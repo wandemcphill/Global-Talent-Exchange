@@ -148,12 +148,19 @@ class _FamilyOverview extends StatelessWidget {
       _FamilyCardData(
         family: CompetitionFamilyRoute.gtex,
         count: hub.gtexCompetitions.length,
-        description: 'Admin-hosted football competitions from /api/competitions.',
+        description:
+            'Admin-hosted football competitions from /api/competitions.',
       ),
       _FamilyCardData(
         family: CompetitionFamilyRoute.hosted,
         count: hub.userCompetitions.length,
         description: 'Manager-created competitions using Fan Coin entry rules.',
+      ),
+      _FamilyCardData(
+        family: CompetitionFamilyRoute.streamer,
+        count: hub.streamerTournaments.length,
+        description:
+            'Creator tournament discovery from the live tournament engine.',
       ),
     ];
 
@@ -186,7 +193,7 @@ class _FamilyOverview extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: <Widget>[
-                    FilledButton.icon(
+                        FilledButton.icon(
                           onPressed:
                               () => context.push(
                                 '/competitions/${card.family.pathSegment}',
@@ -214,15 +221,6 @@ class _FamilyList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (family == CompetitionFamilyRoute.streamer) {
-      return const GteStatePanel(
-        eyebrow: 'COMING SOON',
-        title: 'Streamer competitions coming soon',
-        message:
-            'This competition surface is blocked for launch while GTEX focuses on the 2D football manager experience.',
-        icon: Icons.lock_clock_outlined,
-      );
-    }
     final List<Widget> cards = switch (family) {
       CompetitionFamilyRoute.gtex => hub.gtexCompetitions
           .map(

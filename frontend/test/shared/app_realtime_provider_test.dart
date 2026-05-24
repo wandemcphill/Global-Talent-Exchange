@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/services/reliability/reliable_websocket_manager.dart';
+import 'package:gte_frontend/core/runtime/gtex_realtime_client.dart';
 import 'package:gte_frontend/shared/providers/app_realtime_provider.dart';
 
 void main() {
@@ -13,25 +13,31 @@ void main() {
     () async {
       int marketInvalidations = 0;
       int competitionInvalidations = 0;
-      late _FakeReliableWebSocketManager fakeManager;
+      final _FakeGtexRealtimeClient fakeClient = _FakeGtexRealtimeClient();
 
       final controller = AppRealtimeSyncController(
         enabled: true,
-        socketUri: Uri.parse('ws://example.test/realtime/stream'),
+        apiBaseUrl: 'https://api.example.test',
+        includeWallet: true,
         invalidateMarket: () => marketInvalidations += 1,
         invalidateCompetitions: () => competitionInvalidations += 1,
-        managerFactory: (Uri _) {
-          fakeManager = _FakeReliableWebSocketManager();
-          return fakeManager;
-        },
+        clientFactory: () => fakeClient,
       )..start();
 
-      fakeManager.emitMessage(
-        '{"type":"market_price_update","data":{"player_id":"player-1"}}',
-      );
-      fakeManager.emitMessage(
-        '{"type":"wallet_update","data":{"user_id":"user-1"}}',
-      );
+      expect(fakeClient.subscribedChannels, <String>[
+        'market',
+        'competition',
+        'wallet',
+      ]);
+
+      fakeClient.emitEvent('market', <String, Object?>{
+        'type': 'market_price_update',
+        'data': <String, Object?>{'player_id': 'player-1'},
+      });
+      fakeClient.emitEvent('wallet', <String, Object?>{
+        'type': 'wallet_update',
+        'data': <String, Object?>{'user_id': 'user-1'},
+      });
       await Future<void>.delayed(Duration.zero);
 
       expect(marketInvalidations, 2);
@@ -47,21 +53,19 @@ void main() {
       fakeAsync((FakeAsync async) {
         int marketInvalidations = 0;
         int competitionInvalidations = 0;
-        late _FakeReliableWebSocketManager fakeManager;
+        final _FakeGtexRealtimeClient fakeClient = _FakeGtexRealtimeClient();
 
         final controller = AppRealtimeSyncController(
           enabled: true,
-          socketUri: Uri.parse('ws://example.test/realtime/stream'),
+          apiBaseUrl: 'https://api.example.test',
+          includeWallet: false,
           invalidateMarket: () => marketInvalidations += 1,
           invalidateCompetitions: () => competitionInvalidations += 1,
           fallbackActivationDelay: const Duration(seconds: 10),
-          managerFactory: (Uri _) {
-            fakeManager = _FakeReliableWebSocketManager();
-            return fakeManager;
-          },
+          clientFactory: () => fakeClient,
         )..start();
 
-        fakeManager.emitState(ReliableWebSocketState.reconnecting);
+        fakeClient.emitState(GtexRealtimeConnectionState.reconnecting);
         async.flushMicrotasks();
         expect(marketInvalidations, 0);
         expect(competitionInvalidations, 0);
@@ -74,7 +78,7 @@ void main() {
         expect(marketInvalidations, 1);
         expect(competitionInvalidations, 1);
 
-        fakeManager.emitState(ReliableWebSocketState.connected);
+        fakeClient.emitState(GtexRealtimeConnectionState.connected);
         async.flushMicrotasks();
         async.elapse(const Duration(seconds: 10));
         expect(marketInvalidations, 1);
@@ -86,38 +90,52 @@ void main() {
   );
 }
 
-class _FakeReliableWebSocketManager extends ReliableWebSocketManager {
-  _FakeReliableWebSocketManager()
-    : _messageController = StreamController<dynamic>.broadcast(),
-      _stateController = StreamController<ReliableWebSocketState>.broadcast(
-        sync: true,
-      ),
-      super(socketUri: Uri.parse('ws://example.test/realtime/stream'));
+class _FakeGtexRealtimeClient extends GtexRealtimeClient {
+  _FakeGtexRealtimeClient()
+    : super(
+        apiBaseUrl: 'https://api.example.test',
+        accessTokenProvider: () => null,
+        socketFactory: (_) => throw UnimplementedError(),
+      );
 
-  final StreamController<dynamic> _messageController;
-  final StreamController<ReliableWebSocketState> _stateController;
+  final Map<String, StreamController<Map<String, Object?>>> _controllers =
+      <String, StreamController<Map<String, Object?>>>{};
+  final StreamController<GtexRealtimeConnectionState> _stateController =
+      StreamController<GtexRealtimeConnectionState>.broadcast(sync: true);
+  final List<String> subscribedChannels = <String>[];
 
   @override
-  Stream<dynamic> get messages => _messageController.stream;
+  Stream<Map<String, Object?>> subscribe(String channel) {
+    subscribedChannels.add(channel);
+    return _controllerFor(channel).stream;
+  }
 
   @override
-  Stream<ReliableWebSocketState> get connectionStates =>
+  Stream<GtexRealtimeConnectionState> get connectionStates =>
       _stateController.stream;
 
   @override
-  void connect() {}
-
-  @override
   Future<void> dispose() async {
-    await _messageController.close();
+    for (final StreamController<Map<String, Object?>> controller
+        in _controllers.values) {
+      await controller.close();
+    }
     await _stateController.close();
+    await super.dispose();
   }
 
-  void emitMessage(dynamic message) {
-    _messageController.add(message);
+  void emitEvent(String channel, Map<String, Object?> event) {
+    _controllerFor(channel).add(event);
   }
 
-  void emitState(ReliableWebSocketState state) {
+  void emitState(GtexRealtimeConnectionState state) {
     _stateController.add(state);
+  }
+
+  StreamController<Map<String, Object?>> _controllerFor(String channel) {
+    return _controllers.putIfAbsent(
+      channel,
+      () => StreamController<Map<String, Object?>>.broadcast(sync: true),
+    );
   }
 }

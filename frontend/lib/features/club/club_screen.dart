@@ -13,7 +13,9 @@ import '../../shared/widgets/section_heading.dart';
 import 'widgets/club_screen_widgets.dart';
 
 class ClubScreen extends ConsumerStatefulWidget {
-  const ClubScreen({super.key});
+  const ClubScreen({super.key, this.allowFixtureData = false});
+
+  final bool allowFixtureData;
 
   @override
   ConsumerState<ClubScreen> createState() => _ClubScreenState();
@@ -31,9 +33,14 @@ class _ClubScreenState extends ConsumerState<ClubScreen>
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
 
-    final List<Player> regens = ref.read(regenProvider);
-    _slots = _buildInitialSlots();
-    _benchPlayers = _buildBenchPlayers(regens);
+    if (widget.allowFixtureData) {
+      final List<Player> regens = ref.read(regenProvider);
+      _slots = _buildInitialSlots();
+      _benchPlayers = _buildBenchPlayers(regens);
+    } else {
+      _slots = <ClubFormationSlot>[];
+      _benchPlayers = <Player>[];
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -63,7 +70,10 @@ class _ClubScreenState extends ConsumerState<ClubScreen>
 
   @override
   Widget build(BuildContext context) {
-    final Club club = ref.watch(clubProvider);
+    final Club? club = ref.watch(clubProvider);
+    if (!widget.allowFixtureData || club == null) {
+      return const _ClubBlockedState();
+    }
     final double fanMood = _buildFanMood(club);
     final List<ClubFinancePoint> financePoints = _buildFinancePoints(club);
     final List<ClubFinanceBreakdown> financeBreakdown = _buildFinanceBreakdown(
@@ -158,6 +168,56 @@ class _ClubScreenState extends ConsumerState<ClubScreen>
           ),
         );
       },
+    );
+  }
+}
+
+class _ClubBlockedState extends StatelessWidget {
+  const _ClubBlockedState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Padding(
+          padding: const EdgeInsets.all(spacingLG),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(cardRadius),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(spacingLG),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Icon(
+                    Icons.shield_outlined,
+                    color: AppColors.primary,
+                    size: 32,
+                  ),
+                  const SizedBox(height: spacingMD),
+                  Text(
+                    'Live club workspace unavailable',
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: spacingSM),
+                  Text(
+                    'Club HQ requires a registered live club snapshot from the backend authority.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

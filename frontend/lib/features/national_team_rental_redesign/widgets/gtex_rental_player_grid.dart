@@ -83,10 +83,13 @@ class GtexRentalPlayerGrid extends StatelessWidget {
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               final bool wide = constraints.maxWidth > 820;
+              final int eligibleCount = players
+                  .where((GtexRentalPlayerView player) => player.rentalEligible)
+                  .length;
               final List<Widget> metrics = <Widget>[
                 GtexMetricTile(
-                  label: 'Eligible players',
-                  value: players.length.toString(),
+                  label: 'Backend eligible',
+                  value: eligibleCount.toString(),
                   icon: Icons.groups_2_outlined,
                 ),
                 GtexMetricTile(
@@ -185,8 +188,14 @@ class GtexRentalPlayerGrid extends StatelessWidget {
                   ageLabel: player.ageLabel,
                   isSelected: selectedPlayerId == player.playerId,
                   onTap: () => onSelectPlayer(player),
-                  onAddToShortlist: () => onToggleBasket(player),
-                  onBuyNow: () => onToggleBasket(player),
+                  onAddToShortlist:
+                      player.rentalEligible
+                          ? () => onToggleBasket(player)
+                          : null,
+                  onBuyNow:
+                      player.rentalEligible
+                          ? () => onToggleBasket(player)
+                          : null,
                 );
               },
             ),

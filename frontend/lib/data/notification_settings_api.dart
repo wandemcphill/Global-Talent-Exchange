@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
@@ -7,7 +9,7 @@ class NotificationSettingsApi {
   NotificationSettingsApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
-  final _NotificationFixtures fixtures;
+  final _NotificationFixtures? fixtures;
 
   factory NotificationSettingsApi.standard({
     required String baseUrl,
@@ -23,11 +25,12 @@ class NotificationSettingsApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _NotificationFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory NotificationSettingsApi.fixture() {
+    assertFixtureFactoryAllowed('NotificationSettingsApi.fixture');
     return NotificationSettingsApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -48,7 +51,7 @@ class NotificationSettingsApi {
         '/api/notifications/preferences',
       );
       return NotificationPreference.fromJson(payload);
-    }, fixtures.preferences);
+    }, () => _requireFixtures().preferences());
   }
 
   Future<NotificationPreference> updatePreferences(
@@ -75,7 +78,7 @@ class NotificationSettingsApi {
         return NotificationPreference.fromJson(payload);
       },
       () async {
-        fixtures._preference = preference;
+        _requireFixtures()._preference = preference;
         return preference;
       },
     );
@@ -89,7 +92,7 @@ class NotificationSettingsApi {
       return payload
           .map(NotificationSubscription.fromJson)
           .toList(growable: false);
-    }, fixtures.subscriptions);
+    }, () => _requireFixtures().subscriptions());
   }
 
   Future<NotificationSubscription> upsertSubscription({
@@ -113,7 +116,7 @@ class NotificationSettingsApi {
         );
         return NotificationSubscription.fromJson(payload);
       },
-      () async => fixtures.upsertSubscription(
+      () async => _requireFixtures().upsertSubscription(
         subscriptionKey: subscriptionKey,
         label: label,
         subscriptionType: subscriptionType,
@@ -128,7 +131,7 @@ class NotificationSettingsApi {
         'DELETE',
         '/api/notifications/subscriptions/$subscriptionId',
       );
-    }, () async => fixtures.removeSubscription(subscriptionId));
+    }, () async => _requireFixtures().removeSubscription(subscriptionId));
   }
 
   Future<List<PlatformAnnouncement>> listAnnouncements() {
@@ -138,7 +141,7 @@ class NotificationSettingsApi {
         auth: false,
       );
       return payload.map(PlatformAnnouncement.fromJson).toList(growable: false);
-    }, fixtures.announcements);
+    }, () => _requireFixtures().announcements());
   }
 
   Future<List<PlatformAnnouncement>> adminListAnnouncements() {
@@ -147,7 +150,7 @@ class NotificationSettingsApi {
         '/api/admin/notifications/announcements',
       );
       return payload.map(PlatformAnnouncement.fromJson).toList(growable: false);
-    }, fixtures.announcements);
+    }, () => _requireFixtures().announcements());
   }
 
   Future<PlatformAnnouncement> publishAnnouncement({
@@ -177,7 +180,7 @@ class NotificationSettingsApi {
         );
         return PlatformAnnouncement.fromJson(payload);
       },
-      () async => fixtures.publishAnnouncement(
+      () async => _requireFixtures().publishAnnouncement(
         key: announcementKey,
         title: title,
         body: body,
@@ -193,7 +196,7 @@ class NotificationSettingsApi {
       return payload
           .map(NotificationEventMatrixItem.fromJson)
           .toList(growable: false);
-    }, fixtures.eventMatrix);
+    }, () => _requireFixtures().eventMatrix());
   }
 
   Future<NotificationTestEventResult> adminPublishTestEvent({
@@ -218,13 +221,25 @@ class NotificationSettingsApi {
         );
         return NotificationTestEventResult.fromJson(payload);
       },
-      () async => fixtures.publishTestEvent(
+      () async => _requireFixtures().publishTestEvent(
         eventKey: eventKey,
         targetUserId: targetUserId,
         resourceId: resourceId,
         message: message,
       ),
     );
+  }
+
+  _NotificationFixtures _requireFixtures() {
+    final _NotificationFixtures? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Notification fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 }
 

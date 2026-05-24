@@ -1356,9 +1356,7 @@ class GteWalletTopUpSession {
       ]),
       amount: GteJson.number(json, <String>['amount']),
       currency: GteJson.string(json, <String>['currency'], fallback: 'coin'),
-      provider: GteJson.string(json, <String>[
-        'provider',
-      ], fallback: 'paystack'),
+      provider: GteJson.string(json, <String>['provider'], fallback: 'korapay'),
       status: GteJson.string(json, <String>['status'], fallback: 'pending'),
       mockMode: GteJson.boolean(json, <String>[
         'mock_mode',
@@ -1371,7 +1369,7 @@ class GteWalletTopUpSession {
 class GteWalletTopUpInitiateRequest {
   const GteWalletTopUpInitiateRequest({
     required this.amount,
-    this.provider = 'paystack',
+    this.provider = 'korapay',
     this.unit = GteLedgerUnit.coin,
     this.callbackUrl,
   });

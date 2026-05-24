@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../features/system_profile_redesign/models/gtex_profile_models.dart';
 import '../../features/system_profile_redesign/presentation/gtex_profile_controller.dart';
+import 'gtex_settings_screen_v2.dart';
 
 class GtexProfileScreenV2 extends StatefulWidget {
   const GtexProfileScreenV2({
@@ -32,7 +33,13 @@ class _GtexProfileScreenV2State extends State<GtexProfileScreenV2> {
       body: FutureBuilder<GtexProfileSummary>(
         future: _profile,
         builder: (context, snapshot) {
-          final profile = snapshot.data ?? GtexProfileSummary.demo();
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final GtexProfileSummary? profile = snapshot.data;
+          if (snapshot.hasError || profile == null) {
+            return const _ProfileUnavailableState();
+          }
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -54,6 +61,53 @@ class _GtexProfileScreenV2State extends State<GtexProfileScreenV2> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _ProfileUnavailableState extends StatelessWidget {
+  const _ProfileUnavailableState();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Container(
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _GtexProfileScreenV2State._panel,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _GtexProfileScreenV2State._line),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Icon(
+                  Icons.account_circle_outlined,
+                  color: _GtexProfileScreenV2State._green,
+                  size: 36,
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Live profile required',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Sign in with a live session so GTEX can load the authenticated profile from the backend authority.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -405,7 +459,13 @@ class _ProfileStatusRail extends StatelessWidget {
               foregroundColor: Colors.black,
               minimumSize: const Size.fromHeight(48),
             ),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const GtexSettingsScreenV2(),
+                ),
+              );
+            },
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Edit profile'),
           ),

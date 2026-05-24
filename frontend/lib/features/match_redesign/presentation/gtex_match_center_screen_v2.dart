@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../data/gtex_match_demo_repository.dart';
 import '../data/gtex_match_models.dart';
+import '../data/gtex_match_repository.dart';
 import '../widgets/gtex_2d_pitch.dart';
 import '../widgets/gtex_highlights_panel.dart';
 import '../widgets/gtex_match_lineups.dart';

@@ -176,4 +176,54 @@ void main() {
       expect(find.text(routeLabel), findsWidgets);
     }
   });
+
+  testWidgets('compact shell keeps overflow destinations reachable', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    String? tapped;
+    GtexShellDestination destination(String label, IconData icon) {
+      return GtexShellDestination(
+        label: label,
+        icon: icon,
+        selectedIcon: icon,
+        isSelected: false,
+        onTap: () => tapped = label,
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GtexAppShell(
+          destinations: <GtexShellDestination>[
+            destination('Home', Icons.home_outlined),
+            destination('Market', Icons.storefront_outlined),
+            destination('Wallet', Icons.account_balance_wallet_outlined),
+            destination('Club', Icons.shield_outlined),
+            destination('Social', Icons.forum_outlined),
+            destination('Admin', Icons.admin_panel_settings_outlined),
+          ],
+          child: const SizedBox.shrink(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('More'), findsOneWidget);
+    expect(find.text('Admin'), findsNothing);
+
+    await tester.tap(find.text('More'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Admin'), findsOneWidget);
+    await tester.tap(find.text('Admin'));
+    await tester.pumpAndSettle();
+    expect(tapped, 'Admin');
+  });
 }

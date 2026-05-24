@@ -9,11 +9,13 @@ class GtexAdminJackpotScreenV2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final snapshot = GtexAdminCommandSnapshot.demo();
+    final snapshot = GtexAdminCommandSnapshot.liveUnavailable();
     return Theme(
       data: Theme.of(context).copyWith(
         scaffoldBackgroundColor: const Color(0xFF070B12),
-        textTheme: Theme.of(context).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
+        textTheme: Theme.of(
+          context,
+        ).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
       ),
       child: Scaffold(
         backgroundColor: const Color(0xFF070B12),
@@ -25,11 +27,21 @@ class GtexAdminJackpotScreenV2 extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('Jackpot admin', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 6),
-                        const Text('Create pools, monitor entries, review winners and approve claims.', style: TextStyle(color: Colors.white70)),
-                      ]),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Jackpot admin',
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Create pools, monitor entries, review winners and approve claims.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        ],
+                      ),
                     ),
                     const GtexAdminStatusPill(label: 'Restricted'),
                   ],
@@ -44,7 +56,8 @@ class GtexAdminJackpotScreenV2 extends StatelessWidget {
                   children: [
                     const GtexAdminSectionHeader(
                       title: 'Winner verification checklist',
-                      subtitle: 'Do not release winnings until fraud, KYC and wallet checks pass.',
+                      subtitle:
+                          'Do not release winnings until fraud, KYC and wallet checks pass.',
                     ),
                     const SizedBox(height: 12),
                     ...[
@@ -53,14 +66,21 @@ class GtexAdminJackpotScreenV2 extends StatelessWidget {
                       'No abnormal device/IP pattern',
                       'Wallet status active',
                       'Admin approval audit created',
-                    ].map((item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Row(children: [
-                            const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF2DFF87)),
+                    ].map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle_outline_rounded,
+                              color: Color(0xFF2DFF87),
+                            ),
                             const SizedBox(width: 10),
                             Expanded(child: Text(item)),
-                          ]),
-                        )),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

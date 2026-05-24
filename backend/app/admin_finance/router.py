@@ -26,10 +26,11 @@ from app.auth.dependencies import get_current_admin, get_session
 from app.live_matches.service import ensure_live_match_hub
 from app.models.user import User
 from app.services.runtime_control_service import RuntimeControlService
-
+from app.wallets.providers.registry import paystack_enabled
 
 router = APIRouter(prefix="/api/admin/finance", tags=["admin-finance"])
 webhook_router = APIRouter(prefix="/integrations/payments", tags=["payments"])
+webhook_alias_router = APIRouter(prefix="/api/webhooks", tags=["payments"])
 
 
 @router.get("/control-tower", response_model=AdminFinanceControlTowerView)
@@ -286,11 +287,7 @@ def get_wallet_protection_summary(
     _: User = Depends(get_current_admin),
 ) -> WalletProtectionSummaryView:
     control_service = RuntimeControlService(request.app)
-    frozen_wallet_accounts = sum(
-        1
-        for item in control_service.list_account_controls()
-        if item.freeze_wallet
-    )
+    frozen_wallet_accounts = sum(1 for item in control_service.list_account_controls() if item.freeze_wallet)
     active_wallet_locks = [
         WalletTransactionLockView.model_validate(item, from_attributes=True).model_dump(mode="json")
         for item in control_service.list_wallet_transaction_locks()
@@ -320,6 +317,11 @@ async def handle_paystack_webhook(
     request: Request,
     session: Session = Depends(get_session),
 ) -> AdminFinanceWebhookResultView:
+    if not paystack_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Paystack is unavailable. Use the KoraPay webhook endpoint.",
+        )
     try:
         raw_body = await request.body()
         payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
@@ -338,10 +340,9 @@ async def handle_paystack_webhook(
     return AdminFinanceWebhookResultView.model_validate(result)
 
 
-@webhook_router.post("/korapay/webhook", response_model=AdminFinanceWebhookResultView)
-async def handle_korapay_webhook(
+async def _handle_korapay_webhook_impl(
     request: Request,
-    session: Session = Depends(get_session),
+    session: Session,
 ) -> AdminFinanceWebhookResultView:
     try:
         raw_body = await request.body()
@@ -361,4 +362,20 @@ async def handle_korapay_webhook(
     return AdminFinanceWebhookResultView.model_validate(result)
 
 
-__all__ = ["router", "webhook_router"]
+@webhook_router.post("/korapay/webhook", response_model=AdminFinanceWebhookResultView)
+async def handle_korapay_webhook(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> AdminFinanceWebhookResultView:
+    return await _handle_korapay_webhook_impl(request=request, session=session)
+
+
+@webhook_alias_router.post("/korapay", response_model=AdminFinanceWebhookResultView)
+async def handle_korapay_webhook_alias(
+    request: Request,
+    session: Session = Depends(get_session),
+) -> AdminFinanceWebhookResultView:
+    return await _handle_korapay_webhook_impl(request=request, session=session)
+
+
+__all__ = ["router", "webhook_router", "webhook_alias_router"]

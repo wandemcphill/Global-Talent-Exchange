@@ -175,6 +175,49 @@ def test_hybrid_mode_supports_manual_deposit_and_korapay_webhook(session) -> Non
     assert settled.status == PurchaseOrderStatus.SETTLED
 
 
+def test_provider_webhook_amount_mismatch_holds_purchase_order(session) -> None:
+    user = _create_user(session)
+    _configure_deposit_settings(session)
+    treasury = TreasuryService()
+    settings = treasury.ensure_settings(session)
+    rail_service = WalletRailService(session)
+    order = rail_service.create_purchase_order(
+        user=user,
+        settings=settings,
+        amount=Decimal("9000.0000"),
+        input_unit="fiat",
+        provider_key="korapay",
+        source_scope="wallet",
+        unit=LedgerUnit.COIN,
+        processor_mode="automatic_gateway",
+        payout_channel="gateway",
+        provider_reference="kora-ref-mismatch",
+    )
+
+    held = rail_service.handle_provider_event(
+        event=ProviderEvent(
+            provider_key="korapay",
+            event_type=ProviderEventType.SETTLED,
+            provider_reference="kora-ref-mismatch",
+            purchase_order_reference=order.reference,
+            event_id="kora-event-mismatch",
+            amount=Decimal("8500.0000"),
+            currency="NGN",
+            raw_payload={"reference": "kora-ref-mismatch"},
+        )
+    )
+
+    mismatch_event = session.scalar(
+        select(SystemEvent).where(
+            SystemEvent.event_key == f"purchase-order-amount-mismatch-{order.id}-kora-event-mismatch"
+        )
+    )
+    assert held is not None
+    assert held.status == PurchaseOrderStatus.DISPUTED
+    assert held.ledger_transaction_id is None
+    assert mismatch_event is not None
+
+
 def test_provider_webhook_does_not_auto_settle_duplicate_provider_reference(session) -> None:
     first_user = _create_user(session)
     second_user = AuthService().register_user(

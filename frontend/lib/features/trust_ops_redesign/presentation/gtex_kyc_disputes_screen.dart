@@ -10,13 +10,17 @@ import '../widgets/gtex_wallet_order_widgets.dart';
 class GtexKycDisputesScreen extends StatefulWidget {
   const GtexKycDisputesScreen({
     super.key,
-    this.repository = const GtexTrustOpsDemoRepository(),
+    this.repository,
     this.initialModule = GtexTrustModule.kyc,
+    this.onTopUp,
+    this.onWithdraw,
     this.onCreateDispute,
   });
 
-  final GtexTrustOpsRepository repository;
+  final GtexTrustOpsRepository? repository;
   final GtexTrustModule initialModule;
+  final VoidCallback? onTopUp;
+  final VoidCallback? onWithdraw;
   final VoidCallback? onCreateDispute;
 
   @override
@@ -33,11 +37,23 @@ class _GtexKycDisputesScreenState extends State<GtexKycDisputesScreen> {
   void initState() {
     super.initState();
     _selectedModule = widget.initialModule;
-    _future = widget.repository.load();
+    _future =
+        widget.repository?.load() ??
+        Future<GtexTrustOpsState>.error(
+          StateError('Trust operations repository is not configured.'),
+        );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.repository == null) {
+      return const GtexEmptyState(
+        title: 'Trust data unavailable',
+        message:
+            'KYC and dispute screens need a live trust-ops repository. Demo data is available only in explicit fixture mode.',
+        icon: Icons.lock_outline,
+      );
+    }
     return FutureBuilder<GtexTrustOpsState>(
       future: _future,
       builder: (
@@ -67,7 +83,8 @@ class _GtexKycDisputesScreenState extends State<GtexKycDisputesScreen> {
                     selectedDisputeId: _selectedDisputeId,
                     onSelectDispute:
                         (String id) => setState(() => _selectedDisputeId = id),
-                    onCreateDispute: widget.onCreateDispute ?? () {},
+                    onCreateDispute:
+                        widget.onCreateDispute ?? _showCreateDisputeUnavailable,
                   )
                   : GtexKycPanel(
                     kycCases: state.kycCases.take(1).toList(growable: false),
@@ -89,11 +106,26 @@ class _GtexKycDisputesScreenState extends State<GtexKycDisputesScreen> {
                       (GtexKycCaseRecord item) => item.id == _selectedKycCaseId,
                     )
                     .firstOrNull,
-            onTopUp: () {},
-            onWithdraw: () {},
+            onTopUp: widget.onTopUp ?? _showTopUpUnavailable,
+            onWithdraw: widget.onWithdraw ?? _showWithdrawUnavailable,
           ),
         );
       },
     );
+  }
+
+  void _showTopUpUnavailable() =>
+      _snack('Open the wallet route to use the live top-up flow.');
+
+  void _showWithdrawUnavailable() =>
+      _snack('Open the wallet route to use the live withdrawal flow.');
+
+  void _showCreateDisputeUnavailable() =>
+      _snack('Create-dispute routing is not mounted for this entry point yet.');
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }

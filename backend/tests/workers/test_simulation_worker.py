@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
+import pytest
+
 from app.common.enums.competition_type import CompetitionType
 from app.common.enums.fixture_window import FixtureWindow
 from app.common.enums.replay_visibility import ReplayVisibility
@@ -114,3 +116,20 @@ def test_run_match_simulation_projects_suspensions_when_discipline_breaks_down()
     assert suspension["reason"] in {"straight_red", "second_yellow", "yellow_accumulation"}
     assert suspension["applies_from"] == "next_match"
     assert simulation["growth_hook"]["players"]
+
+
+def test_run_match_simulation_rejects_invalid_payload_without_legacy_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GTE_ENABLE_LEGACY_MATCH_SIMULATION", raising=False)
+
+    with pytest.raises(ValueError, match="legacy mock simulation is disabled"):
+        run_match_simulation({"fixture_id": "fixture-missing-teams"})
+
+
+def test_run_match_simulation_rejects_legacy_mock_in_protected_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GTE_ENABLE_LEGACY_MATCH_SIMULATION", "true")
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+
+    with pytest.raises(ValueError, match="legacy mock simulation is disabled"):
+        run_match_simulation({"fixture_id": "fixture-missing-teams"})

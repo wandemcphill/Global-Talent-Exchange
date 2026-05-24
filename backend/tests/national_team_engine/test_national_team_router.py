@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from decimal import Decimal
 from uuid import uuid4
@@ -9,6 +9,9 @@ import pytest
 
 from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
 from app.ingestion.models import Country, Player
+from app.models.player_agency_state import PlayerAgencyState
+from app.models.player_contract import PlayerContract
+from app.models.player_injury_case import PlayerInjuryCase
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerUnit
@@ -619,6 +622,121 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
     assert all(item["country_code"] == home_code for item in auto_build_payload["players"])
     assert auto_build_payload["source_mix"]["real"] >= 1
     assert auto_build_payload["source_mix"]["regen"] >= 1
+
+
+def test_national_alias_pool_returns_backend_owned_eligibility(
+    client, demo_seed, app_session_factory, national_admin_headers
+) -> None:
+    admin_headers = national_admin_headers
+    manager = demo_seed.demo_users[0]
+    manager_headers = _login(client, email=manager.email, password=manager.password)
+    competition = _create_competition(client, admin_headers, key_prefix="national-alias-eligibility")
+    home_code = "NE1"
+    home_name = "National Eligibility One"
+    away_code = "NX1"
+    away_name = "National Away One"
+    player_ids = _seed_national_pool(
+        app_session_factory,
+        prefix="national-alias-eligibility",
+        funded_user_id=manager.user_id,
+        home_code=home_code,
+        home_name=home_name,
+        away_code=away_code,
+        away_name=away_name,
+    )
+    entry = _create_entry(
+        client,
+        admin_headers,
+        competition_id=competition["id"],
+        manager_user_id=manager.user_id,
+        country_code=home_code,
+        country_name=home_name,
+    )
+
+    today = date.today()
+    with app_session_factory() as session:
+        injured_player = session.get(Player, player_ids["home-cm"])
+        assert injured_player is not None
+        session.add(
+            PlayerInjuryCase(
+                player_id=injured_player.id,
+                severity="major",
+                injury_type="hamstring",
+                occurred_on=today,
+                expected_return_on=today + timedelta(days=7),
+            )
+        )
+        cooldown_player = session.get(Player, player_ids["home-rw"])
+        assert cooldown_player is not None
+        session.add(
+            PlayerAgencyState(
+                player_id=cooldown_player.id,
+                recent_offer_cooldown_until=datetime.now(timezone.utc) + timedelta(days=1),
+            )
+        )
+        locked_player = session.get(Player, player_ids["home-cb1"])
+        assert locked_player is not None
+        session.add(
+            PlayerContract(
+                player_id=locked_player.id,
+                status="locked",
+                wage_amount=Decimal("10.00"),
+                signed_on=today,
+                starts_on=today,
+                ends_on=today + timedelta(days=30),
+            )
+        )
+        suspended_player = session.get(Player, player_ids["home-dm"])
+        assert suspended_player is not None
+        suspended_player.dna_profile = {**dict(suspended_player.dna_profile or {}), "suspension_matches": 2}
+        session.commit()
+
+    pool_response = client.get(
+        f"/api/national/competitions/{competition['id']}/rental-pool",
+        headers=manager_headers,
+        params={"country_code": home_code, "entry_id": entry["id"], "limit": 50},
+    )
+    assert pool_response.status_code == 200, pool_response.text
+    players_by_id = {item["player_id"]: item for item in pool_response.json()["items"]}
+    assert players_by_id[player_ids["home-st"]]["eligibility"]["eligible"] is True
+    assert players_by_id[player_ids["home-cm"]]["eligibility"]["reasons"] == ["injury_unavailable"]
+    assert players_by_id[player_ids["home-rw"]]["eligibility"]["reasons"] == ["cooldown_active"]
+    assert players_by_id[player_ids["home-cb1"]]["eligibility"]["reasons"] == ["contract_locked"]
+    assert players_by_id[player_ids["home-dm"]]["eligibility"]["reasons"] == ["suspension_active"]
+
+    wrong_nationality = client.post(
+        f"/api/national/entries/{entry['id']}/rentals",
+        headers=manager_headers,
+        json={"player_id": player_ids["away-st"]},
+    )
+    assert wrong_nationality.status_code == 409, wrong_nationality.text
+    assert _error_message(wrong_nationality) == "nationality_mismatch"
+
+    blocked_rental = client.post(
+        f"/api/national/entries/{entry['id']}/rentals",
+        headers=manager_headers,
+        json={"player_id": player_ids["home-cm"]},
+    )
+    assert blocked_rental.status_code == 409, blocked_rental.text
+    assert _error_message(blocked_rental) == "injury_unavailable"
+
+    successful_rental = client.post(
+        f"/api/national/entries/{entry['id']}/rentals",
+        headers=manager_headers,
+        json={"player_id": player_ids["home-st"]},
+    )
+    assert successful_rental.status_code == 200, successful_rental.text
+
+    duplicate_pool = client.get(
+        f"/api/national/competitions/{competition['id']}/rental-pool",
+        headers=manager_headers,
+        params={"country_code": home_code, "entry_id": entry["id"], "limit": 50},
+    )
+    assert duplicate_pool.status_code == 200, duplicate_pool.text
+    duplicate_item = next(item for item in duplicate_pool.json()["items"] if item["player_id"] == player_ids["home-st"])
+    assert duplicate_item["eligibility"]["eligible"] is False
+    assert "duplicate_player" in duplicate_item["eligibility"]["reasons"]
+    assert "active_rental_exists" in duplicate_item["eligibility"]["reasons"]
 
 
 def test_claim_free_players_grants_starter_pack_shape_from_national_pool(

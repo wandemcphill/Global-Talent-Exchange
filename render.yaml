@@ -32,6 +32,24 @@ services:
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
+      - key: GTE_KORAPAY_PUBLIC_KEY
+        sync: false
+      - key: GTE_KORAPAY_SECRET_KEY
+        sync: false
+      - key: GTE_KORAPAY_ENCRYPTION_KEY
+        sync: false
+      - key: GTE_KORAPAY_WEBHOOK_SECRET
+        sync: false
+      - key: GTE_KORAPAY_NOTIFICATION_URL
+        value: https://gtex-api.onrender.com/api/webhooks/korapay
+      - key: GTE_ENABLE_PAYSTACK
+        value: "false"
+      - key: TREASURY_BANK_NAME
+        sync: false
+      - key: TREASURY_ACCOUNT_NAME
+        sync: false
+      - key: TREASURY_ACCOUNT_NUMBER
+        sync: false
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "false"
       - key: GTE_TASK_QUEUE_ENABLED

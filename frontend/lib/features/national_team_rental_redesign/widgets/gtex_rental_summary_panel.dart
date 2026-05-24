@@ -111,14 +111,24 @@ class GtexRentalSummaryPanel extends StatelessWidget {
                         label:
                             basketState.contains(selectedPlayer!.playerId)
                                 ? 'Remove'
-                                : 'Add rental',
+                                : selectedPlayer!.rentalEligible
+                                ? 'Add rental'
+                                : 'Unavailable',
                         icon:
                             basketState.contains(selectedPlayer!.playerId)
                                 ? Icons.remove_circle_outline
-                                : Icons.add_shopping_cart,
+                                : selectedPlayer!.rentalEligible
+                                ? Icons.add_shopping_cart
+                                : Icons.block_outlined,
                         compact: true,
                         accent: GtexColors.gold,
-                        onPressed: () => onToggleBasket(selectedPlayer!),
+                        onPressed:
+                            selectedPlayer!.rentalEligible ||
+                                    basketState.contains(
+                                      selectedPlayer!.playerId,
+                                    )
+                                ? () => onToggleBasket(selectedPlayer!)
+                                : null,
                       ),
                     ],
                   ),
@@ -135,7 +145,10 @@ class GtexRentalSummaryPanel extends StatelessWidget {
                 'Choose a country or national team, then add eligible players to build your temporary squad.',
             items: lineItems,
             totalLabel: basketState.totalLabel,
-            onCheckout: basketState.items.isEmpty ? null : onReviewPayment,
+            onCheckout:
+                basketState.items.isEmpty || !basketState.allEligible
+                    ? null
+                    : onReviewPayment,
           ),
         ),
       ],

@@ -38,7 +38,7 @@ void main() {
             'payment_link': 'https://example.test/pay/topup-2',
             'amount': 500,
             'currency': 'NGN',
-            'provider': 'paystack',
+            'provider': 'korapay',
             'status': 'pending',
             'mock_mode': false,
           },

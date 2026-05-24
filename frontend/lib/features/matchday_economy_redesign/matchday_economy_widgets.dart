@@ -73,11 +73,14 @@ class _GtexMatchdayEconomyPanelState extends State<GtexMatchdayEconomyPanel> {
 
   GtexMatchdayEconomyController _buildController() {
     return GtexMatchdayEconomyController(
-      api: GtexMatchdayEconomyApi.standard(
-        baseUrl: widget.baseUrl,
-        accessToken: widget.accessToken,
-        mode: widget.backendMode,
-      ),
+      api:
+          widget.backendMode == GteBackendMode.fixture
+              ? GtexMatchdayEconomyApi.fixture()
+              : GtexMatchdayEconomyApi.standard(
+                baseUrl: widget.baseUrl,
+                accessToken: widget.accessToken,
+                mode: widget.backendMode,
+              ),
     );
   }
 

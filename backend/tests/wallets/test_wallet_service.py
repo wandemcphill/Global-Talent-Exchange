@@ -18,6 +18,7 @@ from app.wallets.service import (
     UnbalancedTransactionError,
     WalletService,
 )
+from app.wallets.providers.registry import list_provider_keys
 from app.wallets.wallet_service import WalletTransactionPosting, WalletTransactionService
 
 
@@ -92,11 +93,16 @@ def test_adaptive_overview_uses_registry_provider_status(session, monkeypatch) -
     user = _create_user(session)
     overview = WalletService().get_adaptive_overview(session, user)
 
-    assert overview["payment_provider_status"]["paystack"] == "mock"
+    assert overview["payment_provider_status"]["paystack"] == "blocked"
     assert overview["payment_provider_status"]["korapay"] == "unavailable"
     assert overview["payment_provider_status"]["cards"] == "stubbed"
     assert "monnify" not in overview["payment_provider_status"]
     assert "flutterwave" not in overview["payment_provider_status"]
+
+
+def test_paystack_is_not_listed_as_live_provider() -> None:
+    assert "korapay" in list_provider_keys(live_only=True)
+    assert "paystack" not in list_provider_keys(live_only=True)
 
 
 def test_append_transaction_requires_balanced_postings(session) -> None:

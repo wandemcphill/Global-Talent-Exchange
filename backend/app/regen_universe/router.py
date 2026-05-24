@@ -608,6 +608,7 @@ def list_national_regens(
             total_stmt = total_stmt.where(NationalRegenSeed.age >= age_min)
         if age_max is not None:
             total_stmt = total_stmt.where(NationalRegenSeed.age <= age_max)
+        total_stmt = total_stmt.where(NationalRegenSeed.status.in_(("active", "available")))
         total = int(session.scalar(total_stmt) or 0)
         items = [
             NationalRegenSeedView.model_validate(item)
@@ -618,6 +619,7 @@ def list_national_regens(
                 age_band=age_band,
                 age_min=age_min,
                 age_max=age_max,
+                active_only=True,
                 limit=params.per_page,
                 offset=params.offset,
             )

@@ -36,6 +36,7 @@ from app.schemas.club_responses import (
     ClubShowcaseView,
     ClubTrophiesView,
 )
+from app.schemas.club_v2_snapshot import ClubV2SnapshotView
 from app.schemas.scouting_intelligence import (
     AcademySupplySignalView,
     CompletedScoutMissionView,
@@ -59,6 +60,7 @@ from app.services.club_jersey_service import ClubJerseyService
 from app.services.club_purchase_service import ClubPurchaseService
 from app.services.club_showcase_service import ClubShowcaseService
 from app.services.club_trophy_service import ClubTrophyService
+from app.services.club_v2_snapshot_service import ClubV2SnapshotService
 from app.services.scouting_intelligence_service import (
     ManagerProfileUpsert,
     ScoutMissionCreate,
@@ -328,6 +330,16 @@ def get_club(club_id: str, session: Session = Depends(get_session)) -> ClubProfi
     except Exception as error:  # noqa: BLE001
         raise _to_http_error(error) from error
     return ClubProfileView(profile=profile)
+
+
+@router.get("/{club_id}/v2-snapshot", response_model=ClubV2SnapshotView)
+def get_club_v2_snapshot(
+    club_id: str,
+    session: Session = Depends(get_session),
+    current_user=Depends(get_current_user),
+) -> ClubV2SnapshotView:
+    club = _require_owned_club(session, club_id, current_user)
+    return ClubV2SnapshotService(session).build_snapshot(club=club, viewer=current_user)
 
 
 @router.get("/{club_id}/showcase", response_model=ClubShowcaseView)

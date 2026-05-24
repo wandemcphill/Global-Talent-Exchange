@@ -103,7 +103,13 @@ def test_wallet_websocket_gateway_streams_committed_events(tmp_path) -> None:
 
         events_message = websocket.receive_json()
         assert events_message["type"] == "wallet_update"
+        assert events_message["source_of_truth"] == "persisted_backend_authority"
+        assert events_message["source_tag"] == "gtex_realtime_hub"
+        assert events_message["topics"] == [f"wallet:{user_id}"]
+        assert events_message["published_at"]
         assert events_message["data"]["user_id"] == user_id
         assert events_message["data"]["unit"] == LedgerUnit.CREDIT.value
+        assert events_message["data"]["source_of_truth"] == "persisted_backend_authority"
+        assert events_message["data"]["source_tag"] == "gtex_realtime_hub"
 
     engine.dispose()

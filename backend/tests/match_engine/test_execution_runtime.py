@@ -63,6 +63,7 @@ def test_local_execution_worker_runs_league_pipeline_end_to_end() -> None:
         dispatcher=dispatcher,
         event_publisher=event_publisher,
         league_service=league_service,
+        team_factory=SyntheticSquadFactory(allow_synthetic_fallback=True),
     )
     event_publisher.subscribe(worker.handle_event)
     execution = LeagueFixtureExecutionService(
@@ -119,9 +120,7 @@ def test_local_execution_worker_runs_league_pipeline_end_to_end() -> None:
     assert "qualified" in template_keys
 
     settlement_events = [
-        event
-        for event in event_publisher.published_events
-        if event.name == "competition.season.settlement.completed"
+        event for event in event_publisher.published_events if event.name == "competition.season.settlement.completed"
     ]
     assert len(settlement_events) == 1
     assert settlement_events[0].payload["status"] == "completed"
@@ -161,10 +160,18 @@ def _seed_managed_team_context(session: Session) -> dict[str, str]:
     session.add_all([user, club_profile])
     roles = [
         "goalkeeper",
-        "defender", "defender", "defender", "defender",
-        "midfielder", "midfielder", "midfielder",
-        "forward", "forward", "forward",
-        "midfielder", "defender",
+        "defender",
+        "defender",
+        "defender",
+        "defender",
+        "midfielder",
+        "midfielder",
+        "midfielder",
+        "forward",
+        "forward",
+        "forward",
+        "midfielder",
+        "defender",
     ]
     for index, role in enumerate(roles, start=1):
         session.add(

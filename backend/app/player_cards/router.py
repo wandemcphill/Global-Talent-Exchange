@@ -166,6 +166,7 @@ def list_players(
     search: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    _: User = Depends(get_current_user),
     service: PlayerCardMarketService = Depends(get_service),
 ) -> list[PlayerCardPlayerSummaryView]:
     results = service.list_players(search=search, limit=limit, offset=offset)
@@ -174,7 +175,9 @@ def list_players(
 
 @router.get("/players/{player_id}", response_model=PlayerCardPlayerDetailView)
 def get_player_detail(
-    player_id: str, service: PlayerCardMarketService = Depends(get_service)
+    player_id: str,
+    _: User = Depends(get_current_user),
+    service: PlayerCardMarketService = Depends(get_service),
 ) -> PlayerCardPlayerDetailView:
     try:
         detail = service.get_player_detail(player_id=player_id)

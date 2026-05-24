@@ -9,10 +9,10 @@ import '../widgets/gtex_rental_summary_panel.dart';
 class GtexNationalTeamRentalScreen extends StatefulWidget {
   const GtexNationalTeamRentalScreen({
     super.key,
-    this.competitions = GtexNationalTeamRentalDemoData.competitions,
-    this.countries = GtexNationalTeamRentalDemoData.countries,
-    this.teams = GtexNationalTeamRentalDemoData.teams,
-    this.players = GtexNationalTeamRentalDemoData.players,
+    this.competitions = const <GtexRentalCompetitionView>[],
+    this.countries = const <GtexRentalCountryView>[],
+    this.teams = const <GtexRentalTeamView>[],
+    this.players = const <GtexRentalPlayerView>[],
     this.isLoading = false,
     this.error,
     this.warning,

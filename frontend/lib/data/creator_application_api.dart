@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import '../models/creator_application_models.dart';
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
@@ -8,11 +10,11 @@ class CreatorApplicationApi {
     required this.client,
     required this.mode,
     _CreatorApplicationFixtureState? fixtureState,
-  }) : _fixtureState = fixtureState ?? _CreatorApplicationFixtureState();
+  }) : _fixtureState = fixtureState;
 
   final GteAuthedApi client;
   final GteBackendMode mode;
-  final _CreatorApplicationFixtureState _fixtureState;
+  final _CreatorApplicationFixtureState? _fixtureState;
 
   factory CreatorApplicationApi.standard({
     required String baseUrl,
@@ -35,6 +37,7 @@ class CreatorApplicationApi {
   }
 
   factory CreatorApplicationApi.fixture() {
+    assertFixtureFactoryAllowed('CreatorApplicationApi.fixture');
     return CreatorApplicationApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -46,12 +49,13 @@ class CreatorApplicationApi {
         mode: GteBackendMode.fixture,
       ),
       mode: GteBackendMode.fixture,
+      fixtureState: _CreatorApplicationFixtureState(),
     );
   }
 
   Future<CreatorContactVerificationStatus> fetchVerificationStatus() async {
     if (mode == GteBackendMode.fixture) {
-      return _fixtureState.verification;
+      return _requireFixtureState().verification;
     }
     final Map<String, dynamic> payload = await client.getMap(
       '/api/auth/me',
@@ -62,7 +66,7 @@ class CreatorApplicationApi {
 
   Future<CreatorContactVerificationStatus> verifyEmail() async {
     if (mode == GteBackendMode.fixture) {
-      return _fixtureState.verifyEmail();
+      return _requireFixtureState().verifyEmail();
     }
     final Object? payload = await client.request(
       'POST',
@@ -74,7 +78,7 @@ class CreatorApplicationApi {
 
   Future<CreatorContactVerificationStatus> verifyPhone() async {
     if (mode == GteBackendMode.fixture) {
-      return _fixtureState.verifyPhone();
+      return _requireFixtureState().verifyPhone();
     }
     final Object? payload = await client.request(
       'POST',
@@ -86,7 +90,7 @@ class CreatorApplicationApi {
 
   Future<CreatorApplicationView?> fetchMyApplication() async {
     if (mode == GteBackendMode.fixture) {
-      return _fixtureState.application;
+      return _requireFixtureState().application;
     }
     final Object? payload = await client.request(
       'GET',
@@ -103,7 +107,7 @@ class CreatorApplicationApi {
     CreatorApplicationSubmitRequest request,
   ) async {
     if (mode == GteBackendMode.fixture) {
-      return _fixtureState.submitApplication(request);
+      return _requireFixtureState().submitApplication(request);
     }
     final Object? payload = await client.request(
       'POST',
@@ -112,6 +116,18 @@ class CreatorApplicationApi {
       body: request.toJson(),
     );
     return CreatorApplicationView.fromJson(payload);
+  }
+
+  _CreatorApplicationFixtureState _requireFixtureState() {
+    final _CreatorApplicationFixtureState? fixtureState = _fixtureState;
+    if (fixtureState == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Creator application fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return fixtureState;
   }
 }
 

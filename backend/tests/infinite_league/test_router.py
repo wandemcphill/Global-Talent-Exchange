@@ -24,7 +24,7 @@ from app.models.user import User, UserRole
 from app.replay_archive.persistence import ReplayArchiveRecordRow
 from app.realtime.service import RealtimeHub
 from app.infinite_league.router import router as infinite_league_router
-from app.live_matches.router import router as live_matches_router
+from app.live_matches.router import _generated_live_bridge_enabled, router as live_matches_router
 from app.pundits.router import router as pundits_router
 from app.viral.router import router as viral_router
 
@@ -93,7 +93,29 @@ def test_infinite_league_tick_requires_admin_authentication_in_production() -> N
     assert response.json()["detail"] == "Admin authentication is required to advance Infinite League matches."
 
 
-def test_infinite_league_generates_matches_and_feeds_existing_surfaces() -> None:
+def test_infinite_league_generated_reads_are_blocked_in_production() -> None:
+    with _build_app() as client:
+        client.app.state.settings = SimpleNamespace(app_env="production")
+
+        response = client.get("/infinite-league/status")
+
+    assert response.status_code == 503
+    assert "generated runtime is disabled" in response.json()["detail"]
+
+
+def test_generated_live_bridge_is_blocked_in_production(monkeypatch) -> None:
+    with _build_app() as client:
+        client.app.state.settings = SimpleNamespace(app_env="production")
+        monkeypatch.delenv("GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE", raising=False)
+
+        assert _generated_live_bridge_enabled(client.app) is False
+
+        monkeypatch.setenv("GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE", "true")
+        assert _generated_live_bridge_enabled(client.app) is False
+
+
+def test_infinite_league_generates_matches_and_feeds_existing_surfaces(monkeypatch) -> None:
+    monkeypatch.setenv("GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE", "true")
     with _build_app() as client:
         tick_response = client.post("/infinite-league/tick", params={"count": 1})
 
@@ -131,7 +153,7 @@ def test_infinite_league_generates_matches_and_feeds_existing_surfaces() -> None
 
         assert livestream_response.status_code == 200
         assert livestream_response.json()["segments"]
-        assert livestream_response.json()["ffmpeg_command"][0] == "ffmpeg"
+        assert livestream_response.json()["ffmpeg_command"] == []
 
         assert economy_response.status_code == 200
         assert economy_response.json()["wallets"]

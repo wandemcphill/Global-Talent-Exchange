@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/gte_session_identity.dart';
+import '../core/runtime/gtex_runtime_health_overlay.dart';
 import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_api_client.dart';
 import '../data/gte_models.dart';
@@ -53,6 +54,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   ProviderContainer? _providerContainer;
   ProviderContainer? _ownedProviderContainer;
   ProviderSubscription<AuthSession?>? _authSessionSubscription;
+  ProviderSubscription<AsyncValue<void>>? _sessionHydrationSubscription;
   bool _usesOwnedProviderContainer = false;
   bool _syncingFromController = false;
   bool _syncingFromProvider = false;
@@ -105,6 +107,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   @override
   void dispose() {
     _authSessionSubscription?.close();
+    _sessionHydrationSubscription?.close();
     _ownedProviderContainer?.dispose();
     _controller.removeListener(_handleControllerChanged);
     if (_ownsController) {
@@ -127,6 +130,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       return;
     }
     _authSessionSubscription?.close();
+    _sessionHydrationSubscription?.close();
     _providerContainer = providerBinding.container;
     _usesOwnedProviderContainer = providerBinding.owned;
     _authSessionSubscription = providerBinding.container.listen<AuthSession?>(
@@ -135,6 +139,8 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
         _syncProviderSessionIntoController(next);
       },
     );
+    _sessionHydrationSubscription = providerBinding.container
+        .listen<AsyncValue<void>>(sessionHydrationProvider, (_, _) {});
     _syncControllerSessionIntoProvider();
   }
 
@@ -155,13 +161,14 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
         },
       ),
     );
+    final Widget observedApp = GtexRuntimeHealthOverlay(child: app);
     if (_usesOwnedProviderContainer && _providerContainer != null) {
       return UncontrolledProviderScope(
         container: _providerContainer!,
-        child: app,
+        child: observedApp,
       );
     }
-    return app;
+    return observedApp;
   }
 
   GteNavigationDependencies _buildNavigationDependencies(BuildContext context) {
@@ -198,7 +205,15 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       currentClubNameProvider:
           () => GteSessionIdentity.fromExchangeController(_controller).clubName,
       accessTokenProvider: () => _controller.accessToken,
-      isAuthenticatedProvider: () => _controller.isAuthenticated,
+      isAuthenticatedProvider: () {
+        final AuthSession? providerSession = _providerContainer?.read(
+          authProvider,
+        );
+        if (providerSession?.bootstrapBlocked == true) {
+          return false;
+        }
+        return _controller.isAuthenticated;
+      },
       match3dEntitlementProvider:
           () => Match3dUserEntitlement(
             isPremiumUser: _hasMatch3dPremiumAccess(_controller.session),

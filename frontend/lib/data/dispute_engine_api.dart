@@ -1,13 +1,18 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
 import '../models/dispute_engine_models.dart';
 
 class DisputeEngineApi {
-  DisputeEngineApi({required this.client, required this.fixtures});
+  DisputeEngineApi({
+    required this.client,
+    required _DisputeEngineFixtures? fixtures,
+  }) : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final _DisputeEngineFixtures fixtures;
+  final _DisputeEngineFixtures? _fixtures;
 
   factory DisputeEngineApi.standard({
     required String baseUrl,
@@ -23,11 +28,12 @@ class DisputeEngineApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _DisputeEngineFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory DisputeEngineApi.fixture() {
+    assertFixtureFactoryAllowed('DisputeEngineApi.fixture');
     return DisputeEngineApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -44,13 +50,11 @@ class DisputeEngineApi {
 
   Future<List<DisputeEngineCase>> listMyDisputes() {
     return client.withFallback<List<DisputeEngineCase>>(() async {
-      final Map<String, dynamic> payload = await client.getMap(
-        '/disputes/me',
-      );
+      final Map<String, dynamic> payload = await client.getMap('/disputes/me');
       final List<dynamic> disputes =
           payload['disputes'] as List<dynamic>? ?? <dynamic>[];
       return disputes.map(DisputeEngineCase.fromJson).toList(growable: false);
-    }, fixtures.listMyDisputes);
+    }, () => _requireFixtures().listMyDisputes());
   }
 
   Future<DisputeEngineDetail> createDispute({
@@ -74,7 +78,7 @@ class DisputeEngineApi {
         },
       );
       return DisputeEngineDetail.fromJson(payload);
-    }, () async => fixtures.createDispute(reference: reference));
+    }, () async => _requireFixtures().createDispute(reference: reference));
   }
 
   Future<DisputeEngineDetail> fetchDispute(String disputeId) {
@@ -83,7 +87,7 @@ class DisputeEngineApi {
         '/disputes/$disputeId',
       );
       return DisputeEngineDetail.fromJson(payload);
-    }, () async => fixtures.detail(disputeId));
+    }, () async => _requireFixtures().detail(disputeId));
   }
 
   Future<DisputeEngineDetail> addMessage({
@@ -97,7 +101,7 @@ class DisputeEngineApi {
         body: <String, Object?>{'message': message},
       );
       return DisputeEngineDetail.fromJson(payload);
-    }, () async => fixtures.addMessage(disputeId, message));
+    }, () async => _requireFixtures().addMessage(disputeId, message));
   }
 
   Future<List<DisputeEngineCase>> listAdminDisputes() {
@@ -108,7 +112,7 @@ class DisputeEngineApi {
       final List<dynamic> disputes =
           payload['disputes'] as List<dynamic>? ?? <dynamic>[];
       return disputes.map(DisputeEngineCase.fromJson).toList(growable: false);
-    }, fixtures.listAdminDisputes);
+    }, () => _requireFixtures().listAdminDisputes());
   }
 
   Future<DisputeEngineCase> assignDispute({
@@ -124,7 +128,7 @@ class DisputeEngineApi {
         },
       );
       return DisputeEngineCase.fromJson(payload);
-    }, () async => fixtures.assign(disputeId));
+    }, () async => _requireFixtures().assign(disputeId));
   }
 
   Future<DisputeEngineCase> updateStatus({
@@ -142,7 +146,18 @@ class DisputeEngineApi {
         },
       );
       return DisputeEngineCase.fromJson(payload);
-    }, () async => fixtures.updateStatus(disputeId, status));
+    }, () async => _requireFixtures().updateStatus(disputeId, status));
+  }
+
+  _DisputeEngineFixtures _requireFixtures() {
+    final _DisputeEngineFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message: 'Dispute fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return fixtures;
   }
 }
 

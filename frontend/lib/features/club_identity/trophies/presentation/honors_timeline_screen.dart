@@ -39,7 +39,8 @@ class _HonorsTimelineScreenState extends State<HonorsTimelineScreen> {
   @override
   void initState() {
     super.initState();
-    _repository = widget.repository ?? StubTrophyCabinetRepository();
+    _repository =
+        widget.repository ?? const UnavailableTrophyCabinetRepository();
     _filter = widget.initialFilter;
     _load();
   }
@@ -117,13 +118,15 @@ class _HonorsTimelineScreenState extends State<HonorsTimelineScreen> {
       );
     }
 
-    final HonorsTimelineDto timeline = _timeline ??
+    final HonorsTimelineDto timeline =
+        _timeline ??
         HonorsTimelineDto(
           clubId: widget.clubId,
           clubName: widget.clubName ?? 'Expansion XI',
           honors: const <TrophyItemDto>[],
         );
-    final SeasonHonorsArchiveDto archive = _archive ??
+    final SeasonHonorsArchiveDto archive =
+        _archive ??
         SeasonHonorsArchiveDto(
           clubId: widget.clubId,
           clubName: widget.clubName ?? 'Expansion XI',
@@ -181,8 +184,9 @@ class _HonorsTimelineScreenState extends State<HonorsTimelineScreen> {
                 icon: Icons.inventory_2_outlined,
               )
             else
-              ...grouped.entries
-                  .map((MapEntry<String, List<SeasonHonorsRecordDto>> entry) {
+              ...grouped.entries.map((
+                MapEntry<String, List<SeasonHonorsRecordDto>> entry,
+              ) {
                 final bool initiallyExpanded = entry.key == grouped.keys.first;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -240,10 +244,7 @@ class _TimelineHero extends StatelessWidget {
 }
 
 class _TimelineFilterBar extends StatelessWidget {
-  const _TimelineFilterBar({
-    required this.selected,
-    required this.onSelected,
-  });
+  const _TimelineFilterBar({required this.selected, required this.onSelected});
 
   final TrophyScopeFilter selected;
   final ValueChanged<TrophyScopeFilter> onSelected;
@@ -255,15 +256,20 @@ class _TimelineFilterBar extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Expanded(
-              child: Text('Archive view',
-                  style: Theme.of(context).textTheme.titleLarge)),
+            child: Text(
+              'Archive view',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
           SegmentedButton<TrophyScopeFilter>(
-            segments: TrophyScopeFilter.values.map((TrophyScopeFilter filter) {
-              return ButtonSegment<TrophyScopeFilter>(
-                value: filter,
-                label: Text(filter.label),
-              );
-            }).toList(growable: false),
+            segments: TrophyScopeFilter.values
+                .map((TrophyScopeFilter filter) {
+                  return ButtonSegment<TrophyScopeFilter>(
+                    value: filter,
+                    label: Text(filter.label),
+                  );
+                })
+                .toList(growable: false),
             selected: <TrophyScopeFilter>{selected},
             onSelectionChanged: (Set<TrophyScopeFilter> selection) {
               onSelected(selection.first);
@@ -276,10 +282,7 @@ class _TimelineFilterBar extends StatelessWidget {
 }
 
 class _StatPill extends StatelessWidget {
-  const _StatPill({
-    required this.label,
-    required this.value,
-  });
+  const _StatPill({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -317,14 +320,15 @@ class _InlineNotice extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         color: GteShellTheme.accentWarm.withValues(alpha: 0.12),
-        border:
-            Border.all(color: GteShellTheme.accentWarm.withValues(alpha: 0.4)),
+        border: Border.all(
+          color: GteShellTheme.accentWarm.withValues(alpha: 0.4),
+        ),
       ),
       child: Text(
         message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: GteShellTheme.textPrimary,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: GteShellTheme.textPrimary),
       ),
     );
   }

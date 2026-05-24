@@ -152,7 +152,8 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: 'Market',
     location: AppRoutes.market,
     state: AppRouteSurfaceState.live,
-    summary: 'Buy, bid, sign, and list players from the live player market desk.',
+    summary:
+        'Buy, bid, sign, and list players from the live player market desk.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -248,7 +249,8 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: 'Arena',
     location: AppRoutes.competitions,
     state: AppRouteSurfaceState.live,
-    summary: 'Create, join, manage, and review football competitions from one arena desk.',
+    summary:
+        'Create, join, manage, and review football competitions from one arena desk.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -273,11 +275,11 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     summary: 'Deep competition-detail route.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: 'Streamer Engine Redirect',
     location: AppRoutes.streamerEngine,
-    state: AppRouteSurfaceState.placeholder,
+    state: AppRouteSurfaceState.hidden,
     summary:
-        'Coming soon for launch. Extra competition tools are not in the 2D manager shell.',
+        'Legacy streamer-engine route redirects to the live Competition OS hub.',
   ),
   AppRouteSurface(
     label: '2D Match Viewer',
@@ -287,38 +289,38 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
         'Deep 2D viewer route that opens the qualified live viewer session or a truthful fallback when the session feed is unavailable.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: 'Broadcast Redirect',
     location: AppRoutes.matchesBroadcast,
-    state: AppRouteSurfaceState.placeholder,
+    state: AppRouteSurfaceState.hidden,
     summary:
-        'Coming soon for launch. 2D match viewing is the active matchday route.',
+        'Legacy broadcast route redirects to the canonical 2D match viewer.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: '3D Match Redirect',
     location: AppRoutes.matchesThreeD,
-    state: AppRouteSurfaceState.placeholder,
+    state: AppRouteSurfaceState.hidden,
     summary:
-        'Coming soon for launch. 3D match viewing is blocked in the active shell.',
+        '3D match route is hidden while Unity is blocked and redirects to the 2D viewer.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: 'Native 3D Redirect',
     location: AppRoutes.matchesNativeThreeD,
-    state: AppRouteSurfaceState.placeholder,
+    state: AppRouteSurfaceState.hidden,
     summary:
-        'Coming soon for launch. Advanced match viewing is blocked in the active shell.',
+        'Native 3D route is hidden while Unity is blocked and redirects to Matchday.',
   ),
   AppRouteSurface(
-    label: 'Spectate',
+    label: 'Spectate Redirect',
     location: AppRoutes.matchesSpectate,
-    state: AppRouteSurfaceState.placeholder,
-    summary: 'Coming soon for launch. Use fixtures and the 2D viewer instead.',
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Legacy spectate route redirects to the active Matchday surface.',
   ),
   AppRouteSurface(
-    label: 'Simulation',
+    label: 'Simulation Redirect',
     location: AppRoutes.matchesSimulate,
-    state: AppRouteSurfaceState.placeholder,
+    state: AppRouteSurfaceState.hidden,
     summary:
-        'Coming soon for launch. Local simulation tools are blocked in the active shell.',
+        'Legacy local simulation route redirects to the active Matchday surface.',
   ),
 ];
 

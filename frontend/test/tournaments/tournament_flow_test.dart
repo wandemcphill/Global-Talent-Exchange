@@ -20,7 +20,7 @@ void main() {
       ProviderScope(
         child: MaterialApp(
           theme: AppTheme.dark(),
-          home: const Scaffold(body: TournamentsScreen()),
+          home: const Scaffold(body: TournamentsScreen(allowFixtureData: true)),
         ),
       ),
     );
@@ -50,5 +50,22 @@ void main() {
 
     expect(find.byKey(const Key('tournament-squad-view')), findsOneWidget);
     expect(find.text('Daniel Okoro'), findsWidgets);
+  });
+
+  testWidgets('blocks generated tournament fixtures by default', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const Scaffold(body: TournamentsScreen()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Live tournaments unavailable'), findsOneWidget);
+    expect(find.text('Lagos Atlas FC'), findsNothing);
   });
 }

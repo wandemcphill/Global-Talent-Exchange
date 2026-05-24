@@ -17,11 +17,20 @@ from app.models.coin_trader import (
     CoinTraderRate,
 )
 from app.models.user import User, UserRole
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerEntry,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransactionType,
+    LedgerUnit,
+)
 from app.notifications.service import NotificationEventMatrixService
 from app.wallets.service import LedgerPosting, WalletService
 from app.coin_traders.governance import CoinTraderPricingGovernanceService
 from app.coin_traders.schemas import (
+    CoinTraderAdminLiquidityRequest,
+    CoinTraderAdminLiquidityTransferView,
     CoinTradeAdminResolutionRequest,
     CoinTradeDisputeRequest,
     CoinTradeOrderCreateRequest,
@@ -95,7 +104,9 @@ class CoinTraderService:
             raise CoinTraderNotFoundError("Coin trader profile was not found for this user.")
         return self.to_profile_view(profile)
 
-    def create_or_update_profile(self, payload: CoinTraderProfileCreateRequest, *, actor: User) -> CoinTraderProfileView:
+    def create_or_update_profile(
+        self, payload: CoinTraderProfileCreateRequest, *, actor: User
+    ) -> CoinTraderProfileView:
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id))
         if profile is None:
             profile = CoinTraderProfile(
@@ -231,7 +242,10 @@ class CoinTraderService:
             raise CoinTraderValidationError("Order is below the trader minimum.")
         if rate.max_coin_amount > Decimal("0") and payload.coin_amount > rate.max_coin_amount:
             raise CoinTraderValidationError("Order exceeds the trader maximum.")
-        if direction == CoinTradeDirection.USER_BUYS.value and rate.available_liquidity < payload.coin_amount:
+        if (
+            direction == CoinTradeDirection.USER_BUYS.value
+            and self._effective_available_liquidity(rate) < payload.coin_amount
+        ):
             raise CoinTraderValidationError("Trader liquidity is below requested amount.")
         fiat_total = payload.coin_amount * quoted_rate
         order = CoinTradeOrder(
@@ -367,9 +381,11 @@ class CoinTraderService:
             **dict(order.metadata_json or {}),
             "dispute": {"reason": payload.reason, "evidence": payload.evidence, "opened_by_user_id": actor.id},
         }
+        profile = self._require_profile(order.trader_profile_id)
+        self.session.flush()
+        self._refresh_profile_metrics(profile)
         self.session.commit()
         self.session.refresh(order)
-        profile = self._require_profile(order.trader_profile_id)
         self._publish_order_matrix_notifications(
             order,
             event_key="dispute_opened",
@@ -437,6 +453,24 @@ class CoinTraderService:
         statement = select(CoinTradeOrder).order_by(CoinTradeOrder.created_at.desc())
         return [self.to_order_view(order) for order in self.session.scalars(statement).all()]
 
+    def admin_issue_liquidity(
+        self,
+        profile_id: str,
+        payload: CoinTraderAdminLiquidityRequest,
+        *,
+        admin: User,
+    ) -> CoinTraderAdminLiquidityTransferView:
+        return self._admin_transfer_liquidity(profile_id, payload, admin=admin, flow="issue")
+
+    def admin_redeem_liquidity(
+        self,
+        profile_id: str,
+        payload: CoinTraderAdminLiquidityRequest,
+        *,
+        admin: User,
+    ) -> CoinTraderAdminLiquidityTransferView:
+        return self._admin_transfer_liquidity(profile_id, payload, admin=admin, flow="redeem")
+
     def admin_resolve_order(
         self,
         order_id: str,
@@ -452,7 +486,9 @@ class CoinTraderService:
         }:
             raise CoinTraderValidationError("Only active or disputed escrow orders can be resolved.")
         if payload.resolution == "release":
-            view = self._release_order(order, admin_actor=admin, source_tag=LedgerSourceTag.COIN_TRADER_ADMIN_RESOLUTION)
+            view = self._release_order(
+                order, admin_actor=admin, source_tag=LedgerSourceTag.COIN_TRADER_ADMIN_RESOLUTION
+            )
             order.status = CoinTradeOrderStatus.ADMIN_RELEASED.value
         else:
             view = self._refund_order(order, actor=admin, admin=True)
@@ -500,6 +536,8 @@ class CoinTraderService:
             **dict(order.ledger_refs_json or {}),
             "release_entry_ids": [entry.id for entry in entries],
         }
+        self.session.flush()
+        self._refresh_profile_metrics(profile)
         self.session.commit()
         self.session.refresh(order)
         self._publish_order_matrix_notifications(
@@ -520,9 +558,7 @@ class CoinTraderService:
             reference=f"coin-trade:{order.id}:refund",
             description="Coin trader escrow refund",
             source_tag=(
-                LedgerSourceTag.COIN_TRADER_ADMIN_RESOLUTION
-                if admin
-                else LedgerSourceTag.COIN_TRADER_ESCROW_REFUND
+                LedgerSourceTag.COIN_TRADER_ADMIN_RESOLUTION if admin else LedgerSourceTag.COIN_TRADER_ESCROW_REFUND
             ),
         )
         order.status = CoinTradeOrderStatus.ADMIN_REFUNDED.value if admin else CoinTradeOrderStatus.REFUNDED.value
@@ -532,9 +568,132 @@ class CoinTraderService:
             "refund_entry_ids": [entry.id for entry in entries],
             "refund_actor_user_id": actor.id,
         }
+        profile = self._require_profile(order.trader_profile_id)
+        self.session.flush()
+        self._refresh_profile_metrics(profile)
         self.session.commit()
         self.session.refresh(order)
         return self.to_order_view(order)
+
+    def _admin_transfer_liquidity(
+        self,
+        profile_id: str,
+        payload: CoinTraderAdminLiquidityRequest,
+        *,
+        admin: User,
+        flow: str,
+    ) -> CoinTraderAdminLiquidityTransferView:
+        profile = self._require_approved_profile(profile_id)
+        trader_user = self._require_user(profile.user_id)
+        amount = self.wallet_service._normalize_amount(payload.amount)
+        if amount <= Decimal("0.0000"):
+            raise CoinTraderValidationError("Liquidity amount must be positive.")
+
+        trader_account = self.wallet_service.get_user_account(self.session, trader_user, payload.coin_unit)
+        platform_account = self.wallet_service.ensure_market_liquidity_account(self.session, payload.coin_unit)
+        if flow == "issue":
+            postings = [
+                LedgerPosting(account=platform_account, amount=-amount),
+                LedgerPosting(account=trader_account, amount=amount),
+            ]
+            transaction_type = LedgerTransactionType.TRADE_BUY
+            description = "Admin issued coin trader liquidity"
+        elif flow == "redeem":
+            available_balance = self.wallet_service.get_balance(self.session, trader_account)
+            if available_balance < amount:
+                raise CoinTraderValidationError("Trader wallet balance is below redemption amount.")
+            postings = [
+                LedgerPosting(account=trader_account, amount=-amount),
+                LedgerPosting(account=platform_account, amount=amount),
+            ]
+            transaction_type = LedgerTransactionType.TRADE_SELL
+            description = "Admin redeemed coin trader liquidity"
+        else:
+            raise CoinTraderValidationError("Unsupported liquidity flow.")
+
+        reference = payload.reference or f"coin-trader:{profile.id}:liquidity:{flow}"
+        idempotency_key = (
+            f"coin-trader-liquidity:{profile.id}:{flow}:{payload.idempotency_key}" if payload.idempotency_key else None
+        )
+        entries = self.wallet_service.append_transaction(
+            self.session,
+            postings=postings,
+            reason=LedgerEntryReason.TRADE_SETTLEMENT,
+            source_tag=LedgerSourceTag.COIN_TRADER_ADMIN_RESOLUTION,
+            transaction_type=transaction_type,
+            reference=reference,
+            description=description,
+            external_reference=reference,
+            actor=admin,
+            idempotency_key=idempotency_key,
+            metadata={
+                "coin_trader_liquidity_flow": flow,
+                "trader_profile_id": profile.id,
+                "trader_user_id": trader_user.id,
+                "coin_unit": payload.coin_unit.value,
+                "amount": str(amount),
+                "fiat_total": str(payload.fiat_total) if payload.fiat_total is not None else None,
+                "note": payload.note or "",
+                "metadata_json": dict(payload.metadata_json),
+            },
+        )
+        self._assert_admin_liquidity_idempotency_matches(
+            entries=entries,
+            profile=profile,
+            payload=payload,
+            flow=flow,
+            amount=amount,
+            reference=reference,
+        )
+        profile.liquidity_snapshot_json = self._liquidity_snapshot(profile.id)
+        profile.metadata_json = {
+            **dict(profile.metadata_json or {}),
+            "last_admin_liquidity_flow": {
+                "flow": flow,
+                "coin_unit": payload.coin_unit.value,
+                "amount": str(amount),
+                "reference": reference,
+                "admin_user_id": admin.id,
+            },
+        }
+        self.session.commit()
+        self.session.refresh(profile)
+        return CoinTraderAdminLiquidityTransferView(
+            trader_profile_id=profile.id,
+            trader_user_id=trader_user.id,
+            flow=flow,  # type: ignore[arg-type]
+            coin_unit=payload.coin_unit,
+            amount=amount,
+            reference=reference,
+            transaction_id=entries[0].transaction_id if entries else None,
+            ledger_entry_ids=[entry.id for entry in entries],
+            available_balance=self._trader_available_balance(profile, payload.coin_unit),
+            liquidity_snapshot=self._liquidity_snapshot(profile.id),
+        )
+
+    def _assert_admin_liquidity_idempotency_matches(
+        self,
+        *,
+        entries: list[LedgerEntry],
+        profile: CoinTraderProfile,
+        payload: CoinTraderAdminLiquidityRequest,
+        flow: str,
+        amount: Decimal,
+        reference: str,
+    ) -> None:
+        if not payload.idempotency_key or not entries:
+            return
+        transaction = entries[0].transaction
+        metadata = dict(transaction.metadata_json or {}) if transaction is not None else {}
+        expected = {
+            "coin_trader_liquidity_flow": flow,
+            "trader_profile_id": profile.id,
+            "coin_unit": payload.coin_unit.value,
+            "amount": str(amount),
+        }
+        mismatched = any(metadata.get(key) != value for key, value in expected.items())
+        if mismatched or transaction.reference != reference:
+            raise CoinTraderValidationError("Liquidity idempotency key was already used for a different transfer.")
 
     def _require_participating_order(self, order_id: str, actor: User) -> CoinTradeOrder:
         order = self._require_order(order_id)
@@ -644,12 +803,69 @@ class CoinTraderService:
         rates = self._rates_for_profile(profile_id)
         return {
             f"{rate.coin_unit.value}:{rate.fiat_currency}": {
-                "available_liquidity": str(rate.available_liquidity),
+                "available_liquidity": str(self._effective_available_liquidity(rate)),
+                "claimed_available_liquidity": str(self.wallet_service._normalize_amount(rate.available_liquidity)),
                 "buy_rate_fiat": str(rate.buy_rate_fiat),
                 "sell_rate_fiat": str(rate.sell_rate_fiat),
             }
             for rate in rates
         }
+
+    def _trader_available_balance(self, profile: CoinTraderProfile, unit: LedgerUnit) -> Decimal:
+        account = self.session.scalar(
+            select(LedgerAccount).where(
+                LedgerAccount.code == self.wallet_service._user_account_code(profile.user_id, unit)
+            )
+        )
+        if account is None:
+            return Decimal("0.0000")
+        balance = self.wallet_service.get_balance(self.session, account)
+        return max(balance, Decimal("0.0000"))
+
+    def _effective_available_liquidity(self, rate: CoinTraderRate) -> Decimal:
+        profile = self._require_profile(rate.trader_profile_id)
+        claimed_liquidity = self.wallet_service._normalize_amount(rate.available_liquidity)
+        return min(claimed_liquidity, self._trader_available_balance(profile, rate.coin_unit))
+
+    def _refresh_profile_metrics(self, profile: CoinTraderProfile) -> None:
+        orders = list(
+            self.session.scalars(select(CoinTradeOrder).where(CoinTradeOrder.trader_profile_id == profile.id)).all()
+        )
+        completed_statuses = {CoinTradeOrderStatus.RELEASED.value, CoinTradeOrderStatus.ADMIN_RELEASED.value}
+        terminal_statuses = completed_statuses | {
+            CoinTradeOrderStatus.REFUNDED.value,
+            CoinTradeOrderStatus.ADMIN_REFUNDED.value,
+            CoinTradeOrderStatus.CANCELLED.value,
+        }
+        completed_orders = [order for order in orders if order.status in completed_statuses]
+        terminal_orders = [order for order in orders if order.status in terminal_statuses]
+        disputed_orders = [
+            order
+            for order in orders
+            if order.disputed_at is not None or order.status == CoinTradeOrderStatus.DISPUTED.value
+        ]
+        profile.completed_volume_fiat = sum((order.fiat_total for order in completed_orders), Decimal("0.0000"))
+        profile.completion_rate = (
+            float((Decimal(len(completed_orders)) / Decimal(len(terminal_orders))) * Decimal("100"))
+            if terminal_orders
+            else 0.0
+        )
+        release_minutes: list[float] = []
+        for order in completed_orders:
+            if order.accepted_at is None or order.released_at is None:
+                continue
+            accepted_at = order.accepted_at
+            released_at = order.released_at
+            if accepted_at.tzinfo is None and released_at.tzinfo is not None:
+                released_at = released_at.replace(tzinfo=None)
+            elif accepted_at.tzinfo is not None and released_at.tzinfo is None:
+                accepted_at = accepted_at.replace(tzinfo=None)
+            release_minutes.append((released_at - accepted_at).total_seconds() / 60)
+        profile.average_release_minutes = sum(release_minutes) / len(release_minutes) if release_minutes else 0.0
+        profile.dispute_score = (
+            float((Decimal(len(disputed_orders)) / Decimal(len(orders))) * Decimal("100")) if orders else 0.0
+        )
+        profile.liquidity_snapshot_json = self._liquidity_snapshot(profile.id)
 
     def _direction_value(self, direction: CoinTradeDirection | str) -> str:
         return direction.value if hasattr(direction, "value") else str(direction)
@@ -687,7 +903,7 @@ class CoinTraderService:
             sell_rate_fiat=rate.sell_rate_fiat,
             min_coin_amount=rate.min_coin_amount,
             max_coin_amount=rate.max_coin_amount,
-            available_liquidity=rate.available_liquidity,
+            available_liquidity=self._effective_available_liquidity(rate),
             is_active=rate.is_active,
             spread_fiat=governance_result.spread_fiat,
             treasury_deposit_rate_fiat=governance_result.treasury_deposit_rate_fiat,

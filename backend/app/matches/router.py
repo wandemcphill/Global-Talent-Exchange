@@ -3,8 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_admin, get_session
 from app.models.match_event import MatchEventTeam
+from app.models.user import User
 from app.orchestrator.command_bus import OutboxCommandDispatcher
 from app.orchestrator.orchestrator_service import OrchestratorService
 from app.services.commentary_service import MatchCommentaryNotFoundError, MatchCommentaryService
@@ -89,6 +90,7 @@ def get_match_analysis(
 @router.post("/start", response_model=MatchCommandAcceptedView, status_code=status.HTTP_202_ACCEPTED)
 def start_match(
     payload: MatchStartRequest,
+    _: User = Depends(get_current_admin),
     service: MatchCommandService = Depends(get_match_command_service),
 ) -> MatchCommandAcceptedView:
     try:
@@ -100,6 +102,7 @@ def start_match(
 @router.post("/complete", response_model=MatchCommandAcceptedView, status_code=status.HTTP_202_ACCEPTED)
 def complete_match(
     payload: MatchCompleteRequest,
+    _: User = Depends(get_current_admin),
     service: MatchCommandService = Depends(get_match_command_service),
 ) -> MatchCommandAcceptedView:
     try:

@@ -37,7 +37,7 @@ void main() {
 
       expect(find.text('Deposit'), findsOneWidget);
       expect(find.text('Choose a deposit method'), findsOneWidget);
-      expect(find.text('Continue to Paystack'), findsOneWidget);
+      expect(find.text('Continue to KoraPay'), findsOneWidget);
       expect(find.text('Compliance action required'), findsNothing);
 
       await _pumpUntil(

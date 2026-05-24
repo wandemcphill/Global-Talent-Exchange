@@ -13,6 +13,7 @@ concurrency:
 jobs:
   frontend-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -26,6 +27,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - run: python tool/audit_dependency_graph.py
       - run: python tool/check_analyzer_hard_errors.py
       - run: |
           if [ -d test ]; then

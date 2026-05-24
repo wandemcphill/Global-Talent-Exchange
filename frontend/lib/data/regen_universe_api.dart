@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
@@ -8,7 +10,7 @@ class RegenUniverseApi {
   RegenUniverseApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
-  final _RegenUniverseFixtures fixtures;
+  final _RegenUniverseFixtures? fixtures;
 
   factory RegenUniverseApi.standard({
     required String baseUrl,
@@ -23,11 +25,12 @@ class RegenUniverseApi {
         ),
         mode: resolvedMode,
       ),
-      fixtures: _RegenUniverseFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory RegenUniverseApi.fixture() {
+    assertFixtureFactoryAllowed('RegenUniverseApi.fixture');
     return RegenUniverseApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -46,7 +49,10 @@ class RegenUniverseApi {
   factory RegenUniverseApi.withClient({required GteAuthedApi client}) {
     return RegenUniverseApi(
       client: client,
-      fixtures: _RegenUniverseFixtures.seed(),
+      fixtures:
+          client.mode == GteBackendMode.fixture
+              ? _RegenUniverseFixtures.seed()
+              : null,
     );
   }
 
@@ -61,7 +67,7 @@ class RegenUniverseApi {
         payload['entries'] ?? const <Object?>[],
       );
       return items.map(RegenRisingStar.fromJson).toList(growable: false);
-    }, () async => fixtures.risingStars(limit: limit));
+    }, () async => _requireFixtures().risingStars(limit: limit));
   }
 
   Future<List<RegenScoutingFeedItem>> listScoutingFeed({int limit = 8}) {
@@ -75,7 +81,7 @@ class RegenUniverseApi {
         payload['items'] ?? const <Object?>[],
       );
       return items.map(RegenScoutingFeedItem.fromJson).toList(growable: false);
-    }, () async => fixtures.scoutingFeed(limit: limit));
+    }, () async => _requireFixtures().scoutingFeed(limit: limit));
   }
 
   Future<List<NationalRegenSeed>> listNationalRegens({
@@ -92,7 +98,7 @@ class RegenUniverseApi {
         payload['items'] ?? const <Object?>[],
       );
       return items.map(NationalRegenSeed.fromJson).toList(growable: false);
-    }, () async => fixtures.nationalRegens(limit: limit));
+    }, () async => _requireFixtures().nationalRegens(limit: limit));
   }
 
   Future<List<RegenAwardResult>> listAwards({int limit = 8}) {
@@ -106,7 +112,7 @@ class RegenUniverseApi {
         payload['items'] ?? const <Object?>[],
       );
       return items.map(RegenAwardResult.fromJson).toList(growable: false);
-    }, () async => fixtures.awards(limit: limit));
+    }, () async => _requireFixtures().awards(limit: limit));
   }
 
   Future<RegenGenerationTracking> fetchTracking() {
@@ -116,7 +122,19 @@ class RegenUniverseApi {
         auth: false,
       );
       return RegenGenerationTracking.fromJson(payload);
-    }, fixtures.tracking);
+    }, () => _requireFixtures().tracking());
+  }
+
+  _RegenUniverseFixtures _requireFixtures() {
+    final _RegenUniverseFixtures? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Regen universe fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 
   String _publicUnversionedUrl(String path) {

@@ -276,14 +276,49 @@ void main() {
   test(
     'clamped secondary APIs surface live failures instead of fixture data',
     () async {
+      const _StatusTransport unavailable = _StatusTransport(
+        statusCode: 503,
+        body: <String, Object?>{'detail': 'backend offline'},
+      );
+
+      final AdminEngineApi adminEngineApi = AdminEngineApi.standard(
+        baseUrl: 'https://example.test',
+        accessToken: 'token',
+        mode: GteBackendMode.liveThenFixture,
+        transport: unavailable,
+      );
+      await _expectUnavailable(adminEngineApi.listFeatureFlags());
+
+      final AdminFinanceApi adminFinanceApi = AdminFinanceApi.standard(
+        baseUrl: 'https://example.test',
+        accessToken: 'token',
+        mode: GteBackendMode.liveThenFixture,
+        transport: unavailable,
+      );
+      await _expectUnavailable(adminFinanceApi.fetchControlTower());
+
+      final CreatorApplicationApi creatorApplicationApi =
+          CreatorApplicationApi.standard(
+            baseUrl: 'https://example.test',
+            accessToken: 'token',
+            mode: GteBackendMode.liveThenFixture,
+            client: GteAuthedApi(
+              config: const GteRepositoryConfig(
+                baseUrl: 'https://example.test',
+                mode: GteBackendMode.live,
+              ),
+              transport: unavailable,
+              accessToken: 'token',
+              mode: GteBackendMode.live,
+            ),
+          );
+      await _expectUnavailable(creatorApplicationApi.fetchVerificationStatus());
+
       final HostedCompetitionApi api = HostedCompetitionApi.standard(
         baseUrl: 'https://example.test',
         accessToken: null,
         mode: GteBackendMode.liveThenFixture,
-        transport: const _StatusTransport(
-          statusCode: 503,
-          body: <String, Object?>{'detail': 'backend offline'},
-        ),
+        transport: unavailable,
       );
 
       await expectLater(

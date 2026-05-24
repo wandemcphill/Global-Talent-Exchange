@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_api.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_models.dart';
@@ -52,39 +53,45 @@ class GtexGlobalSearchController extends ChangeNotifier {
   Future<List<GtexGlobalSearchResult>> _filterLaunchVisible(
     List<GtexGlobalSearchResult> results,
   ) async {
+    final List<GtexGlobalSearchResult> canonicalResults = results
+        .map(
+          (GtexGlobalSearchResult result) => result.copyWith(
+            route: gtexCanonicalGlobalSearchRoute(
+              result.route,
+              isAdmin: _admin,
+            ),
+          ),
+        )
+        .toList(growable: false);
     if (_admin || results.isEmpty) {
-      return results;
+      return canonicalResults;
     }
-    if (!results.any(
+    if (!canonicalResults.any(
       (GtexGlobalSearchResult result) =>
-          GtexLaunchControlFeatureGate.featureKeyForPath(
-            gtexCanonicalGlobalSearchRoute(result.route, isAdmin: _admin),
-          ) !=
-          null,
+          GtexLaunchControlFeatureGate.featureKeyForPath(result.route) != null,
     )) {
-      return results;
+      return canonicalResults;
     }
 
     late final List<GtexClientFeatureFlag> flags;
     try {
-      flags =
-          await GtexLaunchControlApi.standard(
-            baseUrl: _api.client.config.baseUrl,
-            accessToken: _api.client.accessToken,
-            mode: _api.client.mode,
-          ).fetchClientFlags();
+      final GtexLaunchControlApi launchControlApi =
+          _api.client.mode == GteBackendMode.fixture
+              ? GtexLaunchControlApi.fixture()
+              : GtexLaunchControlApi.standard(
+                baseUrl: _api.client.config.baseUrl,
+                accessToken: _api.client.accessToken,
+                mode: _api.client.mode,
+              );
+      flags = await launchControlApi.fetchClientFlags();
     } catch (_) {
       flags = const <GtexClientFeatureFlag>[];
     }
 
     final List<GtexGlobalSearchResult> visible = <GtexGlobalSearchResult>[];
-    for (final GtexGlobalSearchResult result in results) {
-      final String canonicalRoute = gtexCanonicalGlobalSearchRoute(
-        result.route,
-        isAdmin: _admin,
-      );
-      if (canonicalRoute == '/app/home' &&
-          result.route.trim().toLowerCase().startsWith('/admin')) {
+    for (final GtexGlobalSearchResult result in canonicalResults) {
+      final String canonicalRoute = result.route;
+      if (canonicalRoute == '/app/home' && result.adminOnly) {
         continue;
       }
       final String? featureKey = GtexLaunchControlFeatureGate.featureKeyForPath(
@@ -98,7 +105,7 @@ class GtexGlobalSearchController extends ChangeNotifier {
             flags: flags,
           );
       if (decision.allowed) {
-        visible.add(result);
+        visible.add(result.copyWith(route: canonicalRoute));
       }
     }
     return visible;

@@ -5,10 +5,15 @@ const String gteFixtureApiBaseUrl = 'https://fixture.invalid';
 const String gteFlutterTestApiBaseUrl = 'https://runtime-config.invalid';
 
 class GteAppConfig {
-  const GteAppConfig({required this.apiBaseUrl, required this.backendMode});
+  const GteAppConfig({
+    required this.apiBaseUrl,
+    required this.backendMode,
+    this.rawBackendMode = 'strict_live',
+  });
 
   final String apiBaseUrl;
   final GteBackendMode backendMode;
+  final String rawBackendMode;
 
   GteBackendMode get activeShellBackendMode =>
       backendMode == GteBackendMode.fixture
@@ -19,9 +24,7 @@ class GteAppConfig {
     const String rawBaseUrl = String.fromEnvironment('GTE_API_BASE_URL');
     const String rawMode = String.fromEnvironment(
       'GTE_BACKEND_MODE',
-      // Default to live so imported players, regens, and admin changes are
-      // visible without requiring a local launch flag override.
-      defaultValue: 'live',
+      defaultValue: 'strict_live',
     );
     final GteBackendMode backendMode = _parseBackendMode(
       rawMode,
@@ -33,6 +36,7 @@ class GteAppConfig {
         backendMode: backendMode,
       ),
       backendMode: backendMode,
+      rawBackendMode: rawMode,
     );
   }
 
@@ -40,7 +44,7 @@ class GteAppConfig {
     const String rawBaseUrl = String.fromEnvironment('GTE_API_BASE_URL');
     const String rawMode = String.fromEnvironment(
       'GTE_BACKEND_MODE',
-      defaultValue: 'live',
+      defaultValue: 'strict_live',
     );
     final GteBackendMode backendMode = _parseBackendMode(
       rawMode,
@@ -52,6 +56,7 @@ class GteAppConfig {
         rawMode: rawMode,
       ),
       backendMode: backendMode,
+      rawBackendMode: rawMode,
     );
   }
 }
@@ -68,7 +73,7 @@ String resolveGteApiBaseUrl({
     return gteFixtureApiBaseUrl;
   }
   throw StateError(
-    'GTE_API_BASE_URL must be set when GTE_BACKEND_MODE is live.',
+    'GTE_API_BASE_URL must be set when GTE_BACKEND_MODE is strict_live.',
   );
 }
 
@@ -76,7 +81,7 @@ String resolveGteApiBaseUrlFromEnvironment({
   String rawBaseUrl = const String.fromEnvironment('GTE_API_BASE_URL'),
   String rawMode = const String.fromEnvironment(
     'GTE_BACKEND_MODE',
-    defaultValue: 'live',
+    defaultValue: 'strict_live',
   ),
 }) {
   return resolveGteApiBaseUrl(
@@ -92,7 +97,7 @@ String resolveGteApiBaseUrlForRuntimeEnvironment({
   String rawBaseUrl = const String.fromEnvironment('GTE_API_BASE_URL'),
   String rawMode = const String.fromEnvironment(
     'GTE_BACKEND_MODE',
-    defaultValue: 'live',
+    defaultValue: 'strict_live',
   ),
 }) {
   final String baseUrl = rawBaseUrl.trim();
@@ -120,11 +125,21 @@ GteBackendMode _parseBackendMode(
 }) {
   switch (rawMode.trim().toLowerCase()) {
     case 'fixture':
-      return allowFixtureMode ? GteBackendMode.fixture : GteBackendMode.live;
+      if (allowFixtureMode) {
+        return GteBackendMode.fixture;
+      }
+      throw StateError(
+        'GTE_BACKEND_MODE=fixture is not allowed outside Flutter test runtime.',
+      );
+    case 'strict_live':
+    case 'strictlive':
+    case 'production':
     case 'live':
       return GteBackendMode.live;
     case 'livethenfixture':
-      return GteBackendMode.live;
+      throw StateError(
+        'GTE_BACKEND_MODE=liveThenFixture is forbidden. Use strict_live.',
+      );
     default:
       return GteBackendMode.live;
   }

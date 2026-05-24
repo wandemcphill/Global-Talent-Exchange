@@ -77,5 +77,11 @@ def test_match_websocket_gateway_streams_match_events() -> None:
 
         events_message = websocket.receive_json()
         assert events_message["type"] == "match_update"
+        assert events_message["source_of_truth"] == "persisted_backend_authority"
+        assert events_message["source_tag"] == "gtex_realtime_hub"
+        assert events_message["topics"] == ["match:match-42"]
+        assert events_message["published_at"]
         assert events_message["data"]["match_id"] == "match-42"
         assert events_message["data"]["event_name"] == "competition.match.execution.started"
+        assert events_message["data"]["source_of_truth"] == "persisted_backend_authority"
+        assert events_message["data"]["source_tag"] == "gtex_realtime_hub"

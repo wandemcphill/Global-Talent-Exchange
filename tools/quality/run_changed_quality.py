@@ -55,6 +55,15 @@ SECRET_SCAN_FILENAMES = {
 NPM_EXECUTABLE = shutil.which("npm") or shutil.which("npm.cmd")
 UNTRACKED_SKIP_PREFIXES = (
     ".tmp",
+    ".codex_tmp",
+    ".dart_tool",
+    ".pytest_tmp",
+    ".runtime",
+    "_zip_review/",
+    "backend/generated_media/",
+    "backend/media_dropzones/",
+    "frontend/.dart_tool/",
+    "frontend/build/",
     "tmp/",
 )
 

@@ -10,7 +10,7 @@ import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
 import '../../widgets/gtex_branding.dart';
-import '../gte_signup_screen.dart';
+import '../auth/gtex_account_signup_screens.dart';
 
 class CreatorAccessRequestScreen extends StatefulWidget {
   const CreatorAccessRequestScreen({
@@ -55,8 +55,9 @@ class _CreatorAccessRequestScreenState
   void didUpdateWidget(covariant CreatorAccessRequestScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.exchangeController != widget.exchangeController) {
-      oldWidget.exchangeController
-          .removeListener(_handleExchangeControllerChanged);
+      oldWidget.exchangeController.removeListener(
+        _handleExchangeControllerChanged,
+      );
       widget.exchangeController.addListener(_handleExchangeControllerChanged);
       _syncApplicationController(force: true);
     }
@@ -100,7 +101,8 @@ class _CreatorAccessRequestScreenState
     final String? nextAccessToken = widget.exchangeController.accessToken;
     final String nextBaseUrl = widget.exchangeController.api.config.baseUrl;
     final GteBackendMode nextMode = widget.exchangeController.api.config.mode;
-    final bool sameBinding = !force &&
+    final bool sameBinding =
+        !force &&
         nextAccessToken == _boundAccessToken &&
         nextBaseUrl == _boundBaseUrl &&
         nextMode == _boundMode;
@@ -120,12 +122,12 @@ class _CreatorAccessRequestScreenState
 
     final CreatorApplicationController controller =
         CreatorApplicationController(
-      api: CreatorApplicationApi.standard(
-        baseUrl: nextBaseUrl,
-        accessToken: nextAccessToken,
-        mode: nextMode,
-      ),
-    );
+          api: CreatorApplicationApi.standard(
+            baseUrl: nextBaseUrl,
+            accessToken: nextAccessToken,
+            mode: nextMode,
+          ),
+        );
     controller.addListener(_handleApplicationControllerChanged);
     _applicationController = controller;
     controller.load();
@@ -156,9 +158,7 @@ class _CreatorAccessRequestScreenState
       decoration: gteBackdropDecoration(),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: const Text('Creator access request'),
-        ),
+        appBar: AppBar(title: const Text('Creator access request')),
         body: SafeArea(
           child: Center(
             child: ConstrainedBox(
@@ -234,7 +234,8 @@ class _CreatorAccessRequestScreenState
         _ContactReadinessCard(
           email:
               widget.exchangeController.session?.user.email ?? 'Unknown email',
-          phoneNumber: widget.exchangeController.session?.user.phoneNumber ??
+          phoneNumber:
+              widget.exchangeController.session?.user.phoneNumber ??
               'No phone number on account',
           verificationStatus: controller.verificationStatus,
           canVerifyPhone:
@@ -244,25 +245,29 @@ class _CreatorAccessRequestScreenState
           isVerifyingEmail: controller.isVerifyingEmail,
           isVerifyingPhone: controller.isVerifyingPhone,
           verificationError: controller.verificationError,
-          onVerifyEmail: controller.verificationStatus.isEmailVerified
-              ? null
-              : controller.verifyEmail,
-          onVerifyPhone: controller.verificationStatus.isPhoneVerified ||
-                  (widget.exchangeController.session?.user.phoneNumber ?? '')
-                      .trim()
-                      .isEmpty
-              ? null
-              : controller.verifyPhone,
+          onVerifyEmail:
+              controller.verificationStatus.isEmailVerified
+                  ? null
+                  : controller.verifyEmail,
+          onVerifyPhone:
+              controller.verificationStatus.isPhoneVerified ||
+                      (widget.exchangeController.session?.user.phoneNumber ??
+                              '')
+                          .trim()
+                          .isEmpty
+                  ? null
+                  : controller.verifyPhone,
         ),
         if (application != null) ...<Widget>[
           const SizedBox(height: 16),
           _ApplicationStatusCard(
             application: application,
-            onRefresh: controller.isLoading
-                ? null
-                : () {
-                    controller.load();
-                  },
+            onRefresh:
+                controller.isLoading
+                    ? null
+                    : () {
+                      controller.load();
+                    },
           ),
         ],
         if (showForm) ...<Widget>[
@@ -278,11 +283,13 @@ class _CreatorAccessRequestScreenState
     CreatorApplicationController controller,
     CreatorApplicationView? application,
   ) {
-    final bool contactsReady = controller.verificationStatus.isEmailVerified &&
+    final bool contactsReady =
+        controller.verificationStatus.isEmailVerified &&
         controller.verificationStatus.isPhoneVerified;
-    final String submitLabel = application == null
-        ? 'Submit creator application'
-        : 'Resubmit creator application';
+    final String submitLabel =
+        application == null
+            ? 'Submit creator application'
+            : 'Resubmit creator application';
     return GteSurfacePanel(
       emphasized: true,
       accentColor: GteShellTheme.accentCommunity,
@@ -343,14 +350,8 @@ class _CreatorAccessRequestScreenState
                 value: 'youtube',
                 child: Text('YouTube'),
               ),
-              DropdownMenuItem<String>(
-                value: 'twitch',
-                child: Text('Twitch'),
-              ),
-              DropdownMenuItem<String>(
-                value: 'tiktok',
-                child: Text('TikTok'),
-              ),
+              DropdownMenuItem<String>(value: 'twitch', child: Text('Twitch')),
+              DropdownMenuItem<String>(value: 'tiktok', child: Text('TikTok')),
             ],
             onChanged: (String? value) {
               if (value == null) {
@@ -415,20 +416,22 @@ class _CreatorAccessRequestScreenState
             runSpacing: 12,
             children: <Widget>[
               FilledButton.icon(
-                onPressed: !contactsReady || controller.isSubmitting
-                    ? null
-                    : _submitApplication,
+                onPressed:
+                    !contactsReady || controller.isSubmitting
+                        ? null
+                        : _submitApplication,
                 icon: const Icon(Icons.send_outlined),
                 label: Text(
                   controller.isSubmitting ? 'Submitting...' : submitLabel,
                 ),
               ),
               OutlinedButton.icon(
-                onPressed: controller.isLoading
-                    ? null
-                    : () {
-                        controller.load();
-                      },
+                onPressed:
+                    controller.isLoading
+                        ? null
+                        : () {
+                          controller.load();
+                        },
                 icon: const Icon(Icons.refresh_outlined),
                 label: const Text('Refresh status'),
               ),
@@ -449,9 +452,7 @@ class _CreatorAccessRequestScreenState
   Future<void> _openSignup() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => GteSignupScreen(
-          controller: widget.exchangeController,
-        ),
+        builder: (BuildContext context) => const GtexAccountSelectorScreen(),
       ),
     );
     if (!mounted) {
@@ -473,8 +474,9 @@ class _CreatorAccessRequestScreenState
     }
     final String requestedHandle = _handleController.text.trim();
     final String displayName = _displayNameController.text.trim();
-    final int? followerCount =
-        int.tryParse(_followerCountController.text.trim());
+    final int? followerCount = int.tryParse(
+      _followerCountController.text.trim(),
+    );
     final List<String> socialLinks = _socialLinksController.text
         .split(RegExp(r'\r?\n'))
         .map((String item) => item.trim())
@@ -645,8 +647,8 @@ class _ContactReadinessCard extends StatelessWidget {
                   verificationStatus.isEmailVerified
                       ? 'Email ready'
                       : isVerifyingEmail
-                          ? 'Confirming email...'
-                          : 'Use account email',
+                      ? 'Confirming email...'
+                      : 'Use account email',
                 ),
               ),
               FilledButton.tonalIcon(
@@ -658,8 +660,8 @@ class _ContactReadinessCard extends StatelessWidget {
                   verificationStatus.isPhoneVerified
                       ? 'Phone ready'
                       : isVerifyingPhone
-                          ? 'Confirming phone...'
-                          : 'Use account phone',
+                      ? 'Confirming phone...'
+                      : 'Use account phone',
                 ),
               ),
             ],
@@ -676,8 +678,8 @@ class _ContactReadinessCard extends StatelessWidget {
             Text(
               verificationError!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
           ],
         ],
@@ -702,19 +704,22 @@ class _ApplicationStatusCard extends StatelessWidget {
     final Color accentColor;
     if (application.isApproved) {
       title = 'Creator access approved';
-      message = application.provisioning == null
-          ? 'Your creator application is approved. Provisioning is being finalized for this account.'
-          : 'Your creator application is approved and provisioning is attached to this account.';
+      message =
+          application.provisioning == null
+              ? 'Your creator application is approved. Provisioning is being finalized for this account.'
+              : 'Your creator application is approved and provisioning is attached to this account.';
       accentColor = GteShellTheme.accentCommunity;
     } else if (application.needsVerificationUpdate) {
       title = 'More verification is required';
-      message = application.decisionReason ??
+      message =
+          application.decisionReason ??
           application.reviewNotes ??
           'GTEX requested more verification before the creator application can proceed.';
       accentColor = GteShellTheme.accentWarm;
     } else if (application.isRejected) {
       title = 'Creator application was not approved';
-      message = application.decisionReason ??
+      message =
+          application.decisionReason ??
           application.reviewNotes ??
           'This creator application was rejected. Update the details below if you need to resubmit.';
       accentColor = GteShellTheme.accentWarm;
@@ -729,13 +734,14 @@ class _ApplicationStatusCard extends StatelessWidget {
       eyebrow: 'APPLICATION STATUS',
       title: title,
       message: message,
-      icon: application.isApproved
-          ? Icons.verified_outlined
-          : application.isRejected
+      icon:
+          application.isApproved
+              ? Icons.verified_outlined
+              : application.isRejected
               ? Icons.cancel_outlined
               : application.needsVerificationUpdate
-                  ? Icons.fact_check_outlined
-                  : Icons.hourglass_top_outlined,
+              ? Icons.fact_check_outlined
+              : Icons.hourglass_top_outlined,
       accentColor: accentColor,
       actionLabel: 'Refresh status',
       onAction: onRefresh,
@@ -783,10 +789,8 @@ class _ContactStatusRow extends StatelessWidget {
           Text(
             isReady ? 'Ready' : 'Pending',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: isReady
-                      ? GteShellTheme.positive
-                      : GteShellTheme.textMuted,
-                ),
+              color: isReady ? GteShellTheme.positive : GteShellTheme.textMuted,
+            ),
           ),
         ],
       ),

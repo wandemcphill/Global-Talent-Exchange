@@ -127,15 +127,52 @@ class GtexClubWorkspaceSnapshot {
 
   int get squadValueCredits => finances.squadValueCredits;
   int get totalClubValueCredits =>
-      finances.walletCredits + finances.squadValueCredits - finances.openOrdersCredits;
+      finances.walletCredits +
+      finances.squadValueCredits -
+      finances.openOrdersCredits;
 
+  static GtexClubWorkspaceSnapshot liveUnavailable({
+    required String clubId,
+    String? clubName,
+  }) {
+    final String resolvedName =
+        (clubName == null || clubName.trim().isEmpty)
+            ? 'Live club unavailable'
+            : clubName.trim();
+    return GtexClubWorkspaceSnapshot(
+      clubId: clubId,
+      clubName: resolvedName,
+      shortCode: _shortCode(resolvedName),
+      country: 'Unavailable',
+      division: 'Live snapshot required',
+      ownerName: 'Unavailable',
+      followers: 0,
+      shareholders: 0,
+      finances: const GtexClubFinancialSnapshot(
+        walletCredits: 0,
+        squadValueCredits: 0,
+        openOrdersCredits: 0,
+        monthlyRevenueCredits: 0,
+        sharePriceCredits: 0,
+      ),
+      squad: const <GtexClubMember>[],
+      news: const <GtexClubNewsItem>[],
+      orders: const <GtexClubOrderItem>[],
+      trophies: const <GtexClubTrophy>[],
+      identityTags: const <String>['Live club snapshot required'],
+      activity: const <String>['No persisted club snapshot loaded'],
+    );
+  }
+
+  @visibleForTesting
   static GtexClubWorkspaceSnapshot demo({
     String clubId = 'gtex-club-demo',
     String? clubName,
   }) {
-    final String resolvedName = (clubName == null || clubName.trim().isEmpty)
-        ? 'Lagos Eclipse FC'
-        : clubName.trim();
+    final String resolvedName =
+        (clubName == null || clubName.trim().isEmpty)
+            ? 'Lagos Eclipse FC'
+            : clubName.trim();
     return GtexClubWorkspaceSnapshot(
       clubId: clubId,
       clubName: resolvedName,

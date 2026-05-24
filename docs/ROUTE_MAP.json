@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1620,
+  "route_count": 1650,
   "routes": [
     {
       "method": "POST",
@@ -1112,6 +1112,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "service",
           "current_user"
         ]
@@ -1138,6 +1139,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "service",
           "current_user"
         ]
@@ -1145,6 +1147,33 @@
       "response_shape": {
         "response_model": "list[CoinTradeOrderView]",
         "returns": "list[CoinTradeOrderView]"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/competitions",
+      "effective_paths": [
+        "/api/admin/competitions"
+      ],
+      "file": "backend/app/admin_api/router.py",
+      "handler": "get_admin_competitions",
+      "router_variable": "router",
+      "module_path": "app.admin_api.router",
+      "module_mounts": [
+        "admin_api"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "session",
+          "_"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminCompetitionsCanonicalView",
+        "returns": "AdminCompetitionsCanonicalView"
       },
       "version": "canonical",
       "domain": "admin"
@@ -1672,6 +1701,149 @@
       "response_shape": {
         "response_model": "WithdrawalSummaryView",
         "returns": "WithdrawalSummaryView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/payment-rails",
+      "effective_paths": [
+        "/api/admin/payment-rails"
+      ],
+      "file": "backend/app/admin_api/router.py",
+      "handler": "get_admin_payment_rails",
+      "router_variable": "router",
+      "module_path": "app.admin_api.router",
+      "module_mounts": [
+        "admin_api"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "_"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminPaymentRailsCanonicalView",
+        "returns": "AdminPaymentRailsCanonicalView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/queues",
+      "effective_paths": [
+        "/api/admin/queues"
+      ],
+      "file": "backend/app/admin_api/router.py",
+      "handler": "get_admin_queues",
+      "router_variable": "router",
+      "module_path": "app.admin_api.router",
+      "module_mounts": [
+        "admin_api"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "queue_name",
+          "min_length",
+          "max_length",
+          "job_limit",
+          "ge",
+          "le",
+          "session",
+          "_"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminQueuesCanonicalView",
+        "returns": "AdminQueuesCanonicalView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/readiness",
+      "effective_paths": [
+        "/api/admin/readiness"
+      ],
+      "file": "backend/app/admin_api/router.py",
+      "handler": "get_admin_readiness",
+      "router_variable": "router",
+      "module_path": "app.admin_api.router",
+      "module_mounts": [
+        "admin_api"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "session",
+          "_"
+        ]
+      },
+      "response_shape": {
+        "response_model": "OperationsReadinessSnapshot",
+        "returns": "OperationsReadinessSnapshot"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/settlements",
+      "effective_paths": [
+        "/api/admin/settlements"
+      ],
+      "file": "backend/app/admin_api/router.py",
+      "handler": "get_admin_settlements",
+      "router_variable": "router",
+      "module_path": "app.admin_api.router",
+      "module_mounts": [
+        "admin_api"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "recent_limit",
+          "ge",
+          "le",
+          "session",
+          "_"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminSettlementsCanonicalView",
+        "returns": "AdminSettlementsCanonicalView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/treasury",
+      "effective_paths": [
+        "/api/admin/treasury"
+      ],
+      "file": "backend/app/admin_api/router.py",
+      "handler": "get_admin_treasury",
+      "router_variable": "router",
+      "module_path": "app.admin_api.router",
+      "module_mounts": [
+        "admin_api"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "session",
+          "_"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminTreasuryCanonicalView",
+        "returns": "AdminTreasuryCanonicalView"
       },
       "version": "canonical",
       "domain": "admin"
@@ -2433,6 +2605,7 @@
         "parameters": [
           "order_id",
           "payload",
+          "request",
           "service",
           "current_user"
         ]
@@ -2461,6 +2634,7 @@
         "parameters": [
           "profile_id",
           "payload",
+          "request",
           "service",
           "current_user"
         ]
@@ -2489,6 +2663,7 @@
         "parameters": [
           "profile_id",
           "payload",
+          "request",
           "service",
           "current_user"
         ]
@@ -2496,6 +2671,64 @@
       "response_shape": {
         "response_model": "CoinTraderProfileView",
         "returns": "CoinTraderProfileView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/coin-traders/{profile_id}/liquidity/issue",
+      "effective_paths": [
+        "/api/admin/coin-traders/{profile_id}/liquidity/issue"
+      ],
+      "file": "backend/app/coin_traders/router.py",
+      "handler": "admin_issue_coin_trader_liquidity",
+      "router_variable": "admin_router",
+      "module_path": "app.coin_traders.router",
+      "module_mounts": [
+        "admin_coin_traders"
+      ],
+      "request_shape": {
+        "parameters": [
+          "profile_id",
+          "payload",
+          "request",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CoinTraderAdminLiquidityTransferView",
+        "returns": "CoinTraderAdminLiquidityTransferView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/coin-traders/{profile_id}/liquidity/redeem",
+      "effective_paths": [
+        "/api/admin/coin-traders/{profile_id}/liquidity/redeem"
+      ],
+      "file": "backend/app/coin_traders/router.py",
+      "handler": "admin_redeem_coin_trader_liquidity",
+      "router_variable": "admin_router",
+      "module_path": "app.coin_traders.router",
+      "module_mounts": [
+        "admin_coin_traders"
+      ],
+      "request_shape": {
+        "parameters": [
+          "profile_id",
+          "payload",
+          "request",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CoinTraderAdminLiquidityTransferView",
+        "returns": "CoinTraderAdminLiquidityTransferView"
       },
       "version": "canonical",
       "domain": "admin"
@@ -2517,6 +2750,7 @@
         "parameters": [
           "profile_id",
           "payload",
+          "request",
           "service",
           "current_user"
         ]
@@ -4816,6 +5050,114 @@
     },
     {
       "method": "GET",
+      "path": "/api/club/current",
+      "effective_paths": [
+        "/api/club/current"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "read_current_club",
+      "router_variable": "router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubProfileCore",
+        "returns": "ClubProfileCore"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "GET",
+      "path": "/api/profile",
+      "effective_paths": [
+        "/api/profile"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "read_live_profile",
+      "router_variable": "router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CurrentUserResponse",
+        "returns": "CurrentUserResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "GET",
+      "path": "/api/profile/security",
+      "effective_paths": [
+        "/api/profile/security"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "read_profile_security",
+      "router_variable": "router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "SessionBootstrapSecurityState",
+        "returns": "SessionBootstrapSecurityState"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "GET",
+      "path": "/api/profile/sessions",
+      "effective_paths": [
+        "/api/profile/sessions"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "read_profile_sessions",
+      "router_variable": "router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[SessionBootstrapSessionView]",
+        "returns": "list[SessionBootstrapSessionView]"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "GET",
       "path": "/api/session/bootstrap",
       "effective_paths": [
         "/api/session/bootstrap"
@@ -4850,6 +5192,34 @@
       "file": "backend/app/auth/router.py",
       "handler": "update_current_user_profile",
       "router_variable": "api_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "request",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CurrentUserResponse",
+        "returns": "CurrentUserResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/profile",
+      "effective_paths": [
+        "/api/profile"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "update_live_profile",
+      "router_variable": "router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -10889,7 +11259,7 @@
         "parameters": [
           "request",
           "session",
-          "_"
+          "actor"
         ]
       },
       "response_shape": {
@@ -10918,7 +11288,7 @@
           "ge",
           "region",
           "session",
-          "_"
+          "actor"
         ]
       },
       "response_shape": {
@@ -18436,6 +18806,7 @@
       "request_shape": {
         "parameters": [
           "competition_id",
+          "user",
           "session"
         ]
       },
@@ -18515,6 +18886,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "request",
           "admin_user",
           "session"
         ]
@@ -18541,7 +18913,8 @@
       ],
       "request_shape": {
         "parameters": [
-          "_",
+          "request",
+          "admin_user",
           "session"
         ]
       },
@@ -18569,6 +18942,7 @@
         "parameters": [
           "competition_id",
           "payload",
+          "request",
           "admin_user",
           "session"
         ]
@@ -18596,6 +18970,7 @@
       "request_shape": {
         "parameters": [
           "competition_id",
+          "request",
           "admin_user",
           "session"
         ]
@@ -20840,6 +21215,32 @@
     },
     {
       "method": "GET",
+      "path": "/api/matches/{match_id}/events",
+      "effective_paths": [
+        "/api/matches/{match_id}/events"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_v2_events",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
       "path": "/api/matches/{match_id}/highlights",
       "effective_paths": [
         "/api/matches/{match_id}/highlights"
@@ -20893,12 +21294,142 @@
     },
     {
       "method": "GET",
+      "path": "/api/matches/{match_id}/lineups",
+      "effective_paths": [
+        "/api/matches/{match_id}/lineups"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_v2_lineups",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
       "path": "/api/matches/{match_id}/live",
       "effective_paths": [
         "/api/matches/{match_id}/live"
       ],
       "file": "backend/app/live_matches/router.py",
       "handler": "read_match_live_bridge",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/matches/{match_id}/state",
+      "effective_paths": [
+        "/api/matches/{match_id}/state"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_v2_state",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/matches/{match_id}/stats",
+      "effective_paths": [
+        "/api/matches/{match_id}/stats"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_v2_stats",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/matches/{match_id}/tactics",
+      "effective_paths": [
+        "/api/matches/{match_id}/tactics"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_v2_tactics",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
+      "path": "/api/matches/{match_id}/timeline",
+      "effective_paths": [
+        "/api/matches/{match_id}/timeline"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "read_match_v2_timeline",
       "router_variable": "api_router",
       "module_path": "app.live_matches.router",
       "module_mounts": [
@@ -21242,6 +21773,32 @@
       "response_shape": {
         "response_model": "SpectatorSessionView",
         "returns": "SpectatorSessionView"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/api/matches/{match_id}/tactics",
+      "effective_paths": [
+        "/api/matches/{match_id}/tactics"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "update_match_v2_tactics",
+      "router_variable": "api_router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
       },
       "version": "canonical",
       "domain": "live"
@@ -24497,6 +25054,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "_",
           "service"
         ]
       },
@@ -24524,6 +25082,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "_",
           "service"
         ]
       },
@@ -25908,6 +26467,8 @@
           "preseeded_only",
           "source_bucket",
           "position",
+          "entry_id",
+          "current_user",
           "service"
         ]
       },
@@ -26108,6 +26669,122 @@
       },
       "response_shape": {
         "response_model": "list[NationalTeamCountryRankingResponse]",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "national"
+    },
+    {
+      "method": "GET",
+      "path": "/national/competitions",
+      "effective_paths": [
+        "/api/national/competitions"
+      ],
+      "file": "backend/app/national_team_engine/router.py",
+      "handler": "national_list_competitions",
+      "router_variable": "national_router",
+      "module_path": "app.national_team_engine.router",
+      "module_mounts": [
+        "national_rental"
+      ],
+      "request_shape": {
+        "parameters": [
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[NationalTeamCompetitionResponse]",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "national"
+    },
+    {
+      "method": "GET",
+      "path": "/national/competitions/{competition_id}/rental-pool",
+      "effective_paths": [
+        "/api/national/competitions/{competition_id}/rental-pool"
+      ],
+      "file": "backend/app/national_team_engine/router.py",
+      "handler": "national_list_rental_pool",
+      "router_variable": "national_router",
+      "module_path": "app.national_team_engine.router",
+      "module_mounts": [
+        "national_rental"
+      ],
+      "request_shape": {
+        "parameters": [
+          "competition_id",
+          "limit",
+          "ge",
+          "le",
+          "offset",
+          "ge",
+          "country_code",
+          "real_only",
+          "preseeded_only",
+          "source_bucket",
+          "position",
+          "entry_id",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "NationalTeamRentalPlayerCollectionResponse",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "national"
+    },
+    {
+      "method": "GET",
+      "path": "/national/entries/{entry_id}",
+      "effective_paths": [
+        "/api/national/entries/{entry_id}"
+      ],
+      "file": "backend/app/national_team_engine/router.py",
+      "handler": "national_get_entry",
+      "router_variable": "national_router",
+      "module_path": "app.national_team_engine.router",
+      "module_mounts": [
+        "national_rental"
+      ],
+      "request_shape": {
+        "parameters": [
+          "entry_id",
+          "session",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "NationalTeamEntryDetailResponse",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "national"
+    },
+    {
+      "method": "GET",
+      "path": "/national/me/history",
+      "effective_paths": [
+        "/api/national/me/history"
+      ],
+      "file": "backend/app/national_team_engine/router.py",
+      "handler": "national_get_my_history",
+      "router_variable": "national_router",
+      "module_path": "app.national_team_engine.router",
+      "module_mounts": [
+        "national_rental"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "NationalTeamUserHistoryResponse",
         "returns": null
       },
       "version": "canonical",
@@ -26545,6 +27222,63 @@
       "module_path": "app.national_team_engine.router",
       "module_mounts": [
         "national_team_engine"
+      ],
+      "request_shape": {
+        "parameters": [
+          "entry_id",
+          "payload",
+          "current_user",
+          "session",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "NationalTeamEntryDetailResponse",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "national"
+    },
+    {
+      "method": "POST",
+      "path": "/national/competitions/{competition_id}/rental-entry",
+      "effective_paths": [
+        "/api/national/competitions/{competition_id}/rental-entry"
+      ],
+      "file": "backend/app/national_team_engine/router.py",
+      "handler": "national_create_my_rental_entry",
+      "router_variable": "national_router",
+      "module_path": "app.national_team_engine.router",
+      "module_mounts": [
+        "national_rental"
+      ],
+      "request_shape": {
+        "parameters": [
+          "competition_id",
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "NationalTeamEntryResponse",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "national"
+    },
+    {
+      "method": "POST",
+      "path": "/national/entries/{entry_id}/rentals",
+      "effective_paths": [
+        "/api/national/entries/{entry_id}/rentals"
+      ],
+      "file": "backend/app/national_team_engine/router.py",
+      "handler": "national_rent_player",
+      "router_variable": "national_router",
+      "module_path": "app.national_team_engine.router",
+      "module_mounts": [
+        "national_rental"
       ],
       "request_shape": {
         "parameters": [
@@ -27786,6 +28520,32 @@
       "domain": "ownership"
     },
     {
+      "method": "POST",
+      "path": "/api/webhooks/korapay",
+      "effective_paths": [
+        "/api/webhooks/korapay"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "handle_korapay_webhook_alias",
+      "router_variable": "webhook_alias_router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "payment_webhook_aliases"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminFinanceWebhookResultView",
+        "returns": "AdminFinanceWebhookResultView"
+      },
+      "version": "canonical",
+      "domain": "payment"
+    },
+    {
       "method": "GET",
       "path": "/integrations/payments/methods",
       "effective_paths": [
@@ -28539,6 +29299,7 @@
           "le",
           "offset",
           "ge",
+          "_",
           "service"
         ]
       },
@@ -28566,6 +29327,7 @@
       "request_shape": {
         "parameters": [
           "player_id",
+          "_",
           "service"
         ]
       },
@@ -31442,6 +32204,32 @@
       ],
       "file": "backend/app/realtime/router.py",
       "handler": "stream_live_match_events",
+      "router_variable": "router",
+      "module_path": "app.realtime.router",
+      "module_mounts": [
+        "realtime"
+      ],
+      "request_shape": {
+        "parameters": [
+          "websocket",
+          "match_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "realtime"
+    },
+    {
+      "method": "WEBSOCKET",
+      "path": "/ws/matches/{match_id}",
+      "effective_paths": [
+        "/ws/matches/{match_id}"
+      ],
+      "file": "backend/app/realtime/router.py",
+      "handler": "stream_live_match_events_plural_alias",
       "router_variable": "router",
       "module_path": "app.realtime.router",
       "module_mounts": [
@@ -35059,6 +35847,31 @@
       "response_shape": {
         "response_model": "ClubTrophiesView",
         "returns": "ClubTrophiesView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/v2-snapshot",
+      "effective_paths": [
+        "/api/clubs/{club_id}/v2-snapshot"
+      ],
+      "file": "backend/app/segments/clubs/segment_clubs.py",
+      "handler": "get_club_v2_snapshot",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_clubs",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
       },
       "version": "canonical",
       "domain": "segment"
@@ -43355,6 +44168,35 @@
     },
     {
       "method": "GET",
+      "path": "/api/wallet/summary",
+      "effective_paths": [
+        "/api/wallet/summary",
+        "/wallet/summary"
+      ],
+      "file": "backend/app/wallets/router.py",
+      "handler": "get_wallet_summary_alias",
+      "router_variable": "public_wallet_router",
+      "module_path": "app.wallets.router",
+      "module_mounts": [
+        "wallets"
+      ],
+      "request_shape": {
+        "parameters": [
+          "currency",
+          "session",
+          "current_user",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "WalletSummaryView",
+        "returns": "WalletSummaryView"
+      },
+      "version": "canonical",
+      "domain": "wallets"
+    },
+    {
+      "method": "GET",
       "path": "/api/wallet/transactions",
       "effective_paths": [
         "/api/wallet/transactions",
@@ -44481,6 +45323,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "reference_at"
         ]
       },
@@ -44507,6 +45350,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "reference_at"
         ]
       },
@@ -44533,6 +45377,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "reference_at"
         ]
       },
@@ -44559,6 +45404,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "reference_at"
         ]
       },
@@ -44585,6 +45431,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "reference_at"
         ]
       },

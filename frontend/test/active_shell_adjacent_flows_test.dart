@@ -189,7 +189,7 @@ void main() {
       await tester.tap(fundWalletButton);
       await _pumpUntilText(tester, 'Choose a deposit method');
       expect(find.text('Deposit'), findsOneWidget);
-      expect(find.text('Continue to Paystack'), findsOneWidget);
+      expect(find.text('Continue to KoraPay'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Money moves');

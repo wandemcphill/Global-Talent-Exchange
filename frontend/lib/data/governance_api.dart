@@ -1,13 +1,16 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
 import '../models/governance_models.dart';
 
 class GovernanceApi {
-  GovernanceApi({required this.client, required this.fixtures});
+  GovernanceApi({required this.client, required _GovernanceFixtures? fixtures})
+    : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final _GovernanceFixtures fixtures;
+  final _GovernanceFixtures? _fixtures;
 
   factory GovernanceApi.standard({
     required String baseUrl,
@@ -26,11 +29,12 @@ class GovernanceApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _GovernanceFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory GovernanceApi.fixture() {
+    assertFixtureFactoryAllowed('GovernanceApi.fixture');
     return GovernanceApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -56,7 +60,7 @@ class GovernanceApi {
       final List<dynamic> proposals =
           payload['proposals'] as List<dynamic>? ?? <dynamic>[];
       return proposals.map(GovernanceProposal.fromJson).toList(growable: false);
-    }, fixtures.listProposals);
+    }, () => _requireFixtures().listProposals());
   }
 
   Future<GovernanceProposalDetail> fetchProposal(String proposalId) {
@@ -65,7 +69,7 @@ class GovernanceApi {
         '/api/governance/proposals/$proposalId',
       );
       return GovernanceProposalDetail.fromJson(payload);
-    }, () async => fixtures.detail(proposalId));
+    }, () async => _requireFixtures().detail(proposalId));
   }
 
   Future<GovernanceOverview> fetchOverview() {
@@ -74,7 +78,7 @@ class GovernanceApi {
         '/api/governance/me/overview',
       );
       return GovernanceOverview.fromJson(payload);
-    }, fixtures.overview);
+    }, () => _requireFixtures().overview());
   }
 
   Future<GovernanceProposalDetail> vote({
@@ -100,7 +104,7 @@ class GovernanceApi {
         'my_vote': map['vote'],
         'user_eligible': true,
       });
-    }, () async => fixtures.vote(proposalId, choice));
+    }, () async => _requireFixtures().vote(proposalId, choice));
   }
 
   Future<GovernanceProposal> updateProposalStatus({
@@ -118,7 +122,19 @@ class GovernanceApi {
         },
       );
       return GovernanceProposal.fromJson(payload);
-    }, () async => fixtures.updateStatus(proposalId, status));
+    }, () async => _requireFixtures().updateStatus(proposalId, status));
+  }
+
+  _GovernanceFixtures _requireFixtures() {
+    final _GovernanceFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Governance fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return fixtures;
   }
 }
 

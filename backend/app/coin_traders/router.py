@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.admin.capabilities import AdminCapability, assert_admin_capability
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.coin_traders.schemas import (
+    CoinTraderAdminLiquidityRequest,
+    CoinTraderAdminLiquidityTransferView,
     CoinTradeAdminResolutionRequest,
     CoinTradeDisputeRequest,
     CoinTradeOrderCreateRequest,
@@ -43,6 +46,10 @@ def _raise_coin_trader_error(exc: Exception) -> None:
     if isinstance(exc, CoinTraderValidationError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     raise exc
+
+
+def _require_liquidity_desk_permission(request: Request, actor: User) -> None:
+    assert_admin_capability(request, actor, AdminCapability.MANAGE_LIQUIDITY_DESK)
 
 
 @router.get("/api/coin-traders", response_model=list[CoinTraderProfileView])
@@ -197,10 +204,11 @@ def get_coin_trader_profile(profile_id: str, service: CoinTraderService = Depend
 
 @admin_router.get("/api/admin/coin-traders", response_model=list[CoinTraderProfileView])
 def admin_list_coin_traders(
+    request: Request,
     service: CoinTraderService = Depends(_service),
     current_user: User = Depends(get_current_admin),
 ) -> list[CoinTraderProfileView]:
-    del current_user
+    _require_liquidity_desk_permission(request, current_user)
     return service.admin_list_profiles()
 
 
@@ -208,9 +216,11 @@ def admin_list_coin_traders(
 def admin_approve_coin_trader(
     profile_id: str,
     payload: CoinTraderAdminDecisionRequest,
+    request: Request,
     service: CoinTraderService = Depends(_service),
     current_user: User = Depends(get_current_admin),
 ) -> CoinTraderProfileView:
+    _require_liquidity_desk_permission(request, current_user)
     try:
         return service.approve_trader(profile_id, payload, admin=current_user)
     except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
@@ -221,9 +231,11 @@ def admin_approve_coin_trader(
 def admin_reject_coin_trader(
     profile_id: str,
     payload: CoinTraderAdminRejectRequest,
+    request: Request,
     service: CoinTraderService = Depends(_service),
     current_user: User = Depends(get_current_admin),
 ) -> CoinTraderProfileView:
+    _require_liquidity_desk_permission(request, current_user)
     try:
         return service.reject_trader(profile_id, payload, admin=current_user)
     except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
@@ -234,9 +246,11 @@ def admin_reject_coin_trader(
 def admin_freeze_coin_trader(
     profile_id: str,
     payload: CoinTraderAdminRejectRequest,
+    request: Request,
     service: CoinTraderService = Depends(_service),
     current_user: User = Depends(get_current_admin),
 ) -> CoinTraderProfileView:
+    _require_liquidity_desk_permission(request, current_user)
     try:
         return service.freeze_trader(profile_id, admin=current_user, note=payload.note)
     except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
@@ -245,20 +259,59 @@ def admin_freeze_coin_trader(
 
 @admin_router.get("/api/admin/coin-traders/orders", response_model=list[CoinTradeOrderView])
 def admin_list_coin_trade_orders(
+    request: Request,
     service: CoinTraderService = Depends(_service),
     current_user: User = Depends(get_current_admin),
 ) -> list[CoinTradeOrderView]:
-    del current_user
+    _require_liquidity_desk_permission(request, current_user)
     return service.admin_list_orders()
+
+
+@admin_router.post(
+    "/api/admin/coin-traders/{profile_id}/liquidity/issue",
+    response_model=CoinTraderAdminLiquidityTransferView,
+)
+def admin_issue_coin_trader_liquidity(
+    profile_id: str,
+    payload: CoinTraderAdminLiquidityRequest,
+    request: Request,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> CoinTraderAdminLiquidityTransferView:
+    _require_liquidity_desk_permission(request, current_user)
+    try:
+        return service.admin_issue_liquidity(profile_id, payload, admin=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@admin_router.post(
+    "/api/admin/coin-traders/{profile_id}/liquidity/redeem",
+    response_model=CoinTraderAdminLiquidityTransferView,
+)
+def admin_redeem_coin_trader_liquidity(
+    profile_id: str,
+    payload: CoinTraderAdminLiquidityRequest,
+    request: Request,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> CoinTraderAdminLiquidityTransferView:
+    _require_liquidity_desk_permission(request, current_user)
+    try:
+        return service.admin_redeem_liquidity(profile_id, payload, admin=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
 
 
 @admin_router.post("/api/admin/coin-traders/orders/{order_id}/resolve", response_model=CoinTradeOrderView)
 def admin_resolve_coin_trade_order(
     order_id: str,
     payload: CoinTradeAdminResolutionRequest,
+    request: Request,
     service: CoinTraderService = Depends(_service),
     current_user: User = Depends(get_current_admin),
 ) -> CoinTradeOrderView:
+    _require_liquidity_desk_permission(request, current_user)
     try:
         return service.admin_resolve_order(order_id, payload, admin=current_user)
     except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:

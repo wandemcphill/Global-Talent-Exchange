@@ -9,9 +9,16 @@ from app.core.errors import error_response
 
 PROTECTED_PATH_PREFIXES = (
     "/api/admin",
+    "/api/profile",
     "/api/session",
+    "/api/v2/profile",
+    "/api/v2/session",
+    "/api/v2/wallet",
+    "/api/v2/wallets",
+    "/api/wallet",
     "/api/wallets",
     "/wallets",
+    "/wallet",
     "/policies/me",
     "/users/me",
     "/internal",
@@ -21,6 +28,9 @@ PROTECTED_EXACT_PATHS = frozenset(
         "/api/auth/me",
         "/api/auth/logout",
         "/api/auth/change-password",
+        "/api/v2/auth/me",
+        "/api/v2/auth/logout",
+        "/api/v2/auth/change-password",
     }
 )
 
@@ -74,4 +84,8 @@ class AuthEnforcementMiddleware(BaseHTTPMiddleware):
     def _requires_auth(path: str) -> bool:
         if path in PROTECTED_EXACT_PATHS:
             return True
-        return any(path.startswith(prefix) for prefix in PROTECTED_PATH_PREFIXES)
+        return any(_path_matches_prefix(path, prefix) for prefix in PROTECTED_PATH_PREFIXES)
+
+
+def _path_matches_prefix(path: str, prefix: str) -> bool:
+    return path == prefix or path.startswith(f"{prefix}/")

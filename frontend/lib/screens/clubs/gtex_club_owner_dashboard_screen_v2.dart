@@ -1,16 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:gte_frontend/controllers/club_controller.dart';
+import 'package:go_router/go_router.dart';
+import 'package:gte_frontend/data/club_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.dart';
 import 'package:gte_frontend/features/club_lifecycle_redesign/club_lifecycle_redesign.dart';
 import 'package:gte_frontend/features/club_redesign/club_redesign.dart';
-import 'package:gte_frontend/features/club_identity/reputation/data/reputation_models.dart';
-import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
-import 'package:gte_frontend/models/club_catalog_models.dart';
-import 'package:gte_frontend/models/club_models.dart';
+import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 class GtexClubOwnerDashboardScreenV2 extends StatefulWidget {
@@ -22,6 +20,7 @@ class GtexClubOwnerDashboardScreenV2 extends StatefulWidget {
     this.backendMode,
     this.accessToken,
     this.authedApi,
+    this.snapshotApi,
     this.ownerName,
     this.walletCredits = 0,
     this.isAuthenticated = true,
@@ -34,6 +33,7 @@ class GtexClubOwnerDashboardScreenV2 extends StatefulWidget {
   final GteBackendMode? backendMode;
   final String? accessToken;
   final GteAuthedApi? authedApi;
+  final ClubApi? snapshotApi;
   final String? ownerName;
   final int walletCredits;
   final bool isAuthenticated;
@@ -46,9 +46,13 @@ class GtexClubOwnerDashboardScreenV2 extends StatefulWidget {
 
 class _GtexClubOwnerDashboardScreenV2State
     extends State<GtexClubOwnerDashboardScreenV2> {
-  ClubController? _controller;
+  ClubApi? _snapshotApi;
   GtexClubLifecycleController? _lifecycleController;
   GtexClubGrowthController? _growthController;
+  GtexClubWorkspaceSnapshot? _snapshot;
+  String? _snapshotError;
+  bool _snapshotLoading = false;
+  int _snapshotRequestId = 0;
 
   @override
   void initState() {
@@ -63,7 +67,9 @@ class _GtexClubOwnerDashboardScreenV2State
         oldWidget.baseUrl != widget.baseUrl ||
         oldWidget.backendMode != widget.backendMode ||
         oldWidget.accessToken != widget.accessToken ||
-        oldWidget.authedApi != widget.authedApi) {
+        oldWidget.authedApi != widget.authedApi ||
+        oldWidget.snapshotApi != widget.snapshotApi ||
+        oldWidget.clubName != widget.clubName) {
       _disposeControllers();
       _createController();
     }
@@ -76,39 +82,41 @@ class _GtexClubOwnerDashboardScreenV2State
   }
 
   void _disposeControllers() {
-    _controller?.dispose();
     _lifecycleController?.dispose();
     _growthController?.dispose();
-    _controller = null;
+    _snapshotRequestId += 1;
+    _snapshotApi = null;
+    _snapshot = null;
+    _snapshotError = null;
+    _snapshotLoading = false;
     _lifecycleController = null;
     _growthController = null;
   }
 
   void _createController() {
     if (!widget.isAuthenticated) {
-      _controller = null;
+      _snapshotApi = null;
       _lifecycleController = null;
       _growthController = null;
       return;
     }
     final String? baseUrl = widget.baseUrl;
     if (baseUrl == null || baseUrl.trim().isEmpty) {
-      _controller = null;
+      _snapshotApi = null;
       _lifecycleController = null;
       _growthController = null;
       return;
     }
     final GteBackendMode backendMode =
         widget.backendMode ?? GteBackendMode.live;
-    final ClubController controller = ClubController.standard(
-      clubId: widget.clubId,
-      clubName: widget.clubName,
-      baseUrl: baseUrl,
-      backendMode: backendMode,
-      accessToken: widget.accessToken,
-    );
-    _controller = controller;
-    controller.ensureLoaded();
+    _snapshotApi =
+        widget.snapshotApi ??
+        ClubApi.standard(
+          baseUrl: baseUrl,
+          mode: backendMode,
+          accessToken: widget.accessToken,
+        );
+    unawaited(_loadSnapshot(notify: false));
     final GtexClubLifecycleController lifecycleController =
         GtexClubLifecycleController(
           api: GtexClubLifecycleApi.standard(
@@ -134,10 +142,64 @@ class _GtexClubOwnerDashboardScreenV2State
     unawaited(growthController.load());
   }
 
+  Future<void> _loadSnapshot({bool notify = true}) {
+    final ClubApi? api = _snapshotApi;
+    if (api == null) {
+      return Future<void>.value();
+    }
+    final int requestId = ++_snapshotRequestId;
+    void update(VoidCallback callback) {
+      if (notify && mounted) {
+        setState(callback);
+      } else {
+        callback();
+      }
+    }
+
+    update(() {
+      _snapshotLoading = true;
+      _snapshotError = null;
+      _snapshot = null;
+    });
+    final Future<void> task = () async {
+      try {
+        final GtexClubWorkspaceSnapshot snapshot = await api
+            .fetchV2WorkspaceSnapshot(
+              clubId: widget.clubId,
+              clubName: widget.clubName,
+            );
+        if (!mounted || requestId != _snapshotRequestId) {
+          return;
+        }
+        setState(() {
+          _snapshot = snapshot;
+          _snapshotError = null;
+          _snapshotLoading = false;
+        });
+      } catch (error) {
+        if (!mounted || requestId != _snapshotRequestId) {
+          return;
+        }
+        setState(() {
+          _snapshot = null;
+          _snapshotError = _snapshotErrorMessage(error);
+          _snapshotLoading = false;
+        });
+      }
+    }();
+    return task;
+  }
+
+  String _snapshotErrorMessage(Object error) {
+    if (error is GteApiException) {
+      return error.message;
+    }
+    return 'GTEX could not load the live club V2 snapshot. $error';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final ClubController? controller = _controller;
-    if (!widget.isAuthenticated || controller == null) {
+    if (!widget.isAuthenticated) {
       return GtexClubOwnerDashboardV2(
         clubId: widget.clubId,
         clubName: widget.clubName,
@@ -145,6 +207,22 @@ class _GtexClubOwnerDashboardScreenV2State
         backendMode: widget.backendMode,
         isAuthenticated: widget.isAuthenticated,
         onOpenLogin: widget.onOpenLogin,
+        onOpenMarket: () => context.go(const GteNavigationRoute.market().path),
+        onCreateCompetition:
+            () => context.go(const GteNavigationRoute.competitions().path),
+      );
+    }
+    if (_snapshotApi == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(GtexSpacing.lg),
+          child: GtexEmptyState(
+            title: 'Live club workspace required',
+            message:
+                'This club workspace no longer opens with demo data. Connect the live backend session before loading owner operations.',
+            icon: Icons.shield_outlined,
+          ),
+        ),
       );
     }
 
@@ -153,26 +231,25 @@ class _GtexClubOwnerDashboardScreenV2State
     final GtexClubGrowthController? growthController = _growthController;
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[
-        controller,
         if (lifecycleController != null) lifecycleController,
         if (growthController != null) growthController,
       ]),
       builder: (BuildContext context, Widget? child) {
-        final ClubDashboardData? data = controller.data;
-        if (controller.isLoading && data == null) {
+        final GtexClubWorkspaceSnapshot? snapshot = _snapshot;
+        if (_snapshotLoading && snapshot == null) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (data == null) {
+        if (snapshot == null) {
           return Padding(
             padding: const EdgeInsets.all(GtexSpacing.lg),
             child: GtexEmptyState(
-              title: 'Club command unavailable',
+              title: 'Live club snapshot unavailable',
               message:
-                  controller.errorMessage ??
-                  'GTEX could not load live club data for this owner workspace.',
+                  _snapshotError ??
+                  'GTEX could not load the live Club V2 snapshot for this owner workspace.',
               icon: Icons.shield_outlined,
               actionLabel: 'Retry club',
-              onAction: controller.load,
+              onAction: () => unawaited(_loadSnapshot()),
             ),
           );
         }
@@ -184,7 +261,11 @@ class _GtexClubOwnerDashboardScreenV2State
           backendMode: widget.backendMode,
           isAuthenticated: widget.isAuthenticated,
           onOpenLogin: widget.onOpenLogin,
-          initialSnapshot: _snapshotFromLiveClub(data),
+          onOpenMarket:
+              () => context.go(const GteNavigationRoute.market().path),
+          onCreateCompetition:
+              () => context.go(const GteNavigationRoute.competitions().path),
+          initialSnapshot: snapshot,
           lifecycleDashboard: lifecycleController?.dashboard,
           lifecycleLoading: lifecycleController?.busy ?? false,
           lifecycleError: lifecycleController?.error,
@@ -241,125 +322,6 @@ class _GtexClubOwnerDashboardScreenV2State
         );
       },
     );
-  }
-
-  GtexClubWorkspaceSnapshot _snapshotFromLiveClub(ClubDashboardData data) {
-    final List<ClubPurchaseRecord> purchases = data.purchaseHistory;
-    final int openOrdersCredits = purchases
-        .where((ClubPurchaseRecord item) => !item.equipped)
-        .fold<int>(
-          0,
-          (int total, ClubPurchaseRecord item) =>
-              total + item.priceCredits.round(),
-        );
-    final int squadValueCredits = data.catalog
-        .where(
-          (ClubCatalogItem item) =>
-              item.ownershipStatus != CatalogOwnershipStatus.available,
-        )
-        .fold<int>(
-          0,
-          (int total, ClubCatalogItem item) =>
-              total + item.priceCredits.round(),
-        );
-    final List<TrophyItemDto> honors = data.trophyCabinet.featuredHonors(
-      limit: 6,
-    );
-    final List<String> identityTags = <String>[
-      data.identity.colorPalette.paletteName,
-      data.reputation.profile.currentPrestigeTier.label,
-      if (data.playerCount != null) '${data.playerCount} registered players',
-      '${data.equippedCatalogCount} equipped identity assets',
-    ].where((String value) => value.trim().isNotEmpty).toList(growable: false);
-
-    return GtexClubWorkspaceSnapshot(
-      clubId: data.clubId,
-      clubName: data.clubName,
-      shortCode: _shortCode(data),
-      country: data.countryName ?? data.reputation.profile.regionLabel,
-      division: data.reputation.profile.currentPrestigeTier.label,
-      ownerName: widget.ownerName ?? 'Club owner',
-      followers: data.reputation.profile.currentScore,
-      shareholders: data.reputation.contributors.length,
-      finances: GtexClubFinancialSnapshot(
-        walletCredits: widget.walletCredits,
-        squadValueCredits: squadValueCredits,
-        openOrdersCredits: openOrdersCredits,
-        monthlyRevenueCredits: data.purchaseHistory.fold<int>(
-          0,
-          (int total, ClubPurchaseRecord item) =>
-              total + item.priceCredits.round(),
-        ),
-        sharePriceCredits:
-            data.reputation.profile.currentScore <= 0
-                ? 1
-                : data.reputation.profile.currentScore,
-      ),
-      squad: const <GtexClubMember>[],
-      news: data.reputation.recentEvents
-          .map(
-            (ReputationEventDto event) => GtexClubNewsItem(
-              id: event.id,
-              headline: event.title,
-              category: event.category.label,
-              timestampLabel: event.seasonLabel,
-              summary: event.description,
-            ),
-          )
-          .toList(growable: false),
-      orders: purchases
-          .take(8)
-          .map(
-            (ClubPurchaseRecord item) => GtexClubOrderItem(
-              id: item.id,
-              title: item.itemTitle,
-              status: item.statusLabel,
-              amountCredits: item.priceCredits.round(),
-              timestampLabel: _dateLabel(item.purchasedAt),
-            ),
-          )
-          .toList(growable: false),
-      trophies: honors
-          .map(
-            (TrophyItemDto item) => GtexClubTrophy(
-              id: item.trophyWinId,
-              title: item.trophyName,
-              season: item.seasonLabel,
-              tier: item.prestigeLabel,
-            ),
-          )
-          .toList(growable: false),
-      identityTags: identityTags,
-      activity: <String>[
-        if (data.trophyCabinet.totalHonorsCount > 0)
-          '${data.trophyCabinet.totalHonorsCount} honors in the cabinet',
-        if (data.purchaseHistory.isNotEmpty)
-          '${data.purchaseHistory.length} identity purchases recorded',
-        if (data.reputation.recentEvents.isNotEmpty)
-          '${data.reputation.recentEvents.length} reputation events synced',
-        if (data.playerCount != null) '${data.playerCount} players registered',
-      ],
-    );
-  }
-
-  String _shortCode(ClubDashboardData data) {
-    final String direct = data.identity.shortClubCode.trim();
-    if (direct.isNotEmpty) {
-      return direct.toUpperCase();
-    }
-    final List<String> parts = data.clubName
-        .split(RegExp(r'\s+'))
-        .where((String part) => part.trim().isNotEmpty)
-        .toList(growable: false);
-    if (parts.isEmpty) {
-      return 'GTX';
-    }
-    return parts.take(3).map((String part) => part[0].toUpperCase()).join();
-  }
-
-  String _dateLabel(DateTime value) {
-    final DateTime local = value.toLocal();
-    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
   }
 }
 

@@ -429,11 +429,13 @@ class GtexClubRightRail extends StatelessWidget {
     super.key,
     required this.snapshot,
     this.ownerFacing = true,
+    this.onOpenPlayerMarket,
     this.onBuyShares,
   });
 
   final GtexClubWorkspaceSnapshot snapshot;
   final bool ownerFacing;
+  final VoidCallback? onOpenPlayerMarket;
   final VoidCallback? onBuyShares;
 
   @override
@@ -450,25 +452,39 @@ class GtexClubRightRail extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              GtexActionButton(
-                label:
-                    ownerFacing ? 'Open player market' : 'Follow club updates',
-                icon:
+              Tooltip(
+                message:
                     ownerFacing
-                        ? Icons.shopping_basket_outlined
-                        : Icons.notifications_active_outlined,
-                onPressed: () {},
-                accent: GtexColors.pitch,
+                        ? 'No route dispatcher is attached to this club rail yet.'
+                        : 'Follow notifications are waiting for a live subscription endpoint.',
+                child: GtexActionButton(
+                  label:
+                      ownerFacing
+                          ? 'Open player market'
+                          : 'Follow club updates',
+                  icon:
+                      ownerFacing
+                          ? Icons.shopping_basket_outlined
+                          : Icons.notifications_active_outlined,
+                  onPressed: ownerFacing ? onOpenPlayerMarket : null,
+                  accent: GtexColors.pitch,
+                ),
               ),
               const SizedBox(height: GtexSpacing.sm),
-              GtexActionButton(
-                label: ownerFacing ? 'Review orders' : 'Buy shares',
-                icon:
-                    ownerFacing
-                        ? Icons.receipt_long_outlined
-                        : Icons.ssid_chart_outlined,
-                onPressed: onBuyShares,
-                accent: GtexColors.gold,
+              Tooltip(
+                message:
+                    ownerFacing && onBuyShares == null
+                        ? 'Order review is visible in this rail but has no route dispatcher attached.'
+                        : 'Open the live club share purchase flow.',
+                child: GtexActionButton(
+                  label: ownerFacing ? 'Review orders' : 'Buy shares',
+                  icon:
+                      ownerFacing
+                          ? Icons.receipt_long_outlined
+                          : Icons.ssid_chart_outlined,
+                  onPressed: onBuyShares,
+                  accent: GtexColors.gold,
+                ),
               ),
             ],
           ),

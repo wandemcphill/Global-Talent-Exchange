@@ -5,37 +5,60 @@ import 'package:gte_frontend/features/world/football_world_pulse_provider.dart';
 import 'package:gte_frontend/features/world/widgets/football_world_pulse_widgets.dart';
 
 void main() {
-  testWidgets(
-    'football world pulse ticker renders compact live fallback data',
-    (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
+  testWidgets('football world pulse ticker renders truthful empty live state', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            footballWorldPulseProvider.overrideWith(
-              (Ref ref) async => FootballWorldPulseData.empty,
-            ),
-          ],
-          child: const MaterialApp(
-            home: Scaffold(body: FootballWorldPulseTicker()),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          footballWorldPulseProvider.overrideWith(
+            (Ref ref) async => FootballWorldPulseData.empty,
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: FootballWorldPulseTicker()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('football-world-pulse-ticker')),
+      findsOneWidget,
+    );
+    expect(find.text('No live pulse events returned'), findsOneWidget);
+    expect(find.text('Transfer desk'), findsNothing);
+  });
+
+  testWidgets('football world pulse rail renders blocked state on errors', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          footballWorldPulseProvider.overrideWith(
+            (Ref ref) async => throw StateError('backend offline'),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(width: 318, child: FootballWorldPulseRail()),
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const Key('football-world-pulse-ticker')),
-        findsOneWidget,
-      );
-      expect(find.text('Transfer desk'), findsOneWidget);
-    },
-  );
+    expect(find.text('Live World Pulse Unavailable'), findsOneWidget);
+    expect(find.text('Discovery route'), findsNothing);
+  });
 
   testWidgets('football world pulse rail renders desktop market layers', (
     WidgetTester tester,

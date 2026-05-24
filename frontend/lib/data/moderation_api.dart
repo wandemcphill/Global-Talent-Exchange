@@ -1,13 +1,16 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
 import '../models/moderation_models.dart';
 
 class ModerationApi {
-  ModerationApi({required this.client, required this.fixtures});
+  ModerationApi({required this.client, required _ModerationFixtures? fixtures})
+    : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final _ModerationFixtures fixtures;
+  final _ModerationFixtures? _fixtures;
 
   factory ModerationApi.standard({
     required String baseUrl,
@@ -23,11 +26,12 @@ class ModerationApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _ModerationFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory ModerationApi.fixture() {
+    assertFixtureFactoryAllowed('ModerationApi.fixture');
     return ModerationApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -66,8 +70,10 @@ class ModerationApi {
         );
         return ModerationReport.fromJson(payload);
       },
-      () async =>
-          fixtures.createReport(targetId: targetId, description: description),
+      () async => _requireFixtures().createReport(
+        targetId: targetId,
+        description: description,
+      ),
     );
   }
 
@@ -77,7 +83,7 @@ class ModerationApi {
         '/api/moderation/me/reports',
       );
       return payload.map(ModerationReport.fromJson).toList(growable: false);
-    }, fixtures.listReports);
+    }, () => _requireFixtures().listReports());
   }
 
   Future<List<ModerationReport>> listReports({
@@ -96,7 +102,7 @@ class ModerationApi {
         },
       );
       return payload.map(ModerationReport.fromJson).toList(growable: false);
-    }, fixtures.listReports);
+    }, () => _requireFixtures().listReports());
   }
 
   Future<ModerationSummary> fetchSummary() {
@@ -105,7 +111,7 @@ class ModerationApi {
         '/api/admin/moderation/reports/summary',
       );
       return ModerationSummary.fromJson(payload);
-    }, fixtures.summary);
+    }, () => _requireFixtures().summary());
   }
 
   Future<ModerationReport> assignReport({
@@ -123,7 +129,7 @@ class ModerationApi {
         },
       );
       return ModerationReport.fromJson(payload);
-    }, () async => fixtures.assignReport(reportId, priority));
+    }, () async => _requireFixtures().assignReport(reportId, priority));
   }
 
   Future<ModerationReport> resolveReport({
@@ -132,18 +138,33 @@ class ModerationApi {
     required String resolutionNote,
     bool dismiss = false,
   }) {
-    return client.withFallback<ModerationReport>(() async {
-      final Object? payload = await client.request(
-        'POST',
-        '/api/admin/moderation/reports/$reportId/resolve',
-        body: <String, Object?>{
-          'resolution_action': resolutionAction,
-          'resolution_note': resolutionNote,
-          'dismiss': dismiss,
-        },
+    return client.withFallback<ModerationReport>(
+      () async {
+        final Object? payload = await client.request(
+          'POST',
+          '/api/admin/moderation/reports/$reportId/resolve',
+          body: <String, Object?>{
+            'resolution_action': resolutionAction,
+            'resolution_note': resolutionNote,
+            'dismiss': dismiss,
+          },
+        );
+        return ModerationReport.fromJson(payload);
+      },
+      () async => _requireFixtures().resolveReport(reportId, resolutionAction),
+    );
+  }
+
+  _ModerationFixtures _requireFixtures() {
+    final _ModerationFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Moderation fixtures are not registered in strict-live runtime.',
       );
-      return ModerationReport.fromJson(payload);
-    }, () async => fixtures.resolveReport(reportId, resolutionAction));
+    }
+    return fixtures;
   }
 }
 

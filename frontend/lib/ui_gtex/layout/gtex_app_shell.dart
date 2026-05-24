@@ -98,9 +98,7 @@ class GtexAppShell extends StatelessWidget {
                   ),
         ),
         bottomNavigationBar:
-            compact
-                ? _BottomNav(destinations: destinations.take(5).toList())
-                : null,
+            compact ? _BottomNav(destinations: destinations) : null,
       ),
     );
   }
@@ -356,23 +354,125 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int rawIndex = destinations.indexWhere(
+    final _BottomNavLayout layout = _BottomNavLayout.from(destinations);
+    final int rawIndex = layout.visibleDestinations.indexWhere(
+      (GtexShellDestination item) => item.isSelected,
+    );
+    final bool overflowSelected = layout.overflowDestinations.any(
       (GtexShellDestination item) => item.isSelected,
     );
     final int selectedIndex =
-        rawIndex < 0 ? 0 : rawIndex.clamp(0, destinations.length - 1).toInt();
+        overflowSelected
+            ? layout.visibleDestinations.length
+            : rawIndex < 0
+            ? 0
+            : rawIndex.clamp(0, layout.visibleDestinations.length - 1).toInt();
     return NavigationBar(
       selectedIndex: selectedIndex,
-      onDestinationSelected: (int index) => destinations[index].onTap(),
-      destinations: destinations
-          .map(
-            (GtexShellDestination item) => NavigationDestination(
-              icon: Icon(item.icon),
-              selectedIcon: Icon(item.selectedIcon),
-              label: item.label,
-            ),
-          )
-          .toList(growable: false),
+      onDestinationSelected: (int index) {
+        if (index < layout.visibleDestinations.length) {
+          layout.visibleDestinations[index].onTap();
+          return;
+        }
+        _showMoreDestinations(context, layout.overflowDestinations);
+      },
+      destinations: <NavigationDestination>[
+        for (final GtexShellDestination item in layout.visibleDestinations)
+          NavigationDestination(
+            icon: Icon(item.icon),
+            selectedIcon: Icon(item.selectedIcon),
+            label: item.label,
+          ),
+        if (layout.overflowDestinations.isNotEmpty)
+          const NavigationDestination(
+            key: Key('gtex-shell-more-destination'),
+            icon: Icon(Icons.more_horiz_rounded),
+            selectedIcon: Icon(Icons.more_rounded),
+            label: 'More',
+          ),
+      ],
+    );
+  }
+
+  Future<void> _showMoreDestinations(
+    BuildContext context,
+    List<GtexShellDestination> overflowDestinations,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: GtexColors.stadiumBlack,
+      builder: (BuildContext sheetContext) {
+        return ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(
+            GtexSpacing.md,
+            GtexSpacing.md,
+            GtexSpacing.md,
+            GtexSpacing.xl,
+          ),
+          itemCount: overflowDestinations.length,
+          separatorBuilder:
+              (_, __) => Divider(color: GtexColors.line.withValues(alpha: 0.4)),
+          itemBuilder: (BuildContext context, int index) {
+            final GtexShellDestination item = overflowDestinations[index];
+            return ListTile(
+              key: Key('gtex-shell-more-${item.label}'),
+              leading: Icon(
+                item.isSelected ? item.selectedIcon : item.icon,
+                color: item.isSelected ? item.accent : GtexColors.textMuted,
+              ),
+              title: Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: item.isSelected ? item.accent : GtexColors.text,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              trailing:
+                  item.badgeLabel == null
+                      ? null
+                      : Text(
+                        item.badgeLabel!,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: item.accent,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+              selected: item.isSelected,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                item.onTap();
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _BottomNavLayout {
+  const _BottomNavLayout({
+    required this.visibleDestinations,
+    required this.overflowDestinations,
+  });
+
+  final List<GtexShellDestination> visibleDestinations;
+  final List<GtexShellDestination> overflowDestinations;
+
+  static _BottomNavLayout from(List<GtexShellDestination> destinations) {
+    if (destinations.length <= 5) {
+      return _BottomNavLayout(
+        visibleDestinations: destinations,
+        overflowDestinations: const <GtexShellDestination>[],
+      );
+    }
+    return _BottomNavLayout(
+      visibleDestinations: destinations.take(4).toList(growable: false),
+      overflowDestinations: destinations.skip(4).toList(growable: false),
     );
   }
 }

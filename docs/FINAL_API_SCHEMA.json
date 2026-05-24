@@ -455,9 +455,27 @@
       },
       {
         "method": "POST",
+        "path": "/api/admin/coin-traders/{profile_id}/liquidity/issue",
+        "handler": "admin_issue_coin_trader_liquidity",
+        "response_model": "CoinTraderAdminLiquidityTransferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/coin-traders/{profile_id}/liquidity/redeem",
+        "handler": "admin_redeem_coin_trader_liquidity",
+        "response_model": "CoinTraderAdminLiquidityTransferView"
+      },
+      {
+        "method": "POST",
         "path": "/api/admin/coin-traders/{profile_id}/reject",
         "handler": "admin_reject_coin_trader",
         "response_model": "CoinTraderProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/competitions",
+        "handler": "get_admin_competitions",
+        "response_model": "AdminCompetitionsCanonicalView"
       },
       {
         "method": "GET",
@@ -692,6 +710,36 @@
         "path": "/api/admin/god-mode/withdrawals/{payout_request_id}",
         "handler": "update_withdrawal",
         "response_model": "WithdrawalAdminView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/payment-rails",
+        "handler": "get_admin_payment_rails",
+        "response_model": "AdminPaymentRailsCanonicalView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/queues",
+        "handler": "get_admin_queues",
+        "response_model": "AdminQueuesCanonicalView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/readiness",
+        "handler": "get_admin_readiness",
+        "response_model": "OperationsReadinessSnapshot"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/settlements",
+        "handler": "get_admin_settlements",
+        "response_model": "AdminSettlementsCanonicalView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/treasury",
+        "handler": "get_admin_treasury",
+        "response_model": "AdminTreasuryCanonicalView"
       }
     ],
     "ads": [
@@ -1158,6 +1206,36 @@
         "path": "/api/auth/signup/user",
         "handler": "signup_user",
         "response_model": "TokenResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/club/current",
+        "handler": "read_current_club",
+        "response_model": "ClubProfileCore"
+      },
+      {
+        "method": "GET",
+        "path": "/api/profile",
+        "handler": "read_live_profile",
+        "response_model": "CurrentUserResponse"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/profile",
+        "handler": "update_live_profile",
+        "response_model": "CurrentUserResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/profile/security",
+        "handler": "read_profile_security",
+        "response_model": "SessionBootstrapSecurityState"
+      },
+      {
+        "method": "GET",
+        "path": "/api/profile/sessions",
+        "handler": "read_profile_sessions",
+        "response_model": "list[SessionBootstrapSessionView]"
       },
       {
         "method": "GET",
@@ -5237,6 +5315,12 @@
       },
       {
         "method": "GET",
+        "path": "/api/matches/{match_id}/events",
+        "handler": "read_match_v2_events",
+        "response_model": null
+      },
+      {
+        "method": "GET",
         "path": "/api/matches/{match_id}/highlights",
         "handler": "read_match_highlights",
         "response_model": "MatchHighlightResponseView"
@@ -5246,6 +5330,12 @@
         "path": "/api/matches/{match_id}/highlights/share-package",
         "handler": "get_match_highlight_share_package",
         "response_model": "MatchHighlightSharePackageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/lineups",
+        "handler": "read_match_v2_lineups",
+        "response_model": null
       },
       {
         "method": "GET",
@@ -5260,9 +5350,39 @@
         "response_model": "SpectatorSessionView"
       },
       {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/state",
+        "handler": "read_match_v2_state",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/stats",
+        "handler": "read_match_v2_stats",
+        "response_model": null
+      },
+      {
         "method": "WEBSOCKET",
         "path": "/api/matches/{match_id}/stream",
         "handler": "stream_match",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/tactics",
+        "handler": "read_match_v2_tactics",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/matches/{match_id}/tactics",
+        "handler": "update_match_v2_tactics",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/matches/{match_id}/timeline",
+        "handler": "read_match_v2_timeline",
         "response_model": null
       },
       {
@@ -6724,6 +6844,42 @@
         "path": "/api/national-team-engine/rankings",
         "handler": "list_country_rankings",
         "response_model": "list[NationalTeamCountryRankingResponse]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/national/competitions",
+        "handler": "national_list_competitions",
+        "response_model": "list[NationalTeamCompetitionResponse]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/national/competitions/{competition_id}/rental-entry",
+        "handler": "national_create_my_rental_entry",
+        "response_model": "NationalTeamEntryResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/national/competitions/{competition_id}/rental-pool",
+        "handler": "national_list_rental_pool",
+        "response_model": "NationalTeamRentalPlayerCollectionResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/national/entries/{entry_id}",
+        "handler": "national_get_entry",
+        "response_model": "NationalTeamEntryDetailResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/national/entries/{entry_id}/rentals",
+        "handler": "national_rent_player",
+        "response_model": "NationalTeamEntryDetailResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/national/me/history",
+        "handler": "national_get_my_history",
+        "response_model": "NationalTeamUserHistoryResponse"
       }
     ],
     "notifications": [
@@ -7036,6 +7192,14 @@
         "path": "/api/ownership-groups/{group_id}/clubs",
         "handler": "add_club_to_ownership_group",
         "response_model": "OwnershipGroupView"
+      }
+    ],
+    "payment": [
+      {
+        "method": "POST",
+        "path": "/api/webhooks/korapay",
+        "handler": "handle_korapay_webhook_alias",
+        "response_model": "AdminFinanceWebhookResultView"
       }
     ],
     "payments": [
@@ -8077,6 +8241,12 @@
         "method": "WEBSOCKET",
         "path": "/ws/match/{match_id}",
         "handler": "stream_live_match_events",
+        "response_model": null
+      },
+      {
+        "method": "WEBSOCKET",
+        "path": "/ws/matches/{match_id}",
+        "handler": "stream_live_match_events_plural_alias",
         "response_model": null
       }
     ],
@@ -9268,6 +9438,12 @@
         "path": "/api/clubs/{club_id}/trophies",
         "handler": "get_club_trophies",
         "response_model": "ClubTrophiesView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/v2-snapshot",
+        "handler": "get_club_v2_snapshot",
+        "response_model": null
       },
       {
         "method": "GET",
@@ -11046,6 +11222,18 @@
         "path": "/api/wallet",
         "handler": "get_wallet_profile",
         "response_model": "WalletProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallet/summary",
+        "handler": "get_wallet_summary_alias",
+        "response_model": "WalletSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/wallet/summary",
+        "handler": "get_wallet_summary_alias",
+        "response_model": "WalletSummaryView"
       },
       {
         "method": "POST",

@@ -1,15 +1,18 @@
 import 'dart:math';
 
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
 import '../models/discovery_models.dart';
 
 class DiscoveryApi {
-  DiscoveryApi({required this.client, required this.fixtures});
+  DiscoveryApi({required this.client, required _DiscoveryFixtures? fixtures})
+    : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final _DiscoveryFixtures fixtures;
+  final _DiscoveryFixtures? _fixtures;
 
   factory DiscoveryApi.standard({
     required String baseUrl,
@@ -26,11 +29,12 @@ class DiscoveryApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _DiscoveryFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory DiscoveryApi.fixture() {
+    assertFixtureFactoryAllowed('DiscoveryApi.fixture');
     return DiscoveryApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -51,7 +55,7 @@ class DiscoveryApi {
         '/api/discovery/home',
       );
       return DiscoveryHome.fromJson(payload);
-    }, fixtures.home);
+    }, () => _requireFixtures().home());
   }
 
   Future<List<DiscoveryItem>> search({
@@ -69,7 +73,7 @@ class DiscoveryApi {
         },
       );
       return payload.map(DiscoveryItem.fromJson).toList(growable: false);
-    }, () async => fixtures.search(query: query, limit: limit));
+    }, () async => _requireFixtures().search(query: query, limit: limit));
   }
 
   Future<List<SavedSearch>> listSavedSearches() {
@@ -78,7 +82,7 @@ class DiscoveryApi {
         '/api/discovery/saved-searches',
       );
       return payload.map(SavedSearch.fromJson).toList(growable: false);
-    }, fixtures.savedSearches);
+    }, () => _requireFixtures().savedSearches());
   }
 
   Future<SavedSearch> createSavedSearch({
@@ -97,13 +101,13 @@ class DiscoveryApi {
         },
       );
       return SavedSearch.fromJson(payload);
-    }, () async => fixtures.createSavedSearch(query: query));
+    }, () async => _requireFixtures().createSavedSearch(query: query));
   }
 
   Future<void> deleteSavedSearch(String searchId) {
     return client.withFallback<void>(() async {
       await client.request('DELETE', '/api/discovery/saved-searches/$searchId');
-    }, () async => fixtures.deleteSavedSearch(searchId));
+    }, () async => _requireFixtures().deleteSavedSearch(searchId));
   }
 
   Future<List<FeaturedRail>> listFeaturedRails() {
@@ -112,7 +116,7 @@ class DiscoveryApi {
         '/api/admin/discovery/featured-rails',
       );
       return payload.map(FeaturedRail.fromJson).toList(growable: false);
-    }, fixtures.featuredRails);
+    }, () => _requireFixtures().featuredRails());
   }
 
   Future<FeaturedRail> upsertFeaturedRail({
@@ -125,23 +129,38 @@ class DiscoveryApi {
     int displayOrder = 0,
     bool active = true,
   }) {
-    return client.withFallback<FeaturedRail>(() async {
-      final Object? payload = await client.request(
-        'POST',
-        '/api/admin/discovery/featured-rails',
-        body: <String, Object?>{
-          'rail_key': railKey,
-          'title': title,
-          'rail_type': railType,
-          'audience': audience,
-          'query_hint': queryHint,
-          'subtitle': subtitle,
-          'display_order': displayOrder,
-          'active': active,
-        },
+    return client.withFallback<FeaturedRail>(
+      () async {
+        final Object? payload = await client.request(
+          'POST',
+          '/api/admin/discovery/featured-rails',
+          body: <String, Object?>{
+            'rail_key': railKey,
+            'title': title,
+            'rail_type': railType,
+            'audience': audience,
+            'query_hint': queryHint,
+            'subtitle': subtitle,
+            'display_order': displayOrder,
+            'active': active,
+          },
+        );
+        return FeaturedRail.fromJson(payload);
+      },
+      () async => _requireFixtures().upsertRail(railKey: railKey, title: title),
+    );
+  }
+
+  _DiscoveryFixtures _requireFixtures() {
+    final _DiscoveryFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Discovery fixtures are not registered in strict-live runtime.',
       );
-      return FeaturedRail.fromJson(payload);
-    }, () async => fixtures.upsertRail(railKey: railKey, title: title));
+    }
+    return fixtures;
   }
 }
 

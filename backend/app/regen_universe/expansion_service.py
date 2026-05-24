@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from hashlib import sha1
 from itertools import combinations
+import os
 from random import Random
 from typing import Any
 
@@ -52,9 +53,20 @@ from app.services.regen_service import (
 )
 from app.story_feed_engine.service import StoryFeedService
 
+_PROTECTED_APP_ENVS = {"production", "prod", "staging", "release"}
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _protected_runtime_enabled() -> bool:
+    environment = (
+        str(os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "development")
+        .strip()
+        .lower()
+    )
+    return environment in _PROTECTED_APP_ENVS
 
 
 def _clamp_int(value: int, minimum: int, maximum: int) -> int:
@@ -1512,6 +1524,8 @@ class RegenUniverseExpansionService:
             )
             for player in participant.get("players", [])
         ]
+        if _protected_runtime_enabled() and (not seeds or any(seed.source_type == "synthetic" for seed in seeds)):
+            raise RegenUniverseExpansionValidationError("youth_tournament_requires_persisted_squads")
         team_key = str(participant["team_id"])
         starters, bench = self._select_tournament_squad(seeds, team_key=team_key)
         average_rating = round(sum(seed.overall for seed, _ in starters) / max(1, len(starters)))
@@ -1568,6 +1582,7 @@ class RegenUniverseExpansionService:
             + ([PlayerRole.FORWARD] * 3)
         )
         remaining = list(seeds)
+        protected_runtime = _protected_runtime_enabled()
         starters: list[tuple[_TournamentPlayerSeed, PlayerRole]] = []
         for index, role in enumerate(required_roles, start=1):
             if remaining:
@@ -1576,12 +1591,16 @@ class RegenUniverseExpansionService:
                     starters.append((best, role))
                     remaining.remove(best)
                     continue
+            if protected_runtime:
+                raise RegenUniverseExpansionValidationError("youth_tournament_requires_persisted_squads")
             starters.append((self._synthetic_seed(role, slot=index, team_key=team_key), role))
         bench = [
             (seed, _resolve_role(seed.position))
             for seed in sorted(remaining, key=lambda item: item.overall, reverse=True)[:7]
         ]
         while len(bench) < 7:
+            if protected_runtime:
+                raise RegenUniverseExpansionValidationError("youth_tournament_requires_persisted_squads")
             role = [PlayerRole.GOALKEEPER, PlayerRole.DEFENDER, PlayerRole.MIDFIELDER, PlayerRole.FORWARD][
                 len(bench) % 4
             ]
@@ -2208,6 +2227,7 @@ class RegenUniverseExpansionService:
         age_band: str | None = None,
         age_min: int | None = None,
         age_max: int | None = None,
+        active_only: bool = False,
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -2232,6 +2252,8 @@ class RegenUniverseExpansionService:
             stmt = stmt.where(NationalRegenSeed.age >= age_min)
         if age_max is not None:
             stmt = stmt.where(NationalRegenSeed.age <= age_max)
+        if active_only:
+            stmt = stmt.where(NationalRegenSeed.status.in_(_NATIONAL_SEED_ACTIVE_STATUSES))
         stmt = stmt.offset(offset).limit(limit)
         seeds = list(self.session.scalars(stmt).all())
         return [self._national_seed_view(item) for item in seeds]

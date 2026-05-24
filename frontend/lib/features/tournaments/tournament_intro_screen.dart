@@ -17,6 +17,7 @@ class TournamentIntroScreen extends StatefulWidget {
     this.standings,
     this.squad,
     this.onEnterTournament,
+    this.allowFixtureData = false,
   });
 
   final Competition competition;
@@ -25,6 +26,7 @@ class TournamentIntroScreen extends StatefulWidget {
   final List<TournamentStanding>? standings;
   final List<Player>? squad;
   final VoidCallback? onEnterTournament;
+  final bool allowFixtureData;
 
   @override
   State<TournamentIntroScreen> createState() => _TournamentIntroScreenState();
@@ -96,6 +98,7 @@ class _TournamentIntroScreenState extends State<TournamentIntroScreen> {
             fixtures: widget.fixtures,
             standings: widget.standings,
             squad: widget.squad,
+            allowFixtureData: widget.allowFixtureData,
           );
         },
       ),

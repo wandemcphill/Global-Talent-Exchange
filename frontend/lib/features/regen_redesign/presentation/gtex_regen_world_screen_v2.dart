@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/app/test_runtime_detector.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/gtex_regen_repository.dart';
@@ -9,14 +10,32 @@ import 'gtex_create_son_screen_v2.dart';
 class GtexRegenWorldScreenV2 extends StatefulWidget {
   const GtexRegenWorldScreenV2({
     super.key,
-    this.repository = const DemoGtexRegenRepository(),
+    required this.repository,
     this.isAdmin = false,
     this.onOpenAwards,
+    this.allowFixtureData = false,
   });
+
+  factory GtexRegenWorldScreenV2.fixture({
+    Key? key,
+    GtexRegenRepository repository = const DemoGtexRegenRepository(),
+    bool isAdmin = false,
+    VoidCallback? onOpenAwards,
+  }) {
+    assertFixtureFactoryAllowed('GtexRegenWorldScreenV2.fixture');
+    return GtexRegenWorldScreenV2(
+      key: key,
+      repository: repository,
+      isAdmin: isAdmin,
+      onOpenAwards: onOpenAwards,
+      allowFixtureData: true,
+    );
+  }
 
   final GtexRegenRepository repository;
   final bool isAdmin;
   final VoidCallback? onOpenAwards;
+  final bool allowFixtureData;
 
   @override
   State<GtexRegenWorldScreenV2> createState() => _GtexRegenWorldScreenV2State();
@@ -166,6 +185,7 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
           repository: widget.repository,
           initialData: data,
           embedded: true,
+          allowFixtureData: widget.allowFixtureData,
         );
       case 'achievements':
         return _AchievementBoard(items: data.achievementFeed);
@@ -174,6 +194,7 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
           repository: widget.repository,
           initialData: data,
           embedded: true,
+          allowFixtureData: widget.allowFixtureData,
         );
       case 'prospects':
       default:
@@ -194,6 +215,7 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
             (_) => GtexCreateSonScreenV2(
               repository: widget.repository,
               initialData: data,
+              allowFixtureData: widget.allowFixtureData,
             ),
       ),
     );
@@ -206,6 +228,7 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
             (_) => GtexAdminCreateSonScreenV2(
               repository: widget.repository,
               initialData: data,
+              allowFixtureData: widget.allowFixtureData,
             ),
       ),
     );
@@ -630,18 +653,16 @@ class _SelectedProspectPanel extends StatelessWidget {
                 .toList(growable: false),
           ),
           const SizedBox(height: GtexSpacing.md),
-          if (prospect.isNationalRentalOnly)
-            const GtexStatusChip(
-              label: 'Not tradable — national team rental depth only',
-              color: GtexColors.cyan,
-            )
-          else
-            GtexActionButton(
-              label: 'Open contract room',
-              icon: Icons.assignment_outlined,
-              accent: GtexColors.purple,
-              onPressed: () {},
-            ),
+          GtexStatusChip(
+            label:
+                prospect.isNationalRentalOnly
+                    ? 'Not tradable - national team rental depth only'
+                    : 'Contracts blocked - live endpoint unavailable',
+            color:
+                prospect.isNationalRentalOnly
+                    ? GtexColors.cyan
+                    : GtexColors.purple,
+          ),
         ],
       ),
     );

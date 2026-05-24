@@ -332,6 +332,28 @@ def test_duplicate_generation_call_returns_existing_generated_regen(session) -> 
 
 
 def test_korapay_paid_callback_generates_exactly_once(session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("GTE_KORAPAY_WEBHOOK_SECRET", "test-webhook-secret")
+
+    class _FakeKoraPayInitializeResponse:
+        @staticmethod
+        def raise_for_status() -> None:
+            return None
+
+        @staticmethod
+        def json() -> dict[str, object]:
+            return {
+                "data": {
+                    "checkout_url": "https://checkout.korapay.test/pay/regen",
+                    "payment_reference": "regen-kora-test-reference",
+                    "reference": "regen-kora-test-reference",
+                }
+            }
+
+    monkeypatch.setattr(
+        "app.regen_creation.service.httpx.post",
+        lambda *args, **kwargs: _FakeKoraPayInitializeResponse(),
+    )
     user = _create_user(session, email="korapay@example.com", username="korapayuser", full_name="Korapay User")
     club = _create_club(session, owner=user, slug="korapay-fc", name="Korapay FC")
     country = _create_country(session)
@@ -360,7 +382,7 @@ def test_korapay_paid_callback_generates_exactly_once(session, monkeypatch: pyte
     assert payload["payment_link"] is not None
     assert payload["status"] == "pending_payment"
 
-    expected_amount = (Decimal(str(payload["amount_minor"])) / Decimal("100")).quantize(Decimal("0.0001"))
+    expected_amount = Decimal(str(payload["amount_minor"])).quantize(Decimal("0.0001"))
     monkeypatch.setattr(
         RegenCreationService,
         "_verify_korapay_transaction",
@@ -370,6 +392,7 @@ def test_korapay_paid_callback_generates_exactly_once(session, monkeypatch: pyte
                 "status": "success",
                 "payment_reference": reference,
                 "reference": reference,
+                "currency": payload["currency"],
                 "amount": expected_amount,
             }
         },

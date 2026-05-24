@@ -216,7 +216,7 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
           title: adminMode ? 'Operator actions' : 'Wallet actions',
           subtitle:
               adminMode
-                  ? 'Use existing backend actions after adapter wiring.'
+                  ? 'Review context is live; mutation controls unlock only after audited review endpoints are mounted.'
                   : state.wallet.kycStatus,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -236,27 +236,32 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
                   accent: GtexColors.gold,
                 ),
               ] else ...<Widget>[
-                GtexActionButton(
-                  label: 'Approve / continue',
-                  icon: Icons.check_circle_outline,
-                  onPressed: () {},
-                  accent: GtexColors.pitch,
+                Text(
+                  _selectedReviewSummary(
+                    order: selectedOrder,
+                    dispute: selectedDispute,
+                    kycCase: selectedKycCase,
+                  ),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: GtexColors.textSecondary,
+                    height: 1.45,
+                  ),
                 ),
-                const SizedBox(height: GtexSpacing.sm),
-                GtexActionButton(
-                  label: 'Request more info',
-                  icon: Icons.rule_folder_outlined,
-                  onPressed: () {},
-                  secondary: true,
-                  accent: GtexColors.gold,
-                ),
-                const SizedBox(height: GtexSpacing.sm),
-                GtexActionButton(
-                  label: 'Escalate',
-                  icon: Icons.report_outlined,
-                  onPressed: () {},
-                  secondary: true,
-                  accent: GtexColors.red,
+                const SizedBox(height: GtexSpacing.md),
+                const Wrap(
+                  spacing: GtexSpacing.xs,
+                  runSpacing: GtexSpacing.xs,
+                  children: <Widget>[
+                    GtexStatusChip(label: 'READ ONLY', color: GtexColors.cyan),
+                    GtexStatusChip(
+                      label: 'AUDIT REQUIRED',
+                      color: GtexColors.gold,
+                    ),
+                    GtexStatusChip(
+                      label: 'NO MUTATION ENDPOINT',
+                      color: GtexColors.red,
+                    ),
+                  ],
                 ),
               ],
             ],
@@ -295,6 +300,23 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
       ],
     );
   }
+}
+
+String _selectedReviewSummary({
+  required GtexOrderRecord? order,
+  required GtexDisputeRecord? dispute,
+  required GtexKycCaseRecord? kycCase,
+}) {
+  if (order != null) {
+    return 'Selected order ${order.id} is available for inspection. Approve, info-request, and escalation mutations remain locked until the live review adapter is mounted.';
+  }
+  if (dispute != null) {
+    return 'Selected dispute ${dispute.id} is available for inspection. Resolution mutations remain locked until the live review adapter is mounted.';
+  }
+  if (kycCase != null) {
+    return 'Selected KYC case ${kycCase.id} is available for inspection. Approval mutations remain locked until the live review adapter is mounted.';
+  }
+  return 'Select an order, KYC case, or dispute to review its live context. This rail is intentionally read-only until audited admin mutation endpoints are mounted.';
 }
 
 class _OperationsReadinessCard extends StatelessWidget {

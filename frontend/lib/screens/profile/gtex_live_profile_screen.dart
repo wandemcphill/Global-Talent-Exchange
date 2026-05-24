@@ -3,13 +3,19 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/gte_models.dart';
 import '../../features/engagement_redesign/engagement_widgets.dart';
+import '../../features/system_profile_redesign/data/profile_runtime_adapter.dart';
 import '../../providers/gte_exchange_controller.dart';
 import '../../ui_gtex/ui_gtex.dart';
 
 class GtexLiveProfileScreen extends StatefulWidget {
-  const GtexLiveProfileScreen({super.key, required this.controller});
+  const GtexLiveProfileScreen({
+    super.key,
+    required this.controller,
+    this.profileRuntimeAdapter,
+  });
 
   final GteExchangeController controller;
+  final ProfileRuntimeAdapter? profileRuntimeAdapter;
 
   @override
   State<GtexLiveProfileScreen> createState() => _GtexLiveProfileScreenState();
@@ -17,6 +23,9 @@ class GtexLiveProfileScreen extends StatefulWidget {
 
 class _GtexLiveProfileScreenState extends State<GtexLiveProfileScreen> {
   _ProfileSection _selected = _ProfileSection.overview;
+  GtexProfileRuntimeSnapshot? _profileSnapshot;
+  Object? _profileError;
+  bool _isLoadingProfileRuntime = false;
 
   @override
   void initState() {
@@ -28,10 +37,42 @@ class _GtexLiveProfileScreenState extends State<GtexLiveProfileScreen> {
     if (!widget.controller.isAuthenticated) {
       return;
     }
-    await Future.wait<void>(<Future<void>>[
-      widget.controller.refreshAccount(),
-      widget.controller.loadOrders(),
-    ]);
+    setState(() {
+      _isLoadingProfileRuntime = true;
+      _profileError = null;
+    });
+    try {
+      GtexProfileRuntimeSnapshot? nextSnapshot;
+      final ProfileRuntimeAdapter adapter =
+          widget.profileRuntimeAdapter ??
+          ProfileRuntimeAdapter.fromController(widget.controller);
+      await Future.wait<void>(<Future<void>>[
+        widget.controller.refreshAccount(),
+        widget.controller.loadOrders(),
+        adapter.load().then((GtexProfileRuntimeSnapshot value) {
+          nextSnapshot = value;
+        }),
+      ]);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _profileSnapshot = nextSnapshot;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _profileError = error;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingProfileRuntime = false;
+        });
+      }
+    }
   }
 
   @override
@@ -42,7 +83,14 @@ class _GtexLiveProfileScreenState extends State<GtexLiveProfileScreen> {
         child: AnimatedBuilder(
           animation: widget.controller,
           builder: (BuildContext context, _) {
-            final GteCurrentUser? user = widget.controller.session?.user;
+            if (_profileError != null && _profileSnapshot == null) {
+              return _ProfileRuntimeBlockedState(
+                error: _profileError!,
+                onRetry: _primeAccount,
+              );
+            }
+            final GteCurrentUser? user =
+                _profileSnapshot?.user ?? widget.controller.session?.user;
             if (user == null) {
               return GtexEmptyState(
                 title: 'Sign in to open your GTEX profile',
@@ -71,14 +119,21 @@ class _GtexLiveProfileScreenState extends State<GtexLiveProfileScreen> {
               detail: _ProfileDetail(
                 controller: widget.controller,
                 user: user,
+                runtime: _profileSnapshot,
                 section: _selected,
                 onRefresh: _primeAccount,
               ),
               rightPanel: _ProfileRightPanel(
                 controller: widget.controller,
                 user: user,
+                runtime: _profileSnapshot,
               ),
               actions: <Widget>[
+                if (_isLoadingProfileRuntime)
+                  const SizedBox.square(
+                    dimension: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 IconButton(
                   tooltip: 'Refresh profile',
                   onPressed:
@@ -90,6 +145,50 @@ class _GtexLiveProfileScreenState extends State<GtexLiveProfileScreen> {
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileRuntimeBlockedState extends StatelessWidget {
+  const _ProfileRuntimeBlockedState({
+    required this.error,
+    required this.onRetry,
+  });
+
+  final Object error;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: GtexPanel(
+          title: 'Live profile unavailable',
+          subtitle:
+              'Profile V2 requires the canonical live bootstrap, profile, security, session, wallet, and club endpoints.',
+          accent: GtexColors.red,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                error.toString(),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: GtexColors.textMuted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: GtexSpacing.md),
+              GtexButton(
+                label: 'Retry live profile',
+                icon: Icons.refresh,
+                onPressed: onRetry,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -220,12 +319,14 @@ class _ProfileDetail extends StatelessWidget {
   const _ProfileDetail({
     required this.controller,
     required this.user,
+    required this.runtime,
     required this.section,
     required this.onRefresh,
   });
 
   final GteExchangeController controller;
   final GteCurrentUser user;
+  final GtexProfileRuntimeSnapshot? runtime;
   final _ProfileSection section;
   final Future<void> Function() onRefresh;
 
@@ -249,11 +350,13 @@ class _ProfileDetail extends StatelessWidget {
   }
 
   Widget _overview(BuildContext context) {
-    final String? clubName = _rawString(user.rawJson, <String>[
-      'current_club_name',
-      'club_name',
-      'clubName',
-    ]);
+    final String? clubName =
+        runtime?.clubName ??
+        _rawString(user.rawJson, <String>[
+          'current_club_name',
+          'club_name',
+          'clubName',
+        ]);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -301,7 +404,8 @@ class _ProfileDetail extends StatelessWidget {
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'Identity record',
-          subtitle: 'This is read from the authenticated GTEX user session.',
+          subtitle:
+              'This is read from the canonical Profile V2 backend authority.',
           accent: GtexColors.pitch,
           child: Column(
             children: <Widget>[
@@ -318,7 +422,8 @@ class _ProfileDetail extends StatelessWidget {
   }
 
   Widget _walletTrust(BuildContext context) {
-    final GteWalletSummary? wallet = controller.walletSummary;
+    final GteWalletSummary? wallet =
+        runtime?.wallet ?? controller.walletSummary;
     final GteComplianceStatus? compliance = controller.complianceStatus;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -476,6 +581,9 @@ class _ProfileDetail extends StatelessWidget {
   }
 
   Widget _security(BuildContext context) {
+    final GtexProfileRuntimeSnapshot? profile = runtime;
+    final Map<String, Object?> security =
+        profile?.security ?? const <String, Object?>{};
     return _SimpleSection(
       title: 'Security',
       icon: section.icon,
@@ -485,7 +593,25 @@ class _ProfileDetail extends StatelessWidget {
           'Session',
           controller.isAuthenticated ? 'Authenticated' : 'Guest',
         ),
+        _SimpleRow(
+          'Active sessions',
+          profile == null
+              ? 'Loading live sessions'
+              : '${profile.activeSessionCount}',
+        ),
+        _SimpleRow(
+          'MFA',
+          profile == null
+              ? 'Loading live security'
+              : (profile.mfaEnabled ? 'Enabled' : 'Not enabled'),
+        ),
         _SimpleRow('Account active', user.isActive ? 'Yes' : 'No'),
+        _SimpleRow(
+          'Security source',
+          _rawString(security, const <String>['source', 'runtime_source']) ??
+              profile?.sessionSource ??
+              'Canonical live endpoint',
+        ),
         _SimpleRow(
           'Age confirmation',
           user.ageConfirmedAt == null ? 'Not recorded' : 'Recorded',
@@ -549,10 +675,15 @@ class _ProfileDetail extends StatelessWidget {
 }
 
 class _ProfileRightPanel extends StatelessWidget {
-  const _ProfileRightPanel({required this.controller, required this.user});
+  const _ProfileRightPanel({
+    required this.controller,
+    required this.user,
+    required this.runtime,
+  });
 
   final GteExchangeController controller;
   final GteCurrentUser user;
+  final GtexProfileRuntimeSnapshot? runtime;
 
   @override
   Widget build(BuildContext context) {
@@ -617,6 +748,20 @@ class _ProfileRightPanel extends StatelessWidget {
             children: <Widget>[
               _InfoRow(label: 'Role', value: user.role),
               _InfoRow(label: 'KYC', value: user.kycStatus ?? 'Unknown'),
+              _InfoRow(
+                label: 'Profile source',
+                value:
+                    runtime == null
+                        ? 'Loading live profile'
+                        : runtime!.sessionSource,
+              ),
+              _InfoRow(
+                label: 'Security sessions',
+                value:
+                    runtime == null
+                        ? 'Loading'
+                        : '${runtime!.activeSessionCount}',
+              ),
               _InfoRow(
                 label: 'Orders sync',
                 value:

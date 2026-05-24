@@ -17,7 +17,7 @@ from app.models.wallet import LedgerUnit
 from app.policies.service import PolicyService
 from app.treasury.service import TreasuryService
 from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
-from app.wallets.providers.registry import provider_runtime_statuses
+from app.wallets.providers.registry import paystack_enabled, provider_live_deposit_ready, provider_runtime_statuses
 from app.wallets.rail_service import WalletRailError, WalletRailService
 from app.wallets.service import WalletService
 
@@ -129,13 +129,21 @@ class WalletFundingService:
         *,
         amount: Decimal,
         input_unit: str = "coin",
-        provider: str = "paystack",
+        provider: str = "korapay",
         unit: LedgerUnit = LedgerUnit.COIN,
         callback_url: str | None = None,
     ) -> WalletTopUpSession:
         normalized_provider = provider.strip().lower()
         if normalized_provider not in SUPPORTED_TOP_UP_PROVIDER_KEYS:
-            raise WalletFundingError("Only Paystack and KoraPay top-up are currently supported.")
+            raise WalletFundingError(
+                "KoraPay is the live automatic top-up provider. Manual transfer remains available."
+            )
+        if normalized_provider == "paystack" and not paystack_enabled():
+            raise WalletFundingError("Paystack is unavailable. Use KoraPay checkout or manual bank transfer.")
+        if normalized_provider == "korapay" and not provider_live_deposit_ready("korapay"):
+            raise WalletFundingError(
+                "KoraPay requires live checkout and webhook credentials before it can accept deposits."
+            )
 
         normalized_amount = self._normalize_amount(amount)
         if normalized_amount <= Decimal("0.0000"):
@@ -282,18 +290,13 @@ class WalletFundingService:
         settings: TreasurySettings,
         callback_url: str | None,
     ) -> dict[str, Any]:
+        if not paystack_enabled():
+            raise WalletFundingError("Paystack is unavailable. Use KoraPay checkout or manual bank transfer.")
         secret = self._paystack_secret()
         if not secret:
-            if self._is_production_environment():
-                raise WalletFundingError(
-                    "Paystack is not configured. Set GTE_PAYSTACK_SECRET_KEY before accepting real payments."
-                )
-            return {
-                "authorization_url": f"https://mock.paystack.local/{order.reference}",
-                "access_code": f"mock-{order.reference}",
-                "reference": order.reference,
-                "mock_mode": True,
-            }
+            raise WalletFundingError(
+                "Paystack is not configured. Set GTE_PAYSTACK_SECRET_KEY before accepting payments."
+            )
 
         payload: dict[str, Any] = {
             "email": user.email,
@@ -383,20 +386,13 @@ class WalletFundingService:
         reference: str,
         order: FancoinPurchaseOrder,
     ) -> dict[str, Any]:
+        if not paystack_enabled():
+            raise WalletTopUpVerificationError("Paystack is unavailable. Use KoraPay checkout or manual bank transfer.")
         secret = self._paystack_secret()
         if not secret:
-            if self._is_production_environment():
-                raise WalletTopUpVerificationError(
-                    "Paystack is not configured. Set GTE_PAYSTACK_SECRET_KEY before verifying real payments."
-                )
-            return {
-                "data": {
-                    "id": f"mock-{reference}",
-                    "status": "success",
-                    "reference": reference,
-                    "amount": int((self._normalize_amount(order.amount_fiat) * Decimal("100")).to_integral_value()),
-                }
-            }
+            raise WalletTopUpVerificationError(
+                "Paystack is not configured. Set GTE_PAYSTACK_SECRET_KEY before verifying payments."
+            )
 
         response = httpx.get(
             f"{self._paystack_base_url()}/transaction/verify/{reference}",
@@ -669,8 +665,3 @@ class WalletFundingService:
         if raw_value and raw_value.strip():
             return raw_value.strip().rstrip("/")
         return KORAPAY_BASE_URL
-
-    @staticmethod
-    def _is_production_environment() -> bool:
-        environment = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or "development").strip().lower()
-        return environment in {"production", "prod", "release"}

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.analytics.service import AnalyticsService
@@ -20,8 +22,15 @@ from app.auth.schemas import (
     CurrentUserUpdateRequest,
     LoginRequest,
     RefreshTokenRequest,
+    SessionBootstrapCoinTraderState,
+    SessionBootstrapCreatorState,
+    SessionBootstrapOnboardingState,
+    SessionBootstrapPaymentsRuntimeState,
     RegisterRequest,
+    SessionBootstrapRuntimeState,
+    SessionBootstrapSecurityState,
     SessionBootstrapResponse,
+    SessionBootstrapSessionView,
     TokenResponse,
     TraderSignupRequest,
     UserClubSignupRequest,
@@ -37,14 +46,17 @@ from app.auth.service import (
 )
 from app.core.request_security import extract_client_ip
 from app.common.enums.creator_profile_status import CreatorProfileStatus
+from app.models.coin_trader import CoinTraderProfile
+from app.models.auth_session import AuthSession
 from app.models.creator_profile import CreatorProfile
-from app.models.user import KycStatus, PublicAccountType, User
+from app.models.user import PublicAccountType, User
 from app.policies.schemas import PolicyRequirementSummary, UserComplianceStatus
 from app.policies.service import PolicyService
 from app.schemas.club_identity_core import ClubProfileCore
 from app.trader.service import TraderAccessError, TraderService
 from app.treasury.service import TreasuryService
 from app.wallets.funding_service import WalletFundingService
+from app.wallets.providers.registry import provider_live_deposit_ready
 from app.wallets.schemas import WalletAdaptiveOverviewView
 from app.wallets.service import WalletService
 
@@ -255,6 +267,179 @@ def _build_wallet_bootstrap(service: AuthService, session: Session, user: User) 
     return WalletAdaptiveOverviewView(**wallet_payload)
 
 
+def _build_creator_bootstrap(session: Session, user: User) -> SessionBootstrapCreatorState | None:
+    if user.account_type != PublicAccountType.CREATOR:
+        return None
+    profile = session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == user.id))
+    if profile is None:
+        return None
+    status_value = getattr(profile.status, "value", profile.status)
+    return SessionBootstrapCreatorState(
+        profile_id=profile.id,
+        handle=profile.handle,
+        display_name=profile.display_name,
+        status=str(status_value),
+        tier=profile.tier,
+        is_active=status_value == CreatorProfileStatus.ACTIVE.value,
+    )
+
+
+def _build_coin_trader_bootstrap(session: Session, user: User) -> SessionBootstrapCoinTraderState | None:
+    if user.account_type != PublicAccountType.COIN_TRADER:
+        return None
+    profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
+    if profile is None:
+        return None
+    status_value = str(profile.status)
+    is_approved = status_value == "approved"
+    return SessionBootstrapCoinTraderState(
+        profile_id=profile.id,
+        display_name=profile.display_name,
+        status=status_value,
+        tier=profile.tier,
+        verification_level=profile.verification_level,
+        is_approved=is_approved,
+        can_trade=is_approved and user.is_active,
+    )
+
+
+def _build_onboarding_bootstrap(
+    *,
+    user: User,
+    club_present: bool,
+    creator: SessionBootstrapCreatorState | None,
+    coin_trader: SessionBootstrapCoinTraderState | None,
+) -> SessionBootstrapOnboardingState:
+    if user.account_type == PublicAccountType.CREATOR:
+        return SessionBootstrapOnboardingState(
+            has_club=False,
+            requires_club=False,
+            suggested_route="/app/hub",
+            available_actions=["creator_dashboard", "community"],
+        )
+    if user.account_type == PublicAccountType.COIN_TRADER:
+        trader_route = (
+            "/app/trader-dashboard" if coin_trader is not None and coin_trader.is_approved else "/app/coin-traders"
+        )
+        return SessionBootstrapOnboardingState(
+            has_club=False,
+            requires_club=False,
+            suggested_route=trader_route,
+            available_actions=["coin_trader_dashboard", "wallet", "coin_trader_marketplace"],
+        )
+    if club_present:
+        return SessionBootstrapOnboardingState(
+            has_club=True,
+            requires_club=False,
+            suggested_route="/app/club",
+            available_actions=["club_workspace", "market", "competitions", "community"],
+        )
+    return SessionBootstrapOnboardingState(
+        has_club=False,
+        requires_club=True,
+        suggested_route="/app/club",
+        available_actions=["create_club", "join_club", "continue_as_fan"],
+    )
+
+
+def _as_aware_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _is_auth_session_active(record: AuthSession, *, now: datetime) -> bool:
+    return record.revoked_at is None and _as_aware_utc(record.expires_at) > now
+
+
+def _current_auth_session(request: Request) -> AuthSession | None:
+    current_session = getattr(request.state, "auth_session", None)
+    return current_session if isinstance(current_session, AuthSession) else None
+
+
+def _build_session_roles(
+    *,
+    user: User,
+    club_present: bool,
+    creator: SessionBootstrapCreatorState | None,
+    coin_trader: SessionBootstrapCoinTraderState | None,
+) -> list[str]:
+    role_values = {
+        str(getattr(user.role, "value", user.role)),
+        str(getattr(user.account_type, "value", user.account_type)),
+    }
+    if club_present:
+        role_values.add("club_owner")
+    if creator is not None:
+        role_values.add("creator")
+    if coin_trader is not None:
+        role_values.add("coin_trader")
+    return sorted(value for value in role_values if value)
+
+
+def _build_session_runtime_state() -> SessionBootstrapRuntimeState:
+    return SessionBootstrapRuntimeState(
+        strict_live=True,
+        payments=SessionBootstrapPaymentsRuntimeState(
+            paystack_enabled=False,
+            korapay_enabled=provider_live_deposit_ready("korapay"),
+            manual_payment_enabled=True,
+        ),
+    )
+
+
+def _build_session_security_state(
+    *,
+    request: Request,
+    records: list[AuthSession],
+    user: User,
+    now: datetime,
+) -> SessionBootstrapSecurityState:
+    current_session = _current_auth_session(request)
+    return SessionBootstrapSecurityState(
+        current_session_id=None if current_session is None else current_session.id,
+        current_device_id=None if current_session is None else current_session.device_id,
+        current_ip_address=None if current_session is None else current_session.ip_address,
+        current_user_agent=None if current_session is None else current_session.user_agent,
+        session_count=len(records),
+        active_session_count=sum(1 for record in records if _is_auth_session_active(record, now=now)),
+        last_login_at=user.last_login_at,
+    )
+
+
+def _build_session_views(
+    *,
+    request: Request,
+    records: list[AuthSession],
+    now: datetime,
+) -> list[SessionBootstrapSessionView]:
+    current_session = _current_auth_session(request)
+    current_session_id = None if current_session is None else current_session.id
+    return [
+        SessionBootstrapSessionView(
+            id=record.id,
+            device_id=record.device_id,
+            user_agent=record.user_agent,
+            ip_address=record.ip_address,
+            created_at=record.created_at,
+            last_used_at=record.last_used_at,
+            expires_at=record.expires_at,
+            revoked_at=record.revoked_at,
+            is_current=record.id == current_session_id,
+            is_active=_is_auth_session_active(record, now=now),
+        )
+        for record in records
+    ]
+
+
+def _list_user_auth_sessions(session: Session, user: User) -> list[AuthSession]:
+    return list(
+        session.scalars(
+            select(AuthSession).where(AuthSession.user_id == user.id).order_by(AuthSession.created_at.desc()).limit(20)
+        )
+    )
+
+
 def _build_session_bootstrap_response(
     *,
     service: AuthService,
@@ -265,12 +450,48 @@ def _build_session_bootstrap_response(
     bootstrap = service.build_session_bootstrap_state(session, user, app=request.app)
     wallet = _build_wallet_bootstrap(service, session, user)
     compliance = _build_compliance_status(session, user)
+    creator = _build_creator_bootstrap(session, user)
+    coin_trader = _build_coin_trader_bootstrap(session, user)
+    session_records = _list_user_auth_sessions(session, user)
+    now = datetime.now(UTC)
+    club_present = bootstrap.club is not None
     return SessionBootstrapResponse(
         user=bootstrap.user,
+        roles=_build_session_roles(
+            user=user,
+            club_present=club_present,
+            creator=creator,
+            coin_trader=coin_trader,
+        ),
         club=None if bootstrap.club is None else ClubProfileCore.model_validate(bootstrap.club),
         wallet=wallet,
         compliance=compliance,
         permissions=bootstrap.permissions,
+        effective_role=bootstrap.user.role,
+        account_type=bootstrap.user.account_type,
+        active_organization_id=bootstrap.user.active_organization_id,
+        active_organization_name=bootstrap.user.active_organization_name,
+        active_organization_type=bootstrap.user.active_organization_type,
+        creator=creator,
+        coin_trader=coin_trader,
+        onboarding=_build_onboarding_bootstrap(
+            user=user,
+            club_present=club_present,
+            creator=creator,
+            coin_trader=coin_trader,
+        ),
+        security=_build_session_security_state(
+            request=request,
+            records=session_records,
+            user=user,
+            now=now,
+        ),
+        sessions=_build_session_views(
+            request=request,
+            records=session_records,
+            now=now,
+        ),
+        runtime=_build_session_runtime_state(),
     )
 
 
@@ -349,7 +570,9 @@ def signup_user(
     telemetry = _AuthRouteTelemetry("signup_user")
     user: User | None = None
     try:
-        analytics.track_event(session, name="signup_started", user_id=None, metadata={"email": payload.email, "account_type": "user"})
+        analytics.track_event(
+            session, name="signup_started", user_id=None, metadata={"email": payload.email, "account_type": "user"}
+        )
         user = service.register_user(
             session,
             email=payload.email,
@@ -402,7 +625,7 @@ def signup_user(
     except AuthError as exc:
         _rollback_with_telemetry(session, telemetry)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except Exception as exc:
+    except Exception:
         _rollback_with_telemetry(session, telemetry)
         raise
     else:
@@ -870,6 +1093,80 @@ def get_session_bootstrap(
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return response
+
+
+@router.get("/api/profile", response_model=CurrentUserResponse)
+def read_live_profile(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> CurrentUserResponse:
+    return AuthService().get_current_user_profile(session, current_user, app=request.app)
+
+
+@router.patch("/api/profile", response_model=CurrentUserResponse)
+def update_live_profile(
+    payload: CurrentUserUpdateRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> CurrentUserResponse:
+    service = AuthService()
+    try:
+        service.update_current_user_profile(
+            session,
+            user=current_user,
+            payload=payload,
+        )
+        session.commit()
+    except AuthError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return service.get_current_user_profile(session, current_user, app=request.app)
+
+
+@router.get("/api/profile/security", response_model=SessionBootstrapSecurityState)
+def read_profile_security(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> SessionBootstrapSecurityState:
+    records = _list_user_auth_sessions(session, current_user)
+    return _build_session_security_state(
+        request=request,
+        records=records,
+        user=current_user,
+        now=datetime.now(UTC),
+    )
+
+
+@router.get("/api/profile/sessions", response_model=list[SessionBootstrapSessionView])
+def read_profile_sessions(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[SessionBootstrapSessionView]:
+    return _build_session_views(
+        request=request,
+        records=_list_user_auth_sessions(session, current_user),
+        now=datetime.now(UTC),
+    )
+
+
+@router.get("/api/club/current", response_model=ClubProfileCore)
+def read_current_club(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ClubProfileCore:
+    bootstrap = AuthService().build_session_bootstrap_state(session, current_user, app=request.app)
+    if bootstrap.club is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The authenticated account does not have an active club.",
+        )
+    return ClubProfileCore.model_validate(bootstrap.club)
 
 
 @api_router.get("/me", response_model=CurrentUserResponse)

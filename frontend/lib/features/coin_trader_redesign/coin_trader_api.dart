@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
@@ -29,6 +31,7 @@ class GtexCoinTraderApi {
   }
 
   factory GtexCoinTraderApi.fixture() {
+    assertFixtureFactoryAllowed('GtexCoinTraderApi.fixture');
     return GtexCoinTraderApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(

@@ -1,13 +1,18 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
 import '../models/policy_admin_models.dart';
 
 class PolicyAdminApi {
-  PolicyAdminApi({required this.client, required this.fixtures});
+  PolicyAdminApi({
+    required this.client,
+    required _PolicyAdminFixtures? fixtures,
+  }) : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final _PolicyAdminFixtures fixtures;
+  final _PolicyAdminFixtures? _fixtures;
 
   factory PolicyAdminApi.standard({
     required String baseUrl,
@@ -22,11 +27,12 @@ class PolicyAdminApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _PolicyAdminFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory PolicyAdminApi.fixture() {
+    assertFixtureFactoryAllowed('PolicyAdminApi.fixture');
     return PolicyAdminApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -47,7 +53,7 @@ class PolicyAdminApi {
         '/admin/policies/country-policies',
       );
       return payload.map(CountryFeaturePolicy.fromJson).toList(growable: false);
-    }, fixtures.policies);
+    }, () => _requireFixtures().policies());
   }
 
   Future<CountryFeaturePolicy> upsertCountryPolicy({
@@ -84,7 +90,19 @@ class PolicyAdminApi {
         },
       );
       return CountryFeaturePolicy.fromJson(payload);
-    }, () async => fixtures.upsertPolicy(countryCode: countryCode));
+    }, () async => _requireFixtures().upsertPolicy(countryCode: countryCode));
+  }
+
+  _PolicyAdminFixtures _requireFixtures() {
+    final _PolicyAdminFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Policy admin fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return fixtures;
   }
 }
 

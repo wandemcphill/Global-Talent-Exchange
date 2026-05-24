@@ -38,6 +38,10 @@ from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletS
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_WHATSAPP = "+2347000000000"
+PROTECTED_APP_ENVS = {"production", "prod", "staging", "release"}
+PLACEHOLDER_TREASURY_BANK_NAME = "GTEX Treasury"
+PLACEHOLDER_TREASURY_ACCOUNT_NUMBER = "0000000000"
+PLACEHOLDER_TREASURY_ACCOUNT_NAME = "GTEX Treasury Desk"
 WITHDRAWAL_RISK_AMOUNT_THRESHOLD = Decimal("5000.0000")
 WITHDRAWAL_RISK_FREQUENCY_THRESHOLD = 3
 WITHDRAWAL_RISK_WINDOW_HOURS = 24
@@ -64,6 +68,19 @@ class TreasuryNotFoundError(TreasuryError):
 
 class TreasuryConflictError(TreasuryError):
     pass
+
+
+def _is_protected_app_env() -> bool:
+    environment = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or "development").strip().lower()
+    return environment in PROTECTED_APP_ENVS
+
+
+def _is_placeholder_treasury_bank_account(bank_account: TreasuryBankAccount) -> bool:
+    return (
+        bank_account.bank_name == PLACEHOLDER_TREASURY_BANK_NAME
+        and bank_account.account_number == PLACEHOLDER_TREASURY_ACCOUNT_NUMBER
+        and bank_account.account_name == PLACEHOLDER_TREASURY_ACCOUNT_NAME
+    )
 
 
 @dataclass(slots=True, frozen=True)
@@ -129,19 +146,20 @@ class TreasuryService:
             session.flush()
         if settings.active_bank_account_id is None:
             bank_account = session.scalar(select(TreasuryBankAccount).where(TreasuryBankAccount.is_active.is_(True)))
-            if bank_account is None:
+            if bank_account is None and not _is_protected_app_env():
                 bank_account = TreasuryBankAccount(
                     currency_code=settings.currency_code,
-                    bank_name="GTEX Treasury",
-                    account_number="0000000000",
-                    account_name="GTEX Treasury Desk",
+                    bank_name=PLACEHOLDER_TREASURY_BANK_NAME,
+                    account_number=PLACEHOLDER_TREASURY_ACCOUNT_NUMBER,
+                    account_name=PLACEHOLDER_TREASURY_ACCOUNT_NAME,
                     bank_code=None,
                     is_active=True,
                 )
                 session.add(bank_account)
                 session.flush()
-            settings.active_bank_account_id = bank_account.id
-            session.flush()
+            if bank_account is not None:
+                settings.active_bank_account_id = bank_account.id
+                session.flush()
         return settings
 
     def ensure_user_bank_account(self, session: Session, user: User) -> UserBankAccount | None:
@@ -159,6 +177,11 @@ class TreasuryService:
             bank_account = session.scalar(select(TreasuryBankAccount).where(TreasuryBankAccount.is_active.is_(True)))
         if bank_account is None:
             raise TreasuryError("No active treasury bank account is configured.")
+        if _is_protected_app_env() and _is_placeholder_treasury_bank_account(bank_account):
+            raise TreasuryError(
+                "Active treasury bank account is a placeholder. Configure a real treasury bank account before "
+                "accepting manual deposits."
+            )
         return bank_account
 
     def compute_deposit_quote(
@@ -527,7 +550,12 @@ class TreasuryService:
             country_code, country_withdrawals_enabled, missing_required_policies = self._resolve_user_policy_state(
                 session, user
             )
-        requires_kyc = kyc_status in {KycStatus.UNVERIFIED, KycStatus.PENDING, KycStatus.UNDER_REVIEW, KycStatus.REJECTED}
+        requires_kyc = kyc_status in {
+            KycStatus.UNVERIFIED,
+            KycStatus.PENDING,
+            KycStatus.UNDER_REVIEW,
+            KycStatus.REJECTED,
+        }
         requires_bank = (
             self.ensure_user_bank_account(session, user) is None
             if has_active_bank_account is None
@@ -1059,11 +1087,7 @@ class TreasuryService:
             payload={"status": status.value, "reason": rejection_reason or ""},
         )
         if user is not None:
-            event_name = (
-                "kyc_approved"
-                if status == KycStatus.VERIFIED
-                else "kyc_rejected"
-            )
+            event_name = "kyc_approved" if status == KycStatus.VERIFIED else "kyc_rejected"
             self.track_event(session, event_name, user=user, metadata={"kyc_profile_id": profile.id})
             message = "KYC approved." if event_name == "kyc_approved" else "KYC rejected."
             self.create_notification(

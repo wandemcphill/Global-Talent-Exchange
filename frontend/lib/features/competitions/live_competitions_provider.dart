@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/competition_api.dart';
+import '../../data/gte_api_repository.dart';
 import '../../data/gte_authed_api.dart';
 import '../../data/hosted_competition_api.dart';
 import '../../features/shared/data/gte_feature_support.dart';
@@ -26,7 +27,7 @@ extension CompetitionFamilyRouteX on CompetitionFamilyRoute {
     return switch (this) {
       CompetitionFamilyRoute.gtex => 'GTEX Competitions',
       CompetitionFamilyRoute.hosted => 'User Competitions',
-      CompetitionFamilyRoute.streamer => 'E-Games',
+      CompetitionFamilyRoute.streamer => 'Creator Tournaments',
     };
   }
 
@@ -114,6 +115,11 @@ final FutureProvider<CompetitionHubData> competitionHubProvider =
       final String? userId = ref.watch(currentUserIdProvider);
       final CompetitionListResponse competitionList = await competitionApi
           .fetchCompetitions(userId: userId);
+      final HostedCompetitionApi hostedApi = ref.watch(
+        hostedCompetitionApiProvider,
+      );
+      final List<HostedCompetition> hostedCompetitions =
+          await hostedApi.listCompetitions();
       final StreamerTournamentList streamerTournaments =
           await streamerApi.listPublicTournaments();
       return CompetitionHubData(
@@ -123,7 +129,7 @@ final FutureProvider<CompetitionHubData> competitionHubProvider =
         userCompetitions: competitionList.items
             .where((CompetitionSummary item) => item.isUserHosted)
             .toList(growable: false),
-        hostedCompetitions: const <HostedCompetition>[],
+        hostedCompetitions: hostedCompetitions,
         streamerTournaments: streamerTournaments.tournaments,
       );
     });
@@ -149,7 +155,11 @@ final gtexCompetitionDetailProvider =
             ))
             .map((dynamic item) => jsonMap(item, label: 'standing'))
             .toList(growable: false);
-      } catch (_) {}
+      } catch (_) {
+        if (api.mode != GteBackendMode.fixture) {
+          rethrow;
+        }
+      }
       try {
         fixtures = (await api.getList(
               '/api/competitions/$competitionId/fixtures',
@@ -157,7 +167,11 @@ final gtexCompetitionDetailProvider =
             ))
             .map((dynamic item) => jsonMap(item, label: 'fixture'))
             .toList(growable: false);
-      } catch (_) {}
+      } catch (_) {
+        if (api.mode != GteBackendMode.fixture) {
+          rethrow;
+        }
+      }
       return GtexCompetitionDetailBundle(
         competition: competition,
         financials: financials,

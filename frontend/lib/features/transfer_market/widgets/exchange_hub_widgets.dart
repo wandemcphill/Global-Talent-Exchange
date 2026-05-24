@@ -839,7 +839,7 @@ class _WalletActions extends StatelessWidget {
           buttonKey: const Key('wallet-action-deposit'),
           icon: Icons.arrow_downward_rounded,
           label: 'Deposit',
-          caption: 'Paystack, KoraPay, or manual bank transfer.',
+          caption: 'KoraPay checkout or manual bank transfer.',
           accent: AppColors.primary,
           onTap: onDeposit,
         ),
@@ -882,8 +882,13 @@ class DepositFlowSheet extends StatefulWidget {
 }
 
 class _DepositFlowSheetState extends State<DepositFlowSheet> {
+  static const List<PaymentMethod> _availableMethods = <PaymentMethod>[
+    PaymentMethod.korapay,
+    PaymentMethod.bankTransfer,
+  ];
+
   final TextEditingController _amountController = TextEditingController();
-  PaymentMethod _selectedMethod = PaymentMethod.paystack;
+  PaymentMethod _selectedMethod = PaymentMethod.korapay;
   bool _receiptAttached = false;
 
   @override
@@ -902,13 +907,13 @@ class _DepositFlowSheetState extends State<DepositFlowSheet> {
         children: <Widget>[
           _SheetStepLabel(index: 1, title: 'Choose method'),
           const SizedBox(height: spacingMD),
-          for (final PaymentMethod method in PaymentMethod.values) ...<Widget>[
+          for (final PaymentMethod method in _availableMethods) ...<Widget>[
             _MethodTile(
               method: method,
               selected: method == _selectedMethod,
               onTap: () => setState(() => _selectedMethod = method),
             ),
-            if (method != PaymentMethod.values.last)
+            if (method != _availableMethods.last)
               const SizedBox(height: spacingSM),
           ],
           const SizedBox(height: spacingLG),

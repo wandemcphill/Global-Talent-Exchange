@@ -122,6 +122,41 @@ class TournamentCountdown:
 
 
 @dataclass(frozen=True, slots=True)
+class WorldSuperCupFixtureSnapshot:
+    tournament_id: str
+    fixture_id: str
+    stage: str
+    home_club: QualifiedClub
+    away_club: QualifiedClub
+    kickoff_at: datetime
+    venue: str
+    status: str
+    round_name: str | None = None
+    group_name: str | None = None
+    matchday: int | None = None
+    home_score: int | None = None
+    away_score: int | None = None
+    winner: QualifiedClub | None = None
+    decided_by: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorldSuperCupSettlementSnapshot:
+    tournament_id: str
+    fixture_id: str
+    idempotency_key: str
+    status: str
+    home_score: int
+    away_score: int
+    winner: QualifiedClub | None
+    decided_by: str | None
+    applied_at: datetime
+    lifecycle_match_id: str | None = None
+    lifecycle_competition_id: str | None = None
+    idempotency_source: str = "explicit_key"
+
+
+@dataclass(frozen=True, slots=True)
 class TrophyCeremonyMetadata:
     trophy_name: str
     host_city: str

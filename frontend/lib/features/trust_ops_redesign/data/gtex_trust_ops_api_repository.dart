@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
@@ -9,7 +11,7 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
   GtexTrustOpsApiRepository({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
-  final GtexTrustOpsDemoRepository fixtures;
+  final GtexTrustOpsDemoRepository? fixtures;
 
   factory GtexTrustOpsApiRepository.standard({
     required String baseUrl,
@@ -24,11 +26,12 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: const GtexTrustOpsDemoRepository(),
+      fixtures: null,
     );
   }
 
   factory GtexTrustOpsApiRepository.fixture() {
+    assertFixtureFactoryAllowed('GtexTrustOpsApiRepository.fixture');
     return GtexTrustOpsApiRepository(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -52,7 +55,17 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
       return _stateFromOperationsReadiness(
         GtexOperationsReadinessSnapshot.fromJson(payload),
       );
-    }, fixtures.load);
+    }, () => _requireFixtures().load());
+  }
+
+  GtexTrustOpsDemoRepository _requireFixtures() {
+    final GtexTrustOpsDemoRepository? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw StateError(
+        'Trust Ops demo repository is not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 
   GtexTrustOpsState _stateFromOperationsReadiness(

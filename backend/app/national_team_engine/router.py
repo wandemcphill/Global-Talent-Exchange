@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
 from app.models.user import User
 from app.national_team_engine.schemas import (
     NationalTeamAutoBuildRequest,
@@ -18,7 +18,6 @@ from app.national_team_engine.schemas import (
     NationalTeamEntryDetailResponse,
     NationalTeamEntryResponse,
     NationalTeamEntryUpsertRequest,
-    NationalTeamManagerHistoryResponse,
     NationalTeamRentalCreateRequest,
     NationalTeamRentalPlayerCollectionResponse,
     NationalTeamRentalStatusResponse,
@@ -43,6 +42,7 @@ from app.wallets.service import InsufficientBalanceError
 
 router = APIRouter(prefix="/national-team-engine", tags=["national-team-engine"])
 admin_router = APIRouter(prefix="/admin/national-team-engine", tags=["national-team-engine-admin"])
+national_router = APIRouter(prefix="/national", tags=["national-rental"])
 
 
 def _engine_service(session: Session = Depends(get_session)) -> NationalTeamEngineService:
@@ -95,7 +95,14 @@ def _raise_tournament_http(exc: NationalTeamTournamentError) -> None:
         "free_distribution_unavailable",
         "squad_limit_reached",
         "rental_contract_exists",
+        "active_rental_exists",
+        "contract_locked",
+        "cooldown_active",
+        "duplicate_player",
+        "injury_unavailable",
+        "nationality_mismatch",
         "player_not_eligible",
+        "suspension_active",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.reason) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason) from exc
@@ -255,6 +262,8 @@ def list_rental_pool(
     preseeded_only: bool = Query(default=False),
     source_bucket: list[str] | None = Query(default=None),
     position: list[str] | None = Query(default=None),
+    entry_id: str | None = Query(default=None),
+    current_user: User | None = Depends(get_optional_current_user),
     service: NationalTeamTournamentService = Depends(_tournament_service),
 ):
     try:
@@ -267,6 +276,8 @@ def list_rental_pool(
             preseeded_only=preseeded_only,
             source_buckets=tuple(source_bucket or ()),
             positions=tuple(position or ()),
+            entry_id=entry_id,
+            actor=current_user,
         )
     except NationalTeamTournamentError as exc:
         _raise_tournament_http(exc)
@@ -322,9 +333,31 @@ def rent_player(
     session: Session = Depends(get_session),
     service: NationalTeamTournamentService = Depends(_tournament_service),
 ):
+    return _rent_player_detail(
+        entry_id=entry_id,
+        payload=payload,
+        current_user=current_user,
+        session=session,
+        service=service,
+    )
+
+
+def _rent_player_detail(
+    *,
+    entry_id: str,
+    payload: NationalTeamRentalCreateRequest,
+    current_user: User,
+    session: Session,
+    service: NationalTeamTournamentService,
+    expose_specific_outside_pool_reason: bool = False,
+) -> NationalTeamEntryDetailResponse:
     try:
         body = service.rent_player(
-            entry_id=entry_id, actor=current_user, player_id=payload.player_id, shirt_number=payload.shirt_number
+            entry_id=entry_id,
+            actor=current_user,
+            player_id=payload.player_id,
+            shirt_number=payload.shirt_number,
+            expose_specific_outside_pool_reason=expose_specific_outside_pool_reason,
         )
         session.commit()
     except NationalTeamTournamentError as exc:
@@ -415,6 +448,96 @@ def send_tournament_gift(
             _raise_tournament_http(exc)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return NationalTeamTournamentGiftResponse.model_validate(body)
+
+
+@national_router.get("/competitions", response_model=list[NationalTeamCompetitionResponse])
+def national_list_competitions(service: NationalTeamEngineService = Depends(_engine_service)):
+    return list_competitions(service=service)
+
+
+@national_router.get(
+    "/competitions/{competition_id}/rental-pool",
+    response_model=NationalTeamRentalPlayerCollectionResponse,
+)
+def national_list_rental_pool(
+    competition_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    country_code: str | None = Query(default=None),
+    real_only: bool = Query(default=False),
+    preseeded_only: bool = Query(default=False),
+    source_bucket: list[str] | None = Query(default=None),
+    position: list[str] | None = Query(default=None),
+    entry_id: str | None = Query(default=None),
+    current_user: User | None = Depends(get_optional_current_user),
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+):
+    try:
+        payload = service.list_rental_players(
+            competition_id=competition_id,
+            limit=limit,
+            offset=offset,
+            country_code=country_code,
+            real_only=real_only,
+            preseeded_only=preseeded_only,
+            source_buckets=tuple(source_bucket or ()),
+            positions=tuple(position or ()),
+            entry_id=entry_id,
+            actor=current_user,
+        )
+    except NationalTeamTournamentError as exc:
+        _raise_tournament_http(exc)
+    return NationalTeamRentalPlayerCollectionResponse.model_validate(payload)
+
+
+@national_router.post("/competitions/{competition_id}/rental-entry", response_model=NationalTeamEntryResponse)
+def national_create_my_rental_entry(
+    competition_id: str,
+    payload: NationalTeamEntryUpsertRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    return create_my_rental_entry(
+        competition_id=competition_id,
+        payload=payload,
+        session=session,
+        current_user=current_user,
+    )
+
+
+@national_router.get("/entries/{entry_id}", response_model=NationalTeamEntryDetailResponse)
+def national_get_entry(
+    entry_id: str,
+    session: Session = Depends(get_session),
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+):
+    return get_entry(entry_id=entry_id, session=session, service=service)
+
+
+@national_router.post("/entries/{entry_id}/rentals", response_model=NationalTeamEntryDetailResponse)
+def national_rent_player(
+    entry_id: str,
+    payload: NationalTeamRentalCreateRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: NationalTeamTournamentService = Depends(_tournament_service),
+):
+    return _rent_player_detail(
+        entry_id=entry_id,
+        payload=payload,
+        current_user=current_user,
+        session=session,
+        service=service,
+        expose_specific_outside_pool_reason=True,
+    )
+
+
+@national_router.get("/me/history", response_model=NationalTeamUserHistoryResponse)
+def national_get_my_history(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    return get_my_history(session=session, current_user=current_user)
 
 
 @admin_router.post("/competitions", response_model=NationalTeamCompetitionResponse)

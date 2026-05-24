@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class _BaseView(BaseModel):
@@ -103,12 +104,78 @@ class PausePolicyView(_BaseView):
     cadence_description: str
 
 
+class WorldSuperCupAuthorityFields(BaseModel):
+    source_of_truth: str = "persisted_backend_authority"
+    authority: str = "competition_os"
+    no_demo_data: bool = True
+    tournament_id: str | None = None
+    competition_id: str | None = None
+
+
 class TournamentCountdownView(_BaseView):
     tournament_name: str
     starts_at: datetime
     reference_at: datetime
     minutes_until_start: int
     pause_policy: PausePolicyView
+    source_of_truth: str = "persisted_backend_authority"
+    authority: str = "competition_os"
+    no_demo_data: bool = True
+    tournament_id: str | None = None
+    competition_id: str | None = None
+
+
+class WorldSuperCupFixtureView(_BaseView):
+    tournament_id: str
+    fixture_id: str
+    stage: str
+    home_club: QualifiedClubView
+    away_club: QualifiedClubView
+    kickoff_at: datetime
+    venue: str
+    status: str
+    round_name: str | None = None
+    group_name: str | None = None
+    matchday: int | None = None
+    home_score: int | None = None
+    away_score: int | None = None
+    winner: QualifiedClubView | None = None
+    decided_by: str | None = None
+
+
+class WorldSuperCupFixturesView(WorldSuperCupAuthorityFields):
+    fixtures: list[WorldSuperCupFixtureView]
+
+
+class WorldSuperCupSettlementRequest(BaseModel):
+    tournament_id: str | None = None
+    competition_id: str | None = None
+    match_id: str | None = None
+    idempotency_key: str | None = Field(default=None, min_length=1)
+    home_score: int
+    away_score: int
+    winner_club_id: str | None = None
+    decided_by: str | None = None
+    completed_at: datetime | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorldSuperCupSettlementView(_BaseView):
+    tournament_id: str
+    fixture_id: str
+    idempotency_key: str
+    status: str
+    home_score: int
+    away_score: int
+    winner: QualifiedClubView | None = None
+    decided_by: str | None = None
+    applied_at: datetime
+    lifecycle_match_id: str | None = None
+    lifecycle_competition_id: str | None = None
+    idempotency_source: str = "explicit_key"
+    source_of_truth: str = "persisted_backend_authority"
+    authority: str = "competition_os"
+    no_demo_data: bool = True
 
 
 class TrophyCeremonyView(_BaseView):
@@ -121,7 +188,7 @@ class TrophyCeremonyView(_BaseView):
     penalties_if_tied: bool
 
 
-class QualificationExplanationView(BaseModel):
+class QualificationExplanationView(WorldSuperCupAuthorityFields):
     seasons_considered: tuple[int, int]
     direct_slots: int
     playoff_slots: int
@@ -131,19 +198,19 @@ class QualificationExplanationView(BaseModel):
     playoff_qualifiers: list[QualifiedClubView]
 
 
-class PlayoffDrawView(BaseModel):
+class PlayoffDrawView(WorldSuperCupAuthorityFields):
     matches: list[PlayoffMatchView]
     winners: list[QualifiedClubView]
 
 
-class GroupStageTableView(BaseModel):
+class GroupStageTableView(WorldSuperCupAuthorityFields):
     groups: list[GroupView]
     tables: list[GroupTableView]
     matches: list[GroupMatchView]
     advancing_clubs: list[QualifiedClubView]
 
 
-class KnockoutBracketView(BaseModel):
+class KnockoutBracketView(WorldSuperCupAuthorityFields):
     rounds: list[KnockoutRoundView]
     champion: QualifiedClubView
     runner_up: QualifiedClubView

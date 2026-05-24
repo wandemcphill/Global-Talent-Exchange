@@ -43,7 +43,8 @@ class _TrophyCabinetScreenState extends State<TrophyCabinetScreen> {
   @override
   void initState() {
     super.initState();
-    _repository = widget.repository ?? StubTrophyCabinetRepository();
+    _repository =
+        widget.repository ?? const UnavailableTrophyCabinetRepository();
     _filter = widget.initialFilter;
     _loadCabinet();
   }
@@ -114,7 +115,8 @@ class _TrophyCabinetScreenState extends State<TrophyCabinetScreen> {
       );
     }
 
-    final TrophyCabinetDto cabinet = _cabinet ??
+    final TrophyCabinetDto cabinet =
+        _cabinet ??
         TrophyCabinetDto(
           clubId: widget.clubId,
           clubName: widget.clubName ?? 'Expansion XI',
@@ -213,18 +215,21 @@ class _TrophyCabinetScreenState extends State<TrophyCabinetScreen> {
               ] else
                 TrophyCategorySection(
                   title: isAcademyFilter ? 'Academy wing' : 'Senior cabinet',
-                  subtitle: isAcademyFilter
-                      ? 'Youth honors live in a dedicated wing of the museum.'
-                      : 'First-team honors anchor the main gallery.',
+                  subtitle:
+                      isAcademyFilter
+                          ? 'Youth honors live in a dedicated wing of the museum.'
+                          : 'First-team honors anchor the main gallery.',
                   categories: cabinet.trophiesByCategory,
                   badgeLabel: isAcademyFilter ? 'Academy' : 'Senior',
-                  badgeStyle: isAcademyFilter
-                      ? MajorHonorBadgeStyle.academy
-                      : MajorHonorBadgeStyle.major,
+                  badgeStyle:
+                      isAcademyFilter
+                          ? MajorHonorBadgeStyle.academy
+                          : MajorHonorBadgeStyle.major,
                   emphasized: isAcademyFilter,
-                  emptyMessage: isAcademyFilter
-                      ? 'No academy honors yet.'
-                      : 'No senior honors yet.',
+                  emptyMessage:
+                      isAcademyFilter
+                          ? 'No academy honors yet.'
+                          : 'No senior honors yet.',
                 ),
               const SizedBox(height: 20),
               _SeasonSummaryPanel(seasons: cabinet.trophiesBySeason),
@@ -240,12 +245,13 @@ class _TrophyCabinetScreenState extends State<TrophyCabinetScreen> {
   void _openTimeline() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => HonorsTimelineScreen(
-          clubId: widget.clubId,
-          clubName: _cabinet?.clubName ?? widget.clubName,
-          repository: _repository,
-          initialFilter: _filter,
-        ),
+        builder:
+            (BuildContext context) => HonorsTimelineScreen(
+              clubId: widget.clubId,
+              clubName: _cabinet?.clubName ?? widget.clubName,
+              repository: _repository,
+              initialFilter: _filter,
+            ),
       ),
     );
   }
@@ -253,10 +259,11 @@ class _TrophyCabinetScreenState extends State<TrophyCabinetScreen> {
   void _openLeaderboard() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) => TrophyLeaderboardScreen(
-          repository: _repository,
-          initialFilter: _filter,
-        ),
+        builder:
+            (BuildContext context) => TrophyLeaderboardScreen(
+              repository: _repository,
+              initialFilter: _filter,
+            ),
       ),
     );
   }
@@ -287,8 +294,10 @@ class _HeroPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(cabinet.clubName,
-                        style: Theme.of(context).textTheme.displaySmall),
+                    Text(
+                      cabinet.clubName,
+                      style: Theme.of(context).textTheme.displaySmall,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'A museum of silverware, milestones, and season-defining honors.',
@@ -356,19 +365,27 @@ class _HeroPanel extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: cabinet.summaryOutputs.map((String summary) {
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: GteShellTheme.panelStrong.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: GteShellTheme.stroke),
-                  ),
-                  child: Text(summary,
-                      style: Theme.of(context).textTheme.labelLarge),
-                );
-              }).toList(growable: false),
+              children: cabinet.summaryOutputs
+                  .map((String summary) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: GteShellTheme.panelStrong.withValues(
+                          alpha: 0.92,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: GteShellTheme.stroke),
+                      ),
+                      child: Text(
+                        summary,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    );
+                  })
+                  .toList(growable: false),
             ),
           ],
         ],
@@ -378,10 +395,7 @@ class _HeroPanel extends StatelessWidget {
 }
 
 class _FilterBar extends StatelessWidget {
-  const _FilterBar({
-    required this.selected,
-    required this.onSelected,
-  });
+  const _FilterBar({required this.selected, required this.onSelected});
 
   final TrophyScopeFilter selected;
   final ValueChanged<TrophyScopeFilter> onSelected;
@@ -393,15 +407,20 @@ class _FilterBar extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Expanded(
-              child: Text('Cabinet view',
-                  style: Theme.of(context).textTheme.titleLarge)),
+            child: Text(
+              'Cabinet view',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
           SegmentedButton<TrophyScopeFilter>(
-            segments: TrophyScopeFilter.values.map((TrophyScopeFilter filter) {
-              return ButtonSegment<TrophyScopeFilter>(
-                value: filter,
-                label: Text(filter.label),
-              );
-            }).toList(growable: false),
+            segments: TrophyScopeFilter.values
+                .map((TrophyScopeFilter filter) {
+                  return ButtonSegment<TrophyScopeFilter>(
+                    value: filter,
+                    label: Text(filter.label),
+                  );
+                })
+                .toList(growable: false),
             selected: <TrophyScopeFilter>{selected},
             onSelectionChanged: (Set<TrophyScopeFilter> selection) {
               onSelected(selection.first);
@@ -424,8 +443,10 @@ class _SeasonSummaryPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Season archive markers',
-              style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            'Season archive markers',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 8),
           Text(
             'A fast season-by-season scan of how the museum was built.',
@@ -441,36 +462,42 @@ class _SeasonSummaryPanel extends StatelessWidget {
             Wrap(
               spacing: 12,
               runSpacing: 12,
-              children: seasons.map((TrophySeasonSummaryDto season) {
-                return SizedBox(
-                  width: 208,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      color: GteShellTheme.panelStrong.withValues(alpha: 0.76),
-                      border: Border.all(color: GteShellTheme.stroke),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(season.seasonLabel,
-                            style: Theme.of(context).textTheme.titleLarge),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${season.totalHonorsCount} honors | ${season.majorHonorsCount} major',
-                          style: Theme.of(context).textTheme.bodyLarge,
+              children: seasons
+                  .map((TrophySeasonSummaryDto season) {
+                    return SizedBox(
+                      width: 208,
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          color: GteShellTheme.panelStrong.withValues(
+                            alpha: 0.76,
+                          ),
+                          border: Border.all(color: GteShellTheme.stroke),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Senior ${season.seniorHonorsCount} | Academy ${season.academyHonorsCount}',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              season.seasonLabel,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${season.totalHonorsCount} honors | ${season.majorHonorsCount} major',
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Senior ${season.seniorHonorsCount} | Academy ${season.academyHonorsCount}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(growable: false),
+                      ),
+                    );
+                  })
+                  .toList(growable: false),
             ),
         ],
       ),
@@ -489,8 +516,10 @@ class _RecentHonorsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Recent honors',
-              style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            'Recent honors',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 8),
           Text(
             'The freshest additions to the museum floor.',
@@ -509,12 +538,14 @@ class _RecentHonorsPanel extends StatelessWidget {
                 return Wrap(
                   spacing: 14,
                   runSpacing: 14,
-                  children: honors.map((TrophyItemDto honor) {
-                    return SizedBox(
-                      width: narrow ? constraints.maxWidth : 280,
-                      child: TrophyTile(trophy: honor),
-                    );
-                  }).toList(growable: false),
+                  children: honors
+                      .map((TrophyItemDto honor) {
+                        return SizedBox(
+                          width: narrow ? constraints.maxWidth : 280,
+                          child: TrophyTile(trophy: honor),
+                        );
+                      })
+                      .toList(growable: false),
                 );
               },
             ),
@@ -536,8 +567,9 @@ class _InlineNotice extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         color: GteShellTheme.accentWarm.withValues(alpha: 0.12),
-        border:
-            Border.all(color: GteShellTheme.accentWarm.withValues(alpha: 0.4)),
+        border: Border.all(
+          color: GteShellTheme.accentWarm.withValues(alpha: 0.4),
+        ),
       ),
       child: Row(
         children: <Widget>[
@@ -547,8 +579,8 @@ class _InlineNotice extends StatelessWidget {
             child: Text(
               message,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: GteShellTheme.textPrimary,
-                  ),
+                color: GteShellTheme.textPrimary,
+              ),
             ),
           ),
         ],

@@ -91,7 +91,10 @@ class GtexClubWorkspaceController extends ChangeNotifier {
     GtexClubWorkspaceSnapshot? initialSnapshot,
   }) : snapshot =
            initialSnapshot ??
-           GtexClubWorkspaceSnapshot.demo(clubId: clubId, clubName: clubName);
+           GtexClubWorkspaceSnapshot.liveUnavailable(
+             clubId: clubId,
+             clubName: clubName,
+           );
 
   GtexClubWorkspaceSnapshot snapshot;
   GtexClubOwnerSection ownerSection = GtexClubOwnerSection.overview;

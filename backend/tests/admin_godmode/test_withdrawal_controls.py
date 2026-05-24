@@ -17,6 +17,7 @@ import app.ledger.models  # noqa: F401
 import app.models  # noqa: F401
 import app.orders.models  # noqa: F401
 from app.admin_godmode.router import router as admin_router
+from app.admin_godmode.service import AdminGodModeService
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.auth.service import AuthService
 from app.models.base import Base
@@ -91,6 +92,15 @@ def admin_wallet_context(tmp_path: Path):
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_current_admin] = lambda: admin_user
     app.dependency_overrides[get_current_user] = lambda: trader
+    AdminGodModeService(wallet_service=WalletService()).upsert_admin_assignment(
+        app,
+        session,
+        admin=admin_user,
+        role_name=None,
+        permissions=["manage_competitions", "manage_withdrawals"],
+        is_enabled=True,
+    )
+    session.commit()
 
     with TestClient(app) as client:
         yield client, session, admin_user, trader
@@ -181,7 +191,7 @@ def test_admin_can_update_withdrawal_controls_and_competition_topup(admin_wallet
     assert competition_response.json()["prize_pool_topup_pct"] == "12.50"
 
 
-def test_manual_bank_transfer_mode_blocks_gateway_deposit_endpoint(admin_wallet_context) -> None:
+def test_client_authored_payment_events_stay_disabled_in_manual_bank_transfer_mode(admin_wallet_context) -> None:
     client, _session, _admin_user, _trader = admin_wallet_context
 
     response = client.post(
@@ -194,15 +204,15 @@ def test_manual_bank_transfer_mode_blocks_gateway_deposit_endpoint(admin_wallet_
         },
     )
 
-    assert response.status_code == 409
-    assert "manual bank transfer" in response.json()["detail"].lower()
+    assert response.status_code == 410
+    assert "client-authored payment events are disabled" in response.json()["detail"].lower()
 
 
-def test_automatic_gateway_mode_allows_gateway_deposit_endpoint(admin_wallet_context) -> None:
+def test_automatic_gateway_mode_does_not_restore_client_authored_payment_events(admin_wallet_context) -> None:
     client, session, _admin_user, _trader = admin_wallet_context
     _enable_automatic_deposits(session)
 
-    client.put(
+    controls_response = client.put(
         "/api/admin/god-mode/withdrawal-controls",
         json={
             "egame_withdrawals_enabled": False,
@@ -213,6 +223,7 @@ def test_automatic_gateway_mode_allows_gateway_deposit_endpoint(admin_wallet_con
             "reason": "Enable automatic rails",
         },
     )
+    assert controls_response.status_code == 200
 
     response = client.post(
         "/api/wallets/payment-events",
@@ -224,8 +235,8 @@ def test_automatic_gateway_mode_allows_gateway_deposit_endpoint(admin_wallet_con
         },
     )
 
-    assert response.status_code == 201
-    assert response.json()["provider"] == "monnify"
+    assert response.status_code == 410
+    assert "client-authored payment events are disabled" in response.json()["detail"].lower()
 
 
 def test_competition_withdrawal_can_be_enabled_for_bank_transfer_review(admin_wallet_context) -> None:

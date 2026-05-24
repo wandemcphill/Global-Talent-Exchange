@@ -5,11 +5,11 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
+from app.admin.capabilities import AdminCapability, assert_admin_capability
 from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user
 from app.competitions.creator_league_router import router as creator_league_router
 from app.common.enums.competition_format import CompetitionFormat
-from app.models.user import User, UserRole
+from app.models.user import User
 from app.models.competition import Competition
 from app.schemas.competition_lifecycle import (
     CompetitionAdvanceRequest,
@@ -57,7 +57,6 @@ from app.services.competition_orchestrator import (
     get_competition_orchestrator,
 )
 from app.services.competition_reminder_service import CompetitionReminderService
-from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/api/competitions", tags=["competitions"])
 admin_router = APIRouter(prefix="/api/admin/competitions", tags=["admin-competitions"])
@@ -65,25 +64,7 @@ router.include_router(creator_league_router)
 
 
 def _require_manage_competitions_permission(request: Request, actor: User) -> None:
-    if actor.role == UserRole.SUPER_ADMIN:
-        return
-    if actor.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access is required for this action.",
-        )
-    service = AdminGodModeService(
-        wallet_service=WalletService(cache_backend=getattr(request.app.state, "cache_backend", None))
-    )
-    try:
-        state = service._load_state(request.app)
-        profile = service.resolve_profile(actor, state)
-        service._assert_has_permission(profile, "manage_competitions")
-    except PermissionDeniedError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
-        ) from exc
+    assert_admin_capability(request, actor, AdminCapability.MANAGE_COMPETITIONS)
 
 
 def _is_admin_managed_platform_competition(source_type: str | None) -> bool:

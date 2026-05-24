@@ -256,6 +256,7 @@ class LiveMatchHub:
                 away_team_name=away_team_name,
                 events=list(events),
                 live_state=None,
+                allow_synthetic_visuals=True,
             )
         except Exception:
             viewer_state = None

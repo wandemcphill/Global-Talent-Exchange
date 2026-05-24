@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.match_engine.simulation.models import MatchEventType, TacticalStyle
 from app.live_matches.schemas import LiveMatchRenderPointView, LiveMatchStreamEventView
@@ -247,6 +249,7 @@ def test_match_timeline_service_maps_infinite_league_chance_and_save_events_to_a
         home_team_name="North City",
         away_team_id="away-team",
         away_team_name="South Town",
+        allow_synthetic_visuals=True,
         events=[
             LiveMatchStreamEventView(
                 match_id="match-live-001",
@@ -309,6 +312,21 @@ def test_match_timeline_service_maps_infinite_league_chance_and_save_events_to_a
     )
 
 
+def test_match_timeline_service_requires_persisted_visual_identity_for_live_streams() -> None:
+    service = MatchTimelineService()
+
+    with pytest.raises(ValueError, match="persisted visual identity"):
+        service.build_from_live_stream(
+            match_id="match-live-strict-001",
+            source="live_match_hub",
+            home_team_id="home-team",
+            home_team_name="North City",
+            away_team_id="away-team",
+            away_team_name="South Town",
+            events=[],
+        )
+
+
 def test_match_timeline_service_maps_live_pass_events_to_2d_contract() -> None:
     service = MatchTimelineService()
 
@@ -319,6 +337,7 @@ def test_match_timeline_service_maps_live_pass_events_to_2d_contract() -> None:
         home_team_name="North City",
         away_team_id="away-team",
         away_team_name="South Town",
+        allow_synthetic_visuals=True,
         events=[
             LiveMatchStreamEventView(
                 match_id="match-live-pass-001",

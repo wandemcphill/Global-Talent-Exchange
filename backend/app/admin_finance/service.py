@@ -322,9 +322,7 @@ class AdminFinanceService:
             "pending_purchase_orders": self._count_pending_purchase_orders(),
             "pending_withdrawals": self._count_pending_withdrawals(),
             "active_wallet_transaction_lock_count": len(active_wallet_transaction_locks or []),
-            "payment_signature_verification_enabled": any(
-                bool(self._provider_secret(provider)) for provider in ("paystack", "korapay")
-            ),
+            "payment_signature_verification_enabled": bool(self._provider_secret("korapay")),
             "active_wallet_transaction_locks": list(active_wallet_transaction_locks or []),
             "duplicate_deposit_candidates": duplicate_candidates,
         }
@@ -547,19 +545,35 @@ class AdminFinanceService:
     @staticmethod
     def _provider_secret(provider_key: str) -> str | None:
         normalized_provider = provider_key.strip().upper()
-        for name in (
+        env_names = [
             f"GTE_{normalized_provider}_WEBHOOK_SECRET",
             f"{normalized_provider}_WEBHOOK_SECRET",
-        ):
+        ]
+        if normalized_provider == "KORAPAY":
+            env_names.extend(
+                [
+                    "GTE_KORAPAY_ENCRYPTION_KEY",
+                    "KORAPAY_ENCRYPTION_KEY",
+                ]
+            )
+        for name in env_names:
             secret = os.getenv(name)
             if secret and secret.strip():
                 return secret.strip()
         return None
 
-    @staticmethod
-    def _signature_optional(provider_key: str) -> bool:
+    def _signature_optional(self, provider_key: str) -> bool:
+        if self._is_protected_environment():
+            return False
         raw_value = os.getenv(f"GTE_{provider_key.strip().upper()}_WEBHOOK_SIGNATURE_OPTIONAL", "")
         return raw_value.strip().lower() in {"true", "1", "yes"}
+
+    def _is_protected_environment(self) -> bool:
+        settings_env = getattr(self.settings, "app_env", None)
+        environment = (
+            (settings_env or os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or "development").strip().lower()
+        )
+        return environment in {"production", "prod", "staging", "release"}
 
     def _sum_user_credits(self, *, unit: LedgerUnit, start: datetime, end: datetime) -> Decimal:
         amount = self.session.scalar(

@@ -7,7 +7,19 @@ import '../shared/models/auth_session.dart';
 import 'gte_api_contract.dart';
 import 'gte_models.dart';
 
-enum GteBackendMode { live, fixture, liveThenFixture }
+enum GteBackendMode {
+  /// Strict live runtime: every visible value must come from a live backend
+  /// authority or render an explicit blocked/error state.
+  live,
+
+  /// Test-only fixture runtime. Production and staging config parsing clamps
+  /// this back to [live] unless the Flutter test detector allows it.
+  fixture,
+
+  /// Deprecated compatibility alias. It is resolved as [live] everywhere and
+  /// never enables a silent fixture fallback.
+  liveThenFixture,
+}
 
 GteBackendMode gteProductionBackendMode(GteBackendMode mode) {
   return mode == GteBackendMode.fixture
@@ -37,11 +49,6 @@ class GteApiException implements Exception {
   final String message;
   final int? statusCode;
   final Object? cause;
-
-  bool get supportsFixtureFallback =>
-      type == GteApiErrorType.network ||
-      type == GteApiErrorType.unavailable ||
-      type == GteApiErrorType.parsing;
 
   @override
   String toString() => 'GteApiException($type, $statusCode): $message';
@@ -410,6 +417,17 @@ abstract class GteApiRepository {
   Future<GtePortfolioSummary> fetchPortfolioSummary();
 }
 
+class GteFixtureRepositoryUnavailable implements GteApiRepository {
+  const GteFixtureRepositoryUnavailable();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    throw StateError(
+      'Fixture repository access is not registered in strict-live runtime.',
+    );
+  }
+}
+
 class GteModeAwareApiRepository implements GteApiRepository {
   GteModeAwareApiRepository({
     required this.config,
@@ -433,7 +451,6 @@ class GteModeAwareApiRepository implements GteApiRepository {
         await _request('POST', '/auth/login', body: request.toJson()),
       ),
       () => fixtures.login(request),
-      allowFixtureFallback: false,
     );
     return _persistAuthSession(
       session,
@@ -456,7 +473,6 @@ class GteModeAwareApiRepository implements GteApiRepository {
         await _request('POST', '/auth/signup/user', body: request.toJson()),
       ),
       () => fixtures.signupUser(request),
-      allowFixtureFallback: false,
     );
     return _persistAuthSession(
       session,
@@ -472,7 +488,6 @@ class GteModeAwareApiRepository implements GteApiRepository {
         await _request('POST', '/auth/signup/creator', body: request.toJson()),
       ),
       () => fixtures.signupCreator(request),
-      allowFixtureFallback: false,
     );
     return _persistAuthSession(
       session,
@@ -488,7 +503,6 @@ class GteModeAwareApiRepository implements GteApiRepository {
         await _request('POST', '/auth/signup/trader', body: request.toJson()),
       ),
       () => fixtures.signupTrader(request),
-      allowFixtureFallback: false,
     );
     return _persistAuthSession(
       session,
@@ -504,7 +518,6 @@ class GteModeAwareApiRepository implements GteApiRepository {
         await _request('GET', '/api/auth/me', requiresAuth: true),
       ),
       fixtures.fetchCurrentUser,
-      allowFixtureFallback: false,
     );
   }
 
@@ -551,23 +564,19 @@ class GteModeAwareApiRepository implements GteApiRepository {
   Future<List<GtePolicyDocumentSummary>> fetchPolicyDocuments({
     bool mandatoryOnly = false,
   }) {
-    return _withFallback<List<GtePolicyDocumentSummary>>(
-      () async {
-        final List<Object?> payload = GteJson.list(
-          await _request(
-            'GET',
-            '/policies/documents',
-            query: <String, Object?>{'mandatory_only': mandatoryOnly},
-          ),
-          label: 'policy documents',
-        );
-        return payload
-            .map(GtePolicyDocumentSummary.fromJson)
-            .toList(growable: false);
-      },
-      () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly),
-      allowFixtureFallback: false,
-    );
+    return _withFallback<List<GtePolicyDocumentSummary>>(() async {
+      final List<Object?> payload = GteJson.list(
+        await _request(
+          'GET',
+          '/policies/documents',
+          query: <String, Object?>{'mandatory_only': mandatoryOnly},
+        ),
+        label: 'policy documents',
+      );
+      return payload
+          .map(GtePolicyDocumentSummary.fromJson)
+          .toList(growable: false);
+    }, () => fixtures.fetchPolicyDocuments(mandatoryOnly: mandatoryOnly));
   }
 
   @override
@@ -587,7 +596,6 @@ class GteModeAwareApiRepository implements GteApiRepository {
       ),
       () =>
           fixtures.fetchPolicyDocument(documentKey, versionLabel: versionLabel),
-      allowFixtureFallback: false,
     );
   }
 
@@ -616,19 +624,15 @@ class GteModeAwareApiRepository implements GteApiRepository {
 
   @override
   Future<List<GtePolicyAcceptanceSummary>> fetchMyPolicyAcceptances() {
-    return _withFallback<List<GtePolicyAcceptanceSummary>>(
-      () async {
-        final List<Object?> payload = GteJson.list(
-          await _request('GET', '/policies/me/acceptances', requiresAuth: true),
-          label: 'policy acceptances',
-        );
-        return payload
-            .map(GtePolicyAcceptanceSummary.fromJson)
-            .toList(growable: false);
-      },
-      fixtures.fetchMyPolicyAcceptances,
-      allowFixtureFallback: false,
-    );
+    return _withFallback<List<GtePolicyAcceptanceSummary>>(() async {
+      final List<Object?> payload = GteJson.list(
+        await _request('GET', '/policies/me/acceptances', requiresAuth: true),
+        label: 'policy acceptances',
+      );
+      return payload
+          .map(GtePolicyAcceptanceSummary.fromJson)
+          .toList(growable: false);
+    }, fixtures.fetchMyPolicyAcceptances);
   }
 
   @override
@@ -636,39 +640,35 @@ class GteModeAwareApiRepository implements GteApiRepository {
     String documentKey,
     String versionLabel,
   ) {
-    return _withFallback<GtePolicyAcceptanceSummary>(
-      () async {
-        final Map<String, Object?> payload = GteJson.map(
-          await _request(
-            'POST',
-            '/policies/acceptances',
-            body: <String, Object?>{
-              'document_key': documentKey,
-              'version_label': versionLabel,
-            },
-            requiresAuth: true,
-          ),
-          label: 'policy acceptance response',
-        );
-        return GtePolicyAcceptanceSummary(
-          documentKey: GteJson.string(payload, <String>[
-            'document_key',
-            'documentKey',
-          ]),
-          title: documentKey,
-          versionLabel: GteJson.string(payload, <String>[
-            'version_label',
-            'versionLabel',
-          ]),
-          acceptedAt: GteJson.dateTimeOrNull(payload, <String>[
-            'accepted_at',
-            'acceptedAt',
-          ]),
-        );
-      },
-      () => fixtures.acceptPolicyDocument(documentKey, versionLabel),
-      allowFixtureFallback: false,
-    );
+    return _withFallback<GtePolicyAcceptanceSummary>(() async {
+      final Map<String, Object?> payload = GteJson.map(
+        await _request(
+          'POST',
+          '/policies/acceptances',
+          body: <String, Object?>{
+            'document_key': documentKey,
+            'version_label': versionLabel,
+          },
+          requiresAuth: true,
+        ),
+        label: 'policy acceptance response',
+      );
+      return GtePolicyAcceptanceSummary(
+        documentKey: GteJson.string(payload, <String>[
+          'document_key',
+          'documentKey',
+        ]),
+        title: documentKey,
+        versionLabel: GteJson.string(payload, <String>[
+          'version_label',
+          'versionLabel',
+        ]),
+        acceptedAt: GteJson.dateTimeOrNull(payload, <String>[
+          'accepted_at',
+          'acceptedAt',
+        ]),
+      );
+    }, () => fixtures.acceptPolicyDocument(documentKey, versionLabel));
   }
 
   @override
@@ -1865,22 +1865,12 @@ class GteModeAwareApiRepository implements GteApiRepository {
 
   Future<T> _withFallback<T>(
     Future<T> Function() liveCall,
-    Future<T> Function() fixtureCall, {
-    bool allowFixtureFallback = true,
-  }) async {
+    Future<T> Function() fixtureCall,
+  ) async {
     if (config.mode == GteBackendMode.fixture) {
       return fixtureCall();
     }
-    try {
-      return await liveCall();
-    } on GteApiException catch (error) {
-      if (allowFixtureFallback &&
-          config.mode == GteBackendMode.liveThenFixture &&
-          error.supportsFixtureFallback) {
-        return fixtureCall();
-      }
-      rethrow;
-    }
+    return liveCall();
   }
 
   Future<T?> _safeFixture<T>(Future<T> Function() callback) async {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import logging
+import os
 from typing import Any
 
 from app.cache.redis_helpers import HotReadCache, NullCacheBackend
@@ -12,14 +13,13 @@ from app.ingestion.constants import (
     DEFAULT_PROVIDER_NAME,
     INCREMENTAL_ENTITY_TYPE,
     MATCHES_ENTITY_TYPE,
-    PLAYER_MATCH_STATS_ENTITY_TYPE,
     PLAYER_SEASON_STATS_ENTITY_TYPE,
     STANDINGS_ENTITY_TYPE,
     SYNC_RUN_STATUS_FAILED,
     SYNC_RUN_STATUS_PARTIAL,
     SYNC_RUN_STATUS_SUCCESS,
 )
-from app.ingestion.models import Club, Competition, Match, Player, ProviderSyncRun, Season
+from app.ingestion.models import Competition, Player, ProviderSyncRun
 from app.ingestion.market_profile import PlayerMarketProfileService
 from app.ingestion.normalizers import (
     build_player_tenure_payload,
@@ -93,6 +93,7 @@ class IngestionService:
         competition_external_id: str | None = None,
         season_external_id: str | None = None,
     ) -> SyncExecutionSummary:
+        provider_name = self._resolve_provider_name(provider_name)
         provider = self.provider_registry.create(provider_name, settings=self.settings)
         run = self.repository.start_sync_run(
             provider_name=provider_name,
@@ -131,6 +132,7 @@ class IngestionService:
         competition_external_id: str | None = None,
         season_external_id: str | None = None,
     ) -> SyncExecutionSummary:
+        provider_name = self._resolve_provider_name(provider_name)
         provider = self.provider_registry.create(provider_name, settings=self.settings)
         run = self.repository.start_sync_run(
             provider_name=provider_name,
@@ -162,6 +164,7 @@ class IngestionService:
         competition_external_id: str | None = None,
         season_external_id: str | None = None,
     ) -> SyncExecutionSummary:
+        provider_name = self._resolve_provider_name(provider_name)
         provider = self.provider_registry.create(provider_name, settings=self.settings)
         run = self.repository.start_sync_run(
             provider_name=provider_name,
@@ -195,6 +198,7 @@ class IngestionService:
         player_external_id: str | None = None,
         season_external_id: str | None = None,
     ) -> SyncExecutionSummary:
+        provider_name = self._resolve_provider_name(provider_name)
         provider = self.provider_registry.create(provider_name, settings=self.settings)
         run = self.repository.start_sync_run(
             provider_name=provider_name,
@@ -227,6 +231,7 @@ class IngestionService:
         provider_name: str = DEFAULT_PROVIDER_NAME,
         cursor_key: str = DEFAULT_CURSOR_KEY,
     ) -> SyncExecutionSummary:
+        provider_name = self._resolve_provider_name(provider_name)
         provider = self.provider_registry.create(provider_name, settings=self.settings)
         existing_cursor = self.repository.get_cursor(
             provider_name=provider_name,
@@ -373,6 +378,7 @@ class IngestionService:
         return [SyncRunRead.model_validate(run) for run in self.repository.list_recent_sync_runs(provider_name=provider_name, limit=limit)]
 
     def get_sync_status(self, *, provider_name: str = DEFAULT_PROVIDER_NAME) -> SyncStatusRead:
+        provider_name = self._resolve_provider_name(provider_name)
         latest_run = self.repository.get_latest_sync_run(provider_name=provider_name)
         cursors = self.repository.list_cursors(provider_name=provider_name)
         return SyncStatusRead(
@@ -383,6 +389,7 @@ class IngestionService:
         )
 
     def inspect_provider_health(self, *, provider_name: str = DEFAULT_PROVIDER_NAME) -> ProviderHealthSnapshot:
+        provider_name = self._resolve_provider_name(provider_name)
         provider = self.provider_registry.create(provider_name, settings=self.settings)
         return provider.healthcheck()
 
@@ -392,12 +399,27 @@ class IngestionService:
         provider_name: str = DEFAULT_PROVIDER_NAME,
         cursor_key: str = DEFAULT_CURSOR_KEY,
     ) -> CursorRead | None:
+        provider_name = self._resolve_provider_name(provider_name)
         cursor = self.repository.get_cursor(
             provider_name=provider_name,
             entity_type=INCREMENTAL_ENTITY_TYPE,
             cursor_key=cursor_key,
         )
         return CursorRead.model_validate(cursor) if cursor else None
+
+    def _resolve_provider_name(self, provider_name: str) -> str:
+        normalized_provider = provider_name.strip().lower().replace("-", "_")
+        if normalized_provider != "mock":
+            return provider_name
+        app_env = str(getattr(self.settings, "app_env", "") or "").strip().lower()
+        if app_env not in {"production", "prod", "staging"}:
+            return provider_name
+        if (os.getenv("GTE_ENABLE_MOCK_INGESTION_PROVIDER") or "").strip().lower() in {"1", "true", "yes", "on"}:
+            return provider_name
+        raise ValueError(
+            "Mock ingestion provider is disabled in production. Configure GTE_INGESTION_PROVIDER "
+            "or explicitly enable mock ingestion with GTE_ENABLE_MOCK_INGESTION_PROVIDER for fixture/test runs."
+        )
 
     def _bootstrap_scope(
         self,

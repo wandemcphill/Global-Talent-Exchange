@@ -8,6 +8,7 @@ import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
 import 'package:gte_frontend/shared/providers/live_clients_provider.dart';
+import 'package:gte_frontend/shared/providers/regen_provider.dart';
 
 void main() {
   test('active-shell routed providers clamp liveThenFixture down to live', () {
@@ -88,5 +89,42 @@ void main() {
       isAuthenticated: true,
     );
     expect(dependencies.createCompetitionApi().accessToken, 'token-123');
+  });
+
+  test('regen creation client uses the active auth session wiring', () {
+    final MemoryAuthSessionStore store = MemoryAuthSessionStore();
+    const AuthSession session = AuthSession(
+      userId: 'user-1',
+      accessToken: 'token-regen',
+      refreshToken: 'refresh-regen',
+      sessionId: 'session-regen',
+      role: 'user',
+      userName: 'tester',
+    );
+    final ProviderContainer container = ProviderContainer(
+      overrides: [
+        appConfigProvider.overrideWithValue(
+          const GteAppConfig(
+            apiBaseUrl: 'https://example.test',
+            backendMode: GteBackendMode.live,
+          ),
+        ),
+        initialAuthSessionProvider.overrideWithValue(session),
+        authSessionStoreProvider.overrideWithValue(store),
+        deviceIdentityStoreProvider.overrideWithValue(
+          MemoryDeviceIdentityStore(),
+        ),
+        deviceIdProvider.overrideWithValue('device-regen'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final regenCreationApi = container.read(regenCreationApiProvider);
+
+    expect(regenCreationApi.client.accessToken, 'token-regen');
+    expect(regenCreationApi.client.authSession, session);
+    expect(regenCreationApi.client.authSessionStore, same(store));
+    expect(regenCreationApi.client.deviceId, 'device-regen');
+    expect(regenCreationApi.client.mode, GteBackendMode.live);
   });
 }

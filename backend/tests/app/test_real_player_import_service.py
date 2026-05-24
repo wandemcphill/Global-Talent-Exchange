@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -17,7 +18,7 @@ from app.ingestion.real_player_import_models import (
     RealPlayerImportRun,
     RealPlayerImportStagingRecord,
 )
-from app.ingestion.real_player_import_service import RealPlayerImportService
+from app.ingestion.real_player_import_service import RealPlayerImportError, RealPlayerImportService
 from app.models.base import Base
 
 
@@ -146,5 +147,33 @@ def test_real_player_import_is_resumable_and_idempotent() -> None:
             assert status.latest_run is not None
             assert status.latest_run.job_name == "real_player_directory_import"
             assert len(status.recent_runs) == 3
+    finally:
+        engine.dispose()
+
+
+def test_mock_real_player_import_requires_explicit_enablement_in_production(monkeypatch) -> None:
+    monkeypatch.delenv("GTE_ENABLE_MOCK_INGESTION_PROVIDER", raising=False)
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    settings = load_settings(
+        environ={
+            "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "GTE_APP_ENV": "production",
+            "GTE_INGESTION_PROVIDER": "mock",
+        },
+        config_root=(Path(__file__).resolve().parents[2] / "config"),
+    )
+
+    try:
+        with session_factory() as session:
+            service = RealPlayerImportService(session, settings=settings)
+
+            with pytest.raises(RealPlayerImportError, match="Mock real-player ingestion is disabled"):
+                service.import_directory(provider_name="mock")
     finally:
         engine.dispose()

@@ -26,7 +26,15 @@ enum GtexNewsCategory {
   disputes,
 }
 
-enum GtexConversationKind { support, admin, club, order, dispute, player, creator }
+enum GtexConversationKind {
+  support,
+  admin,
+  club,
+  order,
+  dispute,
+  player,
+  creator,
+}
 
 class GtexNotificationItem {
   const GtexNotificationItem({
@@ -125,6 +133,8 @@ class GtexNewsArticle {
     required this.publishedAt,
     this.heroLabel,
     this.relatedEntity,
+    this.relatedRoute,
+    this.shareUrl,
     this.isBreaking = false,
     this.trustScore = 0.92,
   });
@@ -137,6 +147,8 @@ class GtexNewsArticle {
   final DateTime publishedAt;
   final String? heroLabel;
   final String? relatedEntity;
+  final String? relatedRoute;
+  final String? shareUrl;
   final bool isBreaking;
   final double trustScore;
 

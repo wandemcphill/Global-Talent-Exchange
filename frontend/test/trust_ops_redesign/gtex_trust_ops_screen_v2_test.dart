@@ -13,7 +13,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.dark(useMaterial3: true),
-        home: const Scaffold(body: GtexWalletOrdersScreen()),
+        home: const Scaffold(
+          body: GtexWalletOrdersScreen(
+            repository: GtexTrustOpsDemoRepository(),
+          ),
+        ),
       ),
     );
 

@@ -151,7 +151,7 @@ class WalletRailService:
             reference=reference,
             status=status,
             provider_key=provider_key,
-            provider_reference=provider_reference or uuid4().hex,
+            provider_reference=provider_reference,
             unit=unit,
             amount_fiat=quote.amount_fiat,
             gross_amount=quote.gross_amount,
@@ -474,9 +474,9 @@ class WalletRailService:
         if event.amount is not None and order.amount_fiat and event.amount != order.amount_fiat:
             self._create_system_event(
                 event_key=f"purchase-order-amount-mismatch-{order.id}-{event.event_id or 'event'}",
-                severity=SystemEventSeverity.WARNING,
+                severity=SystemEventSeverity.ERROR,
                 title="Purchase order amount mismatch",
-                body="Provider webhook amount did not match the recorded purchase order amount.",
+                body="Provider webhook amount did not match the recorded purchase order amount. Settlement was blocked.",
                 subject_type="purchase_order",
                 subject_id=order.id,
                 metadata={
@@ -484,6 +484,20 @@ class WalletRailService:
                     "received_amount": str(event.amount),
                     "provider_reference": event.provider_reference,
                 },
+            )
+            payload = dict(order.raw_payload or {})
+            payload["amount_mismatch_hold"] = {
+                "expected_amount": str(order.amount_fiat),
+                "received_amount": str(event.amount),
+                "provider_reference": event.provider_reference,
+                "event_id": event.event_id,
+            }
+            order.raw_payload = payload
+            return self.apply_purchase_order_status(
+                order=order,
+                status=PurchaseOrderStatus.DISPUTED,
+                actor=None,
+                notes="Provider webhook amount mismatch.",
             )
         target_status = self._map_provider_event(event.event_type)
         if target_status is None:

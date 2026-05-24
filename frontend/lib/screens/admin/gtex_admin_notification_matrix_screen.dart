@@ -30,9 +30,7 @@ class _GtexAdminNotificationMatrixScreenState
   late final NotificationSettingsApi _api;
   late Future<List<NotificationEventMatrixItem>> _future;
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _targetUserController = TextEditingController(
-    text: 'fixture-admin-target',
-  );
+  final TextEditingController _targetUserController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
   String _query = '';
   String? _selectedEventKey;

@@ -15,6 +15,7 @@ from app.main import INITIAL_ADMIN_DISPLAY_NAME, INITIAL_ADMIN_EMAIL, INITIAL_AD
 from app.models import (
     CountryFeaturePolicy,
     EconomyBurnEvent,
+    LedgerTransaction,
     LedgerEntryReason,
     LedgerSourceTag,
     LedgerUnit,
@@ -273,9 +274,12 @@ def test_simulator_returns_30_day_projection(client, app_session_factory) -> Non
     assert payload["summary"]["inflation_risk"] in {"LOW", "MEDIUM", "HIGH"}
 
 
-def test_paystack_webhook_settles_purchase_order(client, app_session_factory, monkeypatch) -> None:
+def test_paystack_webhook_does_not_settle_even_when_stale_env_flags_are_present(
+    client, app_session_factory, monkeypatch
+) -> None:
     _prepare_admin(client, app_session_factory)
     order = _seed_paystack_order(app_session_factory)
+    monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
     monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
     payload = {
         "event": "charge.success",
@@ -299,14 +303,27 @@ def test_paystack_webhook_settles_purchase_order(client, app_session_factory, mo
         content=raw_body,
     )
 
-    assert response.status_code == 200, response.text
-    assert response.json()["status"] == "ok"
-    assert response.json()["order_status"] == PurchaseOrderStatus.SETTLED.value
+    assert response.status_code == 410, response.text
+    assert "paystack is unavailable" in _error_message(response)
 
     with app_session_factory() as session:
         refreshed = session.get(FancoinPurchaseOrder, order.id)
         assert refreshed is not None
-        assert refreshed.status == PurchaseOrderStatus.SETTLED
+        assert refreshed.status != PurchaseOrderStatus.SETTLED
+        assert refreshed.ledger_transaction_id is None
+
+
+def test_paystack_webhook_is_gone_when_provider_is_disabled(client, app_session_factory, monkeypatch) -> None:
+    _prepare_admin(client, app_session_factory)
+    monkeypatch.delenv("GTE_ENABLE_PAYSTACK", raising=False)
+
+    response = client.post(
+        "/integrations/payments/paystack/webhook",
+        json={"event": "charge.success", "data": {"reference": "ps_disabled"}},
+    )
+
+    assert response.status_code == 410, response.text
+    assert "paystack is unavailable" in _error_message(response).lower()
 
 
 def test_wallet_protection_reports_active_wallet_transaction_locks(client, app_session_factory) -> None:
@@ -530,11 +547,12 @@ def test_wallet_protection_summary_surfaces_duplicate_deposit_candidates(client,
     assert len(duplicate["order_ids"]) >= 2
 
 
-def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
+def test_paystack_webhook_rejects_before_signature_validation_when_stale_secret_exists(
     client, app_session_factory, monkeypatch
 ) -> None:
     _prepare_admin(client, app_session_factory)
     _seed_paystack_order(app_session_factory)
+    monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
     monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
 
     response = client.post(
@@ -552,8 +570,8 @@ def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
         },
     )
 
-    assert response.status_code == 401, response.text
-    assert "signature is invalid" in _error_message(response)
+    assert response.status_code == 410, response.text
+    assert "paystack is unavailable" in _error_message(response)
 
 
 def test_korapay_webhook_verifies_signature_and_settles_purchase_order(
@@ -597,6 +615,69 @@ def test_korapay_webhook_verifies_signature_and_settles_purchase_order(
     assert response.json()["status"] == "ok"
     assert response.json()["signature_verified"] is True
     assert response.json()["order_status"] == PurchaseOrderStatus.SETTLED.value
+
+    replay_response = client.post(
+        "/integrations/payments/korapay/webhook",
+        headers={"x-korapay-signature": signature},
+        json=payload,
+    )
+
+    assert replay_response.status_code == 200, replay_response.text
+    assert replay_response.json()["status"] == "ok"
+    assert replay_response.json()["order_status"] == PurchaseOrderStatus.SETTLED.value
+
+    with app_session_factory() as session:
+        refreshed = session.get(FancoinPurchaseOrder, order.id)
+        assert refreshed is not None
+        assert refreshed.status == PurchaseOrderStatus.SETTLED
+        assert refreshed.provider_event_id == "kp-event-1"
+        assert refreshed.ledger_transaction_id is not None
+        transactions = session.scalars(
+            select(LedgerTransaction).where(LedgerTransaction.reference == order.reference)
+        ).all()
+        assert len(transactions) == 1
+
+
+def test_korapay_webhook_render_alias_reuses_signed_settlement_handler(
+    client, app_session_factory, monkeypatch
+) -> None:
+    _prepare_admin(client, app_session_factory)
+    order = _seed_provider_order(
+        app_session_factory,
+        provider_key="korapay",
+        provider_reference="kp_alias_ref_webhook",
+        email="korapay-alias@example.com",
+        username="korapayalias",
+    )
+    monkeypatch.setenv("GTE_KORAPAY_WEBHOOK_SECRET", "korapay-secret")
+    payload = {
+        "event": "charge.success",
+        "data": {
+            "id": "kp-alias-event-1",
+            "reference": "kp_alias_ref_webhook",
+            "amount": "9000.0000",
+            "currency": "NGN",
+            "status": "success",
+            "metadata": {
+                "purchase_order_reference": order.reference,
+            },
+        },
+    }
+    signature = hmac.new(
+        b"korapay-secret",
+        json.dumps(payload["data"], separators=(",", ":"), ensure_ascii=False).encode("utf-8"),
+        sha256,
+    ).hexdigest()
+
+    response = client.post(
+        "/api/webhooks/korapay",
+        headers={"x-korapay-signature": signature},
+        json=payload,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "ok"
+    assert response.json()["signature_verified"] is True
 
     with app_session_factory() as session:
         refreshed = session.get(FancoinPurchaseOrder, order.id)

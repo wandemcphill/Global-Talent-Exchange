@@ -253,7 +253,7 @@ def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
     assert payload["items"][2]["reason"] == "adjustment"
 
 
-def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
+def test_api_wallet_accounts_and_legacy_payment_events_are_blocked(api_context) -> None:
     client, session, _current_user = api_context
     _enable_automatic_deposits(session)
 
@@ -282,26 +282,11 @@ def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
         "balance",
     }
 
-    assert payment_event_response.status_code == 201
-    payment_payload = payment_event_response.json()
-    assert set(payment_payload) == {
-        "id",
-        "provider",
-        "provider_reference",
-        "pack_code",
-        "amount",
-        "unit",
-        "status",
-        "created_at",
-        "verified_at",
-        "processed_at",
-        "ledger_transaction_id",
-    }
-    assert payment_payload["provider"] == "paystack"
-    assert payment_payload["status"] == "pending"
+    assert payment_event_response.status_code == 410
+    assert "Client-authored payment events are disabled" in payment_event_response.json()["detail"]
 
 
-def test_payment_event_rejects_when_wallet_transaction_lock_exists(api_context) -> None:
+def test_payment_event_rejects_before_wallet_transaction_lock(api_context) -> None:
     client, session, current_user = api_context
     _enable_automatic_deposits(session)
     RuntimeControlService(client.app).acquire_wallet_transaction_lock(
@@ -321,8 +306,8 @@ def test_payment_event_rejects_when_wallet_transaction_lock_exists(api_context) 
         },
     )
 
-    assert response.status_code == 409
-    assert "another wallet transaction is already in progress" in response.json()["detail"].lower()
+    assert response.status_code == 410
+    assert "Client-authored payment events are disabled" in response.json()["detail"]
 
 
 def test_create_trade_withdrawal_request_reserves_balance(api_context) -> None:
@@ -440,6 +425,8 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
     monkeypatch.delenv("GTE_KORAPAY_SECRET_KEY", raising=False)
     monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_ENCRYPTION_KEY", raising=False)
     client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -455,10 +442,10 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     assert payload["country_code"] == "NG"
     assert payload["required_policy_acceptances_missing"] == 0
     assert payload["policy_blocked"] is False
-    assert payload["deposit_mode"] == "gateway"
+    assert payload["deposit_mode"] == "bank_transfer"
     assert payload["withdrawal_mode"] == "bank_transfer"
-    assert payload["payment_provider_status"]["paystack"] == "mock"
-    assert payload["payment_provider_status"]["korapay"] == "unavailable"
+    assert payload["payment_provider_status"]["paystack"] == "blocked"
+    assert payload["payment_provider_status"]["korapay"] == "blocked"
 
 
 def test_wallet_overview_supports_hybrid_bank_transfer_and_korapay(api_context, monkeypatch) -> None:
@@ -468,6 +455,7 @@ def test_wallet_overview_supports_hybrid_bank_transfer_and_korapay(api_context, 
     monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
     monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
     monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", "sk_test_launch")
+    monkeypatch.setenv("GTE_KORAPAY_ENCRYPTION_KEY", "test-encryption-key")
     client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -481,7 +469,7 @@ def test_wallet_overview_supports_hybrid_bank_transfer_and_korapay(api_context, 
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["deposit_mode"] == "hybrid"
-    assert payload["payment_provider_status"]["paystack"] == "mock"
+    assert payload["payment_provider_status"]["paystack"] == "blocked"
     assert payload["payment_provider_status"]["korapay"] == "ready"
 
 
@@ -502,6 +490,47 @@ def test_manual_deposit_request_is_not_blocked_by_missing_policy_acceptance(api_
     payload = response.json()
     assert payload["status"] == "awaiting_payment"
     assert Decimal(str(payload["amount_coin"])) == Decimal("5.0000")
+
+
+def test_manual_deposit_request_obeys_admin_payment_rail_switch(api_context) -> None:
+    client, session, _current_user = api_context
+    settings = TreasuryService().ensure_settings(session)
+    settings.deposit_mode = PaymentMode.MANUAL
+    session.commit()
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"payment_rails":[{"provider":"bank_transfer_manual","deposits_enabled":false,"withdrawals_enabled":true,"is_live":false}]}',
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        "/api/wallets/deposits",
+        json={
+            "amount": "4500.0000",
+            "input_unit": "fiat",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert "manual bank-transfer deposits are disabled" in response.json()["detail"].lower()
+
+
+def test_manual_deposit_request_requires_real_bank_account_in_production(api_context, monkeypatch) -> None:
+    client, _session, _current_user = api_context
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+
+    response = client.post(
+        "/api/wallets/deposits",
+        json={
+            "amount": "4500.0000",
+            "input_unit": "fiat",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert "treasury bank account" in response.json()["detail"].lower()
 
 
 def test_wallet_overview_marks_missing_paystack_secret_unavailable_in_production(api_context, monkeypatch) -> None:
@@ -525,7 +554,7 @@ def test_wallet_overview_marks_missing_paystack_secret_unavailable_in_production
 
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["payment_provider_status"]["paystack"] == "unavailable"
+    assert payload["payment_provider_status"]["paystack"] == "blocked"
     assert payload["payment_provider_status"]["korapay"] == "unavailable"
 
 

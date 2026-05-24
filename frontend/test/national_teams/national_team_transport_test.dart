@@ -13,6 +13,27 @@ void main() {
           statusCode: 200,
           body: <Object?>[_competitionJson('comp-1')],
         ),
+        const GteTransportResponse(
+          statusCode: 200,
+          body: <String, Object?>{
+            'total': 0,
+            'items': <Object?>[],
+          },
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: _entryJson('entry-1', 'comp-1'),
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: <String, Object?>{
+            ..._entryJson('entry-1', 'comp-1'),
+            'squad_members': <Object?>[_squadMemberJson('member-1', 'entry-1')],
+            'manager_history': <Object?>[
+              _managerHistoryJson('history-1', 'entry-1'),
+            ],
+          },
+        ),
         GteTransportResponse(
           statusCode: 200,
           body: <String, Object?>{
@@ -42,15 +63,25 @@ void main() {
     );
 
     await api.listCompetitions();
+    await api.listRentalPool('comp-1', countryCode: 'NG', auth: true);
+    await api.createRentalEntry(
+      'comp-1',
+      countryCode: 'NG',
+      countryName: 'Nigeria',
+    );
+    await api.rentPlayer(entryId: 'entry-1', playerId: 'player-1');
     await api.fetchEntryDetail('entry-1');
     await api.fetchUserHistory();
 
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
-        '/api/v2/national-team-engine/competitions',
-        '/api/v2/national-team-engine/entries/entry-1',
-        '/api/v2/national-team-engine/me/history',
+        '/api/national/competitions',
+        '/api/national/competitions/comp-1/rental-pool',
+        '/api/national/competitions/comp-1/rental-entry',
+        '/api/national/entries/entry-1/rentals',
+        '/api/national/entries/entry-1',
+        '/api/national/me/history',
       ],
     );
   });

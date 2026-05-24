@@ -24,6 +24,7 @@ from app.models.wallet import (
 )
 from app.players.read_models import PlayerSummaryReadModel
 from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
+from app.wallets.providers.registry import provider_live_deposit_ready
 from app.wallets.service import LedgerPosting, WalletService
 from app.observability.audit_service import AuditTrailService
 
@@ -135,6 +136,14 @@ ALL_ADMIN_PERMISSIONS: tuple[str, ...] = tuple(
 )
 
 SUPPORTED_ADMIN_PAYMENT_RAILS: tuple[str, ...] = ("bank_transfer_manual", *SUPPORTED_TOP_UP_PROVIDER_KEYS)
+PAYSTACK_UNAVAILABLE_MESSAGE = "Paystack is unavailable for production. Use KoraPay or manual bank transfer."
+KORAPAY_UNAVAILABLE_MESSAGE = (
+    "KoraPay requires live checkout and webhook credentials before it can accept production deposits."
+)
+
+
+def _paystack_enabled() -> bool:
+    return False
 
 
 def _default_payment_rail(provider: str) -> dict[str, Any]:
@@ -145,6 +154,22 @@ def _default_payment_rail(provider: str) -> dict[str, Any]:
             "withdrawals_enabled": True,
             "is_live": True,
             "maintenance_message": "Manual bank-transfer desk is enabled.",
+        }
+    if provider == "paystack" and not _paystack_enabled():
+        return {
+            "provider": provider,
+            "deposits_enabled": False,
+            "withdrawals_enabled": False,
+            "is_live": False,
+            "maintenance_message": PAYSTACK_UNAVAILABLE_MESSAGE,
+        }
+    if provider == "korapay" and not provider_live_deposit_ready("korapay"):
+        return {
+            "provider": provider,
+            "deposits_enabled": False,
+            "withdrawals_enabled": False,
+            "is_live": False,
+            "maintenance_message": KORAPAY_UNAVAILABLE_MESSAGE,
         }
     return {
         "provider": provider,
@@ -1117,6 +1142,11 @@ class AdminGodModeService:
         if "updated_by" in rail:
             updated_by = rail.get("updated_by")
             record["updated_by"] = None if updated_by is None else str(updated_by)
+        if record["provider"] == "paystack" and not _paystack_enabled():
+            record["deposits_enabled"] = False
+            record["withdrawals_enabled"] = False
+            record["is_live"] = False
+            record["maintenance_message"] = PAYSTACK_UNAVAILABLE_MESSAGE
         return record
 
     def _normalize_roles_block(self, roles_block: dict[str, Any]) -> dict[str, Any]:

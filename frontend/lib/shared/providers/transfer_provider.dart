@@ -222,7 +222,6 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
     'Metro Sporting',
   ];
 
-  static const String _fallbackUserClubName = 'GTEX United';
   static const Duration _refreshInterval = Duration(seconds: 20);
 
   final GteAppConfig _config = GteAppConfig.fromRuntimeEnvironment();
@@ -248,11 +247,9 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
 
   String get _userClubName {
     try {
-      final String clubName =
-          ref.read(authPresentationProvider).clubName.trim();
-      return clubName.isEmpty ? _fallbackUserClubName : clubName;
+      return ref.read(authPresentationProvider).clubName.trim();
     } catch (_) {
-      return _fallbackUserClubName;
+      return '';
     }
   }
 
@@ -386,7 +383,10 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
       if (_disposed) {
         return null;
       }
-      final TransferMarketListing updated = _listingFromPayload(payload);
+      final TransferMarketListing? updated = _listingFromPayload(payload);
+      if (updated == null) {
+        return null;
+      }
       _upsertListing(updated);
       _syncListingStreams(state.listings);
       return updated.currentBidInMillions;
@@ -570,6 +570,7 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
       }
       final List<TransferMarketListing> liveListings = payload
           .map(_listingFromPayload)
+          .whereType<TransferMarketListing>()
           .toList(growable: false);
       _usesLiveListings = true;
       _replaceListings(liveListings);
@@ -675,7 +676,10 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
         );
         return;
       case 'snapshot':
-        final TransferMarketListing snapshot = _listingFromPayload(payload);
+        final TransferMarketListing? snapshot = _listingFromPayload(payload);
+        if (snapshot == null) {
+          return;
+        }
         _upsertListing(snapshot);
         return;
       case 'events':
@@ -829,16 +833,13 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
     );
   }
 
-  TransferMarketListing _listingFromPayload(Object? value) {
+  TransferMarketListing? _listingFromPayload(Object? value) {
     final Map<String, Object?> json = _mapValue(value);
     final Map<String, Object?> playerPayload = _mapValue(json['player']);
-    final String listingId = _stringValue(
-      json['id'],
-      fallback: _stringValue(
-        json['player_id'],
-        fallback: 'transfer-listing-${state.listings.length}',
-      ),
-    );
+    final String? listingId = _stringOrNull(json['id']);
+    if (listingId == null) {
+      return null;
+    }
     final double currentBid = _roundBid(
       _doubleValue(
         json['current_highest_bid'],
@@ -855,7 +856,7 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
       fallback: _listValue(json['bidders']).length,
     );
     final String marketSignal = _stringValue(json['market_signal']);
-    final Player player = _playerFromPayload(
+    final Player? player = _playerFromPayload(
       playerPayload,
       listingId: listingId,
       fallbackValueInMillions: referencePrice,
@@ -865,6 +866,9 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
           marketSignal.toLowerCase().contains('hot') ||
           marketSignal.toLowerCase().contains('surge'),
     );
+    if (player == null) {
+      return null;
+    }
     final List<MarketBidEntry> bidHistory = _bidHistoryFromPayload(
       json,
       playerPayload,
@@ -887,53 +891,60 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
     );
   }
 
-  Player _playerFromPayload(
+  Player? _playerFromPayload(
     Map<String, Object?> payload, {
     required String listingId,
     required double fallbackValueInMillions,
     required bool isHot,
   }) {
-    final String playerId = _stringValue(
-      payload['id'],
-      fallback: 'player-$listingId',
-    );
-    final String fullName = _stringValue(
-      payload['full_name'],
-      fallback: 'Transfer Target',
-    );
+    final String? playerId = _stringOrNull(payload['id']);
+    final String? fullName =
+        _stringOrNull(payload['full_name']) ?? _stringOrNull(payload['name']);
     final String position = _normalizePosition(
-      _stringValue(payload['normalized_position'], fallback: 'N/A'),
+      _stringValue(
+        payload['normalized_position'],
+        fallback: _stringValue(payload['position']),
+      ),
     );
-    final int seed = _stableSeed('$playerId|$fullName|$position');
-    final int rating =
-        (72 + (seed % 11) + (fallbackValueInMillions ~/ 18))
-            .clamp(70, 92)
-            .toInt();
+    if (playerId == null ||
+        fullName == null ||
+        position.isEmpty ||
+        position == 'N/A') {
+      return null;
+    }
     final int? globalScoutingIndex =
         _intOrNullFromKeys(payload, _gsiKeys) ??
         _intOrNullFromKeys(_mapValue(payload['summary_json']), _gsiKeys) ??
         _intOrNullFromKeys(_mapValue(payload['summaryJson']), _gsiKeys) ??
         _intOrNullFromKeys(_mapValue(payload['metadata_json']), _gsiKeys) ??
         _intOrNullFromKeys(_mapValue(payload['metadataJson']), _gsiKeys);
-    final int potential = (rating + 4 + (seed % 6)).clamp(rating, 95).toInt();
-    final int age = (18 + (seed % 11)).clamp(18, 34).toInt();
+    final int? rating =
+        _intOrNullFromKeys(payload, _ratingKeys) ?? globalScoutingIndex;
+    final int? age = _intOrNullFromKeys(payload, _ageKeys);
+    if (rating == null || age == null || fallbackValueInMillions <= 0) {
+      return null;
+    }
+    final int potential = _intOrNullFromKeys(payload, _potentialKeys) ?? rating;
+    final double pace = _doubleFromKeys(payload, _paceKeys);
+    final double technique = _doubleFromKeys(payload, _techniqueKeys);
+    final double mentality = _doubleFromKeys(payload, _mentalityKeys);
 
     return Player(
       id: playerId,
       name: fullName,
       position: position,
-      country: _stringValue(
-        payload['current_club_name'],
-        fallback: 'Open Market',
-      ),
+      country:
+          _stringOrNull(payload['country']) ??
+          _stringOrNull(payload['nationality']) ??
+          _stringOrNull(payload['current_club_name']) ??
+          '',
       age: age,
       rating: rating,
       potential: potential,
-      valueInMillions:
-          fallbackValueInMillions <= 0 ? 1 : fallbackValueInMillions,
-      pace: _metricFromSeed(seed, 0),
-      technique: _metricFromSeed(seed, 1),
-      mentality: _metricFromSeed(seed, 2),
+      valueInMillions: fallbackValueInMillions,
+      pace: pace,
+      technique: technique,
+      mentality: mentality,
       image: 'assets/branding/gtex_icon.png',
       globalScoutingIndex: globalScoutingIndex,
       isHot: isHot,
@@ -1127,17 +1138,6 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
     return 30 + ((index * 7 + tick * 3) % 45);
   }
 
-  double _metricFromSeed(int seed, int offset) {
-    final int normalized = ((seed ~/ (offset + 1)) % 26) + 68;
-    return normalized / 100;
-  }
-
-  int _stableSeed(String value) {
-    return value.codeUnits.fold<int>(0, (int sum, int codeUnit) {
-      return (sum * 31 + codeUnit) & 0x7fffffff;
-    });
-  }
-
   String _normalizePosition(String value) {
     final String position = value.trim().toUpperCase();
     if (position == 'MIDFIELDER') {
@@ -1238,6 +1238,39 @@ const List<String> _gsiKeys = <String>[
   'currentGsi',
 ];
 
+const List<String> _ratingKeys = <String>[
+  'rating',
+  'current_rating',
+  'currentRating',
+  'overall',
+  'overall_rating',
+  'overallRating',
+];
+
+const List<String> _potentialKeys = <String>[
+  'potential',
+  'potential_rating',
+  'potentialRating',
+];
+
+const List<String> _ageKeys = <String>['age', 'player_age', 'playerAge'];
+
+const List<String> _paceKeys = <String>['pace', 'pace_score', 'paceScore'];
+
+const List<String> _techniqueKeys = <String>[
+  'technique',
+  'technical',
+  'technique_score',
+  'techniqueScore',
+];
+
+const List<String> _mentalityKeys = <String>[
+  'mentality',
+  'mental',
+  'mentality_score',
+  'mentalityScore',
+];
+
 int? _intOrNullFromKeys(Map<String, Object?> payload, List<String> keys) {
   for (final String key in keys) {
     final Object? value = payload[key];
@@ -1253,6 +1286,27 @@ int? _intOrNullFromKeys(Map<String, Object?> payload, List<String> keys) {
     }
   }
   return null;
+}
+
+double _doubleFromKeys(Map<String, Object?> payload, List<String> keys) {
+  for (final String key in keys) {
+    final Object? value = payload[key];
+    if (value is num) {
+      return _normalizeMetric(value.toDouble());
+    }
+    final double? parsed = double.tryParse(value?.toString() ?? '');
+    if (parsed != null) {
+      return _normalizeMetric(parsed);
+    }
+  }
+  return 0;
+}
+
+double _normalizeMetric(double value) {
+  if (value > 1) {
+    return (value / 100).clamp(0, 1).toDouble();
+  }
+  return value.clamp(0, 1).toDouble();
 }
 
 DateTime? _dateTimeValue(Object? value) {

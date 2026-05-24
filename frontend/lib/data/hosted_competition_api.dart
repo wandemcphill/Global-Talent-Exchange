@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
@@ -11,7 +13,9 @@ class HostedCompetitionApi {
   HostedCompetitionApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
-  final _HostedCompetitionFixtures fixtures;
+  final _HostedCompetitionFixtures? fixtures;
+
+  bool get hasRegisteredFixtures => fixtures != null;
 
   factory HostedCompetitionApi.standard({
     required String baseUrl,
@@ -38,11 +42,12 @@ class HostedCompetitionApi {
         deviceId: deviceId,
         mode: resolvedMode,
       ),
-      fixtures: _HostedCompetitionFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory HostedCompetitionApi.fixture() {
+    assertFixtureFactoryAllowed('HostedCompetitionApi.fixture');
     return HostedCompetitionApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -66,7 +71,7 @@ class HostedCompetitionApi {
       return payload
           .map(HostedCompetitionTemplate.fromJson)
           .toList(growable: false);
-    }, fixtures.templates);
+    }, () => _requireFixtures().templates());
   }
 
   Future<List<HostedCompetition>> listCompetitions() {
@@ -80,7 +85,7 @@ class HostedCompetitionApi {
       return competitions
           .map(HostedCompetition.fromJson)
           .toList(growable: false);
-    }, fixtures.listCompetitions);
+    }, () => _requireFixtures().listCompetitions());
   }
 
   Future<List<HostedCompetition>> listMyCompetitions() {
@@ -93,7 +98,7 @@ class HostedCompetitionApi {
       return competitions
           .map(HostedCompetition.fromJson)
           .toList(growable: false);
-    }, fixtures.listMyCompetitions);
+    }, () => _requireFixtures().listMyCompetitions());
   }
 
   Future<HostedCompetitionDetail> fetchDetail(String competitionId) {
@@ -103,7 +108,7 @@ class HostedCompetitionApi {
         auth: false,
       );
       return HostedCompetitionDetail.fromJson(payload);
-    }, () async => fixtures.detail(competitionId));
+    }, () async => _requireFixtures().detail(competitionId));
   }
 
   Future<HostedCompetition> createCompetition({
@@ -140,8 +145,10 @@ class HostedCompetitionApi {
             payload as Map<String, dynamic>? ?? <String, dynamic>{};
         return HostedCompetition.fromJson(map['competition'] ?? map);
       },
-      () async =>
-          fixtures.createCompetition(title: title, templateKey: templateKey),
+      () async => _requireFixtures().createCompetition(
+        title: title,
+        templateKey: templateKey,
+      ),
     );
   }
 
@@ -161,7 +168,7 @@ class HostedCompetitionApi {
       final Map<String, dynamic> map =
           payload as Map<String, dynamic>? ?? <String, dynamic>{};
       return HostedCompetition.fromJson(map['competition'] ?? map);
-    }, () async => fixtures.joinCompetition(competitionId));
+    }, () async => _requireFixtures().joinCompetition(competitionId));
   }
 
   Future<HostedCompetition> adminCreateCompetition({
@@ -203,8 +210,10 @@ class HostedCompetitionApi {
             payload as Map<String, dynamic>? ?? <String, dynamic>{};
         return HostedCompetition.fromJson(map['competition'] ?? map);
       },
-      () async =>
-          fixtures.createCompetition(title: title, templateKey: templateKey),
+      () async => _requireFixtures().createCompetition(
+        title: title,
+        templateKey: templateKey,
+      ),
     );
   }
 
@@ -216,7 +225,7 @@ class HostedCompetitionApi {
       return payload
           .map(HostedCompetitionInvite.fromJson)
           .toList(growable: false);
-    }, () async => fixtures.invites(competitionId));
+    }, () async => _requireFixtures().invites(competitionId));
   }
 
   Future<List<HostedCompetitionInvite>> createInvites({
@@ -242,7 +251,7 @@ class HostedCompetitionApi {
       return invites
           .map(HostedCompetitionInvite.fromJson)
           .toList(growable: false);
-    }, () async => fixtures.createInvites(competitionId));
+    }, () async => _requireFixtures().createInvites(competitionId));
   }
 
   Future<HostedCompetition> acceptInvite({
@@ -261,7 +270,7 @@ class HostedCompetitionApi {
       final Map<String, dynamic> map =
           payload as Map<String, dynamic>? ?? <String, dynamic>{};
       return HostedCompetition.fromJson(map['competition'] ?? map);
-    }, () async => fixtures.joinCompetition(competitionId));
+    }, () async => _requireFixtures().joinCompetition(competitionId));
   }
 
   Future<List<HostedCompetitionStanding>> listStandings(String competitionId) {
@@ -273,7 +282,7 @@ class HostedCompetitionApi {
       return payload
           .map(HostedCompetitionStanding.fromJson)
           .toList(growable: false);
-    }, () async => fixtures.standings(competitionId));
+    }, () async => _requireFixtures().standings(competitionId));
   }
 
   Future<HostedCompetitionFinance> fetchFinance(String competitionId) {
@@ -283,7 +292,7 @@ class HostedCompetitionApi {
         auth: false,
       );
       return HostedCompetitionFinance.fromJson(payload);
-    }, () async => fixtures.finance(competitionId));
+    }, () async => _requireFixtures().finance(competitionId));
   }
 
   Future<HostedCompetition> launchCompetition(String competitionId) {
@@ -295,7 +304,7 @@ class HostedCompetitionApi {
       final Map<String, dynamic> map =
           payload as Map<String, dynamic>? ?? <String, dynamic>{};
       return HostedCompetition.fromJson(map['competition'] ?? map);
-    }, () async => fixtures.launchCompetition(competitionId));
+    }, () async => _requireFixtures().launchCompetition(competitionId));
   }
 
   Future<List<HostedCompetitionTemplate>> seedTemplates() {
@@ -308,7 +317,7 @@ class HostedCompetitionApi {
       return items
           .map(HostedCompetitionTemplate.fromJson)
           .toList(growable: false);
-    }, fixtures.seedTemplates);
+    }, () => _requireFixtures().seedTemplates());
   }
 
   Future<HostedCompetition> finalizeCompetition({
@@ -325,7 +334,19 @@ class HostedCompetitionApi {
       final Map<String, dynamic> map =
           payload as Map<String, dynamic>? ?? <String, dynamic>{};
       return HostedCompetition.fromJson(map['competition'] ?? map);
-    }, () async => fixtures.finalizeCompetition(competitionId));
+    }, () async => _requireFixtures().finalizeCompetition(competitionId));
+  }
+
+  _HostedCompetitionFixtures _requireFixtures() {
+    final _HostedCompetitionFixtures? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Hosted competition fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 }
 

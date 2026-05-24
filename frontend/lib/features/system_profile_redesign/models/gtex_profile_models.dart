@@ -31,21 +31,6 @@ class GtexProfileSummary {
   final int securityScore;
   final int profileCompletion;
   final String? avatarUrl;
-
-  factory GtexProfileSummary.demo() => const GtexProfileSummary(
-        userId: 'user_demo_001',
-        displayName: 'Ayo McPhill',
-        email: 'ayo@gtex.local',
-        roleLabel: 'Club Owner',
-        countryLabel: 'Nigeria',
-        clubName: 'Lagos Eclipse FC',
-        kycStatus: 'Pending Review',
-        walletStatus: 'Active',
-        unreadNotifications: 8,
-        openDisputes: 1,
-        securityScore: 82,
-        profileCompletion: 76,
-      );
 }
 
 @immutable

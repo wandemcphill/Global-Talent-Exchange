@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from threading import RLock
 from typing import Any
@@ -13,6 +13,9 @@ from fastapi import WebSocket
 from app.core.events import DomainEvent
 
 logger = logging.getLogger(__name__)
+
+REALTIME_SOURCE_OF_TRUTH = "persisted_backend_authority"
+REALTIME_SOURCE_TAG = "gtex_realtime_hub"
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,7 +236,7 @@ class RealtimeHub:
         delivered = 0
         for connection in connections:
             pending_payloads = [
-                {"type": dispatch.type, "data": dict(dispatch.data)}
+                _payload_for_dispatch(dispatch)
                 for dispatch in dispatches
                 if any(connection.subscribes_to(topic) for topic in dispatch.topics)
             ]
@@ -478,9 +481,26 @@ def _optional_string(value: Any) -> str | None:
     return resolved or None
 
 
+def _payload_for_dispatch(dispatch: RealtimeDispatch) -> dict[str, Any]:
+    topics = list(dict.fromkeys(dispatch.topics))
+    data = dict(dispatch.data)
+    data.setdefault("source_of_truth", REALTIME_SOURCE_OF_TRUTH)
+    data.setdefault("source_tag", REALTIME_SOURCE_TAG)
+    return {
+        "type": dispatch.type,
+        "data": data,
+        "topics": topics,
+        "source_of_truth": REALTIME_SOURCE_OF_TRUTH,
+        "source_tag": REALTIME_SOURCE_TAG,
+        "published_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 __all__ = [
     "RealtimeDispatch",
     "RealtimeHub",
+    "REALTIME_SOURCE_OF_TRUTH",
+    "REALTIME_SOURCE_TAG",
     "RealtimeSnapshot",
     "commentary_topic",
     "match_topic",

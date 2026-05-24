@@ -5,7 +5,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 
 ## Shared Source of Truth
 
-- Shared Flutter client files with API calls discovered: **117**
+- Shared Flutter client files with API calls discovered: **119**
 - Web and mobile therefore inherit the same endpoint usage and the same stale/legacy risks.
 
 ## Divergence Risks
@@ -146,12 +146,12 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/moderation_api.dart -> /api/moderation/me/reports`
 - `frontend/lib/data/moderation_api.dart -> /api/moderation/reports`
 - `frontend/lib/data/moderation_api.dart -> http://127.0.0.1:8000`
-- `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/competitions`
-- `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/competitions/$competitionId/rental-entry`
-- `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/competitions/$competitionId/rental-pool`
-- `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/entries/$entryId`
-- `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/entries/$entryId/rentals`
-- `frontend/lib/data/national_team_api.dart -> /api/national-team-engine/me/history`
+- `frontend/lib/data/national_team_api.dart -> /api/national/competitions`
+- `frontend/lib/data/national_team_api.dart -> /api/national/competitions/$competitionId/rental-entry`
+- `frontend/lib/data/national_team_api.dart -> /api/national/competitions/$competitionId/rental-pool`
+- `frontend/lib/data/national_team_api.dart -> /api/national/entries/$entryId`
+- `frontend/lib/data/national_team_api.dart -> /api/national/entries/$entryId/rentals`
+- `frontend/lib/data/national_team_api.dart -> /api/national/me/history`
 - `frontend/lib/data/national_team_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/notification_settings_api.dart -> /api/admin/notifications/announcements`
 - `frontend/lib/data/notification_settings_api.dart -> /api/admin/notifications/event-matrix`

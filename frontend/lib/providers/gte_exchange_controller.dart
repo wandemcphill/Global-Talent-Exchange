@@ -10,6 +10,7 @@ import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_api_client.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/gte_models.dart';
+import '../shared/models/auth_session.dart' show gtexIsAdminRole;
 
 const int _marketPageSize = 96;
 
@@ -113,7 +114,7 @@ class GteExchangeController extends ChangeNotifier {
 
   bool get isAdmin {
     final String? role = session?.user.role;
-    return role == 'admin' || role == 'super_admin';
+    return gtexIsAdminRole(role);
   }
 
   String? get accessToken => session?.accessToken;

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.hosted_competition_engine.schemas import (
     AdminHostedCompetitionCreateRequest,
@@ -28,8 +29,9 @@ from app.hosted_competition_engine.schemas import (
     HostedCompetitionView,
 )
 from app.hosted_competition_engine.service import HostedCompetitionError, HostedCompetitionService
-from app.models.hosted_competition import CompetitionTemplate
-from app.models.user import User
+from app.models.hosted_competition import CompetitionTemplate, UserHostedCompetition
+from app.models.user import User, UserRole
+from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/hosted-competitions", tags=["hosted-competitions"])
 admin_router = APIRouter(prefix="/admin/hosted-competitions", tags=["admin-hosted-competitions"])
@@ -65,6 +67,41 @@ def _settlement_view(item) -> HostedCompetitionSettlementView:
     if hasattr(status, "value"):
         data["status"] = status.value
     return HostedCompetitionSettlementView.model_validate(data)
+
+
+def _is_admin_user(user: User) -> bool:
+    return user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}
+
+
+def _require_host_or_admin(competition: UserHostedCompetition, user: User) -> None:
+    if competition.host_user_id == user.id or _is_admin_user(user):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Only the host or an admin can view hosted competition finance.",
+    )
+
+
+def _require_manage_competitions_permission(request: Request, actor: User) -> None:
+    if actor.role == UserRole.SUPER_ADMIN:
+        return
+    if actor.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access is required for this action.",
+        )
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None or getattr(settings, "config_root", None) is None:
+        return
+    service = AdminGodModeService(
+        wallet_service=WalletService(cache_backend=getattr(request.app.state, "cache_backend", None))
+    )
+    try:
+        state = service._load_state(request.app)
+        profile = service.resolve_profile(actor, state)
+        service._assert_has_permission(profile, "manage_competitions")
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.get("/templates", response_model=list[CompetitionTemplateView])
@@ -245,8 +282,16 @@ def list_standings(competition_id: str, session: Session = Depends(get_session))
 
 
 @router.get("/{competition_id}/finance", response_model=HostedCompetitionFinanceView)
-def get_finance(competition_id: str, session: Session = Depends(get_session)) -> HostedCompetitionFinanceView:
+def get_finance(
+    competition_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> HostedCompetitionFinanceView:
     service = HostedCompetitionService(session)
+    competition = service.get_competition(competition_id)
+    if competition is None:
+        raise HTTPException(status_code=404, detail="Hosted competition was not found.")
+    _require_host_or_admin(competition, user)
     try:
         return HostedCompetitionFinanceView.model_validate(service.finance_snapshot(competition_id))
     except HostedCompetitionError as exc:
@@ -279,8 +324,11 @@ def launch_competition(
 
 @admin_router.post("/seed", response_model=list[CompetitionTemplateView])
 def seed_templates(
-    _: User = Depends(get_current_admin), session: Session = Depends(get_session)
+    request: Request,
+    admin_user: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
 ) -> list[CompetitionTemplateView]:
+    _require_manage_competitions_permission(request, admin_user)
     service = HostedCompetitionService(session)
     service.seed_defaults()
     session.commit()
@@ -290,9 +338,11 @@ def seed_templates(
 @admin_router.post("", response_model=HostedCompetitionCreateResponse)
 def create_admin_competition(
     payload: AdminHostedCompetitionCreateRequest,
+    request: Request,
     admin_user: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
 ) -> HostedCompetitionCreateResponse:
+    _require_manage_competitions_permission(request, admin_user)
     service = HostedCompetitionService(session)
     try:
         competition, template, host_participation_created = service.create_admin_competition(
@@ -315,9 +365,11 @@ def create_admin_competition(
 @admin_router.post("/{competition_id}/launch", response_model=HostedCompetitionLaunchResponse)
 def admin_launch_competition(
     competition_id: str,
+    request: Request,
     admin_user: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
 ) -> HostedCompetitionLaunchResponse:
+    _require_manage_competitions_permission(request, admin_user)
     service = HostedCompetitionService(session)
     try:
         competition = service.launch_competition(actor=admin_user, competition_id=competition_id)
@@ -337,9 +389,11 @@ def admin_launch_competition(
 def finalize_competition(
     competition_id: str,
     payload: HostedCompetitionFinalizeRequest,
+    request: Request,
     admin_user: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
 ) -> HostedCompetitionFinalizeResponse:
+    _require_manage_competitions_permission(request, admin_user)
     service = HostedCompetitionService(session)
     try:
         competition, standings, settlements = service.finalize_competition(

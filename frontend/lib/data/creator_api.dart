@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import '../features/shared/data/gte_feature_support.dart';
@@ -9,12 +11,12 @@ class CreatorApi {
   CreatorApi({
     required this.client,
     required this.baseUrl,
-    required this.fixtures,
-  });
+    required _CreatorFixtures? fixtures,
+  }) : _fixtures = fixtures;
 
   final GteAuthedApi client;
   final String baseUrl;
-  final _CreatorFixtures fixtures;
+  final _CreatorFixtures? _fixtures;
 
   factory CreatorApi.standard({
     required String baseUrl,
@@ -34,7 +36,7 @@ class CreatorApi {
             mode: resolvedMode,
           ),
       baseUrl: baseUrl,
-      fixtures: _CreatorFixtures.seed(baseUrl),
+      fixtures: null,
     );
   }
 
@@ -44,6 +46,7 @@ class CreatorApi {
     CreatorFinanceSummary? financeSummary,
     GteTransport? transport,
   }) {
+    assertFixtureFactoryAllowed('CreatorApi.fixture');
     final CreatorProfile seededProfile =
         profile ?? _buildFixtureProfile(baseUrl);
     return CreatorApi(
@@ -67,7 +70,7 @@ class CreatorApi {
 
   Future<CreatorProfile> fetchCreatorProfile({String creatorId = 'me'}) {
     if (client.mode == GteBackendMode.fixture) {
-      return fixtures.profile();
+      return _requireFixtures().profile();
     }
     if (creatorId != 'me') {
       return client.withFallback<CreatorProfile>(() async {
@@ -76,7 +79,7 @@ class CreatorApi {
           auth: false,
         );
         return _buildProfileFromPublic(payload, baseUrl: baseUrl);
-      }, () async => fixtures.profile());
+      }, () async => _requireFixtures().profile());
     }
     return _fetchCurrentCreatorProfile();
   }
@@ -104,14 +107,21 @@ class CreatorApi {
   }
 
   Future<CreatorLeaderboardSnapshot> fetchCreatorLeaderboard() async {
-    return fixtures.leaderboard();
+    if (client.mode == GteBackendMode.fixture) {
+      return _requireFixtures().leaderboard();
+    }
+    final Map<String, dynamic> payload = await _getMapWithLegacyFallback(
+      '/api/creators/leaderboard',
+      legacyPath: '/creators/leaderboard',
+    );
+    return _creatorLeaderboardFromJson(payload);
   }
 
   Future<CreatorCopilotAnalysis> analyzeCopilotDraft(
     CreatorCopilotDraft draft,
   ) async {
     if (client.mode == GteBackendMode.fixture) {
-      return fixtures.copilotAnalysis(draft);
+      return _requireFixtures().copilotAnalysis(draft);
     }
     return client.withFallback<CreatorCopilotAnalysis>(() async {
       final Object? response = await _postWithLegacyFallback(
@@ -128,12 +138,12 @@ class CreatorApi {
         type: GteApiErrorType.parsing,
         message: 'Unexpected copilot response shape.',
       );
-    }, () async => fixtures.copilotAnalysis(draft));
+    }, () async => _requireFixtures().copilotAnalysis(draft));
   }
 
   Future<CreatorFinanceSummary> fetchCreatorFinance() async {
     if (client.mode == GteBackendMode.fixture) {
-      return fixtures.financeSummary();
+      return _requireFixtures().financeSummary();
     }
     final Map<String, dynamic> financePayload = await _getMapWithLegacyFallback(
       '/api/creators/me/finance',
@@ -150,6 +160,17 @@ class CreatorApi {
       return finance;
     }
     return _mergeCreatorFinanceWithClipEarnings(finance, clipEarningsPayload);
+  }
+
+  _CreatorFixtures _requireFixtures() {
+    final _CreatorFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message: 'Creator fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return fixtures;
   }
 
   Future<CreatorProfile> _fetchCurrentCreatorProfile() async {
@@ -386,6 +407,74 @@ CreatorProfile _buildProfileFromPublic(
     ),
     financeSummary: finance,
     competitions: const <CreatorCompetition>[],
+  );
+}
+
+CreatorLeaderboardSnapshot _creatorLeaderboardFromJson(Object? value) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  final List<dynamic> rawEntries =
+      json['entries'] as List<dynamic>? ??
+      json['leaderboard'] as List<dynamic>? ??
+      const <dynamic>[];
+  final List<CreatorLeaderboardEntry> entries = rawEntries
+      .map(_creatorLeaderboardEntryFromJson)
+      .toList(growable: false);
+  return CreatorLeaderboardSnapshot(
+    growthHeadline:
+        json['growth_headline']?.toString() ??
+        json['headline']?.toString() ??
+        'Creator leaderboard',
+    growthDetail:
+        json['growth_detail']?.toString() ??
+        json['detail']?.toString() ??
+        'Live creator rankings loaded from GTEX.',
+    topCreatorLabel:
+        json['top_creator_label']?.toString() ??
+        (entries.isEmpty
+            ? 'No ranked creators returned'
+            : entries.first.displayName),
+    strongestCompetitionLabel:
+        json['strongest_competition_label']?.toString() ??
+        'Live competition lift unavailable',
+    highestQualifiedParticipationLabel:
+        json['highest_qualified_participation_label']?.toString() ??
+        'Qualified participation unavailable',
+    entries: entries,
+  );
+}
+
+CreatorLeaderboardEntry _creatorLeaderboardEntryFromJson(Object? value) {
+  final Map<String, dynamic> json =
+      value as Map<String, dynamic>? ?? <String, dynamic>{};
+  return CreatorLeaderboardEntry(
+    rank: _intValue(json['rank'] ?? json['rank_position'], fallback: 0),
+    creatorId:
+        json['creator_id']?.toString() ?? json['user_id']?.toString() ?? '',
+    displayName:
+        json['display_name']?.toString() ??
+        json['creator_name']?.toString() ??
+        'Creator',
+    handle: json['handle']?.toString() ?? '',
+    shareCode: json['share_code']?.toString() ?? '',
+    communityInvites: _intValue(
+      json['community_invites'] ?? json['total_signups'],
+    ),
+    qualifiedParticipation: _intValue(
+      json['qualified_participation'] ?? json['qualified_joins'],
+    ),
+    creatorCompetitions: _intValue(
+      json['creator_competitions'] ?? json['active_competitions'],
+    ),
+    communityRewardLabel:
+        json['community_reward_label']?.toString() ??
+        json['reward_label']?.toString() ??
+        'Reward status unavailable',
+    highlightLabel:
+        json['highlight_label']?.toString() ??
+        json['summary']?.toString() ??
+        'Live creator activity',
+    flaggedForReview: json['flagged_for_review'] == true,
   );
 }
 

@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
@@ -8,7 +10,7 @@ class GtexLaunchControlApi {
   GtexLaunchControlApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
-  final GtexLaunchControlFixtures fixtures;
+  final GtexLaunchControlFixtures? fixtures;
 
   factory GtexLaunchControlApi.standard({
     required String baseUrl,
@@ -26,11 +28,12 @@ class GtexLaunchControlApi {
             accessToken: accessToken,
             mode: resolvedMode,
           ),
-      fixtures: GtexLaunchControlFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory GtexLaunchControlApi.fixture() {
+    assertFixtureFactoryAllowed('GtexLaunchControlApi.fixture');
     return GtexLaunchControlApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -51,7 +54,7 @@ class GtexLaunchControlApi {
         '/api/admin/launch-control',
       );
       return GtexLaunchControlSnapshot.fromJson(payload);
-    }, fixtures.dashboard);
+    }, () => _requireFixtures().dashboard());
   }
 
   Future<GtexLaunchControlFlag> setFlagEnabled({
@@ -59,15 +62,21 @@ class GtexLaunchControlApi {
     required bool enabled,
     String? reason,
   }) {
-    return client.withFallback<GtexLaunchControlFlag>(() async {
-      final Object? payload = await client.post(
-        enabled
-            ? '/api/admin/feature-flags/$featureKey/enable'
-            : '/api/admin/feature-flags/$featureKey/disable',
-        body: <String, Object?>{'reason': reason},
-      );
-      return GtexLaunchControlFlag.fromJson(payload);
-    }, () => fixtures.setFlagEnabled(featureKey: featureKey, enabled: enabled));
+    return client.withFallback<GtexLaunchControlFlag>(
+      () async {
+        final Object? payload = await client.post(
+          enabled
+              ? '/api/admin/feature-flags/$featureKey/enable'
+              : '/api/admin/feature-flags/$featureKey/disable',
+          body: <String, Object?>{'reason': reason},
+        );
+        return GtexLaunchControlFlag.fromJson(payload);
+      },
+      () => _requireFixtures().setFlagEnabled(
+        featureKey: featureKey,
+        enabled: enabled,
+      ),
+    );
   }
 
   Future<GtexLaunchControlFlag> setKillSwitch({
@@ -75,13 +84,19 @@ class GtexLaunchControlApi {
     required bool enabled,
     String? reason,
   }) {
-    return client.withFallback<GtexLaunchControlFlag>(() async {
-      final Object? payload = await client.post(
-        '/api/admin/feature-flags/$featureKey/kill-switch',
-        body: <String, Object?>{'enabled': enabled, 'reason': reason},
-      );
-      return GtexLaunchControlFlag.fromJson(payload);
-    }, () => fixtures.setKillSwitch(featureKey: featureKey, enabled: enabled));
+    return client.withFallback<GtexLaunchControlFlag>(
+      () async {
+        final Object? payload = await client.post(
+          '/api/admin/feature-flags/$featureKey/kill-switch',
+          body: <String, Object?>{'enabled': enabled, 'reason': reason},
+        );
+        return GtexLaunchControlFlag.fromJson(payload);
+      },
+      () => _requireFixtures().setKillSwitch(
+        featureKey: featureKey,
+        enabled: enabled,
+      ),
+    );
   }
 
   Future<GtexLaunchControlFlag> updateFlag({
@@ -104,7 +119,7 @@ class GtexLaunchControlApi {
         );
         return GtexLaunchControlFlag.fromJson(payload);
       },
-      () => fixtures.updateFlag(
+      () => _requireFixtures().updateFlag(
         featureKey: featureKey,
         launchState: launchState,
         betaOnly: betaOnly,
@@ -124,7 +139,7 @@ class GtexLaunchControlApi {
       return payload
           .map(GtexClientFeatureFlag.fromJson)
           .toList(growable: false);
-    }, fixtures.clientFlags);
+    }, () => _requireFixtures().clientFlags());
   }
 
   Future<GtexBetaAccessGrant> grantBetaAccess({
@@ -147,7 +162,7 @@ class GtexLaunchControlApi {
         );
         return GtexBetaAccessGrant.fromJson(payload);
       },
-      () => fixtures.grantBetaAccess(
+      () => _requireFixtures().grantBetaAccess(
         featureKey: featureKey,
         userId: userId,
         notes: notes,
@@ -162,23 +177,41 @@ class GtexLaunchControlApi {
   }) {
     final String encodedFeatureKey = Uri.encodeComponent(featureKey);
     final String encodedUserId = Uri.encodeComponent(userId);
-    return client.withFallback<GtexBetaAccessGrant>(() async {
-      await client.request(
-        'DELETE',
-        '/api/admin/beta-access/$encodedFeatureKey/$encodedUserId',
-      );
-      return GtexBetaAccessGrant(
-        id: 'revoked-$featureKey-$userId',
+    return client.withFallback<GtexBetaAccessGrant>(
+      () async {
+        await client.request(
+          'DELETE',
+          '/api/admin/beta-access/$encodedFeatureKey/$encodedUserId',
+        );
+        return GtexBetaAccessGrant(
+          id: 'revoked-$featureKey-$userId',
+          featureKey: featureKey,
+          userId: userId,
+          active: false,
+          notes: 'Revoked from Launch Control',
+          expiresAt: null,
+          grantedByUserId: null,
+          createdAt: DateTime.now().toUtc(),
+          updatedAt: DateTime.now().toUtc(),
+        );
+      },
+      () => _requireFixtures().revokeBetaAccess(
         featureKey: featureKey,
         userId: userId,
-        active: false,
-        notes: 'Revoked from Launch Control',
-        expiresAt: null,
-        grantedByUserId: null,
-        createdAt: DateTime.now().toUtc(),
-        updatedAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
+
+  GtexLaunchControlFixtures _requireFixtures() {
+    final GtexLaunchControlFixtures? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Launch-control fixtures are not registered in strict-live runtime.',
       );
-    }, () => fixtures.revokeBetaAccess(featureKey: featureKey, userId: userId));
+    }
+    return resolvedFixtures;
   }
 }
 
@@ -271,10 +304,8 @@ class GtexLaunchControlFixtures {
         betaOnly: false,
         killSwitchEnabled: false,
         maintenanceMessage: null,
-        metadata: const <String, Object?>{
-          'route': '/fan-predictions/matches/demo',
-        },
-        route: '/fan-predictions/matches/demo',
+        metadata: const <String, Object?>{'route': '/fan-predictions/matches'},
+        route: '/fan-predictions/matches',
         updatedAt: now,
       ),
       GtexLaunchControlFlag(
@@ -290,10 +321,8 @@ class GtexLaunchControlFixtures {
         betaOnly: false,
         killSwitchEnabled: false,
         maintenanceMessage: null,
-        metadata: const <String, Object?>{
-          'route': '/creator-stadium/matches/demo',
-        },
-        route: '/creator-stadium/matches/demo',
+        metadata: const <String, Object?>{'route': '/creator-stadium/matches'},
+        route: '/creator-stadium/matches',
         updatedAt: now,
       ),
       GtexLaunchControlFlag(

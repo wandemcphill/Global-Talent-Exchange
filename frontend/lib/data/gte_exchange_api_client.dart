@@ -1,12 +1,14 @@
 import 'dart:convert';
 
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+import 'package:gte_frontend/data/gte_mock_api.dart';
+import 'package:gte_frontend/models/match_view_state.dart';
+
 import '../shared/auth/auth_identity_store.dart';
 import 'gte_api_repository.dart';
 import 'gte_exchange_models.dart';
 import 'gte_http_transport.dart';
 import 'gte_models.dart';
-import 'package:gte_frontend/data/gte_mock_api.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
 
 class GteExchangeApiClient {
   GteExchangeApiClient({
@@ -29,20 +31,20 @@ class GteExchangeApiClient {
       mode: mode,
     );
     final GteTransport transport = GteHttpTransport();
-    final GteApiRepository fixtures = GteMockApi();
     return GteExchangeApiClient(
       config: config,
       transport: transport,
       repository: GteModeAwareApiRepository(
         config: config,
         transport: transport,
-        fixtures: fixtures,
+        fixtures: const GteFixtureRepositoryUnavailable(),
         authSessionStore: authSessionStore ?? SecureAuthSessionStore(),
       ),
     );
   }
 
   factory GteExchangeApiClient.fixture({Duration latency = Duration.zero}) {
+    assertFixtureFactoryAllowed('GteExchangeApiClient.fixture');
     final GteRepositoryConfig config = const GteRepositoryConfig(
       baseUrl: 'http://127.0.0.1:8000',
       mode: GteBackendMode.fixture,
@@ -826,14 +828,6 @@ class GteExchangeApiClient {
     }
   }
 
-  bool _shouldFallback(Object error) {
-    if (config.mode != GteBackendMode.liveThenFixture) {
-      return false;
-    }
-    return (error is GteApiException && error.supportsFixtureFallback) ||
-        error is GteParsingException;
-  }
-
   Future<T> _loadPublicWithFallback<T>({
     required Future<T> Function() liveCall,
     required Future<T> Function() fallbackCall,
@@ -841,14 +835,7 @@ class GteExchangeApiClient {
     if (config.mode == GteBackendMode.fixture) {
       return fallbackCall();
     }
-    try {
-      return await liveCall();
-    } catch (error) {
-      if (_shouldFallback(error)) {
-        return fallbackCall();
-      }
-      rethrow;
-    }
+    return liveCall();
   }
 
   Map<String, Object?> _fixtureSpectateSession(String matchKey) {

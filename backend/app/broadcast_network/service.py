@@ -31,6 +31,7 @@ _INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = max(
     60.0,
     float(os.environ.get("GTE_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS", "900")),
 )
+_PROTECTED_APP_ENVS = {"production", "prod", "staging", "release"}
 
 
 def _utcnow() -> datetime:
@@ -47,6 +48,22 @@ def _as_utc(value: datetime | None) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _protected_runtime_enabled(app: FastAPI) -> bool:
+    settings = getattr(getattr(app, "state", None), "settings", None)
+    environment = (
+        str(
+            getattr(settings, "app_env", None)
+            or os.getenv("GTE_APP_ENV")
+            or os.getenv("APP_ENV")
+            or os.getenv("ENVIRONMENT")
+            or "development"
+        )
+        .strip()
+        .lower()
+    )
+    return environment in _PROTECTED_APP_ENVS
 
 
 def _merge_session_access(base: dict[str, Any], overlay: dict[str, Any] | None) -> dict[str, Any]:
@@ -312,7 +329,11 @@ class BroadcastNetworkRuntime:
                 channel_id="ai",
                 name="AI Channel",
                 channel_type="ai",
-                description="24/7 AI-generated fixtures and replay loops.",
+                description=(
+                    "Generated broadcast programs are disabled in strict-live runtimes."
+                    if _protected_runtime_enabled(self.app)
+                    else "24/7 AI-generated fixtures and replay loops."
+                ),
                 candidates=ai_candidates,
                 viewer_count=viewer_counts.get("ai", 0),
             ),
@@ -461,6 +482,8 @@ class BroadcastNetworkRuntime:
         return candidates
 
     def _ai_candidates(self) -> list[_ProgramCandidate]:
+        if _protected_runtime_enabled(self.app):
+            return []
         runtime = ensure_infinite_league_runtime(self.app)
         hub = ensure_live_match_hub(self.app)
         candidates: list[_ProgramCandidate] = []
@@ -516,13 +539,13 @@ class BroadcastNetworkRuntime:
     ) -> BroadcastChannelView:
         now = _utcnow()
         selected = candidates[:6]
-        current_program = (
-            self._program_slot(
+        current_program = None
+        if selected:
+            current_program = self._program_slot(
                 channel_id=channel_id, candidate=selected[0], start_at=now - timedelta(seconds=45), offset_minutes=10
             )
-            if selected
-            else self._fallback_slot(channel_id=channel_id, generated_at=now)
-        )
+        elif not _protected_runtime_enabled(self.app):
+            current_program = self._fallback_slot(channel_id=channel_id, generated_at=now)
         upcoming_programs = [
             self._program_slot(
                 channel_id=channel_id,
@@ -543,7 +566,21 @@ class BroadcastNetworkRuntime:
             featured_match_id=current_program.match_id if current_program is not None else None,
             current_program=current_program,
             upcoming_programs=upcoming_programs,
-            metadata={"scheduler": "director_cache", "program_count": len(selected)},
+            metadata={
+                "scheduler": "director_cache",
+                "program_count": len(selected),
+                **(
+                    {
+                        "strict_live_blocked_reason": (
+                            "no_persisted_live_programs"
+                            if channel_type != "ai"
+                            else "generated_broadcast_programs_disabled"
+                        )
+                    }
+                    if current_program is None and _protected_runtime_enabled(self.app)
+                    else {}
+                ),
+            },
         )
 
     def _program_slot(
@@ -749,6 +786,8 @@ class BroadcastNetworkRuntime:
         return {str(channel_id): int(count) for channel_id, count in rows}
 
     def _bootstrap_infinite_league_stream(self, hub, match_id: str) -> bool:
+        if _protected_runtime_enabled(self.app):
+            return False
         existing_state = hub.get_state(match_id)
         if existing_state is not None and existing_state.is_live:
             return True

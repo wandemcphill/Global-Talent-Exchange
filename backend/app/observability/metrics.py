@@ -117,6 +117,11 @@ def _enum_value(value: Any) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
+def _metric_label(value: Any) -> str:
+    normalized = str(_enum_value(value) if value is not None else "").strip().lower()
+    return normalized or "unknown"
+
+
 @dataclass
 class GTexMetrics:
     runtime_name: str
@@ -239,6 +244,42 @@ class GTexMetrics:
             "gtex_unity_live_generated_match_total",
             "Generated live match bootstrap outcomes.",
             ("result",),
+            registry=self.registry,
+        )
+        self.strict_live_blocked_states_total = Counter(
+            "gtex_strict_live_blocked_states_total",
+            "Strict-live blocked states rendered by surface and reason.",
+            ("surface", "reason"),
+            registry=self.registry,
+        )
+        self.strict_live_payload_rejections_total = Counter(
+            "gtex_strict_live_payload_rejections_total",
+            "Strict-live rejected payloads by source and reason.",
+            ("source", "reason"),
+            registry=self.registry,
+        )
+        self.auth_rejections_total = Counter(
+            "gtex_auth_rejections_total",
+            "Authentication and authorization rejections by surface and reason.",
+            ("surface", "reason"),
+            registry=self.registry,
+        )
+        self.realtime_reconnects_total = Counter(
+            "gtex_realtime_reconnects_total",
+            "Realtime reconnect attempts by channel and result.",
+            ("channel", "result"),
+            registry=self.registry,
+        )
+        self.settlement_failures_total = Counter(
+            "gtex_settlement_failures_total",
+            "Settlement failures by rail and reason.",
+            ("rail", "reason"),
+            registry=self.registry,
+        )
+        self.queue_backlog_depth = Gauge(
+            "gtex_queue_backlog_depth",
+            "Current queue backlog depth by queue name.",
+            ("queue_name",),
             registry=self.registry,
         )
         self.creator_earnings_events_total = Counter(
@@ -408,6 +449,24 @@ class GTexMetrics:
 
     def record_unity_live_generated_match(self, *, result: str) -> None:
         self.unity_live_generated_match_total.labels(result).inc()
+
+    def record_strict_live_blocked_state(self, *, surface: str, reason: str) -> None:
+        self.strict_live_blocked_states_total.labels(_metric_label(surface), _metric_label(reason)).inc()
+
+    def record_strict_live_payload_rejection(self, *, source: str, reason: str) -> None:
+        self.strict_live_payload_rejections_total.labels(_metric_label(source), _metric_label(reason)).inc()
+
+    def record_auth_rejection(self, *, surface: str, reason: str) -> None:
+        self.auth_rejections_total.labels(_metric_label(surface), _metric_label(reason)).inc()
+
+    def record_realtime_reconnect(self, *, channel: str, result: str) -> None:
+        self.realtime_reconnects_total.labels(_metric_label(channel), _metric_label(result)).inc()
+
+    def record_settlement_failure(self, *, rail: str, reason: str) -> None:
+        self.settlement_failures_total.labels(_metric_label(rail), _metric_label(reason)).inc()
+
+    def record_queue_backlog_depth(self, *, queue_name: str, depth: int | float) -> None:
+        self.queue_backlog_depth.labels(_metric_label(queue_name)).set(max(float(depth), 0.0))
 
     def record_creator_earnings(
         self,

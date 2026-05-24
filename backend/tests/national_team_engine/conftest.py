@@ -54,6 +54,7 @@ def app(test_settings):
             router_path="app.national_team_engine.router:admin_router",
             api_only=True,
         ),
+        _module("national_rental", router_path="app.national_team_engine.router:national_router", api_only=True),
     )
     engine = create_engine(test_settings.database_url, connect_args={"check_same_thread": False})
     application = create_app(

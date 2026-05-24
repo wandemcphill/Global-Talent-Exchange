@@ -195,9 +195,8 @@ final Provider<GteAuthedApi> authedApiProvider = Provider<GteAuthedApi>(
     transport: createModeAwareTransport(ref.watch(criticalBackendModeProvider)),
     authSession: ref.watch(authProvider),
     authSessionStore: ref.watch(authSessionStoreProvider),
-    onSessionChanged: ref
-        .read(appSessionControllerProvider.notifier)
-        .updateSession,
+    onSessionChanged:
+        ref.read(appSessionControllerProvider.notifier).updateSession,
     deviceId: ref.watch(deviceIdProvider),
     mode: ref.watch(criticalBackendModeProvider),
   ),
@@ -214,10 +213,7 @@ final FutureProvider<void> sessionHydrationProvider = FutureProvider<void>((
     return;
   }
   final bool alreadyHydrated =
-      session.rawJson.containsKey('user') &&
-      session.rawJson.containsKey('club') &&
-      session.rawJson.containsKey('wallet') &&
-      session.rawJson.containsKey('compliance');
+      session.rawJson['_session_bootstrap_hydrated'] == true;
   if (alreadyHydrated) {
     return;
   }
@@ -227,10 +223,21 @@ final FutureProvider<void> sessionHydrationProvider = FutureProvider<void>((
         .getMap('/api/session/bootstrap');
     await ref
         .read(appSessionControllerProvider.notifier)
-        .mergeProfile(Map<String, Object?>.from(payload));
-  } catch (_) {
-    // The shipped path will surface auth failures per-screen without
-    // falling back to fixtures. Session hydration is best-effort only.
+        .mergeProfile(<String, Object?>{
+          ...Map<String, Object?>.from(payload),
+          '_session_bootstrap_blocked': false,
+          '_session_bootstrap_error': null,
+          '_session_bootstrap_hydrated': true,
+        });
+  } catch (error, stackTrace) {
+    await ref
+        .read(appSessionControllerProvider.notifier)
+        .mergeProfile(<String, Object?>{
+          '_session_bootstrap_blocked': true,
+          '_session_bootstrap_error': error.toString(),
+          '_session_bootstrap_hydrated': false,
+        });
+    Error.throwWithStackTrace(error, stackTrace);
   }
 });
 
@@ -240,9 +247,10 @@ final Provider<AuthPresentation> authPresentationProvider =
       return AuthPresentation(
         userName: session?.resolvedUserName ?? 'Not signed in',
         role: session?.role ?? 'Unauthenticated',
-        clubName: session == null || !session.isAuthenticated
-            ? 'Sign in to access club features'
-            : (session.clubName ?? 'Syncing club context'),
+        clubName:
+            session == null || !session.isAuthenticated
+                ? 'Sign in to access club features'
+                : (session.clubName ?? 'Syncing club context'),
         avatarAsset: 'assets/branding/gtex_icon.png',
         notifications: 0,
       );

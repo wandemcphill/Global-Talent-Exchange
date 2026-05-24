@@ -9,11 +9,30 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: GteNotificationsScreenV2())),
+      const MaterialApp(
+        home: Scaffold(body: GteNotificationsScreenV2(allowFixtureData: true)),
+      ),
     );
 
     expect(find.text('GTEX Notifications'), findsOneWidget);
     expect(find.textContaining('Shortlist total changed'), findsWidgets);
+  });
+
+  testWidgets('notifications screen blocks fixture data by default', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: GteNotificationsScreenV2())),
+    );
+
+    expect(find.text('GTEX Notifications'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Live notifications require an authenticated exchange controller.',
+      ),
+      findsWidgets,
+    );
+    expect(find.textContaining('Shortlist total changed'), findsNothing);
   });
 
   test(

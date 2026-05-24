@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
@@ -5,10 +7,13 @@ import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'club_lifecycle_models.dart';
 
 class GtexClubLifecycleApi {
-  GtexClubLifecycleApi({required this.client, required this.fixtures});
+  GtexClubLifecycleApi({
+    required this.client,
+    GtexClubLifecycleFixtures? fixtures,
+  }) : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final GtexClubLifecycleFixtures fixtures;
+  final GtexClubLifecycleFixtures? _fixtures;
 
   factory GtexClubLifecycleApi.standard({
     required String baseUrl,
@@ -26,11 +31,11 @@ class GtexClubLifecycleApi {
             accessToken: accessToken,
             mode: resolvedMode,
           ),
-      fixtures: GtexClubLifecycleFixtures.seed(),
     );
   }
 
   factory GtexClubLifecycleApi.fixture() {
+    assertFixtureFactoryAllowed('GtexClubLifecycleApi.fixture');
     return GtexClubLifecycleApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -52,7 +57,7 @@ class GtexClubLifecycleApi {
         '/api/clubs/$encodedClubId/operating-dashboard',
       );
       return GtexClubOperatingDashboard.fromJson(payload);
-    }, () => fixtures.dashboard(clubId));
+    }, () => _requireFixtures().dashboard(clubId));
   }
 
   Future<GtexClubSquadRegistration> syncSquadRegistration(String clubId) {
@@ -66,7 +71,7 @@ class GtexClubLifecycleApi {
         },
       );
       return GtexClubSquadRegistration.fromJson(payload);
-    }, () => fixtures.syncSquadRegistration(clubId));
+    }, () => _requireFixtures().syncSquadRegistration(clubId));
   }
 
   Future<GtexClubSquadRegistration> submitSquadRegistration(String clubId) {
@@ -76,7 +81,7 @@ class GtexClubLifecycleApi {
         '/api/clubs/$encodedClubId/squad-registration/submit',
       );
       return GtexClubSquadRegistration.fromJson(payload);
-    }, () => fixtures.submitSquadRegistration(clubId));
+    }, () => _requireFixtures().submitSquadRegistration(clubId));
   }
 
   Future<GtexClubSquadRegistration> lockSquadRegistration(String clubId) {
@@ -86,7 +91,7 @@ class GtexClubLifecycleApi {
         '/api/clubs/$encodedClubId/squad-registration/lock',
       );
       return GtexClubSquadRegistration.fromJson(payload);
-    }, () => fixtures.lockSquadRegistration(clubId));
+    }, () => _requireFixtures().lockSquadRegistration(clubId));
   }
 
   Future<GtexClubLifecycle> advanceLifecycle(String clubId) {
@@ -99,7 +104,17 @@ class GtexClubLifecycleApi {
         },
       );
       return GtexClubLifecycle.fromJson(payload);
-    }, () => fixtures.advanceLifecycle(clubId));
+    }, () => _requireFixtures().advanceLifecycle(clubId));
+  }
+
+  GtexClubLifecycleFixtures _requireFixtures() {
+    final GtexClubLifecycleFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw StateError(
+        'Club lifecycle fixtures are available only in fixture mode.',
+      );
+    }
+    return fixtures;
   }
 }
 

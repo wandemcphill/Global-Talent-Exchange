@@ -192,7 +192,9 @@ class LocalMatchExecutionWorker:
     event_publisher: EventPublisher
     match_service: MatchSimulationService = field(default_factory=MatchSimulationService)
     league_service: LeagueSeasonLifecycleService = field(default_factory=LeagueSeasonLifecycleService)
-    team_factory: SyntheticSquadFactory = field(default_factory=SyntheticSquadFactory)
+    team_factory: SyntheticSquadFactory = field(
+        default_factory=lambda: SyntheticSquadFactory(allow_synthetic_fallback=False)
+    )
     session_factory: sessionmaker[Session] | None = None
     match_stream_service: MatchStreamService | None = None
     cache_backend: CacheBackend = field(default_factory=NullCacheBackend)
@@ -1167,7 +1169,10 @@ def ensure_local_match_execution_runtime(app: FastAPI) -> LocalMatchExecutionWor
             dispatcher=dispatcher,
             event_publisher=app.state.event_publisher,
             session_factory=session_factory,
-            team_factory=SyntheticSquadFactory(session_factory=session_factory),
+            team_factory=SyntheticSquadFactory(
+                session_factory=session_factory,
+                allow_synthetic_fallback=False,
+            ),
             match_stream_service=match_stream_service,
             cache_backend=getattr(app.state, "cache_backend", NullCacheBackend()),
             stream_update_interval_seconds=getattr(settings, "match_stream_interval_seconds", 3.0),

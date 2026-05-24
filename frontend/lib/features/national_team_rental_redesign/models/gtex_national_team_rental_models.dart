@@ -91,6 +91,8 @@ class GtexRentalPlayerView {
     this.portraitStatus,
     this.portraitMissingReason,
     this.eligibilityNote,
+    this.rentalEligible = true,
+    this.eligibilityReasons = const <String>[],
     this.isPreseededRegen = false,
   });
 
@@ -109,6 +111,8 @@ class GtexRentalPlayerView {
   final String? portraitStatus;
   final String? portraitMissingReason;
   final String? eligibilityNote;
+  final bool rentalEligible;
+  final List<String> eligibilityReasons;
   final bool isPreseededRegen;
 
   String get priceLabel => GtexRentalFormatters.credits(rentalCostCredits);
@@ -168,6 +172,9 @@ class GtexRentalBasketState {
 
   int get squadCount => items.length;
 
+  bool get allEligible =>
+      items.every((GtexRentalPlayerView player) => player.rentalEligible);
+
   double get totalCredits => items.fold<double>(
     0,
     (double total, GtexRentalPlayerView player) =>
@@ -179,6 +186,9 @@ class GtexRentalBasketState {
   bool contains(String playerId) => itemsById.containsKey(playerId);
 
   GtexRentalBasketState toggled(GtexRentalPlayerView player) {
+    if (!player.rentalEligible) {
+      return this;
+    }
     final Map<String, GtexRentalPlayerView> next =
         Map<String, GtexRentalPlayerView>.of(itemsById);
     if (next.containsKey(player.playerId)) {

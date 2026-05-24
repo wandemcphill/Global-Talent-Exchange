@@ -9,24 +9,23 @@ import 'package:gte_frontend/shared/models/auth_session.dart';
 void main() {
   const String testPassword = 'DemoPass123'; // pragma: allowlist secret
 
-  test(
-    'live-then-fixture mode falls back to fixtures for market reads',
-    () async {
-      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
-        config: const GteRepositoryConfig(
-          baseUrl: 'http://127.0.0.1:8000',
-          mode: GteBackendMode.liveThenFixture,
-        ),
-        transport: _ThrowingTransport(),
-        fixtures: GteMockApi(latency: Duration.zero),
-      );
+  test('live-then-fixture mode fails closed for market reads', () async {
+    final _RecordingPlayersFixtureApi fixtures = _RecordingPlayersFixtureApi();
+    final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
+      config: const GteRepositoryConfig(
+        baseUrl: 'http://127.0.0.1:8000',
+        mode: GteBackendMode.liveThenFixture,
+      ),
+      transport: _ThrowingTransport(),
+      fixtures: fixtures,
+    );
 
-      final List<PlayerSnapshot> players = await repository.fetchPlayers();
-
-      expect(players, hasLength(4));
-      expect(players.first.id, 'lamine-yamal');
-    },
-  );
+    await expectLater(
+      repository.fetchPlayers(),
+      throwsA(isA<GteApiException>()),
+    );
+    expect(fixtures.fetchPlayersCalls, 0);
+  });
 
   test(
     'fetch players in live mode maps live payload without borrowing fixture snapshots',

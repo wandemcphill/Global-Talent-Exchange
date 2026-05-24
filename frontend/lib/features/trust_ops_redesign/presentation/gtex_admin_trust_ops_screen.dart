@@ -42,11 +42,13 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
     super.initState();
     _repository =
         widget.repository ??
-        GtexTrustOpsApiRepository.standard(
-          baseUrl: widget.baseUrl,
-          accessToken: widget.accessToken,
-          mode: widget.backendMode,
-        );
+        (widget.backendMode == GteBackendMode.fixture
+            ? const GtexTrustOpsDemoRepository()
+            : GtexTrustOpsApiRepository.standard(
+              baseUrl: widget.baseUrl,
+              accessToken: widget.accessToken,
+              mode: widget.backendMode,
+            ));
     _future = _repository.load();
   }
 
@@ -58,6 +60,39 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
         BuildContext context,
         AsyncSnapshot<GtexTrustOpsState> snapshot,
       ) {
+        if (snapshot.hasError) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: GtexPanel(
+                title: 'Live trust ops unavailable',
+                subtitle:
+                    'Admin Trust Ops requires the live operations-readiness authority. Demo queues are available only in explicit fixture tests.',
+                accent: GtexColors.red,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      snapshot.error.toString(),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: GtexColors.textMuted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: GtexSpacing.md),
+                    GtexActionButton(
+                      label: 'Retry live queues',
+                      icon: Icons.refresh,
+                      onPressed:
+                          () => setState(() => _future = _repository.load()),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -96,8 +131,8 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
             selectedDispute: selectedDispute,
             selectedKycCase: selectedKyc,
             adminMode: true,
-            onTopUp: () {},
-            onWithdraw: () {},
+            onTopUp: _showAdminActionUnavailable,
+            onWithdraw: _showAdminActionUnavailable,
           ),
         );
       },
@@ -119,7 +154,7 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
           selectedDisputeId: _selectedDisputeId,
           onSelectDispute:
               (String id) => setState(() => _selectedDisputeId = id),
-          onCreateDispute: () {},
+          onCreateDispute: _showAdminActionUnavailable,
         );
       case GtexTrustModule.orders:
         return GtexOrdersPanel(
@@ -130,10 +165,20 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
       case GtexTrustModule.wallet:
         return GtexWalletOverviewPanel(
           state: state,
-          onTopUp: () {},
-          onWithdraw: () {},
+          onTopUp: _showAdminActionUnavailable,
+          onWithdraw: _showAdminActionUnavailable,
         );
     }
+  }
+
+  void _showAdminActionUnavailable() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Admin trust actions require a mounted audited endpoint.',
+        ),
+      ),
+    );
   }
 
   GtexKycCaseRecord? _selectedKycCase(GtexTrustOpsState state) {

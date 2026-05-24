@@ -18,12 +18,14 @@ class TournamentScreen extends StatefulWidget {
     this.fixtures,
     this.standings,
     this.squad,
+    this.allowFixtureData = false,
   });
 
   final Competition competition;
   final List<TournamentFixture>? fixtures;
   final List<TournamentStanding>? standings;
   final List<Player>? squad;
+  final bool allowFixtureData;
 
   @override
   State<TournamentScreen> createState() => _TournamentScreenState();
@@ -48,12 +50,30 @@ class _TournamentScreenState extends State<TournamentScreen>
   @override
   Widget build(BuildContext context) {
     final List<TournamentFixture> fixtures =
-        widget.fixtures ?? buildTournamentFixtures(widget.competition);
+        widget.fixtures ??
+        (widget.allowFixtureData
+            ? buildTournamentFixtures(widget.competition)
+            : const <TournamentFixture>[]);
     final List<TournamentStanding> standings =
-        widget.standings ?? buildTournamentStandings(widget.competition);
+        widget.standings ??
+        (widget.allowFixtureData
+            ? buildTournamentStandings(widget.competition)
+            : const <TournamentStanding>[]);
     final List<Player> squad = widget.squad ?? const <Player>[];
     final List<Player> resolvedSquad =
-        squad.isEmpty ? buildTournamentSquad(const <Player>[]) : squad;
+        squad.isEmpty && widget.allowFixtureData
+            ? buildTournamentSquad(const <Player>[])
+            : squad;
+
+    if (fixtures.isEmpty || standings.isEmpty) {
+      return AppBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(title: Text(widget.competition.name)),
+          body: const SafeArea(child: _TournamentBlockedState()),
+        ),
+      );
+    }
 
     return AppBackground(
       child: Scaffold(
@@ -114,6 +134,42 @@ class _TournamentScreenState extends State<TournamentScreen>
                   _SquadTab(squad: resolvedSquad),
                 ],
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TournamentBlockedState extends StatelessWidget {
+  const _TournamentBlockedState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Padding(
+          padding: const EdgeInsets.all(spacingLG),
+          child: GtexSurfaceCard(
+            glowColor: AppColors.gold,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Live tournament unavailable',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: spacingSM),
+                Text(
+                  'Fixtures and standings must come from persisted Competition OS authority before this tournament can render.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

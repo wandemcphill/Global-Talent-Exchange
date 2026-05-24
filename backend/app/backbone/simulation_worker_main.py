@@ -70,7 +70,10 @@ def main() -> None:
             dispatcher=dispatcher,
             event_publisher=context.event_publisher,
             session_factory=context.database.session_factory,
-            team_factory=SyntheticSquadFactory(session_factory=context.database.session_factory),
+            team_factory=SyntheticSquadFactory(
+                session_factory=context.database.session_factory,
+                allow_synthetic_fallback=False,
+            ),
             match_stream_service=match_stream_service,
             cache_backend=context.cache_backend,
             stream_update_interval_seconds=settings.match_stream_interval_seconds,

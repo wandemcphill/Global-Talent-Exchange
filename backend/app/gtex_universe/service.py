@@ -144,7 +144,9 @@ class GtexUniverseService(GtexBaseService):
         for ai in session.scalars(select(GtexAIProfile).where(GtexAIProfile.is_active.is_(True))).all():
             self._ensure_manager_profile_for_ai(session, ai)
 
-    def get_manager_history(self, session: Session, *, manager_profile_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    def get_manager_history(
+        self, session: Session, *, manager_profile_id: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
         profile = session.get(ManagerProfile, manager_profile_id)
         if profile is None:
             raise UniverseNotFoundError("Manager profile was not found.")
@@ -156,7 +158,11 @@ class GtexUniverseService(GtexBaseService):
         ).all()
         items: list[dict[str, Any]] = []
         for row in history_rows:
-            opponent = session.get(ManagerProfile, row.opponent_manager_profile_id) if row.opponent_manager_profile_id else None
+            opponent = (
+                session.get(ManagerProfile, row.opponent_manager_profile_id)
+                if row.opponent_manager_profile_id
+                else None
+            )
             rivalry = self._manager_rivalry(session, profile, opponent) if opponent is not None else None
             items.append(
                 {
@@ -171,13 +177,15 @@ class GtexUniverseService(GtexBaseService):
                     "opponent_name": self._manager_name(opponent) if opponent is not None else None,
                     "tactical_snapshot": dict(row.tactical_snapshot_json or {}),
                     "narrative_summary": row.narrative_summary,
-                    "rivalry": None
-                    if rivalry is None
-                    else {
-                        "meetings": rivalry.meetings,
-                        "rivalry_score": round(float(rivalry.rivalry_score), 4),
-                        "narrative_tag": rivalry.narrative_tag,
-                    },
+                    "rivalry": (
+                        None
+                        if rivalry is None
+                        else {
+                            "meetings": rivalry.meetings,
+                            "rivalry_score": round(float(rivalry.rivalry_score), 4),
+                            "narrative_tag": rivalry.narrative_tag,
+                        }
+                    ),
                     "metadata_json": dict(row.metadata_json or {}),
                     "created_at": row.created_at,
                 }
@@ -241,7 +249,9 @@ class GtexUniverseService(GtexBaseService):
             raise UniverseValidationError("Training intensity must be low, normal, or high.")
         intensity_factor = {"low": 0.75, "normal": 1.0, "high": 1.25}[intensity]
         focus_weight = 6 + (len(payload.focus.strip()) % 5)
-        xp_gain = int(round((32 + (career_player.level * 4) + focus_weight) * intensity_factor * (1 + career_player.growth_rate)))
+        xp_gain = int(
+            round((32 + (career_player.level * 4) + focus_weight) * intensity_factor * (1 + career_player.growth_rate))
+        )
         form_gain = round(min(0.18, (0.035 * intensity_factor) + (career_player.growth_rate * 0.22)), 4)
         career_player.xp += xp_gain
         career_player.level = max(1, 1 + (career_player.xp // 250))
@@ -307,7 +317,9 @@ class GtexUniverseService(GtexBaseService):
         stats["transfers"] += 1
         stats["last_transfer_to"] = next_club
         career_player.career_stats = stats
-        career_player.marketability_score = self._clamp(career_player.marketability_score + 0.08, minimum=0.0, maximum=1.0)
+        career_player.marketability_score = self._clamp(
+            career_player.marketability_score + 0.08, minimum=0.0, maximum=1.0
+        )
         career_player.prestige_score += 8
         self._create_or_roll_forward_career_tenure(
             session,
@@ -461,8 +473,12 @@ class GtexUniverseService(GtexBaseService):
         try:
             competitions = self._upsert_competitions(session, provider=provider, inputs=payload.competitions)
             clubs = self._upsert_clubs(session, provider=provider, competitions=competitions, inputs=payload.clubs)
-            players = self._upsert_players(session, provider=provider, competitions=competitions, clubs=clubs, inputs=payload.players)
-            events = self._upsert_events(session, provider=provider, competitions=competitions, clubs=clubs, inputs=payload.events)
+            players = self._upsert_players(
+                session, provider=provider, competitions=competitions, clubs=clubs, inputs=payload.players
+            )
+            events = self._upsert_events(
+                session, provider=provider, competitions=competitions, clubs=clubs, inputs=payload.events
+            )
             if payload.mirror_into_gtex:
                 for event in events.values():
                     match = self._mirror_real_world_event(
@@ -476,7 +492,9 @@ class GtexUniverseService(GtexBaseService):
             provider.last_sync_at = utcnow()
             job.status = RealDataSyncStatus.COMPLETED.value
             job.completed_at = utcnow()
-            job.entities_seen = len(payload.competitions) + len(payload.clubs) + len(payload.players) + len(payload.events)
+            job.entities_seen = (
+                len(payload.competitions) + len(payload.clubs) + len(payload.players) + len(payload.events)
+            )
             job.entities_upserted = len(competitions) + len(clubs) + len(players) + len(events)
             job.summary_json = {
                 "optional_sync": payload.optional_sync,
@@ -611,7 +629,9 @@ class GtexUniverseService(GtexBaseService):
         if match is None:
             raise UniverseNotFoundError("GTEX match was not found.")
         offer = GtexFanExperienceService(session)._match_offer(match=match, current_user=current_user)
-        return GtexSocialWarfareService(session).match_social_warfare(match=match, current_user=current_user, offer=offer)
+        return GtexSocialWarfareService(session).match_social_warfare(
+            match=match, current_user=current_user, offer=offer
+        )
 
     def post_match_chat_message(
         self,
@@ -690,13 +710,16 @@ class GtexUniverseService(GtexBaseService):
             raise UniverseNotFoundError("GTEX match was not found.")
         if not hasattr(self.ai_leagues, "simulate_match") or not hasattr(self.ai_leagues, "get_match_view"):
             raise UniverseValidationError("GTEX simulation service is unavailable.")
-        return GtexFanExperienceService(session).simulate_full_experience(
-            actor=actor,
-            match=match,
-            simulate_match=lambda match_id: self.ai_leagues.simulate_match(session, match_id=match_id),
-            read_match_view=lambda match_id: self.ai_leagues.get_match_view(session, match_id=match_id),
-            season_id=payload.season_id,
-        )
+        try:
+            return GtexFanExperienceService(session).simulate_full_experience(
+                actor=actor,
+                match=match,
+                simulate_match=lambda match_id: self.ai_leagues.simulate_match(session, match_id=match_id),
+                read_match_view=lambda match_id: self.ai_leagues.get_match_view(session, match_id=match_id),
+                season_id=payload.season_id,
+            )
+        except ValueError as exc:
+            raise UniverseValidationError(str(exc)) from exc
 
     def prepare_match_context(
         self,
@@ -772,8 +795,12 @@ class GtexUniverseService(GtexBaseService):
         away: SimulatedParticipant,
         context: dict[str, Any],
     ) -> dict[str, Any]:
-        home_manager = session.get(ManagerProfile, context.get("home_manager_id")) if context.get("home_manager_id") else None
-        away_manager = session.get(ManagerProfile, context.get("away_manager_id")) if context.get("away_manager_id") else None
+        home_manager = (
+            session.get(ManagerProfile, context.get("home_manager_id")) if context.get("home_manager_id") else None
+        )
+        away_manager = (
+            session.get(ManagerProfile, context.get("away_manager_id")) if context.get("away_manager_id") else None
+        )
         rivalry = self._manager_rivalry(session, home_manager, away_manager)
         fan_helper = GtexFanExperienceService(session)
         fan_experience = dict(context.get("fan_experience") or {})
@@ -799,7 +826,11 @@ class GtexUniverseService(GtexBaseService):
             rivalry=rivalry,
         )
         career_summary = self._apply_career_match_impact(session, match=match, context=context)
-        real_event = session.get(RealWorldEvent, context.get("real_world_event_id")) if context.get("real_world_event_id") else None
+        real_event = (
+            session.get(RealWorldEvent, context.get("real_world_event_id"))
+            if context.get("real_world_event_id")
+            else None
+        )
         if real_event is not None:
             real_event.influence_applied_at = utcnow()
             real_event.influence_summary_json = {
@@ -808,15 +839,22 @@ class GtexUniverseService(GtexBaseService):
                 "career_summary": dict(career_summary or {}),
                 "intensity_score": intensity_score,
             }
-        rivalry_level = self._rivalry_level(float(rivalry.rivalry_score) if rivalry is not None else float(context.get("rivalry_score") or 0.0))
+        rivalry_level = self._rivalry_level(
+            float(rivalry.rivalry_score) if rivalry is not None else float(context.get("rivalry_score") or 0.0)
+        )
         home_manager_name = self._manager_name(home_manager) if home_manager is not None else home.label
         away_manager_name = self._manager_name(away_manager) if away_manager is not None else away.label
-        winner_side = "home" if match.home_score > match.away_score else "away" if match.away_score > match.home_score else "draw"
-        winner_manager_name = home_manager_name if winner_side == "home" else away_manager_name if winner_side == "away" else "Neither dugout"
+        winner_side = (
+            "home" if match.home_score > match.away_score else "away" if match.away_score > match.home_score else "draw"
+        )
+        winner_manager_name = (
+            home_manager_name
+            if winner_side == "home"
+            else away_manager_name if winner_side == "away" else "Neither dugout"
+        )
         tickets_sold = int(fan_experience.get("tickets_sold") or 0)
         sell_out_triggered = bool(
-            fan_atmosphere.get("sell_out_triggered")
-            or dict(fan_experience.get("sell_out_hype") or {}).get("triggered")
+            fan_atmosphere.get("sell_out_triggered") or dict(fan_experience.get("sell_out_hype") or {}).get("triggered")
         )
         priority_stream = bool(fan_atmosphere.get("priority_stream") or tickets_sold > 0)
         fan_narrative_tag = str(fan_atmosphere.get("match_narrative_tag") or "anthemic_rise")
@@ -843,11 +881,7 @@ class GtexUniverseService(GtexBaseService):
             },
         )
         final_fan_experience = fan_helper.match_experience(match=match, current_user=None)
-        social_warfare = dict(
-            final_fan_experience.get("social_warfare")
-            or fan_rewards.get("social_warfare")
-            or {}
-        )
+        social_warfare = dict(final_fan_experience.get("social_warfare") or fan_rewards.get("social_warfare") or {})
         live_chat = dict(social_warfare.get("live_chat") or {})
         fan_war = dict(social_warfare.get("fan_war") or {})
         mega_event = dict(social_warfare.get("mega_event") or {})
@@ -873,7 +907,9 @@ class GtexUniverseService(GtexBaseService):
                 f"Live chat storms generated a {live_chat.get('dominant_emoji') or 'viral'} spike with {int(live_chat.get('total_messages') or 0)} crowd messages."
             )
         if mega_event:
-            commentary.append(f"{mega_event.get('title') or 'Mega event'} framing elevated this match into a peak broadcast moment.")
+            commentary.append(
+                f"{mega_event.get('title') or 'Mega event'} framing elevated this match into a peak broadcast moment."
+            )
         commentary.extend(exclusive_commentary_lines)
         broadcast_package = {
             "headline": (
@@ -892,9 +928,7 @@ class GtexUniverseService(GtexBaseService):
             "sell_out_triggered": sell_out_triggered,
             "exclusive_commentary_lines": exclusive_commentary_lines,
             "viral_reaction_highlight": (
-                f"{live_chat.get('dominant_emoji')} storm"
-                if live_chat.get("dominant_emoji")
-                else None
+                f"{live_chat.get('dominant_emoji')} storm" if live_chat.get("dominant_emoji") else None
             ),
             "mega_event": mega_event,
         }
@@ -913,41 +947,45 @@ class GtexUniverseService(GtexBaseService):
         }
         return self._json_safe(
             {
-            "home_manager": self._manager_snapshot(home_manager),
-            "away_manager": self._manager_snapshot(away_manager),
-            "commentary": commentary,
-            "broadcast_package": broadcast_package,
-            "news_article": news_article,
-            "career_summary": career_summary,
-            "fan_experience": {**final_fan_experience, "rewards": fan_rewards},
-            "social_warfare": social_warfare,
-            "real_world_sync": self._real_world_snapshot(real_event),
-            "match_context": {
-                "manager_intensity_score": intensity_score,
-                "manager_rivalry_level": rivalry_level,
-                "career_side": context.get("career_context", {}).get("side"),
-                "fan_crowd_intensity": round(fan_crowd_intensity, 4),
-                "fan_commentary_tone": fan_commentary_tone,
-                "fan_narrative_tag": fan_narrative_tag,
-                "tickets_sold": tickets_sold,
-                "priority_stream": priority_stream,
-                "fan_war_pressure": fan_atmosphere.get("fan_war_pressure"),
-                "live_chat_pressure": fan_atmosphere.get("live_chat_pressure"),
-            },
-            "rivalry": {
-                "manager_rivalry_score": float(rivalry.rivalry_score) if rivalry is not None else float(context.get("rivalry_score") or 0.0),
-                "manager_rivalry_level": rivalry_level,
-            },
-            "narrative_output": {
-                "match_storyline": (
-                    f"{winner_manager_name} dictated a {rivalry_level} mirror duel."
-                    if winner_side != "draw"
-                    else f"{home_manager_name} and {away_manager_name} cancelled each other out in a {rivalry_level} mirror duel."
-                ),
-                "fan_narrative": (
-                    f"The stands generated a {fan_commentary_tone.replace('_', ' ')} reaction arc and tilted the night into {fan_narrative_tag.replace('_', ' ')}."
-                ),
-            },
+                "home_manager": self._manager_snapshot(home_manager),
+                "away_manager": self._manager_snapshot(away_manager),
+                "commentary": commentary,
+                "broadcast_package": broadcast_package,
+                "news_article": news_article,
+                "career_summary": career_summary,
+                "fan_experience": {**final_fan_experience, "rewards": fan_rewards},
+                "social_warfare": social_warfare,
+                "real_world_sync": self._real_world_snapshot(real_event),
+                "match_context": {
+                    "manager_intensity_score": intensity_score,
+                    "manager_rivalry_level": rivalry_level,
+                    "career_side": context.get("career_context", {}).get("side"),
+                    "fan_crowd_intensity": round(fan_crowd_intensity, 4),
+                    "fan_commentary_tone": fan_commentary_tone,
+                    "fan_narrative_tag": fan_narrative_tag,
+                    "tickets_sold": tickets_sold,
+                    "priority_stream": priority_stream,
+                    "fan_war_pressure": fan_atmosphere.get("fan_war_pressure"),
+                    "live_chat_pressure": fan_atmosphere.get("live_chat_pressure"),
+                },
+                "rivalry": {
+                    "manager_rivalry_score": (
+                        float(rivalry.rivalry_score)
+                        if rivalry is not None
+                        else float(context.get("rivalry_score") or 0.0)
+                    ),
+                    "manager_rivalry_level": rivalry_level,
+                },
+                "narrative_output": {
+                    "match_storyline": (
+                        f"{winner_manager_name} dictated a {rivalry_level} mirror duel."
+                        if winner_side != "draw"
+                        else f"{home_manager_name} and {away_manager_name} cancelled each other out in a {rivalry_level} mirror duel."
+                    ),
+                    "fan_narrative": (
+                        f"The stands generated a {fan_commentary_tone.replace('_', ' ')} reaction arc and tilted the night into {fan_narrative_tag.replace('_', ' ')}."
+                    ),
+                },
             }
         )
 
@@ -963,7 +1001,9 @@ class GtexUniverseService(GtexBaseService):
             if player is None:
                 raise UniverseNotFoundError("Requested player was not found.")
             return player
-        display_name = (payload.player_name or user.display_name or user.full_name or user.username or user.email).strip()
+        display_name = (
+            payload.player_name or user.display_name or user.full_name or user.username or user.email
+        ).strip()
         if not display_name:
             raise UniverseValidationError("Career player creation requires a displayable player name.")
         player = Player(
@@ -1060,14 +1100,16 @@ class GtexUniverseService(GtexBaseService):
 
     def _close_active_career_commitments(self, session: Session, *, career_player: CareerPlayer, end_on: date) -> None:
         active_entries = session.scalars(
-            select(PlayerCareerEntry)
-            .where(PlayerCareerEntry.player_id == career_player.player_id, PlayerCareerEntry.end_on.is_(None))
+            select(PlayerCareerEntry).where(
+                PlayerCareerEntry.player_id == career_player.player_id, PlayerCareerEntry.end_on.is_(None)
+            )
         ).all()
         for entry in active_entries:
             entry.end_on = end_on
         active_contracts = session.scalars(
-            select(PlayerContract)
-            .where(PlayerContract.player_id == career_player.player_id, PlayerContract.status == "active")
+            select(PlayerContract).where(
+                PlayerContract.player_id == career_player.player_id, PlayerContract.status == "active"
+            )
         ).all()
         for contract in active_contracts:
             contract.status = "ended"
@@ -1131,7 +1173,9 @@ class GtexUniverseService(GtexBaseService):
                 )
             )
             if competition is None:
-                competition = RealCompetition(provider_id=provider.id, external_key=payload.external_key, name=payload.name)
+                competition = RealCompetition(
+                    provider_id=provider.id, external_key=payload.external_key, name=payload.name
+                )
                 session.add(competition)
             competition.name = payload.name
             competition.country_name = payload.country_name
@@ -1163,7 +1207,11 @@ class GtexUniverseService(GtexBaseService):
                 session.add(club)
             club.name = payload.name
             club.country_name = payload.country_name
-            club.competition_id = competitions.get(payload.competition_external_key).id if payload.competition_external_key in competitions else None
+            club.competition_id = (
+                competitions.get(payload.competition_external_key).id
+                if payload.competition_external_key in competitions
+                else None
+            )
             club.last_updated = utcnow()
             club.metadata_json = {"gtex_team_type": payload.gtex_team_type}
             session.flush()
@@ -1204,9 +1252,13 @@ class GtexUniverseService(GtexBaseService):
             mapped_player = self._resolve_gtex_player(session, payload)
             player.name = payload.name
             player.gtex_player_id = mapped_player.id if mapped_player is not None else payload.gtex_player_id
-            player.real_club_id = clubs.get(payload.club_external_key).id if payload.club_external_key in clubs else None
+            player.real_club_id = (
+                clubs.get(payload.club_external_key).id if payload.club_external_key in clubs else None
+            )
             player.real_competition_id = (
-                competitions.get(payload.competition_external_key).id if payload.competition_external_key in competitions else None
+                competitions.get(payload.competition_external_key).id
+                if payload.competition_external_key in competitions
+                else None
             )
             player.nationality = payload.nationality
             player.position = payload.position
@@ -1259,19 +1311,31 @@ class GtexUniverseService(GtexBaseService):
                 )
                 session.add(event)
             event.competition_id = (
-                competitions.get(payload.competition_external_key).id if payload.competition_external_key in competitions else None
+                competitions.get(payload.competition_external_key).id
+                if payload.competition_external_key in competitions
+                else None
             )
-            event.home_club_id = clubs.get(payload.home_club_external_key).id if payload.home_club_external_key in clubs else None
-            event.away_club_id = clubs.get(payload.away_club_external_key).id if payload.away_club_external_key in clubs else None
+            event.home_club_id = (
+                clubs.get(payload.home_club_external_key).id if payload.home_club_external_key in clubs else None
+            )
+            event.away_club_id = (
+                clubs.get(payload.away_club_external_key).id if payload.away_club_external_key in clubs else None
+            )
             event.headline = payload.headline or self._event_headline(payload, clubs)
             event.event_type = payload.event_type
             event.status = RealWorldEventStatus(payload.status)
             event.scheduled_at = payload.scheduled_at
-            event.started_at = payload.scheduled_at if payload.status in {RealWorldEventStatus.LIVE.value, RealWorldEventStatus.COMPLETED.value} else None
+            event.started_at = (
+                payload.scheduled_at
+                if payload.status in {RealWorldEventStatus.LIVE.value, RealWorldEventStatus.COMPLETED.value}
+                else None
+            )
             event.completed_at = utcnow() if payload.status == RealWorldEventStatus.COMPLETED.value else None
             event.home_score = payload.home_score
             event.away_score = payload.away_score
-            event.magnitude_score = round(min(1.0, payload.importance + (0.15 if payload.status == "completed" else 0.0)), 4)
+            event.magnitude_score = round(
+                min(1.0, payload.importance + (0.15 if payload.status == "completed" else 0.0)), 4
+            )
             event.metadata_json = {"featured_player_keys": list(payload.featured_player_keys)}
             event.influence_summary_json = dict(event.influence_summary_json or {})
             session.flush()
@@ -1295,7 +1359,9 @@ class GtexUniverseService(GtexBaseService):
         home_club = session.get(RealClub, event.home_club_id) if event.home_club_id else None
         away_club = session.get(RealClub, event.away_club_id) if event.away_club_id else None
         home_ai = self._resolve_ai_for_real_club(session, club=home_club, league=league)
-        away_ai = self._resolve_ai_for_real_club(session, club=away_club, league=league, exclude_ai_id=home_ai.id if home_ai else None)
+        away_ai = self._resolve_ai_for_real_club(
+            session, club=away_club, league=league, exclude_ai_id=home_ai.id if home_ai else None
+        )
         if home_ai is None or away_ai is None:
             return None
         career_player = self._career_player_by_user_id(session, career_user_id) if career_user_id else None
@@ -1391,20 +1457,35 @@ class GtexUniverseService(GtexBaseService):
         for player in session.scalars(
             select(Player).where(or_(Player.full_name == payload.name, Player.canonical_display_name == payload.name))
         ).all():
-            if (player.full_name or "").strip().lower() == lowered_name or (player.canonical_display_name or "").strip().lower() == lowered_name:
+            if (player.full_name or "").strip().lower() == lowered_name or (
+                player.canonical_display_name or ""
+            ).strip().lower() == lowered_name:
                 return player
         career = session.scalar(
-            select(CareerPlayer).join(Player, Player.id == CareerPlayer.player_id).where(Player.full_name == payload.name)
+            select(CareerPlayer)
+            .join(Player, Player.id == CareerPlayer.player_id)
+            .where(Player.full_name == payload.name)
         )
         return session.get(Player, career.player_id) if career is not None else None
 
-    def _apply_real_player_influence(self, session: Session, *, payload: SyncPlayerInput, mapped_player: Player | None) -> None:
+    def _apply_real_player_influence(
+        self, session: Session, *, payload: SyncPlayerInput, mapped_player: Player | None
+    ) -> None:
         performance_index = self._performance_index(payload.stats_json, payload.real_world_rating)
         if mapped_player is not None:
-            mapped_player.morale = self._clamp(mapped_player.morale + (performance_index * 12.0), minimum=0.0, maximum=100.0)
-            market_reference = mapped_player.current_market_reference_value or mapped_player.market_value_eur or payload.market_value or 0.0
+            mapped_player.morale = self._clamp(
+                mapped_player.morale + (performance_index * 12.0), minimum=0.0, maximum=100.0
+            )
+            market_reference = (
+                mapped_player.current_market_reference_value
+                or mapped_player.market_value_eur
+                or payload.market_value
+                or 0.0
+            )
             if market_reference:
-                mapped_player.current_market_reference_value = round(max(0.0, market_reference * (1 + (performance_index * 0.08))), 2)
+                mapped_player.current_market_reference_value = round(
+                    max(0.0, market_reference * (1 + (performance_index * 0.08))), 2
+                )
             mapped_player.dna_profile = {
                 **dict(mapped_player.dna_profile or {}),
                 "real_world_form": round(performance_index, 4),
@@ -1417,7 +1498,9 @@ class GtexUniverseService(GtexBaseService):
         if career is None:
             return
         career.current_form = self._clamp(career.current_form + (performance_index * 0.18), minimum=0.1, maximum=1.0)
-        career.marketability_score = self._clamp(career.marketability_score + (performance_index * 0.12), minimum=0.0, maximum=1.0)
+        career.marketability_score = self._clamp(
+            career.marketability_score + (performance_index * 0.12), minimum=0.0, maximum=1.0
+        )
         stats = self._career_stats(career)
         stats["real_world_sync_hits"] += 1
         career.career_stats = stats
@@ -1432,7 +1515,9 @@ class GtexUniverseService(GtexBaseService):
                 boost=abs(performance_index),
             )
 
-    def _resolve_manager_for_participant(self, session: Session, participant: SimulatedParticipant) -> ManagerProfile | None:
+    def _resolve_manager_for_participant(
+        self, session: Session, participant: SimulatedParticipant
+    ) -> ManagerProfile | None:
         if participant.ai is not None:
             return self._ensure_manager_profile_for_ai(session, participant.ai)
         if participant.user is None:
@@ -1498,7 +1583,9 @@ class GtexUniverseService(GtexBaseService):
         updated_rivalry: ManagerVsManagerHistory | None = None
         rivalry_payload: dict[str, Any] = {}
         if home_manager is not None and away_manager is not None:
-            updated_rivalry = self._upsert_manager_rivalry(session, home_manager, away_manager, home_result, intensity_score)
+            updated_rivalry = self._upsert_manager_rivalry(
+                session, home_manager, away_manager, home_result, intensity_score
+            )
             updated_rivalry.last_match_at = utcnow()
             rivalry_payload = {
                 "meetings": updated_rivalry.meetings,
@@ -1540,7 +1627,9 @@ class GtexUniverseService(GtexBaseService):
                 )
             )
 
-    def _apply_career_match_impact(self, session: Session, *, match: GtexMatch, context: dict[str, Any]) -> dict[str, Any]:
+    def _apply_career_match_impact(
+        self, session: Session, *, match: GtexMatch, context: dict[str, Any]
+    ) -> dict[str, Any]:
         career_context = dict(context.get("career_context") or {})
         career_player_id = career_context.get("career_player_id")
         if not career_player_id:
@@ -1562,7 +1651,9 @@ class GtexUniverseService(GtexBaseService):
         xp_gain = 24 + (career_player.level * 4) + (14 if won else 6)
         career_player.xp += xp_gain
         career_player.level = max(1, 1 + (career_player.xp // 250))
-        career_player.current_form = self._clamp(career_player.current_form + (0.08 if won else 0.03), minimum=0.1, maximum=1.0)
+        career_player.current_form = self._clamp(
+            career_player.current_form + (0.08 if won else 0.03), minimum=0.1, maximum=1.0
+        )
         career_player.prestige_score += 12 if won else 4
         stats = self._career_stats(career_player)
         stats["appearances"] += 1
@@ -1602,7 +1693,9 @@ class GtexUniverseService(GtexBaseService):
         real_event: RealWorldEvent | None,
     ) -> dict[str, Any]:
         metadata = dict(match.metadata_json or {})
-        career_player = session.get(CareerPlayer, metadata.get("career_player_id")) if metadata.get("career_player_id") else None
+        career_player = (
+            session.get(CareerPlayer, metadata.get("career_player_id")) if metadata.get("career_player_id") else None
+        )
         side = str(metadata.get("career_side") or "")
         if career_player is None and metadata.get("career_user_id"):
             career_player = self._career_player_by_user_id(session, str(metadata["career_user_id"]))
@@ -1610,20 +1703,33 @@ class GtexUniverseService(GtexBaseService):
         if career_player is None and real_event is not None:
             home_club = session.get(RealClub, real_event.home_club_id) if real_event.home_club_id else None
             away_club = session.get(RealClub, real_event.away_club_id) if real_event.away_club_id else None
-            candidates = session.scalars(select(CareerPlayer).where(CareerPlayer.status == CareerPlayerStatus.ACTIVE)).all()
+            candidates = session.scalars(
+                select(CareerPlayer).where(CareerPlayer.status == CareerPlayerStatus.ACTIVE)
+            ).all()
             for candidate in candidates:
-                if home_club is not None and candidate.current_club and candidate.current_club.lower() == home_club.name.lower():
+                if (
+                    home_club is not None
+                    and candidate.current_club
+                    and candidate.current_club.lower() == home_club.name.lower()
+                ):
                     career_player = candidate
                     side = "home"
                     break
-                if away_club is not None and candidate.current_club and candidate.current_club.lower() == away_club.name.lower():
+                if (
+                    away_club is not None
+                    and candidate.current_club
+                    and candidate.current_club.lower() == away_club.name.lower()
+                ):
                     career_player = candidate
                     side = "away"
                     break
         if career_player is None or side not in {"home", "away"}:
             return {"career_player_id": None, "side": None, "strength_bonus": 0.0, "intensity_bonus": 0.0}
         strength_bonus = round(
-            min(0.18, (career_player.current_form * 0.08) + (career_player.level * 0.01) + (career_player.growth_rate * 0.22)),
+            min(
+                0.18,
+                (career_player.current_form * 0.08) + (career_player.level * 0.01) + (career_player.growth_rate * 0.22),
+            ),
             4,
         )
         intensity_bonus = round(min(0.18, career_player.marketability_score * 0.12), 4)
@@ -1852,7 +1958,9 @@ class GtexUniverseService(GtexBaseService):
         clean_sheets = float(stats_json.get("clean_sheets") or 0.0)
         rating = float(stats_json.get("match_rating") or real_world_rating or 50.0)
         minutes = max(1.0, float(stats_json.get("minutes") or 90.0))
-        raw = ((goals * 0.18) + (assists * 0.12) + (clean_sheets * 0.08) + ((rating - 50.0) / 100.0)) * min(1.0, minutes / 90.0)
+        raw = ((goals * 0.18) + (assists * 0.12) + (clean_sheets * 0.08) + ((rating - 50.0) / 100.0)) * min(
+            1.0, minutes / 90.0
+        )
         return round(max(-0.35, min(0.35, raw)), 4)
 
     def _soft_injury_impact(self, injury_status: str | None) -> float:
@@ -1866,7 +1974,9 @@ class GtexUniverseService(GtexBaseService):
         return 0.02
 
     def _current_club_name(self, player: Player) -> str | None:
-        return player.real_world_club_name or (player.current_club.name if getattr(player, "current_club", None) is not None else None)
+        return player.real_world_club_name or (
+            player.current_club.name if getattr(player, "current_club", None) is not None else None
+        )
 
     def _season_label(self, today: date) -> str:
         return f"{today.year}-{today.year + 1}"
@@ -1908,7 +2018,9 @@ class GtexUniverseService(GtexBaseService):
         digest = sha256(f"{seed}:{salt}".encode("utf-8")).hexdigest()
         return int(digest[:12], 16) / float(0xFFFFFFFFFFFF)
 
-    def _career_side(self, career_player: CareerPlayer | None, home_club: RealClub | None, away_club: RealClub | None) -> str | None:
+    def _career_side(
+        self, career_player: CareerPlayer | None, home_club: RealClub | None, away_club: RealClub | None
+    ) -> str | None:
         if career_player is None or not career_player.current_club:
             return None
         lowered_club = career_player.current_club.strip().lower()

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
@@ -8,12 +9,14 @@ import '../models/gtex_competition_models.dart';
 class GtexCompetitionsHubScreenV2 extends StatefulWidget {
   const GtexCompetitionsHubScreenV2({
     super.key,
-    this.repository = const DemoGtexCompetitionRepository(),
+    this.repository,
     this.initialCompetitionId,
+    this.allowFixtureData = false,
   });
 
-  final GtexCompetitionRepository repository;
+  final GtexCompetitionRepository? repository;
   final String? initialCompetitionId;
+  final bool allowFixtureData;
 
   @override
   State<GtexCompetitionsHubScreenV2> createState() =>
@@ -30,6 +33,10 @@ class _GtexCompetitionsHubScreenV2State
   bool _loading = true;
   int _tabIndex = 0;
 
+  GtexCompetitionRepository? get _repository =>
+      widget.repository ??
+      (widget.allowFixtureData ? const DemoGtexCompetitionRepository() : null);
+
   @override
   void initState() {
     super.initState();
@@ -37,8 +44,14 @@ class _GtexCompetitionsHubScreenV2State
   }
 
   Future<void> _load() async {
+    final GtexCompetitionRepository? repository = _repository;
+    if (repository == null) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      return;
+    }
     final List<GtexCompetitionSummary> competitions =
-        await widget.repository.listCompetitions();
+        await repository.listCompetitions();
     if (!mounted) return;
     GtexCompetitionSummary? featured;
     for (final GtexCompetitionSummary item in competitions) {
@@ -67,14 +80,46 @@ class _GtexCompetitionsHubScreenV2State
   }
 
   Future<void> _select(String competitionId) async {
+    final GtexCompetitionRepository? repository = _repository;
+    if (repository == null) {
+      return;
+    }
     setState(() {
       _selectedId = competitionId;
       _tabIndex = 0;
     });
-    final GtexCompetitionDetail detail = await widget.repository
-        .getCompetitionDetail(competitionId);
+    final GtexCompetitionDetail detail = await repository.getCompetitionDetail(
+      competitionId,
+    );
     if (!mounted) return;
     setState(() => _detail = detail);
+  }
+
+  Future<void> _activateCompetitionAction(
+    GtexCompetitionSummary summary,
+  ) async {
+    final GtexCompetitionRepository? repository = _repository;
+    if (repository == null) {
+      return;
+    }
+    if (!summary.isJoinable) {
+      setState(() => _tabIndex = 0);
+      return;
+    }
+    try {
+      await repository.joinCompetition(summary.id);
+      if (!mounted) return;
+      await _select(summary.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Competition entry synced.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Competition action failed: $error')),
+      );
+    }
   }
 
   List<GtexCompetitionSummary> get _visibleCompetitions {
@@ -95,6 +140,16 @@ class _GtexCompetitionsHubScreenV2State
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
+    final GtexCompetitionRepository? repository = _repository;
+    if (repository == null) {
+      return const GtexEmptyState(
+        title: 'Live competitions unavailable',
+        message:
+            'Competition OS data requires a live repository. Fixture competitions are only available in explicit test mode.',
+        icon: Icons.emoji_events_outlined,
+        accent: GtexColors.gold,
+      );
+    }
 
     return GtexMasterDetailScaffold(
       title: 'GTEX Competitions',
@@ -111,9 +166,8 @@ class _GtexCompetitionsHubScreenV2State
             Navigator.of(context).push<void>(
               MaterialPageRoute<void>(
                 builder:
-                    (_) => GtexCompetitionCreateScreenV2(
-                      repository: widget.repository,
-                    ),
+                    (_) =>
+                        GtexCompetitionCreateScreenV2(repository: repository),
               ),
             );
           },
@@ -431,8 +485,7 @@ class _GtexCompetitionsHubScreenV2State
                         ? Icons.login
                         : Icons.monitor_heart_outlined,
                 accent: summary.isJoinable ? GtexColors.pitch : GtexColors.gold,
-                onPressed:
-                    () async => widget.repository.joinCompetition(summary.id),
+                onPressed: () => _activateCompetitionAction(summary),
               ),
               const SizedBox(height: GtexSpacing.sm),
               GtexActionButton(
@@ -448,7 +501,15 @@ class _GtexCompetitionsHubScreenV2State
                 icon: Icons.ios_share,
                 secondary: true,
                 accent: GtexColors.gold,
-                onPressed: () {},
+                onPressed: () async {
+                  await Clipboard.setData(
+                    ClipboardData(text: 'gtex://competition/${summary.id}'),
+                  );
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Competition link copied.')),
+                  );
+                },
               ),
             ],
           ),
@@ -543,10 +604,12 @@ class _GtexCompetitionsHubScreenV2State
 class GtexCompetitionCreateScreenV2 extends StatefulWidget {
   const GtexCompetitionCreateScreenV2({
     super.key,
-    this.repository = const DemoGtexCompetitionRepository(),
+    this.repository,
+    this.allowFixtureData = false,
   });
 
-  final GtexCompetitionRepository repository;
+  final GtexCompetitionRepository? repository;
+  final bool allowFixtureData;
 
   @override
   State<GtexCompetitionCreateScreenV2> createState() =>
@@ -565,6 +628,10 @@ class _GtexCompetitionCreateScreenV2State
     text: 'Weekend Talent Cup',
   );
 
+  GtexCompetitionRepository? get _repository =>
+      widget.repository ??
+      (widget.allowFixtureData ? const DemoGtexCompetitionRepository() : null);
+
   @override
   void dispose() {
     _title.dispose();
@@ -573,6 +640,16 @@ class _GtexCompetitionCreateScreenV2State
 
   @override
   Widget build(BuildContext context) {
+    final GtexCompetitionRepository? repository = _repository;
+    if (repository == null) {
+      return const GtexEmptyState(
+        title: 'Competition creation unavailable',
+        message:
+            'Competition creation requires a live Competition OS repository. Fixture drafts are only available in explicit test mode.',
+        icon: Icons.add_circle_outline,
+        accent: GtexColors.gold,
+      );
+    }
     return GtexFocusFlowScaffold(
       title: 'Create GTEX competition',
       subtitle:
@@ -606,7 +683,7 @@ class _GtexCompetitionCreateScreenV2State
                     setState(() => _step += 1);
                     return;
                   }
-                  await widget.repository.createCompetition(
+                  await repository.createCompetition(
                     GtexCompetitionDraft(
                       title: _title.text,
                       kind: _kind,
@@ -908,7 +985,7 @@ class _BracketProgress extends StatelessWidget {
         GtexPanel(
           title: 'Bracket progression',
           subtitle:
-              'Codex should replace this visual placeholder with the current bracket/fixture API once mounted.',
+              'Current stage progress, fixture state, and settlement readiness for this competition.',
           accent: GtexColors.gold,
           child: Wrap(
             spacing: GtexSpacing.md,

@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
@@ -5,10 +7,11 @@ import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'club_growth_models.dart';
 
 class GtexClubGrowthApi {
-  GtexClubGrowthApi({required this.client, required this.fixtures});
+  GtexClubGrowthApi({required this.client, GtexClubGrowthFixtures? fixtures})
+    : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final GtexClubGrowthFixtures fixtures;
+  final GtexClubGrowthFixtures? _fixtures;
 
   factory GtexClubGrowthApi.standard({
     required String baseUrl,
@@ -26,11 +29,11 @@ class GtexClubGrowthApi {
             accessToken: accessToken,
             mode: resolvedMode,
           ),
-      fixtures: GtexClubGrowthFixtures.seed(),
     );
   }
 
   factory GtexClubGrowthApi.fixture() {
+    assertFixtureFactoryAllowed('GtexClubGrowthApi.fixture');
     return GtexClubGrowthApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -52,7 +55,7 @@ class GtexClubGrowthApi {
         '/api/clubs/$encodedClubId/growth',
       );
       return GtexClubGrowthDashboard.fromJson(payload);
-    }, () => fixtures.dashboard(clubId));
+    }, () => _requireFixtures().dashboard(clubId));
   }
 
   Future<GtexStaffContract> offerStaffContract(String clubId, String staffId) {
@@ -68,7 +71,7 @@ class GtexClubGrowthApi {
         },
       );
       return GtexStaffContract.fromJson(payload);
-    }, () => fixtures.offerStaffContract(clubId, staffId));
+    }, () => _requireFixtures().offerStaffContract(clubId, staffId));
   }
 
   Future<GtexStaffContract> acceptStaffContract(
@@ -82,7 +85,7 @@ class GtexClubGrowthApi {
         '/api/clubs/$encodedClubId/growth/staff-contracts/$encodedContractId/accept',
       );
       return GtexStaffContract.fromJson(payload);
-    }, () => fixtures.acceptStaffContract(clubId, contractId));
+    }, () => _requireFixtures().acceptStaffContract(clubId, contractId));
   }
 
   Future<List<GtexAcademyProspect>> generateProspects(String clubId) {
@@ -93,7 +96,7 @@ class GtexClubGrowthApi {
         body: const <String, Object?>{'count': 3},
       );
       return _prospectsFromList(payload);
-    }, () => fixtures.generateProspects(clubId));
+    }, () => _requireFixtures().generateProspects(clubId));
   }
 
   Future<GtexAcademyContractOffer> offerProspectContract(
@@ -111,7 +114,7 @@ class GtexClubGrowthApi {
         },
       );
       return GtexAcademyContractOffer.fromJson(payload);
-    }, () => fixtures.offerProspectContract(clubId, prospectId));
+    }, () => _requireFixtures().offerProspectContract(clubId, prospectId));
   }
 
   Future<GtexAcademyContractOffer> acceptProspectContract(
@@ -126,7 +129,7 @@ class GtexClubGrowthApi {
         body: const <String, Object?>{'accepted': true},
       );
       return GtexAcademyContractOffer.fromJson(payload);
-    }, () => fixtures.acceptProspectContract(clubId, offerId));
+    }, () => _requireFixtures().acceptProspectContract(clubId, offerId));
   }
 
   Future<GtexAcademyProspect> promoteProspect(
@@ -140,7 +143,17 @@ class GtexClubGrowthApi {
         '/api/clubs/$encodedClubId/growth/academy/prospects/$encodedProspectId/promote',
       );
       return GtexAcademyProspect.fromJson(payload);
-    }, () => fixtures.promoteProspect(clubId, prospectId));
+    }, () => _requireFixtures().promoteProspect(clubId, prospectId));
+  }
+
+  GtexClubGrowthFixtures _requireFixtures() {
+    final GtexClubGrowthFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw StateError(
+        'Club growth fixtures are available only in fixture mode.',
+      );
+    }
+    return fixtures;
   }
 }
 

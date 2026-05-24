@@ -190,7 +190,15 @@ class _NomineeCard extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${nominee.name} vote capture requires the live awards ballot endpoint.',
+                        ),
+                      ),
+                    );
+                  },
                   icon: const Icon(Icons.how_to_vote_rounded, size: 16),
                   label: const Text('Vote'),
                   style: OutlinedButton.styleFrom(
@@ -200,7 +208,15 @@ class _NomineeCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               IconButton(
-                onPressed: () {},
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '${nominee.name} detail opens once the awards route publishes a nominee id.',
+                      ),
+                    ),
+                  );
+                },
                 icon: const Icon(
                   Icons.open_in_new_rounded,
                   color: Colors.white70,

@@ -16,7 +16,8 @@ from app.main import create_app
 
 
 @pytest.fixture()
-def app_client(tmp_path):
+def app_client(tmp_path, monkeypatch):
+    monkeypatch.setenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", "true")
     database_url = f"sqlite+pysqlite:///{(tmp_path / 'api_v1_router.db').as_posix()}"
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     app = create_app(engine=engine, run_migration_check=True)
@@ -71,8 +72,9 @@ def test_api_v1_requires_auth_and_wraps_success_envelopes(app_client) -> None:
     assert payload["data"]["live_matches"][0]["match_id"] == "m1"
 
 
-def test_api_v1_protected_environment_does_not_serve_demo_dashboard(app_client) -> None:
+def test_api_v1_protected_environment_does_not_serve_demo_dashboard(app_client, monkeypatch) -> None:
     app, client = app_client
+    monkeypatch.delenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", raising=False)
     app.state.settings = replace(app.state.settings, app_env="production")
     _user_id, token = _create_authenticated_user(app)
 
@@ -83,14 +85,32 @@ def test_api_v1_protected_environment_does_not_serve_demo_dashboard(app_client) 
 
     assert response.status_code == 200, response.text
     payload = response.json()["data"]
-    assert payload["club"]["name"] == "V1 Fan"
+    assert payload["club"] is None
     assert payload["live_matches"] == []
     assert payload["stories"] == []
     assert payload["transfer_alerts"] == []
 
 
-def test_api_v1_protected_environment_rejects_demo_mutations(app_client) -> None:
+def test_api_v1_protected_environment_ignores_demo_fixture_flag(app_client, monkeypatch) -> None:
     app, client = app_client
+    monkeypatch.setenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", "true")
+    app.state.settings = replace(app.state.settings, app_env="production")
+    _user_id, token = _create_authenticated_user(app)
+
+    response = client.get(
+        "/api/v2/home/dashboard",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()["data"]
+    assert payload["club"] is None
+    assert payload["live_matches"] == []
+
+
+def test_api_v1_protected_environment_rejects_demo_mutations(app_client, monkeypatch) -> None:
+    app, client = app_client
+    monkeypatch.delenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", raising=False)
     app.state.settings = replace(app.state.settings, app_env="production")
     _user_id, token = _create_authenticated_user(app)
 

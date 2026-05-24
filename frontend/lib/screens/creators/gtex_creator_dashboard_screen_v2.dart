@@ -7,7 +7,14 @@ import '../../features/creator_social_redesign/widgets/gtex_creator_metric_grid.
 import '../../features/creator_social_redesign/widgets/gtex_creator_social_visuals.dart';
 
 class GtexCreatorDashboardScreenV2 extends StatefulWidget {
-  const GtexCreatorDashboardScreenV2({super.key});
+  const GtexCreatorDashboardScreenV2({
+    super.key,
+    this.snapshot,
+    this.allowFixtureData = false,
+  });
+
+  final GtexCreatorSocialSnapshot? snapshot;
+  final bool allowFixtureData;
 
   @override
   State<GtexCreatorDashboardScreenV2> createState() =>
@@ -21,7 +28,10 @@ class _GtexCreatorDashboardScreenV2State
   @override
   void initState() {
     super.initState();
-    controller = GtexCreatorSocialController();
+    controller = GtexCreatorSocialController(
+      snapshot: widget.snapshot,
+      allowFixtureData: widget.allowFixtureData,
+    );
   }
 
   @override
@@ -46,26 +56,74 @@ class _GtexCreatorDashboardScreenV2State
             child: Scaffold(
               backgroundColor: gtexCreatorBg,
               body: SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isWide = constraints.maxWidth >= 760;
-                    if (!isWide) return _MobileCreator(controller: controller);
-                    return Row(
-                      children: [
-                        SizedBox(
-                          width: 330,
-                          child: _CreatorLeftPanel(controller: controller),
-                        ),
-                        Expanded(
-                          child: _CreatorMainWorkspace(controller: controller),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                child:
+                    controller.hasLiveSnapshot
+                        ? LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isWide = constraints.maxWidth >= 760;
+                            if (!isWide) {
+                              return _MobileCreator(controller: controller);
+                            }
+                            return Row(
+                              children: [
+                                SizedBox(
+                                  width: 330,
+                                  child: _CreatorLeftPanel(
+                                    controller: controller,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _CreatorMainWorkspace(
+                                    controller: controller,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        )
+                        : const _CreatorBlockedState(),
               ),
             ),
           ),
+    );
+  }
+}
+
+class _CreatorBlockedState extends StatelessWidget {
+  const _CreatorBlockedState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.video_camera_front_outlined,
+              color: gtexCreatorGreen,
+              size: 44,
+            ),
+            SizedBox(height: 14),
+            Text(
+              'Live creator workspace unavailable',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Creator Studio requires live creator profile, competition, revenue, award, and social feed data.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: gtexCreatorTextSoft),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -118,7 +176,10 @@ class _CreatorLeftPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: () {},
+                  onPressed:
+                      () => controller.selectCreatorModule(
+                        GtexCreatorModule.competitions,
+                      ),
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('Create competition'),
                   style: FilledButton.styleFrom(

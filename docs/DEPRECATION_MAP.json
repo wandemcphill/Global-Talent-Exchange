@@ -668,14 +668,14 @@
     },
     {
       "consumer": "frontend/lib/data/national_team_api.dart",
-      "from": "/api/v2/national-team-engine/competitions",
-      "to": "/api/national-team-engine/competitions",
+      "from": "/api/v2/national/competitions",
+      "to": "/api/national/competitions",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
       "consumer": "frontend/lib/data/national_team_api.dart",
-      "from": "/api/v2/national-team-engine/me/history",
-      "to": "/api/national-team-engine/me/history",
+      "from": "/api/v2/national/me/history",
+      "to": "/api/national/me/history",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
@@ -1282,6 +1282,30 @@
       "consumer": "frontend/lib/features/club_identity/dynasty/data/dynasty_api_repository.dart",
       "from": "/api/v2/leaderboards/dynasties",
       "to": "/api/leaderboards/dynasties",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "from": "/api/v2/session/bootstrap",
+      "to": "/api/session/bootstrap",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "from": "/api/v2/matches/{match_id}/state",
+      "to": "/api/matches/{match_id}/state",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "from": "/api/v2/national-team-engine/competitions",
+      "to": "/api/national-team-engine/competitions",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "from": "/api/v2/admin/operations-readiness",
+      "to": "/api/admin/operations-readiness",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     }
   ]

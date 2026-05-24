@@ -15,6 +15,8 @@ from app.world_super_cup.models.domain import (
     TournamentCountdown,
     TournamentPlan,
     TrophyCeremonyMetadata,
+    WorldSuperCupFixtureSnapshot,
+    WorldSuperCupSettlementSnapshot,
 )
 
 __all__ = [
@@ -34,4 +36,6 @@ __all__ = [
     "TournamentCountdown",
     "TournamentPlan",
     "TrophyCeremonyMetadata",
+    "WorldSuperCupFixtureSnapshot",
+    "WorldSuperCupSettlementSnapshot",
 ]

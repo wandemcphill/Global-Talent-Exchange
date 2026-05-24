@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/app/test_runtime_detector.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/live_match_fixtures.dart';
@@ -32,13 +33,21 @@ class MatchViewerMapper {
       resolvedConfig,
       api,
     );
-    final LiveMatchSnapshot snapshot =
-        fallbackSnapshot ?? LiveMatchFixtures.buildSnapshot(competition);
-    if (preferFallback || effectiveMode == GteBackendMode.fixture) {
+    final bool allowFixtureFallback =
+        effectiveMode == GteBackendMode.fixture ||
+        (preferFallback && isFlutterTestRuntime);
+    if (allowFixtureFallback) {
+      final LiveMatchSnapshot snapshot =
+          fallbackSnapshot ?? LiveMatchFixtures.buildSnapshot(competition);
       return _buildFallbackState(
         competition: competition,
         matchKey: matchKey,
         snapshot: snapshot,
+      );
+    }
+    if (preferFallback) {
+      throw StateError(
+        'Match viewer fixture fallback is available only in Flutter tests or explicit fixture mode.',
       );
     }
 

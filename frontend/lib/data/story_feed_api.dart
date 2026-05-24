@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
@@ -7,7 +9,7 @@ class StoryFeedApi {
   StoryFeedApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
-  final _StoryFeedFixtures fixtures;
+  final _StoryFeedFixtures? fixtures;
 
   factory StoryFeedApi.standard({
     required String baseUrl,
@@ -24,11 +26,12 @@ class StoryFeedApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _StoryFeedFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory StoryFeedApi.fixture() {
+    assertFixtureFactoryAllowed('StoryFeedApi.fixture');
     return StoryFeedApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -51,7 +54,7 @@ class StoryFeedApi {
         auth: false,
       );
       return payload.map(StoryFeedItem.fromJson).toList(growable: false);
-    }, fixtures.feed);
+    }, () => _requireFixtures().feed());
   }
 
   Future<StoryDigest> fetchDigest() {
@@ -61,7 +64,7 @@ class StoryFeedApi {
         auth: false,
       );
       return StoryDigest.fromJson(payload);
-    }, fixtures.digest);
+    }, () => _requireFixtures().digest());
   }
 
   Future<StoryFeedItem> publishStory({
@@ -91,7 +94,19 @@ class StoryFeedApi {
         },
       );
       return StoryFeedItem.fromJson(payload);
-    }, () async => fixtures.publishStory(title: title, body: body));
+    }, () async => _requireFixtures().publishStory(title: title, body: body));
+  }
+
+  _StoryFeedFixtures _requireFixtures() {
+    final _StoryFeedFixtures? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Story feed fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 }
 
@@ -106,7 +121,7 @@ class _StoryFeedFixtures {
         id: 'story-1',
         storyType: 'announcement',
         title: 'Matchday watchlist opens',
-        body: 'Tonight’s matchday feed is now live with cinematic loops.',
+        body: 'Tonightâ€™s matchday feed is now live with cinematic loops.',
         audience: 'all',
         subjectType: null,
         subjectId: null,

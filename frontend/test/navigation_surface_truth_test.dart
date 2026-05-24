@@ -6,7 +6,6 @@ import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
-import 'package:gte_frontend/features/match/match_native_3d_blocked_screen.dart';
 import 'package:gte_frontend/features/profile/live_profile_provider.dart';
 import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
 import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
@@ -33,11 +32,11 @@ void main() {
     );
     expect(
       appRouteSurfaceFor(AppRoutes.matchesNativeThreeD)?.state,
-      AppRouteSurfaceState.placeholder,
+      AppRouteSurfaceState.hidden,
     );
     expect(
       appRouteSurfaceFor(AppRoutes.matchesSimulate)?.state,
-      AppRouteSurfaceState.placeholder,
+      AppRouteSurfaceState.hidden,
     );
     expect(appRouteSurfaceFor('/profile/admin/god-mode'), isNull);
   });
@@ -75,24 +74,23 @@ void main() {
     }
   });
 
-  test('3D inventory stays truthful about launch blocking', () {
+  test('3D inventory stays hidden while Unity is blocked', () {
     final AppRouteSurface? threeD = appRouteSurfaceFor(AppRoutes.matchesThreeD);
 
     expect(threeD, isNotNull);
-    expect(threeD!.state, AppRouteSurfaceState.placeholder);
-    expect(threeD.label, 'Coming soon');
-    expect(threeD.summary, contains('3D match viewing is blocked'));
+    expect(threeD!.state, AppRouteSurfaceState.hidden);
+    expect(threeD.label, '3D Match Redirect');
+    expect(threeD.summary, contains('redirects to the 2D viewer'));
   });
 
-  test('simulation inventory stays blocked for launch', () {
+  test('simulation inventory redirects to Matchday', () {
     final AppRouteSurface? simulation = appRouteSurfaceFor(
       AppRoutes.matchesSimulate,
     );
 
     expect(simulation, isNotNull);
-    expect(simulation!.state, AppRouteSurfaceState.placeholder);
-    expect(simulation.summary, contains('Coming soon for launch.'));
-    expect(simulation.summary.toLowerCase(), contains('blocked'));
+    expect(simulation!.state, AppRouteSurfaceState.hidden);
+    expect(simulation.summary, contains('redirects to the active Matchday'));
   });
 
   testWidgets('home quick actions surface live world routing honestly', (
@@ -124,7 +122,7 @@ void main() {
     expect(find.text('World desk'), findsOneWidget);
   });
 
-  testWidgets('native 3D route is labeled as coming soon', (
+  testWidgets('native 3D route inventory is hidden while Unity is blocked', (
     WidgetTester tester,
   ) async {
     final AppRouteSurface? nativeThreeD = appRouteSurfaceFor(
@@ -132,18 +130,9 @@ void main() {
     );
 
     expect(nativeThreeD, isNotNull);
-    expect(nativeThreeD!.state, AppRouteSurfaceState.placeholder);
-    expect(nativeThreeD.label, 'Coming soon');
-    expect(nativeThreeD.summary, contains('Advanced match viewing is blocked'));
-
-    await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: MatchNative3dBlockedScreen())),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Coming soon'), findsWidgets);
-    expect(find.text('Route blocked'), findsOneWidget);
-    expect(find.textContaining('2D match viewer'), findsWidgets);
+    expect(nativeThreeD!.state, AppRouteSurfaceState.hidden);
+    expect(nativeThreeD.label, 'Native 3D Redirect');
+    expect(nativeThreeD.summary, contains('redirects to Matchday'));
   });
 }
 

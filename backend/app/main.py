@@ -39,6 +39,23 @@ INITIAL_ADMIN_EMAIL = os.getenv("GTE_BOOTSTRAP_ADMIN_EMAIL") or ""
 INITIAL_ADMIN_PASSWORD = os.getenv("GTE_BOOTSTRAP_ADMIN_PASSWORD") or ""
 INITIAL_ADMIN_USERNAME = os.getenv("GTE_BOOTSTRAP_ADMIN_USERNAME") or ""
 INITIAL_ADMIN_DISPLAY_NAME = os.getenv("GTE_BOOTSTRAP_ADMIN_DISPLAY_NAME") or ""
+_STRICT_LIVE_FORBIDDEN_ENV_FLAGS = (
+    "GTE_ENABLE_API_V1_DEMO_FIXTURES",
+    "GTE_DEMO_SIMULATION_ENABLED",
+    "GTE_DEMO_SIMULATION_BOOTSTRAP",
+    "GTE_DEMO_SIMULATION_SEED_ON_BOOT",
+    "GTE_ENABLE_LEGACY_MATCH_SIMULATION",
+    "GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE",
+    "GTE_ENABLE_INFINITE_LEAGUE_DEMO_RUNTIME",
+    "GTE_ENABLE_BROADCAST_GENERATED_PROGRAMS",
+    "GTE_ENABLE_REGEN_FALLBACK_PROSPECTS",
+    "GTE_ENABLE_SYNTHETIC_YOUTH_TOURNAMENT_SQUADS",
+    "GTE_ENABLE_FULL_EXPERIENCE_SIMULATION",
+    "GTE_ENABLE_WORLD_SUPER_CUP_DEMO",
+    "GTE_ENABLE_MOCK_INGESTION_PROVIDER",
+    "GTE_ENABLE_MOCK_KORAPAY",
+    "GTE_ENABLE_PAYSTACK",
+)
 
 
 @asynccontextmanager
@@ -83,6 +100,7 @@ def create_app(
         session_factory=database_session_factory,
     )
     production_like = str(resolved_settings.app_env or "").strip().lower() in {"production", "prod", "staging"}
+    _enforce_strict_live_startup_gate(resolved_settings, production_like=production_like)
 
     app = FastAPI(
         title=resolved_settings.app_name,
@@ -130,6 +148,25 @@ def create_app(
         )
     _configure_cors(app, resolved_settings)
     return app
+
+
+def _env_flag_enabled(name: str) -> bool:
+    return str(os.getenv(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _enforce_strict_live_startup_gate(settings: Settings, *, production_like: bool) -> None:
+    if not production_like:
+        return
+    blocked_reasons: list[str] = []
+    if settings.test_auth_fixture_mode:
+        blocked_reasons.append("test_auth_fixture_mode")
+    if settings.startup_profile != "production":
+        blocked_reasons.append(f"startup_profile:{settings.startup_profile}")
+    if str(settings.default_ingestion_provider or "").strip().lower() == "mock":
+        blocked_reasons.append("mock_ingestion_provider")
+    blocked_reasons.extend(name for name in _STRICT_LIVE_FORBIDDEN_ENV_FLAGS if _env_flag_enabled(name))
+    if blocked_reasons:
+        raise RuntimeError("GTEX strict-live startup gate blocked backend boot: " + ", ".join(sorted(blocked_reasons)))
 
 
 def _resolve_database_engine(

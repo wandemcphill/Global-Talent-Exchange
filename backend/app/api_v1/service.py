@@ -788,18 +788,10 @@ class GlobalApiV1Service:
                     playback = hub.get_playback_context(match_id)
                 except Exception:
                     continue
-                if state is None:
+                if state is None or playback is None or playback.viewer_state is None:
                     continue
-                home_name = (
-                    playback.viewer_state.home_team.team_name
-                    if playback is not None and playback.viewer_state is not None
-                    else "Home"
-                )
-                away_name = (
-                    playback.viewer_state.away_team.team_name
-                    if playback is not None and playback.viewer_state is not None
-                    else "Away"
-                )
+                home_name = playback.viewer_state.home_team.team_name
+                away_name = playback.viewer_state.away_team.team_name
                 live_matches.append(
                     {
                         "match_id": match_id,
@@ -808,14 +800,19 @@ class GlobalApiV1Service:
                         "time": state.snapshot.current_minute,
                     }
                 )
-        return {
-            "club": {
-                "id": getattr(user, "active_organization_id", None) or user.id,
-                "name": getattr(user, "active_organization_name", None) or self._club_name_for_user(user),
+        club_payload = None
+        active_organization_id = getattr(user, "active_organization_id", None)
+        active_organization_name = getattr(user, "active_organization_name", None)
+        if active_organization_id and active_organization_name:
+            club_payload = {
+                "id": active_organization_id,
+                "name": active_organization_name,
                 "logo": None,
                 "fan_sentiment": None,
                 "league_position": None,
-            },
+            }
+        return {
+            "club": club_payload,
             "quick_actions": [],
             "live_matches": live_matches,
             "stories": [],
@@ -832,16 +829,12 @@ class GlobalApiV1Service:
         playback = hub.get_playback_context(match_id)
         if state is None:
             raise GlobalApiV1NotFoundError(f"Match '{match_id}' was not found.")
-        home_name = (
-            playback.viewer_state.home_team.team_name
-            if playback is not None and playback.viewer_state is not None
-            else "Home"
-        )
-        away_name = (
-            playback.viewer_state.away_team.team_name
-            if playback is not None and playback.viewer_state is not None
-            else "Away"
-        )
+        if playback is None or playback.viewer_state is None:
+            raise GlobalApiV1RuntimeUnavailableError(
+                "Match state is unavailable because persisted team context is missing."
+            )
+        home_name = playback.viewer_state.home_team.team_name
+        away_name = playback.viewer_state.away_team.team_name
         return {
             "match_id": match_id,
             "status": state.snapshot.status,
@@ -961,6 +954,6 @@ def _is_protected_environment(app: FastAPI) -> bool:
 
 
 def _demo_fixtures_enabled(app: FastAPI) -> bool:
-    if not _is_protected_environment(app):
-        return True
+    if _is_protected_environment(app):
+        return False
     return str(os.getenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", "")).strip().lower() in {"1", "true", "yes", "on"}

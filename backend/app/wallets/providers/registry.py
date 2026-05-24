@@ -25,7 +25,7 @@ _REGISTRY: dict[str, ProviderRegistration] = {
     "apple_pay": ProviderRegistration(adapter=ApplePayProviderAdapter(), is_live=False, status="stubbed"),
     "google_pay": ProviderRegistration(adapter=GooglePayProviderAdapter(), is_live=False, status="stubbed"),
     "korapay": ProviderRegistration(adapter=KoraPayProviderAdapter(), is_live=True, status="live"),
-    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live"),
+    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=False, status="blocked"),
     "regional_rails": ProviderRegistration(adapter=RegionalRailsProviderAdapter(), is_live=False, status="stubbed"),
     "crypto_fiat": ProviderRegistration(adapter=CryptoFiatProviderAdapter(), is_live=False, status="stubbed"),
 }
@@ -44,6 +44,8 @@ def get_live_provider_adapter(provider_key: str) -> ProviderAdapter:
     registration = _REGISTRY.get(normalized)
     if registration is None:
         raise KeyError(f"Unknown payment provider '{provider_key}'.")
+    if normalized == "paystack" and not paystack_enabled():
+        raise KeyError("Paystack is unavailable for production. Use KoraPay or manual bank transfer.")
     if not registration.is_live:
         raise KeyError(f"Payment provider '{provider_key}' is not currently available.")
     return registration.adapter
@@ -86,14 +88,39 @@ def provider_webhook_secret_configured(provider_key: str) -> bool:
     normalized = provider_key.strip().lower()
     env_names = {
         "paystack": ("GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET"),
-        "korapay": ("GTE_KORAPAY_WEBHOOK_SECRET", "KORAPAY_WEBHOOK_SECRET"),
+        "korapay": (
+            "GTE_KORAPAY_WEBHOOK_SECRET",
+            "KORAPAY_WEBHOOK_SECRET",
+            "GTE_KORAPAY_ENCRYPTION_KEY",
+            "KORAPAY_ENCRYPTION_KEY",
+        ),
     }.get(normalized, (f"GTE_{normalized.upper()}_WEBHOOK_SECRET",))
     return any((os.getenv(name) or "").strip() for name in env_names)
+
+
+def provider_live_deposit_ready(provider_key: str) -> bool:
+    normalized = provider_key.strip().lower()
+    registration = get_provider_registration(normalized)
+    if not registration.is_live:
+        return False
+    if normalized == "paystack":
+        return (
+            paystack_enabled()
+            and provider_secret_configured(normalized)
+            and provider_webhook_secret_configured(normalized)
+        )
+    if normalized == "korapay":
+        return provider_secret_configured(normalized) and provider_webhook_secret_configured(normalized)
+    return provider_secret_configured(normalized)
 
 
 def is_production_environment() -> bool:
     environment = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or "development").strip().lower()
     return environment in {"production", "prod", "release"}
+
+
+def paystack_enabled() -> bool:
+    return False
 
 
 def provider_runtime_status(
@@ -106,14 +133,14 @@ def provider_runtime_status(
     registration = get_provider_registration(normalized)
     if not registration.is_live:
         return registration.status
+    if normalized == "paystack" and not paystack_enabled():
+        return "blocked"
     if not gateway_enabled:
         return "blocked"
     if enabled_providers is not None and normalized not in {item.strip().lower() for item in enabled_providers}:
         return "blocked"
-    if provider_secret_configured(normalized):
+    if provider_live_deposit_ready(normalized):
         return "ready"
-    if normalized == "paystack" and not is_production_environment():
-        return "mock"
     return "unavailable"
 
 
@@ -138,10 +165,12 @@ __all__ = [
     "ProviderRegistration",
     "get_provider_adapter",
     "get_live_provider_adapter",
+    "paystack_enabled",
     "get_provider_registration",
     "is_production_environment",
     "list_provider_keys",
     "list_provider_registrations",
+    "provider_live_deposit_ready",
     "provider_runtime_status",
     "provider_runtime_statuses",
     "provider_secret_configured",

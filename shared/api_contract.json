@@ -317,6 +317,18 @@
         "source_file": "backend/app/coin_traders/router.py",
         "response_model": "list[CoinTradeOrderView]"
       },
+      "get_api_v2_admin_competitions": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/competitions",
+        "aliases": [
+          "/api/admin/competitions",
+          "/api/v1/admin/competitions",
+          "/api/v2/admin/competitions"
+        ],
+        "handler": "get_admin_competitions",
+        "source_file": "backend/app/admin_api/router.py",
+        "response_model": "AdminCompetitionsCanonicalView"
+      },
       "get_api_v2_admin_config_liquidity_bands": {
         "method": "GET",
         "canonical_path": "/api/v2/admin/config/liquidity-bands",
@@ -766,6 +778,18 @@
         "source_file": "backend/app/observability/router.py",
         "response_model": "PlatformInfraView"
       },
+      "get_api_v2_admin_payment_rails": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/payment-rails",
+        "aliases": [
+          "/api/admin/payment-rails",
+          "/api/v1/admin/payment-rails",
+          "/api/v2/admin/payment-rails"
+        ],
+        "handler": "get_admin_payment_rails",
+        "source_file": "backend/app/admin_api/router.py",
+        "response_model": "AdminPaymentRailsCanonicalView"
+      },
       "get_api_v2_admin_policies_country_policies": {
         "method": "GET",
         "canonical_path": "/api/v2/admin/policies/country-policies",
@@ -778,6 +802,54 @@
         "handler": "admin_list_country_policies",
         "source_file": "backend/app/policies/router.py",
         "response_model": "list[CountryFeaturePolicyAdminSummary]"
+      },
+      "get_api_v2_admin_queues": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/queues",
+        "aliases": [
+          "/api/admin/queues",
+          "/api/v1/admin/queues",
+          "/api/v2/admin/queues"
+        ],
+        "handler": "get_admin_queues",
+        "source_file": "backend/app/admin_api/router.py",
+        "response_model": "AdminQueuesCanonicalView"
+      },
+      "get_api_v2_admin_readiness": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/readiness",
+        "aliases": [
+          "/api/admin/readiness",
+          "/api/v1/admin/readiness",
+          "/api/v2/admin/readiness"
+        ],
+        "handler": "get_admin_readiness",
+        "source_file": "backend/app/admin_api/router.py",
+        "response_model": "OperationsReadinessSnapshot"
+      },
+      "get_api_v2_admin_settlements": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/settlements",
+        "aliases": [
+          "/api/admin/settlements",
+          "/api/v1/admin/settlements",
+          "/api/v2/admin/settlements"
+        ],
+        "handler": "get_admin_settlements",
+        "source_file": "backend/app/admin_api/router.py",
+        "response_model": "AdminSettlementsCanonicalView"
+      },
+      "get_api_v2_admin_treasury": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/treasury",
+        "aliases": [
+          "/api/admin/treasury",
+          "/api/v1/admin/treasury",
+          "/api/v2/admin/treasury"
+        ],
+        "handler": "get_admin_treasury",
+        "source_file": "backend/app/admin_api/router.py",
+        "response_model": "AdminTreasuryCanonicalView"
       },
       "patch_api_v2_admin_gifts_catalog_gift_id": {
         "method": "PATCH",
@@ -915,6 +987,30 @@
         "handler": "admin_freeze_coin_trader",
         "source_file": "backend/app/coin_traders/router.py",
         "response_model": "CoinTraderProfileView"
+      },
+      "post_api_v2_admin_coin_traders_profile_id_liquidity_issue": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/coin-traders/{profile_id}/liquidity/issue",
+        "aliases": [
+          "/api/admin/coin-traders/{profile_id}/liquidity/issue",
+          "/api/v1/admin/coin-traders/{profile_id}/liquidity/issue",
+          "/api/v2/admin/coin-traders/{profile_id}/liquidity/issue"
+        ],
+        "handler": "admin_issue_coin_trader_liquidity",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderAdminLiquidityTransferView"
+      },
+      "post_api_v2_admin_coin_traders_profile_id_liquidity_redeem": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/coin-traders/{profile_id}/liquidity/redeem",
+        "aliases": [
+          "/api/admin/coin-traders/{profile_id}/liquidity/redeem",
+          "/api/v1/admin/coin-traders/{profile_id}/liquidity/redeem",
+          "/api/v2/admin/coin-traders/{profile_id}/liquidity/redeem"
+        ],
+        "handler": "admin_redeem_coin_trader_liquidity",
+        "source_file": "backend/app/coin_traders/router.py",
+        "response_model": "CoinTraderAdminLiquidityTransferView"
       },
       "post_api_v2_admin_coin_traders_profile_id_reject": {
         "method": "POST",
@@ -2092,6 +2188,54 @@
         "source_file": "backend/app/auth/router.py",
         "response_model": "CurrentUserResponse"
       },
+      "get_api_v2_club_current": {
+        "method": "GET",
+        "canonical_path": "/api/v2/club/current",
+        "aliases": [
+          "/api/club/current",
+          "/api/v1/club/current",
+          "/api/v2/club/current"
+        ],
+        "handler": "read_current_club",
+        "source_file": "backend/app/auth/router.py",
+        "response_model": "ClubProfileCore"
+      },
+      "get_api_v2_profile": {
+        "method": "GET",
+        "canonical_path": "/api/v2/profile",
+        "aliases": [
+          "/api/profile",
+          "/api/v1/profile",
+          "/api/v2/profile"
+        ],
+        "handler": "read_live_profile",
+        "source_file": "backend/app/auth/router.py",
+        "response_model": "CurrentUserResponse"
+      },
+      "get_api_v2_profile_security": {
+        "method": "GET",
+        "canonical_path": "/api/v2/profile/security",
+        "aliases": [
+          "/api/profile/security",
+          "/api/v1/profile/security",
+          "/api/v2/profile/security"
+        ],
+        "handler": "read_profile_security",
+        "source_file": "backend/app/auth/router.py",
+        "response_model": "SessionBootstrapSecurityState"
+      },
+      "get_api_v2_profile_sessions": {
+        "method": "GET",
+        "canonical_path": "/api/v2/profile/sessions",
+        "aliases": [
+          "/api/profile/sessions",
+          "/api/v1/profile/sessions",
+          "/api/v2/profile/sessions"
+        ],
+        "handler": "read_profile_sessions",
+        "source_file": "backend/app/auth/router.py",
+        "response_model": "list[SessionBootstrapSessionView]"
+      },
       "get_api_v2_session_bootstrap": {
         "method": "GET",
         "canonical_path": "/api/v2/session/bootstrap",
@@ -2113,6 +2257,18 @@
           "/api/v2/auth/me"
         ],
         "handler": "update_current_user_profile",
+        "source_file": "backend/app/auth/router.py",
+        "response_model": "CurrentUserResponse"
+      },
+      "patch_api_v2_profile": {
+        "method": "PATCH",
+        "canonical_path": "/api/v2/profile",
+        "aliases": [
+          "/api/profile",
+          "/api/v1/profile",
+          "/api/v2/profile"
+        ],
+        "handler": "update_live_profile",
         "source_file": "backend/app/auth/router.py",
         "response_model": "CurrentUserResponse"
       },
@@ -9228,6 +9384,18 @@
         "source_file": "backend/app/live_matches/router.py",
         "response_model": "CommentaryStreamResponse"
       },
+      "get_api_v2_matches_match_id_events": {
+        "method": "GET",
+        "canonical_path": "/api/v2/matches/{match_id}/events",
+        "aliases": [
+          "/api/matches/{match_id}/events",
+          "/api/v1/matches/{match_id}/events",
+          "/api/v2/matches/{match_id}/events"
+        ],
+        "handler": "read_match_v2_events",
+        "source_file": "backend/app/live_matches/router.py",
+        "response_model": null
+      },
       "get_api_v2_matches_match_id_highlights": {
         "method": "GET",
         "canonical_path": "/api/v2/matches/{match_id}/highlights",
@@ -9253,6 +9421,18 @@
         "source_file": "backend/app/live_matches/router.py",
         "response_model": "MatchHighlightSharePackageView"
       },
+      "get_api_v2_matches_match_id_lineups": {
+        "method": "GET",
+        "canonical_path": "/api/v2/matches/{match_id}/lineups",
+        "aliases": [
+          "/api/matches/{match_id}/lineups",
+          "/api/v1/matches/{match_id}/lineups",
+          "/api/v2/matches/{match_id}/lineups"
+        ],
+        "handler": "read_match_v2_lineups",
+        "source_file": "backend/app/live_matches/router.py",
+        "response_model": null
+      },
       "get_api_v2_matches_match_id_live": {
         "method": "GET",
         "canonical_path": "/api/v2/matches/{match_id}/live",
@@ -9263,6 +9443,54 @@
           "/matches/{match_id}/live"
         ],
         "handler": "read_match_live_bridge",
+        "source_file": "backend/app/live_matches/router.py",
+        "response_model": null
+      },
+      "get_api_v2_matches_match_id_state": {
+        "method": "GET",
+        "canonical_path": "/api/v2/matches/{match_id}/state",
+        "aliases": [
+          "/api/matches/{match_id}/state",
+          "/api/v1/matches/{match_id}/state",
+          "/api/v2/matches/{match_id}/state"
+        ],
+        "handler": "read_match_v2_state",
+        "source_file": "backend/app/live_matches/router.py",
+        "response_model": null
+      },
+      "get_api_v2_matches_match_id_stats": {
+        "method": "GET",
+        "canonical_path": "/api/v2/matches/{match_id}/stats",
+        "aliases": [
+          "/api/matches/{match_id}/stats",
+          "/api/v1/matches/{match_id}/stats",
+          "/api/v2/matches/{match_id}/stats"
+        ],
+        "handler": "read_match_v2_stats",
+        "source_file": "backend/app/live_matches/router.py",
+        "response_model": null
+      },
+      "get_api_v2_matches_match_id_tactics": {
+        "method": "GET",
+        "canonical_path": "/api/v2/matches/{match_id}/tactics",
+        "aliases": [
+          "/api/matches/{match_id}/tactics",
+          "/api/v1/matches/{match_id}/tactics",
+          "/api/v2/matches/{match_id}/tactics"
+        ],
+        "handler": "read_match_v2_tactics",
+        "source_file": "backend/app/live_matches/router.py",
+        "response_model": null
+      },
+      "get_api_v2_matches_match_id_timeline": {
+        "method": "GET",
+        "canonical_path": "/api/v2/matches/{match_id}/timeline",
+        "aliases": [
+          "/api/matches/{match_id}/timeline",
+          "/api/v1/matches/{match_id}/timeline",
+          "/api/v2/matches/{match_id}/timeline"
+        ],
+        "handler": "read_match_v2_timeline",
         "source_file": "backend/app/live_matches/router.py",
         "response_model": null
       },
@@ -9317,6 +9545,18 @@
         "handler": "join_spectate",
         "source_file": "backend/app/live_matches/router.py",
         "response_model": "SpectatorSessionView"
+      },
+      "post_api_v2_matches_match_id_tactics": {
+        "method": "POST",
+        "canonical_path": "/api/v2/matches/{match_id}/tactics",
+        "aliases": [
+          "/api/matches/{match_id}/tactics",
+          "/api/v1/matches/{match_id}/tactics",
+          "/api/v2/matches/{match_id}/tactics"
+        ],
+        "handler": "update_match_v2_tactics",
+        "source_file": "backend/app/live_matches/router.py",
+        "response_model": null
       },
       "post_api_v2_matches_match_id_unity_access": {
         "method": "POST",
@@ -11084,6 +11324,58 @@
         "source_file": "backend/app/national_team_engine/router.py",
         "response_model": "list[StadiumAdResponse]"
       },
+      "get_api_v2_national_competitions": {
+        "method": "GET",
+        "canonical_path": "/api/v2/national/competitions",
+        "aliases": [
+          "/api/national/competitions",
+          "/api/v1/national/competitions",
+          "/api/v2/national/competitions",
+          "/national/competitions"
+        ],
+        "handler": "national_list_competitions",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "list[NationalTeamCompetitionResponse]"
+      },
+      "get_api_v2_national_competitions_competition_id_rental_pool": {
+        "method": "GET",
+        "canonical_path": "/api/v2/national/competitions/{competition_id}/rental-pool",
+        "aliases": [
+          "/api/national/competitions/{competition_id}/rental-pool",
+          "/api/v1/national/competitions/{competition_id}/rental-pool",
+          "/api/v2/national/competitions/{competition_id}/rental-pool",
+          "/national/competitions/{competition_id}/rental-pool"
+        ],
+        "handler": "national_list_rental_pool",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "NationalTeamRentalPlayerCollectionResponse"
+      },
+      "get_api_v2_national_entries_entry_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/national/entries/{entry_id}",
+        "aliases": [
+          "/api/national/entries/{entry_id}",
+          "/api/v1/national/entries/{entry_id}",
+          "/api/v2/national/entries/{entry_id}",
+          "/national/entries/{entry_id}"
+        ],
+        "handler": "national_get_entry",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "NationalTeamEntryDetailResponse"
+      },
+      "get_api_v2_national_me_history": {
+        "method": "GET",
+        "canonical_path": "/api/v2/national/me/history",
+        "aliases": [
+          "/api/national/me/history",
+          "/api/v1/national/me/history",
+          "/api/v2/national/me/history",
+          "/national/me/history"
+        ],
+        "handler": "national_get_my_history",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "NationalTeamUserHistoryResponse"
+      },
       "get_api_v2_national_team_engine_competitions": {
         "method": "GET",
         "canonical_path": "/api/v2/national-team-engine/competitions",
@@ -11380,6 +11672,32 @@
           "/api/v2/admin/national-team-engine/entries/{entry_id}/squad"
         ],
         "handler": "upsert_squad",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "NationalTeamEntryDetailResponse"
+      },
+      "post_api_v2_national_competitions_competition_id_rental_entry": {
+        "method": "POST",
+        "canonical_path": "/api/v2/national/competitions/{competition_id}/rental-entry",
+        "aliases": [
+          "/api/national/competitions/{competition_id}/rental-entry",
+          "/api/v1/national/competitions/{competition_id}/rental-entry",
+          "/api/v2/national/competitions/{competition_id}/rental-entry",
+          "/national/competitions/{competition_id}/rental-entry"
+        ],
+        "handler": "national_create_my_rental_entry",
+        "source_file": "backend/app/national_team_engine/router.py",
+        "response_model": "NationalTeamEntryResponse"
+      },
+      "post_api_v2_national_entries_entry_id_rentals": {
+        "method": "POST",
+        "canonical_path": "/api/v2/national/entries/{entry_id}/rentals",
+        "aliases": [
+          "/api/national/entries/{entry_id}/rentals",
+          "/api/v1/national/entries/{entry_id}/rentals",
+          "/api/v2/national/entries/{entry_id}/rentals",
+          "/national/entries/{entry_id}/rentals"
+        ],
+        "handler": "national_rent_player",
         "source_file": "backend/app/national_team_engine/router.py",
         "response_model": "NationalTeamEntryDetailResponse"
       },
@@ -11961,6 +12279,20 @@
         "handler": "add_club_to_ownership_group",
         "source_file": "backend/app/ownership_groups/router.py",
         "response_model": "OwnershipGroupView"
+      }
+    },
+    "payment": {
+      "post_api_v2_webhooks_korapay": {
+        "method": "POST",
+        "canonical_path": "/api/v2/webhooks/korapay",
+        "aliases": [
+          "/api/v1/webhooks/korapay",
+          "/api/v2/webhooks/korapay",
+          "/api/webhooks/korapay"
+        ],
+        "handler": "handle_korapay_webhook_alias",
+        "source_file": "backend/app/admin_finance/router.py",
+        "response_model": "AdminFinanceWebhookResultView"
       }
     },
     "payments": {
@@ -15233,6 +15565,18 @@
         "handler": "get_club_trophies",
         "source_file": "backend/app/segments/clubs/segment_clubs.py",
         "response_model": "ClubTrophiesView"
+      },
+      "get_api_v2_clubs_club_id_v2_snapshot": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/{club_id}/v2-snapshot",
+        "aliases": [
+          "/api/clubs/{club_id}/v2-snapshot",
+          "/api/v1/clubs/{club_id}/v2-snapshot",
+          "/api/v2/clubs/{club_id}/v2-snapshot"
+        ],
+        "handler": "get_club_v2_snapshot",
+        "source_file": "backend/app/segments/clubs/segment_clubs.py",
+        "response_model": null
       },
       "get_api_v2_clubs_club_id_youth_pipeline": {
         "method": "GET",
@@ -18740,6 +19084,19 @@
         "source_file": "backend/app/wallets/router.py",
         "response_model": "WalletProfileView"
       },
+      "get_api_v2_wallet_summary": {
+        "method": "GET",
+        "canonical_path": "/api/v2/wallet/summary",
+        "aliases": [
+          "/api/v1/wallet/summary",
+          "/api/v2/wallet/summary",
+          "/api/wallet/summary",
+          "/wallet/summary"
+        ],
+        "handler": "get_wallet_summary_alias",
+        "source_file": "backend/app/wallets/router.py",
+        "response_model": "WalletSummaryView"
+      },
       "get_api_v2_wallet_transactions": {
         "method": "GET",
         "canonical_path": "/api/v2/wallet/transactions",
@@ -19459,6 +19816,18 @@
       "source_file": "backend/app/realtime/router.py",
       "response_model": null
     },
+    "websocket_api_v2_ws_matches_match_id": {
+      "method": "WEBSOCKET",
+      "canonical_path": "/api/v2/ws/matches/{match_id}",
+      "aliases": [
+        "/api/v1/ws/matches/{match_id}",
+        "/api/v2/ws/matches/{match_id}",
+        "/ws/matches/{match_id}"
+      ],
+      "handler": "stream_live_match_events_plural_alias",
+      "source_file": "backend/app/realtime/router.py",
+      "response_model": null
+    },
     "websocket_api_v2_ws_notifications": {
       "method": "WEBSOCKET",
       "canonical_path": "/api/v2/ws/notifications",
@@ -19550,6 +19919,8 @@
     "/api/v2/admin/coin-traders/orders/{order_id}/resolve": "post_api_v2_admin_coin_traders_orders_order_id_resolve",
     "/api/v2/admin/coin-traders/{profile_id}/approve": "post_api_v2_admin_coin_traders_profile_id_approve",
     "/api/v2/admin/coin-traders/{profile_id}/freeze": "post_api_v2_admin_coin_traders_profile_id_freeze",
+    "/api/v2/admin/coin-traders/{profile_id}/liquidity/issue": "post_api_v2_admin_coin_traders_profile_id_liquidity_issue",
+    "/api/v2/admin/coin-traders/{profile_id}/liquidity/redeem": "post_api_v2_admin_coin_traders_profile_id_liquidity_redeem",
     "/api/v2/admin/coin-traders/{profile_id}/reject": "post_api_v2_admin_coin_traders_profile_id_reject",
     "/api/v2/admin/command-router": "get_api_v2_admin_command_router",
     "/api/v2/admin/competitions": "post_api_v2_admin_competitions",
@@ -19718,6 +20089,7 @@
     "/api/v2/admin/ops/stadium-ad-rotation": "post_api_v2_admin_ops_stadium_ad_rotation",
     "/api/v2/admin/ops/tournament-storylines": "post_api_v2_admin_ops_tournament_storylines",
     "/api/v2/admin/ownership-groups/reputation-cycle": "post_api_v2_admin_ownership_groups_reputation_cycle",
+    "/api/v2/admin/payment-rails": "get_api_v2_admin_payment_rails",
     "/api/v2/admin/player-import/card-supply": "post_api_v2_admin_player_import_card_supply",
     "/api/v2/admin/player-import/card-supply/csv": "post_api_v2_admin_player_import_card_supply_csv",
     "/api/v2/admin/player-import/jobs": "post_api_v2_admin_player_import_jobs",
@@ -19727,8 +20099,10 @@
     "/api/v2/admin/policies/documents": "post_api_v2_admin_policies_documents",
     "/api/v2/admin/policies/documents/versions": "post_api_v2_admin_policies_documents_versions",
     "/api/v2/admin/policies/regions/override": "post_api_v2_admin_policies_regions_override",
+    "/api/v2/admin/queues": "get_api_v2_admin_queues",
     "/api/v2/admin/ranking/events": "get_api_v2_admin_ranking_events",
     "/api/v2/admin/ranking/flags": "get_api_v2_admin_ranking_flags",
+    "/api/v2/admin/readiness": "get_api_v2_admin_readiness",
     "/api/v2/admin/real-world/providers": "post_api_v2_admin_real_world_providers",
     "/api/v2/admin/real-world/providers/{provider_id}/sync": "post_api_v2_admin_real_world_providers_provider_id_sync",
     "/api/v2/admin/referrals/analytics/summary": "get_api_v2_admin_referrals_analytics_summary",
@@ -19770,6 +20144,7 @@
     "/api/v2/admin/risk-ops/signals": "post_api_v2_admin_risk_ops_signals",
     "/api/v2/admin/risk-ops/system-events": "post_api_v2_admin_risk_ops_system_events",
     "/api/v2/admin/search": "get_api_v2_admin_search",
+    "/api/v2/admin/settlements": "get_api_v2_admin_settlements",
     "/api/v2/admin/sponsorship/analytics": "get_api_v2_admin_sponsorship_analytics",
     "/api/v2/admin/sponsorship/categories/{category}": "post_api_v2_admin_sponsorship_categories_category",
     "/api/v2/admin/sponsorship/contracts/{contract_id}/review": "post_api_v2_admin_sponsorship_contracts_contract_id_review",
@@ -19784,6 +20159,7 @@
     "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review": "post_api_v2_admin_streamer_tournaments_risk_signals_signal_id_review",
     "/api/v2/admin/streamer-tournaments/{tournament_id}/review": "post_api_v2_admin_streamer_tournaments_tournament_id_review",
     "/api/v2/admin/streamer-tournaments/{tournament_id}/settle": "post_api_v2_admin_streamer_tournaments_tournament_id_settle",
+    "/api/v2/admin/treasury": "get_api_v2_admin_treasury",
     "/api/v2/admin/treasury/bank-accounts": "post_api_v2_admin_treasury_bank_accounts",
     "/api/v2/admin/treasury/bank-accounts/{account_id}": "put_api_v2_admin_treasury_bank_accounts_account_id",
     "/api/v2/admin/treasury/dashboard": "get_api_v2_admin_treasury_dashboard",
@@ -19911,6 +20287,7 @@
     "/api/v2/club-infra/my": "get_api_v2_club_infra_my",
     "/api/v2/club-infra/my/facilities/upgrade": "post_api_v2_club_infra_my_facilities_upgrade",
     "/api/v2/club-infra/my/stadium/upgrade": "post_api_v2_club_infra_my_stadium_upgrade",
+    "/api/v2/club/current": "get_api_v2_club_current",
     "/api/v2/club/identity": "get_api_v2_club_identity",
     "/api/v2/clubs": "post_api_v2_clubs",
     "/api/v2/clubs/admin/club-lifecycle": "get_api_v2_clubs_admin_club_lifecycle",
@@ -20009,6 +20386,7 @@
     "/api/v2/clubs/{club_id}/treasury": "get_api_v2_clubs_club_id_treasury",
     "/api/v2/clubs/{club_id}/trophies": "get_api_v2_clubs_club_id_trophies",
     "/api/v2/clubs/{club_id}/trophy-cabinet": "get_api_v2_clubs_club_id_trophy_cabinet",
+    "/api/v2/clubs/{club_id}/v2-snapshot": "get_api_v2_clubs_club_id_v2_snapshot",
     "/api/v2/clubs/{club_id}/valuation": "get_api_v2_clubs_club_id_valuation",
     "/api/v2/clubs/{club_id}/vote": "post_api_v2_clubs_club_id_vote",
     "/api/v2/clubs/{club_id}/youth-pipeline": "get_api_v2_clubs_club_id_youth_pipeline",
@@ -20398,9 +20776,11 @@
     "/api/v2/matches/{match_id}/chat/messages": "post_api_v2_matches_match_id_chat_messages",
     "/api/v2/matches/{match_id}/commentary": "get_api_v2_matches_match_id_commentary",
     "/api/v2/matches/{match_id}/commentary/stream": "websocket_api_v2_matches_match_id_commentary_stream",
+    "/api/v2/matches/{match_id}/events": "get_api_v2_matches_match_id_events",
     "/api/v2/matches/{match_id}/fan-experience": "get_api_v2_matches_match_id_fan_experience",
     "/api/v2/matches/{match_id}/highlights": "get_api_v2_matches_match_id_highlights",
     "/api/v2/matches/{match_id}/highlights/share-package": "get_api_v2_matches_match_id_highlights_share_package",
+    "/api/v2/matches/{match_id}/lineups": "get_api_v2_matches_match_id_lineups",
     "/api/v2/matches/{match_id}/live": "get_api_v2_matches_match_id_live",
     "/api/v2/matches/{match_id}/live-reactions": "post_api_v2_matches_match_id_live_reactions",
     "/api/v2/matches/{match_id}/reactions": "post_api_v2_matches_match_id_reactions",
@@ -20409,8 +20789,12 @@
     "/api/v2/matches/{match_id}/social-warfare": "get_api_v2_matches_match_id_social_warfare",
     "/api/v2/matches/{match_id}/spectate": "post_api_v2_matches_match_id_spectate",
     "/api/v2/matches/{match_id}/spectators": "get_api_v2_matches_match_id_spectators",
+    "/api/v2/matches/{match_id}/state": "get_api_v2_matches_match_id_state",
+    "/api/v2/matches/{match_id}/stats": "get_api_v2_matches_match_id_stats",
     "/api/v2/matches/{match_id}/stream": "websocket_api_v2_matches_match_id_stream",
+    "/api/v2/matches/{match_id}/tactics": "post_api_v2_matches_match_id_tactics",
     "/api/v2/matches/{match_id}/tickets": "post_api_v2_matches_match_id_tickets",
+    "/api/v2/matches/{match_id}/timeline": "get_api_v2_matches_match_id_timeline",
     "/api/v2/matches/{match_id}/unity-access": "post_api_v2_matches_match_id_unity_access",
     "/api/v2/matches/{match_id}/unity-access/refresh": "post_api_v2_matches_match_id_unity_access_refresh",
     "/api/v2/me/clubs/sale-market/listings": "get_api_v2_me_clubs_sale_market_listings",
@@ -20462,6 +20846,12 @@
     "/api/v2/national-team-engine/me/history": "get_api_v2_national_team_engine_me_history",
     "/api/v2/national-team-engine/me/previous-roster": "get_api_v2_national_team_engine_me_previous_roster",
     "/api/v2/national-team-engine/rankings": "get_api_v2_national_team_engine_rankings",
+    "/api/v2/national/competitions": "get_api_v2_national_competitions",
+    "/api/v2/national/competitions/{competition_id}/rental-entry": "post_api_v2_national_competitions_competition_id_rental_entry",
+    "/api/v2/national/competitions/{competition_id}/rental-pool": "get_api_v2_national_competitions_competition_id_rental_pool",
+    "/api/v2/national/entries/{entry_id}": "get_api_v2_national_entries_entry_id",
+    "/api/v2/national/entries/{entry_id}/rentals": "post_api_v2_national_entries_entry_id_rentals",
+    "/api/v2/national/me/history": "get_api_v2_national_me_history",
     "/api/v2/news/breaking": "get_api_v2_news_breaking",
     "/api/v2/news/daily": "get_api_v2_news_daily",
     "/api/v2/news/feed": "get_api_v2_news_feed",
@@ -20597,6 +20987,9 @@
     "/api/v2/portfolios/me": "get_api_v2_portfolios_me",
     "/api/v2/predictions": "post_api_v2_predictions",
     "/api/v2/predictions/leaderboard": "get_api_v2_predictions_leaderboard",
+    "/api/v2/profile": "patch_api_v2_profile",
+    "/api/v2/profile/security": "get_api_v2_profile_security",
+    "/api/v2/profile/sessions": "get_api_v2_profile_sessions",
     "/api/v2/pundits/matches/{match_key}": "get_api_v2_pundits_matches_match_key",
     "/api/v2/rankings/clubs": "get_api_v2_rankings_clubs",
     "/api/v2/rankings/global": "get_api_v2_rankings_global",
@@ -20811,6 +21204,7 @@
     "/api/v2/viral/matches/{match_key}/clips": "get_api_v2_viral_matches_match_key_clips",
     "/api/v2/viral/sessions/{session_id}": "get_api_v2_viral_sessions_session_id",
     "/api/v2/wallet": "get_api_v2_wallet",
+    "/api/v2/wallet/summary": "get_api_v2_wallet_summary",
     "/api/v2/wallet/top-up/initiate": "post_api_v2_wallet_top_up_initiate",
     "/api/v2/wallet/top-up/verify": "post_api_v2_wallet_top_up_verify",
     "/api/v2/wallet/transactions": "get_api_v2_wallet_transactions",
@@ -20837,6 +21231,7 @@
     "/api/v2/wallets/withdrawals/eligibility": "get_api_v2_wallets_withdrawals_eligibility",
     "/api/v2/wallets/withdrawals/quote": "post_api_v2_wallets_withdrawals_quote",
     "/api/v2/wallets/withdrawals/{withdrawal_id}/receipt": "get_api_v2_wallets_withdrawals_withdrawal_id_receipt",
+    "/api/v2/webhooks/korapay": "post_api_v2_webhooks_korapay",
     "/api/v2/world-super-cup/countdown": "get_api_v2_world_super_cup_countdown",
     "/api/v2/world-super-cup/groups/table": "get_api_v2_world_super_cup_groups_table",
     "/api/v2/world-super-cup/knockout/bracket": "get_api_v2_world_super_cup_knockout_bracket",
@@ -20848,6 +21243,7 @@
     "/api/v2/world/narratives": "get_api_v2_world_narratives",
     "/api/v2/ws/market/{listing_id}": "websocket_api_v2_ws_market_listing_id",
     "/api/v2/ws/match/{match_id}": "websocket_api_v2_ws_match_match_id",
+    "/api/v2/ws/matches/{match_id}": "websocket_api_v2_ws_matches_match_id",
     "/api/v2/ws/notifications": "websocket_api_v2_ws_notifications",
     "/api/v2/ws/spectate/{match_id}": "websocket_api_v2_ws_spectate_match_id",
     "/api/v2/ws/tournament/{tournament_id}": "websocket_api_v2_ws_tournament_tournament_id",
@@ -21140,6 +21536,8 @@
     "/api/admin/coin-traders/orders/{order_id}/resolve": "/api/v2/admin/coin-traders/orders/{order_id}/resolve",
     "/api/admin/coin-traders/{profile_id}/approve": "/api/v2/admin/coin-traders/{profile_id}/approve",
     "/api/admin/coin-traders/{profile_id}/freeze": "/api/v2/admin/coin-traders/{profile_id}/freeze",
+    "/api/admin/coin-traders/{profile_id}/liquidity/issue": "/api/v2/admin/coin-traders/{profile_id}/liquidity/issue",
+    "/api/admin/coin-traders/{profile_id}/liquidity/redeem": "/api/v2/admin/coin-traders/{profile_id}/liquidity/redeem",
     "/api/admin/coin-traders/{profile_id}/reject": "/api/v2/admin/coin-traders/{profile_id}/reject",
     "/api/admin/command-router": "/api/v2/admin/command-router",
     "/api/admin/competitions": "/api/v2/admin/competitions",
@@ -21308,6 +21706,7 @@
     "/api/admin/ops/stadium-ad-rotation": "/api/v2/admin/ops/stadium-ad-rotation",
     "/api/admin/ops/tournament-storylines": "/api/v2/admin/ops/tournament-storylines",
     "/api/admin/ownership-groups/reputation-cycle": "/api/v2/admin/ownership-groups/reputation-cycle",
+    "/api/admin/payment-rails": "/api/v2/admin/payment-rails",
     "/api/admin/player-import/card-supply": "/api/v2/admin/player-import/card-supply",
     "/api/admin/player-import/card-supply/csv": "/api/v2/admin/player-import/card-supply/csv",
     "/api/admin/player-import/jobs": "/api/v2/admin/player-import/jobs",
@@ -21317,8 +21716,10 @@
     "/api/admin/policies/documents": "/api/v2/admin/policies/documents",
     "/api/admin/policies/documents/versions": "/api/v2/admin/policies/documents/versions",
     "/api/admin/policies/regions/override": "/api/v2/admin/policies/regions/override",
+    "/api/admin/queues": "/api/v2/admin/queues",
     "/api/admin/ranking/events": "/api/v2/admin/ranking/events",
     "/api/admin/ranking/flags": "/api/v2/admin/ranking/flags",
+    "/api/admin/readiness": "/api/v2/admin/readiness",
     "/api/admin/real-world/providers": "/api/v2/admin/real-world/providers",
     "/api/admin/real-world/providers/{provider_id}/sync": "/api/v2/admin/real-world/providers/{provider_id}/sync",
     "/api/admin/referrals/analytics/summary": "/api/v2/admin/referrals/analytics/summary",
@@ -21360,6 +21761,7 @@
     "/api/admin/risk-ops/signals": "/api/v2/admin/risk-ops/signals",
     "/api/admin/risk-ops/system-events": "/api/v2/admin/risk-ops/system-events",
     "/api/admin/search": "/api/v2/admin/search",
+    "/api/admin/settlements": "/api/v2/admin/settlements",
     "/api/admin/sponsorship/analytics": "/api/v2/admin/sponsorship/analytics",
     "/api/admin/sponsorship/categories/{category}": "/api/v2/admin/sponsorship/categories/{category}",
     "/api/admin/sponsorship/contracts/{contract_id}/review": "/api/v2/admin/sponsorship/contracts/{contract_id}/review",
@@ -21374,6 +21776,7 @@
     "/api/admin/streamer-tournaments/risk-signals/{signal_id}/review": "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review",
     "/api/admin/streamer-tournaments/{tournament_id}/review": "/api/v2/admin/streamer-tournaments/{tournament_id}/review",
     "/api/admin/streamer-tournaments/{tournament_id}/settle": "/api/v2/admin/streamer-tournaments/{tournament_id}/settle",
+    "/api/admin/treasury": "/api/v2/admin/treasury",
     "/api/admin/treasury/bank-accounts": "/api/v2/admin/treasury/bank-accounts",
     "/api/admin/treasury/bank-accounts/{account_id}": "/api/v2/admin/treasury/bank-accounts/{account_id}",
     "/api/admin/treasury/dashboard": "/api/v2/admin/treasury/dashboard",
@@ -21500,6 +21903,7 @@
     "/api/club-infra/my": "/api/v2/club-infra/my",
     "/api/club-infra/my/facilities/upgrade": "/api/v2/club-infra/my/facilities/upgrade",
     "/api/club-infra/my/stadium/upgrade": "/api/v2/club-infra/my/stadium/upgrade",
+    "/api/club/current": "/api/v2/club/current",
     "/api/club/identity": "/api/v2/club/identity",
     "/api/clubs": "/api/v2/clubs",
     "/api/clubs/admin/club-lifecycle": "/api/v2/clubs/admin/club-lifecycle",
@@ -21594,6 +21998,7 @@
     "/api/clubs/{club_id}/treasury": "/api/v2/clubs/{club_id}/treasury",
     "/api/clubs/{club_id}/trophies": "/api/v2/clubs/{club_id}/trophies",
     "/api/clubs/{club_id}/trophy-cabinet": "/api/v2/clubs/{club_id}/trophy-cabinet",
+    "/api/clubs/{club_id}/v2-snapshot": "/api/v2/clubs/{club_id}/v2-snapshot",
     "/api/clubs/{club_id}/valuation": "/api/v2/clubs/{club_id}/valuation",
     "/api/clubs/{club_id}/vote": "/api/v2/clubs/{club_id}/vote",
     "/api/clubs/{club_id}/youth-pipeline": "/api/v2/clubs/{club_id}/youth-pipeline",
@@ -21991,9 +22396,11 @@
     "/api/matches/{match_id}/chat/messages": "/api/v2/matches/{match_id}/chat/messages",
     "/api/matches/{match_id}/commentary": "/api/v2/matches/{match_id}/commentary",
     "/api/matches/{match_id}/commentary/stream": "/api/v2/matches/{match_id}/commentary/stream",
+    "/api/matches/{match_id}/events": "/api/v2/matches/{match_id}/events",
     "/api/matches/{match_id}/fan-experience": "/api/v2/matches/{match_id}/fan-experience",
     "/api/matches/{match_id}/highlights": "/api/v2/matches/{match_id}/highlights",
     "/api/matches/{match_id}/highlights/share-package": "/api/v2/matches/{match_id}/highlights/share-package",
+    "/api/matches/{match_id}/lineups": "/api/v2/matches/{match_id}/lineups",
     "/api/matches/{match_id}/live": "/api/v2/matches/{match_id}/live",
     "/api/matches/{match_id}/live-reactions": "/api/v2/matches/{match_id}/live-reactions",
     "/api/matches/{match_id}/reactions": "/api/v2/matches/{match_id}/reactions",
@@ -22002,8 +22409,12 @@
     "/api/matches/{match_id}/social-warfare": "/api/v2/matches/{match_id}/social-warfare",
     "/api/matches/{match_id}/spectate": "/api/v2/matches/{match_id}/spectate",
     "/api/matches/{match_id}/spectators": "/api/v2/matches/{match_id}/spectators",
+    "/api/matches/{match_id}/state": "/api/v2/matches/{match_id}/state",
+    "/api/matches/{match_id}/stats": "/api/v2/matches/{match_id}/stats",
     "/api/matches/{match_id}/stream": "/api/v2/matches/{match_id}/stream",
+    "/api/matches/{match_id}/tactics": "/api/v2/matches/{match_id}/tactics",
     "/api/matches/{match_id}/tickets": "/api/v2/matches/{match_id}/tickets",
+    "/api/matches/{match_id}/timeline": "/api/v2/matches/{match_id}/timeline",
     "/api/matches/{match_id}/unity-access": "/api/v2/matches/{match_id}/unity-access",
     "/api/matches/{match_id}/unity-access/refresh": "/api/v2/matches/{match_id}/unity-access/refresh",
     "/api/me/clubs/sale-market/listings": "/api/v2/me/clubs/sale-market/listings",
@@ -22055,6 +22466,12 @@
     "/api/national-team-engine/me/history": "/api/v2/national-team-engine/me/history",
     "/api/national-team-engine/me/previous-roster": "/api/v2/national-team-engine/me/previous-roster",
     "/api/national-team-engine/rankings": "/api/v2/national-team-engine/rankings",
+    "/api/national/competitions": "/api/v2/national/competitions",
+    "/api/national/competitions/{competition_id}/rental-entry": "/api/v2/national/competitions/{competition_id}/rental-entry",
+    "/api/national/competitions/{competition_id}/rental-pool": "/api/v2/national/competitions/{competition_id}/rental-pool",
+    "/api/national/entries/{entry_id}": "/api/v2/national/entries/{entry_id}",
+    "/api/national/entries/{entry_id}/rentals": "/api/v2/national/entries/{entry_id}/rentals",
+    "/api/national/me/history": "/api/v2/national/me/history",
     "/api/news/breaking": "/api/v2/news/breaking",
     "/api/news/daily": "/api/v2/news/daily",
     "/api/news/feed": "/api/v2/news/feed",
@@ -22190,6 +22607,9 @@
     "/api/portfolios/me": "/api/v2/portfolios/me",
     "/api/predictions": "/api/v2/predictions",
     "/api/predictions/leaderboard": "/api/v2/predictions/leaderboard",
+    "/api/profile": "/api/v2/profile",
+    "/api/profile/security": "/api/v2/profile/security",
+    "/api/profile/sessions": "/api/v2/profile/sessions",
     "/api/pundits/matches/{match_key}": "/api/v2/pundits/matches/{match_key}",
     "/api/rankings/clubs": "/api/v2/rankings/clubs",
     "/api/rankings/global": "/api/v2/rankings/global",
@@ -22426,6 +22846,8 @@
     "/api/v1/admin/coin-traders/orders/{order_id}/resolve": "/api/v2/admin/coin-traders/orders/{order_id}/resolve",
     "/api/v1/admin/coin-traders/{profile_id}/approve": "/api/v2/admin/coin-traders/{profile_id}/approve",
     "/api/v1/admin/coin-traders/{profile_id}/freeze": "/api/v2/admin/coin-traders/{profile_id}/freeze",
+    "/api/v1/admin/coin-traders/{profile_id}/liquidity/issue": "/api/v2/admin/coin-traders/{profile_id}/liquidity/issue",
+    "/api/v1/admin/coin-traders/{profile_id}/liquidity/redeem": "/api/v2/admin/coin-traders/{profile_id}/liquidity/redeem",
     "/api/v1/admin/coin-traders/{profile_id}/reject": "/api/v2/admin/coin-traders/{profile_id}/reject",
     "/api/v1/admin/command-router": "/api/v2/admin/command-router",
     "/api/v1/admin/competitions": "/api/v2/admin/competitions",
@@ -22594,6 +23016,7 @@
     "/api/v1/admin/ops/stadium-ad-rotation": "/api/v2/admin/ops/stadium-ad-rotation",
     "/api/v1/admin/ops/tournament-storylines": "/api/v2/admin/ops/tournament-storylines",
     "/api/v1/admin/ownership-groups/reputation-cycle": "/api/v2/admin/ownership-groups/reputation-cycle",
+    "/api/v1/admin/payment-rails": "/api/v2/admin/payment-rails",
     "/api/v1/admin/player-import/card-supply": "/api/v2/admin/player-import/card-supply",
     "/api/v1/admin/player-import/card-supply/csv": "/api/v2/admin/player-import/card-supply/csv",
     "/api/v1/admin/player-import/jobs": "/api/v2/admin/player-import/jobs",
@@ -22603,8 +23026,10 @@
     "/api/v1/admin/policies/documents": "/api/v2/admin/policies/documents",
     "/api/v1/admin/policies/documents/versions": "/api/v2/admin/policies/documents/versions",
     "/api/v1/admin/policies/regions/override": "/api/v2/admin/policies/regions/override",
+    "/api/v1/admin/queues": "/api/v2/admin/queues",
     "/api/v1/admin/ranking/events": "/api/v2/admin/ranking/events",
     "/api/v1/admin/ranking/flags": "/api/v2/admin/ranking/flags",
+    "/api/v1/admin/readiness": "/api/v2/admin/readiness",
     "/api/v1/admin/real-world/providers": "/api/v2/admin/real-world/providers",
     "/api/v1/admin/real-world/providers/{provider_id}/sync": "/api/v2/admin/real-world/providers/{provider_id}/sync",
     "/api/v1/admin/referrals/analytics/summary": "/api/v2/admin/referrals/analytics/summary",
@@ -22646,6 +23071,7 @@
     "/api/v1/admin/risk-ops/signals": "/api/v2/admin/risk-ops/signals",
     "/api/v1/admin/risk-ops/system-events": "/api/v2/admin/risk-ops/system-events",
     "/api/v1/admin/search": "/api/v2/admin/search",
+    "/api/v1/admin/settlements": "/api/v2/admin/settlements",
     "/api/v1/admin/sponsorship/analytics": "/api/v2/admin/sponsorship/analytics",
     "/api/v1/admin/sponsorship/categories/{category}": "/api/v2/admin/sponsorship/categories/{category}",
     "/api/v1/admin/sponsorship/contracts/{contract_id}/review": "/api/v2/admin/sponsorship/contracts/{contract_id}/review",
@@ -22660,6 +23086,7 @@
     "/api/v1/admin/streamer-tournaments/risk-signals/{signal_id}/review": "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review",
     "/api/v1/admin/streamer-tournaments/{tournament_id}/review": "/api/v2/admin/streamer-tournaments/{tournament_id}/review",
     "/api/v1/admin/streamer-tournaments/{tournament_id}/settle": "/api/v2/admin/streamer-tournaments/{tournament_id}/settle",
+    "/api/v1/admin/treasury": "/api/v2/admin/treasury",
     "/api/v1/admin/treasury/bank-accounts": "/api/v2/admin/treasury/bank-accounts",
     "/api/v1/admin/treasury/bank-accounts/{account_id}": "/api/v2/admin/treasury/bank-accounts/{account_id}",
     "/api/v1/admin/treasury/dashboard": "/api/v2/admin/treasury/dashboard",
@@ -22786,6 +23213,7 @@
     "/api/v1/club-infra/my": "/api/v2/club-infra/my",
     "/api/v1/club-infra/my/facilities/upgrade": "/api/v2/club-infra/my/facilities/upgrade",
     "/api/v1/club-infra/my/stadium/upgrade": "/api/v2/club-infra/my/stadium/upgrade",
+    "/api/v1/club/current": "/api/v2/club/current",
     "/api/v1/club/identity": "/api/v2/club/identity",
     "/api/v1/clubs": "/api/v2/clubs",
     "/api/v1/clubs/admin/club-lifecycle": "/api/v2/clubs/admin/club-lifecycle",
@@ -22880,6 +23308,7 @@
     "/api/v1/clubs/{club_id}/treasury": "/api/v2/clubs/{club_id}/treasury",
     "/api/v1/clubs/{club_id}/trophies": "/api/v2/clubs/{club_id}/trophies",
     "/api/v1/clubs/{club_id}/trophy-cabinet": "/api/v2/clubs/{club_id}/trophy-cabinet",
+    "/api/v1/clubs/{club_id}/v2-snapshot": "/api/v2/clubs/{club_id}/v2-snapshot",
     "/api/v1/clubs/{club_id}/valuation": "/api/v2/clubs/{club_id}/valuation",
     "/api/v1/clubs/{club_id}/vote": "/api/v2/clubs/{club_id}/vote",
     "/api/v1/clubs/{club_id}/youth-pipeline": "/api/v2/clubs/{club_id}/youth-pipeline",
@@ -23277,9 +23706,11 @@
     "/api/v1/matches/{match_id}/chat/messages": "/api/v2/matches/{match_id}/chat/messages",
     "/api/v1/matches/{match_id}/commentary": "/api/v2/matches/{match_id}/commentary",
     "/api/v1/matches/{match_id}/commentary/stream": "/api/v2/matches/{match_id}/commentary/stream",
+    "/api/v1/matches/{match_id}/events": "/api/v2/matches/{match_id}/events",
     "/api/v1/matches/{match_id}/fan-experience": "/api/v2/matches/{match_id}/fan-experience",
     "/api/v1/matches/{match_id}/highlights": "/api/v2/matches/{match_id}/highlights",
     "/api/v1/matches/{match_id}/highlights/share-package": "/api/v2/matches/{match_id}/highlights/share-package",
+    "/api/v1/matches/{match_id}/lineups": "/api/v2/matches/{match_id}/lineups",
     "/api/v1/matches/{match_id}/live": "/api/v2/matches/{match_id}/live",
     "/api/v1/matches/{match_id}/live-reactions": "/api/v2/matches/{match_id}/live-reactions",
     "/api/v1/matches/{match_id}/reactions": "/api/v2/matches/{match_id}/reactions",
@@ -23288,8 +23719,12 @@
     "/api/v1/matches/{match_id}/social-warfare": "/api/v2/matches/{match_id}/social-warfare",
     "/api/v1/matches/{match_id}/spectate": "/api/v2/matches/{match_id}/spectate",
     "/api/v1/matches/{match_id}/spectators": "/api/v2/matches/{match_id}/spectators",
+    "/api/v1/matches/{match_id}/state": "/api/v2/matches/{match_id}/state",
+    "/api/v1/matches/{match_id}/stats": "/api/v2/matches/{match_id}/stats",
     "/api/v1/matches/{match_id}/stream": "/api/v2/matches/{match_id}/stream",
+    "/api/v1/matches/{match_id}/tactics": "/api/v2/matches/{match_id}/tactics",
     "/api/v1/matches/{match_id}/tickets": "/api/v2/matches/{match_id}/tickets",
+    "/api/v1/matches/{match_id}/timeline": "/api/v2/matches/{match_id}/timeline",
     "/api/v1/matches/{match_id}/unity-access": "/api/v2/matches/{match_id}/unity-access",
     "/api/v1/matches/{match_id}/unity-access/refresh": "/api/v2/matches/{match_id}/unity-access/refresh",
     "/api/v1/me/clubs/sale-market/listings": "/api/v2/me/clubs/sale-market/listings",
@@ -23341,6 +23776,12 @@
     "/api/v1/national-team-engine/me/history": "/api/v2/national-team-engine/me/history",
     "/api/v1/national-team-engine/me/previous-roster": "/api/v2/national-team-engine/me/previous-roster",
     "/api/v1/national-team-engine/rankings": "/api/v2/national-team-engine/rankings",
+    "/api/v1/national/competitions": "/api/v2/national/competitions",
+    "/api/v1/national/competitions/{competition_id}/rental-entry": "/api/v2/national/competitions/{competition_id}/rental-entry",
+    "/api/v1/national/competitions/{competition_id}/rental-pool": "/api/v2/national/competitions/{competition_id}/rental-pool",
+    "/api/v1/national/entries/{entry_id}": "/api/v2/national/entries/{entry_id}",
+    "/api/v1/national/entries/{entry_id}/rentals": "/api/v2/national/entries/{entry_id}/rentals",
+    "/api/v1/national/me/history": "/api/v2/national/me/history",
     "/api/v1/news/breaking": "/api/v2/news/breaking",
     "/api/v1/news/daily": "/api/v2/news/daily",
     "/api/v1/news/feed": "/api/v2/news/feed",
@@ -23476,6 +23917,9 @@
     "/api/v1/portfolios/me": "/api/v2/portfolios/me",
     "/api/v1/predictions": "/api/v2/predictions",
     "/api/v1/predictions/leaderboard": "/api/v2/predictions/leaderboard",
+    "/api/v1/profile": "/api/v2/profile",
+    "/api/v1/profile/security": "/api/v2/profile/security",
+    "/api/v1/profile/sessions": "/api/v2/profile/sessions",
     "/api/v1/pundits/matches/{match_key}": "/api/v2/pundits/matches/{match_key}",
     "/api/v1/rankings/clubs": "/api/v2/rankings/clubs",
     "/api/v1/rankings/global": "/api/v2/rankings/global",
@@ -23720,6 +24164,7 @@
     "/api/v1/viral/matches/{match_key}/clips": "/api/v2/viral/matches/{match_key}/clips",
     "/api/v1/viral/sessions/{session_id}": "/api/v2/viral/sessions/{session_id}",
     "/api/v1/wallet": "/api/v2/wallet",
+    "/api/v1/wallet/summary": "/api/v2/wallet/summary",
     "/api/v1/wallet/top-up/initiate": "/api/v2/wallet/top-up/initiate",
     "/api/v1/wallet/top-up/verify": "/api/v2/wallet/top-up/verify",
     "/api/v1/wallet/transactions": "/api/v2/wallet/transactions",
@@ -23746,6 +24191,7 @@
     "/api/v1/wallets/withdrawals/eligibility": "/api/v2/wallets/withdrawals/eligibility",
     "/api/v1/wallets/withdrawals/quote": "/api/v2/wallets/withdrawals/quote",
     "/api/v1/wallets/withdrawals/{withdrawal_id}/receipt": "/api/v2/wallets/withdrawals/{withdrawal_id}/receipt",
+    "/api/v1/webhooks/korapay": "/api/v2/webhooks/korapay",
     "/api/v1/world-super-cup/countdown": "/api/v2/world-super-cup/countdown",
     "/api/v1/world-super-cup/groups/table": "/api/v2/world-super-cup/groups/table",
     "/api/v1/world-super-cup/knockout/bracket": "/api/v2/world-super-cup/knockout/bracket",
@@ -23756,6 +24202,7 @@
     "/api/v1/world/cultures": "/api/v2/world/cultures",
     "/api/v1/world/narratives": "/api/v2/world/narratives",
     "/api/v1/ws/match/{match_id}": "/api/v2/ws/match/{match_id}",
+    "/api/v1/ws/matches/{match_id}": "/api/v2/ws/matches/{match_id}",
     "/api/v1/ws/spectate/{match_id}": "/api/v2/ws/spectate/{match_id}",
     "/api/v1/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}",
     "/api/v2/admin/access": "/api/v2/admin/access",
@@ -23903,6 +24350,7 @@
     "/api/v2/market/nationalities": "/api/v2/market/nationalities",
     "/api/v2/market/players": "/api/v2/market/players",
     "/api/v2/matchday-economy/overview": "/api/v2/matchday-economy/overview",
+    "/api/v2/matches/{match_id}/state": "/api/v2/matches/{match_id}/state",
     "/api/v2/me/clubs/sale-market/listings": "/api/v2/me/clubs/sale-market/listings",
     "/api/v2/me/clubs/sale-market/offers": "/api/v2/me/clubs/sale-market/offers",
     "/api/v2/moderation/me/reports": "/api/v2/moderation/me/reports",
@@ -23911,6 +24359,8 @@
     "/api/v2/national-team-engine/me/history": "/api/v2/national-team-engine/me/history",
     "/api/v2/national-team-engine/me/previous-roster": "/api/v2/national-team-engine/me/previous-roster",
     "/api/v2/national-team-engine/rankings": "/api/v2/national-team-engine/rankings",
+    "/api/v2/national/competitions": "/api/v2/national/competitions",
+    "/api/v2/national/me/history": "/api/v2/national/me/history",
     "/api/v2/notifications/announcements": "/api/v2/notifications/announcements",
     "/api/v2/notifications/me": "/api/v2/notifications/me",
     "/api/v2/notifications/preferences": "/api/v2/notifications/preferences",
@@ -23965,6 +24415,7 @@
     "/api/viral/matches/{match_key}/clips": "/api/v2/viral/matches/{match_key}/clips",
     "/api/viral/sessions/{session_id}": "/api/v2/viral/sessions/{session_id}",
     "/api/wallet": "/api/v2/wallet",
+    "/api/wallet/summary": "/api/v2/wallet/summary",
     "/api/wallet/top-up/initiate": "/api/v2/wallet/top-up/initiate",
     "/api/wallet/top-up/verify": "/api/v2/wallet/top-up/verify",
     "/api/wallet/transactions": "/api/v2/wallet/transactions",
@@ -23991,6 +24442,7 @@
     "/api/wallets/withdrawals/eligibility": "/api/v2/wallets/withdrawals/eligibility",
     "/api/wallets/withdrawals/quote": "/api/v2/wallets/withdrawals/quote",
     "/api/wallets/withdrawals/{withdrawal_id}/receipt": "/api/v2/wallets/withdrawals/{withdrawal_id}/receipt",
+    "/api/webhooks/korapay": "/api/v2/webhooks/korapay",
     "/api/world-super-cup/countdown": "/api/v2/world-super-cup/countdown",
     "/api/world-super-cup/groups/table": "/api/v2/world-super-cup/groups/table",
     "/api/world-super-cup/knockout/bracket": "/api/v2/world-super-cup/knockout/bracket",
@@ -24450,6 +24902,12 @@
     "/national-team-engine/me/history": "/api/v2/national-team-engine/me/history",
     "/national-team-engine/me/previous-roster": "/api/v2/national-team-engine/me/previous-roster",
     "/national-team-engine/rankings": "/api/v2/national-team-engine/rankings",
+    "/national/competitions": "/api/v2/national/competitions",
+    "/national/competitions/{competition_id}/rental-entry": "/api/v2/national/competitions/{competition_id}/rental-entry",
+    "/national/competitions/{competition_id}/rental-pool": "/api/v2/national/competitions/{competition_id}/rental-pool",
+    "/national/entries/{entry_id}": "/api/v2/national/entries/{entry_id}",
+    "/national/entries/{entry_id}/rentals": "/api/v2/national/entries/{entry_id}/rentals",
+    "/national/me/history": "/api/v2/national/me/history",
     "/news/breaking": "/api/v2/news/breaking",
     "/news/daily": "/api/v2/news/daily",
     "/news/feed": "/api/v2/news/feed",
@@ -24697,6 +25155,7 @@
     "/viral/cascades": "/api/v2/viral/cascades",
     "/viral/clips/trending": "/api/v2/viral/clips/trending",
     "/wallet": "/api/v2/wallet",
+    "/wallet/summary": "/api/v2/wallet/summary",
     "/wallet/top-up/initiate": "/api/v2/wallet/top-up/initiate",
     "/wallet/top-up/verify": "/api/v2/wallet/top-up/verify",
     "/wallet/transactions": "/api/v2/wallet/transactions",
@@ -24729,6 +25188,7 @@
     "/world-super-cup/playoff/draw": "/api/v2/world-super-cup/playoff/draw",
     "/world-super-cup/qualification/explanation": "/api/v2/world-super-cup/qualification/explanation",
     "/ws/match/{match_id}": "/api/v2/ws/match/{match_id}",
+    "/ws/matches/{match_id}": "/api/v2/ws/matches/{match_id}",
     "/ws/spectate/{match_id}": "/api/v2/ws/spectate/{match_id}",
     "/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}"
   }

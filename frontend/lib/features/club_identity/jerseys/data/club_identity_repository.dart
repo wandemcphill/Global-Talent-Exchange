@@ -34,12 +34,12 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
   ClubIdentityApiRepository({
     required this.config,
     required this.transport,
-    ClubIdentityRepository? fixtures,
-  }) : fixtures = fixtures ?? MockClubIdentityRepository();
+    this.fixtures,
+  });
 
   final GteRepositoryConfig config;
   final GteTransport transport;
-  final ClubIdentityRepository fixtures;
+  final ClubIdentityRepository? fixtures;
 
   factory ClubIdentityApiRepository.standard({
     required String baseUrl,
@@ -65,7 +65,7 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
       () async => BadgeProfileDto.fromJson(
         _asMap(await _request('GET', '/api/clubs/$clubId/badge')),
       ),
-      () => fixtures.fetchBadge(clubId),
+      () => _requireFixtures().fetchBadge(clubId),
     );
   }
 
@@ -75,7 +75,7 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
       () async => ClubIdentityDto.fromJson(
         _asMap(await _request('GET', '/api/clubs/$clubId/identity')),
       ),
-      () => fixtures.fetchIdentity(clubId),
+      () => _requireFixtures().fetchIdentity(clubId),
     );
   }
 
@@ -85,7 +85,7 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
       () async => JerseySetDto.fromJson(
         _asMap(await _request('GET', '/api/clubs/$clubId/jerseys')),
       ),
-      () => fixtures.fetchJerseys(clubId),
+      () => _requireFixtures().fetchJerseys(clubId),
     );
   }
 
@@ -100,7 +100,7 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
           await _request('PATCH', '/api/clubs/$clubId/identity', body: patch),
         ),
       ),
-      () => fixtures.patchIdentity(clubId: clubId, patch: patch),
+      () => _requireFixtures().patchIdentity(clubId: clubId, patch: patch),
     );
   }
 
@@ -115,7 +115,7 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
           await _request('PATCH', '/api/clubs/$clubId/jerseys', body: patch),
         ),
       ),
-      () => fixtures.patchJerseys(clubId: clubId, patch: patch),
+      () => _requireFixtures().patchJerseys(clubId: clubId, patch: patch),
     );
   }
 
@@ -126,7 +126,20 @@ class ClubIdentityApiRepository extends ClubIdentityRepository {
     if (config.mode == GteBackendMode.fixture) {
       return fixtureCall();
     }
+
     return liveCall();
+  }
+
+  ClubIdentityRepository _requireFixtures() {
+    final ClubIdentityRepository? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Club identity fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 
   Future<Object?> _request(String method, String path, {Object? body}) async {

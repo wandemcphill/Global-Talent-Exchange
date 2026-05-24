@@ -1,32 +1,37 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
 import '../models/admin_engine_models.dart';
 
 class AdminEngineApi {
-  AdminEngineApi({required this.client, required this.fixtures});
+  AdminEngineApi({required this.client, required AdminEngineFixtures? fixtures})
+    : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final AdminEngineFixtures fixtures;
+  final AdminEngineFixtures? _fixtures;
 
   factory AdminEngineApi.standard({
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return AdminEngineApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: AdminEngineFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory AdminEngineApi.fixture() {
+    assertFixtureFactoryAllowed('AdminEngineApi.fixture');
     return AdminEngineApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -47,7 +52,7 @@ class AdminEngineApi {
         '/admin/admin-engine/feature-flags',
       );
       return payload.map(AdminFeatureFlag.fromJson).toList(growable: false);
-    }, fixtures.featureFlags);
+    }, () => _requireFixtures().featureFlags());
   }
 
   Future<AdminFeatureFlag> upsertFeatureFlag({
@@ -72,7 +77,7 @@ class AdminEngineApi {
         );
         return AdminFeatureFlag.fromJson(payload);
       },
-      () async => fixtures.upsertFeatureFlag(
+      () async => _requireFixtures().upsertFeatureFlag(
         featureKey: featureKey,
         title: title,
         enabled: enabled,
@@ -86,7 +91,7 @@ class AdminEngineApi {
         '/admin/admin-engine/calendar-rules',
       );
       return payload.map(AdminCalendarRule.fromJson).toList(growable: false);
-    }, fixtures.calendarRules);
+    }, () => _requireFixtures().calendarRules());
   }
 
   Future<AdminCalendarRule> upsertCalendarRule({
@@ -98,22 +103,26 @@ class AdminEngineApi {
     int priority = 100,
     Map<String, Object?> config = const <String, Object?>{},
   }) {
-    return client.withFallback<AdminCalendarRule>(() async {
-      final Object? payload = await client.request(
-        'POST',
-        '/admin/admin-engine/calendar-rules',
-        body: <String, Object?>{
-          'rule_key': ruleKey,
-          'title': title,
-          'description': description,
-          'world_cup_exclusive': worldCupExclusive,
-          'active': active,
-          'priority': priority,
-          'config_json': config,
-        },
-      );
-      return AdminCalendarRule.fromJson(payload);
-    }, () async => fixtures.upsertCalendarRule(ruleKey: ruleKey, title: title));
+    return client.withFallback<AdminCalendarRule>(
+      () async {
+        final Object? payload = await client.request(
+          'POST',
+          '/admin/admin-engine/calendar-rules',
+          body: <String, Object?>{
+            'rule_key': ruleKey,
+            'title': title,
+            'description': description,
+            'world_cup_exclusive': worldCupExclusive,
+            'active': active,
+            'priority': priority,
+            'config_json': config,
+          },
+        );
+        return AdminCalendarRule.fromJson(payload);
+      },
+      () async =>
+          _requireFixtures().upsertCalendarRule(ruleKey: ruleKey, title: title),
+    );
   }
 
   Future<List<AdminRewardRule>> listRewardRules() {
@@ -122,7 +131,7 @@ class AdminEngineApi {
         '/admin/admin-engine/reward-rules',
       );
       return payload.map(AdminRewardRule.fromJson).toList(growable: false);
-    }, fixtures.rewardRules);
+    }, () => _requireFixtures().rewardRules());
   }
 
   Future<AdminRewardRule> upsertRewardRule({
@@ -137,28 +146,44 @@ class AdminEngineApi {
     AdminRewardRuleStabilityControls? stabilityControls,
     bool active = true,
   }) {
-    return client.withFallback<AdminRewardRule>(() async {
-      final Object? payload = await client.request(
-        'POST',
-        '/admin/admin-engine/reward-rules',
-        body: <String, Object?>{
-          'rule_key': ruleKey,
-          'title': title,
-          'description': description,
-          'trading_fee_bps': tradingFeeBps,
-          'gift_platform_rake_bps': giftPlatformRakeBps,
-          'withdrawal_fee_bps': withdrawalFeeBps,
-          'minimum_withdrawal_fee_credits': minimumWithdrawalFeeCredits,
-          'competition_platform_fee_bps': competitionPlatformFeeBps,
-          'stability_controls':
-              (stabilityControls ??
-                      const AdminRewardRuleStabilityControls.defaults())
-                  .toJson(),
-          'active': active,
-        },
+    return client.withFallback<AdminRewardRule>(
+      () async {
+        final Object? payload = await client.request(
+          'POST',
+          '/admin/admin-engine/reward-rules',
+          body: <String, Object?>{
+            'rule_key': ruleKey,
+            'title': title,
+            'description': description,
+            'trading_fee_bps': tradingFeeBps,
+            'gift_platform_rake_bps': giftPlatformRakeBps,
+            'withdrawal_fee_bps': withdrawalFeeBps,
+            'minimum_withdrawal_fee_credits': minimumWithdrawalFeeCredits,
+            'competition_platform_fee_bps': competitionPlatformFeeBps,
+            'stability_controls':
+                (stabilityControls ??
+                        const AdminRewardRuleStabilityControls.defaults())
+                    .toJson(),
+            'active': active,
+          },
+        );
+        return AdminRewardRule.fromJson(payload);
+      },
+      () async =>
+          _requireFixtures().upsertRewardRule(ruleKey: ruleKey, title: title),
+    );
+  }
+
+  AdminEngineFixtures _requireFixtures() {
+    final AdminEngineFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Admin engine fixtures are not registered in strict-live runtime.',
       );
-      return AdminRewardRule.fromJson(payload);
-    }, () async => fixtures.upsertRewardRule(ruleKey: ruleKey, title: title));
+    }
+    return fixtures;
   }
 }
 

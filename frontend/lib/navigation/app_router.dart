@@ -30,7 +30,6 @@ import '../features/world/world_screen.dart';
 import '../shared/models/auth_session.dart';
 import '../shared/providers/auth_provider.dart';
 import '../shared/widgets/app_shell_scaffold.dart';
-import '../widgets/gte_route_integrity_screen.dart';
 import '../screens/competitions/competition_create_screen.dart';
 import 'app_destinations.dart';
 
@@ -288,9 +287,9 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoutes.streamerEngine,
-        pageBuilder:
+        redirect:
             (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Streamer tournaments'),
+                AppRoutes.competitions,
       ),
       GoRoute(
         path: AppRoutes.competitionsFamily,
@@ -330,50 +329,38 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoutes.matchesBroadcast,
-        pageBuilder:
+        redirect:
             (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Broadcast package'),
+                AppRoutes.matchesViewerLocation(
+                  state.pathParameters['matchKey'] ?? 'live-match',
+                ),
       ),
       GoRoute(
         path: AppRoutes.matchesThreeD,
-        pageBuilder:
+        redirect:
             (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Advanced match viewing'),
+                AppRoutes.matchesViewerLocation(
+                  state.pathParameters['matchKey'] ?? 'live-match',
+                ),
       ),
       GoRoute(
         path: AppRoutes.matchesNativeThreeD,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Advanced match viewing'),
+        redirect:
+            (BuildContext context, GoRouterState state) => AppRoutes.matches,
       ),
       GoRoute(
         path: AppRoutes.matchesSpectate,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Spectate mode'),
+        redirect:
+            (BuildContext context, GoRouterState state) => AppRoutes.matches,
       ),
       GoRoute(
         path: AppRoutes.matchesSimulate,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Match simulation tools'),
+        redirect:
+            (BuildContext context, GoRouterState state) => AppRoutes.matches,
       ),
     ],
   );
 });
-
-Page<void> _comingSoonPage(GoRouterState state, {required String title}) {
-  return AppMotion.slidePage<void>(
-    state: state,
-    child: GteRouteIntegrityScreen.blocked(
-      eyebrow: 'COMING SOON',
-      title: '$title coming soon',
-      message:
-          'This route is blocked for launch while GTEX focuses on the 2D football manager experience.',
-      icon: Icons.lock_clock_outlined,
-    ),
-  );
-}
 
 class _CompetitionCreateRouteScreen extends StatefulWidget {
   const _CompetitionCreateRouteScreen({

@@ -7,14 +7,16 @@ import '../models/gtex_regen_models.dart';
 class GtexCreateSonScreenV2 extends StatefulWidget {
   const GtexCreateSonScreenV2({
     super.key,
-    this.repository = const DemoGtexRegenRepository(),
+    this.repository,
     this.initialData,
     this.embedded = false,
+    this.allowFixtureData = false,
   });
 
-  final GtexRegenRepository repository;
+  final GtexRegenRepository? repository;
   final GtexRegenWorldData? initialData;
   final bool embedded;
+  final bool allowFixtureData;
 
   @override
   State<GtexCreateSonScreenV2> createState() => _GtexCreateSonScreenV2State();
@@ -44,12 +46,21 @@ class _GtexCreateSonScreenV2State extends State<GtexCreateSonScreenV2> {
     'ST',
   ];
 
+  GtexRegenRepository? get _repository =>
+      widget.repository ??
+      (widget.allowFixtureData ? const DemoGtexRegenRepository() : null);
+
   @override
   void initState() {
     super.initState();
+    final GtexRegenRepository? repository = _repository;
     _future =
         widget.initialData == null
-            ? widget.repository.loadWorld()
+            ? repository == null
+                ? Future<GtexRegenWorldData>.error(
+                  StateError('Live Create-a-Son repository is required.'),
+                )
+                : repository.loadWorld()
             : Future<GtexRegenWorldData>.value(widget.initialData);
   }
 
@@ -114,7 +125,10 @@ class _GtexCreateSonScreenV2State extends State<GtexCreateSonScreenV2> {
             draft: _draft,
             createdOrder: _createdOrder,
             submitting: _submitting,
-            onSubmit: _parentPlayerId == null ? null : () => _submit(data),
+            onSubmit:
+                _parentPlayerId == null || _repository == null
+                    ? null
+                    : () => _submit(data),
           ),
           rightPanelWidth: 360,
         );
@@ -138,11 +152,13 @@ class _GtexCreateSonScreenV2State extends State<GtexCreateSonScreenV2> {
   );
 
   Future<void> _submit(GtexRegenWorldData data) async {
+    final GtexRegenRepository? repository = _repository;
+    if (repository == null) {
+      return;
+    }
     setState(() => _submitting = true);
     try {
-      final GtexCreateSonOrder order = await widget.repository.createSon(
-        _draft,
-      );
+      final GtexCreateSonOrder order = await repository.createSon(_draft);
       if (!mounted) return;
       setState(() => _createdOrder = order);
       ScaffoldMessenger.of(context).showSnackBar(

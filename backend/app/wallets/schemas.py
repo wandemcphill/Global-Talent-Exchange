@@ -68,8 +68,8 @@ class PaymentEventCreate(WalletRequestModel):
         title="PaymentEventCreate",
         json_schema_extra={
             "example": {
-                "provider": "paystack",
-                "provider_reference": "paystack-ref-001",
+                "provider": "korapay",
+                "provider_reference": "korapay-ref-001",
                 "amount": "50.0000",
                 "pack_code": "starter-50",
             }
@@ -307,8 +307,8 @@ class PaymentEventView(BaseModel):
         json_schema_extra={
             "example": {
                 "id": "pay-123",
-                "provider": "paystack",
-                "provider_reference": "paystack-ref-001",
+                "provider": "korapay",
+                "provider_reference": "korapay-ref-001",
                 "pack_code": "starter-50",
                 "amount": "50.0000",
                 "unit": "credit",
@@ -582,7 +582,7 @@ class WalletTransactionRecordView(BaseModel):
 
 class WalletTopUpInitiateRequest(BaseModel):
     amount: Decimal
-    provider: str = Field(default="paystack", min_length=3, max_length=32)
+    provider: str = Field(default="korapay", min_length=3, max_length=32)
     unit: LedgerUnit = LedgerUnit.COIN
     callback_url: str | None = Field(default=None, max_length=2048)
 

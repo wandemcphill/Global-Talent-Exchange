@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from time import perf_counter
 import logging
+from uuid import uuid4
 from typing import TYPE_CHECKING
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -21,6 +22,8 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         started_at = perf_counter()
         route = self._route_label(request)
+        correlation_id = self._correlation_id(request)
+        request.state.correlation_id = correlation_id
         should_record = route not in {"/health", "/ready", "/metrics"}
         if should_record:
             self.metrics.http_requests_in_progress.inc()
@@ -38,6 +41,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                 logger.exception(
                     "http.request.failed",
                     extra={
+                        "correlation_id": correlation_id,
                         "method": request.method,
                         "route": route,
                         "status_code": 500,
@@ -61,12 +65,14 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             logger.info(
                 "http.request.completed",
                 extra={
+                    "correlation_id": correlation_id,
                     "method": request.method,
                     "route": route,
                     "status_code": response.status_code,
                     "duration_ms": round(elapsed * 1000, 2),
                 },
             )
+        response.headers.setdefault("X-Correlation-ID", correlation_id)
         return response
 
     @staticmethod
@@ -76,3 +82,11 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         if path:
             return str(path)
         return request.url.path
+
+    @staticmethod
+    def _correlation_id(request: Request) -> str:
+        for header_name in ("x-correlation-id", "x-request-id"):
+            value = request.headers.get(header_name)
+            if value and value.strip():
+                return value.strip()[:128]
+        return f"gtex-{uuid4().hex}"

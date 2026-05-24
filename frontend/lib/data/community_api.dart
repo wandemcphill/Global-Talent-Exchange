@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
@@ -7,7 +9,7 @@ class CommunityApi {
   CommunityApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
-  final _CommunityFixtures fixtures;
+  final _CommunityFixtures? fixtures;
 
   factory CommunityApi.standard({
     required String baseUrl,
@@ -26,11 +28,12 @@ class CommunityApi {
             accessToken: accessToken,
             mode: resolvedMode,
           ),
-      fixtures: _CommunityFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory CommunityApi.fixture({GteTransport? transport}) {
+    assertFixtureFactoryAllowed('CommunityApi.fixture');
     return CommunityApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -51,7 +54,7 @@ class CommunityApi {
         '/api/community/digest',
       );
       return CommunityDigest.fromJson(payload);
-    }, fixtures.digest);
+    }, () => _requireFixtures().digest());
   }
 
   Future<bool> fetchCreatorClubFollowing({required String clubId}) async {
@@ -64,7 +67,7 @@ class CommunityApi {
         return following;
       }
       return following?.toString().trim().toLowerCase() == 'true';
-    }, () async => fixtures.creatorClubFollowing(clubId));
+    }, () async => _requireFixtures().creatorClubFollowing(clubId));
   }
 
   Future<void> followCreatorClub({required String clubId}) async {
@@ -76,7 +79,7 @@ class CommunityApi {
           'metadata_json': <String, Object?>{'source': 'active_shell'},
         },
       );
-    }, () async => fixtures.followCreatorClub(clubId));
+    }, () async => _requireFixtures().followCreatorClub(clubId));
   }
 
   Future<void> unfollowCreatorClub({required String clubId}) async {
@@ -85,7 +88,7 @@ class CommunityApi {
         'DELETE',
         '/api/community/creator-clubs/$clubId/follow',
       );
-    }, () async => fixtures.unfollowCreatorClub(clubId));
+    }, () async => _requireFixtures().unfollowCreatorClub(clubId));
   }
 
   Future<List<CommunityWatchlistItem>> listWatchlist() {
@@ -96,7 +99,7 @@ class CommunityApi {
       return payload
           .map(CommunityWatchlistItem.fromJson)
           .toList(growable: false);
-    }, fixtures.watchlist);
+    }, () => _requireFixtures().watchlist());
   }
 
   Future<CommunityWatchlistItem> addWatchlist({
@@ -122,7 +125,7 @@ class CommunityApi {
         );
         return CommunityWatchlistItem.fromJson(payload);
       },
-      () async => fixtures.addWatchlist(
+      () async => _requireFixtures().addWatchlist(
         competitionKey: competitionKey,
         competitionTitle: competitionTitle,
       ),
@@ -135,7 +138,7 @@ class CommunityApi {
         'DELETE',
         '/api/community/watchlist/$competitionKey',
       );
-    }, () async => fixtures.removeWatchlist(competitionKey));
+    }, () async => _requireFixtures().removeWatchlist(competitionKey));
   }
 
   Future<List<LiveThread>> listLiveThreads({String? competitionKey}) {
@@ -148,7 +151,7 @@ class CommunityApi {
         },
       );
       return payload.map(LiveThread.fromJson).toList(growable: false);
-    }, fixtures.liveThreads);
+    }, () => _requireFixtures().liveThreads());
   }
 
   Future<LiveThread> createLiveThread({
@@ -171,7 +174,10 @@ class CommunityApi {
         );
         return LiveThread.fromJson(payload);
       },
-      () async => fixtures.createLiveThread(threadKey: threadKey, title: title),
+      () async => _requireFixtures().createLiveThread(
+        threadKey: threadKey,
+        title: title,
+      ),
     );
   }
 
@@ -181,7 +187,7 @@ class CommunityApi {
         '/api/community/live-threads/$threadId',
       );
       return LiveThread.fromJson(payload);
-    }, () async => fixtures.getLiveThread(threadId));
+    }, () async => _requireFixtures().getLiveThread(threadId));
   }
 
   Future<List<LiveThreadMessage>> listLiveThreadMessages(String threadId) {
@@ -190,7 +196,7 @@ class CommunityApi {
         '/api/community/live-threads/$threadId/messages',
       );
       return payload.map(LiveThreadMessage.fromJson).toList(growable: false);
-    }, () async => fixtures.liveThreadMessages(threadId));
+    }, () async => _requireFixtures().liveThreadMessages(threadId));
   }
 
   Future<LiveThreadMessage> postLiveThreadMessage({
@@ -207,7 +213,7 @@ class CommunityApi {
         },
       );
       return LiveThreadMessage.fromJson(payload);
-    }, () async => fixtures.postLiveThreadMessage(threadId, body));
+    }, () async => _requireFixtures().postLiveThreadMessage(threadId, body));
   }
 
   Future<List<PrivateMessageThread>> listPrivateThreads() {
@@ -216,7 +222,7 @@ class CommunityApi {
         '/api/community/private-messages/threads',
       );
       return payload.map(PrivateMessageThread.fromJson).toList(growable: false);
-    }, fixtures.privateThreads);
+    }, () => _requireFixtures().privateThreads());
   }
 
   Future<PrivateMessageThread> createPrivateThread({
@@ -236,7 +242,7 @@ class CommunityApi {
         },
       );
       return PrivateMessageThread.fromJson(payload);
-    }, () async => fixtures.createPrivateThread(subject: subject));
+    }, () async => _requireFixtures().createPrivateThread(subject: subject));
   }
 
   Future<PrivateMessageThread> fetchPrivateThread(String threadId) {
@@ -245,7 +251,7 @@ class CommunityApi {
         '/api/community/private-messages/threads/$threadId',
       );
       return PrivateMessageThread.fromJson(payload);
-    }, () async => fixtures.getPrivateThread(threadId));
+    }, () async => _requireFixtures().getPrivateThread(threadId));
   }
 
   Future<List<PrivateMessage>> listPrivateMessages(String threadId) {
@@ -254,7 +260,7 @@ class CommunityApi {
         '/api/community/private-messages/threads/$threadId/messages',
       );
       return payload.map(PrivateMessage.fromJson).toList(growable: false);
-    }, () async => fixtures.privateMessages(threadId));
+    }, () async => _requireFixtures().privateMessages(threadId));
   }
 
   Future<PrivateMessage> postPrivateMessage({
@@ -271,7 +277,7 @@ class CommunityApi {
         },
       );
       return PrivateMessage.fromJson(payload);
-    }, () async => fixtures.postPrivateMessage(threadId, body));
+    }, () async => _requireFixtures().postPrivateMessage(threadId, body));
   }
 
   Future<List<DiscussionCategory>> listDiscussionCategories() {
@@ -280,7 +286,7 @@ class CommunityApi {
         '/api/discussions/categories',
       );
       return payload.map(DiscussionCategory.fromJson).toList(growable: false);
-    }, fixtures.discussionCategories);
+    }, () => _requireFixtures().discussionCategories());
   }
 
   Future<List<LiveThread>> listDiscussionThreads({String? category}) {
@@ -292,7 +298,7 @@ class CommunityApi {
         },
       );
       return payload.map(LiveThread.fromJson).toList(growable: false);
-    }, () async => fixtures.discussionThreads(category: category));
+    }, () async => _requireFixtures().discussionThreads(category: category));
   }
 
   Future<LiveThread> createDiscussionThread({
@@ -300,19 +306,23 @@ class CommunityApi {
     required String title,
     required String body,
   }) {
-    return client.withFallback<LiveThread>(() async {
-      final Object? payload = await client.request(
-        'POST',
-        '/api/discussions/threads',
-        body: <String, Object?>{
-          'category': category,
-          'title': title,
-          'body': body,
-          'metadata_json': <String, Object?>{},
-        },
-      );
-      return LiveThread.fromJson(payload);
-    }, () async => fixtures.createDiscussionThread(category, title, body));
+    return client.withFallback<LiveThread>(
+      () async {
+        final Object? payload = await client.request(
+          'POST',
+          '/api/discussions/threads',
+          body: <String, Object?>{
+            'category': category,
+            'title': title,
+            'body': body,
+            'metadata_json': <String, Object?>{},
+          },
+        );
+        return LiveThread.fromJson(payload);
+      },
+      () async =>
+          _requireFixtures().createDiscussionThread(category, title, body),
+    );
   }
 
   Future<List<LiveThreadMessage>> listDiscussionReplies(String threadId) {
@@ -321,7 +331,7 @@ class CommunityApi {
         '/api/discussions/threads/$threadId/replies',
       );
       return payload.map(LiveThreadMessage.fromJson).toList(growable: false);
-    }, () async => fixtures.liveThreadMessages(threadId));
+    }, () async => _requireFixtures().liveThreadMessages(threadId));
   }
 
   Future<LiveThreadMessage> postDiscussionReply({
@@ -338,14 +348,14 @@ class CommunityApi {
         },
       );
       return LiveThreadMessage.fromJson(payload);
-    }, () async => fixtures.postLiveThreadMessage(threadId, body));
+    }, () async => _requireFixtures().postLiveThreadMessage(threadId, body));
   }
 
   Future<List<GiftCatalogItem>> listGiftCatalog() {
     return client.withFallback<List<GiftCatalogItem>>(() async {
       final List<dynamic> payload = await client.getList('/api/gifts/catalog');
       return payload.map(GiftCatalogItem.fromJson).toList(growable: false);
-    }, fixtures.giftCatalog);
+    }, () => _requireFixtures().giftCatalog());
   }
 
   Future<List<GiftCatalogItem>> listAwardGiftPacks() {
@@ -354,7 +364,7 @@ class CommunityApi {
         '/api/gifts/award-packs',
       );
       return payload.map(GiftCatalogItem.fromJson).toList(growable: false);
-    }, fixtures.awardGiftPacks);
+    }, () => _requireFixtures().awardGiftPacks());
   }
 
   Future<GiftEvent> sendGift({
@@ -385,7 +395,19 @@ class CommunityApi {
         },
       );
       return GiftEvent.fromJson(payload);
-    }, () async => fixtures.fakeGiftEvent(giftKey: giftKey));
+    }, () async => _requireFixtures().fakeGiftEvent(giftKey: giftKey));
+  }
+
+  _CommunityFixtures _requireFixtures() {
+    final _CommunityFixtures? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Community fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 }
 

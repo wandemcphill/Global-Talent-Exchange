@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import time
 
 from app.live_matches.service import ensure_live_match_hub
@@ -105,6 +106,30 @@ def test_public_broadcast_home_works_without_auth(client, app) -> None:
     payload = response.json()
     assert payload["channels"]
     assert payload["featured_channel"] is not None
+
+
+def test_broadcast_home_does_not_emit_replay_fallbacks_in_protected_runtime(client, app) -> None:
+    app.state.settings = replace(app.state.settings, app_env="production")
+    hub = ensure_live_match_hub(app)
+    with hub._lock:
+        known_match_ids = list(hub._matches.keys())
+        hub._matches.clear()
+        for match_id in known_match_ids:
+            hub._halted_matches.pop(match_id, None)
+    for match_id in known_match_ids:
+        hub._hot_cache.clear_match_state(match_id)
+        hub._hot_cache.clear_match_events(match_id)
+
+    response = client.get("/api/broadcast/home")
+
+    assert response.status_code == 200
+    payload = response.json()
+    live_channel = next(item for item in payload["channels"] if item["channel_id"] == "live")
+    ai_channel = next(item for item in payload["channels"] if item["channel_id"] == "ai")
+    assert live_channel["current_program"] is None
+    assert live_channel["metadata"]["strict_live_blocked_reason"] == "no_persisted_live_programs"
+    assert ai_channel["current_program"] is None
+    assert ai_channel["metadata"]["strict_live_blocked_reason"] == "generated_broadcast_programs_disabled"
 
 
 def test_broadcast_network_refreshes_cached_fallback_slots_when_live_match_starts(

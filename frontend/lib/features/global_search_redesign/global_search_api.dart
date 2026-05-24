@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
@@ -5,10 +7,13 @@ import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'global_search_models.dart';
 
 class GtexGlobalSearchApi {
-  GtexGlobalSearchApi({required this.client, required this.fixtures});
+  GtexGlobalSearchApi({
+    required this.client,
+    GtexGlobalSearchFixtures? fixtures,
+  }) : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final GtexGlobalSearchFixtures fixtures;
+  final GtexGlobalSearchFixtures? _fixtures;
 
   factory GtexGlobalSearchApi.standard({
     required String baseUrl,
@@ -23,11 +28,11 @@ class GtexGlobalSearchApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: GtexGlobalSearchFixtures.seed(),
     );
   }
 
   factory GtexGlobalSearchApi.fixture() {
+    assertFixtureFactoryAllowed('GtexGlobalSearchApi.fixture');
     return GtexGlobalSearchApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -56,7 +61,17 @@ class GtexGlobalSearchApi {
       return payload
           .map(GtexGlobalSearchResult.fromJson)
           .toList(growable: false);
-    }, () => fixtures.search(query, admin: admin, limit: limit));
+    }, () => _requireFixtures().search(query, admin: admin, limit: limit));
+  }
+
+  GtexGlobalSearchFixtures _requireFixtures() {
+    final GtexGlobalSearchFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw StateError(
+        'Global search fixtures are available only in fixture mode.',
+      );
+    }
+    return fixtures;
   }
 }
 

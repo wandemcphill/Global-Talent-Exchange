@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.admin.capabilities import ADMIN_CAPABILITY_VALUES
 from app.admin_godmode.service import (
     ALL_ADMIN_PERMISSIONS,
     AdminGodModeService,
@@ -54,6 +55,7 @@ class AdminPermissionCatalogView(BaseModel):
 @router.get("/permissions", response_model=AdminPermissionCatalogView)
 def list_permission_catalog() -> AdminPermissionCatalogView:
     permission_set: set[str] = set(ALL_ADMIN_PERMISSIONS)
+    permission_set.update(ADMIN_CAPABILITY_VALUES)
     for item in DEFAULT_ROLE_PERMISSIONS.values():
         permission_set.update(item)
     permission_set.update(

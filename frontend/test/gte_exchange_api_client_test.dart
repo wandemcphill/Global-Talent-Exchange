@@ -185,38 +185,11 @@ void main() {
   );
 
   test(
-    'liveThenFixture client falls back to fixture builders for public player surfaces',
+    'liveThenFixture client fails closed for public player surfaces',
     () async {
-      final _CountingFixtureRepository fixtures = _CountingFixtureRepository();
-      final GteExchangeApiClient client = GteExchangeApiClient(
-        config: const GteRepositoryConfig(
-          baseUrl: 'https://example.test',
-          mode: GteBackendMode.liveThenFixture,
-        ),
-        transport: _ThrowingTransport(),
-        repository: fixtures,
+      await _expectPlayerSurfaceFailuresWithoutFixtureFallback(
+        GteBackendMode.liveThenFixture,
       );
-
-      final GteMarketPlayerListView market = await client.fetchPlayers();
-      final GteMarketPlayerDetailView detail = await client.fetchPlayerDetail(
-        'lamine-yamal',
-      );
-      final GtePlayerOverview overview = await client.fetchPlayerOverview(
-        'lamine-yamal',
-      );
-      final List<GteCareerEntry> career = await client.fetchPlayerCareer(
-        'lamine-yamal',
-      );
-      final GtePlayerLifecycleSnapshot? lifecycle = await client
-          .fetchPlayerLifecycleSnapshot('lamine-yamal');
-
-      expect(market.items, isNotEmpty);
-      expect(detail.playerId, 'lamine-yamal');
-      expect(overview.playerId, 'lamine-yamal');
-      expect(career, isNotEmpty);
-      expect(lifecycle?.playerId, 'lamine-yamal');
-      expect(fixtures.fetchPlayersCalls, 1);
-      expect(fixtures.fetchPlayerProfileCalls, 4);
     },
   );
 }

@@ -43,9 +43,7 @@ class GtexPageSurface extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
-            padding: padding,
             decoration: BoxDecoration(
-              color: surfaceColor,
               borderRadius: radius,
               border: Border.all(
                 color:
@@ -63,7 +61,12 @@ class GtexPageSurface extends StatelessWidget {
                 if (isSelected) GtexColors.glow(accent, opacity: 0.18),
               ],
             ),
-            child: Material(type: MaterialType.transparency, child: child),
+            child: Material(
+              color: surfaceColor,
+              borderRadius: radius,
+              clipBehavior: Clip.antiAlias,
+              child: Padding(padding: padding, child: child),
+            ),
           ),
         ),
       ),

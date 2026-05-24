@@ -113,6 +113,17 @@ class NationalTeamUserHistoryResponse(BaseModel):
     squad_memberships: list[NationalTeamSquadMemberResponse]
 
 
+class NationalTeamRentalEligibilityResponse(BaseModel):
+    eligible: bool = True
+    reasons: list[str] = Field(default_factory=list)
+    checks: dict[str, bool] = Field(default_factory=dict)
+    message: str | None = None
+    active_rental_count: int = 0
+    duplicate: bool = False
+    cooldown_until: datetime | None = None
+    source: str = "national_team_engine"
+
+
 class NationalTeamRentalPlayerView(BaseModel):
     player_id: str
     player_name: str
@@ -146,6 +157,7 @@ class NationalTeamRentalPlayerView(BaseModel):
     admin_trade_enabled: bool = False
     supply_mode: str = "infinite"
     demand_multiplier: Decimal = Field(default=Decimal("1.0000"))
+    eligibility: NationalTeamRentalEligibilityResponse = Field(default_factory=NationalTeamRentalEligibilityResponse)
 
 
 class NationalTeamRentalPlayerCollectionResponse(BaseModel):

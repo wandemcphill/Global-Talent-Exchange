@@ -21,10 +21,12 @@ class GteNotificationsScreenV2 extends StatefulWidget {
     super.key,
     this.controller,
     this.exchangeController,
+    this.allowFixtureData = false,
   });
 
   final GtexEngagementController? controller;
   final GteExchangeController? exchangeController;
+  final bool allowFixtureData;
 
   @override
   State<GteNotificationsScreenV2> createState() =>
@@ -42,6 +44,7 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
   String? _errorMessage;
 
   bool get _usesLiveNotifications => widget.exchangeController != null;
+  bool get _canUseFixtureData => widget.allowFixtureData;
 
   @override
   void initState() {
@@ -49,8 +52,11 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
     _controller = widget.controller ?? GtexEngagementController();
     if (_usesLiveNotifications) {
       _loadLiveNotifications();
-    } else {
+    } else if (_canUseFixtureData) {
       _setItems(_controller.loadDemoNotifications());
+    } else {
+      _errorMessage =
+          'Live notifications require an authenticated exchange controller.';
     }
   }
 
@@ -60,9 +66,17 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
     if (oldWidget.exchangeController != widget.exchangeController) {
       if (_usesLiveNotifications) {
         _loadLiveNotifications();
-      } else {
+      } else if (_canUseFixtureData) {
         _liveNotifications.clear();
         _setItems(_controller.loadDemoNotifications());
+      } else {
+        setState(() {
+          _liveNotifications.clear();
+          _items = const <GtexNotificationItem>[];
+          _selected = null;
+          _errorMessage =
+              'Live notifications require an authenticated exchange controller.';
+        });
       }
     }
   }
@@ -133,11 +147,13 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
       await _loadLiveNotifications();
       return;
     }
-    _setItems(
-      _items
-          .map((GtexNotificationItem item) => _copyItem(item, isRead: true))
-          .toList(growable: false),
-    );
+    if (_canUseFixtureData) {
+      _setItems(
+        _items
+            .map((GtexNotificationItem item) => _copyItem(item, isRead: true))
+            .toList(growable: false),
+      );
+    }
   }
 
   Future<void> _markSelectedRead() async {
@@ -151,14 +167,16 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
       await _loadLiveNotifications();
       return;
     }
-    _setItems(
-      _items
-          .map(
-            (GtexNotificationItem item) =>
-                item.id == selected.id ? _copyItem(item, isRead: true) : item,
-          )
-          .toList(growable: false),
-    );
+    if (_canUseFixtureData) {
+      _setItems(
+        _items
+            .map(
+              (GtexNotificationItem item) =>
+                  item.id == selected.id ? _copyItem(item, isRead: true) : item,
+            )
+            .toList(growable: false),
+      );
+    }
   }
 
   Future<void> _openSelected() async {
@@ -307,7 +325,7 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
           label: 'Refresh',
           icon: Icons.refresh_outlined,
           onPressed:
-              _usesLiveNotifications && !_isLoading
+              (_usesLiveNotifications || _canUseFixtureData) && !_isLoading
                   ? _loadLiveNotifications
                   : null,
           accent: GtexColors.pitch,
@@ -718,11 +736,11 @@ class _NotificationActions extends StatelessWidget {
               ),
               const SizedBox(height: GtexSpacing.sm),
               GtexActionButton(
-                label: 'Mute similar alerts',
-                icon: Icons.notifications_off_outlined,
+                label: 'Notification settings',
+                icon: Icons.tune_outlined,
                 secondary: true,
                 accent: GtexColors.textSecondary,
-                onPressed: null,
+                onPressed: () => context.go('/settings'),
               ),
             ],
           ),

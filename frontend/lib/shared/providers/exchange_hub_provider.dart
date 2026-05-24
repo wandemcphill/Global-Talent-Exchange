@@ -17,12 +17,11 @@ extension TradingDeskFilterLabel on TradingDeskFilter {
   }
 }
 
-enum PaymentMethod { paystack, korapay, bankTransfer }
+enum PaymentMethod { korapay, bankTransfer }
 
 extension PaymentMethodMeta on PaymentMethod {
   String get label {
     return switch (this) {
-      PaymentMethod.paystack => 'Paystack',
       PaymentMethod.korapay => 'KoraPay',
       PaymentMethod.bankTransfer => 'Bank Transfer',
     };
@@ -30,13 +29,12 @@ extension PaymentMethodMeta on PaymentMethod {
 
   String get subtitle {
     return switch (this) {
-      PaymentMethod.paystack => 'Instant checkout',
       PaymentMethod.korapay => 'Instant settlement',
       PaymentMethod.bankTransfer => 'Manual treasury review',
     };
   }
 
-  bool get isInstant => this != PaymentMethod.bankTransfer;
+  bool get isInstant => this == PaymentMethod.korapay;
 }
 
 enum ComplianceTier { basic, verified }
@@ -295,6 +293,8 @@ class ExchangeHubState {
     required this.recentActivity,
     required this.players,
     required this.agents,
+    this.liveAuthorityAvailable = true,
+    this.blockedReason,
   });
 
   final double walletBalanceGtex;
@@ -313,6 +313,8 @@ class ExchangeHubState {
   final List<WalletActivityEntry> recentActivity;
   final List<PlayerShareListing> players;
   final List<MarketAgentProfile> agents;
+  final bool liveAuthorityAvailable;
+  final String? blockedReason;
 
   int get remainingWithdrawalLimitNaira =>
       math.max(0, kycTier.dailyLimitNaira - withdrawalUsedTodayNaira);
@@ -383,6 +385,8 @@ class ExchangeHubState {
     List<WalletActivityEntry>? recentActivity,
     List<PlayerShareListing>? players,
     List<MarketAgentProfile>? agents,
+    bool? liveAuthorityAvailable,
+    String? blockedReason,
   }) {
     return ExchangeHubState(
       walletBalanceGtex: walletBalanceGtex ?? this.walletBalanceGtex,
@@ -402,212 +406,38 @@ class ExchangeHubState {
       recentActivity: recentActivity ?? this.recentActivity,
       players: players ?? this.players,
       agents: agents ?? this.agents,
+      liveAuthorityAvailable:
+          liveAuthorityAvailable ?? this.liveAuthorityAvailable,
+      blockedReason: blockedReason ?? this.blockedReason,
     );
   }
 }
 
-class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
-  static const int _nairaPerGtex = 1000;
+const ExchangeHubState _blockedExchangeHubState = ExchangeHubState(
+  walletBalanceGtex: 0,
+  fanCoinBalance: 0,
+  weeklySpendNaira: 0,
+  matchesWatched: 0,
+  tradesMade: 0,
+  nairaPerGtex: 1000,
+  kycTier: ComplianceTier.basic,
+  withdrawalUsedTodayNaira: 0,
+  selectedBankId: '',
+  searchQuery: '',
+  activeFilter: TradingDeskFilter.all,
+  marketTick: 0,
+  bankAccounts: <WalletBankAccount>[],
+  recentActivity: <WalletActivityEntry>[],
+  players: <PlayerShareListing>[],
+  agents: <MarketAgentProfile>[],
+  liveAuthorityAvailable: false,
+  blockedReason: 'Live exchange hub authority is unavailable.',
+);
 
+class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
   @override
   ExchangeHubState build() {
-    final List<PlayerShareListing> players = <PlayerShareListing>[
-      const PlayerShareListing(
-        id: 'market-mbappe',
-        name: 'Kylian Mbappe',
-        club: 'Madrid Whites',
-        position: 'ST',
-        country: 'France',
-        age: 27,
-        rating: 93,
-        priceGtex: 75,
-        anchorPriceGtex: 72,
-        trendPercent: 5.0,
-        volume: 1880,
-        sharesAvailable: 320,
-        userShares: 0,
-        performanceLabel: 'Explosive form',
-        performanceScore: 0.92,
-        liquidityScore: 0.96,
-        confidenceScore: 0.94,
-        dominantAgent: TradingAgentType.momentumTrader,
-        chartPoints: <double>[68, 69, 70, 71, 72, 73, 74, 75],
-      ),
-      const PlayerShareListing(
-        id: 'market-yamal',
-        name: 'Lamine Yamal',
-        club: 'Barcelona Blau',
-        position: 'RW',
-        country: 'Spain',
-        age: 19,
-        rating: 89,
-        priceGtex: 49,
-        anchorPriceGtex: 46,
-        trendPercent: 6.8,
-        volume: 1710,
-        sharesAvailable: 420,
-        userShares: 0,
-        performanceLabel: 'Skyline momentum',
-        performanceScore: 0.90,
-        liquidityScore: 0.90,
-        confidenceScore: 0.91,
-        dominantAgent: TradingAgentType.momentumTrader,
-        chartPoints: <double>[41, 42, 43, 45, 45, 46, 48, 49],
-      ),
-      const PlayerShareListing(
-        id: 'market-palmer',
-        name: 'Cole Palmer',
-        club: 'London Blue',
-        position: 'CAM',
-        country: 'England',
-        age: 24,
-        rating: 86,
-        priceGtex: 8.4,
-        anchorPriceGtex: 8.0,
-        trendPercent: 2.4,
-        volume: 940,
-        sharesAvailable: 680,
-        userShares: 1,
-        performanceLabel: 'Reliable output',
-        performanceScore: 0.79,
-        liquidityScore: 0.72,
-        confidenceScore: 0.80,
-        dominantAgent: TradingAgentType.valueInvestor,
-        chartPoints: <double>[7.4, 7.5, 7.7, 7.8, 8.0, 8.1, 8.2, 8.4],
-      ),
-      const PlayerShareListing(
-        id: 'market-rice',
-        name: 'Declan Rice',
-        club: 'North London Red',
-        position: 'CM',
-        country: 'England',
-        age: 27,
-        rating: 88,
-        priceGtex: 12.2,
-        anchorPriceGtex: 12.8,
-        trendPercent: -1.4,
-        volume: 820,
-        sharesAvailable: 540,
-        userShares: 0,
-        performanceLabel: 'Cooling week',
-        performanceScore: 0.67,
-        liquidityScore: 0.70,
-        confidenceScore: 0.75,
-        dominantAgent: TradingAgentType.arbitrage,
-        chartPoints: <double>[13.4, 13.2, 13.0, 12.9, 12.8, 12.6, 12.4, 12.2],
-      ),
-      const PlayerShareListing(
-        id: 'market-lookman',
-        name: 'Ademola Lookman',
-        club: 'Bergamo Pulse',
-        position: 'LW',
-        country: 'Nigeria',
-        age: 28,
-        rating: 85,
-        priceGtex: 9.8,
-        anchorPriceGtex: 9.2,
-        trendPercent: 3.1,
-        volume: 760,
-        sharesAvailable: 610,
-        userShares: 0,
-        performanceLabel: 'Sharp finishing',
-        performanceScore: 0.77,
-        liquidityScore: 0.68,
-        confidenceScore: 0.73,
-        dominantAgent: TradingAgentType.valueInvestor,
-        chartPoints: <double>[8.6, 8.7, 8.8, 9.0, 9.2, 9.4, 9.6, 9.8],
-      ),
-      const PlayerShareListing(
-        id: 'market-saliba',
-        name: 'William Saliba',
-        club: 'North London Red',
-        position: 'CB',
-        country: 'France',
-        age: 25,
-        rating: 87,
-        priceGtex: 10.6,
-        anchorPriceGtex: 10.4,
-        trendPercent: 1.8,
-        volume: 640,
-        sharesAvailable: 570,
-        userShares: 2,
-        performanceLabel: 'Locked-in defense',
-        performanceScore: 0.74,
-        liquidityScore: 0.66,
-        confidenceScore: 0.77,
-        dominantAgent: TradingAgentType.arbitrage,
-        chartPoints: <double>[9.6, 9.8, 10.0, 10.1, 10.2, 10.3, 10.5, 10.6],
-      ),
-    ];
-
-    return ExchangeHubState(
-      walletBalanceGtex: 12.5,
-      fanCoinBalance: 850,
-      weeklySpendNaira: 18500,
-      matchesWatched: 14,
-      tradesMade: 9,
-      nairaPerGtex: _nairaPerGtex,
-      kycTier: ComplianceTier.basic,
-      withdrawalUsedTodayNaira: 18000,
-      selectedBankId: 'bank-kuda',
-      searchQuery: '',
-      activeFilter: TradingDeskFilter.all,
-      marketTick: 0,
-      bankAccounts: const <WalletBankAccount>[
-        WalletBankAccount(
-          id: 'bank-kuda',
-          bankName: 'Kuda Bank',
-          accountName: 'Ayo Manager',
-          accountNumber: '1022334455',
-        ),
-        WalletBankAccount(
-          id: 'bank-gtbank',
-          bankName: 'GTBank',
-          accountName: 'Ayo Manager',
-          accountNumber: '0129988776',
-        ),
-      ],
-      recentActivity: const <WalletActivityEntry>[
-        WalletActivityEntry(
-          id: 'activity-deposit',
-          title: 'Paystack deposit',
-          subtitle: 'Instant top-up landed before the market rush.',
-          amountLabel: '+6 GTex',
-          timeLabel: '18m ago',
-          statusLabel: 'Settled',
-          tone: WalletActivityTone.positive,
-        ),
-        WalletActivityEntry(
-          id: 'activity-palmer',
-          title: 'Cole Palmer shares',
-          subtitle: 'Bought 1 share as midfield demand stayed calm.',
-          amountLabel: '-8.4 GTex',
-          timeLabel: '1h ago',
-          statusLabel: 'Trade',
-          tone: WalletActivityTone.negative,
-        ),
-        WalletActivityEntry(
-          id: 'activity-convert',
-          title: 'Matchday spend reserve',
-          subtitle: 'Allocated 2 GTex for watch-party spending.',
-          amountLabel: '+200 spend points',
-          timeLabel: 'Today',
-          statusLabel: 'Allocated',
-          tone: WalletActivityTone.neutral,
-        ),
-        WalletActivityEntry(
-          id: 'activity-manual',
-          title: 'Bank transfer lodged',
-          subtitle: 'Manual treasury confirmation is still pending.',
-          amountLabel: '+4 GTex',
-          timeLabel: 'Yesterday',
-          statusLabel: 'Pending review',
-          tone: WalletActivityTone.pending,
-        ),
-      ],
-      players: players,
-      agents: _buildAgents(players),
-    );
+    return _blockedExchangeHubState;
   }
 
   void setSearchQuery(String value) {
@@ -622,10 +452,21 @@ class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
     state = state.copyWith(selectedBankId: bankId);
   }
 
+  ExchangeActionResult _blockedActionResult() {
+    return ExchangeActionResult(
+      message:
+          state.blockedReason ?? 'Live exchange hub authority is unavailable.',
+      isError: true,
+    );
+  }
+
   ExchangeActionResult fundInstantWallet({
     required PaymentMethod method,
     required double amountNaira,
   }) {
+    if (!state.liveAuthorityAvailable) {
+      return _blockedActionResult();
+    }
     if (amountNaira <= 0) {
       return const ExchangeActionResult(
         message: 'Enter a valid deposit amount.',
@@ -651,6 +492,9 @@ class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
   }
 
   ExchangeActionResult submitManualDeposit({required double amountNaira}) {
+    if (!state.liveAuthorityAvailable) {
+      return _blockedActionResult();
+    }
     if (amountNaira <= 0) {
       return const ExchangeActionResult(
         message: 'Enter a valid deposit amount.',
@@ -677,6 +521,9 @@ class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
   }
 
   ExchangeActionResult convertToFanCoin(double amountGtex) {
+    if (!state.liveAuthorityAvailable) {
+      return _blockedActionResult();
+    }
     if (amountGtex <= 0) {
       return const ExchangeActionResult(
         message: 'Enter a valid conversion amount.',
@@ -714,6 +561,9 @@ class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
   }
 
   ExchangeActionResult requestWithdrawal(double amountGtex) {
+    if (!state.liveAuthorityAvailable) {
+      return _blockedActionResult();
+    }
     if (amountGtex <= 0) {
       return const ExchangeActionResult(
         message: 'Enter a valid withdrawal amount.',
@@ -763,6 +613,9 @@ class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
     required String playerId,
     required int shares,
   }) {
+    if (!state.liveAuthorityAvailable) {
+      return _blockedActionResult();
+    }
     final PlayerShareListing? player = state.playerById(playerId);
     if (player == null) {
       return const ExchangeActionResult(
@@ -844,6 +697,9 @@ class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
     required String playerId,
     required int shares,
   }) {
+    if (!state.liveAuthorityAvailable) {
+      return _blockedActionResult();
+    }
     final PlayerShareListing? player = state.playerById(playerId);
     if (player == null) {
       return const ExchangeActionResult(
@@ -913,6 +769,9 @@ class ExchangeHubNotifier extends Notifier<ExchangeHubState> {
   }
 
   void tickMarket() {
+    if (!state.liveAuthorityAvailable || state.players.isEmpty) {
+      return;
+    }
     final int nextTick = state.marketTick + 1;
     final List<PlayerShareListing> nextPlayers = state.players
         .asMap()

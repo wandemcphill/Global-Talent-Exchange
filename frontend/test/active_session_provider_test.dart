@@ -80,4 +80,47 @@ void main() {
     expect(container.read(authProvider), isNull);
     expect(await store.readSession(), isNull);
   });
+
+  test('bootstrap parsing preserves canonical identity and admin variants', () {
+    final AuthSession session = AuthSession.fromJson(<String, Object?>{
+      'access_token': 'token-1',
+      'refresh_token': 'refresh-1',
+      'session_id': 'session-1',
+      'user': <String, Object?>{
+        'id': 'admin-1',
+        'role': 'god_mode',
+        'accountType': 'creator',
+        'creatorProfile': <String, Object?>{
+          'id': 'creator-1',
+          'status': 'approved',
+        },
+        'coinTraderProfile': <String, Object?>{
+          'id': 'trader-1',
+          'state': 'active',
+        },
+        'noClub': true,
+        'noClubReason': 'not_joined',
+      },
+      'permissions': <String>['view_audit_log'],
+    });
+
+    expect(session.isAdmin, isTrue);
+    expect(session.isSuperAdmin, isTrue);
+    expect(session.accountType, 'creator');
+    expect(session.creatorProfileId, 'creator-1');
+    expect(session.creatorStatus, 'approved');
+    expect(session.traderProfileId, 'trader-1');
+    expect(session.traderStatus, 'active');
+    expect(session.noClub, isTrue);
+    expect(session.hasClubContext, isFalse);
+    expect(session.noClubReason, 'not_joined');
+  });
+
+  test('shared admin helper includes delegated admin variants', () {
+    expect(gtexIsAdminRole('admin'), isTrue);
+    expect(gtexIsAdminRole('super_admin'), isTrue);
+    expect(gtexIsAdminRole('god_mode'), isTrue);
+    expect(gtexIsAdminRole('scoped_admin'), isTrue);
+    expect(gtexIsAdminRole('user'), isFalse);
+  });
 }

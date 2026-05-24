@@ -441,7 +441,8 @@ void main() {
 
       router.go(AppRoutes.streamerEngine);
       await tester.pumpAndSettle();
-      expect(find.text('Streamer tournaments coming soon'), findsOneWidget);
+      expect(find.text('Arena'), findsWidgets);
+      expect(find.text('Streamer tournaments coming soon'), findsNothing);
     },
   );
 
@@ -805,10 +806,7 @@ class _SurfaceRuntimeTransport implements GteTransport {
             'audience_size': 420000,
             'treasury_balance': 1250000,
             'members_json': <Map<String, Object?>>[
-              <String, Object?>{
-                'club_id': 'ibadan-lions',
-                'status': 'active',
-              },
+              <String, Object?>{'club_id': 'ibadan-lions', 'status': 'active'},
             ],
             'is_public': true,
             'default_reality_mode': 'hybrid',
@@ -891,10 +889,7 @@ class _SurfaceRuntimeTransport implements GteTransport {
             'foreign_limit': 5,
           },
           'members': <Map<String, Object?>>[
-            <String, Object?>{
-              'club_id': 'ibadan-lions',
-              'status': 'active',
-            },
+            <String, Object?>{'club_id': 'ibadan-lions', 'status': 'active'},
           ],
           'reputation': <String, Object?>{
             'score': 91.4,

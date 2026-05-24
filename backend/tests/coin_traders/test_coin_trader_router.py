@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from backend.tests.support.secrets import TEST_PASSWORD
+
 
 def test_coin_trader_router_order_lifecycle(
     client,
@@ -41,8 +43,8 @@ def test_coin_trader_router_order_lifecycle(
         json={
             "coin_unit": "coin",
             "fiat_currency": "NGN",
-            "buy_rate_fiat": "0.90",
-            "sell_rate_fiat": "1.05",
+            "buy_rate_fiat": "860",
+            "sell_rate_fiat": "920",
             "min_coin_amount": "100",
             "max_coin_amount": "50000",
             "available_liquidity": "100000",
@@ -269,6 +271,96 @@ def test_coin_trader_router_enforces_escrow_roles_and_admin_resolution(
     assert sell_released.json()["status"] == "released"
 
 
+def test_coin_trader_router_admin_liquidity_issue_and_redeem(
+    client,
+    auth_user_factory,
+    bootstrap_admin_headers,
+) -> None:
+    trader = auth_user_factory(suffix="coin-trader-router-liquidity")
+    profile_id = _approved_profile_with_rate(
+        client,
+        trader_headers=trader["headers"],
+        admin_headers=bootstrap_admin_headers,
+        suffix="liquidity",
+    )
+
+    initial_marketplace = client.get("/api/coin-traders", params={"coin_unit": "coin"})
+    assert initial_marketplace.status_code == 200, initial_marketplace.text
+    initial_profile = next(item for item in initial_marketplace.json() if item["id"] == profile_id)
+    assert initial_profile["rates"][0]["available_liquidity"] == "0.0000"
+
+    issued = client.post(
+        f"/api/admin/coin-traders/{profile_id}/liquidity/issue",
+        headers=bootstrap_admin_headers,
+        json={
+            "coin_unit": "coin",
+            "amount": "2500",
+            "reference": "router-liquidity-issue-001",
+            "idempotency_key": "router-issue-key-001",
+            "note": "contract test funding",
+        },
+    )
+    assert issued.status_code == 200, issued.text
+    assert issued.json()["flow"] == "issue"
+    assert issued.json()["available_balance"] == "2500.0000"
+    assert issued.json()["ledger_entry_ids"]
+
+    redeemed = client.post(
+        f"/api/admin/coin-traders/{profile_id}/liquidity/redeem",
+        headers=bootstrap_admin_headers,
+        json={
+            "coin_unit": "coin",
+            "amount": "900",
+            "reference": "router-liquidity-redeem-001",
+            "idempotency_key": "router-redeem-key-001",
+        },
+    )
+    assert redeemed.status_code == 200, redeemed.text
+    assert redeemed.json()["flow"] == "redeem"
+    assert redeemed.json()["available_balance"] == "1600.0000"
+
+    marketplace = client.get("/api/coin-traders", params={"coin_unit": "coin"})
+    assert marketplace.status_code == 200, marketplace.text
+    profile = next(item for item in marketplace.json() if item["id"] == profile_id)
+    assert profile["rates"][0]["available_liquidity"] == "1600.0000"
+
+
+def test_scoped_admin_without_liquidity_permission_cannot_settle_coin_trader_funds(
+    client,
+    auth_user_factory,
+    bootstrap_admin_headers,
+) -> None:
+    trader = auth_user_factory(suffix="coin-trader-router-scoped-liquidity")
+    profile_id = _approved_profile_with_rate(
+        client,
+        trader_headers=trader["headers"],
+        admin_headers=bootstrap_admin_headers,
+        suffix="scoped-liquidity",
+    )
+    scoped_headers = _create_scoped_admin_headers(
+        client,
+        bootstrap_admin_headers=bootstrap_admin_headers,
+        suffix="coin-trader-liquidity-blocked-admin",
+        permissions=[],
+    )
+
+    response = client.post(
+        f"/api/admin/coin-traders/{profile_id}/liquidity/issue",
+        headers=scoped_headers,
+        json={
+            "coin_unit": "coin",
+            "amount": "2500",
+            "reference": "router-liquidity-scoped-blocked-001",
+            "idempotency_key": "router-liquidity-scoped-blocked-001",
+        },
+    )
+
+    assert response.status_code == 403
+    assert (
+        response.json().get("detail") or response.json().get("message")
+    ) == "Permission manage_liquidity_desk is required for this action."
+
+
 def _approved_profile_with_rate(
     client,
     *,
@@ -307,8 +399,8 @@ def _approved_profile_with_rate(
         json={
             "coin_unit": "coin",
             "fiat_currency": "NGN",
-            "buy_rate_fiat": "0.90",
-            "sell_rate_fiat": "1.05",
+            "buy_rate_fiat": "860",
+            "sell_rate_fiat": "920",
             "min_coin_amount": "100",
             "max_coin_amount": "50000",
             "available_liquidity": "100000",
@@ -317,3 +409,31 @@ def _approved_profile_with_rate(
     )
     assert rate.status_code == 200, rate.text
     return profile_id
+
+
+def _create_scoped_admin_headers(
+    client,
+    *,
+    bootstrap_admin_headers: dict[str, str],
+    suffix: str,
+    permissions: list[str],
+) -> dict[str, str]:
+    password = TEST_PASSWORD
+    email = f"{suffix}@example.com"
+    username = suffix.replace("-", "_")
+    response = client.post(
+        "/api/admin/access",
+        headers=bootstrap_admin_headers,
+        json={
+            "email": email,
+            "username": username,
+            "password": password,
+            "display_name": f"Scoped {suffix}",
+            "permissions": permissions,
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    login = client.post("/auth/login", json={"email": email, "password": password})
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}

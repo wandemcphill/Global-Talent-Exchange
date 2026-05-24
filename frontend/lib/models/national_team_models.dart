@@ -82,6 +82,7 @@ class NationalTeamRentalPlayer {
     required this.isRegen,
     required this.isPreseededNationalRegen,
     required this.marketEligible,
+    required this.eligibility,
     this.imageUrl,
     this.portraitUrl,
     this.portraitStatus,
@@ -106,17 +107,29 @@ class NationalTeamRentalPlayer {
   final bool isRegen;
   final bool isPreseededNationalRegen;
   final bool marketEligible;
+  final NationalTeamRentalEligibility eligibility;
   final String? imageUrl;
   final String? portraitUrl;
   final String? portraitStatus;
   final String? portraitSource;
   final String? portraitMissingReason;
 
+  bool get rentalEligible => eligibility.eligible;
+
   factory NationalTeamRentalPlayer.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
       value,
       label: 'national team rental player',
     );
+    final Object? eligibilityPayload =
+        json['eligibility'] ??
+        <String, Object?>{
+          if (json.containsKey('eligible')) 'eligible': json['eligible'],
+          if (json.containsKey('eligibility_reasons'))
+            'reasons': json['eligibility_reasons'],
+          if (json.containsKey('eligibilityReasons'))
+            'reasons': json['eligibilityReasons'],
+        };
     return NationalTeamRentalPlayer(
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
       playerName: GteJson.string(json, <String>['player_name', 'playerName']),
@@ -169,6 +182,7 @@ class NationalTeamRentalPlayer {
         'market_eligible',
         'marketEligible',
       ], fallback: true),
+      eligibility: NationalTeamRentalEligibility.fromJson(eligibilityPayload),
       imageUrl: GteJson.stringOrNull(json, <String>['image_url', 'imageUrl']),
       portraitUrl: GteJson.stringOrNull(json, <String>[
         'portrait_url',
@@ -186,6 +200,47 @@ class NationalTeamRentalPlayer {
         'portrait_missing_reason',
         'portraitMissingReason',
       ]),
+    );
+  }
+}
+
+class NationalTeamRentalEligibility {
+  const NationalTeamRentalEligibility({
+    required this.eligible,
+    required this.reasons,
+    required this.checks,
+    this.message,
+  });
+
+  final bool eligible;
+  final List<String> reasons;
+  final Map<String, bool> checks;
+  final String? message;
+
+  factory NationalTeamRentalEligibility.fromJson(Object? value) {
+    if (value is! Map) {
+      return const NationalTeamRentalEligibility(
+        eligible: false,
+        reasons: <String>['backend_eligibility_missing'],
+        checks: <String, bool>{},
+        message: 'Backend eligibility was not provided.',
+      );
+    }
+    final Map<String, Object?> json = Map<String, Object?>.from(value);
+    final Map<String, bool> checks = <String, bool>{};
+    final Object? rawChecks = json['checks'];
+    if (rawChecks is Map) {
+      rawChecks.forEach((Object? key, Object? value) {
+        if (key != null) {
+          checks[key.toString()] = value == true;
+        }
+      });
+    }
+    return NationalTeamRentalEligibility(
+      eligible: GteJson.boolean(json, <String>['eligible'], fallback: false),
+      reasons: _stringList(json['reasons'] ?? json['eligibility_reasons']),
+      checks: checks,
+      message: GteJson.stringOrNull(json, <String>['message']),
     );
   }
 }

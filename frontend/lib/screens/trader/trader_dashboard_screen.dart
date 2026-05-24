@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/trader_api.dart';
+import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -44,13 +46,17 @@ class TraderDashboardScreen extends StatelessWidget {
             onAction: () => context.go('/app/home'),
           );
         }
+        final TraderApi api =
+            config.backendMode == GteBackendMode.fixture
+                ? TraderApi.fixture()
+                : TraderApi.standard(
+                  baseUrl: config.apiBaseUrl,
+                  accessToken: controller.accessToken,
+                  mode: config.backendMode,
+                  transport: controller.api.transport,
+                );
         return _TraderDashboardSurface(
-          api: TraderApi.standard(
-            baseUrl: config.apiBaseUrl,
-            accessToken: controller.accessToken,
-            mode: config.backendMode,
-            transport: controller.api.transport,
-          ),
+          api: api,
           accessToken: controller.accessToken,
         );
       },
@@ -908,8 +914,8 @@ class _QuickTradePanel extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.lock_outline),
+            onPressed: () => _openQuickTrade(context),
+            icon: const Icon(Icons.swap_horiz_outlined),
             label: Text('$selectedTab ${market?.symbol ?? 'GTEX'}'),
           ),
           const SizedBox(height: 14),
@@ -924,6 +930,16 @@ class _QuickTradePanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _openQuickTrade(BuildContext context) {
+    final GteNavigationRoute route =
+        selectedTab == 'Convert'
+            ? const GteNavigationRoute.wallet()
+            : const GteNavigationRoute.wallet(
+              capitalDestination: GteCapitalDestination.orders,
+            );
+    context.go(route.path);
   }
 }
 

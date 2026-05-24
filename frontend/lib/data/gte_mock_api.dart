@@ -781,13 +781,10 @@ class GteMockApi implements GteApiRepository {
   ) async {
     await _delay();
     final String reference = 'WTX-${++_walletTransactionSequence}';
-    final String provider = request.provider.trim().toLowerCase();
+    final String provider = 'korapay';
     final GteWalletTopUpSession session = GteWalletTopUpSession(
       reference: reference,
-      paymentLink:
-          provider == 'korapay'
-              ? 'https://mock.korapay.local/$reference'
-              : 'https://mock.paystack.local/$reference',
+      paymentLink: 'https://mock.korapay.local/$reference',
       amount: request.amount,
       currency: request.unit.name,
       provider: provider,
@@ -2444,7 +2441,7 @@ class GteMockApi implements GteApiRepository {
             : 'bank_transfer';
     final Map<String, String> paymentProviderStatus =
         depositMode == 'gateway'
-            ? const <String, String>{'paystack': 'mock', 'korapay': 'mock'}
+            ? const <String, String>{'paystack': 'blocked', 'korapay': 'mock'}
             : const <String, String>{
               'paystack': 'blocked',
               'korapay': 'blocked',

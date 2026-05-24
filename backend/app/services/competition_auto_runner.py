@@ -48,7 +48,10 @@ class CompetitionAutoRunner:
         self.lifecycle_service = CompetitionLifecycleService(self.session)
         bind = self.session.get_bind()
         session_factory = create_session_factory(bind) if bind is not None else None
-        self.team_factory = SyntheticSquadFactory(session_factory=session_factory)
+        self.team_factory = SyntheticSquadFactory(
+            session_factory=session_factory,
+            allow_synthetic_fallback=False,
+        )
 
     def run_until_idle(
         self,

@@ -44,22 +44,8 @@ class FootballWorldPulseData {
   final double userDensity;
 
   static const FootballWorldPulseData empty = FootballWorldPulseData(
-    transferTicker: <FootballPulseItem>[
-      FootballPulseItem(
-        label: 'Transfer desk',
-        detail: 'Waiting for live listings',
-        metric: 'SYNC',
-        intensity: 0.24,
-      ),
-    ],
-    globalActivity: <FootballPulseItem>[
-      FootballPulseItem(
-        label: 'World pulse',
-        detail: 'Market, competitions, and scouting rails are online',
-        metric: 'LIVE',
-        intensity: 0.32,
-      ),
-    ],
+    transferTicker: <FootballPulseItem>[],
+    globalActivity: <FootballPulseItem>[],
     transferRoutes: <FootballPulseRoute>[],
     onlineClubs: <FootballPulseItem>[],
     competitionCountdowns: <FootballPulseItem>[],
@@ -68,8 +54,8 @@ class FootballWorldPulseData {
     rivalryCards: <FootballPulseItem>[],
     negotiations: <FootballPulseItem>[],
     rankingMovements: <FootballPulseItem>[],
-    marketHeat: 0.24,
-    userDensity: 0.28,
+    marketHeat: 0,
+    userDensity: 0,
   );
 }
 
@@ -101,78 +87,77 @@ class FootballPulseRoute {
   final double intensity;
 }
 
-final FutureProvider<FootballWorldPulseData> footballWorldPulseProvider =
-    FutureProvider<FootballWorldPulseData>((Ref ref) async {
-      if (ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture) {
-        return FootballWorldPulseData.empty;
-      }
-      final Future<MarketDashboardData?> marketFuture = ref
-          .watch(marketDashboardProvider.future)
-          .then((MarketDashboardData data) => data, onError: (_, _) => null);
-      final Future<WorldAggregateData?> worldFuture = ref
-          .watch(worldAggregateProvider.future)
-          .then((WorldAggregateData data) => data, onError: (_, _) => null);
-      final Future<CompetitionHubData?> competitionsFuture = ref
-          .watch(competitionHubProvider.future)
-          .then((CompetitionHubData data) => data, onError: (_, _) => null);
-      final Future<List<LiveThread>> discussionFuture = _loadCommunityThreads(
-        ref,
-        discussions: true,
-      );
-      final Future<List<LiveThread>> liveThreadFuture = _loadCommunityThreads(
-        ref,
-        discussions: false,
-      );
+final FutureProvider<FootballWorldPulseData>
+footballWorldPulseProvider = FutureProvider<FootballWorldPulseData>((
+  Ref ref,
+) async {
+  if (ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture) {
+    throw const GteApiException(
+      type: GteApiErrorType.unavailable,
+      message: 'Football world pulse requires strict-live backend authority.',
+    );
+  }
+  final Future<MarketDashboardData> marketFuture = ref.watch(
+    marketDashboardProvider.future,
+  );
+  final Future<WorldAggregateData> worldFuture = ref.watch(
+    worldAggregateProvider.future,
+  );
+  final Future<CompetitionHubData> competitionsFuture = ref.watch(
+    competitionHubProvider.future,
+  );
+  final Future<List<LiveThread>> discussionFuture = _loadCommunityThreads(
+    ref,
+    discussions: true,
+  );
+  final Future<List<LiveThread>> liveThreadFuture = _loadCommunityThreads(
+    ref,
+    discussions: false,
+  );
 
-      final List<Object?> payloads =
-          await Future.wait<Object?>(<Future<Object?>>[
-            marketFuture,
-            worldFuture,
-            competitionsFuture,
-            discussionFuture,
-            liveThreadFuture,
-          ]);
-      final MarketDashboardData? market = payloads[0] as MarketDashboardData?;
-      final WorldAggregateData? world = payloads[1] as WorldAggregateData?;
-      final CompetitionHubData? competitions =
-          payloads[2] as CompetitionHubData?;
-      final List<LiveThread> discussions =
-          (payloads[3] as List<LiveThread>?) ?? const <LiveThread>[];
-      final List<LiveThread> liveThreads =
-          (payloads[4] as List<LiveThread>?) ?? const <LiveThread>[];
+  final List<Object?> payloads = await Future.wait<Object?>(<Future<Object?>>[
+    marketFuture,
+    worldFuture,
+    competitionsFuture,
+    discussionFuture,
+    liveThreadFuture,
+  ]);
+  final MarketDashboardData market = payloads[0] as MarketDashboardData;
+  final WorldAggregateData world = payloads[1] as WorldAggregateData;
+  final CompetitionHubData? competitions = payloads[2] as CompetitionHubData?;
+  final List<LiveThread> discussions =
+      (payloads[3] as List<LiveThread>?) ?? const <LiveThread>[];
+  final List<LiveThread> liveThreads =
+      (payloads[4] as List<LiveThread>?) ?? const <LiveThread>[];
 
-      return FootballWorldPulseData(
-        transferTicker: _transferTicker(market),
-        globalActivity: _globalActivity(world, competitions, liveThreads),
-        transferRoutes: _transferRoutes(market),
-        onlineClubs: _onlineClubIndicators(competitions),
-        competitionCountdowns: _competitionCountdowns(competitions),
-        marketMovers: _marketMovers(market, world),
-        discussionPreviews: _discussionPreviews(discussions, liveThreads),
-        rivalryCards: _rivalryCards(discussions, liveThreads),
-        negotiations: _negotiations(market),
-        rankingMovements: _rankingMovements(world),
-        marketHeat: _marketHeat(market),
-        userDensity: _userDensity(competitions, liveThreads),
-      );
-    });
+  return FootballWorldPulseData(
+    transferTicker: _transferTicker(market),
+    globalActivity: _globalActivity(world, competitions, liveThreads),
+    transferRoutes: _transferRoutes(market),
+    onlineClubs: _onlineClubIndicators(competitions),
+    competitionCountdowns: _competitionCountdowns(competitions),
+    marketMovers: _marketMovers(market, world),
+    discussionPreviews: _discussionPreviews(discussions, liveThreads),
+    rivalryCards: _rivalryCards(discussions, liveThreads),
+    negotiations: _negotiations(market),
+    rankingMovements: _rankingMovements(world),
+    marketHeat: _marketHeat(market),
+    userDensity: _userDensity(competitions, liveThreads),
+  );
+});
 
 Future<List<LiveThread>> _loadCommunityThreads(
   Ref ref, {
   required bool discussions,
 }) async {
-  try {
-    final mode = ref.watch(criticalBackendModeProvider);
-    final CommunityApi api = CommunityApi.standard(
-      baseUrl: ref.watch(apiBaseUrlProvider),
-      accessToken: ref.watch(authProvider)?.accessToken,
-      mode: mode,
-      transport: createModeAwareTransport(mode),
-    );
-    return discussions ? api.listDiscussionThreads() : api.listLiveThreads();
-  } catch (_) {
-    return const <LiveThread>[];
-  }
+  final mode = ref.watch(criticalBackendModeProvider);
+  final CommunityApi api = CommunityApi.standard(
+    baseUrl: ref.watch(apiBaseUrlProvider),
+    accessToken: ref.watch(authProvider)?.accessToken,
+    mode: mode,
+    transport: createModeAwareTransport(mode),
+  );
+  return discussions ? api.listDiscussionThreads() : api.listLiveThreads();
 }
 
 List<FootballPulseItem> _transferTicker(MarketDashboardData? market) {
@@ -194,7 +179,7 @@ List<FootballPulseItem> _transferTicker(MarketDashboardData? market) {
         ),
       )
       .toList(growable: false);
-  return items.isEmpty ? FootballWorldPulseData.empty.transferTicker : items;
+  return items;
 }
 
 List<FootballPulseItem> _globalActivity(

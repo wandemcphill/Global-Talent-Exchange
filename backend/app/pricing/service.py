@@ -200,22 +200,6 @@ class MarketPricingService:
         with self._lock:
             history = tuple(self._history.get(player_id, ()))
 
-        if not history and snapshot.market_price is not None:
-            history = (
-                PricingHistoryPoint(
-                    player_id=player_id,
-                    timestamp=snapshot.updated_at,
-                    price=snapshot.market_price,
-                    volume=0.0,
-                    last_price=snapshot.last_price,
-                    best_bid=snapshot.best_bid,
-                    best_ask=snapshot.best_ask,
-                    mid_price=snapshot.mid_price,
-                    reference_price=snapshot.reference_price,
-                    event_name="market.pricing.synthetic",
-                ),
-            )
-
         bucket_size = SUPPORTED_CANDLE_INTERVALS[interval]
         bucketed: dict[datetime, list[PricingHistoryPoint]] = defaultdict(list)
         for point in history:
@@ -264,7 +248,9 @@ class MarketPricingService:
         best_bid = self._best_bid(offers=offers, trade_intents=trade_intents)
         best_ask = self._best_ask(listings=listings, trade_intents=trade_intents)
         spread = round(best_ask - best_bid, 2) if best_bid is not None and best_ask is not None else None
-        mid_price = round((best_bid + best_ask) / 2.0, 2) if best_bid is not None and best_ask is not None else reference
+        mid_price = (
+            round((best_bid + best_ask) / 2.0, 2) if best_bid is not None and best_ask is not None else reference
+        )
         executions = self.executions_for_player(player_id)
         last_trade = executions[-1] if executions else None
         last_price = self._round_price(last_trade.price if last_trade is not None else reference)
@@ -379,17 +365,21 @@ class MarketPricingService:
         authoritative_reference = authoritative_reference_credits(
             summary=summary,
             latest_snapshot=latest_snapshot,
-            summary_payload=summary.summary_json if summary is not None and isinstance(summary.summary_json, dict) else {},
-            breakdown_payload=latest_snapshot.breakdown_json if latest_snapshot is not None and isinstance(latest_snapshot.breakdown_json, dict) else {},
+            summary_payload=(
+                summary.summary_json if summary is not None and isinstance(summary.summary_json, dict) else {}
+            ),
+            breakdown_payload=(
+                latest_snapshot.breakdown_json
+                if latest_snapshot is not None and isinstance(latest_snapshot.breakdown_json, dict)
+                else {}
+            ),
         )
         if authoritative_reference is not None:
             return round_gtex_display_value(authoritative_reference), player.short_name
         if player.is_real_player:
             return None, player.short_name
         fallback_reference = self._coerce_float(
-            credits_from_real_world_value(player.market_value_eur)
-            if player.market_value_eur is not None
-            else None
+            credits_from_real_world_value(player.market_value_eur) if player.market_value_eur is not None else None
         )
         if fallback_reference is not None and fallback_reference > 0:
             return round_gtex_display_value(fallback_reference), player.short_name
@@ -436,14 +426,18 @@ class MarketPricingService:
                 best_ask=None if payload.get("best_ask") is None else float(payload.get("best_ask")),
                 spread=None if payload.get("spread") is None else float(payload.get("spread")),
                 mid_price=None if payload.get("mid_price") is None else float(payload.get("mid_price")),
-                reference_price=None if payload.get("reference_price") is None else float(payload.get("reference_price")),
+                reference_price=(
+                    None if payload.get("reference_price") is None else float(payload.get("reference_price"))
+                ),
                 market_price=None if payload.get("market_price") is None else float(payload.get("market_price")),
                 day_change=float(payload.get("day_change") or 0.0),
                 day_change_percent=float(payload.get("day_change_percent") or 0.0),
                 volume_24h=float(payload.get("volume_24h") or 0.0),
-                last_trade_at=None
-                if payload.get("last_trade_at") is None
-                else MarketPricingService._normalize_cached_timestamp(payload.get("last_trade_at")),
+                last_trade_at=(
+                    None
+                    if payload.get("last_trade_at") is None
+                    else MarketPricingService._normalize_cached_timestamp(payload.get("last_trade_at"))
+                ),
                 updated_at=MarketPricingService._normalize_cached_timestamp(payload.get("updated_at")),
             )
         except (KeyError, TypeError, ValueError):

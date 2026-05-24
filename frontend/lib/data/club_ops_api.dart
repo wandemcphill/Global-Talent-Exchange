@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/club_ops_fixtures.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
@@ -44,6 +46,7 @@ class ClubOpsApi {
     String baseUrl = 'http://127.0.0.1:8000',
     Duration latency = Duration.zero,
   }) {
+    assertFixtureFactoryAllowed('ClubOpsApi.fixture');
     return ClubOpsApi._(
       config: GteRepositoryConfig(
         baseUrl: baseUrl,

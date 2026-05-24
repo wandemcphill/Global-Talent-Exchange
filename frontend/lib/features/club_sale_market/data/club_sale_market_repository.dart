@@ -9,7 +9,8 @@ abstract class ClubSaleMarketRepository {
   Future<ClubSaleValuation> fetchValuation(String clubId);
 
   Future<ClubSaleListingCollection> listPublicListings(
-      ClubSaleListingsQuery query);
+    ClubSaleListingsQuery query,
+  );
 
   Future<ClubSaleListing?> fetchPublicListing(String clubId);
 
@@ -85,25 +86,30 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
   ClubSaleMarketApiRepository({
     required GteAuthedApi client,
     ClubSaleMarketRepository? fixtures,
-  })  : _client = client,
-        _fixtures = fixtures ?? ClubSaleMarketFixtureRepository();
+  }) : _client = client,
+       _fixtures = fixtures;
 
   factory ClubSaleMarketApiRepository.standard({
     required String baseUrl,
     required GteBackendMode mode,
     required String? accessToken,
   }) {
+    final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return ClubSaleMarketApiRepository(
       client: createFeatureApi(
         baseUrl: baseUrl,
-        mode: mode,
+        mode: resolvedMode,
         accessToken: accessToken,
       ),
+      fixtures:
+          resolvedMode == GteBackendMode.fixture
+              ? ClubSaleMarketFixtureRepository()
+              : null,
     );
   }
 
   final GteAuthedApi _client;
-  final ClubSaleMarketRepository _fixtures;
+  final ClubSaleMarketRepository? _fixtures;
 
   @override
   Future<ClubSaleValuation> fetchValuation(String clubId) {
@@ -111,7 +117,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
       () async => ClubSaleValuation.fromJson(
         await _client.getMap('/api/clubs/$clubId/valuation', auth: false),
       ),
-      () => _fixtures.fetchValuation(clubId),
+      () => _requireFixtures().fetchValuation(clubId),
     );
   }
 
@@ -127,27 +133,24 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           auth: false,
         ),
       ),
-      () => _fixtures.listPublicListings(query),
+      () => _requireFixtures().listPublicListings(query),
     );
   }
 
   @override
   Future<ClubSaleListing?> fetchPublicListing(String clubId) {
-    return _withFallback<ClubSaleListing?>(
-      () async {
-        try {
-          return ClubSaleListing.fromJson(
-            await _client.getMap('/api/clubs/$clubId/sale-market', auth: false),
-          );
-        } on GteApiException catch (error) {
-          if (error.type == GteApiErrorType.notFound) {
-            return null;
-          }
-          rethrow;
+    return _withFallback<ClubSaleListing?>(() async {
+      try {
+        return ClubSaleListing.fromJson(
+          await _client.getMap('/api/clubs/$clubId/sale-market', auth: false),
+        );
+      } on GteApiException catch (error) {
+        if (error.type == GteApiErrorType.notFound) {
+          return null;
         }
-      },
-      () => _fixtures.fetchPublicListing(clubId),
-    );
+        rethrow;
+      }
+    }, () => _requireFixtures().fetchPublicListing(clubId));
   }
 
   @override
@@ -163,7 +166,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.createListing(clubId, request),
+      () => _requireFixtures().createListing(clubId, request),
     );
   }
 
@@ -180,7 +183,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.updateListing(clubId, request),
+      () => _requireFixtures().updateListing(clubId, request),
     );
   }
 
@@ -197,7 +200,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.cancelListing(clubId, request),
+      () => _requireFixtures().cancelListing(clubId, request),
     );
   }
 
@@ -207,7 +210,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
       () async => ClubSaleListingCollection.fromJson(
         await _client.getMap('/api/me/clubs/sale-market/listings'),
       ),
-      _fixtures.listMyListings,
+      () => _requireFixtures().listMyListings(),
     );
   }
 
@@ -224,7 +227,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.createInquiry(clubId, request),
+      () => _requireFixtures().createInquiry(clubId, request),
     );
   }
 
@@ -234,7 +237,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
       () async => ClubSaleInquiryCollection.fromJson(
         await _client.getMap('/api/clubs/$clubId/sale-market/inquiries'),
       ),
-      () => _fixtures.listInquiries(clubId),
+      () => _requireFixtures().listInquiries(clubId),
     );
   }
 
@@ -252,7 +255,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.respondInquiry(clubId, inquiryId, request),
+      () => _requireFixtures().respondInquiry(clubId, inquiryId, request),
     );
   }
 
@@ -269,7 +272,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.createOffer(clubId, request),
+      () => _requireFixtures().createOffer(clubId, request),
     );
   }
 
@@ -279,7 +282,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
       () async => ClubSaleOfferCollection.fromJson(
         await _client.getMap('/api/clubs/$clubId/sale-market/offers'),
       ),
-      () => _fixtures.listOffers(clubId),
+      () => _requireFixtures().listOffers(clubId),
     );
   }
 
@@ -289,7 +292,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
       () async => ClubSaleOfferCollection.fromJson(
         await _client.getMap('/api/me/clubs/sale-market/offers'),
       ),
-      _fixtures.listMyOffers,
+      () => _requireFixtures().listMyOffers(),
     );
   }
 
@@ -307,7 +310,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.counterOffer(clubId, offerId, request),
+      () => _requireFixtures().counterOffer(clubId, offerId, request),
     );
   }
 
@@ -325,7 +328,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.acceptOffer(clubId, offerId, request),
+      () => _requireFixtures().acceptOffer(clubId, offerId, request),
     );
   }
 
@@ -343,7 +346,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.rejectOffer(clubId, offerId, request),
+      () => _requireFixtures().rejectOffer(clubId, offerId, request),
     );
   }
 
@@ -360,7 +363,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           body: request.toJson(),
         ),
       ),
-      () => _fixtures.executeTransfer(clubId, request),
+      () => _requireFixtures().executeTransfer(clubId, request),
     );
   }
 
@@ -376,7 +379,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
           query: query.toQuery(),
         ),
       ),
-      () => _fixtures.fetchHistory(clubId, query),
+      () => _requireFixtures().fetchHistory(clubId, query),
     );
   }
 
@@ -388,5 +391,17 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
       return fixture();
     }
     return live();
+  }
+
+  ClubSaleMarketRepository _requireFixtures() {
+    final ClubSaleMarketRepository? resolvedFixtures = _fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Club sale market fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 }

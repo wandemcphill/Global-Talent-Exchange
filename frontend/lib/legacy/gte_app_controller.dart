@@ -1,14 +1,13 @@
 import 'package:flutter/foundation.dart';
 
 import '../data/gte_api_repository.dart';
-import '../data/gte_mock_api.dart';
 import '../data/gte_models.dart';
 
 @Deprecated(
   'Use GteFrontendApp and GteExchangeController for the canonical MVP app.',
 )
 class GteAppController extends ChangeNotifier {
-  GteAppController({GteApiRepository? api}) : _api = api ?? GteMockApi();
+  GteAppController({required GteApiRepository api}) : _api = api;
 
   final GteApiRepository _api;
   final GteRequestGate _bootstrapGate = GteRequestGate();

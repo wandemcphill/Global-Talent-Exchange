@@ -6,11 +6,12 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_admin, get_session
 from app.matches.router import router as matches_router
 from app.models.base import Base
 from app.models.competition_match import CompetitionMatch
 from app.models.event_backbone import EventOutbox
+from app.models.user import User, UserRole
 
 
 class _Settings:
@@ -39,7 +40,17 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
         with session_factory() as session:
             yield session
 
+    def override_admin() -> User:
+        return User(
+            id="match-command-admin",
+            email="match-command-admin@example.com",
+            username="match-command-admin",
+            password_hash="test-hash",  # pragma: allowlist secret
+            role=UserRole.ADMIN,
+        )
+
     app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_current_admin] = override_admin
     return app, session_factory
 
 
@@ -76,9 +87,7 @@ def test_start_match_enqueues_orchestrator_command_and_persists_match_state() ->
         assert match.stage == "knockout"
         assert (match.metadata_json or {})["orchestrator"]["start_request"]["metadata"] == {"source": "api-test"}
 
-        row = session.scalar(
-            select(EventOutbox).where(EventOutbox.event_id == body["outbox_event_id"])
-        )
+        row = session.scalar(select(EventOutbox).where(EventOutbox.event_id == body["outbox_event_id"]))
         assert row is not None
         assert row.status == "pending"
         assert row.event_type == "orchestrator.command.match.start"
@@ -132,9 +141,7 @@ def test_complete_match_updates_state_and_enqueues_completion_command() -> None:
         assert match.completed_at is not None
         assert (match.metadata_json or {})["orchestrator"]["complete_request"]["metadata"] == {"source": "api-test"}
 
-        row = session.scalar(
-            select(EventOutbox).where(EventOutbox.event_id == body["outbox_event_id"])
-        )
+        row = session.scalar(select(EventOutbox).where(EventOutbox.event_id == body["outbox_event_id"]))
         assert row is not None
         assert row.status == "pending"
         assert row.event_type == "orchestrator.command.match.complete"

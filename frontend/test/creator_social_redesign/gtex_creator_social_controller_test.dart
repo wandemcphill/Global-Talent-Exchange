@@ -6,13 +6,14 @@ void main() {
   test('creator social controller switches modules', () {
     final controller = GtexCreatorSocialController();
     expect(controller.creatorModule, GtexCreatorModule.overview);
+    expect(controller.hasLiveSnapshot, isFalse);
 
     controller.selectCreatorModule(GtexCreatorModule.monetization);
     expect(controller.creatorModule, GtexCreatorModule.monetization);
   });
 
   test('award category filters nominees', () {
-    final controller = GtexCreatorSocialController();
+    final controller = GtexCreatorSocialController(allowFixtureData: true);
     controller.selectAwardCategory(GtexAwardCategory.regen);
 
     expect(
@@ -24,7 +25,7 @@ void main() {
   });
 
   test('social search filters stories', () {
-    final controller = GtexCreatorSocialController();
+    final controller = GtexCreatorSocialController(allowFixtureData: true);
     controller.updateSearch('regen');
 
     expect(controller.stories, isNotEmpty);

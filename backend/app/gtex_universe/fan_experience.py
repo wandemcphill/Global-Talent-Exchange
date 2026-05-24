@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
+import os
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -27,6 +28,7 @@ AMOUNT_QUANTUM = Decimal("0.0001")
 POSITIVE_REACTIONS = {"cheer", "hype"}
 DEFAULT_CEREMONY_CAPACITY = 2400
 DEFAULT_CEREMONY_VIP_CAPACITY = 180
+_PROTECTED_APP_ENVS = {"production", "prod", "staging", "release"}
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
@@ -35,6 +37,15 @@ def _clamp(value: float, minimum: float, maximum: float) -> float:
 
 def _quantize(value: Decimal | str | float | int | None) -> Decimal:
     return Decimal(str(value or "0")).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
+
+
+def _protected_runtime_enabled() -> bool:
+    environment = (
+        str(os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "development")
+        .strip()
+        .lower()
+    )
+    return environment in _PROTECTED_APP_ENVS
 
 
 @dataclass(slots=True)
@@ -132,7 +143,12 @@ class GtexFanExperienceService:
         reaction_summary = self._reaction_summary(event_key=offer["event_key"], match_id=match.id)
         atmosphere = self._atmosphere_summary(match=match, offer=offer, reaction_summary=reaction_summary)
         social_warfare = social.match_social_warfare(match=match, current_user=current_user, offer=offer)
-        return {**offer, "reaction_summary": reaction_summary, "atmosphere": atmosphere, "social_warfare": social_warfare}
+        return {
+            **offer,
+            "reaction_summary": reaction_summary,
+            "atmosphere": atmosphere,
+            "social_warfare": social_warfare,
+        }
 
     def purchase_match_ticket(self, *, actor: User, match: GtexMatch, ticket_tier: str) -> FanExperienceTicket:
         profile = self.get_or_create_profile(actor=actor)
@@ -155,7 +171,9 @@ class GtexFanExperienceService:
             raise ValueError("Match tickets are sold out.")
         if normalized_tier == "vip" and int(offer["vip_tickets_sold"]) >= int(offer["vip_capacity"]):
             raise ValueError("VIP tickets are sold out.")
-        base_price = _quantize(offer["vip_ticket_price_coin"] if normalized_tier == "vip" else offer["ticket_price_coin"])
+        base_price = _quantize(
+            offer["vip_ticket_price_coin"] if normalized_tier == "vip" else offer["ticket_price_coin"]
+        )
         discount_bps = int(offer["discount_bps"])
         final_price = _quantize(base_price * (Decimal("1.0000") - (Decimal(discount_bps) / Decimal("10000"))))
         ticket = FanExperienceTicket(
@@ -230,7 +248,9 @@ class GtexFanExperienceService:
             weight=round(weight, 4),
             tier_at_reaction=profile.fan_tier,
             metadata_json={
-                "commentary_tone": "hostile" if normalized_type == "boo" else "fever_pitch" if normalized_type == "hype" else "charged",
+                "commentary_tone": (
+                    "hostile" if normalized_type == "boo" else "fever_pitch" if normalized_type == "hype" else "charged"
+                ),
                 "event_title": self._match_title(match),
             },
         )
@@ -269,8 +289,12 @@ class GtexFanExperienceService:
             ticket.status = "attended"
             metadata = dict(ticket.metadata_json or {})
             if not metadata.get("attendance_reward_applied"):
-                profile.reputation_score = round(float(profile.reputation_score or 0.0) + float(ticket.reputation_bonus), 3)
-                profile.loyalty_score = round(float(profile.loyalty_score or 0.0) + max(float(ticket.loyalty_bonus) * 0.35, 1.0), 3)
+                profile.reputation_score = round(
+                    float(profile.reputation_score or 0.0) + float(ticket.reputation_bonus), 3
+                )
+                profile.loyalty_score = round(
+                    float(profile.loyalty_score or 0.0) + max(float(ticket.loyalty_bonus) * 0.35, 1.0), 3
+                )
                 metadata["attendance_reward_applied"] = True
                 ticket.metadata_json = metadata
             self._mark_attendance(
@@ -279,7 +303,11 @@ class GtexFanExperienceService:
                 event_type="match",
                 title=self._match_title(match),
                 status="attended",
-                metadata={"match_id": match.id, "ticket_tier": ticket.ticket_tier, "result": fan_context.get("winner_side")},
+                metadata={
+                    "match_id": match.id,
+                    "ticket_tier": ticket.ticket_tier,
+                    "result": fan_context.get("winner_side"),
+                },
             )
             self._upsert_prestige_rating(profile)
             self._refresh_profile(profile)
@@ -334,7 +362,9 @@ class GtexFanExperienceService:
             raise ValueError("Ceremony VIP tickets are sold out.")
         if normalized_tier == "general" and general_sold >= general_capacity:
             raise ValueError("Ceremony general tickets are sold out.")
-        base_price = _quantize(ceremony["vip_ticket_price_coin"] if normalized_tier == "vip" else ceremony["ticket_price_coin"])
+        base_price = _quantize(
+            ceremony["vip_ticket_price_coin"] if normalized_tier == "vip" else ceremony["ticket_price_coin"]
+        )
         discount_bps = int(ceremony["discount_bps"])
         final_price = _quantize(base_price * (Decimal("1.0000") - (Decimal(discount_bps) / Decimal("10000"))))
         ticket = FanExperienceTicket(
@@ -346,11 +376,7 @@ class GtexFanExperienceService:
             ticket_tier=normalized_tier,
             access_level="tv_mode_only",
             status="purchased",
-            seat_label=(
-                f"VIP-{vip_sold + 1}"
-                if normalized_tier == "vip"
-                else f"General-{general_sold + 1}"
-            ),
+            seat_label=(f"VIP-{vip_sold + 1}" if normalized_tier == "vip" else f"General-{general_sold + 1}"),
             price_coin=final_price,
             discount_bps=discount_bps,
             priority_stream=True,
@@ -377,7 +403,9 @@ class GtexFanExperienceService:
         self.session.flush()
         return ticket
 
-    def cast_ceremony_vote(self, *, actor: User, award_id: str, player_id: str, season_id: str | None = None) -> dict[str, Any]:
+    def cast_ceremony_vote(
+        self, *, actor: User, award_id: str, player_id: str, season_id: str | None = None
+    ) -> dict[str, Any]:
         vote = RegenEcosystemService(self.session).cast_award_vote(
             award_id,
             user_id=actor.id,
@@ -450,14 +478,18 @@ class GtexFanExperienceService:
                 "legend_attendees": legend_attendees,
                 "fan_reaction_weight": round(float(reaction_summary["total_weight"]), 3),
             },
-            "current_user_access": None
-            if user_profile is None
-            else {
-                "fan_profile_id": user_profile.id,
-                "fan_tier": user_profile.fan_tier,
-                "discount_bps": discount_bps,
-                "has_ticket": self._user_has_ticket(current_user.id, event_key) if current_user is not None else False,
-            },
+            "current_user_access": (
+                None
+                if user_profile is None
+                else {
+                    "fan_profile_id": user_profile.id,
+                    "fan_tier": user_profile.fan_tier,
+                    "discount_bps": discount_bps,
+                    "has_ticket": (
+                        self._user_has_ticket(current_user.id, event_key) if current_user is not None else False
+                    ),
+                }
+            ),
         }
 
     def regen_hype_board(self, *, season_id: str | None = None, country_limit: int = 12) -> dict[str, Any]:
@@ -518,6 +550,8 @@ class GtexFanExperienceService:
         read_match_view,
         season_id: str | None = None,
     ) -> dict[str, Any]:
+        if _protected_runtime_enabled():
+            raise ValueError("full_experience_simulation_disabled_in_protected_runtime")
         profile = self.get_or_create_profile(actor=actor)
         metadata = dict(match.metadata_json or {})
         fan_meta = dict(metadata.get("fan_experience") or {})
@@ -586,15 +620,11 @@ class GtexFanExperienceService:
         ticket_price = _quantize(fan_meta.get("base_ticket_price") or ("18.0000" if is_final else "8.0000"))
         vip_ticket_price = _quantize(fan_meta.get("vip_ticket_price") or (ticket_price * Decimal("2.4000")))
         real_sold, real_vip_sold = self._ticket_counts(event_key=event_key)
-        synthetic_sales = max(0, int(fan_meta.get("synthetic_ticket_sales") or 0))
-        synthetic_vip_sales = max(0, int(fan_meta.get("synthetic_vip_sales") or 0))
         social = GtexSocialWarfareService(self.session)
         fan_war = social.fan_war_summary(match=match)
         ticket_demand_multiplier = float(dict(fan_war.get("impact") or {}).get("ticket_demand_multiplier") or 1.0)
-        social_sales_bonus = max(0, int(round(capacity * max(0.0, ticket_demand_multiplier - 1.0) * 0.4)))
-        sold = real_sold + synthetic_sales
-        vip_sold = real_vip_sold + synthetic_vip_sales
-        sold += min(max(0, capacity - sold), social_sales_bonus)
+        sold = real_sold
+        vip_sold = real_vip_sold
         sold_ratio = sold / float(capacity)
         sell_out_triggered = sold_ratio > 0.9
         current_user_profile = self.get_or_create_profile(actor=current_user) if current_user is not None else None
@@ -642,21 +672,25 @@ class GtexFanExperienceService:
                 "homepage_promotion": sell_out_triggered,
                 "notification_blast": sell_out_triggered,
             },
-            "current_user": None
-            if current_user_profile is None or current_user is None
-            else {
-                "fan_profile_id": current_user_profile.id,
-                "fan_tier": current_user_profile.fan_tier,
-                "dao_priority": dao_priority,
-                "discount_bps": discount_bps,
-                "has_ticket": current_user_ticket is not None,
-            },
+            "current_user": (
+                None
+                if current_user_profile is None or current_user is None
+                else {
+                    "fan_profile_id": current_user_profile.id,
+                    "fan_tier": current_user_profile.fan_tier,
+                    "dao_priority": dao_priority,
+                    "discount_bps": discount_bps,
+                    "has_ticket": current_user_ticket is not None,
+                }
+            ),
             "discount_bps": discount_bps,
             "social_ticket_demand_multiplier": round(ticket_demand_multiplier, 4),
             "tribe_pressure": round(float(fan_war.get("tribe_pressure") or 0.0), 4),
         }
 
-    def _atmosphere_summary(self, *, match: GtexMatch, offer: dict[str, Any], reaction_summary: dict[str, Any]) -> dict[str, Any]:
+    def _atmosphere_summary(
+        self, *, match: GtexMatch, offer: dict[str, Any], reaction_summary: dict[str, Any]
+    ) -> dict[str, Any]:
         sold_ratio = int(offer["tickets_sold"]) / float(max(int(offer["capacity"]), 1))
         total_weight = float(reaction_summary["total_weight"])
         home_support = float(reaction_summary["home_support"])
@@ -668,10 +702,7 @@ class GtexFanExperienceService:
         chat_pressure = social.live_chat_pressure(match=match)
         crowd_boost = round(
             _clamp(
-                (sold_ratio * 0.34)
-                + (total_weight * 0.05)
-                + (tribe_pressure * 0.22)
-                + (chat_pressure * 0.16),
+                (sold_ratio * 0.34) + (total_weight * 0.05) + (tribe_pressure * 0.22) + (chat_pressure * 0.16),
                 0.08,
                 0.99,
             ),
@@ -689,30 +720,26 @@ class GtexFanExperienceService:
         narrative_tag = (
             "sell_out_cauldron"
             if sold_ratio > 0.9 and reaction_summary["legend_weight"] >= 2.0
-            else "fan_war_cauldron"
-            if tribe_pressure >= 0.6
-            else "viral_reaction_storm"
-            if chat_pressure >= 0.4
-            else "rivalry_voltage"
-            if reaction_summary["dominant_reaction"] == "boo"
-            else "anthemic_rise"
+            else (
+                "fan_war_cauldron"
+                if tribe_pressure >= 0.6
+                else (
+                    "viral_reaction_storm"
+                    if chat_pressure >= 0.4
+                    else "rivalry_voltage" if reaction_summary["dominant_reaction"] == "boo" else "anthemic_rise"
+                )
+            )
         )
         return {
             "crowd_intensity_boost": crowd_boost,
             "commentary_tone": commentary_tone,
             "match_narrative_tag": narrative_tag,
             "home_strength_multiplier": round(
-                1.0
-                + max(home_support, 0.0) * 0.018
-                + (crowd_boost * 0.03)
-                + (tribe_pressure * 0.018),
+                1.0 + max(home_support, 0.0) * 0.018 + (crowd_boost * 0.03) + (tribe_pressure * 0.018),
                 4,
             ),
             "away_strength_multiplier": round(
-                1.0
-                + max(away_support, 0.0) * 0.016
-                + (crowd_boost * 0.02)
-                + (chat_pressure * 0.014),
+                1.0 + max(away_support, 0.0) * 0.016 + (crowd_boost * 0.02) + (chat_pressure * 0.014),
                 4,
             ),
             "intensity_bonus_events": min(
@@ -831,7 +858,16 @@ class GtexFanExperienceService:
             item["metadata"] = {**dict(item.get("metadata") or {}), **metadata}
             found = True
         if not found:
-            history.insert(0, {"event_key": event_key, "event_type": event_type, "title": title, "status": status, "metadata": dict(metadata)})
+            history.insert(
+                0,
+                {
+                    "event_key": event_key,
+                    "event_type": event_type,
+                    "title": title,
+                    "status": status,
+                    "metadata": dict(metadata),
+                },
+            )
         profile.attendance_history_json = history[:20]
         unique_events = {item.get("event_key") for item in history if item.get("event_key")}
         profile.attendance_count = len(unique_events)
@@ -868,7 +904,9 @@ class GtexFanExperienceService:
             tags=["sell_out", "tickets", "homepage"],
             metadata={"event_key": offer["event_key"]},
         )
-        recipients = {user_id for user_id in (match.home_user_id, match.away_user_id, match.requested_by_user_id) if user_id}
+        recipients = {
+            user_id for user_id in (match.home_user_id, match.away_user_id, match.requested_by_user_id) if user_id
+        }
         recipients.update(
             str(user_id)
             for user_id in self.session.scalars(
@@ -938,7 +976,9 @@ class GtexFanExperienceService:
     def _is_dao_priority_user(self, actor: User | None, match: GtexMatch | None) -> bool:
         if actor is None or match is None:
             return False
-        return actor.id in {item for item in (match.home_user_id, match.away_user_id, match.requested_by_user_id) if item}
+        return actor.id in {
+            item for item in (match.home_user_id, match.away_user_id, match.requested_by_user_id) if item
+        }
 
     def _match_event_key(self, match_id: str) -> str:
         return f"match:{match_id}"
@@ -962,7 +1002,9 @@ class GtexFanExperienceService:
         tags: list[str],
         metadata: dict[str, Any],
     ) -> NewsArticle:
-        article = self.session.scalar(select(NewsArticle).where(NewsArticle.article_type == article_type, NewsArticle.title == title))
+        article = self.session.scalar(
+            select(NewsArticle).where(NewsArticle.article_type == article_type, NewsArticle.title == title)
+        )
         if article is None:
             article = NewsArticle(
                 article_type=article_type,

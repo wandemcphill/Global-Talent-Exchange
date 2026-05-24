@@ -33,6 +33,8 @@ class GtexClubOwnerDashboardV2 extends StatefulWidget {
     this.onGenerateAcademyProspects,
     this.onOfferAcademyContract,
     this.onPromoteAcademyProspect,
+    this.onOpenMarket,
+    this.onCreateCompetition,
   });
 
   final String clubId;
@@ -58,6 +60,8 @@ class GtexClubOwnerDashboardV2 extends StatefulWidget {
   final VoidCallback? onGenerateAcademyProspects;
   final ValueChanged<String>? onOfferAcademyContract;
   final ValueChanged<String>? onPromoteAcademyProspect;
+  final VoidCallback? onOpenMarket;
+  final VoidCallback? onCreateCompetition;
 
   @override
   State<GtexClubOwnerDashboardV2> createState() =>
@@ -120,6 +124,21 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
         ),
       );
     }
+    if (widget.initialSnapshot == null &&
+        widget.lifecycleDashboard == null &&
+        widget.growthDashboard == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(GtexSpacing.lg),
+          child: GtexEmptyState(
+            title: 'Live club data required',
+            message:
+                'This owner dashboard no longer opens with generated demo club data. Load it through the live club workspace route.',
+            icon: Icons.shield_outlined,
+          ),
+        ),
+      );
+    }
 
     return AnimatedBuilder(
       animation: _controller,
@@ -160,21 +179,60 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
           ),
           rightPanel: GtexClubRightRail(snapshot: snapshot, ownerFacing: true),
           actions: <Widget>[
-            GtexActionButton(
+            _CommandAction(
               label: 'Market',
               icon: Icons.shopping_basket_outlined,
-              onPressed: () {},
+              message:
+                  'Open the player market from the app shell; this embedded club widget has no route dispatcher.',
               accent: GtexColors.pitch,
+              onPressed: widget.onOpenMarket,
             ),
-            GtexActionButton(
+            _CommandAction(
               label: 'Create competition',
               icon: Icons.add_circle_outline,
-              onPressed: () {},
+              message:
+                  'Open Competition OS from the app shell to create and manage hosted competitions.',
               accent: GtexColors.gold,
+              onPressed: widget.onCreateCompetition,
             ),
           ],
         );
       },
+    );
+  }
+}
+
+class _CommandAction extends StatelessWidget {
+  const _CommandAction({
+    required this.label,
+    required this.icon,
+    required this.message,
+    required this.accent,
+    this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final String message;
+  final Color accent;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: message,
+      child: GtexActionButton(
+        label: label,
+        icon: icon,
+        onPressed:
+            onPressed ??
+            () {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(message)));
+            },
+        accent: accent,
+      ),
     );
   }
 }
@@ -337,7 +395,7 @@ class _OwnerDetail extends StatelessWidget {
                 ),
                 const SizedBox(height: GtexSpacing.sm),
                 const Text(
-                  'Codex should wire this panel to the Batch 2 market shortlist basket once the player market V2 is installed.',
+                  'Open transfer orders are live here; shortlist totals appear once the player market returns basket rows for this club.',
                   style: TextStyle(color: GtexColors.textMuted),
                 ),
               ],
@@ -354,12 +412,7 @@ class _OwnerDetail extends StatelessWidget {
           const SizedBox(height: GtexSpacing.md),
           _OwnerMetrics(snapshot: snapshot),
         ] else if (section == GtexClubOwnerSection.competitions) ...<Widget>[
-          _PlaceholderPanel(
-            title: 'Competitions',
-            subtitle:
-                'Tournament entries, GTEX fixtures, and progress monitoring should mount here.',
-            icon: Icons.emoji_events_outlined,
-          ),
+          _CompetitionOpsPanel(snapshot: snapshot),
         ] else if (section == GtexClubOwnerSection.identity) ...<Widget>[
           _SectionHeader(
             title: 'Club identity',
@@ -393,14 +446,7 @@ class _OwnerDetail extends StatelessWidget {
           ),
           const SizedBox(height: GtexSpacing.md),
           _OrdersList(snapshot: snapshot),
-        ] else ...<Widget>[
-          _PlaceholderPanel(
-            title: 'Club settings',
-            subtitle:
-                'Preferences, permissions, visibility, and operational settings.',
-            icon: Icons.settings_outlined,
-          ),
-        ],
+        ] else ...<Widget>[_ClubSettingsPanel(snapshot: snapshot)],
       ],
     );
   }
@@ -1514,28 +1560,191 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _PlaceholderPanel extends StatelessWidget {
-  const _PlaceholderPanel({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
+class _CompetitionOpsPanel extends StatelessWidget {
+  const _CompetitionOpsPanel({required this.snapshot});
 
-  final String title;
-  final String subtitle;
-  final IconData icon;
+  final GtexClubWorkspaceSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<GtexClubOrderItem> competitionOrders = snapshot.orders
+        .where(
+          (GtexClubOrderItem item) =>
+              item.title.toLowerCase().contains('rental') ||
+              item.title.toLowerCase().contains('cup') ||
+              item.title.toLowerCase().contains('competition'),
+        )
+        .toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const _SectionHeader(
+          title: 'Competitions',
+          subtitle:
+              'Tournament readiness, fixture-linked orders, and club progress signals.',
+          icon: Icons.emoji_events_outlined,
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        Wrap(
+          spacing: GtexSpacing.md,
+          runSpacing: GtexSpacing.md,
+          children: <Widget>[
+            SizedBox(
+              width: 240,
+              child: GtexMetricTile(
+                label: 'Squad value',
+                value: gtexFormatCredits(snapshot.squadValueCredits),
+                icon: Icons.groups_outlined,
+                accent: GtexColors.pitch,
+              ),
+            ),
+            SizedBox(
+              width: 240,
+              child: GtexMetricTile(
+                label: 'Open orders',
+                value: gtexFormatCredits(snapshot.finances.openOrdersCredits),
+                icon: Icons.receipt_long_outlined,
+                accent: GtexColors.gold,
+              ),
+            ),
+            SizedBox(
+              width: 240,
+              child: GtexMetricTile(
+                label: 'Honors',
+                value: '${snapshot.trophies.length}',
+                icon: Icons.workspace_premium_outlined,
+                accent: GtexColors.cyan,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          title: 'Competition signals',
+          subtitle:
+              competitionOrders.isEmpty
+                  ? 'No competition-specific club orders are open right now.'
+                  : 'Orders connected to rental pools, cups, and competition preparation.',
+          accent: GtexColors.gold,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (competitionOrders.isEmpty)
+                const Text(
+                  'Use Competition OS to create, enter, and monitor fixtures. Club readiness signals update here from live club orders and activity.',
+                  style: TextStyle(color: GtexColors.textSecondary),
+                )
+              else
+                for (final GtexClubOrderItem order in competitionOrders)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+                    child: _MiniLine(
+                      label: order.title,
+                      value:
+                          '${order.status} - ${gtexFormatCredits(order.amountCredits)}',
+                    ),
+                  ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ClubSettingsPanel extends StatelessWidget {
+  const _ClubSettingsPanel({required this.snapshot});
+
+  final GtexClubWorkspaceSnapshot snapshot;
 
   @override
   Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: <Widget>[
-      _SectionHeader(title: title, subtitle: subtitle, icon: icon),
+      const _SectionHeader(
+        title: 'Club settings',
+        subtitle:
+            'Current identity, ownership, and visibility signals from the club workspace.',
+        icon: Icons.settings_outlined,
+      ),
       const SizedBox(height: GtexSpacing.md),
-      const GtexEmptyState(
-        title: 'Ready for live wiring',
-        message:
-            'This V2 layout is intentionally route-safe. Codex should connect it to existing GTEX APIs and controllers during integration.',
-        icon: Icons.cable_outlined,
+      GtexPanel(
+        title: 'Workspace identity',
+        subtitle: '${snapshot.shortCode} - ${snapshot.country}',
+        accent: GtexColors.cyan,
+        child: Wrap(
+          spacing: GtexSpacing.xs,
+          runSpacing: GtexSpacing.xs,
+          children: <Widget>[
+            GtexStatusChip(label: snapshot.division, color: GtexColors.pitch),
+            GtexStatusChip(
+              label: '${snapshot.followers} followers',
+              color: GtexColors.cyan,
+            ),
+            GtexStatusChip(
+              label: '${snapshot.shareholders} shareholders',
+              color: GtexColors.gold,
+            ),
+            for (final String tag in snapshot.identityTags.take(5))
+              GtexStatusChip(label: tag, color: GtexColors.purple),
+          ],
+        ),
+      ),
+      const SizedBox(height: GtexSpacing.md),
+      GtexPanel(
+        title: 'Operational policy',
+        subtitle:
+            'Settings are derived from the live club profile until write endpoints expose per-club preferences.',
+        accent: GtexColors.pitch,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _MiniLine(label: 'Owner', value: snapshot.ownerName),
+            _MiniLine(label: 'Visibility', value: 'Public club profile'),
+            _MiniLine(label: 'Market posture', value: 'Transfer-ready'),
+            _MiniLine(
+              label: 'Newsroom',
+              value: '${snapshot.news.length} items',
+            ),
+          ],
+        ),
       ),
     ],
   );
+}
+
+class _MiniLine extends StatelessWidget {
+  const _MiniLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: GtexColors.textMuted),
+            ),
+          ),
+          const SizedBox(width: GtexSpacing.sm),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: GtexColors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

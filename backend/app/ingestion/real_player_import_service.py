@@ -3,6 +3,7 @@ from __future__ import annotations
 """Temporary compatibility shim for the legacy provider-directory import surface."""
 
 import logging
+import os
 from pathlib import Path
 import time
 from typing import Any
@@ -920,6 +921,11 @@ class RealPlayerImportService:
     ) -> dict[str, str | int]:
         configured = self.settings.real_player_import if self.settings is not None else None
         resolved_provider = provider_name or (configured.provider_name if configured is not None else "mock")
+        if self._mock_provider_blocked(resolved_provider):
+            raise RealPlayerImportError(
+                "Mock real-player ingestion is disabled in production. Configure GTE_REAL_PLAYER_IMPORT_PROVIDER "
+                "or explicitly enable mock ingestion with GTE_ENABLE_MOCK_INGESTION_PROVIDER for fixture/test runs."
+            )
         resolved_batch_size = batch_size or (configured.batch_size if configured is not None else 1000)
         return {
             "provider_name": resolved_provider,
@@ -928,6 +934,20 @@ class RealPlayerImportService:
             "cursor_key": cursor_key or (configured.cursor_key if configured is not None else REAL_PLAYER_IMPORT_CURSOR_KEY),
             "rate_limit_per_minute": configured.rate_limit_per_minute if configured is not None else 120,
             "timeout_seconds": configured.timeout_seconds if configured is not None else 20,
+        }
+
+    def _mock_provider_blocked(self, provider_name: str) -> bool:
+        normalized_provider = provider_name.strip().lower().replace("-", "_")
+        if normalized_provider != "mock":
+            return False
+        app_env = str(getattr(self.settings, "app_env", "") or "").strip().lower()
+        if app_env not in {"production", "prod", "staging"}:
+            return False
+        return (os.getenv("GTE_ENABLE_MOCK_INGESTION_PROVIDER") or "").strip().lower() not in {
+            "1",
+            "true",
+            "yes",
+            "on",
         }
 
     @staticmethod

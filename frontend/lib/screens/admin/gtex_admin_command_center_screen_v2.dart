@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/admin_command_redesign/models/gtex_admin_command_models.dart';
 import '../../features/admin_command_redesign/presentation/gtex_admin_command_controller.dart';
@@ -11,7 +12,9 @@ import '../../features/admin_command_redesign/widgets/gtex_jackpot_admin_panel.d
 import '../../features/admin_command_redesign/widgets/gtex_system_health_panel.dart';
 
 class GtexAdminCommandCenterScreenV2 extends StatefulWidget {
-  const GtexAdminCommandCenterScreenV2({super.key});
+  const GtexAdminCommandCenterScreenV2({super.key, this.controller});
+
+  final GtexAdminCommandController? controller;
 
   @override
   State<GtexAdminCommandCenterScreenV2> createState() =>
@@ -20,24 +23,40 @@ class GtexAdminCommandCenterScreenV2 extends StatefulWidget {
 
 class _GtexAdminCommandCenterScreenV2State
     extends State<GtexAdminCommandCenterScreenV2> {
-  late final GtexAdminCommandController controller;
+  GtexAdminCommandController? controller;
 
   @override
   void initState() {
     super.initState();
-    controller = GtexAdminCommandController();
+    controller = widget.controller;
   }
 
   @override
   void dispose() {
-    controller.dispose();
+    controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final GtexAdminCommandController? activeController = controller;
+    if (activeController == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF070B12),
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Live admin command data required. Use the production admin command center with authenticated API wiring.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+        ),
+      );
+    }
     return AnimatedBuilder(
-      animation: controller,
+      animation: activeController,
       builder: (context, _) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -54,19 +73,21 @@ class _GtexAdminCommandCenterScreenV2State
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth >= 1100;
                   if (!isWide) {
-                    return _MobileAdminCommand(controller: controller);
+                    return _MobileAdminCommand(controller: activeController);
                   }
 
                   return Row(
                     children: [
                       SizedBox(
                         width: 360,
-                        child: _LeftPanel(controller: controller),
+                        child: _LeftPanel(controller: activeController),
                       ),
-                      Expanded(child: _MainWorkspace(controller: controller)),
+                      Expanded(
+                        child: _MainWorkspace(controller: activeController),
+                      ),
                       SizedBox(
                         width: 360,
-                        child: _RightPanel(controller: controller),
+                        child: _RightPanel(controller: activeController),
                       ),
                     ],
                   );
@@ -313,18 +334,25 @@ class _RightPanel extends StatelessWidget {
                       'Restricted admin actions. Codex must wire these to existing permission checks.',
                 ),
                 const SizedBox(height: 14),
-                _QuickControl(label: 'Freeze wallet', icon: Icons.lock_rounded),
+                _QuickControl(
+                  label: 'Freeze wallet',
+                  icon: Icons.lock_rounded,
+                  route: '/admin/trust-ops',
+                ),
                 _QuickControl(
                   label: 'Pause jackpot draw',
                   icon: Icons.pause_circle_rounded,
+                  route: '/admin/launch-control',
                 ),
                 _QuickControl(
                   label: 'Publish announcement',
                   icon: Icons.campaign_rounded,
+                  route: '/admin/notifications',
                 ),
                 _QuickControl(
                   label: 'Open system health',
                   icon: Icons.monitor_heart_rounded,
+                  route: '/admin/launch-control',
                 ),
               ],
             ),
@@ -384,17 +412,22 @@ class _RightPanel extends StatelessWidget {
 }
 
 class _QuickControl extends StatelessWidget {
-  const _QuickControl({required this.label, required this.icon});
+  const _QuickControl({
+    required this.label,
+    required this.icon,
+    required this.route,
+  });
 
   final String label;
   final IconData icon;
+  final String route;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 9),
       child: OutlinedButton.icon(
-        onPressed: () {},
+        onPressed: () => context.go(route),
         icon: Icon(icon, size: 18),
         label: Align(alignment: Alignment.centerLeft, child: Text(label)),
         style: OutlinedButton.styleFrom(

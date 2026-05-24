@@ -58,20 +58,24 @@ void main() {
 
       router.go(AppRoutes.matchesBroadcastLocation('live-match-001'));
       await tester.pumpAndSettle();
-      expect(find.text('Broadcast package coming soon'), findsOneWidget);
+      expect(find.byKey(const Key('match-2d-score-strip')), findsWidgets);
+      expect(find.text('Broadcast package coming soon'), findsNothing);
 
       router.go(AppRoutes.matchesThreeDLocation('live-match-001'));
       await tester.pumpAndSettle();
-      expect(find.text('Advanced match viewing coming soon'), findsOneWidget);
+      expect(find.byKey(const Key('match-2d-score-strip')), findsWidgets);
+      expect(find.text('Advanced match viewing coming soon'), findsNothing);
       expect(find.text('FLUTTER_3D'), findsNothing);
 
       router.go(AppRoutes.matchesNativeThreeD);
       await tester.pumpAndSettle();
-      expect(find.text('Advanced match viewing coming soon'), findsOneWidget);
+      expect(find.text('Fixtures'), findsWidgets);
+      expect(find.text('Advanced match viewing coming soon'), findsNothing);
 
       router.go(AppRoutes.streamerEngine);
       await tester.pumpAndSettle();
-      expect(find.text('Streamer tournaments coming soon'), findsOneWidget);
+      expect(find.text('Arena'), findsWidgets);
+      expect(find.text('Streamer tournaments coming soon'), findsNothing);
 
       router.go(AppRoutes.profileAdmin);
       await tester.pumpAndSettle();
@@ -231,15 +235,16 @@ class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
 }
 
 MatchViewState _routeQualifiedViewState(String matchKey, MatchViewState state) {
-  final int lastFrameSecond = state.frames.isEmpty
-      ? 0
-      : state.frames.last.timeSeconds.ceil();
-  final int segmentEndSeconds = state.segmentEndSeconds < lastFrameSecond
-      ? lastFrameSecond
-      : state.segmentEndSeconds;
-  final int durationSeconds = state.durationSeconds < segmentEndSeconds
-      ? segmentEndSeconds
-      : state.durationSeconds;
+  final int lastFrameSecond =
+      state.frames.isEmpty ? 0 : state.frames.last.timeSeconds.ceil();
+  final int segmentEndSeconds =
+      state.segmentEndSeconds < lastFrameSecond
+          ? lastFrameSecond
+          : state.segmentEndSeconds;
+  final int durationSeconds =
+      state.durationSeconds < segmentEndSeconds
+          ? segmentEndSeconds
+          : state.durationSeconds;
   return MatchViewState(
     matchId: matchKey,
     source: state.source,

@@ -1,13 +1,18 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
 import '../models/sponsorship_admin_models.dart';
 
 class SponsorshipAdminApi {
-  SponsorshipAdminApi({required this.client, required this.fixtures});
+  SponsorshipAdminApi({
+    required this.client,
+    required _SponsorshipFixtures? fixtures,
+  }) : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final _SponsorshipFixtures fixtures;
+  final _SponsorshipFixtures? _fixtures;
 
   factory SponsorshipAdminApi.standard({
     required String baseUrl,
@@ -23,11 +28,12 @@ class SponsorshipAdminApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _SponsorshipFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory SponsorshipAdminApi.fixture() {
+    assertFixtureFactoryAllowed('SponsorshipAdminApi.fixture');
     return SponsorshipAdminApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -50,7 +56,7 @@ class SponsorshipAdminApi {
       return payload
           .map(SponsorshipPackageView.fromJson)
           .toList(growable: false);
-    }, fixtures.packages);
+    }, () => _requireFixtures().packages());
   }
 
   Future<List<SponsorshipContractView>> listClubContracts(String clubId) {
@@ -62,7 +68,7 @@ class SponsorshipAdminApi {
       return payload
           .map(SponsorshipContractView.fromJson)
           .toList(growable: false);
-    }, () async => fixtures.contractsForClub(clubId));
+    }, () async => _requireFixtures().contractsForClub(clubId));
   }
 
   Future<SponsorshipContractView> reviewContract({
@@ -80,7 +86,19 @@ class SponsorshipAdminApi {
         },
       );
       return SponsorshipContractView.fromJson(payload);
-    }, () async => fixtures.reviewContract(contractId, action));
+    }, () async => _requireFixtures().reviewContract(contractId, action));
+  }
+
+  _SponsorshipFixtures _requireFixtures() {
+    final _SponsorshipFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Sponsorship fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return fixtures;
   }
 }
 

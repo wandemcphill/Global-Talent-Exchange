@@ -530,12 +530,16 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
   String _providerLabel(String provider) {
     final Map<String, String> labels = <String, String>{
       'bank_transfer_manual': 'Manual bank transfer',
-      'paystack': 'Paystack',
+      'paystack': 'Paystack (blocked)',
       'korapay': 'KoraPay',
       'flutterwave': 'Flutterwave',
       'monnify': 'Monnify',
     };
     return labels[provider.trim().toLowerCase()] ?? _humanize(provider);
+  }
+
+  bool _paymentRailLocked(AdminPaymentRail rail) {
+    return rail.provider.trim().toLowerCase() == 'paystack';
   }
 
   String _depositStatusLabel(GteDepositStatus status) {
@@ -684,7 +688,20 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     });
     try {
       final AdminPaymentRailsState updated = await _api.updatePaymentRails(
-        rails: _paymentRails,
+        rails: _paymentRails
+            .map(
+              (AdminPaymentRail rail) =>
+                  _paymentRailLocked(rail)
+                      ? rail.copyWith(
+                        depositsEnabled: false,
+                        withdrawalsEnabled: false,
+                        isLive: false,
+                        maintenanceMessage:
+                            'Paystack is unavailable for production. Use KoraPay or manual bank transfer.',
+                      )
+                      : rail,
+            )
+            .toList(growable: false),
         reason: reason,
       );
       if (!mounted) {
@@ -1195,7 +1212,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            'Automatic wallet checkout in the app supports Paystack and KoraPay when those rails are live. Manual bank transfer availability follows the treasury modes and active bank account below, and the operations launcher keeps deeper admin routes one tap away.',
+            'Automatic wallet checkout in the app uses KoraPay when that rail is live. Manual bank transfer availability follows the treasury modes and active bank account below; Paystack is blocked until it is explicitly reintroduced.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
@@ -1835,7 +1852,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           const _SectionHeader(
             title: 'Payment methods',
             subtitle:
-                'Toggle gateway providers and manual bank transfer routing without leaving the admin dashboard.',
+                'Toggle KoraPay and manual bank transfer routing without leaving the admin dashboard. Paystack is blocked for now.',
           ),
           const SizedBox(height: 16),
           ..._paymentRails.asMap().entries.map((
@@ -1843,6 +1860,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           ) {
             final int index = entry.key;
             final AdminPaymentRail rail = entry.value;
+            final bool locked = _paymentRailLocked(rail);
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: GteSurfacePanel(
@@ -1867,40 +1885,60 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                       const SizedBox(height: 8),
                       Text(rail.maintenanceMessage!),
                     ],
+                    if (locked) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Text(
+                        'This provider is unavailable for production funding and cannot be opened from the dashboard.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: GteShellTheme.accentWarm,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     SwitchListTile.adaptive(
                       value: rail.isLive,
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Provider live'),
-                      onChanged: (bool value) {
-                        setState(() {
-                          _paymentRails[index] = rail.copyWith(isLive: value);
-                        });
-                      },
+                      onChanged:
+                          locked
+                              ? null
+                              : (bool value) {
+                                setState(() {
+                                  _paymentRails[index] = rail.copyWith(
+                                    isLive: value,
+                                  );
+                                });
+                              },
                     ),
                     SwitchListTile.adaptive(
                       value: rail.depositsEnabled,
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Deposits enabled'),
-                      onChanged: (bool value) {
-                        setState(() {
-                          _paymentRails[index] = rail.copyWith(
-                            depositsEnabled: value,
-                          );
-                        });
-                      },
+                      onChanged:
+                          locked
+                              ? null
+                              : (bool value) {
+                                setState(() {
+                                  _paymentRails[index] = rail.copyWith(
+                                    depositsEnabled: value,
+                                  );
+                                });
+                              },
                     ),
                     SwitchListTile.adaptive(
                       value: rail.withdrawalsEnabled,
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Withdrawals enabled'),
-                      onChanged: (bool value) {
-                        setState(() {
-                          _paymentRails[index] = rail.copyWith(
-                            withdrawalsEnabled: value,
-                          );
-                        });
-                      },
+                      onChanged:
+                          locked
+                              ? null
+                              : (bool value) {
+                                setState(() {
+                                  _paymentRails[index] = rail.copyWith(
+                                    withdrawalsEnabled: value,
+                                  );
+                                });
+                              },
                     ),
                   ],
                 ),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from hashlib import sha256
+import os
 from typing import Any
 
 from pydantic import ValidationError
@@ -23,6 +24,27 @@ _REQUEST_KEYS = (
     "away_team",
     "tactical_changes",
 )
+
+
+def _legacy_match_simulation_enabled(settings: Settings | None = None) -> bool:
+    if _protected_runtime_enabled(settings):
+        return False
+    return (os.getenv("GTE_ENABLE_LEGACY_MATCH_SIMULATION") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _protected_runtime_enabled(settings: Settings | None = None) -> bool:
+    environment = (
+        (
+            str(getattr(settings, "app_env", "") or "")
+            or os.getenv("GTE_APP_ENV")
+            or os.getenv("APP_ENV")
+            or os.getenv("ENVIRONMENT")
+            or "development"
+        )
+        .strip()
+        .lower()
+    )
+    return environment in {"production", "prod", "staging", "release"}
 
 
 def _enum_value(value: Any) -> Any:
@@ -409,11 +431,17 @@ def run_match_simulation(
     *,
     simulation_service: MatchSimulationService | None = None,
     team_factory: SyntheticSquadFactory | None = None,
+    settings: Settings | None = None,
 ) -> dict[str, Any]:
     service = simulation_service or MatchSimulationService()
-    factory = team_factory or SyntheticSquadFactory()
+    factory = team_factory or SyntheticSquadFactory(allow_synthetic_fallback=False)
     request = _match_request_from_payload(payload, team_factory=factory)
     if request is None:
+        if not _legacy_match_simulation_enabled(settings):
+            raise ValueError(
+                "Match simulation payload does not match the GTEX match-engine request contract; "
+                "legacy mock simulation is disabled."
+            )
         return _legacy_match_simulation(payload)
     replay_payload = service.build_replay_payload(request)
     return _full_match_simulation(payload, replay_payload)
@@ -430,7 +458,7 @@ class SimulationWorker(BaseWorker):
         team_factory: SyntheticSquadFactory | None = None,
     ) -> None:
         self.simulation_service = simulation_service or MatchSimulationService()
-        self.team_factory = team_factory or SyntheticSquadFactory()
+        self.team_factory = team_factory or SyntheticSquadFactory(allow_synthetic_fallback=False)
         super().__init__(
             worker_name="simulation-worker",
             consumes=("match.started", "competition_engine.queue.match_simulation.queued"),
@@ -446,6 +474,7 @@ class SimulationWorker(BaseWorker):
             event.payload,
             simulation_service=self.simulation_service,
             team_factory=self.team_factory,
+            settings=self.settings,
         )
         return self.emit_event(
             event_type="match.completed",

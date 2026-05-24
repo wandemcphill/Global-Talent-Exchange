@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
 from app.coin_traders.schemas import (
+    CoinTraderAdminLiquidityRequest,
     CoinTradeAdminResolutionRequest,
     CoinTradeDisputeRequest,
     CoinTradeOrderCreateRequest,
@@ -198,6 +199,155 @@ def test_coin_trader_buy_order_locks_and_releases_escrow(coin_trader_session: Se
         "payment.confirmed",
         "coins.released",
     }.issubset(template_keys)
+    profile_view = service.get_my_profile(users["trader"])
+    assert profile_view.completed_volume_fiat == Decimal("4600000.0000")
+    assert profile_view.completion_rate == 100.0
+    assert profile_view.average_release_minutes > 0
+
+
+def test_admin_issues_and_redeems_coin_trader_liquidity_idempotently(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    profile = _approve_trader_with_rate(service, users, available_liquidity=Decimal("5000"))
+
+    issued = service.admin_issue_liquidity(
+        profile.id,
+        CoinTraderAdminLiquidityRequest(
+            coin_unit=LedgerUnit.COIN,
+            amount=Decimal("2500"),
+            reference="admin-liquidity-issue-001",
+            idempotency_key="admin-issue-key-001",
+            note="operator sold inventory to trader",
+        ),
+        admin=users["admin"],
+    )
+    assert issued.flow == "issue"
+    assert issued.available_balance == Decimal("2500.0000")
+    assert issued.ledger_entry_ids
+    repeated = service.admin_issue_liquidity(
+        profile.id,
+        CoinTraderAdminLiquidityRequest(
+            coin_unit=LedgerUnit.COIN,
+            amount=Decimal("2500"),
+            reference="admin-liquidity-issue-001",
+            idempotency_key="admin-issue-key-001",
+        ),
+        admin=users["admin"],
+    )
+    assert repeated.transaction_id == issued.transaction_id
+    trader_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.COIN)
+    assert trader_summary.available_balance == Decimal("2500.0000")
+    with pytest.raises(CoinTraderValidationError, match="idempotency key"):
+        service.admin_issue_liquidity(
+            profile.id,
+            CoinTraderAdminLiquidityRequest(
+                coin_unit=LedgerUnit.COIN,
+                amount=Decimal("2600"),
+                reference="admin-liquidity-issue-001",
+                idempotency_key="admin-issue-key-001",
+            ),
+            admin=users["admin"],
+        )
+
+    redeemed = service.admin_redeem_liquidity(
+        profile.id,
+        CoinTraderAdminLiquidityRequest(
+            coin_unit=LedgerUnit.COIN,
+            amount=Decimal("1000"),
+            reference="admin-liquidity-redeem-001",
+            idempotency_key="admin-redeem-key-001",
+            note="operator bought back inventory",
+        ),
+        admin=users["admin"],
+    )
+    assert redeemed.flow == "redeem"
+    assert redeemed.available_balance == Decimal("1500.0000")
+    trader_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.COIN)
+    assert trader_summary.available_balance == Decimal("1500.0000")
+
+    with pytest.raises(CoinTraderValidationError, match="below redemption amount"):
+        service.admin_redeem_liquidity(
+            profile.id,
+            CoinTraderAdminLiquidityRequest(coin_unit=LedgerUnit.COIN, amount=Decimal("2000")),
+            admin=users["admin"],
+        )
+
+
+def test_admin_liquidity_keeps_gtex_coin_and_fan_coin_balances_distinct(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    profile = _approve_trader_with_rate(service, users, coin_unit=LedgerUnit.COIN, available_liquidity=Decimal("5000"))
+    service.upsert_rate(
+        CoinTraderRateUpsertRequest(
+            coin_unit=LedgerUnit.CREDIT,
+            fiat_currency="NGN",
+            buy_rate_fiat=Decimal("0.90"),
+            sell_rate_fiat=Decimal("1.05"),
+            min_coin_amount=Decimal("100"),
+            max_coin_amount=Decimal("50000"),
+            available_liquidity=Decimal("9000"),
+        ),
+        actor=users["trader"],
+    )
+
+    service.admin_issue_liquidity(
+        profile.id,
+        CoinTraderAdminLiquidityRequest(coin_unit=LedgerUnit.COIN, amount=Decimal("1200")),
+        admin=users["admin"],
+    )
+    service.admin_issue_liquidity(
+        profile.id,
+        CoinTraderAdminLiquidityRequest(coin_unit=LedgerUnit.CREDIT, amount=Decimal("3400")),
+        admin=users["admin"],
+    )
+
+    coin_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.COIN)
+    credit_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.CREDIT)
+    assert coin_summary.available_balance == Decimal("1200.0000")
+    assert credit_summary.available_balance == Decimal("3400.0000")
+    profile_view = service.get_my_profile(users["trader"])
+    liquidity_by_unit = {rate.coin_unit: rate.available_liquidity for rate in profile_view.rates}
+    assert liquidity_by_unit[LedgerUnit.COIN] == Decimal("1200.0000")
+    assert liquidity_by_unit[LedgerUnit.CREDIT] == Decimal("3400.0000")
+
+
+def test_coin_trader_displayed_liquidity_is_capped_by_wallet_balance(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    wallet_service.credit_trade_proceeds(
+        coin_trader_session,
+        user=users["trader"],
+        amount=Decimal("1000.0000"),
+        unit=LedgerUnit.COIN,
+        reference="seed:stale-liquidity-wallet",
+        description="Seed limited trader liquidity",
+        external_reference="seed",
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+    )
+    coin_trader_session.commit()
+    profile = _approve_trader_with_rate(service, users, available_liquidity=Decimal("50000"))
+
+    profile_view = service.get_profile(profile.id)
+    assert profile_view.rates[0].available_liquidity == Decimal("1000.0000")
+    assert profile_view.liquidity_snapshot["coin:NGN"]["available_liquidity"] == "1000.0000"
+    assert profile_view.liquidity_snapshot["coin:NGN"]["claimed_available_liquidity"] == "50000.0000"
+
+    with pytest.raises(CoinTraderValidationError, match="liquidity"):
+        service.create_order(
+            CoinTradeOrderCreateRequest(
+                trader_profile_id=profile.id,
+                direction="user_buys",
+                coin_unit=LedgerUnit.COIN,
+                coin_amount=Decimal("1500"),
+                fiat_currency="NGN",
+                payment_method="bank_transfer",
+                idempotency_key="stale-liquidity-order-key",
+            ),
+            actor=users["buyer"],
+        )
 
 
 def test_coin_trade_order_idempotency_is_scoped_to_actor(coin_trader_session: Session) -> None:
@@ -518,6 +668,7 @@ def test_disputed_coin_trade_requires_admin_resolution(coin_trader_session: Sess
         actor=users["buyer"],
     )
     assert disputed.status == CoinTradeOrderStatus.DISPUTED.value
+    assert service.get_my_profile(users["trader"]).dispute_score == 100.0
 
     with pytest.raises(CoinTraderValidationError):
         service.confirm_and_release(order.id, actor=users["trader"])
@@ -530,6 +681,9 @@ def test_disputed_coin_trade_requires_admin_resolution(coin_trader_session: Sess
     assert resolved.status == CoinTradeOrderStatus.ADMIN_RELEASED.value
     buyer_summary = wallet_service.get_wallet_summary(coin_trader_session, users["buyer"], currency=LedgerUnit.COIN)
     assert buyer_summary.available_balance == Decimal("5000.0000")
+    profile_view = service.get_my_profile(users["trader"])
+    assert profile_view.completed_volume_fiat == Decimal("4600000.0000")
+    assert profile_view.dispute_score == 100.0
 
 
 def test_frozen_or_rejected_coin_trader_cannot_trade(coin_trader_session: Session) -> None:

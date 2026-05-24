@@ -105,8 +105,9 @@ def test_payment_rails_drop_stale_non_live_defaults(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     rails = response.json()["rails"]
-    assert [rail["provider"] for rail in rails] == ["bank_transfer_manual", "paystack", "korapay"]
-    assert {rail["provider"] for rail in rails} == {"bank_transfer_manual", "paystack", "korapay"}
+    assert [rail["provider"] for rail in rails] == ["bank_transfer_manual", "korapay"]
+    assert {rail["provider"] for rail in rails} == {"bank_transfer_manual", "korapay"}
+    assert "paystack" not in {rail["provider"] for rail in rails}
 
 
 def test_payment_rail_update_rejects_unsupported_provider(tmp_path: Path) -> None:
@@ -129,3 +130,25 @@ def test_payment_rail_update_rejects_unsupported_provider(tmp_path: Path) -> Non
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported payment rail provider 'flutterwave'."
+
+
+def test_payment_rail_update_rejects_paystack_provider(tmp_path: Path) -> None:
+    with _build_client(tmp_path) as client:
+        response = client.put(
+            "/api/admin/god-mode/payment-rails",
+            json={
+                "rails": [
+                    {
+                        "provider": "paystack",
+                        "deposits_enabled": True,
+                        "withdrawals_enabled": True,
+                        "is_live": True,
+                        "maintenance_message": None,
+                    }
+                ],
+                "reason": "Paystack is unavailable for production.",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported payment rail provider 'paystack'."

@@ -51,6 +51,12 @@ def get_match_viewer_presentation_service() -> MatchViewerPresentationService:
     return MatchViewerPresentationService()
 
 
+def _protected_runtime_enabled(app) -> bool:
+    settings = getattr(app.state, "settings", None)
+    environment = str(getattr(settings, "app_env", "") or "").strip().lower()
+    return environment in {"production", "prod", "staging"}
+
+
 def _attach_presentation(
     view_state: MatchViewStateView,
     *,
@@ -209,10 +215,11 @@ def _resolve_live_view_state(
     metadata_json = dict(match.metadata_json or {}) if match is not None else {}
     live_hub = ensure_live_match_hub(request.app)
     live_state = live_hub.get_state(match_key)
+    allow_synthetic_visuals = not _protected_runtime_enabled(request.app)
     if live_state is not None:
         events, _ = live_hub.get_events_since(match_key, 0)
-        return (
-            service.build_from_live_stream(
+        try:
+            view_state = service.build_from_live_stream(
                 match_id=match_key,
                 source="live_match_hub",
                 home_team_id=match.home_club_id if match is not None else None,
@@ -227,11 +234,17 @@ def _resolve_live_view_state(
                 ),
                 events=events,
                 live_state=live_state,
-            ),
-            metadata_json,
-        )
+                allow_synthetic_visuals=allow_synthetic_visuals,
+            )
+        except ValueError:
+            if _protected_runtime_enabled(request.app):
+                return None
+            raise
+        return view_state, metadata_json
     infinite_stream = ensure_infinite_league_runtime(request.app).live_stream(match_key)
     if infinite_stream is not None:
+        if _protected_runtime_enabled(request.app):
+            return None
         return (
             service.build_from_live_stream(
                 match_id=infinite_stream.match_id,
@@ -242,6 +255,7 @@ def _resolve_live_view_state(
                 away_team_name=infinite_stream.away_team_name,
                 events=list(infinite_stream.events),
                 live_state=None,
+                allow_synthetic_visuals=True,
             ),
             metadata_json,
         )

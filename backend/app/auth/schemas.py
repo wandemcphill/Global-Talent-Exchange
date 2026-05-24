@@ -387,12 +387,88 @@ class CurrentUserResponse(BaseModel):
     permissions: list[str] = Field(default_factory=list)
 
 
+class SessionBootstrapCreatorState(BaseModel):
+    profile_id: str
+    handle: str
+    display_name: str
+    status: str
+    tier: str
+    is_active: bool
+
+
+class SessionBootstrapCoinTraderState(BaseModel):
+    profile_id: str
+    display_name: str
+    status: str
+    tier: str
+    verification_level: str
+    is_approved: bool
+    can_trade: bool
+
+
+class SessionBootstrapOnboardingState(BaseModel):
+    has_club: bool
+    requires_club: bool
+    suggested_route: str
+    available_actions: list[str] = Field(default_factory=list)
+
+
+class SessionBootstrapSecurityState(BaseModel):
+    current_session_id: str | None = None
+    current_device_id: str | None = None
+    current_ip_address: str | None = None
+    current_user_agent: str | None = None
+    session_count: int = 0
+    active_session_count: int = 0
+    last_login_at: datetime | None = None
+
+
+class SessionBootstrapSessionView(BaseModel):
+    id: str
+    device_id: str | None = None
+    user_agent: str | None = None
+    ip_address: str | None = None
+    created_at: datetime
+    last_used_at: datetime | None = None
+    expires_at: datetime
+    revoked_at: datetime | None = None
+    is_current: bool
+    is_active: bool
+
+
+class SessionBootstrapPaymentsRuntimeState(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    paystack_enabled: bool = Field(default=False, alias="paystackEnabled")
+    korapay_enabled: bool = Field(default=False, alias="korapayEnabled")
+    manual_payment_enabled: bool = Field(default=True, alias="manualPaymentEnabled")
+
+
+class SessionBootstrapRuntimeState(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    strict_live: bool = Field(default=True, alias="strictLive")
+    payments: SessionBootstrapPaymentsRuntimeState
+
+
 class SessionBootstrapResponse(BaseModel):
     user: CurrentUserResponse
+    roles: list[str] = Field(default_factory=list)
     club: ClubProfileCore | None = None
     wallet: WalletAdaptiveOverviewView
     compliance: UserComplianceStatus
     permissions: list[str] = Field(default_factory=list)
+    effective_role: UserRole
+    account_type: PublicAccountType
+    active_organization_id: str | None = None
+    active_organization_name: str | None = None
+    active_organization_type: OrganizationType | None = None
+    creator: SessionBootstrapCreatorState | None = None
+    coin_trader: SessionBootstrapCoinTraderState | None = None
+    onboarding: SessionBootstrapOnboardingState
+    security: SessionBootstrapSecurityState
+    sessions: list[SessionBootstrapSessionView] = Field(default_factory=list)
+    runtime: SessionBootstrapRuntimeState
 
 
 class CurrentUserUpdateRequest(BaseModel):

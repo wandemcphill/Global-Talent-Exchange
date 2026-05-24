@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.admin_godmode.service import AdminGodModeService
+from app.admin.capabilities import assert_admin_capability
 from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
 from app.models.dispute import Dispute, DisputeMessage
 from app.models.treasury import (
@@ -66,12 +66,7 @@ def _service(request: Request | None) -> TreasuryService:
 
 
 def _require_permission(request: Request, actor: User, permission: str) -> None:
-    service = AdminGodModeService(
-        wallet_service=WalletService(cache_backend=getattr(request.app.state, "cache_backend", None))
-    )
-    state = service._load_state(request.app)
-    profile = service.resolve_profile(actor, state)
-    service._assert_has_permission(profile, permission)
+    assert_admin_capability(request, actor, permission)
 
 
 @api_router.get("/kyc", response_model=KycProfileView)

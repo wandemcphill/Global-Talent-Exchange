@@ -38,6 +38,7 @@ from app.services.player_lifecycle_service import (
 @dataclass(slots=True)
 class SyntheticSquadFactory:
     session_factory: sessionmaker[Session] | None = None
+    allow_synthetic_fallback: bool = False
     identity_service: ClubIdentityService = field(
         default_factory=lambda: ClubIdentityService(InMemoryClubIdentityRepository())
     )
@@ -54,6 +55,10 @@ class SyntheticSquadFactory:
             finally:
                 managed_session.close()
         else:
+            if not self.allow_synthetic_fallback:
+                raise PlayerLifecycleValidationError(
+                    "Live match execution requires persisted squads and a database session."
+                )
             home_team = self.build_team(
                 team_id=job.home_club_id or "home",
                 team_name=job.home_club_name or job.home_club_id or "Home Club",
@@ -116,6 +121,10 @@ class SyntheticSquadFactory:
         manager_profile = manager_profile_override
         if manager_profile is None and lifecycle_service is not None:
             manager_profile = self._manager_profile_for_team(session, team_id)
+        if lifecycle_service is not None and match_date is None and not self.allow_synthetic_fallback:
+            raise PlayerLifecycleValidationError(
+                f"{team_name} cannot be simulated without a match date for persisted squad eligibility."
+            )
         if lifecycle_service is not None and match_date is not None:
             managed_team = self._build_managed_team(
                 lifecycle_service=lifecycle_service,
@@ -127,6 +136,10 @@ class SyntheticSquadFactory:
             )
             if managed_team is not None:
                 return managed_team
+            if not self.allow_synthetic_fallback:
+                raise PlayerLifecycleValidationError(
+                    f"{team_name} has no persisted eligible squad for live match execution."
+                )
 
         resolved_overall = max(50, min(96, base_overall))
         discipline = self._clamp(58 + ((resolved_overall - 55) // 2))

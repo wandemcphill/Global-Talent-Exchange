@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, timezone
+import os
 from random import Random
 
 from sqlalchemy import delete, func, or_, select
@@ -119,6 +120,16 @@ _POSITION_ROLLS = (
     ("LB", 0.6),
     ("GK", 0.45),
 )
+_PROTECTED_APP_ENVS = {"production", "prod", "staging", "release"}
+
+
+def _protected_runtime_enabled() -> bool:
+    environment = (
+        str(os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "development")
+        .strip()
+        .lower()
+    )
+    return environment in _PROTECTED_APP_ENVS
 
 
 @dataclass(frozen=True, slots=True)
@@ -1131,7 +1142,7 @@ class RegenUniverseService:
             if age < age_min or age > age_max:
                 continue
             prospects.append(self._prospect_from_seed(seed))
-        if not prospects:
+        if not prospects and not _protected_runtime_enabled():
             prospects.extend(self._generate_fallback_prospects(limit=max(limit, 12), age_min=age_min, age_max=age_max))
         unique: dict[str, _UniverseProspect] = {}
         for prospect in prospects:

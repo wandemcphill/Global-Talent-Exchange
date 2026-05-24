@@ -6,6 +6,8 @@ import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/features/admin_command_redesign/models/gtex_admin_command_models.dart';
 import 'package:gte_frontend/features/admin_command_redesign/presentation/gtex_admin_command_controller.dart';
 
+import 'admin_command_test_fixtures.dart';
+
 void main() {
   test('admin controller selects modules', () {
     final controller = GtexAdminCommandController();
@@ -16,7 +18,9 @@ void main() {
   });
 
   test('admin controller filters modules by search query', () {
-    final controller = GtexAdminCommandController();
+    final controller = GtexAdminCommandController(
+      initialSnapshot: adminCommandTestSnapshot(),
+    );
 
     controller.updateSearch('coin');
     expect(
@@ -27,8 +31,8 @@ void main() {
     );
   });
 
-  test('demo snapshot includes jackpot and coin economy data', () {
-    final snapshot = GtexAdminCommandSnapshot.demo();
+  test('injected test snapshot includes jackpot and coin economy data', () {
+    final snapshot = adminCommandTestSnapshot();
 
     expect(snapshot.jackpots, isNotEmpty);
     expect(snapshot.coinEconomy.circulatingSupply, isNotEmpty);

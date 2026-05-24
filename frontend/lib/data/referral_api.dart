@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
@@ -45,6 +47,7 @@ class ReferralApi {
     String baseUrl = 'https://community.gte.local',
     Duration latency = Duration.zero,
   }) {
+    assertFixtureFactoryAllowed('ReferralApi.fixture');
     return ReferralApi._(
       baseUrl: baseUrl,
       mode: GteBackendMode.fixture,

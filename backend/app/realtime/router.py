@@ -111,6 +111,11 @@ async def stream_live_match_events(websocket: WebSocket, match_id: str) -> None:
     )
 
 
+@router.websocket("/ws/matches/{match_id}")
+async def stream_live_match_events_plural_alias(websocket: WebSocket, match_id: str) -> None:
+    await stream_live_match_events(websocket, match_id)
+
+
 async def _run_realtime_stream(
     websocket: WebSocket,
     *,

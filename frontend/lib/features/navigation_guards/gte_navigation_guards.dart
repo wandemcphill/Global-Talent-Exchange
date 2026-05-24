@@ -217,10 +217,7 @@ class GteNavigationDependencies {
     );
   }
 
-  bool get isAdminRole => <String>{
-    'admin',
-    'super_admin',
-  }.contains((currentUserRole ?? '').trim().toLowerCase());
+  bool get isAdminRole => gtexIsAdminRole(currentUserRole);
 
   CompetitionApi createCompetitionApi() {
     return competitionApi ??

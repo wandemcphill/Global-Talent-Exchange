@@ -58,6 +58,7 @@ from app.regen_creation.schemas import (
 from app.services.regen_service import OwnerSonContext, OwnerSonRequest, RegenClubContext, RegenGenerationEngine
 from app.services.regen_portrait_service import RegenPortraitService
 from app.treasury.service import TreasuryError, TreasuryService
+from app.wallets.providers.registry import provider_live_deposit_ready
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -299,6 +300,8 @@ class RegenCreationService:
             raise RegenCreationPaymentError("Wallet balance is insufficient for this request.") from exc
 
     def _configure_korapay_checkout(self, *, order: RegenCreationOrder, actor: User) -> None:
+        if not provider_live_deposit_ready("korapay"):
+            raise RegenCreationPaymentError("KoraPay is not configured for live deposits.")
         assert self.treasury_service is not None
         settings = self.treasury_service.ensure_settings(self.session)
         try:
@@ -317,44 +320,37 @@ class RegenCreationService:
 
         secret = self._korapay_secret()
         if not secret:
-            if self._is_production_environment():
-                raise RegenCreationPaymentError("KoraPay secret key is not configured.")
-            checkout = {
-                "checkout_url": f"https://mock.korapay.local/{reference}",
-                "payment_reference": reference,
-                "mock_mode": True,
-            }
-        else:
-            response = httpx.post(
-                f"{self._korapay_base_url()}/charges/initialize",
-                json={
-                    "amount": self._normalize_korapay_amount(quote.amount_fiat),
-                    "currency": quote.currency_code,
-                    "reference": reference,
-                    "customer": {
-                        "email": actor.email,
-                        "name": (actor.full_name or actor.username or actor.email).strip(),
-                    },
-                    "narration": f"GTEX regen request {order.id}",
-                    "merchant_bears_cost": True,
-                    "metadata": {
-                        "regen_creation_order_id": order.id,
-                        "request_type": order.request_type.value,
-                    },
+            raise RegenCreationPaymentError("KoraPay secret key is not configured.")
+        response = httpx.post(
+            f"{self._korapay_base_url()}/charges/initialize",
+            json={
+                "amount": self._normalize_korapay_amount(quote.amount_fiat),
+                "currency": quote.currency_code,
+                "reference": reference,
+                "customer": {
+                    "email": actor.email,
+                    "name": (actor.full_name or actor.username or actor.email).strip(),
                 },
-                headers={
-                    "Authorization": f"Bearer {secret}",
-                    "Content-Type": "application/json",
+                "narration": f"GTEX regen request {order.id}",
+                "merchant_bears_cost": True,
+                "metadata": {
+                    "regen_creation_order_id": order.id,
+                    "request_type": order.request_type.value,
                 },
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            body = response.json()
-            data = body.get("data") if isinstance(body, dict) else None
-            if not isinstance(data, dict) or not data.get("checkout_url"):
-                raise RegenCreationPaymentError("KoraPay did not return a checkout URL.")
-            data["mock_mode"] = False
-            checkout = data
+            },
+            headers={
+                "Authorization": f"Bearer {secret}",
+                "Content-Type": "application/json",
+            },
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        body = response.json()
+        data = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(data, dict) or not data.get("checkout_url"):
+            raise RegenCreationPaymentError("KoraPay did not return a checkout URL.")
+        data["mock_mode"] = False
+        checkout = data
 
         order.amount_minor = self._normalize_korapay_amount(quote.amount_fiat)
         order.currency = quote.currency_code
@@ -366,6 +362,8 @@ class RegenCreationService:
         order.metadata_json = metadata
 
     def _verify_and_mark_korapay_paid(self, order: RegenCreationOrder) -> None:
+        if not provider_live_deposit_ready("korapay"):
+            raise RegenCreationPaymentError("KoraPay is not configured for live deposits.")
         if not order.payment_reference:
             raise RegenCreationPaymentError("KoraPay payment has not been initialized for this order.")
         verification_payload = self._verify_korapay_transaction(reference=order.payment_reference)
@@ -380,6 +378,21 @@ class RegenCreationService:
             order.status = RegenCreationOrderStatus.FAILED
             self.session.flush()
             raise RegenCreationPaymentError("Payment has not been completed successfully.")
+
+        paid_reference = str(data.get("payment_reference") or data.get("reference") or "").strip()
+        if paid_reference and paid_reference != str(order.payment_reference).strip():
+            order.status = RegenCreationOrderStatus.FAILED
+            self.session.flush()
+            raise RegenCreationPaymentError("Verified payment reference does not match the initiated request.")
+
+        expected_currency = (
+            str(order.currency or (order.metadata_json or {}).get("currency_code") or "").strip().upper()
+        )
+        paid_currency = str(data.get("currency") or data.get("currency_code") or expected_currency).strip().upper()
+        if expected_currency and paid_currency and paid_currency != expected_currency:
+            order.status = RegenCreationOrderStatus.FAILED
+            self.session.flush()
+            raise RegenCreationPaymentError("Verified payment currency does not match the initiated request.")
 
         expected_amount = self._normalize_amount((order.metadata_json or {}).get("amount_fiat") or Decimal("0.0000"))
         paid_amount = self._normalize_amount(data.get("amount") or Decimal("0.0000"))
@@ -1046,7 +1059,11 @@ class RegenCreationService:
 
     @staticmethod
     def _normalize_korapay_amount(value: Decimal | int | float | str) -> int:
-        return int((Decimal(str(value)) * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP))
+        normalized = RegenCreationService._normalize_amount(value)
+        integral = normalized.to_integral_value(rounding=ROUND_HALF_UP)
+        if normalized != integral:
+            raise RegenCreationPaymentError("KoraPay checkout currently requires whole-number fiat amounts.")
+        return int(integral)
 
     @staticmethod
     def _json_safe(value: Any) -> Any:
@@ -1088,7 +1105,7 @@ class RegenCreationService:
     @staticmethod
     def _is_production_environment() -> bool:
         environment = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or "development").strip().lower()
-        return environment in {"production", "prod", "release"}
+        return environment in {"production", "prod", "release", "staging"}
 
     def _verify_korapay_transaction(self, *, reference: str) -> dict[str, Any]:
         secret = self._korapay_secret()

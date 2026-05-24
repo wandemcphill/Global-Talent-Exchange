@@ -233,18 +233,16 @@ Future<LiveMatchSnapshot> loadLiveMatchSnapshot(
   final GteBackendMode effectiveMode = resolvedConfig.activeShellBackendMode;
   final GteExchangeApiClient client =
       api ?? _resolveMatchApiClient(resolvedConfig);
-  final LiveMatchSnapshot fallback = LiveMatchFixtures.buildSnapshot(
-    competition,
-  );
   if (effectiveMode == GteBackendMode.fixture) {
-    return fallback;
+    return LiveMatchFixtures.buildSnapshot(competition);
   }
 
   final Map<String, Object?> livePayload = await client.fetchMatchLiveFeed(
     competition.id,
   );
+  final LiveMatchSnapshot liveOnlyBase = _emptyLiveSnapshot(competition);
   LiveMatchSnapshot merged = _mergeLiveFeedSnapshot(
-    fallback,
+    liveOnlyBase,
     livePayload,
     competition,
   );
@@ -256,6 +254,30 @@ Future<LiveMatchSnapshot> loadLiveMatchSnapshot(
     return merged;
   }
   return merged;
+}
+
+LiveMatchSnapshot _emptyLiveSnapshot(CompetitionSummary competition) {
+  final DateTime now = DateTime.now().toUtc();
+  return LiveMatchSnapshot(
+    matchId: competition.id,
+    homeTeam: '',
+    awayTeam: '',
+    homeScore: 0,
+    awayScore: 0,
+    minute: 0,
+    phase: LiveMatchPhase.preMatch,
+    momentum: const <int>[],
+    commentary: const <LiveMatchEvent>[],
+    homeLineup: const <LiveMatchLineupPlayer>[],
+    awayLineup: const <LiveMatchLineupPlayer>[],
+    substitutions: const <LiveMatchEvent>[],
+    cards: const <LiveMatchEvent>[],
+    tacticalSuggestions: const <LiveMatchTacticalSuggestion>[],
+    keyMoments: const <LiveMatchHighlightClip>[],
+    highlights: const <LiveMatchHighlightClip>[],
+    standardHighlightExpiresAt: now,
+    premiumHighlightExpiresAt: now,
+  );
 }
 
 final GteAppConfig _matchApiConfig = GteAppConfig.fromRuntimeEnvironment();

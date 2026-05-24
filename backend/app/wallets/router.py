@@ -9,10 +9,11 @@ from fastapi.routing import APIRoute
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.admin_godmode.runtime_paths import admin_godmode_state_path
+from app.admin.capabilities import AdminCapability, assert_admin_capability
 from app.admin_finance.service import AdminFinanceService
-from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
+from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.admin_godmode.service import AdminGodModeService, DEFAULT_PAYMENT_RAILS
+from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
 from app.economy.governor_service import EconomyGovernorService
 from app.models.user import User
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
@@ -65,7 +66,12 @@ from app.wallets.funding_service import (
 from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
 from app.wallets.service import LedgerError, WalletService
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
-from app.wallets.providers.registry import get_live_provider_adapter
+from app.wallets.providers.registry import (
+    get_live_provider_adapter,
+    is_production_environment,
+    paystack_enabled,
+    provider_live_deposit_ready,
+)
 from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest
 from app.risk_ops_engine.service import RiskOpsService
 from app.services.runtime_control_service import RuntimeControlService, WalletTransactionLockConflict
@@ -89,7 +95,7 @@ from app.treasury.schemas import (
     WithdrawalRequestCreate as TreasuryWithdrawalRequestCreate,
     WithdrawalRequestView as TreasuryWithdrawalRequestView,
 )
-from app.treasury.service import TreasuryConflictError, TreasuryService
+from app.treasury.service import TreasuryConflictError, TreasuryError, TreasuryService
 
 router = APIRouter()
 wallet_router = APIRouter(prefix="/wallets", tags=["wallets"])
@@ -150,10 +156,7 @@ def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
 
 
 def _require_payment_rails_permission(request: Request, actor: User) -> None:
-    service = AdminGodModeService(wallet_service=_build_wallet_service(request))
-    state = service._load_state(request.app)
-    profile = service.resolve_profile(actor, state)
-    service._assert_has_permission(profile, "manage_payment_rails")
+    assert_admin_capability(request, actor, AdminCapability.MANAGE_PAYMENT_RAILS)
 
 
 @contextmanager
@@ -357,24 +360,97 @@ def _withdrawal_controls(request: Request | None) -> dict[str, object]:
 
 def _payment_rails(request: Request | None) -> list[dict[str, object]]:
     rails = _load_admin_god_mode_state(request).get("payment_rails")
-    if not isinstance(rails, list) or not rails:
+    using_defaults = not isinstance(rails, list) or not rails
+    if using_defaults:
         rails = DEFAULT_PAYMENT_RAILS
-    return [dict(rail) for rail in rails if isinstance(rail, dict)]
+    resolved = [dict(rail) for rail in rails if isinstance(rail, dict)]
+    if using_defaults:
+        for rail in resolved:
+            provider = str(rail.get("provider") or "").strip().lower()
+            if provider == "korapay" and provider_live_deposit_ready("korapay"):
+                rail["deposits_enabled"] = True
+                rail["is_live"] = True
+                rail["maintenance_message"] = None
+            elif provider == "paystack" and not paystack_enabled():
+                rail["deposits_enabled"] = False
+                rail["withdrawals_enabled"] = False
+                rail["is_live"] = False
+    return resolved
 
 
-def _payment_rail_deposits_enabled(request: Request | None, provider: str) -> bool:
+def _payment_rail_deposits_enabled(
+    request: Request | None,
+    provider: str,
+    *,
+    require_live_ready: bool = True,
+) -> bool:
     normalized_provider = provider.strip().lower()
+    if normalized_provider == "paystack" and not paystack_enabled():
+        return False
+    if (
+        require_live_ready
+        and normalized_provider in {"korapay", "paystack"}
+        and not provider_live_deposit_ready(normalized_provider)
+    ):
+        return False
+    configured_rails = _load_admin_god_mode_state(request).get("payment_rails")
+    if (
+        not require_live_ready
+        and normalized_provider in SUPPORTED_TOP_UP_PROVIDER_KEYS
+        and (not isinstance(configured_rails, list) or not configured_rails)
+    ):
+        return True
     for rail in _payment_rails(request):
         if str(rail.get("provider") or "").strip().lower() != normalized_provider:
             continue
+        maintenance_message = str(rail.get("maintenance_message") or "").strip().lower()
+        if (
+            not require_live_ready
+            and normalized_provider == "korapay"
+            and is_production_environment()
+            and not provider_live_deposit_ready("korapay")
+            and "requires live checkout" in maintenance_message
+        ):
+            return True
         return bool(rail.get("is_live", True)) and bool(rail.get("deposits_enabled", True))
     return False
 
 
-def _enabled_gateway_deposit_providers(request: Request | None) -> set[str]:
+def _enabled_gateway_deposit_providers(
+    request: Request | None,
+    *,
+    require_live_ready: bool = True,
+) -> set[str]:
     return {
-        provider for provider in SUPPORTED_TOP_UP_PROVIDER_KEYS if _payment_rail_deposits_enabled(request, provider)
+        provider
+        for provider in SUPPORTED_TOP_UP_PROVIDER_KEYS
+        if _payment_rail_deposits_enabled(request, provider, require_live_ready=require_live_ready)
     }
+
+
+def _status_gateway_deposit_providers(request: Request | None) -> set[str]:
+    state_rails = _load_admin_god_mode_state(request).get("payment_rails")
+    if not isinstance(state_rails, list) or not state_rails:
+        return set(SUPPORTED_TOP_UP_PROVIDER_KEYS)
+    providers: set[str] = set()
+    for rail in state_rails:
+        if not isinstance(rail, dict):
+            continue
+        provider = str(rail.get("provider") or "").strip().lower()
+        if provider not in SUPPORTED_TOP_UP_PROVIDER_KEYS:
+            continue
+        maintenance_message = str(rail.get("maintenance_message") or "").strip().lower()
+        if (
+            provider == "korapay"
+            and is_production_environment()
+            and not provider_live_deposit_ready("korapay")
+            and "requires live checkout" in maintenance_message
+        ):
+            providers.add(provider)
+            continue
+        if bool(rail.get("is_live", True)) and bool(rail.get("deposits_enabled", True)):
+            providers.add(provider)
+    return providers
 
 
 def _commission_settings(request: Request | None) -> dict[str, object]:
@@ -435,6 +511,7 @@ def _gateway_deposit_enabled(
     settings: TreasurySettings,
     policy: dict[str, object],
     provider_key: str | None = None,
+    require_live_ready: bool = True,
 ) -> bool:
     if settings.deposit_mode not in {PaymentMode.AUTOMATIC, PaymentMode.HYBRID}:
         return False
@@ -442,7 +519,7 @@ def _gateway_deposit_enabled(
         processor_mode = str(policy.get("processor_mode", "manual_bank_transfer"))
         if processor_mode == "manual_bank_transfer" and settings.deposit_mode != PaymentMode.HYBRID:
             return False
-    enabled_providers = _enabled_gateway_deposit_providers(request)
+    enabled_providers = _enabled_gateway_deposit_providers(request, require_live_ready=require_live_ready)
     if provider_key is not None:
         return provider_key.strip().lower() in enabled_providers
     return bool(enabled_providers)
@@ -560,6 +637,33 @@ def _require_gateway_deposit(
     processor_mode = "automatic_gateway"
     payout_channel = "gateway"
     return settings, processor_mode, payout_channel
+
+
+def _require_manual_deposit(
+    *,
+    request: Request | None,
+    session: Session,
+    user: User,
+    treasury: TreasuryService,
+) -> TreasurySettings:
+    settings = treasury.ensure_settings(session)
+    policy = _build_withdrawal_policy_snapshot(request)
+    compliance_policy, _, _ = _resolve_wallet_policy_context(
+        session=session,
+        current_user=user,
+        request=request,
+    )
+    if not bool(compliance_policy.deposits_enabled):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Deposits are currently disabled for country policy '{compliance_policy.country_code}'.",
+        )
+    if not _manual_deposit_enabled(request=request, settings=settings, policy=policy):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Manual bank-transfer deposits are disabled by treasury payment rail controls.",
+        )
+    return settings
 
 
 @public_wallet_router.get("", response_model=WalletProfileView)
@@ -701,6 +805,21 @@ def get_wallet_summary(
     )
 
 
+@public_wallet_router.get("/summary", response_model=WalletSummaryView)
+def get_wallet_summary_alias(
+    currency: LedgerUnit = Query(default=LedgerUnit.COIN),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+) -> WalletSummaryView:
+    return get_wallet_summary(
+        currency=currency,
+        session=session,
+        current_user=current_user,
+        request=request,
+    )
+
+
 @wallet_router.post("/conversions/quote", response_model=WalletConversionQuoteView)
 def quote_wallet_conversion(
     payload: WalletConversionQuoteRequest,
@@ -786,10 +905,15 @@ def get_wallet_adaptive_overview(
     )
     overview.update(policy)
     overview["country_code"] = compliance_policy.country_code
-    gateway_deposits_enabled = _gateway_deposit_enabled(request=request, settings=settings, policy=policy)
+    gateway_deposits_enabled = _gateway_deposit_enabled(
+        request=request,
+        settings=settings,
+        policy=policy,
+        require_live_ready=False,
+    )
     overview["payment_provider_status"] = funding_service.payment_provider_status(
         gateway_enabled=gateway_deposits_enabled and compliance_policy.deposits_enabled,
-        enabled_providers=_enabled_gateway_deposit_providers(request),
+        enabled_providers=_status_gateway_deposit_providers(request),
     )
     insights = list(overview.get("insights") or [])
     insights.append(
@@ -929,9 +1053,14 @@ def get_wallet_overview(
         deposit_mode=deposit_mode,
         withdrawal_mode=withdrawal_mode,
         payment_provider_status=funding_service.payment_provider_status(
-            gateway_enabled=_gateway_deposit_enabled(request=request, settings=settings, policy=policy)
+            gateway_enabled=_gateway_deposit_enabled(
+                request=request,
+                settings=settings,
+                policy=policy,
+                require_live_ready=False,
+            )
             and compliance_policy.deposits_enabled,
-            enabled_providers=_enabled_gateway_deposit_providers(request),
+            enabled_providers=_status_gateway_deposit_providers(request),
         ),
     )
 
@@ -945,6 +1074,12 @@ def create_deposit_request(
 ) -> DepositRequestView:
     service = _build_treasury_service(request)
     try:
+        _require_manual_deposit(
+            request=request,
+            session=session,
+            user=current_user,
+            treasury=service,
+        )
         deposit = service.create_deposit_request(
             session,
             user=current_user,
@@ -952,7 +1087,7 @@ def create_deposit_request(
             input_unit=payload.input_unit,
         )
         session.commit()
-    except TreasuryConflictError as exc:
+    except (TreasuryConflictError, TreasuryError) as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return DepositRequestView.model_validate(deposit)
@@ -1076,7 +1211,7 @@ def create_purchase_order(
                 unit=payload.unit,
                 processor_mode=processor_mode,
                 payout_channel=payout_channel,
-                provider_reference=payload.provider_reference,
+                provider_reference=None,
                 notes=payload.notes,
             )
             session.commit()
@@ -1563,6 +1698,13 @@ def create_payment_event(
     current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> PaymentEventView:
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Client-authored payment events are disabled for production. "
+            "Use KoraPay signed webhooks, wallet top-up verification, or admin-reviewed manual bank transfer deposits."
+        ),
+    )
     service = _build_wallet_service(request)
     _require_gateway_deposit(
         request=request,

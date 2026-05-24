@@ -137,11 +137,7 @@ class PlayerCardMarketplaceApiRepository
     PlayerCardPlayersQuery query,
   ) async {
     return parseList(
-      await _client.getList(
-        '/player-cards/players',
-        query: query.toQuery(),
-        auth: false,
-      ),
+      await _client.getList('/player-cards/players', query: query.toQuery()),
       PlayerCardPlayerSummary.fromJson,
       label: 'player card players',
     );
@@ -150,7 +146,7 @@ class PlayerCardMarketplaceApiRepository
   @override
   Future<PlayerCardPlayerDetail> fetchPlayerDetail(String playerId) async {
     return PlayerCardPlayerDetail.fromJson(
-      await _client.getMap('/player-cards/players/$playerId', auth: false),
+      await _client.getMap('/player-cards/players/$playerId'),
     );
   }
 

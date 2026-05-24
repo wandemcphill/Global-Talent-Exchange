@@ -35,11 +35,12 @@ def test_market_pricing_service_uses_cached_snapshot(monkeypatch) -> None:
     )
 
     cold_service = MarketPricingService(cache_backend=cache_backend)
-    monkeypatch.setattr(
-        cold_service,
-        "_build_snapshot",
-        lambda **_kwargs: pytest.fail("expected cached player snapshot lookup"),
-    )
+
+    def fail_snapshot_build(self, **_kwargs):
+        if self is cold_service:
+            pytest.fail("expected cached player snapshot lookup")
+
+    monkeypatch.setattr(MarketPricingService, "_build_snapshot", fail_snapshot_build)
 
     cached_snapshot = cold_service.get_snapshot(
         player_id="player-1",
@@ -50,3 +51,18 @@ def test_market_pricing_service_uses_cached_snapshot(monkeypatch) -> None:
     assert cached_snapshot.player_id == "player-1"
     assert cached_snapshot.market_price == snapshot.market_price
     assert cache_backend.values["player:player-1:price"] == str(snapshot.market_price)
+
+
+def test_market_pricing_candles_do_not_synthesize_history_from_snapshot_only() -> None:
+    service = MarketPricingService()
+
+    candles = service.get_candles(
+        player_id="player-1",
+        interval="1m",
+        limit=10,
+        reference_price=220.0,
+        symbol="A. Striker",
+    )
+
+    assert candles.candles == ()
+    assert service.history_for_player("player-1") == ()

@@ -68,6 +68,29 @@ class CoinTraderRateView(CommonSchema):
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
+class CoinTraderAdminLiquidityRequest(CommonSchema):
+    coin_unit: LedgerUnit = LedgerUnit.COIN
+    amount: Decimal = Field(gt=0)
+    reference: str | None = Field(default=None, min_length=3, max_length=120)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
+    fiat_total: Decimal | None = Field(default=None, ge=0)
+    note: str | None = Field(default=None, max_length=1000)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class CoinTraderAdminLiquidityTransferView(CommonSchema):
+    trader_profile_id: str
+    trader_user_id: str
+    flow: Literal["issue", "redeem"]
+    coin_unit: LedgerUnit
+    amount: Decimal
+    reference: str
+    transaction_id: str | None = None
+    ledger_entry_ids: list[str] = Field(default_factory=list)
+    available_balance: Decimal
+    liquidity_snapshot: dict[str, Any] = Field(default_factory=dict)
+
+
 class CoinTraderProfileView(CommonSchema):
     id: str
     user_id: str

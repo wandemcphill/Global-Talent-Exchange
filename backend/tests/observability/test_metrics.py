@@ -216,3 +216,67 @@ def test_metrics_capture_unity_live_observability_signals() -> None:
         )
         == 1.0
     )
+
+
+def test_metrics_capture_strict_live_runtime_health_signals() -> None:
+    metrics = GTexMetrics(runtime_name="test")
+
+    metrics.record_strict_live_blocked_state(surface="club_v2", reason="missing_club_id")
+    metrics.record_strict_live_payload_rejection(source="websocket", reason="synthetic")
+    metrics.record_auth_rejection(surface="admin_v2", reason="missing_capability")
+    metrics.record_realtime_reconnect(channel="matches", result="success")
+    metrics.record_settlement_failure(rail="korapay", reason="signature_invalid")
+    metrics.record_queue_backlog_depth(queue_name="settlements", depth=42)
+
+    rendered = metrics.render_latest().decode("utf-8")
+    samples_by_name: dict[str, list[object]] = {}
+    for family in text_string_to_metric_families(rendered):
+        for sample in family.samples:
+            samples_by_name.setdefault(sample.name, []).append(sample)
+
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_strict_live_blocked_states_total",
+            surface="club_v2",
+            reason="missing_club_id",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_strict_live_payload_rejections_total",
+            source="websocket",
+            reason="synthetic",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_auth_rejections_total",
+            surface="admin_v2",
+            reason="missing_capability",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_realtime_reconnects_total",
+            channel="matches",
+            result="success",
+        )
+        == 1.0
+    )
+    assert (
+        _sample_value(
+            samples_by_name,
+            "gtex_settlement_failures_total",
+            rail="korapay",
+            reason="signature_invalid",
+        )
+        == 1.0
+    )
+    assert _sample_value(samples_by_name, "gtex_queue_backlog_depth", queue_name="settlements") == 42.0

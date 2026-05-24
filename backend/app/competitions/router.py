@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.admin.capabilities import AdminCapability, assert_admin_capability
 from app.auth.dependencies import get_current_admin, get_session
 from app.competitions.schemas import CompetitionView
 from app.competitions.service import CompetitionQueryService
@@ -56,8 +57,9 @@ def preview_runtime(
 def list_admin_competitions(
     request: Request,
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_admin),
 ) -> list[CompetitionAdminView]:
+    assert_admin_capability(request, actor, AdminCapability.MANAGE_COMPETITIONS)
     return _manager_market_service().list_competitions(request.app, session)
 
 
@@ -69,6 +71,7 @@ def update_admin_competition(
     session: Session = Depends(get_session),
     actor: User = Depends(get_current_admin),
 ) -> CompetitionAdminView:
+    assert_admin_capability(request, actor, AdminCapability.MANAGE_COMPETITIONS)
     result = _manager_market_service().update_competition(
         request.app,
         session,
@@ -88,8 +91,9 @@ def preview_admin_orchestration(
     participants: int = Query(default=4, ge=0),
     region: str = Query(default="africa"),
     session: Session = Depends(get_session),
-    _: User = Depends(get_current_admin),
+    actor: User = Depends(get_current_admin),
 ) -> CompetitionOrchestrationView:
+    assert_admin_capability(request, actor, AdminCapability.MANAGE_COMPETITIONS)
     return _manager_market_service().orchestrate_competition(
         request.app, session, code=code, participants=participants, region=region
     )

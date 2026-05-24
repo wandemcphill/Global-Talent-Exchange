@@ -9,8 +9,15 @@ class AuthSession {
     this.permissions = const <String>[],
     this.userName,
     this.displayName,
+    this.accountType = 'guest',
+    this.creatorProfileId,
+    this.creatorStatus,
+    this.traderProfileId,
+    this.traderStatus,
     this.clubId,
     this.clubName,
+    this.noClub = false,
+    this.noClubReason,
     this.federationId,
     this.federationName,
     this.rawJson = const <String, Object?>{},
@@ -25,13 +32,26 @@ class AuthSession {
   final List<String> permissions;
   final String? userName;
   final String? displayName;
+  final String accountType;
+  final String? creatorProfileId;
+  final String? creatorStatus;
+  final String? traderProfileId;
+  final String? traderStatus;
   final String? clubId;
   final String? clubName;
+  final bool noClub;
+  final String? noClubReason;
   final String? federationId;
   final String? federationName;
   final Map<String, Object?> rawJson;
 
   bool get isAuthenticated => accessToken.trim().isNotEmpty;
+
+  bool get bootstrapBlocked =>
+      _boolValue(rawJson['_session_bootstrap_blocked']);
+
+  String? get bootstrapError =>
+      _firstString(rawJson, const <String>['_session_bootstrap_error']);
 
   String get normalizedRole => role.trim().toLowerCase();
 
@@ -41,13 +61,14 @@ class AuthSession {
           .where((String value) => value.isNotEmpty)
           .toSet();
 
-  bool get isSuperAdmin =>
-      normalizedRole == 'super_admin' || normalizedRole == 'god_mode';
+  bool get isSuperAdmin => gtexIsSuperAdminRole(normalizedRole);
 
-  bool get isDelegatedAdmin =>
-      normalizedRole == 'admin' || normalizedRole == 'scoped_admin';
+  bool get isDelegatedAdmin => gtexIsDelegatedAdminRole(normalizedRole);
 
-  bool get isAdmin => isSuperAdmin || isDelegatedAdmin;
+  bool get isAdmin => gtexIsAdminRole(normalizedRole);
+
+  bool get hasClubContext =>
+      clubId != null && clubId!.trim().isNotEmpty && !noClub;
 
   bool hasPermission(String permission) {
     final String normalized = permission.trim().toLowerCase();
@@ -102,6 +123,48 @@ class AuthSession {
     };
     final _ResolvedClub? club = _resolveClub(mergedRaw, user);
     final _ResolvedFederation? federation = _resolveFederation(mergedRaw, user);
+    final Map<String, Object?> onboarding =
+        _mapValue(
+          mergedRaw['onboarding'] ??
+              mergedRaw['onboarding_state'] ??
+              mergedRaw['onboardingState'] ??
+              user['onboarding'],
+        ) ??
+        const <String, Object?>{};
+    final Map<String, Object?> creatorProfile =
+        _mapValue(
+          mergedRaw['creator'] ??
+              mergedRaw['creator_profile'] ??
+              mergedRaw['creatorProfile'] ??
+              user['creator'] ??
+              user['creator_profile'] ??
+              user['creatorProfile'],
+        ) ??
+        const <String, Object?>{};
+    final Map<String, Object?> traderProfile =
+        _mapValue(
+          mergedRaw['coin_trader'] ??
+              mergedRaw['coinTrader'] ??
+              mergedRaw['trader_profile'] ??
+              mergedRaw['traderProfile'] ??
+              user['trader_profile'] ??
+              user['traderProfile'] ??
+              mergedRaw['coin_trader_profile'] ??
+              mergedRaw['coinTraderProfile'] ??
+              user['coin_trader'] ??
+              user['coinTrader'] ??
+              user['coin_trader_profile'] ??
+              user['coinTraderProfile'],
+        ) ??
+        const <String, Object?>{};
+    final String resolvedAccountType =
+        _firstString(mergedRaw, const <String>[
+          'account_type',
+          'accountType',
+          'type',
+        ]) ??
+        _firstString(user, const <String>['account_type', 'accountType']) ??
+        'guest';
     return AuthSession(
       userId:
           _firstString(mergedRaw, const <String>['user_id', 'userId', 'id']) ??
@@ -148,8 +211,74 @@ class AuthSession {
             'displayName',
             'full_name',
           ]),
+      accountType: resolvedAccountType,
+      creatorProfileId:
+          _firstString(mergedRaw, const <String>[
+            'creator_profile_id',
+            'creatorProfileId',
+            'creator_id',
+            'creatorId',
+          ]) ??
+          _firstString(creatorProfile, const <String>[
+            'id',
+            'profile_id',
+            'profileId',
+          ]),
+      creatorStatus:
+          _firstString(mergedRaw, const <String>[
+            'creator_status',
+            'creatorStatus',
+            'creator_profile_status',
+            'creatorProfileStatus',
+          ]) ??
+          _firstString(creatorProfile, const <String>['status', 'state']),
+      traderProfileId:
+          _firstString(mergedRaw, const <String>[
+            'trader_profile_id',
+            'traderProfileId',
+            'coin_trader_profile_id',
+            'coinTraderProfileId',
+            'trader_id',
+            'traderId',
+          ]) ??
+          _firstString(traderProfile, const <String>[
+            'id',
+            'profile_id',
+            'profileId',
+          ]),
+      traderStatus:
+          _firstString(mergedRaw, const <String>[
+            'trader_status',
+            'traderStatus',
+            'trader_profile_status',
+            'traderProfileStatus',
+            'coin_trader_status',
+            'coinTraderStatus',
+          ]) ??
+          _firstString(traderProfile, const <String>['status', 'state']),
       clubId: club?.id,
       clubName: club?.displayName,
+      noClub:
+          _boolValue(
+            mergedRaw['no_club'] ??
+                mergedRaw['noClub'] ??
+                mergedRaw['has_no_club'] ??
+                mergedRaw['hasNoClub'] ??
+                user['no_club'] ??
+                user['noClub'],
+          ) ||
+          _boolValue(
+            onboarding['requires_club'] ?? onboarding['requiresClub'],
+          ) ||
+          (club == null && resolvedAccountType == 'user'),
+      noClubReason:
+          _firstString(mergedRaw, const <String>[
+            'no_club_reason',
+            'noClubReason',
+            'club_missing_reason',
+            'clubMissingReason',
+          ]) ??
+          _firstString(user, const <String>['no_club_reason', 'noClubReason']),
       federationId: federation?.id,
       federationName: federation?.displayName,
       rawJson: Map<String, Object?>.unmodifiable(mergedRaw),
@@ -200,8 +329,15 @@ class AuthSession {
     List<String>? permissions,
     String? userName,
     String? displayName,
+    String? accountType,
+    String? creatorProfileId,
+    String? creatorStatus,
+    String? traderProfileId,
+    String? traderStatus,
     String? clubId,
     String? clubName,
+    bool? noClub,
+    String? noClubReason,
     String? federationId,
     String? federationName,
     Map<String, Object?>? rawJson,
@@ -216,8 +352,15 @@ class AuthSession {
       permissions: permissions ?? this.permissions,
       userName: userName ?? this.userName,
       displayName: displayName ?? this.displayName,
+      accountType: accountType ?? this.accountType,
+      creatorProfileId: creatorProfileId ?? this.creatorProfileId,
+      creatorStatus: creatorStatus ?? this.creatorStatus,
+      traderProfileId: traderProfileId ?? this.traderProfileId,
+      traderStatus: traderStatus ?? this.traderStatus,
       clubId: clubId ?? this.clubId,
       clubName: clubName ?? this.clubName,
+      noClub: noClub ?? this.noClub,
+      noClubReason: noClubReason ?? this.noClubReason,
       federationId: federationId ?? this.federationId,
       federationName: federationName ?? this.federationName,
       rawJson: rawJson ?? this.rawJson,
@@ -235,13 +378,36 @@ class AuthSession {
       'permissions': permissions,
       if (userName != null) 'username': userName,
       if (displayName != null) 'display_name': displayName,
+      'account_type': accountType,
+      if (creatorProfileId != null) 'creator_profile_id': creatorProfileId,
+      if (creatorStatus != null) 'creator_status': creatorStatus,
+      if (traderProfileId != null) 'trader_profile_id': traderProfileId,
+      if (traderStatus != null) 'trader_status': traderStatus,
       if (clubId != null) 'club_id': clubId,
       if (clubName != null) 'club_name': clubName,
+      'no_club': noClub,
+      if (noClubReason != null) 'no_club_reason': noClubReason,
       if (federationId != null) 'federation_id': federationId,
       if (federationName != null) 'federation_name': federationName,
       'raw_json': rawJson,
     };
   }
+}
+
+bool gtexIsAdminRole(String? role) {
+  final String normalized = role?.trim().toLowerCase() ?? '';
+  return gtexIsSuperAdminRole(normalized) ||
+      gtexIsDelegatedAdminRole(normalized);
+}
+
+bool gtexIsSuperAdminRole(String? role) {
+  final String normalized = role?.trim().toLowerCase() ?? '';
+  return normalized == 'super_admin' || normalized == 'god_mode';
+}
+
+bool gtexIsDelegatedAdminRole(String? role) {
+  final String normalized = role?.trim().toLowerCase() ?? '';
+  return normalized == 'admin' || normalized == 'scoped_admin';
 }
 
 class ClubContext {
@@ -310,6 +476,17 @@ int _intValue(Object? value) {
     return value.toInt();
   }
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+bool _boolValue(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is num) {
+    return value != 0;
+  }
+  final String normalized = value?.toString().trim().toLowerCase() ?? '';
+  return normalized == 'true' || normalized == '1' || normalized == 'yes';
 }
 
 _ResolvedClub? _resolveClub(

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/core/runtime/gtex_runtime_graph.dart';
+import 'package:gte_frontend/core/runtime/gtex_runtime_models.dart';
 import 'package:gte_frontend/features/app_routes/gte_app_route_registry.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
@@ -23,6 +26,7 @@ import 'package:gte_frontend/screens/gte_signup_screen.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/screens/gtex_public_landing_screen_v2.dart';
 import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
+import 'package:gte_frontend/screens/match/gtex_match_center_screen_v2.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
 import 'package:gte_frontend/screens/profile/gtex_live_profile_screen.dart';
 import 'package:gte_frontend/screens/support/gte_support_dispute_screens.dart';
@@ -452,6 +456,11 @@ List<RouteBase> _buildLegacyAliasRoutes({
               controller: controller,
               apiBaseUrl: config.apiBaseUrl,
               backendMode: config.activeShellBackendMode,
+              nationalTeamApi:
+                  ProviderScope.containerOf(
+                    context,
+                    listen: false,
+                  ).read(gtexRuntimeProvider).repositories.nationalTeams,
               isAuthenticated: controller.isAuthenticated,
               onOpenLogin: () => _openLogin(context, controller),
             ),
@@ -640,6 +649,39 @@ List<RouteBase> _buildLegacyAliasRoutes({
       redirect:
           (BuildContext context, GoRouterState state) =>
               const BroadcastDeskRouteData().toUri().toString(),
+    ),
+    GoRoute(
+      path: '/live-match/:matchId',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final String matchId = state.pathParameters['matchId']?.trim() ?? '';
+        if (matchId.isEmpty) {
+          return NoTransitionPage<void>(
+            key: state.pageKey,
+            child: GteRouteIntegrityScreen.blocked(
+              title: 'Live match unavailable',
+              message:
+                  'A persisted match id is required before the 2D live match surface can open.',
+              icon: Icons.sports_soccer_outlined,
+              actionLabel: 'Open Broadcast Desk',
+              onAction:
+                  () => context.go(
+                    const BroadcastDeskRouteData().toUri().toString(),
+                  ),
+            ),
+          );
+        }
+        final GtexRuntime runtime = ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).read(gtexRuntimeProvider);
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: GtexMatchCenterScreenV2(
+            matchId: matchId,
+            repository: runtime.repositories.matches,
+          ),
+        );
+      },
     ),
     GoRoute(
       path: '/play',

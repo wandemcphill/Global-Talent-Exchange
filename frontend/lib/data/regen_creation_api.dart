@@ -1,6 +1,8 @@
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
+import '../shared/auth/auth_identity_store.dart';
+import '../shared/models/auth_session.dart';
 import '../models/regen_creation_models.dart';
 
 class RegenCreationApi {
@@ -12,13 +14,24 @@ class RegenCreationApi {
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.live,
     String? accessToken,
+    AuthSession? authSession,
+    AuthSessionStore? authSessionStore,
+    AuthSessionStore? fallbackAuthSessionStore,
+    Future<void> Function(AuthSession? session)? onSessionChanged,
+    String? deviceId,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return RegenCreationApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: accessToken,
+        authSession: authSession,
+        authSessionStore: authSessionStore,
+        fallbackAuthSessionStore: fallbackAuthSessionStore,
+        onSessionChanged: onSessionChanged,
+        deviceId: deviceId,
         mode: resolvedMode,
       ),
     );

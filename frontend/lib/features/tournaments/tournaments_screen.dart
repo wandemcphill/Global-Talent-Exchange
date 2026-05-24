@@ -13,12 +13,17 @@ import 'tournament_intro_screen.dart';
 import 'tournament_models.dart';
 
 class TournamentsScreen extends ConsumerWidget {
-  const TournamentsScreen({super.key});
+  const TournamentsScreen({super.key, this.allowFixtureData = false});
+
+  final bool allowFixtureData;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final List<Competition> competitions = ref.watch(competitionsProvider);
     final List<Player> regens = ref.watch(regenProvider);
+    if (!allowFixtureData) {
+      return const _TournamentsBlockedView();
+    }
     final Competition featured =
         competitions.isNotEmpty
             ? competitions.first
@@ -100,6 +105,7 @@ class TournamentsScreen extends ConsumerWidget {
                               fixtures: buildTournamentFixtures(featured),
                               standings: buildTournamentStandings(featured),
                               squad: buildTournamentSquad(regens),
+                              allowFixtureData: allowFixtureData,
                             );
                           },
                         ),
@@ -135,6 +141,7 @@ class TournamentsScreen extends ConsumerWidget {
                           fixtures: buildTournamentFixtures(entry.value),
                           standings: buildTournamentStandings(entry.value),
                           squad: buildTournamentSquad(regens),
+                          allowFixtureData: allowFixtureData,
                         );
                       },
                     ),
@@ -142,6 +149,45 @@ class TournamentsScreen extends ConsumerWidget {
                 },
               ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TournamentsBlockedView extends StatelessWidget {
+  const _TournamentsBlockedView();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(spacingMD),
+      children: <Widget>[
+        const SectionHeading(
+          title: 'Tournaments',
+          subtitle:
+              'Competition OS fixtures and standings load only from the live backend authority.',
+          trailing: MetricPill(label: 'Status', value: 'Blocked'),
+        ),
+        const SizedBox(height: spacingLG),
+        GtexSurfaceCard(
+          glowColor: AppColors.gold,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Live tournaments unavailable',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: spacingSM),
+              Text(
+                'This legacy tournament shell is blocked until persisted Competition OS fixtures, standings, and squad data are injected.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
         ),
       ],

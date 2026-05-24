@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
@@ -5,10 +7,13 @@ import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'matchday_economy_models.dart';
 
 class GtexMatchdayEconomyApi {
-  GtexMatchdayEconomyApi({required this.client, required this.fixtures});
+  GtexMatchdayEconomyApi({
+    required this.client,
+    GtexMatchdayEconomyFixtures? fixtures,
+  }) : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final GtexMatchdayEconomyFixtures fixtures;
+  final GtexMatchdayEconomyFixtures? _fixtures;
 
   factory GtexMatchdayEconomyApi.standard({
     required String baseUrl,
@@ -23,11 +28,11 @@ class GtexMatchdayEconomyApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: GtexMatchdayEconomyFixtures.seed(),
     );
   }
 
   factory GtexMatchdayEconomyApi.fixture() {
+    assertFixtureFactoryAllowed('GtexMatchdayEconomyApi.fixture');
     return GtexMatchdayEconomyApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -51,7 +56,7 @@ class GtexMatchdayEconomyApi {
         auth: admin,
       );
       return GtexMatchdayEconomyOverview.fromJson(payload);
-    }, fixtures.overview);
+    }, _requireFixtures().overview);
   }
 
   Future<GtexMatchdayEconomyAction> resolveFederationSanction({
@@ -60,13 +65,17 @@ class GtexMatchdayEconomyApi {
     Map<String, Object?> metadata = const <String, Object?>{},
   }) {
     final String encodedSanctionId = Uri.encodeComponent(sanctionId);
-    return client.withFallback<GtexMatchdayEconomyAction>(() async {
-      final Object? payload = await client.post(
-        '/api/admin/matchday-economy/federation-sanctions/$encodedSanctionId/resolve',
-        body: <String, Object?>{'note': note, 'metadata_json': metadata},
-      );
-      return GtexMatchdayEconomyAction.fromJson(payload);
-    }, () => fixtures.action('resolve_federation_sanction', sanctionId));
+    return client.withFallback<GtexMatchdayEconomyAction>(
+      () async {
+        final Object? payload = await client.post(
+          '/api/admin/matchday-economy/federation-sanctions/$encodedSanctionId/resolve',
+          body: <String, Object?>{'note': note, 'metadata_json': metadata},
+        );
+        return GtexMatchdayEconomyAction.fromJson(payload);
+      },
+      () =>
+          _requireFixtures().action('resolve_federation_sanction', sanctionId),
+    );
   }
 
   Future<GtexMatchdayEconomyAction> settlePredictionRewards({
@@ -88,7 +97,7 @@ class GtexMatchdayEconomyApi {
         },
       );
       return GtexMatchdayEconomyAction.fromJson(payload);
-    }, () => fixtures.action('settle_prediction_rewards', fixtureId));
+    }, () => _requireFixtures().action('settle_prediction_rewards', fixtureId));
   }
 
   Future<GtexMatchdayEconomyAction> checkInTicket({
@@ -110,7 +119,7 @@ class GtexMatchdayEconomyApi {
         },
       );
       return GtexMatchdayEconomyAction.fromJson(payload);
-    }, () => fixtures.action('check_in_ticket', ticketId));
+    }, () => _requireFixtures().action('check_in_ticket', ticketId));
   }
 
   Future<GtexMatchdayEconomyAction> settleCardListing({
@@ -134,7 +143,17 @@ class GtexMatchdayEconomyApi {
         },
       );
       return GtexMatchdayEconomyAction.fromJson(payload);
-    }, () => fixtures.action('settle_card_listing', listingId));
+    }, () => _requireFixtures().action('settle_card_listing', listingId));
+  }
+
+  GtexMatchdayEconomyFixtures _requireFixtures() {
+    final GtexMatchdayEconomyFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw StateError(
+        'Matchday economy fixtures are available only in fixture mode.',
+      );
+    }
+    return fixtures;
   }
 }
 

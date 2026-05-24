@@ -1,15 +1,7 @@
 import 'dart:async';
 
 import 'gtex_match_models.dart';
-
-abstract class GtexMatchRepository {
-  Future<GtexLiveMatchState> fetchLiveMatch(String matchId);
-  Stream<GtexLiveMatchState> watchLiveMatch(String matchId);
-  Future<void> sendTacticalInstruction(
-    String matchId,
-    GtexTacticalInstruction instruction,
-  );
-}
+import 'gtex_match_repository.dart';
 
 class GtexMatchDemoRepository implements GtexMatchRepository {
   const GtexMatchDemoRepository();

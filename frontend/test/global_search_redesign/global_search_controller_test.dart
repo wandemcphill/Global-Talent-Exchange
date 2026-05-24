@@ -79,6 +79,25 @@ void main() {
       ),
       '/app/market?player=player-jude',
     );
+    expect(
+      gtexCanonicalGlobalSearchRoute('/players/player-jude', isAdmin: false),
+      '/app/market?player=player-jude',
+    );
+    expect(
+      gtexCanonicalGlobalSearchRoute('/clubs/club-arsenal', isAdmin: false),
+      '/world/clubs/club-arsenal',
+    );
+    expect(
+      gtexCanonicalGlobalSearchRoute('/app/regens', isAdmin: false),
+      '/world/regens',
+    );
+    expect(
+      gtexCanonicalGlobalSearchRoute(
+        '/app/player-cards/players/player-jude',
+        isAdmin: false,
+      ),
+      '/player-cards/players/player-jude',
+    );
   });
 
   test('fixture covers Batch 28-33 product-loop result families', () async {

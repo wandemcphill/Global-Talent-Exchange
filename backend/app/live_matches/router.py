@@ -61,6 +61,8 @@ _INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = max(
     60.0,
     float(os.environ.get("GTE_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS", "900")),
 )
+_STRICT_LIVE_BLOCKED_SOURCES = frozenset({"demo", "fixture", "infinite_league", "infinite_league_runtime", "synthetic"})
+_GENERATED_LIVE_BRIDGE_ENV = "GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE"
 
 _UNITY_PITCH_LENGTH_METERS = 105.0
 _UNITY_PITCH_WIDTH_METERS = 68.0
@@ -136,7 +138,34 @@ def _generated_match_access_payload() -> dict[str, object]:
     }
 
 
+def _protected_runtime_enabled(app) -> bool:
+    settings = getattr(getattr(app, "state", None), "settings", None)
+    environment = (
+        (
+            str(getattr(settings, "app_env", "") or "")
+            or os.getenv("GTE_APP_ENV")
+            or os.getenv("APP_ENV")
+            or os.getenv("ENVIRONMENT")
+            or "development"
+        )
+        .strip()
+        .lower()
+    )
+    return environment in {"production", "prod", "staging", "release"}
+
+
+def _generated_live_bridge_enabled(app) -> bool:
+    raw_flag = str(os.getenv(_GENERATED_LIVE_BRIDGE_ENV, "")).strip().lower()
+    if _protected_runtime_enabled(app):
+        return False
+    return raw_flag in {"1", "true", "yes", "on"}
+
+
 def _bootstrap_infinite_league_stream(app, hub, match_id: str, *, restart_if_completed: bool = False) -> bool:
+    if not _generated_live_bridge_enabled(app):
+        _record_unity_live_generated_match_metric(app, result="blocked")
+        return False
+
     existing_state = hub.get_state(match_id)
     if existing_state is not None and existing_state.is_live:
         _record_unity_live_generated_match_metric(app, result="already_live")
@@ -832,6 +861,7 @@ def build_unity_live_payload_for_app(
                 away_team_name=None,
                 events=events,
                 live_state=state,
+                allow_synthetic_visuals=not _protected_runtime_enabled(app),
             )
         except Exception:
             logger.exception("Failed to build live-stream view state for match %s", match_id)
@@ -918,6 +948,317 @@ def _build_unity_live_payload(match_id: str, request: Request) -> dict[str, obje
         include_full_timeline=include_full_timeline,
         event_limit=event_limit,
     )
+
+
+def _strict_live_runtime_flags() -> dict[str, bool]:
+    return {"live": True, "fixture": False, "demo": False}
+
+
+def _is_blocked_strict_live_source(value: object | None) -> bool:
+    source = str(value or "").strip().lower()
+    if not source:
+        return False
+    return (
+        source in _STRICT_LIVE_BLOCKED_SOURCES
+        or source.startswith(("demo", "fixture", "synthetic"))
+        or "infinite_league" in source
+    )
+
+
+def _strict_live_event_source(event) -> object | None:
+    meta = getattr(event, "meta", None)
+    if isinstance(meta, dict) and meta.get("source") is not None:
+        return meta.get("source")
+    metadata = getattr(event, "metadata", None)
+    if isinstance(metadata, dict):
+        return metadata.get("source")
+    return None
+
+
+def _ensure_strict_live_sources(view_state: MatchViewStateView, events: list[Any]) -> None:
+    if _is_blocked_strict_live_source(view_state.source) or any(
+        _is_blocked_strict_live_source(_strict_live_event_source(event)) for event in events
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strict live match state was not found.")
+
+
+def _load_strict_live_view_state(
+    match_id: str, app
+) -> tuple[MatchViewStateView, MatchTimelineFrameView, list[Any], bool]:
+    hub = ensure_live_match_hub(app)
+    state = hub.get_state(match_id)
+    playback_context = hub.get_playback_context(match_id)
+    view_state: MatchViewStateView | None = None
+    is_live = False
+    if playback_context is not None and playback_context.viewer_state is not None:
+        view_state = playback_context.viewer_state
+        is_live = bool(playback_context.is_live)
+    elif state is not None:
+        events, _cursor = hub.get_events_since(match_id, 0)
+        if any(_is_blocked_strict_live_source(_strict_live_event_source(event)) for event in events):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strict live match state was not found.")
+        try:
+            view_state = MatchTimelineService().build_from_live_stream(
+                match_id=match_id,
+                source="live_match_hub",
+                home_team_id=None,
+                home_team_name=None,
+                away_team_id=None,
+                away_team_name=None,
+                events=events,
+                live_state=state,
+                allow_synthetic_visuals=False,
+            )
+            is_live = bool(state.is_live)
+        except Exception:
+            logger.exception("Failed to build strict live V2 match state for %s", match_id)
+            view_state = None
+    if view_state is None:
+        view_state = _load_persisted_live_view_state(match_id, app)
+    if view_state is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Live match state was not found.")
+    _ensure_strict_live_sources(view_state, list(view_state.events))
+    if not view_state.frames:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Live match frames are unavailable."
+        )
+    frame = view_state.frames[-1]
+    if playback_context is not None and playback_context.viewer_state is not None:
+        playback_span_seconds = max(
+            float(view_state.duration_seconds),
+            float(view_state.frames[-1].time_seconds),
+            1.0,
+        )
+        playback_ratio = min(
+            1.0,
+            max(0.0, playback_context.elapsed_runtime_seconds / max(playback_context.target_runtime_seconds, 1.0)),
+        )
+        frame = _sample_viewer_frame(view_state, round(playback_span_seconds * playback_ratio, 2))
+    active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
+    return view_state, frame, _recent_view_events(view_state, active_event=active_event, event_limit=40), is_live
+
+
+def _v2_player_payload(player) -> dict[str, object]:
+    return {
+        "id": player.player_id,
+        "player_id": player.player_id,
+        "name": player.label,
+        "label": player.label,
+        "position": _enum_value(player.role) or "N/A",
+        "role": _enum_value(player.role) or "N/A",
+        "shirt_number": player.shirt_number or 0,
+        "rating": None,
+        "is_regen": False,
+    }
+
+
+def _v2_pitch_player_payload(player) -> dict[str, object]:
+    return {
+        "player_id": player.player_id,
+        "team_id": player.team_id,
+        "name": player.label,
+        "shirt_number": player.shirt_number or 0,
+        "x": round(_float_or_default(player.position.x) / 100.0, 4),
+        "y": round(_float_or_default(player.position.y) / 100.0, 4),
+        "is_home": (_enum_value(player.side) or "").lower() == "home",
+        "has_ball": bool(player.has_possession),
+    }
+
+
+def _v2_event_type(raw: object | None) -> str:
+    value = (_enum_value(raw) or "").lower()
+    mapping = {
+        "yellowcard": "yellow_card",
+        "redcard": "red_card",
+        "tacticalchange": "tactical_change",
+        "halftime": "half_time",
+        "fulltime": "full_time",
+    }
+    return mapping.get(value, value or "pass")
+
+
+def _v2_event_payload(event) -> dict[str, object]:
+    return {
+        "id": event.event_id,
+        "type": _v2_event_type(event.event_type),
+        "minute": int(event.minute),
+        "title": event.banner_text,
+        "description": event.commentary,
+        "team_id": event.team_id,
+        "player_name": event.primary_player_name,
+        "home_score": int(event.home_score),
+        "away_score": int(event.away_score),
+    }
+
+
+def _v2_team_payload(team, *, players: list[Any], score: int) -> dict[str, object]:
+    return {
+        "id": team.team_id,
+        "team_id": team.team_id,
+        "name": team.team_name,
+        "short_name": team.short_name,
+        "score": int(score),
+        "formation": team.formation,
+        "primary_color_hex": team.primary_color,
+        "players": [_v2_player_payload(player) for player in players],
+    }
+
+
+def _v2_stats_payload(frame: MatchTimelineFrameView, events: list[Any]) -> dict[str, object]:
+    home_shots = sum(
+        1 for event in events if _v2_event_type(event.event_type) in {"goal", "save", "miss", "shot"} and event.team_id
+    )
+    away_shots = 0
+    home_team_id = next(
+        (player.team_id for player in frame.players if (_enum_value(player.side) or "").lower() == "home"), None
+    )
+    if home_team_id is not None:
+        home_shots = sum(
+            1
+            for event in events
+            if _v2_event_type(event.event_type) in {"goal", "save", "miss", "shot"} and event.team_id == home_team_id
+        )
+        away_shots = sum(
+            1
+            for event in events
+            if _v2_event_type(event.event_type) in {"goal", "save", "miss", "shot"}
+            and event.team_id
+            and event.team_id != home_team_id
+        )
+    return {
+        "available": False,
+        "reason": "match_stats_projection_not_loaded",
+        "source": "event_timeline_derived" if events else "unavailable",
+        "projections": {
+            "shots": {
+                "available": bool(events),
+                "source": "event_timeline" if events else "unavailable",
+            },
+            "possession": {
+                "available": False,
+                "reason": "match_possession_projection_not_loaded",
+            },
+            "passing": {
+                "available": False,
+                "reason": "match_passing_projection_not_loaded",
+            },
+            "expected_goals": {
+                "available": False,
+                "reason": "match_xg_projection_not_loaded",
+            },
+        },
+        "home_possession": 0,
+        "away_possession": 0,
+        "home_shots": home_shots,
+        "away_shots": away_shots,
+        "home_shots_on_target": home_shots,
+        "away_shots_on_target": away_shots,
+        "home_pass_accuracy": 0,
+        "away_pass_accuracy": 0,
+        "home_expected_goals": 0,
+        "away_expected_goals": 0,
+    }
+
+
+def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
+    view_state, frame, events, is_live = _load_strict_live_view_state(match_id, app)
+    home_players = [player for player in frame.players if (_enum_value(player.side) or "").lower() == "home"]
+    away_players = [player for player in frame.players if (_enum_value(player.side) or "").lower() == "away"]
+    return {
+        "match_id": view_state.match_id,
+        "matchId": view_state.match_id,
+        **_strict_live_runtime_flags(),
+        "is_live": bool(is_live),
+        "isLive": bool(is_live),
+        "source": view_state.source,
+        "status": "LIVE" if is_live else "FT",
+        "minute": int(round(_float_or_default(frame.clock_minute))),
+        "phase": _enum_value(frame.phase) or "LIVE",
+        "home": _v2_team_payload(view_state.home_team, players=home_players, score=frame.home_score),
+        "away": _v2_team_payload(view_state.away_team, players=away_players, score=frame.away_score),
+        "pitch_players": [_v2_pitch_player_payload(player) for player in frame.players],
+        "timeline": [_v2_event_payload(event) for event in events],
+        "events": [_v2_event_payload(event) for event in events],
+        "stats": _v2_stats_payload(frame, events),
+        "highlights": [
+            {
+                "minute": int(event.minute),
+                "title": event.banner_text,
+                "summary": event.commentary,
+                "importance": int(event.emphasis_level),
+            }
+            for event in events
+            if _v2_event_type(event.event_type) in {"goal", "save", "red_card", "yellow_card", "substitution"}
+        ],
+    }
+
+
+@api_router.get("/{match_id}/state")
+def read_match_v2_state(match_id: str, request: Request) -> dict[str, object]:
+    return _v2_match_state_payload(match_id, request.app)
+
+
+@api_router.get("/{match_id}/timeline")
+def read_match_v2_timeline(match_id: str, request: Request) -> dict[str, object]:
+    payload = _v2_match_state_payload(match_id, request.app)
+    return {
+        "match_id": payload["match_id"],
+        **_strict_live_runtime_flags(),
+        "timeline": payload["timeline"],
+    }
+
+
+@api_router.get("/{match_id}/events")
+def read_match_v2_events(match_id: str, request: Request) -> dict[str, object]:
+    payload = _v2_match_state_payload(match_id, request.app)
+    return {
+        "match_id": payload["match_id"],
+        **_strict_live_runtime_flags(),
+        "events": payload["events"],
+    }
+
+
+@api_router.get("/{match_id}/lineups")
+def read_match_v2_lineups(match_id: str, request: Request) -> dict[str, object]:
+    payload = _v2_match_state_payload(match_id, request.app)
+    return {
+        "match_id": payload["match_id"],
+        **_strict_live_runtime_flags(),
+        "home": payload["home"],
+        "away": payload["away"],
+    }
+
+
+@api_router.get("/{match_id}/tactics")
+def read_match_v2_tactics(match_id: str, request: Request) -> dict[str, object]:
+    payload = _v2_match_state_payload(match_id, request.app)
+    home = dict(payload["home"])
+    away = dict(payload["away"])
+    return {
+        "match_id": payload["match_id"],
+        **_strict_live_runtime_flags(),
+        "home": {"team_id": home.get("team_id"), "formation": home.get("formation")},
+        "away": {"team_id": away.get("team_id"), "formation": away.get("formation")},
+    }
+
+
+@api_router.post("/{match_id}/tactics")
+def update_match_v2_tactics(match_id: str, request: Request) -> dict[str, object]:
+    _load_strict_live_view_state(match_id, request.app)
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Live tactical instruction persistence is not mounted.",
+    )
+
+
+@api_router.get("/{match_id}/stats")
+def read_match_v2_stats(match_id: str, request: Request) -> dict[str, object]:
+    payload = _v2_match_state_payload(match_id, request.app)
+    return {
+        "match_id": payload["match_id"],
+        **_strict_live_runtime_flags(),
+        "stats": payload["stats"],
+    }
 
 
 def _extract_bearer_token(authorization: str | None) -> str:
@@ -1369,7 +1710,11 @@ def read_match_highlights(match_id: str, request: Request) -> MatchHighlightResp
     if record is not None:
         rebuilt = service.persist_from_archive_timeline(match_id, record.timeline)
         return MatchHighlightResponseView(highlights=rebuilt)
-    generated = ensure_infinite_league_runtime(request.app).highlight_response(match_id)
+    generated = (
+        ensure_infinite_league_runtime(request.app).highlight_response(match_id)
+        if _generated_live_bridge_enabled(request.app)
+        else None
+    )
     if generated is not None:
         return generated
     return MatchHighlightResponseView(highlights=[])

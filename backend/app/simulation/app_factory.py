@@ -27,6 +27,8 @@ def create_demo_simulation_app(
     run_migration_check: bool | None = None,
 ) -> FastAPI:
     resolved_settings = settings or get_settings()
+    if _production_like_environment(resolved_settings):
+        raise RuntimeError("Demo simulation app cannot boot in production or staging runtime.")
     database_engine = _resolve_database_engine(
         settings=resolved_settings,
         engine=engine,
@@ -86,6 +88,11 @@ def _get_bool(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _production_like_environment(settings: Settings) -> bool:
+    environment = str(getattr(settings, "app_env", "") or "").strip().lower()
+    return environment in {"production", "prod", "staging", "release"}
 
 
 def _get_int(name: str, default: int) -> int:

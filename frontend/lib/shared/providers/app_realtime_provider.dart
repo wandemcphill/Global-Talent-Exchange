@@ -1,14 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/gte_app_config.dart';
+import '../../core/runtime/gtex_realtime_client.dart';
 import '../../data/gte_api_repository.dart';
 import '../../features/competitions/live_competitions_provider.dart';
 import '../../features/transfer_market/live_market_provider.dart';
-import '../../services/reliability/reliable_websocket_manager.dart';
 import 'auth_provider.dart';
 
 final Provider<AppRealtimeSyncController> appRealtimeSyncProvider =
@@ -18,7 +17,8 @@ final Provider<AppRealtimeSyncController> appRealtimeSyncProvider =
       final String? accessToken = ref.watch(accessTokenProvider);
       final controller = AppRealtimeSyncController(
         enabled: mode != GteBackendMode.fixture,
-        socketUri: _buildRealtimeUri(baseUrl, accessToken: accessToken),
+        apiBaseUrl: baseUrl,
+        includeWallet: accessToken != null && accessToken.trim().isNotEmpty,
         invalidateMarket: () => ref.invalidate(marketDashboardProvider),
         invalidateCompetitions: () {
           ref.invalidate(competitionHubProvider);
@@ -26,6 +26,11 @@ final Provider<AppRealtimeSyncController> appRealtimeSyncProvider =
           ref.invalidate(hostedCompetitionDetailProvider);
           ref.invalidate(streamerTournamentDetailProvider);
         },
+        clientFactory:
+            () => GtexRealtimeClient(
+              apiBaseUrl: baseUrl,
+              accessTokenProvider: () => ref.read(accessTokenProvider),
+            ),
       )..start();
       ref.onDispose(controller.dispose);
       return controller;
@@ -34,48 +39,66 @@ final Provider<AppRealtimeSyncController> appRealtimeSyncProvider =
 class AppRealtimeSyncController {
   AppRealtimeSyncController({
     required this.enabled,
-    required this.socketUri,
+    required this.apiBaseUrl,
+    required this.includeWallet,
     required this.invalidateMarket,
     required this.invalidateCompetitions,
     this.fallbackPollingInterval = const Duration(seconds: 5),
     this.fallbackActivationDelay = const Duration(seconds: 10),
-    ReliableWebSocketManager Function(Uri socketUri)? managerFactory,
-  }) : _managerFactory =
-           managerFactory ??
-           ((Uri socketUri) => ReliableWebSocketManager(socketUri: socketUri));
+    GtexRealtimeClient Function()? clientFactory,
+  }) : _clientFactory =
+           clientFactory ??
+           (() => GtexRealtimeClient(
+             apiBaseUrl: apiBaseUrl,
+             accessTokenProvider: () => null,
+           ));
 
   final bool enabled;
-  final Uri? socketUri;
+  final String apiBaseUrl;
+  final bool includeWallet;
   final VoidCallback invalidateMarket;
   final VoidCallback invalidateCompetitions;
   final Duration fallbackPollingInterval;
   final Duration fallbackActivationDelay;
-  final ReliableWebSocketManager Function(Uri socketUri) _managerFactory;
+  final GtexRealtimeClient Function() _clientFactory;
 
-  ReliableWebSocketManager? _manager;
-  StreamSubscription<dynamic>? _messageSubscription;
-  StreamSubscription<ReliableWebSocketState>? _stateSubscription;
+  GtexRealtimeClient? _client;
+  final List<StreamSubscription<Map<String, Object?>>> _eventSubscriptions =
+      <StreamSubscription<Map<String, Object?>>>[];
+  StreamSubscription<GtexRealtimeConnectionState>? _stateSubscription;
   Timer? _fallbackTimer;
   Timer? _fallbackActivationTimer;
 
   void start() {
-    if (!enabled || socketUri == null) {
+    if (!enabled || !_hasLiveRealtimeBaseUrl(apiBaseUrl)) {
       _startFallbackPollingNow();
       return;
     }
-    final ReliableWebSocketManager manager = _managerFactory(socketUri!);
-    _manager = manager;
-    _messageSubscription = manager.messages.listen(_handleMessage);
-    _stateSubscription = manager.connectionStates.listen(_handleStateChange);
-    manager.connect();
+    final GtexRealtimeClient client = _clientFactory();
+    _client = client;
+    _stateSubscription = client.connectionStates.listen(_handleStateChange);
+    _eventSubscriptions
+      ..add(
+        client
+            .subscribe('market')
+            .listen(_handleEvent, onError: _handleStreamError),
+      )
+      ..add(
+        client
+            .subscribe('competition')
+            .listen(_handleEvent, onError: _handleStreamError),
+      );
+    if (includeWallet) {
+      _eventSubscriptions.add(
+        client
+            .subscribe('wallet')
+            .listen(_handleEvent, onError: _handleStreamError),
+      );
+    }
   }
 
-  void _handleMessage(dynamic rawMessage) {
-    final Object? decoded = _decodeMessage(rawMessage);
-    if (decoded is! Map) {
-      return;
-    }
-    final String type = (decoded['type'] ?? '').toString().trim().toLowerCase();
+  void _handleEvent(Map<String, Object?> event) {
+    final String type = (event['type'] ?? '').toString().trim().toLowerCase();
     switch (type) {
       case 'market_price_update':
       case 'wallet_update':
@@ -89,18 +112,22 @@ class AppRealtimeSyncController {
     }
   }
 
-  void _handleStateChange(ReliableWebSocketState state) {
+  void _handleStreamError(Object error, StackTrace stackTrace) {
+    _scheduleFallbackPolling();
+  }
+
+  void _handleStateChange(GtexRealtimeConnectionState state) {
     switch (state) {
-      case ReliableWebSocketState.connected:
+      case GtexRealtimeConnectionState.connected:
         _stopFallbackPolling();
         return;
-      case ReliableWebSocketState.paused:
-      case ReliableWebSocketState.disposed:
+      case GtexRealtimeConnectionState.disposed:
         _stopFallbackPolling();
         return;
-      case ReliableWebSocketState.connecting:
-      case ReliableWebSocketState.disconnected:
-      case ReliableWebSocketState.reconnecting:
+      case GtexRealtimeConnectionState.connecting:
+      case GtexRealtimeConnectionState.disconnected:
+      case GtexRealtimeConnectionState.reconnecting:
+      case GtexRealtimeConnectionState.failed:
         _scheduleFallbackPolling();
         return;
     }
@@ -136,49 +163,23 @@ class AppRealtimeSyncController {
 
   Future<void> dispose() async {
     _stopFallbackPolling();
-    await _messageSubscription?.cancel();
+    for (final StreamSubscription<Map<String, Object?>> subscription
+        in _eventSubscriptions) {
+      await subscription.cancel();
+    }
+    _eventSubscriptions.clear();
     await _stateSubscription?.cancel();
-    await _manager?.dispose();
+    await _client?.dispose();
   }
 }
 
-Uri? _buildRealtimeUri(String baseUrl, {required String? accessToken}) {
+bool _hasLiveRealtimeBaseUrl(String baseUrl) {
   final Uri? base = Uri.tryParse(baseUrl);
   if (base == null || !base.hasScheme || base.host.trim().isEmpty) {
-    return null;
+    return false;
   }
-  final String scheme = switch (base.scheme) {
-    'https' => 'wss',
-    'http' => 'ws',
-    'ws' || 'wss' => base.scheme,
-    _ => 'wss',
-  };
-  final List<String> topics = <String>['market', 'competition'];
-  if (accessToken != null && accessToken.trim().isNotEmpty) {
-    topics.add('wallet');
-  }
-  return base.replace(
-    scheme: scheme,
-    path: '/realtime/stream',
-    queryParameters: <String, String>{
-      'topics': topics.join(','),
-      if (accessToken != null && accessToken.trim().isNotEmpty)
-        'token': accessToken.trim(),
-    },
-  );
-}
-
-Object? _decodeMessage(dynamic rawMessage) {
-  if (rawMessage is String) {
-    final String trimmed = rawMessage.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-    try {
-      return jsonDecode(trimmed);
-    } catch (_) {
-      return null;
-    }
-  }
-  return rawMessage;
+  return base.scheme == 'http' ||
+      base.scheme == 'https' ||
+      base.scheme == 'ws' ||
+      base.scheme == 'wss';
 }

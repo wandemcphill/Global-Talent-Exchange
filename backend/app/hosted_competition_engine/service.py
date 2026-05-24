@@ -340,6 +340,36 @@ class HostedCompetitionService:
         }
         self.session.flush()
 
+    def _fund_gtex_hosted_reward_pool(self, *, competition: UserHostedCompetition, admin: User) -> None:
+        amount = self._normalize_amount(competition.reward_pool_fancoin)
+        if amount <= Decimal("0.0000"):
+            return
+        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
+        escrow_account = self._competition_escrow_account(competition)
+        self.wallet_service.append_transaction(
+            self.session,
+            postings=[
+                LedgerPosting(
+                    account=platform_account,
+                    amount=-amount,
+                    source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                ),
+                LedgerPosting(
+                    account=escrow_account,
+                    amount=amount,
+                    source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+                ),
+            ],
+            reason=LedgerEntryReason.COMPETITION_REWARD,
+            reference=f"gtex-hosted-reward-pool:{competition.id}",
+            description=f"GTEX hosted reward pool funding for {competition.title}",
+            external_reference=f"gtex-hosted-reward-pool:{competition.id}",
+            actor=admin,
+            idempotency_key=f"gtex-hosted-reward-pool:{competition.id}",
+            metadata={"hosted_competition_id": competition.id, "reward_source": "gtex_hosted_reward_pool"},
+        )
+        self.session.flush()
+
     def create_competition(
         self,
         *,
@@ -405,6 +435,8 @@ class HostedCompetitionService:
         self.session.add(competition)
         self.session.flush()
         if gtex_hosted:
+            if created_by_admin is not None:
+                self._fund_gtex_hosted_reward_pool(competition=competition, admin=created_by_admin)
             return competition, template, False
         participant = self._create_entry_participant(competition=competition, user=host, role="host")
         try:
@@ -734,9 +766,22 @@ class HostedCompetitionService:
         platform_fee = min(self._normalize_amount(competition.platform_fee_amount), escrow_balance)
         prize_pool = self._normalize_amount(escrow_balance - platform_fee)
         placements = list(placements)
+        if not placements:
+            raise HostedCompetitionError("At least one placement is required to settle a hosted competition.")
         total_percent = sum(Decimal(str(item.get("payout_percent", 0))) for item in placements)
         if total_percent > Decimal("100.0000"):
             raise HostedCompetitionError("Total payout percent cannot exceed 100.")
+        if prize_pool > Decimal("0.0000") and total_percent != Decimal("100.0000"):
+            raise HostedCompetitionError("Total payout percent must equal 100 for competitions with a prize pool.")
+        placement_user_ids = [str(item.get("user_id")) for item in placements]
+        if len(set(placement_user_ids)) != len(placement_user_ids):
+            raise HostedCompetitionError("Each placement must reference a distinct participant.")
+        placement_ranks = [int(item.get("rank", 0) or 0) for item in placements]
+        if len(set(placement_ranks)) != len(placement_ranks):
+            raise HostedCompetitionError("Each placement rank must be unique.")
+        expected_ranks = set(range(1, len(placement_ranks) + 1))
+        if set(placement_ranks) != expected_ranks:
+            raise HostedCompetitionError("Placement ranks must be contiguous starting at 1.")
         standings_by_user = {row.user_id: row for row in self.standings_for_competition(competition_id)}
         if not standings_by_user:
             for item in self.participants_for_competition(competition_id):
@@ -786,6 +831,12 @@ class HostedCompetitionService:
                 )
             )
         platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
+        total_outgoing = self._normalize_amount(total_prize_paid + platform_fee)
+        residual_amount = self._normalize_amount(escrow_balance - total_outgoing)
+        if residual_amount > Decimal("0.0000"):
+            platform_fee = self._normalize_amount(platform_fee + residual_amount)
+        elif residual_amount < Decimal("0.0000"):
+            raise HostedCompetitionError("Settlement exceeds available escrow balance.")
         if platform_fee > Decimal("0.0000"):
             postings.append(
                 LedgerPosting(

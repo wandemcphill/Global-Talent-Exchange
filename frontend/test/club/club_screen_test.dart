@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:gte_frontend/core/theme/app_theme.dart';
 import 'package:gte_frontend/features/club/club_screen.dart';
+import 'package:gte_frontend/shared/models/club.dart';
+import 'package:gte_frontend/shared/providers/club_provider.dart';
 
 void main() {
   testWidgets('renders club dashboard tabs', (WidgetTester tester) async {
@@ -16,9 +18,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [clubProvider.overrideWithValue(_fixtureClub)],
         child: MaterialApp(
           theme: AppTheme.dark(),
-          home: const Scaffold(body: ClubScreen()),
+          home: const Scaffold(body: ClubScreen(allowFixtureData: true)),
         ),
       ),
     );
@@ -40,4 +43,34 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Identity score'), findsOneWidget);
   });
+
+  testWidgets('blocks legacy fixture club state by default', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const Scaffold(body: ClubScreen()),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Live club workspace unavailable'), findsOneWidget);
+  });
 }
+
+const Club _fixtureClub = Club(
+  id: 'fixture-club',
+  name: 'Fixture Club',
+  country: 'Testland',
+  league: 'Fixture League',
+  stadium: 'Fixture Ground',
+  budgetInMillions: 186,
+  startingXiRating: 84,
+  academyLevel: 5,
+  formLabel: 'WWDWW',
+  fans: 3240000,
+  badgeAsset: 'assets/branding/gtex_logo.png',
+);

@@ -477,7 +477,15 @@ class _RouteLaunchButton extends StatelessWidget {
         label: Text(label),
       ),
       AppRouteSurfaceState.placeholder => OutlinedButton.icon(
-        onPressed: null,
+        onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${surface.label} is visible in the route map but remains blocked until its live backend is mounted.',
+              ),
+            ),
+          );
+        },
         icon: Icon(icon),
         label: Text(label),
       ),

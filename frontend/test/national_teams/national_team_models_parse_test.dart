@@ -31,6 +31,12 @@ void main() {
               'is_regen': true,
               'is_preseeded_national_regen': true,
               'market_eligible': false,
+              'eligibility': <String, Object?>{
+                'eligible': false,
+                'reasons': <Object?>['cooldown_active'],
+                'checks': <String, Object?>{'cooldown': false},
+                'message': 'This player is inside a rental cooldown window.',
+              },
             },
           ],
         });
@@ -43,6 +49,8 @@ void main() {
     expect(collection.items.single.imageUrl, 'https://media.test/regen.png');
     expect(collection.items.single.portraitStatus, 'approved');
     expect(collection.items.single.isPreseededNationalRegen, isTrue);
+    expect(collection.items.single.rentalEligible, isFalse);
+    expect(collection.items.single.eligibility.reasons, contains('cooldown_active'));
   });
 
   test(
@@ -61,6 +69,7 @@ void main() {
                 'loan_price_coin': '74.0000',
                 'tier_label': 'mid',
                 'source_bucket': 'real',
+                'eligibility': const <String, Object?>{'eligible': true},
               },
             ],
           });
@@ -69,6 +78,7 @@ void main() {
       expect(collection.failedCount, 1);
       expect(collection.items, hasLength(1));
       expect(collection.items.single.playerName, 'Live Player');
+      expect(collection.items.single.rentalEligible, isTrue);
     },
   );
 }

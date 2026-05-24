@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/shared/models/auth_session.dart';
 
 @immutable
 class GtexGlobalSearchResult {
@@ -25,7 +26,21 @@ class GtexGlobalSearchResult {
   final String? permissionRequired;
   final Map<String, Object?> metadata;
 
-  bool get adminOnly => permissionRequired == 'admin';
+  bool get adminOnly => gtexIsAdminRole(permissionRequired);
+
+  GtexGlobalSearchResult copyWith({String? route}) {
+    return GtexGlobalSearchResult(
+      type: type,
+      id: id,
+      title: title,
+      subtitle: subtitle,
+      imageUrl: imageUrl,
+      route: route ?? this.route,
+      score: score,
+      permissionRequired: permissionRequired,
+      metadata: metadata,
+    );
+  }
 
   factory GtexGlobalSearchResult.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -86,8 +101,14 @@ String gtexCanonicalGlobalSearchRoute(String route, {required bool isAdmin}) {
     uri = Uri(path: uri.path, query: uri.query.isEmpty ? null : uri.query);
   }
   final String path = uri.path.trim().isEmpty ? '/app/home' : uri.path;
-  final String canonicalPath = switch (path.toLowerCase()) {
+  final String normalizedPath = path.toLowerCase();
+  final List<String> segments = uri.pathSegments
+      .where((String segment) => segment.trim().isNotEmpty)
+      .toList(growable: false);
+  String? canonicalQuery = uri.query.isEmpty ? null : uri.query;
+  String canonicalPath = switch (normalizedPath) {
     '/broadcast' => '/broadcast/live',
+    '/regens' || '/app/regens' || '/regen-universe' => '/world/regens',
     '/admin/ops' ||
     '/admin/risk-ops' ||
     '/admin/policies' ||
@@ -96,8 +117,27 @@ String gtexCanonicalGlobalSearchRoute(String route, {required bool isAdmin}) {
     '/admin/ops/audit' => '/admin/trust-ops',
     _ => path,
   };
+
+  if (segments.length == 2 &&
+      (segments.first == 'player' || segments.first == 'players')) {
+    canonicalPath = '/app/market';
+    canonicalQuery =
+        Uri(queryParameters: <String, String>{'player': segments[1]}).query;
+  } else if (segments.length == 2 &&
+      segments.first == 'clubs' &&
+      segments[1] != 'sale-market') {
+    canonicalPath = '/world/clubs/${segments[1]}';
+  } else if (segments.length >= 2 &&
+      segments.first == 'app' &&
+      segments[1] == 'player-cards') {
+    canonicalPath =
+        segments.length == 2
+            ? '/player-cards'
+            : '/${segments.sublist(1).join('/')}';
+  }
+
   if (canonicalPath.toLowerCase().startsWith('/admin') && !isAdmin) {
     return '/app/home';
   }
-  return uri.replace(path: canonicalPath).toString();
+  return uri.replace(path: canonicalPath, query: canonicalQuery).toString();
 }

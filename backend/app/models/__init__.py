@@ -224,6 +224,16 @@ from app.models.competition_schedule_job import CompetitionScheduleJob
 from app.models.competition_seed_rule import CompetitionSeedRule
 from app.models.competition_visibility_rule import CompetitionVisibilityRule
 from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.models.world_super_cup_authority import (
+    WorldSuperCupCoefficient,
+    WorldSuperCupCountdown,
+    WorldSuperCupFixture,
+    WorldSuperCupGroup,
+    WorldSuperCupQualifiedClub,
+    WorldSuperCupSettlement,
+    WorldSuperCupStanding,
+    WorldSuperCupTournament,
+)
 from app.models.tournament import (
     Tournament,
     TournamentGameType,
@@ -893,6 +903,14 @@ __all__ = [
     "CompetitionSeedRule",
     "CompetitionVisibilityRule",
     "CompetitionWalletLedger",
+    "WorldSuperCupCoefficient",
+    "WorldSuperCupCountdown",
+    "WorldSuperCupFixture",
+    "WorldSuperCupGroup",
+    "WorldSuperCupQualifiedClub",
+    "WorldSuperCupSettlement",
+    "WorldSuperCupStanding",
+    "WorldSuperCupTournament",
     "ClubRankingAbuseFlag",
     "ClubRankingEvent",
     "CompetitionIntegrityScore",

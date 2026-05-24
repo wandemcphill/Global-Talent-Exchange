@@ -13,7 +13,7 @@ class TrophyCabinetApiRepository implements TrophyCabinetRepository {
     required this.config,
     required this.transport,
     TrophyCabinetRepository? fixtures,
-  }) : fixtures = fixtures ?? StubTrophyCabinetRepository();
+  }) : fixtures = fixtures ?? const UnavailableTrophyCabinetRepository();
 
   factory TrophyCabinetApiRepository.standard({
     required String baseUrl,

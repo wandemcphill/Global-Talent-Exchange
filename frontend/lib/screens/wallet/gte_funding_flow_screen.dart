@@ -21,10 +21,7 @@ class GteFundWalletScreen extends StatefulWidget {
 }
 
 class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
-  static const List<String> _automaticProviders = <String>[
-    'paystack',
-    'korapay',
-  ];
+  static const List<String> _automaticProviders = <String>['korapay'];
 
   final TextEditingController _automaticAmountController =
       TextEditingController();
@@ -40,7 +37,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
   bool _isCreatingManualDeposit = false;
   bool _isSubmittingManualDeposit = false;
   bool _awaitingInitialComplianceCheck = false;
-  String _automaticProvider = 'paystack';
+  String _automaticProvider = 'korapay';
   GteLedgerUnit _automaticUnit = GteLedgerUnit.coin;
   String? _error;
   GteWalletTopUpSession? _session;
@@ -240,6 +237,15 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       if (!mounted) {
         return;
       }
+      if (session.mockMode) {
+        setState(() {
+          _session = null;
+          _verification = null;
+          _error =
+              'Live payment provider returned a mock session. Strict-live funding is blocked until KoraPay or manual bank transfer is configured.';
+        });
+        return;
+      }
       setState(() {
         _session = session;
         _verification = null;
@@ -301,14 +307,6 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
         });
       }
     }
-  }
-
-  void _simulateMockFailure() {
-    setState(() {
-      _verification = null;
-      _error =
-          'Test payment was marked as failed locally. No wallet credit was applied.';
-    });
   }
 
   Future<void> _createManualDeposit() async {
@@ -425,8 +423,9 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       case 'korapay':
         return 'KoraPay';
       case 'paystack':
-      default:
         return 'Paystack';
+      default:
+        return provider;
     }
   }
 
@@ -439,14 +438,14 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
 
   bool _providerSupportsCheckout(String provider) {
     final String status = _providerStatus(provider);
-    return status == 'ready' || status == 'mock';
+    return status == 'ready';
   }
 
   String _providerRestrictionMessage(String provider) {
     final String label = _providerLabel(provider);
     switch (_providerStatus(provider)) {
       case 'blocked':
-        return 'Instant deposit is currently disabled for this wallet. Use bank transfer below.';
+        return '$label is not available for live wallet deposits. Use KoraPay or bank transfer below.';
       case 'unavailable':
         return '$label is unavailable until live gateway credentials are configured.';
       default:
@@ -460,9 +459,9 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       case 'ready':
         return '$label checkout is ready for deposits.';
       case 'mock':
-        return '$label is available in test payment mode for this environment.';
+        return '$label is not enabled for live production deposits.';
       case 'blocked':
-        return 'Instant deposit is currently routed away from $label. Use bank transfer below.';
+        return '$label is blocked for production. Use KoraPay or bank transfer below.';
       case 'unavailable':
         return '$label is unavailable until live gateway credentials are configured.';
       default:
@@ -571,7 +570,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                         ? 'Loading the live deposit rail and gateway availability.'
                         : walletOverview.depositMode == 'gateway' ||
                             walletOverview.depositMode == 'hybrid'
-                        ? 'Automatic checkout supports Paystack and KoraPay deposits.'
+                        ? 'Automatic checkout uses KoraPay deposits. Manual bank transfer remains available below.'
                         : 'Instant checkout is currently unavailable because deposits are routed through manual bank transfer review.',
                   ),
                   if (walletOverview != null) ...<Widget>[
@@ -686,54 +685,27 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                     ),
                     Text('Provider: ${_providerLabel(session.provider)}'),
                     Text('Status: ${_titleCase(session.status)}'),
-                    if (session.mockMode)
-                      Padding(
-                        padding: EdgeInsets.only(top: 10),
-                        child: Text(
-                          'Test payment mode is active because no live ${_providerLabel(session.provider)} key is configured for this environment.',
-                        ),
-                      ),
                     const SizedBox(height: 14),
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
                       children: <Widget>[
-                        if (session.mockMode)
-                          FilledButton.tonalIcon(
-                            onPressed: _isVerifying ? null : _verifyTopUp,
-                            icon: const Icon(Icons.check_circle_outline),
-                            label: const Text('Mark test payment successful'),
-                          )
-                        else
-                          FilledButton.tonalIcon(
-                            onPressed:
-                                _isVerifying
-                                    ? null
-                                    : () =>
-                                        _launchPaymentLink(session.paymentLink),
-                            icon: const Icon(Icons.open_in_browser_outlined),
-                            label: Text(
-                              'Open ${_providerLabel(session.provider)}',
-                            ),
+                        FilledButton.tonalIcon(
+                          onPressed:
+                              _isVerifying
+                                  ? null
+                                  : () =>
+                                      _launchPaymentLink(session.paymentLink),
+                          icon: const Icon(Icons.open_in_browser_outlined),
+                          label: Text(
+                            'Open ${_providerLabel(session.provider)}',
                           ),
-                        if (session.mockMode)
-                          OutlinedButton.icon(
-                            onPressed:
-                                _isSubmitting || _isVerifying
-                                    ? null
-                                    : _simulateMockFailure,
-                            icon: const Icon(Icons.cancel_outlined),
-                            label: const Text('Mark test payment failed'),
-                          ),
+                        ),
                         OutlinedButton.icon(
                           onPressed: _isVerifying ? null : _verifyTopUp,
                           icon: const Icon(Icons.verified_outlined),
                           label: Text(
-                            _isVerifying
-                                ? 'Verifying...'
-                                : session.mockMode
-                                ? 'Verify test payment'
-                                : 'Verify payment',
+                            _isVerifying ? 'Verifying...' : 'Verify payment',
                           ),
                         ),
                         OutlinedButton(

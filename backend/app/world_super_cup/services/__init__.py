@@ -3,6 +3,7 @@ from app.world_super_cup.services.ceremony import TrophyCeremonyService
 from app.world_super_cup.services.competition_engine import WorldSuperCupCompetitionEngineService
 from app.world_super_cup.services.group_stage import GroupStageService
 from app.world_super_cup.services.knockout import KnockoutService
+from app.world_super_cup.services.persistence import WorldSuperCupAuthorityError, WorldSuperCupPersistenceService
 from app.world_super_cup.services.qualification import (
     DirectQualifierSelector,
     PlayoffQualifierSelector,
@@ -18,8 +19,10 @@ __all__ = [
     "PlayoffQualifierSelector",
     "QualificationCoefficientService",
     "TrophyCeremonyService",
+    "WorldSuperCupAuthorityError",
     "WorldSuperCupCompetitionEngineService",
     "WorldSuperCupCalendarService",
+    "WorldSuperCupPersistenceService",
     "WorldSuperCupQualificationService",
     "WorldSuperCupService",
 ]

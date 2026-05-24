@@ -1,28 +1,50 @@
 import 'dart:math' as math;
 
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/models/admin_finance_models.dart';
 
 class AdminFinanceApi {
-  AdminFinanceApi({required this.client, required this.fixtures});
+  AdminFinanceApi({
+    required this.client,
+    required AdminFinanceFixtures? fixtures,
+  }) : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final AdminFinanceFixtures fixtures;
+  final AdminFinanceFixtures? _fixtures;
 
   factory AdminFinanceApi.standard({
     required String baseUrl,
     required String? accessToken,
     GteBackendMode mode = GteBackendMode.live,
+    GteTransport? transport,
   }) {
     final GteBackendMode resolvedMode = gteProductionBackendMode(mode);
     return AdminFinanceApi(
       client: GteAuthedApi(
         config: GteRepositoryConfig(baseUrl: baseUrl, mode: resolvedMode),
-        transport: GteHttpTransport(),
+        transport: transport ?? GteHttpTransport(),
         accessToken: accessToken,
         mode: resolvedMode,
+      ),
+      fixtures: null,
+    );
+  }
+
+  factory AdminFinanceApi.fixture() {
+    assertFixtureFactoryAllowed('AdminFinanceApi.fixture');
+    return AdminFinanceApi(
+      client: GteAuthedApi(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.fixture,
+        ),
+        transport: GteHttpTransport(),
+        accessToken: 'fixture-token',
+        mode: GteBackendMode.fixture,
       ),
       fixtures: AdminFinanceFixtures.seed(),
     );
@@ -43,7 +65,7 @@ class AdminFinanceApi {
         );
         return AdminFinanceControlTower.fromJson(payload);
       },
-      () async => fixtures.controlTower(
+      () async => _requireFixtures().controlTower(
         historyDays: historyDays,
         transactionLimit: transactionLimit,
       ),
@@ -60,7 +82,19 @@ class AdminFinanceApi {
         body: config.toJson(),
       );
       return AdminEconomySimulationResult.fromJson(payload);
-    }, () async => fixtures.simulate(config: config));
+    }, () async => _requireFixtures().simulate(config: config));
+  }
+
+  AdminFinanceFixtures _requireFixtures() {
+    final AdminFinanceFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Admin finance fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return fixtures;
   }
 }
 
@@ -277,7 +311,7 @@ class AdminFinanceFixtures {
         ),
       ],
       cashRails: const AdminFinanceCashRail(
-        paymentMethods: <String>['Paystack', 'Bank transfer', 'USDT'],
+        paymentMethods: <String>['KoraPay', 'Bank transfer', 'USDT'],
         depositMode: 'automatic',
         withdrawalMode: 'manual',
         currencyCode: 'NGN',

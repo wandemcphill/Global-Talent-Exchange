@@ -1,13 +1,16 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
 import '../models/risk_ops_models.dart';
 
 class RiskOpsApi {
-  RiskOpsApi({required this.client, required this.fixtures});
+  RiskOpsApi({required this.client, required _RiskOpsFixtures? fixtures})
+    : _fixtures = fixtures;
 
   final GteAuthedApi client;
-  final _RiskOpsFixtures fixtures;
+  final _RiskOpsFixtures? _fixtures;
 
   factory RiskOpsApi.standard({
     required String baseUrl,
@@ -22,11 +25,12 @@ class RiskOpsApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _RiskOpsFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory RiskOpsApi.fixture() {
+    assertFixtureFactoryAllowed('RiskOpsApi.fixture');
     return RiskOpsApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -47,7 +51,18 @@ class RiskOpsApi {
         '/admin/risk-ops/overview',
       );
       return RiskOverview.fromJson(payload);
-    }, fixtures.overview);
+    }, () => _requireFixtures().overview());
+  }
+
+  _RiskOpsFixtures _requireFixtures() {
+    final _RiskOpsFixtures? fixtures = _fixtures;
+    if (fixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message: 'Risk Ops fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return fixtures;
   }
 }
 

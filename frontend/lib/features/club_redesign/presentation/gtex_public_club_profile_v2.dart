@@ -62,6 +62,19 @@ class _GtexPublicClubProfileV2State extends State<GtexPublicClubProfileV2> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.initialSnapshot == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(GtexSpacing.lg),
+          child: GtexEmptyState(
+            title: 'Live club profile required',
+            message:
+                'This public club profile no longer opens with generated demo club data. Load a live club profile snapshot first.',
+            icon: Icons.shield_outlined,
+          ),
+        ),
+      );
+    }
     return AnimatedBuilder(
       animation: _controller,
       builder: (BuildContext context, _) {

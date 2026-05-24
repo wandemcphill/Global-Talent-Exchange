@@ -43,6 +43,7 @@ import 'package:gte_frontend/features/viral_feed/data/viral_feed_repository.dart
 import 'package:gte_frontend/features/viral_feed/presentation/viral_feed_screen.dart';
 import 'package:gte_frontend/screens/competitions/competition_create_screen_v2.dart';
 import 'package:gte_frontend/screens/clubs/gtex_public_club_profile_screen_v2.dart';
+import 'package:gte_frontend/shared/models/auth_session.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 
@@ -289,7 +290,7 @@ class GteAppRouteRegistry {
         backendMode: liveDependencies.backendMode,
         accessToken: liveDependencies.accessToken,
         isAuthenticated: liveDependencies.isAuthenticated,
-        isAdmin: liveDependencies.currentUserRole == 'admin',
+        isAdmin: gtexIsAdminRole(liveDependencies.currentUserRole),
         onOpenAwards: () {
           unawaited(
             GteNavigationHelpers.pushRoute<void>(

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/gte_app_config.dart';
 import 'app/gte_bootstrap_failure_app.dart';
 import 'app/gte_frontend_app.dart';
+import 'core/runtime/gtex_runtime_graph.dart';
 import 'data/gte_exchange_api_client.dart';
 import 'data/gte_models.dart';
 import 'providers/gte_exchange_controller.dart';
@@ -25,6 +26,7 @@ Future<void> main() async {
   );
   try {
     final GteAppConfig appConfig = GteAppConfig.fromEnvironment();
+    validateGtexStrictLiveStartup(appConfig);
     final SecureAuthSessionStore authSessionStore = SecureAuthSessionStore();
     final AuthSession? storedSession = await authSessionStore.readSession();
     // Ship the richer GTEX football shell by default on web builds.

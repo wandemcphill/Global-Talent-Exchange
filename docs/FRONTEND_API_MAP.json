@@ -1,7 +1,79 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 607,
+  "call_count": 614,
   "calls": [
+    {
+      "file": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/admin/operations-readiness",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/{match_id}/state",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/national-team-engine/competitions",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/session/bootstrap",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/realtime/stream",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/ws/matches/{match_id}",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
     {
       "file": "frontend/lib/data/admin_command_center_api.dart",
       "transport_call": "string_reference",
@@ -2691,18 +2763,6 @@
       ]
     },
     {
-      "file": "frontend/lib/data/gte_mock_api.dart",
-      "transport_call": "hardcoded_url",
-      "method": "N/A",
-      "endpoint": "https://mock.paystack.local/$reference",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
       "file": "frontend/lib/data/hosted_competition_api.dart",
       "transport_call": "string_reference",
       "method": "POST",
@@ -3162,7 +3222,7 @@
       "file": "frontend/lib/data/national_team_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
-      "endpoint": "/api/national-team-engine/competitions",
+      "endpoint": "/api/national/competitions",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [
@@ -3174,7 +3234,7 @@
       "file": "frontend/lib/data/national_team_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
-      "endpoint": "/api/national-team-engine/competitions/$competitionId/rental-entry",
+      "endpoint": "/api/national/competitions/$competitionId/rental-entry",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [
@@ -3186,7 +3246,7 @@
       "file": "frontend/lib/data/national_team_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
-      "endpoint": "/api/national-team-engine/competitions/$competitionId/rental-pool",
+      "endpoint": "/api/national/competitions/$competitionId/rental-pool",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [
@@ -3198,7 +3258,7 @@
       "file": "frontend/lib/data/national_team_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
-      "endpoint": "/api/national-team-engine/entries/$entryId",
+      "endpoint": "/api/national/entries/$entryId",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [
@@ -3210,7 +3270,7 @@
       "file": "frontend/lib/data/national_team_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
-      "endpoint": "/api/national-team-engine/entries/$entryId/rentals",
+      "endpoint": "/api/national/entries/$entryId/rentals",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [
@@ -3222,8 +3282,8 @@
       "file": "frontend/lib/data/national_team_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
-      "endpoint": "/api/national-team-engine/me/history",
-      "expected_shape": "list",
+      "endpoint": "/api/national/me/history",
+      "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
       "platforms": [
         "web",
@@ -5851,6 +5911,30 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/matches/$matchKey/spectate",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/match_redesign/data/gtex_match_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/$matchId/state",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/match_redesign/data/gtex_match_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/matches/$matchId/tactics",
       "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [

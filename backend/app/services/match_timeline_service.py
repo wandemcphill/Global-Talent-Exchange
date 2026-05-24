@@ -216,6 +216,7 @@ class MatchTimelineService:
         away_team_name: str | None,
         events: list[LiveMatchStreamEventView],
         live_state: LiveMatchStateView | None = None,
+        allow_synthetic_visuals: bool = False,
     ) -> MatchViewStateView:
         ordered_events = sorted(
             events,
@@ -245,6 +246,9 @@ class MatchTimelineService:
         )
         resolved_home_team_name = resolved_home_team_name or "Home"
         resolved_away_team_name = resolved_away_team_name or "Away"
+
+        if not allow_synthetic_visuals:
+            raise ValueError("Live stream viewer state requires persisted visual identity data.")
 
         home_identity = self._synthetic_team_identity(
             match_id=match_id,

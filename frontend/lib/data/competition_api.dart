@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
@@ -12,7 +14,10 @@ class CompetitionApi {
     required this.config,
     required this.transport,
     this.accessToken,
-  }) : _fixtureStore = _CompetitionFixtureStore.seed();
+  }) : _fixtureStore =
+           config.mode == GteBackendMode.fixture
+               ? _CompetitionFixtureStore.seed()
+               : _CompetitionFixtureStore.unavailable();
 
   CompetitionApi._({
     required this.config,
@@ -25,6 +30,8 @@ class CompetitionApi {
   final GteTransport transport;
   final String? accessToken;
   final _CompetitionFixtureStore _fixtureStore;
+
+  bool get hasRegisteredFixtures => _fixtureStore.registered;
 
   factory CompetitionApi.standard({
     required String baseUrl,
@@ -40,6 +47,7 @@ class CompetitionApi {
   }
 
   factory CompetitionApi.fixture() {
+    assertFixtureFactoryAllowed('CompetitionApi.fixture');
     return CompetitionApi._(
       config: const GteRepositoryConfig(
         baseUrl: 'http://127.0.0.1:8000',
@@ -488,12 +496,22 @@ class _CompetitionRecord {
 }
 
 class _CompetitionFixtureStore {
-  _CompetitionFixtureStore({required Map<String, _CompetitionRecord> records})
-    : _records = records;
+  _CompetitionFixtureStore({
+    required Map<String, _CompetitionRecord> records,
+    this.registered = true,
+  }) : _records = records;
 
   final Map<String, _CompetitionRecord> _records;
+  final bool registered;
   int _idSequence = 400;
   final Random _random = Random(42);
+
+  factory _CompetitionFixtureStore.unavailable() {
+    return _CompetitionFixtureStore(
+      records: const <String, _CompetitionRecord>{},
+      registered: false,
+    );
+  }
 
   factory _CompetitionFixtureStore.seed() {
     final Map<String, _CompetitionRecord> records =

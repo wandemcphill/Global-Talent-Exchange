@@ -1,13 +1,28 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
 import '../models/national_team_models.dart';
 
 class NationalTeamApi {
-  NationalTeamApi({required this.client, required this.fixtures});
+  NationalTeamApi({required this.client, this.fixtures});
 
   final GteAuthedApi client;
-  final _NationalTeamFixtures fixtures;
+  final _NationalTeamFixtures? fixtures;
+
+  bool get hasRegisteredFixtures => fixtures != null;
+
+  String _nationalAlias(String path) {
+    final Uri baseUri = Uri.parse(
+      client.config.baseUrl.endsWith('/')
+          ? client.config.baseUrl
+          : '${client.config.baseUrl}/',
+    );
+    return baseUri
+        .resolve(path.startsWith('/') ? path.substring(1) : path)
+        .toString();
+  }
 
   factory NationalTeamApi.standard({
     required String baseUrl,
@@ -24,11 +39,11 @@ class NationalTeamApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _NationalTeamFixtures.seed(),
     );
   }
 
   factory NationalTeamApi.fixture() {
+    assertFixtureFactoryAllowed('NationalTeamApi.fixture');
     return NationalTeamApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -46,13 +61,13 @@ class NationalTeamApi {
   Future<List<NationalTeamCompetition>> listCompetitions() {
     return client.withFallback<List<NationalTeamCompetition>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/api/national-team-engine/competitions',
+        _nationalAlias('/api/national/competitions'),
         auth: false,
       );
       return payload
           .map(NationalTeamCompetition.fromJson)
           .toList(growable: false);
-    }, fixtures.listCompetitions);
+    }, () => _requireFixtures().listCompetitions());
   }
 
   Future<NationalTeamRentalPlayerCollection> listRentalPool(
@@ -61,23 +76,35 @@ class NationalTeamApi {
     int offset = 0,
     String? countryCode,
     String? position,
+    String? entryId,
+    bool auth = false,
   }) {
-    return client.withFallback<NationalTeamRentalPlayerCollection>(() async {
-      final Map<String, Object?> query = <String, Object?>{
-        'limit': limit,
-        'offset': offset,
-        if (countryCode != null && countryCode.trim().isNotEmpty)
-          'country_code': countryCode.trim(),
-        if (position != null && position.trim().isNotEmpty)
-          'position': position.trim(),
-      };
-      final Map<String, dynamic> payload = await client.getMap(
-        '/api/national-team-engine/competitions/$competitionId/rental-pool',
-        query: query,
-        auth: false,
-      );
-      return NationalTeamRentalPlayerCollection.fromJson(payload);
-    }, () => fixtures.rentalPool(competitionId, countryCode: countryCode));
+    return client.withFallback<NationalTeamRentalPlayerCollection>(
+      () async {
+        final Map<String, Object?> query = <String, Object?>{
+          'limit': limit,
+          'offset': offset,
+          if (countryCode != null && countryCode.trim().isNotEmpty)
+            'country_code': countryCode.trim(),
+          if (position != null && position.trim().isNotEmpty)
+            'position': position.trim(),
+          if (entryId != null && entryId.trim().isNotEmpty)
+            'entry_id': entryId.trim(),
+        };
+        final Map<String, dynamic> payload = await client.getMap(
+          _nationalAlias(
+            '/api/national/competitions/$competitionId/rental-pool',
+          ),
+          query: query,
+          auth: auth,
+        );
+        return NationalTeamRentalPlayerCollection.fromJson(payload);
+      },
+      () => _requireFixtures().rentalPool(
+        competitionId,
+        countryCode: countryCode,
+      ),
+    );
   }
 
   Future<NationalTeamEntry> createRentalEntry(
@@ -88,7 +115,9 @@ class NationalTeamApi {
     return client.withFallback<NationalTeamEntry>(
       () async {
         final Object? payload = await client.post(
-          '/api/national-team-engine/competitions/$competitionId/rental-entry',
+          _nationalAlias(
+            '/api/national/competitions/$competitionId/rental-entry',
+          ),
           body: <String, Object?>{
             'country_code': countryCode,
             'country_name': countryName,
@@ -97,7 +126,7 @@ class NationalTeamApi {
         );
         return NationalTeamEntry.fromJson(payload);
       },
-      () => fixtures.createRentalEntry(
+      () => _requireFixtures().createRentalEntry(
         competitionId,
         countryCode: countryCode,
         countryName: countryName,
@@ -112,33 +141,43 @@ class NationalTeamApi {
   }) {
     return client.withFallback<NationalTeamEntryDetail>(() async {
       final Object? payload = await client.post(
-        '/api/national-team-engine/entries/$entryId/rentals',
+        _nationalAlias('/api/national/entries/$entryId/rentals'),
         body: <String, Object?>{
           'player_id': playerId,
           if (shirtNumber != null) 'shirt_number': shirtNumber,
         },
       );
       return NationalTeamEntryDetail.fromJson(payload);
-    }, () => fixtures.entryDetail(entryId));
+    }, () => _requireFixtures().entryDetail(entryId));
   }
 
   Future<NationalTeamEntryDetail> fetchEntryDetail(String entryId) {
     return client.withFallback<NationalTeamEntryDetail>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/api/national-team-engine/entries/$entryId',
+        _nationalAlias('/api/national/entries/$entryId'),
         auth: false,
       );
       return NationalTeamEntryDetail.fromJson(payload);
-    }, () async => fixtures.entryDetail(entryId));
+    }, () async => _requireFixtures().entryDetail(entryId));
   }
 
   Future<NationalTeamUserHistory> fetchUserHistory() {
     return client.withFallback<NationalTeamUserHistory>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/api/national-team-engine/me/history',
+        _nationalAlias('/api/national/me/history'),
       );
       return NationalTeamUserHistory.fromJson(payload);
-    }, fixtures.userHistory);
+    }, () => _requireFixtures().userHistory());
+  }
+
+  _NationalTeamFixtures _requireFixtures() {
+    final _NationalTeamFixtures? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw StateError(
+        'National-team fixture data is not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 }
 
@@ -208,6 +247,11 @@ class _NationalTeamFixtures {
         isRegen: false,
         isPreseededNationalRegen: false,
         marketEligible: true,
+        eligibility: const NationalTeamRentalEligibility(
+          eligible: true,
+          reasons: <String>[],
+          checks: <String, bool>{'fixture': true},
+        ),
       ),
       NationalTeamRentalPlayer(
         playerId: 'fixture-ng-10',
@@ -227,6 +271,11 @@ class _NationalTeamFixtures {
         isRegen: true,
         isPreseededNationalRegen: true,
         marketEligible: true,
+        eligibility: const NationalTeamRentalEligibility(
+          eligible: true,
+          reasons: <String>[],
+          checks: <String, bool>{'fixture': true},
+        ),
       ),
     ];
     final List<NationalTeamRentalPlayer> filtered =

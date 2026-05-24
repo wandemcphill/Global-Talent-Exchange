@@ -10,14 +10,14 @@ import '../widgets/gtex_wallet_order_widgets.dart';
 class GtexWalletOrdersScreen extends StatefulWidget {
   const GtexWalletOrdersScreen({
     super.key,
-    this.repository = const GtexTrustOpsDemoRepository(),
+    this.repository,
     this.initialModule = GtexTrustModule.wallet,
     this.onTopUp,
     this.onWithdraw,
     this.onCreateDispute,
   });
 
-  final GtexTrustOpsRepository repository;
+  final GtexTrustOpsRepository? repository;
   final GtexTrustModule initialModule;
   final VoidCallback? onTopUp;
   final VoidCallback? onWithdraw;
@@ -38,11 +38,23 @@ class _GtexWalletOrdersScreenState extends State<GtexWalletOrdersScreen> {
   void initState() {
     super.initState();
     _selectedModule = widget.initialModule;
-    _future = widget.repository.load();
+    _future =
+        widget.repository?.load() ??
+        Future<GtexTrustOpsState>.error(
+          StateError('Trust operations repository is not configured.'),
+        );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.repository == null) {
+      return const GtexEmptyState(
+        title: 'Trust data unavailable',
+        message:
+            'This wallet trust workspace needs a live trust-ops repository. Demo data is available only in explicit fixture mode.',
+        icon: Icons.lock_outline,
+      );
+    }
     return FutureBuilder<GtexTrustOpsState>(
       future: _future,
       builder: (
@@ -68,7 +80,7 @@ class _GtexWalletOrdersScreenState extends State<GtexWalletOrdersScreen> {
             IconButton.filledTonal(
               tooltip: 'Refresh wallet',
               onPressed:
-                  () => setState(() => _future = widget.repository.load()),
+                  () => setState(() => _future = widget.repository!.load()),
               icon: const Icon(Icons.sync),
             ),
           ],

@@ -8,7 +8,8 @@ class GtexAdminCommandController extends ChangeNotifier {
     AdminCommandCenterApi? api,
     GtexAdminCommandSnapshot? initialSnapshot,
   }) : _api = api,
-       _snapshot = initialSnapshot ?? GtexAdminCommandSnapshot.demo();
+       _snapshot =
+           initialSnapshot ?? GtexAdminCommandSnapshot.liveUnavailable();
 
   final AdminCommandCenterApi? _api;
   GtexAdminCommandSnapshot _snapshot;
@@ -100,7 +101,7 @@ class GtexAdminCommandController extends ChangeNotifier {
   void replaceWithOperationsReadiness(
     AdminOperationsReadinessSnapshot readiness,
   ) {
-    _snapshot = _snapshotFromReadiness(readiness, fallback: _snapshot);
+    _snapshot = _snapshotFromReadiness(readiness);
     notifyListeners();
   }
 
@@ -115,7 +116,7 @@ class GtexAdminCommandController extends ChangeNotifier {
     notifyListeners();
     try {
       final readiness = await api.fetchOperationsReadiness();
-      _snapshot = _snapshotFromReadiness(readiness, fallback: _snapshot);
+      _snapshot = _snapshotFromReadiness(readiness);
     } catch (error) {
       _error = error.toString();
     } finally {
@@ -158,9 +159,8 @@ class GtexAdminCommandController extends ChangeNotifier {
   }
 
   static GtexAdminCommandSnapshot _snapshotFromReadiness(
-    AdminOperationsReadinessSnapshot readiness, {
-    required GtexAdminCommandSnapshot fallback,
-  }) {
+    AdminOperationsReadinessSnapshot readiness,
+  ) {
     final metrics = <GtexAdminMetric>[
       GtexAdminMetric(
         label: 'Readiness',
@@ -284,8 +284,14 @@ class GtexAdminCommandController extends ChangeNotifier {
         ...gateModules,
       ],
       queues: queueItems,
-      jackpots: fallback.jackpots,
-      coinEconomy: fallback.coinEconomy,
+      jackpots: const <GtexJackpotRound>[],
+      coinEconomy: const GtexCoinEconomySnapshot(
+        circulatingSupply: 'Unavailable',
+        treasuryBalance: 'Unavailable',
+        pendingWithdrawals: 'Unavailable',
+        topupVolumeToday: 'Unavailable',
+        riskStatus: 'Live treasury endpoint required',
+      ),
       healthSignals: healthSignals,
     );
   }

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
@@ -18,6 +20,7 @@ import 'package:gte_frontend/features/club_identity/trophies/data/season_honors_
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_dto.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_leaderboard_entry_dto.dart';
+import 'package:gte_frontend/features/club_redesign/models/gtex_club_redesign_models.dart';
 import 'package:gte_frontend/models/club_branding_models.dart';
 import 'package:gte_frontend/models/club_catalog_models.dart';
 import 'package:gte_frontend/models/club_models.dart';
@@ -38,7 +41,7 @@ class ClubApi {
        _dynastyRepository = dynastyRepository,
        _trophyRepository = trophyRepository,
        _identityRepository = identityRepository,
-       _fixtures = fixtures ?? _ClubFixtureStore.seeded();
+       _fixtures = fixtures;
 
   final GteRepositoryConfig config;
   final GteTransport transport;
@@ -47,7 +50,9 @@ class ClubApi {
   final DynastyRepository _dynastyRepository;
   final TrophyCabinetRepository _trophyRepository;
   final ClubIdentityRepository _identityRepository;
-  final _ClubFixtureStore _fixtures;
+  final _ClubFixtureStore? _fixtures;
+
+  bool get hasRegisteredFixtures => _fixtures != null;
 
   factory ClubApi.standard({
     required String baseUrl,
@@ -75,18 +80,29 @@ class ClubApi {
         config: config,
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        fixtures: StubTrophyCabinetRepository(),
+        fixtures:
+            resolvedMode == GteBackendMode.fixture
+                ? StubTrophyCabinetRepository()
+                : null,
       ),
       identityRepository: _ClubIdentityApiRepository(
         config: config,
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        fixtures: MockClubIdentityRepository(),
+        fixtures:
+            resolvedMode == GteBackendMode.fixture
+                ? MockClubIdentityRepository()
+                : null,
       ),
+      fixtures:
+          resolvedMode == GteBackendMode.fixture
+              ? _ClubFixtureStore.seeded()
+              : null,
     );
   }
 
   factory ClubApi.fixture() {
+    assertFixtureFactoryAllowed('ClubApi.fixture');
     return ClubApi.standard(
       baseUrl: 'http://127.0.0.1:8000',
       mode: GteBackendMode.fixture,
@@ -157,12 +173,13 @@ class ClubApi {
       globalRank: _findLeaderboardEntry(globalLeaderboard, clubId),
       regionalRank: _findLeaderboardEntry(regionalLeaderboard, clubId),
     );
-    final ClubBrandingProfile branding = _fixtures.brandingFor(
+    final _ClubFixtureStore fixtures = _requireFixtures();
+    final ClubBrandingProfile branding = fixtures.brandingFor(
       clubId,
       resolvedClubName,
     );
-    final List<ClubCatalogItem> catalog = _fixtures.catalogFor(clubId);
-    final List<ClubPurchaseRecord> purchaseHistory = _fixtures
+    final List<ClubCatalogItem> catalog = fixtures.catalogFor(clubId);
+    final List<ClubPurchaseRecord> purchaseHistory = fixtures
         .purchaseHistoryFor(clubId);
 
     return ClubDashboardData(
@@ -200,6 +217,48 @@ class ClubApi {
     );
   }
 
+  Future<GtexClubWorkspaceSnapshot> fetchV2WorkspaceSnapshot({
+    required String clubId,
+    String? clubName,
+  }) async {
+    final Map<String, String> headers = <String, String>{
+      'Accept': 'application/json',
+    };
+    final String token = accessToken?.trim() ?? '';
+    if (token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    final GteTransportResponse response = await transport.send(
+      GteTransportRequest(
+        method: 'GET',
+        uri: config.uriFor('/api/clubs/$clubId/v2-snapshot'),
+        headers: headers,
+      ),
+    );
+    if (response.statusCode >= 400) {
+      throw GteApiException(
+        type: _snapshotErrorType(response.statusCode),
+        statusCode: response.statusCode,
+        message: gteApiErrorMessage(
+          response.body,
+          fallback:
+              response.statusCode == 404
+                  ? 'Club onboarding is required before this workspace can load.'
+                  : 'Unable to load the live club snapshot.',
+        ),
+      );
+    }
+    final Map<String, Object?> payload = GteJson.map(
+      gteApiSuccessPayload(response.body),
+      label: 'club v2 snapshot',
+    );
+    return _workspaceSnapshotFromV2(
+      payload,
+      fallbackClubId: clubId,
+      fallbackClubName: clubName,
+    );
+  }
+
   Future<ClubIdentityDto> saveIdentity({
     required String clubId,
     required ClubIdentityDto identity,
@@ -220,8 +279,9 @@ class ClubApi {
     required ClubBrandingProfile branding,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
-    _fixtures.saveBranding(clubId, branding);
-    return _fixtures.brandingFor(clubId, null);
+    final _ClubFixtureStore fixtures = _requireFixtures();
+    fixtures.saveBranding(clubId, branding);
+    return fixtures.brandingFor(clubId, null);
   }
 
   Future<void> purchaseCatalogItem({
@@ -229,7 +289,7 @@ class ClubApi {
     required ClubCatalogItem item,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 140));
-    _fixtures.purchaseItem(clubId, item);
+    _requireFixtures().purchaseItem(clubId, item);
   }
 
   Future<void> equipCatalogItem({
@@ -237,17 +297,17 @@ class ClubApi {
     required ClubCatalogItem item,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
-    _fixtures.equipItem(clubId, item);
+    _requireFixtures().equipItem(clubId, item);
   }
 
   Future<ClubAdminAnalytics> fetchAdminAnalytics() async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
-    return _fixtures.buildAdminAnalytics();
+    return _requireFixtures().buildAdminAnalytics();
   }
 
   Future<List<BrandingReviewCase>> fetchBrandingModerationQueue() async {
     await Future<void>.delayed(const Duration(milliseconds: 120));
-    return _fixtures.brandingReviewQueue();
+    return _requireFixtures().brandingReviewQueue();
   }
 
   Future<void> updateBrandingReview({
@@ -255,7 +315,21 @@ class ClubApi {
     required bool approved,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    _fixtures.updateBrandingReview(reviewId: reviewId, approved: approved);
+    _requireFixtures().updateBrandingReview(
+      reviewId: reviewId,
+      approved: approved,
+    );
+  }
+
+  _ClubFixtureStore _requireFixtures() {
+    final _ClubFixtureStore? resolvedFixtures = _fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message: 'Club fixture store is not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 
   String _resolveClubName({
@@ -481,6 +555,230 @@ class ClubApi {
       return null;
     }
   }
+
+  GtexClubWorkspaceSnapshot _workspaceSnapshotFromV2(
+    Map<String, Object?> payload, {
+    required String fallbackClubId,
+    String? fallbackClubName,
+  }) {
+    final Map<String, Object?> club = _jsonMap(payload['club']);
+    final Map<String, Object?> squad = _jsonMap(payload['squad']);
+    final Map<String, Object?> wallet = _jsonMap(payload['wallet']);
+    final Map<String, Object?> ranking = _jsonMap(payload['ranking']);
+    final Map<String, Object?> facilities = _jsonMap(payload['facilities']);
+    final Map<String, Object?> competitions = _jsonMap(payload['competitions']);
+    final Map<String, Object?> transfers = _jsonMap(payload['transfers']);
+
+    final String resolvedClubName =
+        _stringValue(club['club_name']) ??
+        fallbackClubName?.trim() ??
+        prettifyClubId(fallbackClubId);
+    final List<GtexClubMember> players = _jsonObjectList(
+      squad['players'],
+    ).map(_clubMemberFromV2).toList(growable: false);
+    final List<GtexClubOrderItem> orders = _transferOrdersFromV2(
+      _jsonObjectList(transfers['activity']),
+    );
+    final int playerCount = _intValue(squad['player_count'], players.length);
+    final int activeCompetitionCount = _intValue(competitions['active_count']);
+    final int transferSignalCount =
+        _intValue(transfers['outgoing_listing_count']) +
+        _intValue(transfers['incoming_bid_count']) +
+        _intValue(transfers['outgoing_offer_count']) +
+        _intValue(transfers['incoming_offer_count']) +
+        _intValue(transfers['transfer_request_count']);
+    final Map<String, Object?> supporterToken = _jsonMap(
+      facilities['supporter_token'],
+    );
+
+    return GtexClubWorkspaceSnapshot(
+      clubId: _stringValue(payload['club_id']) ?? fallbackClubId,
+      clubName: resolvedClubName,
+      shortCode:
+          _stringValue(club['short_name']) ??
+          _workspaceShortCode(resolvedClubName),
+      country:
+          _stringValue(club['country_code']) ??
+          _stringValue(club['region_name']) ??
+          _stringValue(club['city_name']) ??
+          'Live',
+      division:
+          _stringValue(ranking['prestige_tier']) ??
+          _stringValue(club['lifecycle_status']) ??
+          'Live club',
+      ownerName: _stringValue(club['owner_display_name']) ?? 'Club owner',
+      followers: _intValue(ranking['reputation_score']),
+      shareholders: _intValue(supporterToken['holder_count']),
+      finances: GtexClubFinancialSnapshot(
+        walletCredits: _intValue(wallet['wallet_credits']),
+        squadValueCredits: _intValue(squad['squad_value_credits']),
+        openOrdersCredits: orders.fold<int>(
+          0,
+          (int total, GtexClubOrderItem item) => total + item.amountCredits,
+        ),
+        monthlyRevenueCredits: _intValue(
+          facilities['projected_matchday_revenue_coin'],
+        ),
+        sharePriceCredits: 0,
+      ),
+      squad: players,
+      news: const <GtexClubNewsItem>[],
+      orders: orders,
+      trophies: const <GtexClubTrophy>[],
+      identityTags: <String>[
+        'Live snapshot',
+        if (playerCount > 0) '$playerCount registered players',
+        if (activeCompetitionCount > 0)
+          '$activeCompetitionCount active competitions',
+        if (transferSignalCount > 0) '$transferSignalCount transfer signals',
+      ],
+      activity: <String>[
+        'Loaded from /api/clubs/{club_id}/v2-snapshot',
+        '$playerCount squad players',
+        '$activeCompetitionCount active competitions',
+        '$transferSignalCount transfer signals',
+      ],
+    );
+  }
+
+  GtexClubMember _clubMemberFromV2(Map<String, Object?> player) {
+    final String name = GteJson.string(player, const <String>[
+      'name',
+      'short_name',
+      'player_id',
+    ], fallback: 'Unknown player');
+    return GtexClubMember(
+      id: GteJson.string(player, const <String>['player_id', 'id']),
+      name: name,
+      position: _stringValue(player['position']) ?? 'Unknown',
+      nationality: _stringValue(player['nationality']) ?? 'Unknown',
+      valueCredits: _intValue(player['market_value_credits']),
+      rating: _doubleValue(player['rating']),
+      isRegen: _boolValue(player['is_regen']),
+    );
+  }
+
+  List<GtexClubOrderItem> _transferOrdersFromV2(
+    List<Map<String, Object?>> activity,
+  ) {
+    final List<GtexClubOrderItem> items = <GtexClubOrderItem>[];
+    for (final MapEntry<int, Map<String, Object?>> entry
+        in activity.take(8).toList(growable: false).asMap().entries) {
+      final Map<String, Object?> item = entry.value;
+      final String kind = _stringValue(item['kind']) ?? 'transfer';
+      final String status = _stringValue(item['status']) ?? 'live';
+      final String? playerName = _stringValue(item['player_name']);
+      items.add(
+        GtexClubOrderItem(
+          id: _stringValue(item['id']) ?? 'transfer-${entry.key}',
+          title:
+              playerName == null
+                  ? _titleCase(kind)
+                  : '${_titleCase(kind)}: $playerName',
+          status: _titleCase(status.replaceAll('_', ' ')),
+          amountCredits: _intValue(item['amount_credits']),
+          timestampLabel: 'Live',
+        ),
+      );
+    }
+    return items;
+  }
+
+  static GteApiErrorType _snapshotErrorType(int statusCode) {
+    if (statusCode == 401 || statusCode == 403) {
+      return GteApiErrorType.unauthorized;
+    }
+    if (statusCode == 404) {
+      return GteApiErrorType.notFound;
+    }
+    if (statusCode >= 400 && statusCode < 500) {
+      return GteApiErrorType.validation;
+    }
+    if (statusCode >= 500) {
+      return GteApiErrorType.unavailable;
+    }
+    return GteApiErrorType.unknown;
+  }
+
+  static Map<String, Object?> _jsonMap(Object? value) {
+    if (value is Map<String, Object?>) {
+      return value;
+    }
+    if (value is Map) {
+      return Map<String, Object?>.from(value);
+    }
+    return const <String, Object?>{};
+  }
+
+  static List<Map<String, Object?>> _jsonObjectList(Object? value) {
+    if (value is! List) {
+      return const <Map<String, Object?>>[];
+    }
+    return value
+        .whereType<Map>()
+        .map((Map<dynamic, dynamic> item) => Map<String, Object?>.from(item))
+        .toList(growable: false);
+  }
+
+  static String? _stringValue(Object? value) {
+    final String parsed = value?.toString().trim() ?? '';
+    return parsed.isEmpty ? null : parsed;
+  }
+
+  static int _intValue(Object? value, [int fallback = 0]) {
+    if (value == null) {
+      return fallback;
+    }
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value.toString()) ?? fallback;
+  }
+
+  static double _doubleValue(Object? value, [double fallback = 0]) {
+    if (value == null) {
+      return fallback;
+    }
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value.toString()) ?? fallback;
+  }
+
+  static bool _boolValue(Object? value) {
+    if (value is bool) {
+      return value;
+    }
+    final String normalized = value?.toString().trim().toLowerCase() ?? '';
+    return normalized == 'true' || normalized == '1' || normalized == 'yes';
+  }
+
+  static String _workspaceShortCode(String clubName) {
+    final List<String> parts = clubName
+        .split(RegExp(r'\s+'))
+        .where((String part) => part.trim().isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) {
+      return 'FC';
+    }
+    final String code =
+        parts
+            .take(3)
+            .map((String part) => part.substring(0, 1).toUpperCase())
+            .join();
+    return code.isEmpty ? 'FC' : code;
+  }
+
+  static String _titleCase(String value) {
+    final String normalized = value.trim();
+    if (normalized.isEmpty) {
+      return normalized;
+    }
+    return normalized[0].toUpperCase() + normalized.substring(1);
+  }
 }
 
 class _ClubIdentityApiRepository extends ClubIdentityRepository {
@@ -494,7 +792,7 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
   final GteRepositoryConfig config;
   final GteTransport transport;
   final String? accessToken;
-  final ClubIdentityRepository fixtures;
+  final ClubIdentityRepository? fixtures;
 
   @override
   Future<BadgeProfileDto> fetchBadge(String clubId) {
@@ -502,7 +800,7 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
       () async => BadgeProfileDto.fromJson(
         _asMap(await _request('GET', '/api/clubs/$clubId/badge')),
       ),
-      () => fixtures.fetchBadge(clubId),
+      () => _requireFixtures().fetchBadge(clubId),
     );
   }
 
@@ -512,7 +810,7 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
       () async => ClubIdentityDto.fromJson(
         _asMap(await _request('GET', '/api/clubs/$clubId/identity')),
       ),
-      () => fixtures.fetchIdentity(clubId),
+      () => _requireFixtures().fetchIdentity(clubId),
     );
   }
 
@@ -522,7 +820,7 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
       () async => JerseySetDto.fromJson(
         _asMap(await _request('GET', '/api/clubs/$clubId/jerseys')),
       ),
-      () => fixtures.fetchJerseys(clubId),
+      () => _requireFixtures().fetchJerseys(clubId),
     );
   }
 
@@ -537,7 +835,7 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
           await _request('PATCH', '/api/clubs/$clubId/identity', body: patch),
         ),
       ),
-      () => fixtures.patchIdentity(clubId: clubId, patch: patch),
+      () => _requireFixtures().patchIdentity(clubId: clubId, patch: patch),
     );
   }
 
@@ -552,7 +850,7 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
           await _request('PATCH', '/api/clubs/$clubId/jerseys', body: patch),
         ),
       ),
-      () => fixtures.patchJerseys(clubId: clubId, patch: patch),
+      () => _requireFixtures().patchJerseys(clubId: clubId, patch: patch),
     );
   }
 
@@ -564,6 +862,18 @@ class _ClubIdentityApiRepository extends ClubIdentityRepository {
       return liveCall();
     }
     return fixtureCall();
+  }
+
+  ClubIdentityRepository _requireFixtures() {
+    final ClubIdentityRepository? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Club identity fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 
   Future<Object?> _request(String method, String path, {Object? body}) async {
@@ -615,7 +925,7 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
   final GteRepositoryConfig config;
   final GteTransport transport;
   final String? accessToken;
-  final TrophyCabinetRepository fixtures;
+  final TrophyCabinetRepository? fixtures;
 
   @override
   Future<TrophyCabinetDto> fetchTrophyCabinet({
@@ -631,7 +941,10 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
           ),
         ),
       ),
-      () => fixtures.fetchTrophyCabinet(clubId: clubId, teamScope: teamScope),
+      () => _requireFixtures().fetchTrophyCabinet(
+        clubId: clubId,
+        teamScope: teamScope,
+      ),
     );
   }
 
@@ -649,7 +962,10 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
           ),
         ),
       ),
-      () => fixtures.fetchHonorsTimeline(clubId: clubId, teamScope: teamScope),
+      () => _requireFixtures().fetchHonorsTimeline(
+        clubId: clubId,
+        teamScope: teamScope,
+      ),
     );
   }
 
@@ -667,7 +983,10 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
           ),
         ),
       ),
-      () => fixtures.fetchSeasonHonors(clubId: clubId, teamScope: teamScope),
+      () => _requireFixtures().fetchSeasonHonors(
+        clubId: clubId,
+        teamScope: teamScope,
+      ),
     );
   }
 
@@ -682,7 +1001,7 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
           ),
         ),
       ),
-      () => fixtures.fetchTrophyLeaderboard(teamScope: teamScope),
+      () => _requireFixtures().fetchTrophyLeaderboard(teamScope: teamScope),
     );
   }
 
@@ -694,6 +1013,18 @@ class _ClubTrophyApiRepository implements TrophyCabinetRepository {
       return liveCall();
     }
     return fixtureCall();
+  }
+
+  TrophyCabinetRepository _requireFixtures() {
+    final TrophyCabinetRepository? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message:
+            'Trophy cabinet fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 
   Future<Object?> _request(

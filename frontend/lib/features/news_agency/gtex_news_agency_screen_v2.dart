@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/story_feed_api.dart';
 import '../../models/story_feed_models.dart';
@@ -8,10 +10,16 @@ import '../engagement_redesign/engagement_widgets.dart';
 import '../../ui_gtex/ui_gtex.dart';
 
 class GtexNewsAgencyScreenV2 extends StatefulWidget {
-  const GtexNewsAgencyScreenV2({super.key, this.controller, this.api});
+  const GtexNewsAgencyScreenV2({
+    super.key,
+    this.controller,
+    this.api,
+    this.allowFixtureData = false,
+  });
 
   final GtexEngagementController? controller;
   final StoryFeedApi? api;
+  final bool allowFixtureData;
 
   @override
   State<GtexNewsAgencyScreenV2> createState() => _GtexNewsAgencyScreenV2State();
@@ -43,7 +51,10 @@ class _GtexNewsAgencyScreenV2State extends State<GtexNewsAgencyScreenV2> {
   Future<List<GtexNewsArticle>> _loadArticles() async {
     final StoryFeedApi? api = widget.api;
     if (api == null) {
-      return _controller.loadDemoArticles();
+      if (widget.allowFixtureData) {
+        return _controller.loadDemoArticles();
+      }
+      throw StateError('Live story feed API is required for GTEX News Agency.');
     }
     final List<StoryFeedItem> stories = await api.listFeed(limit: 100);
     return stories.map(_articleFromStory).toList(growable: false);
@@ -167,6 +178,20 @@ GtexNewsArticle _articleFromStory(StoryFeedItem story) {
         ]) ??
         story.subjectId ??
         story.countryCode,
+    relatedRoute: _metadataString(metadata, <String>[
+      'related_route',
+      'relatedRoute',
+      'route',
+      'deep_link',
+      'deepLink',
+    ]),
+    shareUrl: _metadataString(metadata, <String>[
+      'share_url',
+      'shareUrl',
+      'url',
+      'canonical_url',
+      'canonicalUrl',
+    ]),
     isBreaking:
         story.featured || story.storyType.toLowerCase().contains('break'),
     trustScore: _metadataDouble(metadata, <String>[
@@ -380,39 +405,50 @@ class _NewsRightRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool hasRelatedRoute = article.relatedRoute != null;
+    final bool hasShareUrl = article.shareUrl != null;
     return ListView(
       padding: const EdgeInsets.all(GtexSpacing.md),
       children: <Widget>[
         GtexPanel(
           title: 'Story actions',
           subtitle:
-              'Route these to market, club, regen, tournament or jackpot detail screens.',
+              'Actions appear only when story metadata provides a live target.',
           accent: newsCategoryColor(article.category),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              GtexActionButton(
-                label: 'Open related object',
-                icon: Icons.open_in_new_outlined,
-                onPressed: () {},
-                accent: newsCategoryColor(article.category),
-              ),
-              const SizedBox(height: GtexSpacing.sm),
-              GtexActionButton(
-                label: 'Follow story',
-                icon: Icons.notifications_active_outlined,
-                onPressed: () {},
-                accent: GtexColors.gold,
-                secondary: true,
-              ),
-              const SizedBox(height: GtexSpacing.sm),
-              GtexActionButton(
-                label: 'Share',
-                icon: Icons.ios_share_outlined,
-                onPressed: () {},
-                accent: GtexColors.cyan,
-                secondary: true,
-              ),
+              if (hasRelatedRoute)
+                GtexActionButton(
+                  label: 'Open related object',
+                  icon: Icons.open_in_new_outlined,
+                  accent: newsCategoryColor(article.category),
+                  onPressed: () => context.go(article.relatedRoute!),
+                ),
+              if (hasRelatedRoute && hasShareUrl)
+                const SizedBox(height: GtexSpacing.sm),
+              if (hasShareUrl)
+                GtexActionButton(
+                  label: 'Copy share link',
+                  icon: Icons.ios_share_outlined,
+                  accent: GtexColors.cyan,
+                  secondary: true,
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: article.shareUrl!),
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Story link copied')),
+                      );
+                    }
+                  },
+                ),
+              if (!hasRelatedRoute && !hasShareUrl)
+                _StoryActionStatus(
+                  accent: newsCategoryColor(article.category),
+                  relatedEntity: article.relatedEntity,
+                ),
             ],
           ),
         ),
@@ -449,6 +485,41 @@ class _NewsRightRail extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StoryActionStatus extends StatelessWidget {
+  const _StoryActionStatus({required this.accent, this.relatedEntity});
+
+  final Color accent;
+  final String? relatedEntity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.link_off_outlined, color: accent),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Text(
+              relatedEntity == null
+                  ? 'This story has no live route metadata yet.'
+                  : 'Related entity: $relatedEntity',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: GtexColors.textMuted),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

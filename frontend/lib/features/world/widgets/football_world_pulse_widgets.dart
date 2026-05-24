@@ -15,8 +15,16 @@ class FootballWorldPulseTicker extends ConsumerWidget {
     final AsyncValue<FootballWorldPulseData> value = ref.watch(
       footballWorldPulseProvider,
     );
-    final FootballWorldPulseData pulse =
-        value.asData?.value ?? FootballWorldPulseData.empty;
+    if (!value.hasValue) {
+      return _TickerStatusBar(
+        status: value.hasError ? 'ERROR' : 'LOADING',
+        detail:
+            value.hasError
+                ? 'Live world pulse unavailable'
+                : 'Syncing live world pulse',
+      );
+    }
+    final FootballWorldPulseData pulse = value.requireValue;
     final List<FootballPulseItem> items = <FootballPulseItem>[
       ...pulse.transferTicker.take(4),
       ...pulse.competitionCountdowns.take(2),
@@ -54,16 +62,7 @@ class FootballWorldPulseTicker extends ConsumerWidget {
                 ),
                 const SizedBox(width: GtexSpacing.md),
               ],
-              Expanded(
-                child: ClipRect(
-                  child: _TickerItemRail(
-                    items:
-                        items.isEmpty
-                            ? FootballWorldPulseData.empty.transferTicker
-                            : items,
-                  ),
-                ),
-              ),
+              Expanded(child: ClipRect(child: _TickerItemRail(items: items))),
               if (!compact) ...<Widget>[
                 const SizedBox(width: GtexSpacing.sm),
                 _HeatBadge(label: 'heat', value: pulse.marketHeat),
@@ -86,8 +85,19 @@ class FootballWorldPulseRail extends ConsumerWidget {
     final AsyncValue<FootballWorldPulseData> value = ref.watch(
       footballWorldPulseProvider,
     );
-    final FootballWorldPulseData pulse =
-        value.asData?.value ?? FootballWorldPulseData.empty;
+    if (!value.hasValue) {
+      return _PulseRailBlocked(
+        title:
+            value.hasError
+                ? 'Live World Pulse Unavailable'
+                : 'Loading World Pulse',
+        detail:
+            value.hasError
+                ? 'The shell could not load live market, competition, and community activity.'
+                : 'Waiting for live backend authority.',
+      );
+    }
+    final FootballWorldPulseData pulse = value.requireValue;
     return Container(
       key: const Key('football-world-pulse-rail'),
       width: 318,
@@ -167,6 +177,16 @@ class _TickerItemRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Text(
+        'No live pulse events returned',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: GtexColors.textSecondary,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0,
+        ),
+      );
+    }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
@@ -334,17 +354,7 @@ class _RouteOverlayState extends State<_RouteOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final List<FootballPulseRoute> routes =
-        widget.routes.isEmpty
-            ? const <FootballPulseRoute>[
-              FootballPulseRoute(
-                source: 'Academy',
-                destination: 'Market room',
-                label: 'Discovery route',
-                intensity: 0.32,
-              ),
-            ]
-            : widget.routes;
+    final List<FootballPulseRoute> routes = widget.routes;
     return Container(
       height: 138,
       decoration: BoxDecoration(
@@ -369,12 +379,129 @@ class _RouteOverlayState extends State<_RouteOverlay>
           child: Align(
             alignment: Alignment.bottomLeft,
             child: Text(
-              'Animated transfer routes',
+              routes.isEmpty
+                  ? 'No live transfer routes returned'
+                  : 'Animated transfer routes',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: GtexColors.textSecondary,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0,
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TickerStatusBar extends StatelessWidget {
+  const _TickerStatusBar({required this.status, required this.detail});
+
+  final String status;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('football-world-pulse-ticker'),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: GtexSpacing.lg),
+      decoration: BoxDecoration(
+        color: GtexColors.stadiumBlack.withValues(alpha: 0.52),
+        border: Border(
+          bottom: BorderSide(color: GtexColors.line.withValues(alpha: 0.36)),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            status == 'ERROR' ? Icons.error_outline : Icons.sync_rounded,
+            color: status == 'ERROR' ? GtexColors.gold : GtexColors.pitch,
+            size: 16,
+          ),
+          const SizedBox(width: GtexSpacing.sm),
+          Text(
+            status,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: GtexColors.text,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Text(
+              detail,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: GtexColors.textSecondary,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PulseRailBlocked extends StatelessWidget {
+  const _PulseRailBlocked({required this.title, required this.detail});
+
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('football-world-pulse-rail'),
+      width: 318,
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      decoration: BoxDecoration(
+        color: GtexColors.stadiumBlack.withValues(alpha: 0.50),
+        border: Border(
+          left: BorderSide(color: GtexColors.line.withValues(alpha: 0.34)),
+        ),
+      ),
+      child: SafeArea(
+        left: false,
+        top: false,
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Container(
+            padding: const EdgeInsets.all(GtexSpacing.md),
+            decoration: BoxDecoration(
+              color: GtexColors.panel.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: GtexColors.line.withValues(alpha: 0.42),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: GtexSpacing.xs),
+                Text(
+                  detail,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: GtexColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

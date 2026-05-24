@@ -10,8 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 import pytest
 
-from app.auth.router import register_user
-from app.auth.schemas import RegisterRequest
+from app.auth.service import AuthService
 from app.core.database import ensure_database_schema_current
 from app.models.treasury import PaymentMode
 from app.models.policy import CountryFeaturePolicy
@@ -41,6 +40,17 @@ from app.wallets.schemas import (
 )
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
+
+
+class _FakeKoraPayResponse:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, object]:
+        return self._payload
 
 
 class FakeCacheBackend:
@@ -90,16 +100,15 @@ def session(tmp_path, migrated_wallet_router_db):
 
 
 def _register_and_load_user(session) -> User:
-    response = register_user(
-        RegisterRequest(
-            email="fan@example.com",
-            region_code="NG",
-            username="fanuser",
-            password="SuperSecret1",  # pragma: allowlist secret
-        ),
+    user = AuthService().register_user(
         session,
+        email="fan@example.com",
+        username="fanuser",
+        password="SuperSecret1",  # pragma: allowlist secret
+        region_code="NG",
     )
-    return session.get(User, response.user.id)
+    session.commit()
+    return session.get(User, user.id)
 
 
 def _seed_global_policy(session) -> None:
@@ -126,6 +135,44 @@ def _enable_automatic_deposits(session) -> None:
     session.commit()
 
 
+def _stub_korapay_gateway(monkeypatch) -> None:
+    monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", "sk_test_korapay")
+    monkeypatch.setenv("GTE_KORAPAY_ENCRYPTION_KEY", "test-korapay-encryption-key")
+    amounts_by_reference: dict[str, object] = {}
+
+    def fake_post(url, *, json, headers, timeout):  # noqa: ANN001
+        del url, headers, timeout
+        reference = str(json["reference"])
+        amounts_by_reference[reference] = json["amount"]
+        return _FakeKoraPayResponse(
+            {
+                "data": {
+                    "checkout_url": f"https://checkout.korapay.test/pay/{reference}",
+                    "payment_reference": reference,
+                    "reference": reference,
+                }
+            }
+        )
+
+    def fake_get(url, *, headers, timeout):  # noqa: ANN001
+        del headers, timeout
+        reference = str(url).rstrip("/").rsplit("/", maxsplit=1)[-1]
+        return _FakeKoraPayResponse(
+            {
+                "data": {
+                    "id": f"evt-{reference}",
+                    "status": "success",
+                    "amount": str(amounts_by_reference.get(reference, "250.0000")),
+                    "payment_reference": reference,
+                    "reference": reference,
+                }
+            }
+        )
+
+    monkeypatch.setattr("app.wallets.funding_service.httpx.post", fake_post)
+    monkeypatch.setattr("app.wallets.funding_service.httpx.get", fake_get)
+
+
 def test_list_wallet_accounts_returns_default_coin_and_credit_accounts(session) -> None:
     current_user = _register_and_load_user(session)
 
@@ -141,8 +188,8 @@ def test_create_payment_event_route_returns_pending_event(session) -> None:
 
     payload = create_payment_event(
         PaymentEventCreate(
-            provider="paystack",
-            provider_reference="paystack-ref-001",
+            provider="korapay",
+            provider_reference="korapay-ref-001",
             amount=Decimal("50"),
             pack_code="starter-50",
         ),
@@ -252,10 +299,11 @@ def test_create_wallet_conversion_route_refreshes_shared_wallet_summary_cache(se
     assert credit_payload["balance"] == "100.0000"
 
 
-def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> None:
+def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session, monkeypatch) -> None:
     current_user = _register_and_load_user(session)
     _seed_global_policy(session)
     _enable_automatic_deposits(session)
+    _stub_korapay_gateway(monkeypatch)
 
     initiated = initiate_wallet_top_up(
         WalletTopUpInitiateRequest(amount=Decimal("250")),
@@ -265,7 +313,8 @@ def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> 
     assert initiated.reference
     assert initiated.payment_link
     assert initiated.status == "pending"
-    assert initiated.mock_mode is True
+    assert initiated.provider == "korapay"
+    assert initiated.mock_mode is False
 
     pending_wallet = get_wallet_profile(session=session, current_user=current_user)
     pending_transactions = list_wallet_transactions(session=session, current_user=current_user)
@@ -291,10 +340,11 @@ def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session) -> 
     assert stored_transaction.status == "verified"
 
 
-def test_wallet_top_up_can_credit_fan_coin_balance(session) -> None:
+def test_wallet_top_up_can_credit_fan_coin_balance(session, monkeypatch) -> None:
     current_user = _register_and_load_user(session)
     _seed_global_policy(session)
     _enable_automatic_deposits(session)
+    _stub_korapay_gateway(monkeypatch)
 
     initiated = initiate_wallet_top_up(
         WalletTopUpInitiateRequest(amount=Decimal("250"), unit=LedgerUnit.CREDIT),
@@ -317,23 +367,23 @@ def test_wallet_top_up_can_credit_fan_coin_balance(session) -> None:
     assert wallet_service.get_balance(session, coin_account) == Decimal("0.0000")
 
 
-def test_wallet_top_up_rejects_missing_paystack_secret_in_production(session, monkeypatch) -> None:
+def test_wallet_top_up_blocks_paystack_when_unavailable(session, monkeypatch) -> None:
     current_user = _register_and_load_user(session)
     _seed_global_policy(session)
     _enable_automatic_deposits(session)
-    monkeypatch.setenv("GTE_APP_ENV", "production")
+    monkeypatch.delenv("GTE_ENABLE_PAYSTACK", raising=False)
     monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
     monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
 
     with pytest.raises(HTTPException) as exc_info:
         initiate_wallet_top_up(
-            WalletTopUpInitiateRequest(amount=Decimal("250")),
+            WalletTopUpInitiateRequest(amount=Decimal("250"), provider="paystack"),
             session=session,
             current_user=current_user,
         )
 
-    assert exc_info.value.status_code == 400
-    assert "Paystack is not configured" in str(exc_info.value.detail)
+    assert exc_info.value.status_code == 409
+    assert "paystack deposits are disabled" in str(exc_info.value.detail).lower()
 
 
 def test_purchase_order_quote_rejects_stub_provider(session) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -14,7 +15,8 @@ def _build_client() -> TestClient:
     return TestClient(app)
 
 
-def test_world_super_cup_api_surfaces_demo_tournament_state() -> None:
+def test_world_super_cup_api_surfaces_demo_tournament_state(monkeypatch) -> None:
+    monkeypatch.setenv("GTE_ENABLE_WORLD_SUPER_CUP_DEMO", "true")
     client = _build_client()
     reference_at = datetime(2026, 3, 11, 9, 0, tzinfo=timezone.utc).isoformat()
 
@@ -50,3 +52,32 @@ def test_world_super_cup_api_surfaces_demo_tournament_state() -> None:
         "gtex_fast_cup",
         "academy_competitions",
     ]
+    assert countdown.json()["source_of_truth"] == "local_projection"
+    assert countdown.json()["no_demo_data"] is False
+    assert "demo" not in countdown.json()
+
+
+def test_world_super_cup_demo_routes_fail_closed_in_production(monkeypatch) -> None:
+    monkeypatch.delenv("GTE_ENABLE_WORLD_SUPER_CUP_DEMO", raising=False)
+    app = FastAPI()
+    app.state.settings = SimpleNamespace(app_env="production")
+    app.include_router(router)
+    client = TestClient(app)
+
+    response = client.get("/world-super-cup/countdown")
+
+    assert response.status_code == 503
+    assert "demo projections are disabled" in response.json()["detail"]
+
+
+def test_world_super_cup_demo_routes_ignore_explicit_enablement_in_production(monkeypatch) -> None:
+    monkeypatch.setenv("GTE_ENABLE_WORLD_SUPER_CUP_DEMO", "true")
+    app = FastAPI()
+    app.state.settings = SimpleNamespace(app_env="production")
+    app.include_router(router)
+    client = TestClient(app)
+
+    response = client.get("/world-super-cup/countdown")
+
+    assert response.status_code == 503
+    assert "protected environments" in response.json()["detail"]

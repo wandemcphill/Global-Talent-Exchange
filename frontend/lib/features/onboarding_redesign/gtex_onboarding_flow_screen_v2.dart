@@ -16,6 +16,7 @@ class GtexOnboardingFlowScreenV2 extends StatefulWidget {
     this.onJoinClub,
     this.onStartKyc,
     this.onOpenCompetitions,
+    this.allowFixtureData = false,
   });
 
   final GtexOnboardingController? controller;
@@ -24,13 +25,18 @@ class GtexOnboardingFlowScreenV2 extends StatefulWidget {
   final VoidCallback? onJoinClub;
   final VoidCallback? onStartKyc;
   final VoidCallback? onOpenCompetitions;
+  final bool allowFixtureData;
 
   @override
-  State<GtexOnboardingFlowScreenV2> createState() => _GtexOnboardingFlowScreenV2State();
+  State<GtexOnboardingFlowScreenV2> createState() =>
+      _GtexOnboardingFlowScreenV2State();
 }
 
-class _GtexOnboardingFlowScreenV2State extends State<GtexOnboardingFlowScreenV2> {
-  late final GtexOnboardingController _controller = widget.controller ?? GtexOnboardingController();
+class _GtexOnboardingFlowScreenV2State
+    extends State<GtexOnboardingFlowScreenV2> {
+  late final GtexOnboardingController _controller =
+      widget.controller ??
+      GtexOnboardingController(allowFixtureData: widget.allowFixtureData);
   int _page = 0;
 
   @override
@@ -38,6 +44,44 @@ class _GtexOnboardingFlowScreenV2State extends State<GtexOnboardingFlowScreenV2>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
+        if (!_controller.hasLiveState) {
+          return const Scaffold(
+            backgroundColor: GtexColors.black,
+            body: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.person_add_alt_1_outlined,
+                        color: GtexColors.green,
+                        size: 44,
+                      ),
+                      SizedBox(height: 14),
+                      Text(
+                        'Live onboarding unavailable',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Role options, regions, and onboarding steps must come from the session bootstrap/onboarding backend.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
         final state = _controller.state;
         return Scaffold(
           backgroundColor: GtexColors.black,
@@ -53,9 +97,18 @@ class _GtexOnboardingFlowScreenV2State extends State<GtexOnboardingFlowScreenV2>
                     child: IndexedStack(
                       index: _page,
                       children: [
-                        _RoleSelection(state: state, onSelect: _controller.selectRole),
-                        _RegionSelection(state: state, onSelect: _controller.selectRegion),
-                        _ClubDecision(onCreateClub: widget.onCreateClub, onJoinClub: widget.onJoinClub),
+                        _RoleSelection(
+                          state: state,
+                          onSelect: _controller.selectRole,
+                        ),
+                        _RegionSelection(
+                          state: state,
+                          onSelect: _controller.selectRegion,
+                        ),
+                        _ClubDecision(
+                          onCreateClub: widget.onCreateClub,
+                          onJoinClub: widget.onJoinClub,
+                        ),
                         _NewUserDashboard(
                           steps: state.steps,
                           onOpenMarket: widget.onOpenMarket,
@@ -68,9 +121,18 @@ class _GtexOnboardingFlowScreenV2State extends State<GtexOnboardingFlowScreenV2>
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      if (_page > 0) GtexButton(label: 'Back', variant: GtexButtonVariant.secondary, onPressed: () => setState(() => _page--)),
+                      if (_page > 0)
+                        GtexButton(
+                          label: 'Back',
+                          variant: GtexButtonVariant.secondary,
+                          onPressed: () => setState(() => _page--),
+                        ),
                       const Spacer(),
-                      if (_page < 3) GtexButton(label: 'Continue', onPressed: () => setState(() => _page++)),
+                      if (_page < 3)
+                        GtexButton(
+                          label: 'Continue',
+                          onPressed: () => setState(() => _page++),
+                        ),
                     ],
                   ),
                 ],
@@ -92,11 +154,24 @@ class _Header extends StatelessWidget {
     final labels = ['Role', 'Region', 'Club', 'Dashboard'];
     return Row(
       children: [
-        const Text('GTEX Setup', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+        const Text(
+          'GTEX Setup',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
         const Spacer(),
         Wrap(
           spacing: 8,
-          children: List.generate(labels.length, (i) => GtexStatusChip(label: labels[i], tone: i <= page ? GtexStatusTone.success : GtexStatusTone.neutral)),
+          children: List.generate(
+            labels.length,
+            (i) => GtexStatusChip(
+              label: labels[i],
+              tone: i <= page ? GtexStatusTone.success : GtexStatusTone.neutral,
+            ),
+          ),
         ),
       ],
     );
@@ -112,23 +187,30 @@ class _RoleSelection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _FlowPanel(
       title: 'Choose how you want to enter GTEX',
-      subtitle: 'This does not remove access to other features. It controls your first dashboard and onboarding checklist.',
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 16,
-        children: state.roles.map((role) {
-          final selected = role.id == state.selectedRoleId;
-          return SizedBox(
-            width: 320,
-            child: _SelectableCard(
-              selected: selected,
-              title: role.title,
-              subtitle: role.description,
-              lines: role.highlights,
-              onTap: () => onSelect(role.id),
-            ),
+      subtitle:
+          'This does not remove access to other features. It controls your first dashboard and onboarding checklist.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cardWidth = _flowCardWidth(context, constraints, 320);
+          return Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children:
+                state.roles.map((role) {
+                  final selected = role.id == state.selectedRoleId;
+                  return SizedBox(
+                    width: cardWidth,
+                    child: _SelectableCard(
+                      selected: selected,
+                      title: role.title,
+                      subtitle: role.description,
+                      lines: role.highlights,
+                      onTap: () => onSelect(role.id),
+                    ),
+                  );
+                }).toList(),
           );
-        }).toList(),
+        },
       ),
     );
   }
@@ -143,23 +225,31 @@ class _RegionSelection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _FlowPanel(
       title: 'Pick your football region',
-      subtitle: 'GTEX can later use this for market defaults, player discovery, national-team rentals and local competitions.',
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 16,
-        children: state.regions.map((region) {
-          final selected = region.code == state.selectedRegionCode;
-          return SizedBox(
-            width: 300,
-            child: _SelectableCard(
-              selected: selected,
-              title: region.name,
-              subtitle: '${region.marketCount} players and prospects indexed',
-              lines: region.featuredLeagues,
-              onTap: () => onSelect(region.code),
-            ),
+      subtitle:
+          'GTEX can later use this for market defaults, player discovery, national-team rentals and local competitions.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cardWidth = _flowCardWidth(context, constraints, 300);
+          return Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children:
+                state.regions.map((region) {
+                  final selected = region.code == state.selectedRegionCode;
+                  return SizedBox(
+                    width: cardWidth,
+                    child: _SelectableCard(
+                      selected: selected,
+                      title: region.name,
+                      subtitle:
+                          '${region.marketCount} players and prospects indexed',
+                      lines: region.featuredLeagues,
+                      onTap: () => onSelect(region.code),
+                    ),
+                  );
+                }).toList(),
           );
-        }).toList(),
+        },
       ),
     );
   }
@@ -174,21 +264,66 @@ class _ClubDecision extends StatelessWidget {
   Widget build(BuildContext context) {
     return _FlowPanel(
       title: 'Create or join a club',
-      subtitle: 'A club is the core of GTEX. It connects your squad, transfers, wallet, tournaments, shares and public profile.',
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 16,
-        children: [
-          SizedBox(width: 360, child: _ActionCard(icon: Icons.add_circle_outline, title: 'Create a new club', subtitle: 'Design your identity, build a squad and enter competitions.', action: 'Create club', onTap: onCreateClub)),
-          SizedBox(width: 360, child: _ActionCard(icon: Icons.groups_2_outlined, title: 'Join or follow a club', subtitle: 'Find existing clubs, follow their progress or buy shares.', action: 'Find clubs', onTap: onJoinClub)),
-        ],
+      subtitle:
+          'A club is the core of GTEX. It connects your squad, transfers, wallet, tournaments, shares and public profile.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cardWidth = _flowCardWidth(context, constraints, 360);
+          return Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: [
+              SizedBox(
+                width: cardWidth,
+                child: _ActionCard(
+                  icon: Icons.add_circle_outline,
+                  title: 'Create a new club',
+                  subtitle:
+                      'Design your identity, build a squad and enter competitions.',
+                  action: 'Create club',
+                  onTap: onCreateClub,
+                ),
+              ),
+              SizedBox(
+                width: cardWidth,
+                child: _ActionCard(
+                  icon: Icons.groups_2_outlined,
+                  title: 'Join or follow a club',
+                  subtitle:
+                      'Find existing clubs, follow their progress or buy shares.',
+                  action: 'Find clubs',
+                  onTap: onJoinClub,
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
+double _flowCardWidth(
+  BuildContext context,
+  BoxConstraints constraints,
+  double targetWidth,
+) {
+  final double fallbackWidth = MediaQuery.sizeOf(context).width - 40;
+  final double availableWidth =
+      constraints.maxWidth.isFinite ? constraints.maxWidth : fallbackWidth;
+  if (availableWidth <= 0) {
+    return targetWidth;
+  }
+  return availableWidth < targetWidth ? availableWidth : targetWidth;
+}
+
 class _NewUserDashboard extends StatelessWidget {
-  const _NewUserDashboard({required this.steps, this.onOpenMarket, this.onStartKyc, this.onOpenCompetitions});
+  const _NewUserDashboard({
+    required this.steps,
+    this.onOpenMarket,
+    this.onStartKyc,
+    this.onOpenCompetitions,
+  });
   final List<GtexOnboardingStep> steps;
   final VoidCallback? onOpenMarket;
   final VoidCallback? onStartKyc;
@@ -198,7 +333,8 @@ class _NewUserDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     return _FlowPanel(
       title: 'Your first GTEX dashboard',
-      subtitle: 'A calm starter command center for new users before they graduate into the full app.',
+      subtitle:
+          'A calm starter command center for new users before they graduate into the full app.',
       child: Column(
         children: [
           ...steps.map((step) {
@@ -213,17 +349,43 @@ class _NewUserDashboard extends StatelessWidget {
               child: GtexCard(
                 child: Row(
                   children: [
-                    Icon(step.completed ? Icons.check_circle : Icons.radio_button_unchecked, color: step.completed ? GtexColors.green : GtexColors.textMuted),
+                    Icon(
+                      step.completed
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                      color:
+                          step.completed
+                              ? GtexColors.green
+                              : GtexColors.textMuted,
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(step.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 4),
-                        Text(step.description, style: const TextStyle(color: GtexColors.textSecondary)),
-                      ]),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            step.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            step.description,
+                            style: const TextStyle(
+                              color: GtexColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(width: 12),
-                    GtexButton(label: step.ctaLabel, variant: GtexButtonVariant.secondary, onPressed: callback),
+                    GtexButton(
+                      label: step.ctaLabel,
+                      variant: GtexButtonVariant.secondary,
+                      onPressed: callback,
+                    ),
                   ],
                 ),
               ),
@@ -236,7 +398,11 @@ class _NewUserDashboard extends StatelessWidget {
 }
 
 class _FlowPanel extends StatelessWidget {
-  const _FlowPanel({required this.title, required this.subtitle, required this.child});
+  const _FlowPanel({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
   final String title;
   final String subtitle;
   final Widget child;
@@ -244,22 +410,44 @@ class _FlowPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 10),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
-          child: Text(subtitle, style: const TextStyle(color: GtexColors.textSecondary, height: 1.42)),
-        ),
-        const SizedBox(height: 24),
-        child,
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 32,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Text(
+              subtitle,
+              style: const TextStyle(
+                color: GtexColors.textSecondary,
+                height: 1.42,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          child,
+        ],
+      ),
     );
   }
 }
 
 class _SelectableCard extends StatelessWidget {
-  const _SelectableCard({required this.selected, required this.title, required this.subtitle, required this.lines, required this.onTap});
+  const _SelectableCard({
+    required this.selected,
+    required this.title,
+    required this.subtitle,
+    required this.lines,
+    required this.onTap,
+  });
   final bool selected;
   final String title;
   final String subtitle;
@@ -273,33 +461,80 @@ class _SelectableCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       child: GtexCard(
         borderColor: selected ? GtexColors.green : null,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(selected ? Icons.check_circle : Icons.circle_outlined, color: selected ? GtexColors.green : GtexColors.textMuted),
-            const Spacer(),
-            if (selected) const GtexStatusChip(label: 'Selected', tone: GtexStatusTone.success),
-          ]),
-          const SizedBox(height: 12),
-          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
-          const SizedBox(height: 8),
-          Text(subtitle, style: const TextStyle(color: GtexColors.textSecondary, height: 1.35)),
-          const SizedBox(height: 12),
-          ...lines.map((line) => Padding(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  selected ? Icons.check_circle : Icons.circle_outlined,
+                  color: selected ? GtexColors.green : GtexColors.textMuted,
+                ),
+                const Spacer(),
+                if (selected)
+                  const GtexStatusChip(
+                    label: 'Selected',
+                    tone: GtexStatusTone.success,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: GtexColors.textSecondary,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...lines.map(
+              (line) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
-                child: Row(children: [
-                  const Icon(Icons.sports_soccer, color: GtexColors.green, size: 14),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(line, style: const TextStyle(color: GtexColors.textMuted, fontSize: 12))),
-                ]),
-              )),
-        ]),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.sports_soccer,
+                      color: GtexColors.green,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        line,
+                        style: const TextStyle(
+                          color: GtexColors.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _ActionCard extends StatelessWidget {
-  const _ActionCard({required this.icon, required this.title, required this.subtitle, required this.action, this.onTap});
+  const _ActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.action,
+    this.onTap,
+  });
   final IconData icon;
   final String title;
   final String subtitle;
@@ -309,15 +544,31 @@ class _ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GtexCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: GtexColors.green, size: 34),
-        const SizedBox(height: 14),
-        Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
-        const SizedBox(height: 8),
-        Text(subtitle, style: const TextStyle(color: GtexColors.textSecondary, height: 1.4)),
-        const SizedBox(height: 18),
-        GtexButton(label: action, onPressed: onTap),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: GtexColors.green, size: 34),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 20,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: GtexColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 18),
+          GtexButton(label: action, onPressed: onTap),
+        ],
+      ),
     );
   }
 }

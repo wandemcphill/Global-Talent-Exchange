@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
 import 'gte_http_transport.dart';
@@ -7,7 +9,7 @@ class TraderApi {
   TraderApi({required this.client, required this.fixtures});
 
   final GteAuthedApi client;
-  final _TraderFixtures fixtures;
+  final _TraderFixtures? fixtures;
 
   factory TraderApi.standard({
     required String baseUrl,
@@ -23,11 +25,12 @@ class TraderApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures: _TraderFixtures.seed(),
+      fixtures: null,
     );
   }
 
   factory TraderApi.fixture() {
+    assertFixtureFactoryAllowed('TraderApi.fixture');
     return TraderApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
@@ -48,7 +51,7 @@ class TraderApi {
         '/api/v2/trader/overview',
       );
       return TraderOverview.fromJson(payload);
-    }, fixtures.overview);
+    }, () => _requireFixtures().overview());
   }
 
   Future<List<TraderMarket>> listMarkets() {
@@ -57,7 +60,7 @@ class TraderApi {
         '/api/v2/trader/markets',
       );
       return payload.map(TraderMarket.fromJson).toList(growable: false);
-    }, fixtures.markets);
+    }, () => _requireFixtures().markets());
   }
 
   Future<TraderOrder> placeOrder(TraderOrderCreate request) {
@@ -67,7 +70,7 @@ class TraderApi {
         request.toJson(),
       );
       return TraderOrder.fromJson(payload);
-    }, () => fixtures.order(request));
+    }, () => _requireFixtures().order(request));
   }
 
   Future<TraderP2POffer> createP2POffer(TraderP2POfferCreate request) {
@@ -77,7 +80,7 @@ class TraderApi {
         request.toJson(),
       );
       return TraderP2POffer.fromJson(payload);
-    }, () => fixtures.p2pOffer(request));
+    }, () => _requireFixtures().p2pOffer(request));
   }
 
   Future<List<TraderWatchlistItem>> listWatchlist() {
@@ -86,7 +89,7 @@ class TraderApi {
         '/api/v2/trader/watchlist',
       );
       return payload.map(TraderWatchlistItem.fromJson).toList(growable: false);
-    }, fixtures.watchlist);
+    }, () => _requireFixtures().watchlist());
   }
 
   Future<TraderWatchlistItem> addWatchlist(String marketId) {
@@ -96,7 +99,7 @@ class TraderApi {
         <String, Object?>{'market_id': marketId},
       );
       return TraderWatchlistItem.fromJson(payload);
-    }, () => fixtures.addWatchlist(marketId));
+    }, () => _requireFixtures().addWatchlist(marketId));
   }
 
   Future<TraderTotpSetup> setupTotp() {
@@ -106,7 +109,7 @@ class TraderApi {
         const <String, Object?>{},
       );
       return TraderTotpSetup.fromJson(payload);
-    }, fixtures.totpSetup);
+    }, () => _requireFixtures().totpSetup());
   }
 
   Future<TraderSecurityStatus> security() {
@@ -115,7 +118,7 @@ class TraderApi {
         '/api/v2/trader/security',
       );
       return TraderSecurityStatus.fromJson(payload);
-    }, fixtures.security);
+    }, () => _requireFixtures().security());
   }
 
   Future<TraderSecurityStatus> verifyTotp(TraderTotpVerify request) {
@@ -125,7 +128,18 @@ class TraderApi {
         request.toJson(),
       );
       return TraderSecurityStatus.fromJson(payload);
-    }, () => fixtures.verifyTotp(request));
+    }, () => _requireFixtures().verifyTotp(request));
+  }
+
+  _TraderFixtures _requireFixtures() {
+    final _TraderFixtures? resolvedFixtures = fixtures;
+    if (resolvedFixtures == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message: 'Trader fixtures are not registered in strict-live runtime.',
+      );
+    }
+    return resolvedFixtures;
   }
 
   Future<Map<String, dynamic>> _postMap(String path, Object? body) async {

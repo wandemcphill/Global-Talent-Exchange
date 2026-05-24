@@ -33,7 +33,8 @@ class _TrophyLeaderboardScreenState extends State<TrophyLeaderboardScreen> {
   @override
   void initState() {
     super.initState();
-    _repository = widget.repository ?? StubTrophyCabinetRepository();
+    _repository =
+        widget.repository ?? const UnavailableTrophyCabinetRepository();
     _filter = widget.initialFilter;
     _load();
   }
@@ -44,10 +45,8 @@ class _TrophyLeaderboardScreenState extends State<TrophyLeaderboardScreen> {
       _error = null;
     });
     try {
-      final TrophyLeaderboardDto leaderboard =
-          await _repository.fetchTrophyLeaderboard(
-        teamScope: _filter.queryValue,
-      );
+      final TrophyLeaderboardDto leaderboard = await _repository
+          .fetchTrophyLeaderboard(teamScope: _filter.queryValue);
       if (!mounted) {
         return;
       }
@@ -104,7 +103,8 @@ class _TrophyLeaderboardScreenState extends State<TrophyLeaderboardScreen> {
       );
     }
 
-    final TrophyLeaderboardDto leaderboard = _leaderboard ??
+    final TrophyLeaderboardDto leaderboard =
+        _leaderboard ??
         const TrophyLeaderboardDto(entries: <TrophyLeaderboardEntryDto>[]);
 
     return RefreshIndicator(
@@ -150,8 +150,8 @@ class _TrophyLeaderboardScreenState extends State<TrophyLeaderboardScreen> {
                 title: 'Most trophies',
                 subtitle: 'Pure cabinet volume across all archived honors.',
                 entries: leaderboard.topByTotal(),
-                selector: (TrophyLeaderboardEntryDto item) =>
-                    item.totalHonorsCount,
+                selector:
+                    (TrophyLeaderboardEntryDto item) => item.totalHonorsCount,
               ),
               const SizedBox(height: 20),
               _LeaderboardSection(
@@ -159,24 +159,25 @@ class _TrophyLeaderboardScreenState extends State<TrophyLeaderboardScreen> {
                 subtitle:
                     'League titles, continental crowns, and elite trophies.',
                 entries: leaderboard.topByMajor(),
-                selector: (TrophyLeaderboardEntryDto item) =>
-                    item.majorHonorsCount,
+                selector:
+                    (TrophyLeaderboardEntryDto item) => item.majorHonorsCount,
               ),
               const SizedBox(height: 20),
               _LeaderboardSection(
                 title: 'Most continental titles',
                 subtitle: 'Senior and academy continental wins combined.',
                 entries: leaderboard.topByContinental(),
-                selector: (TrophyLeaderboardEntryDto item) =>
-                    item.continentalTitlesCount,
+                selector:
+                    (TrophyLeaderboardEntryDto item) =>
+                        item.continentalTitlesCount,
               ),
               const SizedBox(height: 20),
               _LeaderboardSection(
                 title: 'Most world titles',
                 subtitle: 'World Super Cup wins carry the rarest weight.',
                 entries: leaderboard.topByWorld(),
-                selector: (TrophyLeaderboardEntryDto item) =>
-                    item.worldTitlesCount,
+                selector:
+                    (TrophyLeaderboardEntryDto item) => item.worldTitlesCount,
               ),
             ],
           ],
@@ -187,9 +188,7 @@ class _TrophyLeaderboardScreenState extends State<TrophyLeaderboardScreen> {
 }
 
 class _LeaderboardHero extends StatelessWidget {
-  const _LeaderboardHero({
-    required this.totalClubs,
-  });
+  const _LeaderboardHero({required this.totalClubs});
 
   final int totalClubs;
 
@@ -200,8 +199,10 @@ class _LeaderboardHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Museum rankings',
-              style: Theme.of(context).textTheme.displaySmall),
+          Text(
+            'Museum rankings',
+            style: Theme.of(context).textTheme.displaySmall,
+          ),
           const SizedBox(height: 8),
           Text(
             'A premium overview of who owns the most decorated cabinet in the exchange.',
@@ -210,9 +211,9 @@ class _LeaderboardHero extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             '$totalClubs clubs ranked',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: GteShellTheme.accentWarm,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: GteShellTheme.accentWarm),
           ),
         ],
       ),
@@ -221,10 +222,7 @@ class _LeaderboardHero extends StatelessWidget {
 }
 
 class _FilterBar extends StatelessWidget {
-  const _FilterBar({
-    required this.selected,
-    required this.onSelected,
-  });
+  const _FilterBar({required this.selected, required this.onSelected});
 
   final TrophyScopeFilter selected;
   final ValueChanged<TrophyScopeFilter> onSelected;
@@ -236,15 +234,20 @@ class _FilterBar extends StatelessWidget {
       child: Row(
         children: <Widget>[
           Expanded(
-              child: Text('Leaderboard scope',
-                  style: Theme.of(context).textTheme.titleLarge)),
+            child: Text(
+              'Leaderboard scope',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
           SegmentedButton<TrophyScopeFilter>(
-            segments: TrophyScopeFilter.values.map((TrophyScopeFilter filter) {
-              return ButtonSegment<TrophyScopeFilter>(
-                value: filter,
-                label: Text(filter.label),
-              );
-            }).toList(growable: false),
+            segments: TrophyScopeFilter.values
+                .map((TrophyScopeFilter filter) {
+                  return ButtonSegment<TrophyScopeFilter>(
+                    value: filter,
+                    label: Text(filter.label),
+                  );
+                })
+                .toList(growable: false),
             selected: <TrophyScopeFilter>{selected},
             onSelectionChanged: (Set<TrophyScopeFilter> selection) {
               onSelected(selection.first);
@@ -279,13 +282,13 @@ class _LeaderboardSection extends StatelessWidget {
           const SizedBox(height: 8),
           Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 16),
-          ...entries
-              .asMap()
-              .entries
-              .map((MapEntry<int, TrophyLeaderboardEntryDto> entry) {
+          ...entries.asMap().entries.map((
+            MapEntry<int, TrophyLeaderboardEntryDto> entry,
+          ) {
             return Padding(
               padding: EdgeInsets.only(
-                  bottom: entry.key == entries.length - 1 ? 0 : 12),
+                bottom: entry.key == entries.length - 1 ? 0 : 12,
+              ),
               child: _LeaderboardRow(
                 rank: entry.key + 1,
                 entry: entry.value,
@@ -328,9 +331,10 @@ class _LeaderboardRow extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: rank == 1
-                  ? GteShellTheme.accentWarm.withValues(alpha: 0.18)
-                  : GteShellTheme.panel.withValues(alpha: 0.9),
+              color:
+                  rank == 1
+                      ? GteShellTheme.accentWarm.withValues(alpha: 0.18)
+                      : GteShellTheme.panel.withValues(alpha: 0.9),
               border: Border.all(
                 color:
                     rank == 1 ? GteShellTheme.accentWarm : GteShellTheme.stroke,
@@ -339,8 +343,8 @@ class _LeaderboardRow extends StatelessWidget {
             child: Text(
               '$rank',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: rank == 1 ? GteShellTheme.accentWarm : null,
-                  ),
+                color: rank == 1 ? GteShellTheme.accentWarm : null,
+              ),
             ),
           ),
           const SizedBox(width: 14),
@@ -358,10 +362,8 @@ class _LeaderboardRow extends StatelessWidget {
                     ),
                     Text(
                       '$value',
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: GteShellTheme.accent,
-                              ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(color: GteShellTheme.accent),
                     ),
                   ],
                 ),
@@ -383,7 +385,8 @@ class _LeaderboardRow extends StatelessWidget {
                       _TinyPill(label: 'World ${entry.worldTitlesCount}'),
                     if (entry.continentalTitlesCount > 0)
                       _TinyPill(
-                          label: 'Continental ${entry.continentalTitlesCount}'),
+                        label: 'Continental ${entry.continentalTitlesCount}',
+                      ),
                   ],
                 ),
               ],
@@ -426,14 +429,15 @@ class _InlineNotice extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         color: GteShellTheme.accentWarm.withValues(alpha: 0.12),
-        border:
-            Border.all(color: GteShellTheme.accentWarm.withValues(alpha: 0.4)),
+        border: Border.all(
+          color: GteShellTheme.accentWarm.withValues(alpha: 0.4),
+        ),
       ),
       child: Text(
         message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: GteShellTheme.textPrimary,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: GteShellTheme.textPrimary),
       ),
     );
   }

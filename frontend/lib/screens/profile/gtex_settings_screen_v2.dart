@@ -4,7 +4,10 @@ import '../../features/system_profile_redesign/models/gtex_profile_models.dart';
 import '../../features/system_profile_redesign/presentation/gtex_profile_controller.dart';
 
 class GtexSettingsScreenV2 extends StatefulWidget {
-  const GtexSettingsScreenV2({super.key, this.controller = const GtexProfileController()});
+  const GtexSettingsScreenV2({
+    super.key,
+    this.controller = const GtexProfileController(),
+  });
 
   final GtexProfileController controller;
 
@@ -45,7 +48,11 @@ class _GtexSettingsScreenV2State extends State<GtexSettingsScreenV2> {
 }
 
 class _SettingsList extends StatelessWidget {
-  const _SettingsList({required this.sections, required this.selectedId, required this.onSelected});
+  const _SettingsList({
+    required this.sections,
+    required this.selectedId,
+    required this.onSelected,
+  });
   final List<GtexSettingSection> sections;
   final String selectedId;
   final ValueChanged<String> onSelected;
@@ -54,30 +61,67 @@ class _SettingsList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: const Color(0xFF0E1D15), borderRadius: BorderRadius.circular(28), border: Border.all(color: const Color(0xFF214232))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('SETTINGS', style: TextStyle(color: Color(0xFF39FF88), fontWeight: FontWeight.w900, letterSpacing: 1.2)),
-        const SizedBox(height: 18),
-        for (final section in sections)
-          InkWell(
-            onTap: () => onSelected(section.id),
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: selectedId == section.id ? const Color(0xFF153B27) : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(section.title, style: TextStyle(color: selectedId == section.id ? Colors.white : Colors.white70, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 3),
-                Text(section.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white38, fontSize: 12)),
-              ]),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E1D15),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFF214232)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'SETTINGS',
+            style: TextStyle(
+              color: Color(0xFF39FF88),
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
             ),
           ),
-      ]),
+          const SizedBox(height: 18),
+          for (final section in sections)
+            InkWell(
+              onTap: () => onSelected(section.id),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color:
+                      selectedId == section.id
+                          ? const Color(0xFF153B27)
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      section.title,
+                      style: TextStyle(
+                        color:
+                            selectedId == section.id
+                                ? Colors.white
+                                : Colors.white70,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      section.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -90,7 +134,13 @@ class _SettingsWorkspace extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
-        Text(section.title, style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w900)),
+        Text(
+          section.title,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
         const SizedBox(height: 8),
         Text(section.subtitle, style: const TextStyle(color: Colors.white60)),
         const SizedBox(height: 18),
@@ -110,20 +160,62 @@ class _SettingItemCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: const Color(0xFF0E1D15), borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF214232))),
-      child: Row(children: [
-        Icon(item.isDanger ? Icons.warning_amber_rounded : Icons.tune, color: accent),
-        const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(item.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 4),
-          Text(item.description, style: const TextStyle(color: Colors.white60)),
-        ])),
-        const SizedBox(width: 14),
-        Chip(label: Text(item.status), backgroundColor: Colors.black26, labelStyle: TextStyle(color: accent)),
-        const SizedBox(width: 8),
-        IconButton(onPressed: () {}, icon: const Icon(Icons.chevron_right, color: Colors.white54)),
-      ]),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E1D15),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF214232)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            item.isDanger ? Icons.warning_amber_rounded : Icons.tune,
+            color: accent,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.description,
+                  style: const TextStyle(color: Colors.white60),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Chip(
+            label: Text(item.status),
+            backgroundColor: Colors.black26,
+            labelStyle: TextStyle(color: accent),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Detailed settings are not mounted in this shell yet.',
+            child: IconButton(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '${item.title} is tracked here; detailed controls are handled by the live preferences APIs.',
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.chevron_right, color: Colors.white54),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

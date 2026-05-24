@@ -52,7 +52,16 @@ class GtexWalletOverviewScreenV2 extends StatelessWidget {
   Widget build(BuildContext context) {
     final GteExchangeController? liveController = controller;
     if (liveController == null) {
+      if (backendMode != GteBackendMode.fixture) {
+        return const GtexEmptyState(
+          title: 'Wallet connection required',
+          message:
+              'The production wallet route needs the live exchange controller. Fixture wallet data is available only in explicit test mode.',
+          icon: Icons.account_balance_wallet_outlined,
+        );
+      }
       return GtexWalletOrdersScreen(
+        repository: const GtexTrustOpsDemoRepository(),
         initialModule: GtexTrustModule.wallet,
         onTopUp: onTopUp,
         onWithdraw: onWithdraw,

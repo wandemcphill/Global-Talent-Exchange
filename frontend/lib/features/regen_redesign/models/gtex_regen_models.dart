@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 /// Batch 5 view models for the GTEX Regen World redesign.
 ///
-/// These are intentionally UI-facing DTOs. Codex should map the current
-/// live API models (`RegenUniverseHubData`, `RegenCreationOrder`, etc.) into
-/// these models instead of changing backend business logic.
+/// These are intentionally UI-facing DTOs. The current live API models
+/// (`RegenUniverseHubData`, `RegenCreationOrder`, etc.) are adapted into these
+/// models instead of changing backend business logic.
 enum GtexRegenOrigin {
   nationalPool,
   clubGenerated,

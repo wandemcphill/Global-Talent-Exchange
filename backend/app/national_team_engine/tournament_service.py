@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.gift_engine.service import GiftEngineError, GiftEngineService
 from app.ingestion.models import Competition as IngestionCompetition
 from app.ingestion.models import Country as IngestionCountry
-from app.ingestion.models import InternalLeague, Player, PlayerSeasonStat
+from app.ingestion.models import InjuryStatus, InternalLeague, Player, PlayerSeasonStat
 from app.market.player_eligibility_policy import market_access_payload
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
@@ -33,6 +33,10 @@ from app.models.national_team_tournament import (
     TournamentTheme,
 )
 from app.models.notification_record import NotificationRecord
+from app.models.federation import FederationSanction, FederationSanctionType
+from app.models.player_agency_state import PlayerAgencyState
+from app.models.player_contract import PlayerContract
+from app.models.player_injury_case import PlayerInjuryCase
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.integrity_engine.service import IntegrityEngineService
@@ -63,6 +67,8 @@ SOURCE_BUCKET_CLUB = "club"
 SUPPORTED_SOURCE_BUCKETS = frozenset({SOURCE_BUCKET_REAL, SOURCE_BUCKET_PRESEEDED, SOURCE_BUCKET_CLUB})
 NATIONAL_SEED_ACTIVE_STATUSES = frozenset({"active", "available"})
 NATIONAL_POOL_ONLY_SUPPLY_MODE = "national_pool_only"
+CONTRACT_LOCK_STATUSES = frozenset({"blocked", "contract_locked", "locked", "loan_locked", "suspended"})
+FIT_INJURY_STATUSES = frozenset({"available", "fit", "healthy", "none", "recovered"})
 STARTER_PACK_SLOTS: tuple[str, ...] = ("GK", "ST", "WINGER", "MIDFIELDER", "MIDFIELDER")
 AUTO_BUILD_FORMATIONS: dict[str, tuple[str, ...]] = {
     "4-3-3": ("GK", "RB", "CB", "CB", "LB", "CM", "CM", "CM", "RW", "ST", "LW"),
@@ -268,30 +274,327 @@ class NationalTeamTournamentService:
         return entry
 
     def _validate_entry_window(self, competition: NationalTeamCompetition) -> None:
+        reason = self._rental_tournament_lock_reason(competition)
+        if reason == "competition_entry_not_open":
+            raise NationalTeamTournamentError("Entry is not open yet.", reason=reason)
+        if reason == "competition_entry_closed":
+            raise NationalTeamTournamentError("Entry has closed for this tournament.", reason=reason)
+        if reason == "competition_completed":
+            raise NationalTeamTournamentError("Tournament has already completed.", reason=reason)
+        if reason is not None:
+            raise NationalTeamTournamentError(
+                "Tournament squads are locked while the tournament is live.", reason=reason
+            )
+
+    @staticmethod
+    def _is_future_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
+        if value is None:
+            return False
+        reference = now or utcnow()
+        if value.tzinfo is None and reference.tzinfo is not None:
+            reference = reference.replace(tzinfo=None)
+        if value.tzinfo is not None and reference.tzinfo is None:
+            value = value.replace(tzinfo=None)
+        return value > reference
+
+    @staticmethod
+    def _parse_datetime(value: Any) -> datetime | None:
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, date):
+            return datetime.combine(value, datetime.min.time())
+        if not isinstance(value, str):
+            return None
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_date(value: Any) -> date | None:
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if not isinstance(value, str):
+            return None
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
+        except ValueError:
+            try:
+                return date.fromisoformat(text)
+            except ValueError:
+                return None
+
+    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:
         now = utcnow()
         if competition.entry_opens_at is not None and competition.entry_opens_at > now:
-            raise NationalTeamTournamentError("Entry is not open yet.", reason="competition_entry_not_open")
+            return "competition_entry_not_open"
         if competition.entry_closes_at is not None and competition.entry_closes_at < now:
-            raise NationalTeamTournamentError(
-                "Entry has closed for this tournament.", reason="competition_entry_closed"
-            )
+            return "competition_entry_closed"
         if str(competition.status).strip().lower() == "live":
-            raise NationalTeamTournamentError(
-                "Tournament squads are locked while the tournament is live.", reason="competition_already_live"
-            )
+            return "competition_already_live"
         if competition.kickoff_at is not None and competition.kickoff_at <= now:
-            raise NationalTeamTournamentError(
-                "Tournament squads are locked after kickoff.", reason="competition_already_live"
-            )
+            return "competition_already_live"
         if competition.linked_competition_id:
             try:
                 CompetitionLockService(self.session).ensure_rentals_allowed(
                     competition_id=competition.linked_competition_id
                 )
-            except CompetitionLockError as exc:
-                raise NationalTeamTournamentError(exc.detail, reason="competition_already_live") from exc
+            except CompetitionLockError:
+                return "competition_already_live"
         if competition.completed_at is not None:
-            raise NationalTeamTournamentError("Tournament has already completed.", reason="competition_completed")
+            return "competition_completed"
+        return None
+
+    @staticmethod
+    def _pool_metadata(item: dict[str, Any], player: Player | None, seed: NationalRegenSeed | None) -> dict[str, Any]:
+        metadata: dict[str, Any] = {}
+        for source in (
+            getattr(player, "dna_profile", None) if player is not None else None,
+            getattr(seed, "metadata_json", None) if seed is not None else None,
+            item,
+        ):
+            if isinstance(source, dict):
+                metadata.update(source)
+        return metadata
+
+    def _active_injury_reason(
+        self,
+        *,
+        player: Player | None,
+        seed: NationalRegenSeed | None,
+        metadata: dict[str, Any],
+        today: date,
+    ) -> str | None:
+        if bool(metadata.get("injured") or metadata.get("injury_active")):
+            return "injury_unavailable"
+        injury_return = self._parse_date(metadata.get("expected_return_on") or metadata.get("injury_until"))
+        if injury_return is not None and injury_return >= today:
+            return "injury_unavailable"
+        if seed is not None:
+            return None
+        if player is None:
+            return None
+        active_case = self.session.scalar(
+            select(PlayerInjuryCase.id)
+            .where(PlayerInjuryCase.player_id == player.id)
+            .where(PlayerInjuryCase.recovered_on.is_(None))
+            .where(or_(PlayerInjuryCase.expected_return_on.is_(None), PlayerInjuryCase.expected_return_on >= today))
+            .limit(1)
+        )
+        if active_case is not None:
+            return "injury_unavailable"
+        injury_status = self.session.scalar(
+            select(InjuryStatus)
+            .where(InjuryStatus.player_id == player.id)
+            .order_by(InjuryStatus.updated_at.desc())
+            .limit(1)
+        )
+        if injury_status is None:
+            return None
+        status_text = str(injury_status.status or "").strip().lower()
+        if status_text in FIT_INJURY_STATUSES:
+            return None
+        if injury_status.expected_return_at is None or injury_status.expected_return_at >= today:
+            return "injury_unavailable"
+        return None
+
+    def _active_suspension_reason(
+        self,
+        *,
+        player: Player | None,
+        metadata: dict[str, Any],
+        now: datetime,
+    ) -> str | None:
+        raw_matches = metadata.get("suspension_matches")
+        try:
+            if raw_matches is not None and int(raw_matches) > 0:
+                return "suspension_active"
+        except (TypeError, ValueError):
+            pass
+        suspended_until = self._parse_datetime(metadata.get("suspended_until") or metadata.get("suspension_until"))
+        if self._is_future_datetime(suspended_until, now=now):
+            return "suspension_active"
+        if player is None:
+            return None
+        sanction = self.session.scalar(
+            select(FederationSanction.id)
+            .where(FederationSanction.player_id == player.id)
+            .where(FederationSanction.status == "active")
+            .where(FederationSanction.sanction_type == FederationSanctionType.PLAYER_BAN.value)
+            .where(FederationSanction.starts_at <= now)
+            .where(or_(FederationSanction.ends_at.is_(None), FederationSanction.ends_at > now))
+            .limit(1)
+        )
+        return "suspension_active" if sanction is not None else None
+
+    def _cooldown_until(
+        self,
+        *,
+        player: Player | None,
+        metadata: dict[str, Any],
+        now: datetime,
+    ) -> datetime | None:
+        for key in ("rental_cooldown_until", "cooldown_until", "recent_offer_cooldown_until"):
+            cooldown_until = self._parse_datetime(metadata.get(key))
+            if self._is_future_datetime(cooldown_until, now=now):
+                return cooldown_until
+        if player is None:
+            return None
+        agency_state = self.session.scalar(
+            select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id).limit(1)
+        )
+        if agency_state is None:
+            return None
+        cooldown_until = agency_state.recent_offer_cooldown_until
+        return cooldown_until if self._is_future_datetime(cooldown_until, now=now) else None
+
+    def _contract_lock_reason(
+        self,
+        *,
+        player: Player | None,
+        seed: NationalRegenSeed | None,
+        metadata: dict[str, Any],
+        today: date,
+    ) -> str | None:
+        if bool(
+            metadata.get("contract_locked")
+            or metadata.get("rental_contract_locked")
+            or metadata.get("national_rental_locked")
+        ):
+            return "contract_locked"
+        if seed is not None or player is None:
+            return None
+        contract = self.session.scalar(
+            select(PlayerContract.id)
+            .where(PlayerContract.player_id == player.id)
+            .where(PlayerContract.status.in_(tuple(CONTRACT_LOCK_STATUSES)))
+            .where(PlayerContract.starts_on <= today)
+            .where(PlayerContract.ends_on >= today)
+            .limit(1)
+        )
+        return "contract_locked" if contract is not None else None
+
+    def _active_rental_count(
+        self,
+        *,
+        player_id: str,
+        competition_id: str,
+        actor: User | None,
+        now: datetime,
+    ) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(RentalContract)
+            .where(
+                RentalContract.player_id == player_id,
+                RentalContract.tournament_id == competition_id,
+                RentalContract.status == RentalContractStatus.ACTIVE,
+                RentalContract.end_date > now,
+            )
+        )
+        if actor is not None:
+            stmt = stmt.where(RentalContract.user_id == actor.id)
+        return int(self.session.scalar(stmt) or 0)
+
+    def rental_eligibility_for_pool_item(
+        self,
+        *,
+        competition: NationalTeamCompetition,
+        item: dict[str, Any],
+        country_code: str | None = None,
+        entry: NationalTeamEntry | None = None,
+        actor: User | None = None,
+    ) -> dict[str, Any]:
+        now = utcnow()
+        today = now.date()
+        player_id = str(item["player_id"])
+        player = item.get("player") if isinstance(item.get("player"), Player) else self.session.get(Player, player_id)
+        seed = None if player is not None else self.session.get(NationalRegenSeed, player_id)
+        metadata = self._pool_metadata(item, player, seed)
+        reasons: list[str] = []
+        checks: dict[str, bool] = {}
+
+        def record(check: str, passed: bool, reason: str | None = None) -> None:
+            checks[check] = passed
+            if not passed and reason is not None and reason not in reasons:
+                reasons.append(reason)
+
+        normalized_country = self._normalize_token(country_code or getattr(entry, "country_code", None), upper=True)
+        country_tokens = {
+            str(token).strip().upper() for token in item.get("country_tokens") or () if str(token).strip()
+        }
+        if not country_tokens and item.get("country_code"):
+            country_tokens.add(str(item["country_code"]).strip().upper())
+        record(
+            "nationality",
+            normalized_country is None or normalized_country in country_tokens,
+            "nationality_mismatch",
+        )
+
+        tournament_lock_reason = self._rental_tournament_lock_reason(competition)
+        record("tournament_lock", tournament_lock_reason is None, tournament_lock_reason)
+
+        injury_reason = self._active_injury_reason(player=player, seed=seed, metadata=metadata, today=today)
+        record("injury", injury_reason is None, injury_reason)
+
+        suspension_reason = self._active_suspension_reason(player=player, metadata=metadata, now=now)
+        record("suspension", suspension_reason is None, suspension_reason)
+
+        cooldown_until = self._cooldown_until(player=player, metadata=metadata, now=now)
+        record("cooldown", cooldown_until is None, "cooldown_active")
+
+        contract_lock_reason = self._contract_lock_reason(player=player, seed=seed, metadata=metadata, today=today)
+        record("contract_lock", contract_lock_reason is None, contract_lock_reason)
+
+        duplicate = False
+        if entry is not None:
+            duplicate = any(member.player_id == player_id for member in self._entry_rental_members(entry.id))
+        record("duplicate", not duplicate, "duplicate_player")
+
+        active_rental_count = self._active_rental_count(
+            player_id=player_id,
+            competition_id=competition.id,
+            actor=actor,
+            now=now,
+        )
+        record("active_rentals", actor is None or active_rental_count == 0, "active_rental_exists")
+
+        eligible = not reasons
+        return {
+            "eligible": eligible,
+            "reasons": reasons,
+            "checks": checks,
+            "message": None if eligible else self._eligibility_message(reasons[0]),
+            "active_rental_count": active_rental_count,
+            "duplicate": duplicate,
+            "cooldown_until": cooldown_until,
+            "source": "national_team_engine",
+        }
+
+    @staticmethod
+    def _eligibility_message(reason: str) -> str:
+        messages = {
+            "active_rental_exists": "This player already has an active rental for this competition.",
+            "competition_already_live": "Tournament squads are locked for this competition.",
+            "competition_completed": "This competition has already completed.",
+            "competition_entry_closed": "Entry has closed for this tournament.",
+            "competition_entry_not_open": "Entry is not open yet.",
+            "contract_locked": "This player is contract-locked for national rental.",
+            "cooldown_active": "This player is inside a rental cooldown window.",
+            "duplicate_player": "This player is already in the rental squad.",
+            "injury_unavailable": "This player is unavailable through injury.",
+            "nationality_mismatch": "This player is not eligible for the selected country.",
+            "suspension_active": "This player is unavailable through suspension.",
+        }
+        return messages.get(reason, "This player is not eligible for national rental.")
 
     def _contract_window(self, competition: NationalTeamCompetition) -> tuple[Any, Any]:
         now = utcnow()
@@ -1055,6 +1358,96 @@ class NationalTeamTournamentService:
         )
         return filtered
 
+    def _national_pool_item_for_player_id(
+        self,
+        *,
+        player_id: str,
+        competition: NationalTeamCompetition,
+    ) -> dict[str, Any] | None:
+        reference_date = self._competition_reference_date(competition)
+        age_limit = self._age_band_limit(competition)
+        season_stats = (
+            select(
+                PlayerSeasonStat.player_id.label("player_id"),
+                func.max(PlayerSeasonStat.average_rating).label("average_rating"),
+            )
+            .where(PlayerSeasonStat.player_id == player_id)
+            .group_by(PlayerSeasonStat.player_id)
+            .subquery()
+        )
+        player_row = self.session.execute(
+            select(
+                Player,
+                season_stats.c.average_rating,
+                IngestionCountry.name.label("country_name"),
+                IngestionCountry.alpha2_code.label("country_alpha2"),
+                IngestionCountry.alpha3_code.label("country_alpha3"),
+                IngestionCountry.fifa_code.label("country_fifa"),
+                IngestionCompetition.name.label("competition_name"),
+                InternalLeague.name.label("league_name"),
+                InternalLeague.rank.label("league_rank"),
+                PlayerSummaryReadModel,
+            )
+            .outerjoin(season_stats, season_stats.c.player_id == Player.id)
+            .outerjoin(IngestionCountry, IngestionCountry.id == Player.country_id)
+            .outerjoin(IngestionCompetition, IngestionCompetition.id == Player.current_competition_id)
+            .outerjoin(InternalLeague, InternalLeague.id == Player.internal_league_id)
+            .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
+            .where(Player.id == player_id)
+        ).one_or_none()
+        if player_row is not None:
+            (
+                player,
+                average_rating,
+                country_name,
+                country_alpha2,
+                country_alpha3,
+                country_fifa,
+                competition_name,
+                league_name,
+                league_rank,
+                summary,
+            ) = player_row
+            item = self._build_player_pool_item(
+                player=player,
+                average_rating=average_rating,
+                country_name=country_name,
+                country_alpha2=country_alpha2,
+                country_alpha3=country_alpha3,
+                country_fifa=country_fifa,
+                competition_name=competition_name,
+                league_name=league_name,
+                league_rank=league_rank,
+                summary=summary,
+                reference_date=reference_date,
+            )
+            if age_limit is not None and (item.get("age") is None or int(item["age"]) > age_limit):
+                return None
+            return item
+
+        seed = self.session.get(NationalRegenSeed, player_id)
+        if seed is None:
+            return None
+        normalized_seed_code = self._normalize_token(seed.country_code, upper=True)
+        normalized_seed_name = self._normalize_token(seed.country_name, upper=True)
+        country_clauses: list[Any] = []
+        if normalized_seed_code is not None:
+            country_clauses.extend(
+                (
+                    func.upper(IngestionCountry.alpha2_code) == normalized_seed_code,
+                    func.upper(IngestionCountry.alpha3_code) == normalized_seed_code,
+                    func.upper(IngestionCountry.fifa_code) == normalized_seed_code,
+                )
+            )
+        if normalized_seed_name is not None:
+            country_clauses.append(func.upper(IngestionCountry.name) == normalized_seed_name)
+        country = (
+            self.session.scalar(select(IngestionCountry).where(or_(*country_clauses)).limit(1))
+            if country_clauses
+            else None
+        )
+        return self._build_seed_pool_item(seed=seed, country=country, competition=competition)
+
     def _pool_item_payload(self, item: dict[str, Any]) -> dict[str, Any]:
         return {
             "player_id": item["player_id"],
@@ -1104,8 +1497,16 @@ class NationalTeamTournamentService:
         max_price_coin: Decimal | None = None,
         positions: tuple[str, ...] = (),
         tradable_only: bool = False,
+        entry_id: str | None = None,
+        actor: User | None = None,
     ) -> dict[str, Any]:
         competition = self._require_competition(competition_id)
+        entry = self._require_entry(entry_id) if entry_id else None
+        if entry is not None and entry.competition_id != competition.id:
+            raise NationalTeamTournamentError(
+                "National team entry does not belong to this competition.",
+                reason="entry_not_found",
+            )
         filters = self._normalize_pool_filters(
             country_code=country_code,
             real_only=real_only,
@@ -1141,7 +1542,19 @@ class NationalTeamTournamentService:
             source_counts[source_bucket] = source_counts.get(source_bucket, 0) + 1
         return {
             "total": len(catalog),
-            "items": [self._pool_item_payload(item) for item in items],
+            "items": [
+                {
+                    **self._pool_item_payload(item),
+                    "eligibility": self.rental_eligibility_for_pool_item(
+                        competition=competition,
+                        item=item,
+                        country_code=filters.country_code,
+                        entry=entry,
+                        actor=actor,
+                    ),
+                }
+                for item in items
+            ],
             "partial": bool(warnings),
             "failed_count": len(warnings),
             "warnings": warnings[:10],
@@ -1923,6 +2336,7 @@ class NationalTeamTournamentService:
         actor: User,
         player_id: str,
         shirt_number: int | None = None,
+        expose_specific_outside_pool_reason: bool = False,
     ) -> dict[str, Any]:
         entry = self._require_managed_entry(entry_id, actor)
         competition = entry.competition
@@ -1936,7 +2350,7 @@ class NationalTeamTournamentService:
             )
         if any(member.player_id == player_id for member in current_members):
             raise NationalTeamTournamentError(
-                "This player is already part of the rental squad.", reason="rental_contract_exists"
+                "This player is already part of the rental squad.", reason="duplicate_player"
             )
 
         player_catalog = {
@@ -1951,9 +2365,41 @@ class NationalTeamTournamentService:
         if item is None:
             player_exists = self.session.get(Player, player_id) is not None
             seed_exists = self.session.get(NationalRegenSeed, player_id) is not None
+            if expose_specific_outside_pool_reason and (player_exists or seed_exists):
+                outside_pool_item = self._national_pool_item_for_player_id(
+                    player_id=player_id,
+                    competition=competition,
+                )
+                if outside_pool_item is not None:
+                    eligibility = self.rental_eligibility_for_pool_item(
+                        competition=competition,
+                        item=self._priced_pool_item(outside_pool_item),
+                        country_code=entry.country_code,
+                        entry=entry,
+                        actor=actor,
+                    )
+                    if not eligibility["eligible"]:
+                        reason = str((eligibility.get("reasons") or ["player_not_eligible"])[0])
+                        raise NationalTeamTournamentError(
+                            str(eligibility.get("message") or "Rental player is not eligible."),
+                            reason=reason,
+                        )
             raise NationalTeamTournamentError(
                 "Rental player is outside the national pool.",
                 reason="player_not_eligible" if player_exists or seed_exists else "player_not_found",
+            )
+        eligibility = self.rental_eligibility_for_pool_item(
+            competition=competition,
+            item=item,
+            country_code=entry.country_code,
+            entry=entry,
+            actor=actor,
+        )
+        if not eligibility["eligible"]:
+            reason = str((eligibility.get("reasons") or ["player_not_eligible"])[0])
+            raise NationalTeamTournamentError(
+                str(eligibility.get("message") or "Rental player is not eligible."),
+                reason=reason,
             )
 
         loan_price = self._normalize_amount(item["loan_price_coin"])

@@ -26,7 +26,9 @@ void main() {
 
   testWidgets('onboarding flow advances through setup steps', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: GtexOnboardingFlowScreenV2()),
+      const MaterialApp(
+        home: GtexOnboardingFlowScreenV2(allowFixtureData: true),
+      ),
     );
     expect(find.text('Choose how you want to enter GTEX'), findsOneWidget);
     await tester.tap(find.text('Continue'));
@@ -35,5 +37,16 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
     expect(find.text('Create or join a club'), findsOneWidget);
+  });
+
+  testWidgets('onboarding flow blocks fixture state by default', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: GtexOnboardingFlowScreenV2()),
+    );
+
+    expect(find.text('Live onboarding unavailable'), findsOneWidget);
+    expect(find.text('Choose how you want to enter GTEX'), findsNothing);
   });
 }

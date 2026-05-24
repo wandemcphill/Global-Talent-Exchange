@@ -81,10 +81,51 @@ class _GtexNationalTeamRentalScreenV2State
   @override
   Widget build(BuildContext context) {
     if (!_hasLiveDependencies) {
-      return GtexNationalTeamRentalScreen(
-        isAuthenticated: widget.isAuthenticated,
-        onOpenLogin: widget.onOpenLogin,
-        onSubmitRentalBasket: _showPreviewOnlyMessage,
+      return Scaffold(
+        backgroundColor: const Color(0xFF050B08),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Icon(
+                      Icons.public_outlined,
+                      color: Color(0xFF39FF88),
+                      size: 42,
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Live rental pool required',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleLarge?.copyWith(color: Colors.white),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'National-team rentals no longer open with demo defaults. Connect the live API session to load competitions, countries, teams, and eligible players.',
+                      style: TextStyle(color: Colors.white70),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (!widget.isAuthenticated && widget.onOpenLogin != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 18),
+                        child: FilledButton.icon(
+                          onPressed: widget.onOpenLogin,
+                          icon: const Icon(Icons.login_outlined),
+                          label: const Text('Sign in'),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       );
     }
 
@@ -117,44 +158,25 @@ class _GtexNationalTeamRentalScreenV2State
     });
 
     try {
-      final List<Object> payload = await Future.wait<Object>(<Future<Object>>[
-        _nationalTeamApi.listCompetitions(),
-        widget.controller!.api.fetchMarketNationalTeams(),
-      ]);
+      final List<NationalTeamCompetition> competitions =
+          await _nationalTeamApi.listCompetitions();
       if (!mounted || serial != _requestSerial) {
         return;
       }
 
-      final List<NationalTeamCompetition> competitions =
-          payload[0] as List<NationalTeamCompetition>;
-      final List<GteMarketNationalityBrowseItem> nationalities =
-          payload[1] as List<GteMarketNationalityBrowseItem>;
       final List<GtexRentalCompetitionView> competitionViews = competitions
           .map(_competitionView)
-          .toList(growable: false);
-      final List<GtexRentalCountryView> countryViews = nationalities
-          .where(
-            (GteMarketNationalityBrowseItem item) =>
-                item.countryCode.trim().isNotEmpty,
-          )
-          .map(_countryView)
           .toList(growable: false);
 
       final String? competitionId =
           _selectedCompetitionId ?? _firstOpenCompetition(competitionViews);
-      final String? countryCode =
-          _selectedCountryCode ?? _firstCountryCode(countryViews);
-      final List<GtexRentalTeamView> teamViews = _buildTeams(
-        competitions: competitionViews,
-        countries: countryViews,
-      );
 
       setState(() {
         _competitions = competitionViews;
-        _countries = countryViews;
-        _teams = teamViews;
         _selectedCompetitionId = competitionId;
-        _selectedCountryCode = countryCode;
+        _selectedCountryCode = null;
+        _countries = const <GtexRentalCountryView>[];
+        _teams = const <GtexRentalTeamView>[];
       });
       await _loadCurrentPool(serial: serial);
     } catch (error) {
@@ -192,24 +214,34 @@ class _GtexNationalTeamRentalScreenV2State
 
     try {
       final NationalTeamRentalPlayerCollection pool = await _nationalTeamApi
-          .listRentalPool(competitionId, limit: 200, countryCode: countryCode);
+          .listRentalPool(
+            competitionId,
+            limit: 200,
+            countryCode: countryCode,
+            auth: widget.isAuthenticated,
+          );
       final Map<String, GteMarketPlayerListItem> imageLookup =
           await _loadMarketImages(countryCode);
       if (!mounted || activeSerial != _requestSerial) {
         return;
       }
 
-      List<GtexRentalPlayerView> playerViews = pool.items
+      final List<GtexRentalPlayerView> playerViews = pool.items
           .map(
             (NationalTeamRentalPlayer player) =>
                 _rentalPlayerView(player, imageLookup[player.playerId]),
           )
           .toList(growable: false);
-      if (playerViews.isEmpty && imageLookup.isNotEmpty) {
-        playerViews = imageLookup.values
-            .map(_marketFallbackRentalPlayerView)
-            .toList(growable: false);
-      }
+      final List<GtexRentalCountryView> countryViews =
+          countryCode == null || _countries.isEmpty
+              ? _countryViewsFromPool(pool.items)
+              : _countries;
+      final String? selectedCountryCode =
+          countryCode ?? _firstCountryCode(countryViews);
+      final List<GtexRentalTeamView> teamViews = _buildTeams(
+        competitions: _competitions,
+        countries: countryViews,
+      );
       final List<String> diagnostics = <String>[
         ...pool.warnings.take(3),
         if (pool.failedCount > pool.warnings.length)
@@ -217,6 +249,9 @@ class _GtexNationalTeamRentalScreenV2State
       ];
 
       setState(() {
+        _countries = countryViews;
+        _teams = teamViews;
+        _selectedCountryCode = selectedCountryCode;
         _players = playerViews;
         _poolWarning =
             pool.partial || pool.failedCount > 0
@@ -338,12 +373,6 @@ class _GtexNationalTeamRentalScreenV2State
     }
   }
 
-  void _showPreviewOnlyMessage(List<GtexRentalPlayerView> players) {
-    _showSnack(
-      'Rental preview only: live route dependencies were not provided.',
-    );
-  }
-
   void _showSnack(String message) {
     if (!mounted) {
       return;
@@ -367,14 +396,37 @@ class _GtexNationalTeamRentalScreenV2State
     );
   }
 
-  GtexRentalCountryView _countryView(GteMarketNationalityBrowseItem item) {
-    return GtexRentalCountryView(
-      countryCode: item.countryCode,
-      countryName: item.displayName,
-      confederation: _inferConfederation(item.countryCode),
-      eligiblePlayers: item.eligiblePlayerCount,
-      rentalBudgetLabel: 'Live pricing',
+  List<GtexRentalCountryView> _countryViewsFromPool(
+    List<NationalTeamRentalPlayer> players,
+  ) {
+    final Map<String, int> counts = <String, int>{};
+    final Map<String, String> names = <String, String>{};
+    for (final NationalTeamRentalPlayer player in players) {
+      final String code = (player.countryCode ?? '').trim().toUpperCase();
+      if (code.isEmpty || code == 'WORLD') {
+        continue;
+      }
+      counts[code] = (counts[code] ?? 0) + 1;
+      final String name = (player.nationality ?? _countryNameFor(code)).trim();
+      if (name.isNotEmpty) {
+        names[code] = name;
+      }
+    }
+    final List<GtexRentalCountryView> countries = <GtexRentalCountryView>[
+      for (final MapEntry<String, int> entry in counts.entries)
+        GtexRentalCountryView(
+          countryCode: entry.key,
+          countryName: names[entry.key] ?? _countryNameFor(entry.key),
+          confederation: _inferConfederation(entry.key),
+          eligiblePlayers: entry.value,
+          rentalBudgetLabel: 'Backend eligible pool',
+        ),
+    ];
+    countries.sort(
+      (GtexRentalCountryView left, GtexRentalCountryView right) =>
+          left.countryName.compareTo(right.countryName),
     );
+    return countries;
   }
 
   List<GtexRentalTeamView> _buildTeams({
@@ -428,39 +480,23 @@ class _GtexNationalTeamRentalScreenV2State
       portraitStatus: player.portraitStatus,
       portraitMissingReason: player.portraitMissingReason,
       eligibilityNote: _rentalEligibilityNote(player),
+      rentalEligible: player.rentalEligible,
+      eligibilityReasons: player.eligibility.reasons,
       isPreseededRegen: player.isPreseededNationalRegen || player.isRegen,
     );
   }
 
   String _rentalEligibilityNote(NationalTeamRentalPlayer player) {
-    if (!player.marketEligible) {
-      return 'Pending market eligibility review.';
+    final String? message = player.eligibility.message;
+    if (message != null && message.trim().isNotEmpty) {
+      return message;
     }
-    if ((player.portraitStatus ?? '').contains('missing')) {
-      return 'Eligible for rental. Portrait asset is pending, so a football silhouette will be shown.';
+    if (player.eligibility.reasons.isNotEmpty) {
+      return player.eligibility.reasons.join(', ');
     }
-    return 'Eligible for the selected national-team rental pool.';
-  }
-
-  GtexRentalPlayerView _marketFallbackRentalPlayerView(
-    GteMarketPlayerListItem player,
-  ) {
-    return GtexRentalPlayerView(
-      playerId: player.playerId,
-      name: player.playerName,
-      position: player.position ?? 'POS',
-      age: player.age,
-      rating: player.averageRating,
-      nationality:
-          player.nationality ?? _countryNameFor(player.nationalityCode),
-      countryCode: player.nationalityCode ?? _selectedCountryCode ?? 'WORLD',
-      clubName: player.currentClubName ?? 'National rental pool',
-      rentalCostCredits: (player.currentValueCredits ?? 0) * 0.2,
-      sourceBucket: 'market',
-      imageUrl: player.imageUrl,
-      eligibilityNote:
-          'Eligible through the live market national-team player endpoint.',
-    );
+    return player.rentalEligible
+        ? 'Backend eligible for the selected national-team rental pool.'
+        : 'Backend eligibility is unavailable.';
   }
 
   GtexRentalCountryView? _countryForCode(String? countryCode) {

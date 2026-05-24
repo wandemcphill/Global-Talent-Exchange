@@ -29,3 +29,20 @@ def test_infinite_league_seed_hydrates_existing_matches_across_runtimes(tmp_path
     }
     assert len(first.store.recent_results(limit=10)) == 2
     assert len(first.publisher_queue.list_jobs()) >= 1
+
+
+def test_infinite_league_livestream_does_not_expose_operator_rtmp_command(tmp_path) -> None:
+    runtime = InfiniteLeagueRuntime(
+        root_path=tmp_path,
+        enabled=False,
+        auto_advance=False,
+        club_count=4,
+        initial_match_count=2,
+        rtmp_url="rtmp://operator.example/app/live-key",
+    )
+
+    view = runtime.livestream_view()
+
+    assert view.total_duration_seconds > 0
+    assert view.playlist_manifest
+    assert view.ffmpeg_command == []

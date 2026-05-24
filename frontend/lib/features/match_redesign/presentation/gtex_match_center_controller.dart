@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../data/gtex_match_demo_repository.dart';
 import '../data/gtex_match_models.dart';
+import '../data/gtex_match_repository.dart';
 
 class GtexMatchCenterController extends ChangeNotifier {
   GtexMatchCenterController({
     required this.matchId,
     GtexMatchRepository? repository,
-  }) : repository = repository ?? const GtexMatchDemoRepository();
+  }) : repository = repository ?? const GtexUnavailableMatchRepository();
 
   final String matchId;
   final GtexMatchRepository repository;
@@ -28,13 +28,18 @@ class GtexMatchCenterController extends ChangeNotifier {
     try {
       state = await repository.fetchLiveMatch(matchId);
       _subscription?.cancel();
-      _subscription = repository.watchLiveMatch(matchId).listen((event) {
-        state = event;
-        notifyListeners();
-      }, onError: (Object err) {
-        error = err;
-        notifyListeners();
-      });
+      _subscription = repository
+          .watchLiveMatch(matchId)
+          .listen(
+            (event) {
+              state = event;
+              notifyListeners();
+            },
+            onError: (Object err) {
+              error = err;
+              notifyListeners();
+            },
+          );
     } catch (err) {
       error = err;
     } finally {

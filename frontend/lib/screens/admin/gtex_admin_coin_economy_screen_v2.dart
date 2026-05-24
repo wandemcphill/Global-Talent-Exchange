@@ -10,11 +10,13 @@ class GtexAdminCoinEconomyScreenV2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final snapshot = GtexAdminCommandSnapshot.demo();
+    final snapshot = GtexAdminCommandSnapshot.liveUnavailable();
     return Theme(
       data: Theme.of(context).copyWith(
         scaffoldBackgroundColor: const Color(0xFF070B12),
-        textTheme: Theme.of(context).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
+        textTheme: Theme.of(
+          context,
+        ).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
       ),
       child: Scaffold(
         backgroundColor: const Color(0xFF070B12),
@@ -26,13 +28,26 @@ class GtexAdminCoinEconomyScreenV2 extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('Coin economy', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 6),
-                        const Text('Treasury, user balances, top-ups, withdrawals, risk controls and ledger audits.', style: TextStyle(color: Colors.white70)),
-                      ]),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Coin economy',
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Treasury, user balances, top-ups, withdrawals, risk controls and ledger audits.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        ],
+                      ),
                     ),
-                    const GtexAdminStatusPill(label: 'Ledger critical', severity: GtexAdminSeverity.watch),
+                    const GtexAdminStatusPill(
+                      label: 'Ledger critical',
+                      severity: GtexAdminSeverity.watch,
+                    ),
                   ],
                 ),
               ),
@@ -47,7 +62,8 @@ class GtexAdminCoinEconomyScreenV2 extends StatelessWidget {
                   children: [
                     GtexAdminSectionHeader(
                       title: 'Coin control rules',
-                      subtitle: 'Every balance-impacting action must go through ledger/audit APIs.',
+                      subtitle:
+                          'Every balance-impacting action must go through ledger/audit APIs.',
                     ),
                     SizedBox(height: 12),
                     Text(

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:gte_frontend/features/app_routes/gte_app_route_registry.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 
@@ -52,11 +51,12 @@ class GteNavigationHelpers {
     if (router != null) {
       return context.push<T>(location);
     }
-    // Fall back to the legacy material route host while the router purge is
-    // still migrating every surface onto the central GoRouter spine.
-    final GteAppRouteRegistry registry =
-        GteAppRouteRegistry(dependencies: dependencies);
-    return Navigator.of(context).push<T>(registry.routeFor<T>(route));
+    return Future<T?>.error(
+      StateError(
+        'GTEX routes require the central GoRouter runtime. '
+        'Legacy material-route fallback is disabled in strict live mode.',
+      ),
+    );
   }
 
   static Future<T?> pushNamedRoute<T>(
@@ -71,11 +71,7 @@ class GteNavigationHelpers {
       pathParameters: pathParameters,
       queryParameters: queryParameters,
     );
-    return pushRoute<T>(
-      context,
-      route: route,
-      dependencies: dependencies,
-    );
+    return pushRoute<T>(context, route: route, dependencies: dependencies);
   }
 
   static Future<T?> pushDeepLink<T>(
@@ -87,11 +83,7 @@ class GteNavigationHelpers {
     if (route == null) {
       return Future<T?>.value(null);
     }
-    return pushRoute<T>(
-      context,
-      route: route,
-      dependencies: dependencies,
-    );
+    return pushRoute<T>(context, route: route, dependencies: dependencies);
   }
 
   static Future<bool> tryPushDeepLink(
@@ -103,11 +95,7 @@ class GteNavigationHelpers {
     if (route == null) {
       return false;
     }
-    await pushRoute<void>(
-      context,
-      route: route,
-      dependencies: dependencies,
-    );
+    await pushRoute<void>(context, route: route, dependencies: dependencies);
     return true;
   }
 }

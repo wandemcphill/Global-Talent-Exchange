@@ -265,12 +265,6 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                               value: _railLabel(overview.depositMode),
                             ),
                             _RestrictionChip(
-                              label: 'Paystack',
-                              value: _providerStatusLabel(
-                                overview.paymentProviderStatus['paystack'],
-                              ),
-                            ),
-                            _RestrictionChip(
                               label: 'KoraPay',
                               value: _providerStatusLabel(
                                 overview.paymentProviderStatus['korapay'],
@@ -318,7 +312,7 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Instant provider status: Paystack ${_providerStatusLabel(overview.paymentProviderStatus['paystack'])}, KoraPay ${_providerStatusLabel(overview.paymentProviderStatus['korapay'])}.',
+                        'Instant provider status: KoraPay ${_providerStatusLabel(overview.paymentProviderStatus['korapay'])}. Manual bank transfer is handled through admin review.',
                       ),
                     ],
                   ),

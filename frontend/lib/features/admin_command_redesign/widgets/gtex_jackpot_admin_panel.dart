@@ -4,10 +4,7 @@ import '../models/gtex_admin_command_models.dart';
 import 'gtex_admin_visuals.dart';
 
 class GtexJackpotAdminPanel extends StatelessWidget {
-  const GtexJackpotAdminPanel({
-    super.key,
-    required this.rounds,
-  });
+  const GtexJackpotAdminPanel({super.key, required this.rounds});
 
   final List<GtexJackpotRound> rounds;
 
@@ -19,21 +16,71 @@ class GtexJackpotAdminPanel extends StatelessWidget {
         children: [
           GtexAdminSectionHeader(
             title: 'Jackpot control',
-            subtitle: 'Pools, entries, draws, winners, claims, and fraud review.',
+            subtitle:
+                'Pools, entries, draws, winners, claims, and fraud review.',
             trailing: GtexAdminStatusPill(label: 'Admin only'),
           ),
           const SizedBox(height: 14),
-          ...rounds.map((round) => Padding(
+          if (rounds.isEmpty)
+            const _JackpotUnavailableState()
+          else
+            ...rounds.map(
+              (round) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _JackpotRoundTile(round: round),
-              )),
+              ),
+            ),
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: _Button(label: 'Create pool', icon: Icons.add_rounded, onTap: () {})),
+              Expanded(
+                child: _Button(
+                  label: 'Create pool',
+                  icon: Icons.add_rounded,
+                  unavailableMessage:
+                      'Jackpot pool creation has no mounted admin endpoint in this panel.',
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _Button(label: 'Winner review', icon: Icons.verified_rounded, onTap: () {})),
+              Expanded(
+                child: _Button(
+                  label: 'Winner review',
+                  icon: Icons.verified_rounded,
+                  unavailableMessage:
+                      'Winner review is blocked until the claims review route is mounted.',
+                ),
+              ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _JackpotUnavailableState extends StatelessWidget {
+  const _JackpotUnavailableState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(.12)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.block_rounded, color: Colors.white54),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Live jackpot rounds unavailable until the admin jackpot endpoint returns a persisted pool snapshot.',
+              style: TextStyle(color: Colors.white70),
+            ),
           ),
         ],
       ),
@@ -73,17 +120,39 @@ class _JackpotRoundTile extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(round.title, style: const TextStyle(fontWeight: FontWeight.w900)),
-              const SizedBox(height: 4),
-              Text('${round.entriesLabel} • ${round.drawTimeLabel}', style: const TextStyle(color: Colors.white60, fontSize: 12)),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  round.title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${round.entriesLabel} • ${round.drawTimeLabel}',
+                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ],
+            ),
           ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(round.poolLabel, style: const TextStyle(color: Color(0xFFFFD166), fontWeight: FontWeight.w900, fontSize: 18)),
-            const SizedBox(height: 4),
-            Text(round.status, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-          ]),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                round.poolLabel,
+                style: const TextStyle(
+                  color: Color(0xFFFFD166),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                round.status,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -91,24 +160,38 @@ class _JackpotRoundTile extends StatelessWidget {
 }
 
 class _Button extends StatelessWidget {
-  const _Button({required this.label, required this.icon, required this.onTap});
+  const _Button({
+    required this.label,
+    required this.icon,
+    required this.unavailableMessage,
+  });
 
   final String label;
   final IconData icon;
-  final VoidCallback onTap;
+  final String unavailableMessage;
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF2DFF87).withOpacity(.14),
-        foregroundColor: const Color(0xFF2DFF87),
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return Tooltip(
+      message: unavailableMessage,
+      child: ElevatedButton.icon(
+        onPressed: () {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(unavailableMessage)));
+        },
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2DFF87).withOpacity(.08),
+          disabledBackgroundColor: const Color(0xFF2DFF87).withOpacity(.08),
+          disabledForegroundColor: Colors.white54,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
       ),
     );
   }

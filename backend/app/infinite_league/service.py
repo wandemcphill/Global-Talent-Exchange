@@ -56,12 +56,10 @@ from app.viral.schemas import (
 from services.economy import RewardEngine, Token, Wallet, quote_cash_out
 from services.influencers import build_publishable_persona_clip, generate_persona_content, select_persona
 from services.livestream import (
-    FFmpegStreamConfig,
     LivestreamScheduler,
     StreamSegment,
     StreamWindow,
     build_concat_playlist,
-    build_ffmpeg_command,
     build_playlist,
     compose_highlight_segment,
     compose_match_segment,
@@ -114,6 +112,14 @@ def _get_float(name: str, default: float) -> float:
         return float(value)
     except ValueError:
         return default
+
+
+def _optional_env(name: str) -> str | None:
+    value = os.environ.get(name)
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
 
 
 def _display_name(owner_id: str) -> str:
@@ -200,7 +206,7 @@ class InfiniteLeagueRuntime:
     club_count: int = 20
     initial_match_count: int = 3
     seed: int = 20260328
-    rtmp_url: str = "rtmp://live.example.com/app/GTEX_DEMO"
+    rtmp_url: str | None = None
     league_name: str = "GTEX Infinite League"
     max_recent_matches: int = 64
     store: UniverseStore | None = None
@@ -252,7 +258,7 @@ class InfiniteLeagueRuntime:
             club_count=max(_get_int("GTE_INFINITE_LEAGUE_CLUB_COUNT", 20), 2),
             initial_match_count=max(_get_int("GTE_INFINITE_LEAGUE_INITIAL_MATCH_COUNT", 3), 1),
             seed=_get_int("GTE_INFINITE_LEAGUE_SEED", 20260328),
-            rtmp_url=os.environ.get("GTE_INFINITE_LEAGUE_RTMP_URL", "rtmp://live.example.com/app/GTEX_DEMO"),
+            rtmp_url=_optional_env("GTE_INFINITE_LEAGUE_RTMP_URL"),
         )
 
     def start(self) -> None:
@@ -449,11 +455,10 @@ class InfiniteLeagueRuntime:
                 total_duration_seconds=0, playlist_manifest="", ffmpeg_command=[], segments=[]
             )
         playlist_manifest = build_concat_playlist(window.segments)
-        command = build_ffmpeg_command(FFmpegStreamConfig(rtmp_url=self.rtmp_url), playlist_path="playlist.txt")
         return InfiniteLeagueLivestreamView(
             total_duration_seconds=window.total_duration_seconds,
             playlist_manifest=playlist_manifest,
-            ffmpeg_command=command,
+            ffmpeg_command=[],
             segments=[
                 InfiniteLeagueLivestreamSegmentView(
                     kind=segment.kind,
