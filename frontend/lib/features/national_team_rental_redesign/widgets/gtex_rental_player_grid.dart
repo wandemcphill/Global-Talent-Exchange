@@ -17,7 +17,7 @@ class GtexRentalPlayerGrid extends StatelessWidget {
     required this.selectedTeamName,
     required this.onSelectPlayer,
     required this.onToggleBasket,
-    required this.onRefresh,
+    this.onRefresh,
   });
 
   final List<GtexRentalPlayerView> players;
@@ -31,7 +31,7 @@ class GtexRentalPlayerGrid extends StatelessWidget {
   final String? selectedTeamName;
   final ValueChanged<GtexRentalPlayerView> onSelectPlayer;
   final ValueChanged<GtexRentalPlayerView> onToggleBasket;
-  final VoidCallback onRefresh;
+  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -41,35 +41,31 @@ class GtexRentalPlayerGrid extends StatelessWidget {
     if (error != null && error!.trim().isNotEmpty) {
       return Padding(
         padding: const EdgeInsets.all(GtexSpacing.lg),
-        child: GtexEmptyState(
-          title: 'Rental pool could not load',
-          message: error!,
+        child: GtexBlockedState(
+          title: 'Live rental pool unavailable',
+          reason: error!,
+          severity: GtexBlockedSeverity.error,
+          resolution:
+              'The national rental screen cannot render fallback countries or players.',
           icon: Icons.cloud_off_outlined,
-          actionLabel: 'Retry',
-          onAction: onRefresh,
-          recommendations: const <String>[
-            'Check the selected competition',
-            'Try another country',
-            'Retry the live pool',
-          ],
+          ctaLabel: onRefresh == null ? null : 'Retry live pool',
+          ctaAction: onRefresh,
         ),
       );
     }
     if (players.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(GtexSpacing.lg),
-        child: GtexEmptyState(
-          title: 'No eligible rental players yet',
-          message:
-              'The current country/source filter has no valid rental players. The pool itself is healthy.',
+        child: GtexBlockedState(
+          title: 'No backend-eligible players returned',
+          reason:
+              'The live national-team rental endpoint returned no players for the selected filters.',
+          severity: GtexBlockedSeverity.info,
+          resolution:
+              'Change the competition, country, or team filter, or retry the live pool.',
           icon: Icons.flag_outlined,
-          actionLabel: 'Retry pool',
-          onAction: onRefresh,
-          recommendations: <String>[
-            'Broaden country filters',
-            'Switch source bucket',
-            'Pick another national competition',
-          ],
+          ctaLabel: onRefresh == null ? null : 'Retry live pool',
+          ctaAction: onRefresh,
         ),
       );
     }
@@ -83,9 +79,13 @@ class GtexRentalPlayerGrid extends StatelessWidget {
           child: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               final bool wide = constraints.maxWidth > 820;
-              final int eligibleCount = players
-                  .where((GtexRentalPlayerView player) => player.rentalEligible)
-                  .length;
+              final int eligibleCount =
+                  players
+                      .where(
+                        (GtexRentalPlayerView player) => player.rentalEligible,
+                      )
+                      .length;
+              final int unavailableCount = players.length - eligibleCount;
               final List<Widget> metrics = <Widget>[
                 GtexMetricTile(
                   label: 'Backend eligible',
@@ -99,7 +99,16 @@ class GtexRentalPlayerGrid extends StatelessWidget {
                   accent: GtexColors.gold,
                 ),
                 GtexMetricTile(
-                  label: 'Country',
+                  label: 'Unavailable',
+                  value: unavailableCount.toString(),
+                  icon: Icons.lock_outline,
+                  accent:
+                      unavailableCount == 0
+                          ? GtexColors.textMuted
+                          : GtexColors.gold,
+                ),
+                GtexMetricTile(
+                  label: 'Country pool',
                   value: selectedCountryName ?? 'All',
                   icon: Icons.public_outlined,
                   accent: GtexColors.cyan,
@@ -141,69 +150,92 @@ class GtexRentalPlayerGrid extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: () async => onRefresh(),
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(
-                GtexSpacing.md,
-                0,
-                GtexSpacing.md,
-                GtexSpacing.md,
-              ),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: MediaQuery.sizeOf(context).width > 1350 ? 3 : 2,
-                childAspectRatio: 1.82,
-                mainAxisSpacing: GtexSpacing.md,
-                crossAxisSpacing: GtexSpacing.md,
-              ),
-              itemCount: players.length,
-              itemBuilder: (BuildContext context, int index) {
-                final GtexRentalPlayerView player = players[index];
-                return GtexPlayerCard(
-                  name: player.name,
-                  position: player.position,
-                  clubName: player.clubName,
-                  nationality: player.nationality,
-                  priceLabel: player.priceLabel,
-                  imageUrl: player.imageUrl,
-                  countryCode: player.countryCode,
-                  rarityLabel: player.rarityLabel,
-                  marketHeatLabel: player.marketHeatLabel,
-                  gsiTrendLabel: player.transferTrendLabel,
-                  demandLabel: player.demandLabel,
-                  chemistryLinks: <String>[
-                    player.sourceLabel,
-                    if (player.portraitStatus != null) player.portraitStatus!,
-                  ],
-                  cardVariant:
-                      player.isPreseededRegen
-                          ? GtexPlayerCardVariant.nationalSeed
-                          : (player.gsiScore ?? 0) >= 88
-                          ? GtexPlayerCardVariant.holographic
-                          : GtexPlayerCardVariant.standard,
-                  portraitStatus: player.portraitStatus,
-                  portraitMissingReason: player.portraitMissingReason,
-                  gsiLabel: player.gsiLabel,
-                  gsiTierLabel: player.gsiTierLabel,
-                  ageLabel: player.ageLabel,
-                  isSelected: selectedPlayerId == player.playerId,
-                  onTap: () => onSelectPlayer(player),
-                  onAddToShortlist:
-                      player.rentalEligible
-                          ? () => onToggleBasket(player)
-                          : null,
-                  onBuyNow:
-                      player.rentalEligible
-                          ? () => onToggleBasket(player)
-                          : null,
-                );
-              },
-            ),
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final int crossAxisCount = _rentalGridCrossAxisCount(
+                constraints.maxWidth,
+              );
+              final double childAspectRatio = _rentalGridAspectRatio(
+                crossAxisCount,
+              );
+
+              final Widget grid = GridView.builder(
+                padding: const EdgeInsets.fromLTRB(
+                  GtexSpacing.md,
+                  0,
+                  GtexSpacing.md,
+                  GtexSpacing.md,
+                ),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: childAspectRatio,
+                  mainAxisSpacing: GtexSpacing.md,
+                  crossAxisSpacing: GtexSpacing.md,
+                ),
+                itemCount: players.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final GtexRentalPlayerView player = players[index];
+                  return GtexPlayerCard(
+                    name: player.name,
+                    position: player.position,
+                    clubName: player.clubName,
+                    nationality: player.nationality,
+                    priceLabel: player.priceLabel,
+                    imageUrl: player.imageUrl,
+                    countryCode: player.countryCode,
+                    rarityLabel: player.rarityLabel,
+                    marketHeatLabel: player.marketHeatLabel,
+                    gsiTrendLabel: player.transferTrendLabel,
+                    demandLabel: player.demandLabel,
+                    chemistryLinks: <String>[
+                      player.availabilityLabel,
+                      player.sourceLabel,
+                      if (player.portraitStatus != null) player.portraitStatus!,
+                    ],
+                    cardVariant:
+                        player.isPreseededRegen
+                            ? GtexPlayerCardVariant.nationalSeed
+                            : GtexPlayerCardVariant.standard,
+                    portraitStatus: player.portraitStatus,
+                    portraitMissingReason: player.portraitMissingReason,
+                    gsiLabel: player.gsiLabel,
+                    gsiTierLabel: player.gsiTierLabel,
+                    ageLabel: player.ageLabel,
+                    isSelected: selectedPlayerId == player.playerId,
+                    onTap: () => onSelectPlayer(player),
+                    onAddToShortlist:
+                        player.rentalEligible
+                            ? () => onToggleBasket(player)
+                            : null,
+                    onBuyNow:
+                        player.rentalEligible
+                            ? () => onToggleBasket(player)
+                            : null,
+                  );
+                },
+              );
+
+              if (onRefresh == null) return grid;
+              return RefreshIndicator(
+                onRefresh: () async => onRefresh!.call(),
+                child: grid,
+              );
+            },
           ),
         ),
       ],
     );
   }
+}
+
+int _rentalGridCrossAxisCount(double maxWidth) {
+  if (maxWidth >= 1120) return 3;
+  if (maxWidth >= 680) return 2;
+  return 1;
+}
+
+double _rentalGridAspectRatio(int crossAxisCount) {
+  return crossAxisCount == 1 ? 1.85 : 1.72;
 }
 
 class _RentalPoolWarningBanner extends StatelessWidget {
@@ -292,17 +324,24 @@ class _RentalPoolSkeletonBoard extends StatelessWidget {
           ),
           const SizedBox(height: GtexSpacing.md),
           Expanded(
-            child: GridView.builder(
-              itemCount: 6,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: MediaQuery.sizeOf(context).width > 1350 ? 3 : 2,
-                childAspectRatio: 1.82,
-                mainAxisSpacing: GtexSpacing.md,
-                crossAxisSpacing: GtexSpacing.md,
-              ),
-              itemBuilder:
-                  (BuildContext context, int index) =>
-                      const _RentalSkeletonTile(height: 168),
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final int crossAxisCount = _rentalGridCrossAxisCount(
+                  constraints.maxWidth,
+                );
+                return GridView.builder(
+                  itemCount: 6,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: _rentalGridAspectRatio(crossAxisCount),
+                    mainAxisSpacing: GtexSpacing.md,
+                    crossAxisSpacing: GtexSpacing.md,
+                  ),
+                  itemBuilder:
+                      (BuildContext context, int index) =>
+                          const _RentalSkeletonTile(height: 168),
+                );
+              },
             ),
           ),
         ],

@@ -76,27 +76,27 @@ class HomeFeaturedEventBanner extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'MATCH SIGNAL',
+                        'SOURCE SIGNAL',
                         style: theme.textTheme.labelLarge?.copyWith(
                           color: GteShellTheme.accentArena,
                         ),
                       ),
                       const SizedBox(height: 10),
                       _BannerSignalRow(
-                        label: 'Board',
-                        value: 'Live',
+                        label: 'Source',
+                        value: stats.isNotEmpty ? 'Backend' : 'No metric',
                         color: GteShellTheme.accent,
                       ),
                       const SizedBox(height: 10),
                       _BannerSignalRow(
-                        label: 'Volume',
-                        value: stats.isNotEmpty ? stats.first.value : 'Hot',
+                        label: stats.isNotEmpty ? stats.first.key : 'Metric',
+                        value: stats.isNotEmpty ? stats.first.value : 'None',
                         color: GteShellTheme.accentCapital,
                       ),
                       const SizedBox(height: 10),
                       _BannerSignalRow(
-                        label: 'Story',
-                        value: 'Active',
+                        label: stats.length > 1 ? stats[1].key : 'Signal',
+                        value: stats.length > 1 ? stats[1].value : 'None',
                         color: GteShellTheme.accentWarm,
                       ),
                     ],
@@ -135,11 +135,11 @@ class HomeFeaturedEventBanner extends StatelessWidget {
                           color: GteShellTheme.accentWarm,
                         ),
                         _BannerTag(
-                          label: 'Breaking',
+                          label: 'Backend',
                           color: GteShellTheme.accentArena,
                         ),
                         _BannerTag(
-                          label: 'GTEX TV',
+                          label: 'Action route',
                           color: GteShellTheme.accent,
                         ),
                       ],
@@ -223,7 +223,7 @@ class _BannerTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(4),
         color: color.withValues(alpha: 0.14),
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
@@ -248,7 +248,7 @@ class _BannerStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(8),
         color: Colors.white.withValues(alpha: 0.05),
         border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),

@@ -1,7 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../components/gtex_action_button.dart';
+import '../components/gtex_live_status_chip.dart';
 import '../components/gtex_status_chip.dart';
+import '../components/gtex_value_display.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_spacing.dart';
 
@@ -12,6 +16,8 @@ enum GtexPlayerCardVariant {
   legendary,
   holographic,
 }
+
+enum GtexPlayerCardScale { full, compact, thumbnail }
 
 class GtexPlayerCard extends StatelessWidget {
   const GtexPlayerCard({
@@ -33,9 +39,16 @@ class GtexPlayerCard extends StatelessWidget {
     this.demandLabel,
     this.chemistryLinks = const <String>[],
     this.cardVariant = GtexPlayerCardVariant.standard,
+    this.scale = GtexPlayerCardScale.full,
     this.portraitStatus,
     this.portraitMissingReason,
     this.badges = const <Widget>[],
+    this.formResults = const <String>[],
+    this.valueDeltaLabel,
+    this.valueState = GtexValueState.recent,
+    this.ownerLabel,
+    this.contractLabel,
+    this.potentialLabel,
     this.isSelected = false,
     this.onTap,
     this.onAddToShortlist,
@@ -60,10 +73,182 @@ class GtexPlayerCard extends StatelessWidget {
   final String? demandLabel;
   final List<String> chemistryLinks;
   final GtexPlayerCardVariant cardVariant;
+  final GtexPlayerCardScale scale;
   final String? portraitStatus;
   final String? portraitMissingReason;
   final List<Widget> badges;
+  final List<String> formResults;
+  final String? valueDeltaLabel;
+  final GtexValueState valueState;
+  final String? ownerLabel;
+  final String? contractLabel;
+  final String? potentialLabel;
   final bool isSelected;
+  final VoidCallback? onTap;
+  final VoidCallback? onAddToShortlist;
+  final VoidCallback? onBuyNow;
+  final String buyNowLabel;
+
+  bool get _isRegen => cardVariant != GtexPlayerCardVariant.standard;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color positionAccent = GtexColors.positionColor(position);
+    final bool reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool microLayout =
+            (constraints.hasBoundedWidth && constraints.maxWidth < 128) ||
+            (constraints.hasBoundedHeight && constraints.maxHeight < 92);
+        final bool shortLayout =
+            constraints.hasBoundedHeight && constraints.maxHeight < 360;
+        final bool compact =
+            microLayout || shortLayout || scale == GtexPlayerCardScale.compact;
+        if (microLayout) {
+          return _MicroPlayerCard(
+            name: name,
+            position: position,
+            clubName: clubName,
+            priceLabel: priceLabel,
+            nationality: nationality,
+            isRegen: _isRegen,
+            positionAccent: positionAccent,
+            isSelected: isSelected,
+            reduceMotion: reduceMotion,
+            valueState: valueState,
+            imageUrl: imageUrl,
+            onTap: onTap,
+            valueDeltaLabel: valueDeltaLabel,
+            ratingLabel: ratingLabel ?? gsiLabel,
+          );
+        }
+        if (compact) {
+          return _CompactPlayerCard(
+            name: name,
+            position: position,
+            clubName: clubName,
+            priceLabel: priceLabel,
+            imageUrl: imageUrl,
+            nationality: nationality,
+            isRegen: _isRegen,
+            positionAccent: positionAccent,
+            isSelected: isSelected,
+            reduceMotion: reduceMotion,
+            onTap: onTap,
+            valueDeltaLabel: valueDeltaLabel,
+            valueState: valueState,
+            ratingLabel: ratingLabel ?? gsiLabel,
+            formResults: formResults,
+          );
+        }
+
+        return _FullPlayerCard(
+          name: name,
+          position: position,
+          clubName: clubName,
+          nationality: nationality,
+          priceLabel: priceLabel,
+          imageUrl: imageUrl,
+          gsiLabel: gsiLabel,
+          gsiTierLabel: gsiTierLabel,
+          gsiTrendLabel: gsiTrendLabel,
+          ratingLabel: ratingLabel,
+          ageLabel: ageLabel,
+          countryCode: countryCode,
+          rarityLabel: rarityLabel,
+          marketHeatLabel: marketHeatLabel,
+          demandLabel: demandLabel,
+          chemistryLinks: chemistryLinks,
+          cardVariant: cardVariant,
+          portraitMissingReason: portraitMissingReason,
+          badges: badges,
+          formResults: formResults,
+          valueDeltaLabel: valueDeltaLabel,
+          valueState: valueState,
+          ownerLabel: ownerLabel,
+          contractLabel: contractLabel,
+          potentialLabel: potentialLabel,
+          isSelected: isSelected,
+          onTap: onTap,
+          onAddToShortlist: onAddToShortlist,
+          onBuyNow: onBuyNow,
+          buyNowLabel: buyNowLabel,
+          positionAccent: positionAccent,
+          isRegen: _isRegen,
+          reduceMotion: reduceMotion,
+        );
+      },
+    );
+  }
+}
+
+class _FullPlayerCard extends StatelessWidget {
+  const _FullPlayerCard({
+    required this.name,
+    required this.position,
+    required this.clubName,
+    required this.nationality,
+    required this.priceLabel,
+    required this.cardVariant,
+    required this.formResults,
+    required this.valueState,
+    required this.badges,
+    required this.positionAccent,
+    required this.isRegen,
+    required this.isSelected,
+    required this.reduceMotion,
+    required this.buyNowLabel,
+    this.imageUrl,
+    this.gsiLabel,
+    this.gsiTierLabel,
+    this.gsiTrendLabel,
+    this.ratingLabel,
+    this.ageLabel,
+    this.countryCode,
+    this.rarityLabel,
+    this.marketHeatLabel,
+    this.demandLabel,
+    this.chemistryLinks = const <String>[],
+    this.portraitMissingReason,
+    this.valueDeltaLabel,
+    this.ownerLabel,
+    this.contractLabel,
+    this.potentialLabel,
+    this.onTap,
+    this.onAddToShortlist,
+    this.onBuyNow,
+  });
+
+  final String name;
+  final String position;
+  final String clubName;
+  final String nationality;
+  final String priceLabel;
+  final String? imageUrl;
+  final String? gsiLabel;
+  final String? gsiTierLabel;
+  final String? gsiTrendLabel;
+  final String? ratingLabel;
+  final String? ageLabel;
+  final String? countryCode;
+  final String? rarityLabel;
+  final String? marketHeatLabel;
+  final String? demandLabel;
+  final List<String> chemistryLinks;
+  final GtexPlayerCardVariant cardVariant;
+  final String? portraitMissingReason;
+  final List<Widget> badges;
+  final List<String> formResults;
+  final String? valueDeltaLabel;
+  final GtexValueState valueState;
+  final String? ownerLabel;
+  final String? contractLabel;
+  final String? potentialLabel;
+  final Color positionAccent;
+  final bool isRegen;
+  final bool isSelected;
+  final bool reduceMotion;
   final VoidCallback? onTap;
   final VoidCallback? onAddToShortlist;
   final VoidCallback? onBuyNow;
@@ -71,242 +256,15 @@ class GtexPlayerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color accent = _variantAccent(cardVariant);
-    final bool reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool microLayout =
-            (constraints.hasBoundedWidth && constraints.maxWidth < 120) ||
-            (constraints.hasBoundedHeight && constraints.maxHeight < 120);
-        if (microLayout) {
-          return _GtexPlayerCardMicroShell(
-            accent: accent,
-            cardVariant: cardVariant,
-            isSelected: isSelected,
-            onTap: onTap,
-            position: position,
-            priceLabel: priceLabel,
-            reduceMotion: reduceMotion,
-          );
-        }
-
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
-            onTap: onTap,
-            child: AnimatedContainer(
-              duration:
-                  reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 180),
-              padding: const EdgeInsets.all(GtexSpacing.md),
-              decoration: BoxDecoration(
-                gradient: _cardGradient(accent),
-                borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
-                border: Border.all(
-                  color:
-                      isSelected
-                          ? GtexColors.pitch.withValues(alpha: 0.75)
-                          : accent.withValues(
-                            alpha: _variantBorderOpacity(cardVariant),
-                          ),
-                ),
-                boxShadow: <BoxShadow>[
-                  if (!reduceMotion && isSelected)
-                    GtexColors.glow(GtexColors.pitch, opacity: 0.18),
-                  if (!reduceMotion &&
-                      cardVariant != GtexPlayerCardVariant.standard)
-                    GtexColors.glow(accent, opacity: 0.12),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      _PlayerImage(
-                        imageUrl: imageUrl,
-                        name: name,
-                        position: position,
-                        countryCode: countryCode ?? nationality,
-                        accent: accent,
-                        portraitMissingReason: portraitMissingReason,
-                      ),
-                      const SizedBox(width: GtexSpacing.sm),
-                      if (gsiLabel != null) ...<Widget>[
-                        _GsiPlate(label: gsiLabel!),
-                        const SizedBox(width: GtexSpacing.sm),
-                      ],
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.titleMedium?.copyWith(
-                                color: GtexColors.text,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '$clubName - $nationality',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: GtexColors.textMuted,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: GtexSpacing.xs),
-                            _PlayerCardChipRail(
-                              chips: <Widget>[
-                                GtexStatusChip(
-                                  label: position,
-                                  color: GtexColors.pitch,
-                                  compact: true,
-                                ),
-                                if (rarityLabel != null)
-                                  GtexStatusChip(
-                                    label: rarityLabel!,
-                                    color: accent,
-                                    compact: true,
-                                  ),
-                                if (ratingLabel != null)
-                                  GtexStatusChip(
-                                    label: ratingLabel!,
-                                    color: GtexColors.gold,
-                                    compact: true,
-                                  ),
-                                if (gsiTierLabel != null)
-                                  GtexStatusChip(
-                                    label: gsiTierLabel!,
-                                    color: GtexColors.cyan,
-                                    compact: true,
-                                  ),
-                                if (gsiTrendLabel != null)
-                                  GtexStatusChip(
-                                    label: gsiTrendLabel!,
-                                    color: GtexColors.mint,
-                                    compact: true,
-                                  ),
-                                if (marketHeatLabel != null)
-                                  GtexStatusChip(
-                                    label: marketHeatLabel!,
-                                    color: GtexColors.gold,
-                                    compact: true,
-                                  ),
-                                if (ageLabel != null)
-                                  GtexStatusChip(
-                                    label: ageLabel!,
-                                    color: GtexColors.cyan,
-                                    compact: true,
-                                  ),
-                                ...badges,
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: GtexSpacing.md),
-                  if (chemistryLinks.isNotEmpty ||
-                      demandLabel != null) ...<Widget>[
-                    _PlayerCardSignalRail(
-                      accent: accent,
-                      demandLabel: demandLabel,
-                      links: chemistryLinks,
-                    ),
-                    const SizedBox(height: GtexSpacing.sm),
-                  ],
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              demandLabel == null
-                                  ? 'MARKET VALUE'
-                                  : 'LIVE VALUE',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.labelSmall?.copyWith(
-                                color: GtexColors.textMuted,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.9,
-                              ),
-                            ),
-                            Text(
-                              priceLabel,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.titleMedium?.copyWith(
-                                color: GtexColors.gold,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (onAddToShortlist != null)
-                        IconButton.filledTonal(
-                          tooltip: 'Add to shortlist',
-                          onPressed: onAddToShortlist,
-                          icon: const Icon(Icons.playlist_add),
-                        ),
-                      if (onBuyNow != null) ...<Widget>[
-                        const SizedBox(width: GtexSpacing.xs),
-                        GtexActionButton(
-                          label: buyNowLabel,
-                          onPressed: onBuyNow,
-                          compact: true,
-                          accent: GtexColors.gold,
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _GtexPlayerCardMicroShell extends StatelessWidget {
-  const _GtexPlayerCardMicroShell({
-    required this.accent,
-    required this.cardVariant,
-    required this.isSelected,
-    required this.onTap,
-    required this.position,
-    required this.priceLabel,
-    required this.reduceMotion,
-  });
-
-  final Color accent;
-  final GtexPlayerCardVariant cardVariant;
-  final bool isSelected;
-  final VoidCallback? onTap;
-  final String position;
-  final String priceLabel;
-  final bool reduceMotion;
-
-  @override
-  Widget build(BuildContext context) {
+    final Color provenanceColor =
+        isRegen ? GtexColors.accentViolet : GtexColors.accentBlue;
+    final String identityLabel = isRegen ? 'REGEN DNA' : 'REAL PLAYER';
+    final String identitySupport =
+        isRegen ? 'lineage profile' : 'scouting profile';
+    final String? rarityChip =
+        rarityLabel == null || rarityLabel!.trim().isEmpty
+            ? null
+            : rarityLabel!.trim();
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -314,49 +272,422 @@ class _GtexPlayerCardMicroShell extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration:
-              reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
-          padding: const EdgeInsets.all(2),
+              reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            gradient: _cardGradient(accent),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                GtexColors.surfaceRaised,
+                GtexColors.surfaceBase,
+                provenanceColor.withValues(alpha: isRegen ? 0.1 : 0.07),
+              ],
+            ),
             borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
             border: Border.all(
               color:
                   isSelected
-                      ? GtexColors.pitch.withValues(alpha: 0.75)
-                      : accent.withValues(
-                        alpha: _variantBorderOpacity(cardVariant),
-                      ),
+                      ? GtexColors.accentPrimary
+                      : GtexColors.surfaceBorder,
             ),
-            boxShadow: <BoxShadow>[
-              if (!reduceMotion && isSelected)
-                GtexColors.glow(GtexColors.pitch, opacity: 0.18),
-              if (!reduceMotion &&
-                  cardVariant != GtexPlayerCardVariant.standard)
-                GtexColors.glow(accent, opacity: 0.12),
-            ],
+            boxShadow: <BoxShadow>[GtexColors.glow(Colors.black, opacity: 0.3)],
           ),
-          child: ClipRect(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(height: 4, color: positionAccent),
+              _IdentityBanner(
+                label: identityLabel,
+                support: identitySupport,
+                icon: isRegen ? Icons.hub_rounded : Icons.badge_rounded,
+                color: provenanceColor,
+              ),
+              Padding(
+                padding: const EdgeInsets.all(GtexSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Icon(Icons.person, size: 16, color: accent),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$position $priceLabel',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: GtexColors.text,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        _PlayerImage(
+                          imageUrl: imageUrl,
+                          name: name,
+                          position: position,
+                          countryCode: countryCode ?? nationality,
+                          accent: provenanceColor,
+                          isRegen: isRegen,
+                          portraitMissingReason: portraitMissingReason,
+                        ),
+                        const SizedBox(width: GtexSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: <Widget>[
+                                  GtexStatusChip(
+                                    label: identityLabel,
+                                    color: provenanceColor,
+                                    compact: true,
+                                  ),
+                                  if (rarityChip != null)
+                                    GtexStatusChip(
+                                      label: rarityChip,
+                                      color: provenanceColor,
+                                      compact: true,
+                                    ),
+                                  if (marketHeatLabel != null)
+                                    GtexStatusChip(
+                                      label: marketHeatLabel!,
+                                      color: GtexColors.accentAmber,
+                                      compact: true,
+                                    ),
+                                  if (demandLabel != null)
+                                    GtexLiveStatusChip(
+                                      status: GtexLiveStatus.live,
+                                      label: demandLabel!,
+                                      compact: true,
+                                    ),
+                                  ...badges,
+                                ],
+                              ),
+                              const SizedBox(height: GtexSpacing.sm),
+                              Text(
+                                position.toUpperCase(),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelLarge?.copyWith(
+                                  color: positionAccent,
+                                  fontFamily: 'Barlow',
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                              Text(
+                                name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.titleLarge?.copyWith(
+                                  color: GtexColors.textPrimary,
+                                  fontFamily: 'DM Sans',
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: GtexSpacing.xxs),
+                              Text(
+                                '$clubName / $nationality',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: GtexColors.textSecondary,
+                                  fontFamily: 'DM Sans',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: GtexSpacing.md),
+                    Row(
+                      children: <Widget>[
+                        if (gsiLabel != null) ...<Widget>[
+                          _GsiPlate(label: gsiLabel!),
+                          const SizedBox(width: GtexSpacing.xs),
+                        ],
+                        Expanded(
+                          child: _StatGrid(
+                            stats: <_StatItem>[
+                              if (ratingLabel != null)
+                                _StatItem('OVR', ratingLabel!),
+                              if (potentialLabel != null)
+                                _StatItem('POT', potentialLabel!),
+                              if (ageLabel != null) _StatItem('AGE', ageLabel!),
+                              if (gsiTierLabel != null)
+                                _StatItem('TIER', gsiTierLabel!),
+                              if (gsiTrendLabel != null)
+                                _StatItem('TREND', gsiTrendLabel!),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (formResults.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: GtexSpacing.sm),
+                      _FormRail(results: formResults),
+                    ],
+                    const SizedBox(height: GtexSpacing.md),
+                    Divider(color: GtexColors.surfaceBorder, height: 1),
+                    const SizedBox(height: GtexSpacing.md),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        Expanded(
+                          child: GtexValueDisplay(
+                            valueLabel: priceLabel,
+                            deltaLabel: valueDeltaLabel,
+                            state: valueState,
+                            size: GtexValueDisplaySize.standard,
+                            updatedLabel:
+                                valueState == GtexValueState.live
+                                    ? 'Updated live'
+                                    : null,
+                          ),
+                        ),
+                        if (onAddToShortlist != null)
+                          IconButton.outlined(
+                            tooltip: 'Add to watchlist',
+                            onPressed: onAddToShortlist,
+                            icon: const Icon(Icons.star_border_rounded),
+                          ),
+                        if (onBuyNow != null) ...<Widget>[
+                          const SizedBox(width: GtexSpacing.xs),
+                          GtexActionButton(
+                            label: buyNowLabel,
+                            onPressed: onBuyNow,
+                            compact: true,
+                            accent: GtexColors.accentPrimary,
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (_footerSignals.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: GtexSpacing.sm),
+                      _SignalRail(
+                        signals: _footerSignals,
+                        accent: provenanceColor,
+                      ),
+                    ],
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<String> get _footerSignals {
+    return <String>[
+      if (ownerLabel != null && ownerLabel!.trim().isNotEmpty) ownerLabel!,
+      if (contractLabel != null && contractLabel!.trim().isNotEmpty)
+        contractLabel!,
+      ...chemistryLinks.where((String item) => item.trim().isNotEmpty).take(2),
+    ];
+  }
+}
+
+class _IdentityBanner extends StatelessWidget {
+  const _IdentityBanner({
+    required this.label,
+    required this.support,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String support;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: GtexSpacing.md,
+        vertical: GtexSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border(
+          bottom: BorderSide(color: color.withValues(alpha: 0.18)),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: GtexSpacing.xs),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontFamily: 'Barlow',
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.6,
             ),
+          ),
+          const SizedBox(width: GtexSpacing.xs),
+          Expanded(
+            child: Text(
+              support.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: GtexColors.textSecondary,
+                fontFamily: 'DM Sans',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactPlayerCard extends StatelessWidget {
+  const _CompactPlayerCard({
+    required this.name,
+    required this.position,
+    required this.clubName,
+    required this.priceLabel,
+    required this.nationality,
+    required this.isRegen,
+    required this.positionAccent,
+    required this.isSelected,
+    required this.reduceMotion,
+    required this.valueState,
+    required this.formResults,
+    this.imageUrl,
+    this.onTap,
+    this.valueDeltaLabel,
+    this.ratingLabel,
+  });
+
+  final String name;
+  final String position;
+  final String clubName;
+  final String priceLabel;
+  final String nationality;
+  final bool isRegen;
+  final Color positionAccent;
+  final bool isSelected;
+  final bool reduceMotion;
+  final String? imageUrl;
+  final VoidCallback? onTap;
+  final String? valueDeltaLabel;
+  final String? ratingLabel;
+  final GtexValueState valueState;
+  final List<String> formResults;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color provenanceColor =
+        isRegen ? GtexColors.accentViolet : GtexColors.accentBlue;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration:
+              reduceMotion ? Duration.zero : const Duration(milliseconds: 160),
+          height: 76,
+          decoration: BoxDecoration(
+            color: GtexColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+            border: Border.all(
+              color:
+                  isSelected
+                      ? GtexColors.accentPrimary
+                      : GtexColors.surfaceBorder,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: positionAccent,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(GtexSpacing.radiusMd),
+                    bottomLeft: Radius.circular(GtexSpacing.radiusMd),
+                  ),
+                ),
+              ),
+              const SizedBox(width: GtexSpacing.xs),
+              _PlayerImage(
+                imageUrl: imageUrl,
+                name: name,
+                position: position,
+                countryCode: nationality,
+                accent: provenanceColor,
+                isRegen: isRegen,
+                compact: true,
+              ),
+              const SizedBox(width: GtexSpacing.sm),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      isRegen ? 'REGEN DNA' : 'REAL PLAYER',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: provenanceColor,
+                        fontFamily: 'Barlow',
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: GtexColors.textPrimary,
+                        fontFamily: 'DM Sans',
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$position / $clubName',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: GtexColors.textSecondary,
+                        fontFamily: 'DM Sans',
+                      ),
+                    ),
+                    if (formResults.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 4),
+                      _FormRail(results: formResults, compact: true),
+                    ],
+                  ],
+                ),
+              ),
+              if (ratingLabel != null) ...<Widget>[
+                const SizedBox(width: GtexSpacing.xs),
+                _RatingPill(label: ratingLabel!, accent: positionAccent),
+              ],
+              const SizedBox(width: GtexSpacing.xs),
+              SizedBox(
+                width: 92,
+                child: GtexValueDisplay(
+                  valueLabel: priceLabel,
+                  deltaLabel: valueDeltaLabel,
+                  state: valueState,
+                  size: GtexValueDisplaySize.small,
+                  showStateIndicator: false,
+                ),
+              ),
+              const SizedBox(width: GtexSpacing.xs),
+            ],
           ),
         ),
       ),
@@ -364,115 +695,149 @@ class _GtexPlayerCardMicroShell extends StatelessWidget {
   }
 }
 
-Color _variantAccent(GtexPlayerCardVariant variant) {
-  switch (variant) {
-    case GtexPlayerCardVariant.nationalSeed:
-      return GtexColors.mint;
-    case GtexPlayerCardVariant.elite:
-      return GtexColors.gold;
-    case GtexPlayerCardVariant.legendary:
-      return GtexColors.gold;
-    case GtexPlayerCardVariant.holographic:
-      return GtexColors.cyan;
-    case GtexPlayerCardVariant.standard:
-      return GtexColors.pitch;
-  }
-}
-
-double _variantBorderOpacity(GtexPlayerCardVariant variant) {
-  switch (variant) {
-    case GtexPlayerCardVariant.standard:
-      return 0.42;
-    case GtexPlayerCardVariant.nationalSeed:
-      return 0.62;
-    case GtexPlayerCardVariant.elite:
-    case GtexPlayerCardVariant.legendary:
-    case GtexPlayerCardVariant.holographic:
-      return 0.72;
-  }
-}
-
-LinearGradient _cardGradient(Color accent) {
-  return LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: <Color>[
-      accent.withValues(alpha: 0.16),
-      GtexColors.panelStrong.withValues(alpha: 0.96),
-      GtexColors.stadiumBlack.withValues(alpha: 0.98),
-    ],
-  );
-}
-
-class _PlayerCardChipRail extends StatelessWidget {
-  const _PlayerCardChipRail({required this.chips});
-
-  final List<Widget> chips;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 28,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemBuilder: (BuildContext context, int index) => chips[index],
-        separatorBuilder:
-            (BuildContext context, int index) => const SizedBox(width: 6),
-        itemCount: chips.length,
-      ),
-    );
-  }
-}
-
-class _PlayerCardSignalRail extends StatelessWidget {
-  const _PlayerCardSignalRail({
-    required this.accent,
-    required this.links,
-    this.demandLabel,
+class _MicroPlayerCard extends StatelessWidget {
+  const _MicroPlayerCard({
+    required this.name,
+    required this.position,
+    required this.clubName,
+    required this.priceLabel,
+    required this.nationality,
+    required this.isRegen,
+    required this.positionAccent,
+    required this.isSelected,
+    required this.reduceMotion,
+    required this.valueState,
+    this.imageUrl,
+    this.onTap,
+    this.valueDeltaLabel,
+    this.ratingLabel,
   });
 
-  final Color accent;
-  final List<String> links;
-  final String? demandLabel;
+  final String name;
+  final String position;
+  final String clubName;
+  final String priceLabel;
+  final String nationality;
+  final bool isRegen;
+  final Color positionAccent;
+  final bool isSelected;
+  final bool reduceMotion;
+  final GtexValueState valueState;
+  final String? imageUrl;
+  final VoidCallback? onTap;
+  final String? valueDeltaLabel;
+  final String? ratingLabel;
 
   @override
   Widget build(BuildContext context) {
-    final List<String> signals = <String>[
-      if (demandLabel != null && demandLabel!.trim().isNotEmpty) demandLabel!,
-      ...links.where((String item) => item.trim().isNotEmpty).take(3),
-    ];
-    if (signals.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: signals
-          .map(
-            (String signal) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(GtexSpacing.radiusPill),
-                border: Border.all(color: accent.withValues(alpha: 0.26)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Icon(Icons.hub_outlined, size: 12, color: accent),
-                  const SizedBox(width: 4),
-                  Text(
-                    signal,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: GtexColors.textSecondary,
-                      fontWeight: FontWeight.w800,
+    final Color provenanceColor =
+        isRegen ? GtexColors.accentViolet : GtexColors.accentBlue;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        onTap: onTap,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double width =
+                constraints.hasBoundedWidth && constraints.maxWidth.isFinite
+                    ? constraints.maxWidth
+                    : 180;
+            final double height =
+                constraints.hasBoundedHeight && constraints.maxHeight.isFinite
+                    ? constraints.maxHeight
+                    : 58;
+
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+              child: AnimatedContainer(
+                duration:
+                    reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 160),
+                width: width,
+                height: height,
+                decoration: BoxDecoration(
+                  color: GtexColors.surfaceRaised,
+                  border: Border.all(
+                    color:
+                        isSelected
+                            ? GtexColors.accentPrimary
+                            : GtexColors.surfaceBorder,
+                  ),
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: 190,
+                    height: 58,
+                    child: Row(
+                      children: <Widget>[
+                        Container(width: 4, color: positionAccent),
+                        const SizedBox(width: GtexSpacing.xs),
+                        _PlayerImage(
+                          imageUrl: imageUrl,
+                          name: name,
+                          position: position,
+                          countryCode: nationality,
+                          accent: provenanceColor,
+                          isRegen: isRegen,
+                          compact: true,
+                        ),
+                        const SizedBox(width: GtexSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelLarge?.copyWith(
+                                  color: GtexColors.textPrimary,
+                                  fontFamily: 'DM Sans',
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$position / $clubName',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.labelSmall?.copyWith(
+                                  color: GtexColors.textSecondary,
+                                  fontFamily: 'DM Sans',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: GtexSpacing.xs),
+                        SizedBox(
+                          width: 64,
+                          child: GtexValueDisplay(
+                            valueLabel: ratingLabel ?? priceLabel,
+                            deltaLabel: valueDeltaLabel,
+                            state: valueState,
+                            size: GtexValueDisplaySize.small,
+                            showStateIndicator: false,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          )
-          .toList(growable: false),
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -484,7 +849,9 @@ class _PlayerImage extends StatelessWidget {
     required this.position,
     required this.countryCode,
     required this.accent,
+    required this.isRegen,
     this.portraitMissingReason,
+    this.compact = false,
   });
 
   final String? imageUrl;
@@ -492,27 +859,31 @@ class _PlayerImage extends StatelessWidget {
   final String position;
   final String countryCode;
   final Color accent;
+  final bool isRegen;
   final String? portraitMissingReason;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final String? trimmed = imageUrl?.trim();
+    final double size = compact ? 48 : 96;
     return Container(
-      width: 68,
-      height: 82,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
-        border: Border.all(color: accent.withValues(alpha: 0.38)),
+        color: GtexColors.surfaceOverlay,
+        shape: BoxShape.circle,
+        border: Border.all(color: accent.withValues(alpha: 0.5)),
       ),
       clipBehavior: Clip.antiAlias,
       child:
           trimmed == null || trimmed.isEmpty
-              ? _FootballSilhouette(
+              ? _PlayerAvatarFallback(
                 name: name,
                 position: position,
                 countryCode: countryCode,
                 accent: accent,
+                isRegen: isRegen,
                 reason: portraitMissingReason,
               )
               : Image.network(
@@ -531,14 +902,127 @@ class _PlayerImage extends StatelessWidget {
                   return const _PortraitLoadingPlate();
                 },
                 errorBuilder:
-                    (_, __, ___) => _FootballSilhouette(
+                    (_, __, ___) => _PlayerAvatarFallback(
                       name: name,
                       position: position,
                       countryCode: countryCode,
                       accent: accent,
+                      isRegen: isRegen,
                       reason: portraitMissingReason,
                     ),
               ),
+    );
+  }
+}
+
+class _PlayerAvatarFallback extends StatelessWidget {
+  const _PlayerAvatarFallback({
+    required this.name,
+    required this.position,
+    required this.countryCode,
+    required this.accent,
+    required this.isRegen,
+    this.reason,
+  });
+
+  final String name;
+  final String position;
+  final String countryCode;
+  final Color accent;
+  final bool isRegen;
+  final String? reason;
+
+  @override
+  Widget build(BuildContext context) {
+    final String initials =
+        name
+            .split(RegExp(r'\s+'))
+            .where((String part) => part.isNotEmpty)
+            .take(2)
+            .map((String part) => part.substring(0, 1).toUpperCase())
+            .join();
+    final String code =
+        countryCode.trim().isEmpty ? 'GTEX' : countryCode.toUpperCase();
+    return Tooltip(
+      message:
+          reason == null
+              ? 'Portrait unavailable'
+              : 'Portrait unavailable: $reason',
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          CustomPaint(
+            painter:
+                isRegen
+                    ? _GeometricRegenAvatarPainter(accent, name)
+                    : _FootballCardPitchPainter(accent),
+          ),
+          Center(
+            child: Icon(
+              isRegen ? Icons.hub_rounded : Icons.person_rounded,
+              size: 38,
+              color: GtexColors.textPrimary.withValues(alpha: 0.86),
+            ),
+          ),
+          Positioned(
+            left: 8,
+            top: 8,
+            child: Text(
+              position.toUpperCase(),
+              style: TextStyle(
+                color: accent,
+                fontFamily: 'Barlow',
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Text(
+              code.length > 4 ? code.substring(0, 4) : code,
+              style: TextStyle(
+                color: GtexColors.textSecondary,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 8,
+            child: Text(
+              initials.isEmpty ? 'GT' : initials,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: GtexColors.textPrimary,
+                fontFamily: 'JetBrains Mono',
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PortraitLoadingPlate extends StatelessWidget {
+  const _PortraitLoadingPlate();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(color: GtexColors.surfaceHover),
+      child: Center(
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
     );
   }
 }
@@ -553,12 +1037,14 @@ class _GsiPlate extends StatelessWidget {
     final String value =
         label.replaceFirst(RegExp(r'^GSI\s*', caseSensitive: false), '').trim();
     return Container(
-      width: 54,
+      width: 58,
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: GtexColors.gold.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),
-        border: Border.all(color: GtexColors.gold.withValues(alpha: 0.62)),
+        color: GtexColors.surfaceOverlay,
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        border: Border.all(
+          color: GtexColors.accentAmber.withValues(alpha: 0.55),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -568,7 +1054,8 @@ class _GsiPlate extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: GtexColors.gold,
+              color: GtexColors.accentAmber,
+              fontFamily: 'JetBrains Mono',
               fontSize: 18,
               fontWeight: FontWeight.w900,
               height: 1,
@@ -578,10 +1065,12 @@ class _GsiPlate extends StatelessWidget {
           const Text(
             'GSI',
             style: TextStyle(
-              color: GtexColors.textMuted,
+              color: GtexColors.textSecondary,
+              fontFamily: 'Barlow',
               fontSize: 9,
               fontWeight: FontWeight.w900,
               height: 1,
+              letterSpacing: 0.4,
             ),
           ),
         ],
@@ -590,132 +1079,192 @@ class _GsiPlate extends StatelessWidget {
   }
 }
 
-class _PortraitLoadingPlate extends StatelessWidget {
-  const _PortraitLoadingPlate();
+class _StatItem {
+  const _StatItem(this.label, this.value);
+
+  final String label;
+  final String value;
+}
+
+class _StatGrid extends StatelessWidget {
+  const _StatGrid({required this.stats});
+
+  final List<_StatItem> stats;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            GtexColors.pitch.withValues(alpha: 0.16),
-            GtexColors.panelStrong,
-            GtexColors.cyan.withValues(alpha: 0.12),
-          ],
-        ),
-      ),
-      child: const Center(
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
+    if (stats.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Wrap(
+      spacing: GtexSpacing.xs,
+      runSpacing: GtexSpacing.xs,
+      children: stats
+          .take(5)
+          .map((_StatItem stat) {
+            return Container(
+              width: 66,
+              padding: const EdgeInsets.symmetric(
+                horizontal: GtexSpacing.xs,
+                vertical: GtexSpacing.xs,
+              ),
+              decoration: BoxDecoration(
+                color: GtexColors.surfaceOverlay,
+                borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+                border: Border.all(color: GtexColors.surfaceBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    stat.label.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: GtexColors.textSecondary,
+                      fontFamily: 'Barlow',
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    stat.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: GtexColors.textPrimary,
+                      fontFamily: 'JetBrains Mono',
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          })
+          .toList(growable: false),
     );
   }
 }
 
-class _FootballSilhouette extends StatelessWidget {
-  const _FootballSilhouette({
-    required this.name,
-    required this.position,
-    required this.countryCode,
-    required this.accent,
-    this.reason,
-  });
+class _FormRail extends StatelessWidget {
+  const _FormRail({required this.results, this.compact = false});
 
-  final String name;
-  final String position;
-  final String countryCode;
-  final Color accent;
-  final String? reason;
+  final List<String> results;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final String initials =
-        name
-            .split(RegExp(r'\s+'))
-            .where((String part) => part.isNotEmpty)
-            .take(2)
-            .map((String part) => part.characters.first.toUpperCase())
-            .join();
-    final String code =
-        countryCode.trim().isEmpty ? 'GTEX' : countryCode.toUpperCase();
-    return Tooltip(
-      message:
-          reason == null ? 'Portrait pending' : 'Portrait pending: $reason',
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: <Color>[
-              accent.withValues(alpha: 0.22),
-              GtexColors.panelStrong,
-              GtexColors.stadiumBlack,
-            ],
-          ),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            Positioned(
-              left: 8,
-              right: 8,
-              bottom: 8,
-              child: SizedBox(
-                height: 36,
-                child: CustomPaint(painter: _FootballCardPitchPainter(accent)),
-              ),
-            ),
-            Center(
-              child: Icon(
-                Icons.person_rounded,
-                size: 44,
-                color: GtexColors.text.withValues(alpha: 0.88),
-              ),
-            ),
-            Positioned(
-              left: 6,
-              top: 6,
-              child: Text(
-                position,
-                style: const TextStyle(
-                  color: GtexColors.text,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: results
+          .take(5)
+          .map((String result) {
+            final String label =
+                result.trim().isEmpty
+                    ? '-'
+                    : result.trim().substring(0, 1).toUpperCase();
+            return Container(
+              width: compact ? 18 : 24,
+              height: compact ? 18 : 22,
+              margin: const EdgeInsets.only(right: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _formColor(label).withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),
+                border: Border.all(
+                  color: _formColor(label).withValues(alpha: 0.48),
                 ),
               ),
-            ),
-            Positioned(
-              right: 6,
-              top: 6,
               child: Text(
-                code.length > 4 ? code.substring(0, 4) : code,
+                label,
                 style: TextStyle(
-                  color: accent,
-                  fontSize: 9,
+                  color: _formColor(label),
+                  fontSize: compact ? 10 : 11,
+                  fontFamily: 'JetBrains Mono',
                   fontWeight: FontWeight.w900,
                 ),
               ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 8,
+            );
+          })
+          .toList(growable: false),
+    );
+  }
+
+  Color _formColor(String label) {
+    return switch (label) {
+      'W' => GtexColors.accentPrimary,
+      'D' => GtexColors.accentAmber,
+      'L' => GtexColors.accentRed,
+      _ => GtexColors.textTertiary,
+    };
+  }
+}
+
+class _SignalRail extends StatelessWidget {
+  const _SignalRail({required this.signals, required this.accent});
+
+  final List<String> signals;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: signals
+          .map((String signal) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),
+                border: Border.all(color: accent.withValues(alpha: 0.22)),
+              ),
               child: Text(
-                initials.isEmpty ? 'GT' : initials,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: GtexColors.text,
-                  fontWeight: FontWeight.w900,
+                signal,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: GtexColors.textSecondary,
+                  fontFamily: 'DM Sans',
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ),
-          ],
+            );
+          })
+          .toList(growable: false),
+    );
+  }
+}
+
+class _RatingPill extends StatelessWidget {
+  const _RatingPill({required this.label, required this.accent});
+
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        border: Border.all(color: accent.withValues(alpha: 0.38)),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label.replaceFirst(RegExp(r'^GSI\s*', caseSensitive: false), ''),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: accent,
+          fontFamily: 'JetBrains Mono',
+          fontWeight: FontWeight.w900,
+          fontSize: 13,
         ),
       ),
     );
@@ -731,44 +1280,22 @@ class _FootballCardPitchPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final Paint line =
         Paint()
-          ..color = accent.withValues(alpha: 0.25)
+          ..color = accent.withValues(alpha: 0.18)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1;
     final Rect pitch = Offset.zero & size;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(pitch.deflate(1), const Radius.circular(4)),
+      RRect.fromRectAndRadius(pitch.deflate(8), const Radius.circular(999)),
       line,
     );
     canvas.drawLine(
-      Offset(size.width / 2, 1),
-      Offset(size.width / 2, size.height - 1),
+      Offset(size.width / 2, 8),
+      Offset(size.width / 2, size.height - 8),
       line,
     );
     canvas.drawCircle(
       Offset(size.width / 2, size.height / 2),
-      size.height * 0.18,
-      line,
-    );
-    canvas.drawArc(
-      Rect.fromCenter(
-        center: Offset(1, size.height / 2),
-        width: size.height * 0.8,
-        height: size.height * 0.8,
-      ),
-      -1.2,
-      2.4,
-      false,
-      line,
-    );
-    canvas.drawArc(
-      Rect.fromCenter(
-        center: Offset(size.width - 1, size.height / 2),
-        width: size.height * 0.8,
-        height: size.height * 0.8,
-      ),
-      2.0,
-      2.4,
-      false,
+      size.shortestSide * 0.18,
       line,
     );
   }
@@ -776,4 +1303,40 @@ class _FootballCardPitchPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _FootballCardPitchPainter oldDelegate) =>
       oldDelegate.accent != accent;
+}
+
+class _GeometricRegenAvatarPainter extends CustomPainter {
+  const _GeometricRegenAvatarPainter(this.accent, this.seed);
+
+  final Color accent;
+  final String seed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final int hash = seed.codeUnits.fold<int>(0, (int a, int b) => a + b);
+    final Paint fill = Paint()..color = accent.withValues(alpha: 0.18);
+    final Paint stroke =
+        Paint()
+          ..color = accent.withValues(alpha: 0.42)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2;
+    final Offset center = Offset(size.width / 2, size.height / 2);
+    for (int i = 0; i < 6; i += 1) {
+      final double radius = size.shortestSide * (0.18 + (i * 0.045));
+      final double angle = (hash + i * 47) * math.pi / 180;
+      final Offset offset = Offset(math.cos(angle), math.sin(angle)) * radius;
+      canvas.drawCircle(center + offset, radius * 0.62, fill);
+      canvas.drawCircle(center + offset, radius * 0.62, stroke);
+    }
+    canvas.drawCircle(center, size.shortestSide * 0.36, stroke);
+    canvas.drawLine(
+      Offset(size.width * 0.22, size.height * 0.72),
+      Offset(size.width * 0.78, size.height * 0.28),
+      stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _GeometricRegenAvatarPainter oldDelegate) =>
+      oldDelegate.accent != accent || oldDelegate.seed != seed;
 }

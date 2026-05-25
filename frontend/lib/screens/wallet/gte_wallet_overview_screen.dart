@@ -160,79 +160,158 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'Club funds',
+                        'Wallet command desk',
                         style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Club funds',
+                        style: Theme.of(context).textTheme.labelSmall,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Track GTEX Coin for transfers and Fan Coin for gifting and user competitions.',
+                        'Two live balances, two jobs: GTC moves football capital, FNC powers fan activity, gifts, and community play.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        children: <Widget>[
-                          _BalanceTile(
-                            label: _walletUnitLabel(coinSummary.currency),
-                            value: _formatWalletAmount(
-                              coinSummary.availableBalance,
-                              coinSummary.currency,
+                      LayoutBuilder(
+                        builder: (
+                          BuildContext context,
+                          BoxConstraints constraints,
+                        ) {
+                          final bool stacked = constraints.maxWidth < 680;
+                          final List<Widget> cards = <Widget>[
+                            _CoinBalanceCard(
+                              title: 'GTEX Coin',
+                              code: 'GTC',
+                              icon: Icons.monetization_on_outlined,
+                              summary: coinSummary,
+                              accent: GteShellTheme.accentCapital,
+                              description:
+                                  'Transfer bids, player purchases, trader settlement, and withdrawals.',
+                              primaryActionLabel: 'Deposit',
+                              secondaryActionLabel: 'Withdraw GTC',
+                              onPrimaryAction: _openDeposit,
+                              onSecondaryAction: _openWithdrawals,
                             ),
-                            detail: _walletUnitDetail(coinSummary.currency),
-                            accent: GteShellTheme.accentCapital,
-                          ),
-                          const SizedBox(width: 12),
-                          _BalanceTile(
-                            label: _walletUnitLabel(fanSummary.currency),
-                            value: _formatWalletAmount(
-                              fanSummary.availableBalance,
-                              fanSummary.currency,
+                            _CoinBalanceCard(
+                              title: 'Fan Coin',
+                              code: 'FNC',
+                              icon: Icons.stars_outlined,
+                              summary: fanSummary,
+                              accent: const Color(0xFF3D7EFF),
+                              description:
+                                  'Gifting, reactions, community entry fees, and fan economy rewards.',
+                              primaryActionLabel: 'View FNC history',
+                              secondaryActionLabel: 'Not withdrawable',
+                              onPrimaryAction: _openTransactions,
+                              onSecondaryAction: null,
                             ),
-                            detail: _walletUnitDetail(fanSummary.currency),
-                            accent: GteShellTheme.accent,
-                          ),
-                        ],
+                          ];
+                          if (stacked) {
+                            return Column(
+                              children: cards
+                                  .map(
+                                    (Widget card) => Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: card,
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                            );
+                          }
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Expanded(child: cards[0]),
+                              const SizedBox(width: 12),
+                              Expanded(child: cards[1]),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        children: <Widget>[
-                          _MetricTile(
-                            label: 'Withdrawable now',
-                            value: gteFormatCredits(
-                              eligibility.withdrawableNow,
+                      LayoutBuilder(
+                        builder: (
+                          BuildContext context,
+                          BoxConstraints constraints,
+                        ) {
+                          final bool stacked = constraints.maxWidth < 560;
+                          final List<Widget> metrics = <Widget>[
+                            _MetricTile(
+                              label: 'Withdrawable GTC',
+                              value: gteFormatGtc(eligibility.withdrawableNow),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          _MetricTile(
-                            label: 'Funding rail',
-                            value: _railLabel(overview.depositMode),
-                          ),
-                        ],
+                            _MetricTile(
+                              label: 'Funding rail',
+                              value: _railLabel(overview.depositMode),
+                            ),
+                          ];
+                          if (stacked) {
+                            return Column(
+                              children: metrics
+                                  .map(
+                                    (Widget metric) => Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: metric,
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                            );
+                          }
+                          return Row(
+                            children: <Widget>[
+                              Expanded(child: metrics[0]),
+                              const SizedBox(width: 12),
+                              Expanded(child: metrics[1]),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 16),
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
                         children: <Widget>[
-                          FilledButton.icon(
+                          _WalletQuickAction(
+                            label: 'Top up via KoraPay',
+                            detail: _providerStatusLabel(
+                              overview.paymentProviderStatus['korapay'],
+                            ),
+                            icon: Icons.open_in_new_outlined,
+                            accent: GteShellTheme.accentCapital,
                             onPressed: _openDeposit,
-                            icon: const Icon(Icons.add_circle_outline),
-                            label: const Text('Deposit'),
                           ),
-                          OutlinedButton.icon(
+                          _WalletQuickAction(
+                            label: 'Manual deposit',
+                            detail: 'Admin review',
+                            icon: Icons.account_balance_outlined,
+                            accent: GteShellTheme.accentWarm,
+                            onPressed: _openDeposit,
+                          ),
+                          _WalletQuickAction(
+                            label: 'Withdraw GTC',
+                            detail: _railLabel(overview.withdrawalMode),
+                            icon: Icons.outbox_outlined,
+                            accent: GteShellTheme.positive,
                             onPressed: _openWithdrawals,
-                            icon: const Icon(Icons.outbox_outlined),
-                            label: const Text('Withdraw'),
                           ),
-                          OutlinedButton.icon(
+                          _WalletQuickAction(
+                            label: 'Transaction history',
+                            detail: '${transactions.length} recent records',
+                            icon: Icons.receipt_long_outlined,
+                            accent: GteShellTheme.accent,
                             onPressed: _openTransactions,
-                            icon: const Icon(Icons.receipt_long_outlined),
-                            label: const Text('Transaction History'),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'GTEX Coin powers transfers and withdrawals. Fan Coin powers gifting and user-hosted competition entries.',
+                        'Live funding is available through KoraPay checkout or manual bank transfer review.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -351,43 +430,173 @@ class _GteWalletOverviewScreenState extends State<GteWalletOverviewScreen> {
   }
 }
 
-class _BalanceTile extends StatelessWidget {
-  const _BalanceTile({
-    required this.label,
-    required this.value,
-    required this.detail,
+class _CoinBalanceCard extends StatelessWidget {
+  const _CoinBalanceCard({
+    required this.title,
+    required this.code,
+    required this.icon,
+    required this.summary,
     required this.accent,
+    required this.description,
+    required this.primaryActionLabel,
+    required this.secondaryActionLabel,
+    required this.onPrimaryAction,
+    required this.onSecondaryAction,
   });
 
-  final String label;
-  final String value;
-  final String detail;
+  final String title;
+  final String code;
+  final IconData icon;
+  final GteWalletSummary summary;
   final Color accent;
+  final String description;
+  final String primaryActionLabel;
+  final String secondaryActionLabel;
+  final VoidCallback? onPrimaryAction;
+  final VoidCallback? onSecondaryAction;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          color: accent.withValues(alpha: 0.08),
-          border: Border.all(color: accent.withValues(alpha: 0.16)),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: RadialGradient(
+          center: Alignment.topRight,
+          radius: 1.2,
+          colors: <Color>[
+            accent.withValues(alpha: 0.24),
+            GteShellTheme.panelStrong.withValues(alpha: 0.72),
+          ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              label.toUpperCase(),
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: accent,
-                letterSpacing: 0.8,
+        border: Border.all(color: accent.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent.withValues(alpha: 0.16),
+                  border: Border.all(color: accent.withValues(alpha: 0.3)),
+                ),
+                child: Icon(icon, color: accent),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      code,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: accent,
+                        letterSpacing: 0.8,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      title.toUpperCase(),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            gteFormatShortAmountForUnit(
+              summary.availableBalance,
+              summary.currency,
             ),
-            const SizedBox(height: 8),
-            Text(value, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(detail, style: Theme.of(context).textTheme.bodySmall),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(description, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _RestrictionChip(
+                label: 'Reserved',
+                value: gteFormatShortAmountForUnit(
+                  summary.reservedBalance,
+                  summary.currency,
+                ),
+              ),
+              _RestrictionChip(
+                label: 'Total',
+                value: gteFormatShortAmountForUnit(
+                  summary.totalBalance,
+                  summary.currency,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                onPressed: onPrimaryAction,
+                icon: const Icon(Icons.arrow_circle_down_outlined),
+                label: Text(primaryActionLabel),
+              ),
+              OutlinedButton.icon(
+                onPressed: onSecondaryAction,
+                icon: const Icon(Icons.arrow_circle_up_outlined),
+                label: Text(secondaryActionLabel),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WalletQuickAction extends StatelessWidget {
+  const _WalletQuickAction({
+    required this.label,
+    required this.detail,
+    required this.icon,
+    required this.accent,
+    required this.onPressed,
+  });
+
+  final String label;
+  final String detail;
+  final IconData icon;
+  final Color accent;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 210,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, color: accent),
+        label: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(
+              detail,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
           ],
         ),
       ),
@@ -403,30 +612,28 @@ class _MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: GteShellTheme.panelStrong.withValues(alpha: 0.6),
-          border: Border.all(
-            color: GteShellTheme.accentCapital.withValues(alpha: 0.12),
-          ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: GteShellTheme.panelStrong.withValues(alpha: 0.6),
+        border: Border.all(
+          color: GteShellTheme.accentCapital.withValues(alpha: 0.12),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              label.toUpperCase(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                letterSpacing: 0.9,
-                fontWeight: FontWeight.w700,
-              ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label.toUpperCase(),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              letterSpacing: 0.9,
+              fontWeight: FontWeight.w700,
             ),
-            const SizedBox(height: 8),
-            Text(value, style: Theme.of(context).textTheme.titleMedium),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
+        ],
       ),
     );
   }
@@ -475,6 +682,7 @@ class _WalletTransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isCredit = transaction.type.toLowerCase() == 'credit';
+    final String normalizedType = transaction.type.toLowerCase();
     final Color tone =
         transaction.status.toLowerCase() == 'verified'
             ? GteShellTheme.positive
@@ -488,9 +696,15 @@ class _WalletTransactionTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(
-              isCredit ? Icons.south_west_outlined : Icons.north_east_outlined,
-              color: tone,
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: tone.withValues(alpha: 0.12),
+                border: Border.all(color: tone.withValues(alpha: 0.2)),
+              ),
+              child: Icon(_transactionIcon(normalizedType), color: tone),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -498,12 +712,12 @@ class _WalletTransactionTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    '${_titleCase(transaction.type)} | ${_titleCase(transaction.status)}',
+                    _transactionTitle(normalizedType, isCredit),
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    transaction.reference,
+                    '${_titleCase(transaction.status)} - ${transaction.reference}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   if (transaction.createdAt != null) ...<Widget>[
@@ -518,9 +732,7 @@ class _WalletTransactionTile extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              gteFormatCredits(
-                isCredit ? transaction.amount : -transaction.amount,
-              ),
+              gteFormatGtc(isCredit ? transaction.amount : -transaction.amount),
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 color:
                     isCredit ? GteShellTheme.positive : GteShellTheme.negative,
@@ -531,6 +743,43 @@ class _WalletTransactionTile extends StatelessWidget {
       ),
     );
   }
+}
+
+IconData _transactionIcon(String type) {
+  if (type.contains('withdraw')) {
+    return Icons.account_balance_outlined;
+  }
+  if (type.contains('trade')) {
+    return Icons.currency_exchange_outlined;
+  }
+  if (type.contains('purchase') || type.contains('player')) {
+    return Icons.person_search_outlined;
+  }
+  if (type.contains('rent')) {
+    return Icons.flag_outlined;
+  }
+  return type.contains('credit')
+      ? Icons.south_west_outlined
+      : Icons.north_east_outlined;
+}
+
+String _transactionTitle(String type, bool isCredit) {
+  if (type.contains('deposit')) {
+    return 'Wallet deposit';
+  }
+  if (type.contains('withdraw')) {
+    return 'Withdrawal request';
+  }
+  if (type.contains('trade')) {
+    return 'Coin trade settlement';
+  }
+  if (type.contains('purchase')) {
+    return 'Player purchase';
+  }
+  if (type.contains('rent')) {
+    return 'National rental payment';
+  }
+  return isCredit ? 'Wallet credit' : 'Wallet debit';
 }
 
 String _railLabel(String mode) {
@@ -558,34 +807,6 @@ String _providerStatusLabel(String? status) {
     default:
       return 'Unknown';
   }
-}
-
-String _walletUnitLabel(GteLedgerUnit unit) {
-  switch (unit) {
-    case GteLedgerUnit.credit:
-      return 'Fan Coin';
-    case GteLedgerUnit.coin:
-      return 'GTEX Coin';
-    case GteLedgerUnit.unknown:
-      return 'Wallet Unit';
-  }
-}
-
-String _walletUnitDetail(GteLedgerUnit unit) {
-  switch (unit) {
-    case GteLedgerUnit.credit:
-      return 'Gifting and user-hosted competition balance';
-    case GteLedgerUnit.coin:
-      return 'Transfer, buy-now, and withdrawal balance';
-    case GteLedgerUnit.unknown:
-      return 'Wallet balance';
-  }
-}
-
-String _formatWalletAmount(double value, GteLedgerUnit unit) {
-  final bool wholeNumber = value == value.roundToDouble();
-  final String amount = value.toStringAsFixed(wholeNumber ? 0 : 2);
-  return '$amount ${_walletUnitLabel(unit)}';
 }
 
 String _titleCase(String value) {

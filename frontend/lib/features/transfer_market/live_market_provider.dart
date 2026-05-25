@@ -349,7 +349,10 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
 });
 
 PlayerShareSummary _playerShareSummaryFromMarketListItem(JsonMap item) {
-  final String marketStatus = stringValue(item['status'], fallback: 'active');
+  final String marketStatus = stringValue(
+    item['status'],
+    fallback: 'unavailable',
+  );
   return PlayerShareSummary(
     playerId: stringValue(item['player_id']),
     playerName: stringValue(item['player_name']),

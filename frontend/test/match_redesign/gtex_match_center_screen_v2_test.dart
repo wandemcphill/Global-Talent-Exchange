@@ -16,8 +16,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 1000));
 
-    expect(find.text('Match Center'), findsWidgets);
+    expect(find.text('MATCH CENTER'), findsWidgets);
     expect(find.textContaining('Lagos Crown'), findsOneWidget);
-    expect(find.text('Timeline'), findsOneWidget);
+    expect(find.text('LIVE TIMELINE'), findsOneWidget);
   });
 }

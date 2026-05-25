@@ -40,6 +40,7 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
   List<GtexNotificationItem> _items = const <GtexNotificationItem>[];
   GtexNotificationKind? _selectedKind;
   GtexNotificationItem? _selected;
+  String _query = '';
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -294,14 +295,26 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
 
   @override
   Widget build(BuildContext context) {
-    final List<GtexNotificationItem> visible =
-        _selectedKind == null
-            ? _items
-            : _items
-                .where(
-                  (GtexNotificationItem item) => item.kind == _selectedKind,
-                )
-                .toList(growable: false);
+    final String query = _query.trim().toLowerCase();
+    final List<GtexNotificationItem> visible = _items
+        .where((GtexNotificationItem item) {
+          final bool kindMatches =
+              _selectedKind == null || item.kind == _selectedKind;
+          if (!kindMatches) {
+            return false;
+          }
+          if (query.isEmpty) {
+            return true;
+          }
+          return <String?>[
+            item.title,
+            item.body,
+            item.relatedLabel,
+            item.actionLabel,
+            item.kindLabel,
+          ].whereType<String>().join(' ').toLowerCase().contains(query);
+        })
+        .toList(growable: false);
     final GtexNotificationItem? selected =
         visible.contains(_selected)
             ? _selected
@@ -310,7 +323,7 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
     return GtexMasterDetailScaffold(
       title: 'GTEX Notifications',
       subtitle:
-          'Market alerts, club activity, KYC, disputes, competitions and jackpot updates.',
+          'Role-aware transfer, match, wallet, trader, gift, competition and system alerts from live backend events.',
       accent: GtexColors.cyan,
       mobileLeftTitle: 'Notifications',
       actions: <Widget>[
@@ -336,9 +349,16 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
         items: visible,
         selected: selected,
         selectedKind: _selectedKind,
+        onQueryChanged:
+            (String value) => setState(() {
+              _query = value;
+              _selected = null;
+            }),
         onKindChanged:
-            (GtexNotificationKind? kind) =>
-                setState(() => _selectedKind = kind),
+            (GtexNotificationKind? kind) => setState(() {
+              _selectedKind = kind;
+              _selected = null;
+            }),
         onSelected:
             (GtexNotificationItem item) => setState(() => _selected = item),
         isLoading: _isLoading,
@@ -545,6 +565,7 @@ class _NotificationsLeftPanel extends StatelessWidget {
     required this.items,
     required this.selected,
     required this.selectedKind,
+    required this.onQueryChanged,
     required this.onKindChanged,
     required this.onSelected,
     required this.isLoading,
@@ -555,6 +576,7 @@ class _NotificationsLeftPanel extends StatelessWidget {
   final List<GtexNotificationItem> items;
   final GtexNotificationItem? selected;
   final GtexNotificationKind? selectedKind;
+  final ValueChanged<String> onQueryChanged;
   final ValueChanged<GtexNotificationKind?> onKindChanged;
   final ValueChanged<GtexNotificationItem> onSelected;
   final bool isLoading;
@@ -566,24 +588,36 @@ class _NotificationsLeftPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const GtexSearchField(hintText: 'Search notifications'),
+        GtexSearchField(
+          hintText: 'Search notifications',
+          onChanged: onQueryChanged,
+        ),
         const SizedBox(height: GtexSpacing.md),
-        Wrap(
-          spacing: GtexSpacing.xs,
-          runSpacing: GtexSpacing.xs,
-          children: <Widget>[
-            ChoiceChip(
-              selected: selectedKind == null,
-              label: const Text('All'),
-              onSelected: (_) => onKindChanged(null),
-            ),
-            for (final GtexNotificationKind kind in GtexNotificationKind.values)
-              ChoiceChip(
-                selected: selectedKind == kind,
-                label: Text(kind.name),
-                onSelected: (_) => onKindChanged(kind),
+        SizedBox(
+          height: 42,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.only(right: GtexSpacing.xs),
+                child: ChoiceChip(
+                  selected: selectedKind == null,
+                  label: const Text('All'),
+                  onSelected: (_) => onKindChanged(null),
+                ),
               ),
-          ],
+              for (final GtexNotificationKind kind
+                  in GtexNotificationKind.values)
+                Padding(
+                  padding: const EdgeInsets.only(right: GtexSpacing.xs),
+                  child: ChoiceChip(
+                    selected: selectedKind == kind,
+                    label: Text(_notificationFilterLabel(kind)),
+                    onSelected: (_) => onKindChanged(kind),
+                  ),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: GtexSpacing.md),
         Expanded(child: _buildListBody()),
@@ -715,7 +749,7 @@ class _NotificationActions extends StatelessWidget {
         GtexPanel(
           title: 'Quick actions',
           subtitle:
-              'Route into live GTEX wallet, KYC, dispute, and order flows.',
+              'Route into the live GTEX area only when the backend notification exposes a safe target.',
           accent: accent,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -864,6 +898,17 @@ GtexNotificationItem _mapLiveNotification(GteNotification notification) {
 }
 
 GtexNotificationKind _kindForSignal(String signal) {
+  if (signal.contains('gift') ||
+      signal.contains('reaction') ||
+      signal.contains('applause')) {
+    return GtexNotificationKind.gifts;
+  }
+  if (signal.contains('coin_trader') ||
+      signal.contains('coin trader') ||
+      signal.contains('trader') ||
+      signal.contains('liquidity')) {
+    return GtexNotificationKind.traders;
+  }
   if (signal.contains('kyc') || signal.contains('verification')) {
     return GtexNotificationKind.kyc;
   }
@@ -883,10 +928,15 @@ GtexNotificationKind _kindForSignal(String signal) {
       signal.contains('payment')) {
     return GtexNotificationKind.wallet;
   }
+  if (signal.contains('fixture') ||
+      signal.contains('match') ||
+      signal.contains('lineup') ||
+      signal.contains('score')) {
+    return GtexNotificationKind.matches;
+  }
   if (signal.contains('competition') ||
       signal.contains('tournament') ||
-      signal.contains('fixture') ||
-      signal.contains('match')) {
+      signal.contains('cup')) {
     return GtexNotificationKind.competition;
   }
   if (signal.contains('club') ||
@@ -894,8 +944,13 @@ GtexNotificationKind _kindForSignal(String signal) {
       signal.contains('follower')) {
     return GtexNotificationKind.club;
   }
+  if (signal.contains('transfer') ||
+      signal.contains('offer') ||
+      signal.contains('loan') ||
+      signal.contains('swap')) {
+    return GtexNotificationKind.transfers;
+  }
   if (signal.contains('market') ||
-      signal.contains('transfer') ||
       signal.contains('player') ||
       signal.contains('order') ||
       signal.contains('purchase')) {
@@ -921,8 +976,14 @@ String _titleForNotification(
         .join(' ');
   }
   switch (kind) {
+    case GtexNotificationKind.transfers:
+      return 'Transfer update';
+    case GtexNotificationKind.matches:
+      return 'Match update';
     case GtexNotificationKind.market:
       return 'Market update';
+    case GtexNotificationKind.traders:
+      return 'Trader update';
     case GtexNotificationKind.club:
       return 'Club update';
     case GtexNotificationKind.competition:
@@ -931,6 +992,8 @@ String _titleForNotification(
       return 'Regen world update';
     case GtexNotificationKind.wallet:
       return 'Wallet update';
+    case GtexNotificationKind.gifts:
+      return 'Gift update';
     case GtexNotificationKind.kyc:
       return 'KYC update';
     case GtexNotificationKind.dispute:
@@ -962,8 +1025,43 @@ String? _relatedLabelFor(GteNotification notification) {
   return null;
 }
 
+String _notificationFilterLabel(GtexNotificationKind kind) {
+  switch (kind) {
+    case GtexNotificationKind.transfers:
+      return 'Transfers';
+    case GtexNotificationKind.matches:
+      return 'Matches';
+    case GtexNotificationKind.market:
+      return 'Market';
+    case GtexNotificationKind.traders:
+      return 'Traders';
+    case GtexNotificationKind.club:
+      return 'Clubs';
+    case GtexNotificationKind.competition:
+      return 'Competitions';
+    case GtexNotificationKind.regen:
+      return 'Regens';
+    case GtexNotificationKind.wallet:
+      return 'Wallet';
+    case GtexNotificationKind.gifts:
+      return 'Gifts';
+    case GtexNotificationKind.kyc:
+      return 'KYC';
+    case GtexNotificationKind.dispute:
+      return 'Disputes';
+    case GtexNotificationKind.jackpot:
+      return 'Jackpot';
+    case GtexNotificationKind.system:
+      return 'System';
+  }
+}
+
 String _actionLabelFor(GtexNotificationKind kind) {
   switch (kind) {
+    case GtexNotificationKind.transfers:
+      return 'Open transfer context';
+    case GtexNotificationKind.matches:
+      return 'Open match context';
     case GtexNotificationKind.kyc:
       return 'Open KYC';
     case GtexNotificationKind.dispute:
@@ -972,12 +1070,16 @@ String _actionLabelFor(GtexNotificationKind kind) {
       return 'Open wallet';
     case GtexNotificationKind.market:
       return 'Open market context';
+    case GtexNotificationKind.traders:
+      return 'Open trader market';
     case GtexNotificationKind.club:
       return 'Open club context';
     case GtexNotificationKind.competition:
       return 'Open competition context';
     case GtexNotificationKind.regen:
       return 'Open regen context';
+    case GtexNotificationKind.gifts:
+      return 'Open gift context';
     case GtexNotificationKind.jackpot:
       return 'Open jackpot context';
     case GtexNotificationKind.system:

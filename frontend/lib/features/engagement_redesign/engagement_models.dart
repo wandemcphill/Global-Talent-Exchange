@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
 enum GtexNotificationKind {
+  transfers,
+  matches,
   market,
+  traders,
   club,
   competition,
   regen,
   wallet,
+  gifts,
   kyc,
   dispute,
   jackpot,
@@ -59,8 +63,14 @@ class GtexNotificationItem {
 
   IconData get icon {
     switch (kind) {
+      case GtexNotificationKind.transfers:
+        return Icons.swap_horiz_outlined;
+      case GtexNotificationKind.matches:
+        return Icons.sports_soccer_outlined;
       case GtexNotificationKind.market:
         return Icons.shopping_basket_outlined;
+      case GtexNotificationKind.traders:
+        return Icons.currency_exchange_outlined;
       case GtexNotificationKind.club:
         return Icons.shield_outlined;
       case GtexNotificationKind.competition:
@@ -69,6 +79,8 @@ class GtexNotificationItem {
         return Icons.auto_awesome_outlined;
       case GtexNotificationKind.wallet:
         return Icons.account_balance_wallet_outlined;
+      case GtexNotificationKind.gifts:
+        return Icons.card_giftcard_outlined;
       case GtexNotificationKind.kyc:
         return Icons.verified_user_outlined;
       case GtexNotificationKind.dispute:
@@ -80,7 +92,36 @@ class GtexNotificationItem {
     }
   }
 
-  String get kindLabel => kind.name.toUpperCase();
+  String get kindLabel {
+    switch (kind) {
+      case GtexNotificationKind.transfers:
+        return 'TRANSFERS';
+      case GtexNotificationKind.matches:
+        return 'MATCHES';
+      case GtexNotificationKind.market:
+        return 'MARKET';
+      case GtexNotificationKind.traders:
+        return 'TRADERS';
+      case GtexNotificationKind.club:
+        return 'CLUB';
+      case GtexNotificationKind.competition:
+        return 'COMPETITIONS';
+      case GtexNotificationKind.regen:
+        return 'REGENS';
+      case GtexNotificationKind.wallet:
+        return 'WALLET';
+      case GtexNotificationKind.gifts:
+        return 'GIFTS';
+      case GtexNotificationKind.kyc:
+        return 'KYC';
+      case GtexNotificationKind.dispute:
+        return 'DISPUTES';
+      case GtexNotificationKind.jackpot:
+        return 'JACKPOT';
+      case GtexNotificationKind.system:
+        return 'SYSTEM';
+    }
+  }
 }
 
 class GtexConversation {
@@ -137,6 +178,8 @@ class GtexNewsArticle {
     this.shareUrl,
     this.isBreaking = false,
     this.trustScore = 0.92,
+    this.reactionCount = 0,
+    this.commentCount = 0,
   });
 
   final String id;
@@ -151,6 +194,8 @@ class GtexNewsArticle {
   final String? shareUrl;
   final bool isBreaking;
   final double trustScore;
+  final int reactionCount;
+  final int commentCount;
 
   String get categoryLabel {
     switch (category) {

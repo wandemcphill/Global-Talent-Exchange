@@ -32,8 +32,8 @@ void main() {
     expect(find.text('My coin orders'), findsOneWidget);
     expect(find.text('Payment Pending'), findsOneWidget);
     expect(find.text('Verified'), findsWidgets);
-    expect(find.text('BUY GTEX COIN FROM TRADER'), findsWidgets);
-    expect(find.text('SELL GTEX COIN TO TRADER'), findsWidgets);
+    expect(find.text('BUY GTC FROM TRADER'), findsWidgets);
+    expect(find.text('SELL GTC TO TRADER'), findsWidgets);
     expect(find.text('TREASURY TOP-UP'), findsWidgets);
   });
 

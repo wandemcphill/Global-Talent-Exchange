@@ -94,6 +94,16 @@ class _GtexCreateSonScreenV2State extends State<GtexCreateSonScreenV2> {
           );
         }
         final GtexRegenWorldData data = snapshot.data!;
+        if (!data.createSonAvailable || data.parentPlayers.isEmpty) {
+          return GtexEmptyState(
+            title: 'Create-a-Son unavailable',
+            message:
+                data.createSonBlockedReason ??
+                'Live parent eligibility and pricing are required before a Create-a-Son order can be placed.',
+            icon: Icons.lock_clock,
+            accent: GtexColors.gold,
+          );
+        }
         _parentPlayerId ??=
             data.parentPlayers.isNotEmpty ? data.parentPlayers.first.id : null;
         return GtexMasterDetailScaffold(

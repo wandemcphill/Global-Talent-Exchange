@@ -9,6 +9,8 @@ class GtexCurrentRouteAdapter {
   static List<GtexShellDestination> destinations({
     required GtePrimaryDestination current,
     required ValueChanged<GtePrimaryDestination> onOpen,
+    Map<GtePrimaryDestination, String> badgeLabels =
+        const <GtePrimaryDestination, String>{},
     List<GtePrimaryDestination> items = const <GtePrimaryDestination>[
       GtePrimaryDestination.home,
       GtePrimaryDestination.market,
@@ -27,6 +29,7 @@ class GtexCurrentRouteAdapter {
             selectedIcon: destination.selectedIcon,
             isSelected: destination == current,
             accent: destination.accentColor,
+            badgeLabel: badgeLabels[destination],
             onTap: () => onOpen(destination),
           );
         })

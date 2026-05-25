@@ -134,6 +134,7 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
             section: _section,
             origin: _origin,
             query: _query,
+            isAdmin: widget.isAdmin,
             onQueryChanged: (String value) => setState(() => _query = value),
             onSectionChanged:
                 (String value) => setState(() => _section = value),
@@ -190,6 +191,15 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
       case 'achievements':
         return _AchievementBoard(items: data.achievementFeed);
       case 'admin-create-son':
+        if (!widget.isAdmin) {
+          return const GtexEmptyState(
+            title: 'Admin Create-a-Son unavailable',
+            message:
+                'This live workflow is only available to authorized admin sessions.',
+            icon: Icons.admin_panel_settings_outlined,
+            accent: GtexColors.danger,
+          );
+        }
         return GtexAdminCreateSonScreenV2(
           repository: widget.repository,
           initialData: data,
@@ -241,6 +251,7 @@ class _RegenLeftPanel extends StatelessWidget {
     required this.section,
     required this.origin,
     required this.query,
+    required this.isAdmin,
     required this.onQueryChanged,
     required this.onSectionChanged,
     required this.onOriginChanged,
@@ -250,6 +261,7 @@ class _RegenLeftPanel extends StatelessWidget {
   final String section;
   final String origin;
   final String query;
+  final bool isAdmin;
   final ValueChanged<String> onQueryChanged;
   final ValueChanged<String> onSectionChanged;
   final ValueChanged<String> onOriginChanged;
@@ -329,12 +341,13 @@ class _RegenLeftPanel extends StatelessWidget {
             selected: section == 'create-son',
             onTap: () => onSectionChanged('create-son'),
           ),
-          _SectionTile(
-            label: 'Admin Create-a-Son',
-            icon: Icons.admin_panel_settings,
-            selected: section == 'admin-create-son',
-            onTap: () => onSectionChanged('admin-create-son'),
-          ),
+          if (isAdmin)
+            _SectionTile(
+              label: 'Admin Create-a-Son',
+              icon: Icons.admin_panel_settings,
+              selected: section == 'admin-create-son',
+              onTap: () => onSectionChanged('admin-create-son'),
+            ),
         ],
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
@@ -487,7 +500,7 @@ class _ProspectsBoard extends StatelessWidget {
                     ratingLabel: prospect.currentRatingLabel,
                     potentialLabel: prospect.potentialLabel,
                     ageLabel: prospect.ageLabel,
-                    valueLabel: '${prospect.valueCoin.toStringAsFixed(0)} coin',
+                    valueLabel: _valueLabelFor(prospect),
                     storyLine: prospect.storyline,
                     isSelected: prospect.id == selectedId,
                     onTap: () => onSelected(prospect),
@@ -499,6 +512,13 @@ class _ProspectsBoard extends StatelessWidget {
         );
       },
     );
+  }
+
+  String? _valueLabelFor(GtexRegenProspect prospect) {
+    if (prospect.valueCoin <= 0) {
+      return null;
+    }
+    return '${prospect.valueCoin.toStringAsFixed(0)} coin';
   }
 }
 
@@ -656,12 +676,12 @@ class _SelectedProspectPanel extends StatelessWidget {
           GtexStatusChip(
             label:
                 prospect.isNationalRentalOnly
-                    ? 'Not tradable - national team rental depth only'
-                    : 'Contracts blocked - live endpoint unavailable',
+                    ? 'National rental only - not tradable'
+                    : 'Live contract endpoint unavailable',
             color:
                 prospect.isNationalRentalOnly
                     ? GtexColors.cyan
-                    : GtexColors.purple,
+                    : GtexColors.danger,
           ),
         ],
       ),

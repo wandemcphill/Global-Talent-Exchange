@@ -16,6 +16,7 @@ import 'package:gte_frontend/features/club_sale_market/presentation/club_sale_ma
 import 'package:gte_frontend/features/coin_trader_redesign/coin_trader_redesign.dart';
 import 'package:gte_frontend/features/launch_control_redesign/gtex_feature_flags_launch_control_screen_v2.dart';
 import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
+import 'package:gte_frontend/features/football_world_simulation/presentation/football_world_simulation_screen.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_screen.dart';
 import 'package:gte_frontend/features/news_agency/gtex_news_agency_screen_v2.dart';
@@ -229,12 +230,12 @@ void main() {
           in <String, Type>{
             '/clips': GtexNewsAgencyScreenV2,
             '/news': GtexNewsAgencyScreenV2,
-            '/world': RegensScreenV2,
+            '/world': FootballWorldSimulationScreen,
             '/world/regens': RegensScreenV2,
             '/world/awards': GtexAwardsScreenV2,
             '/awards': GtexAwardsScreenV2,
-            '/world/federations': FederationsHubScreen,
-            '/federations': FederationsHubScreen,
+            '/world/federations': FederationsHubRouteScreen,
+            '/federations': FederationsHubRouteScreen,
             '/viral': ViralFeedScreen,
             '/viral-feed': ViralFeedScreen,
             '/regens': RegensScreenV2,
@@ -266,7 +267,11 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.byType(expectation.value), findsOneWidget);
+        expect(
+          find.byType(expectation.value),
+          findsOneWidget,
+          reason: expectation.key,
+        );
       }
 
       for (final String path in <String>[

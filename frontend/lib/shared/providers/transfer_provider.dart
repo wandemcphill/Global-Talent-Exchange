@@ -57,7 +57,7 @@ class TransferMarketListing {
     required this.minimumIncrementInMillions,
     required this.watcherCount,
     required this.bidHistory,
-    this.status = 'open',
+    this.status = 'unavailable',
     this.channel,
   });
 
@@ -886,7 +886,7 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
       minimumIncrementInMillions: 0.1,
       watcherCount: watchlistCount,
       bidHistory: bidHistory,
-      status: _stringValue(json['status'], fallback: 'open'),
+      status: _stringValue(json['status'], fallback: 'unavailable'),
       channel: _stringOrNull(json['channel']),
     );
   }

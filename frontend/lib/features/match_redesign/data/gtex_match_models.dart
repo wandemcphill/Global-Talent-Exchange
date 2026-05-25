@@ -36,6 +36,8 @@ class GtexLiveMatchState {
     required this.timeline,
     required this.stats,
     required this.highlights,
+    this.homeMomentumPercent,
+    this.economyImpacts = const <GtexMatchEconomyImpact>[],
     this.selectedPlayerId,
     this.isWatchedByOwner = false,
   });
@@ -49,10 +51,13 @@ class GtexLiveMatchState {
   final List<GtexMatchTimelineEvent> timeline;
   final GtexMatchStats stats;
   final List<GtexMatchHighlight> highlights;
+  final int? homeMomentumPercent;
+  final List<GtexMatchEconomyImpact> economyImpacts;
   final String? selectedPlayerId;
   final bool isWatchedByOwner;
 
-  bool get isLive => phase != GtexMatchPhase.scheduled && phase != GtexMatchPhase.fullTime;
+  bool get isLive =>
+      phase != GtexMatchPhase.scheduled && phase != GtexMatchPhase.fullTime;
 
   GtexLiveMatchState copyWith({
     String? selectedPlayerId,
@@ -70,10 +75,29 @@ class GtexLiveMatchState {
       timeline: timeline ?? this.timeline,
       stats: stats,
       highlights: highlights,
+      homeMomentumPercent: homeMomentumPercent,
+      economyImpacts: economyImpacts,
       selectedPlayerId: selectedPlayerId ?? this.selectedPlayerId,
       isWatchedByOwner: isWatchedByOwner,
     );
   }
+}
+
+@immutable
+class GtexMatchEconomyImpact {
+  const GtexMatchEconomyImpact({
+    required this.playerName,
+    this.teamId,
+    this.currentValueLabel,
+    this.deltaLabel,
+    this.deltaPercent,
+  });
+
+  final String playerName;
+  final String? teamId;
+  final String? currentValueLabel;
+  final String? deltaLabel;
+  final double? deltaPercent;
 }
 
 @immutable

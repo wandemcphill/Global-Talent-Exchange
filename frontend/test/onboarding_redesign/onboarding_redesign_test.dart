@@ -11,8 +11,12 @@ void main() {
       const MaterialApp(home: GtexPublicLandingScreenV2()),
     );
     expect(find.text('GTEX'), findsOneWidget);
-    expect(find.textContaining('football marketplace'), findsWidgets);
-    expect(find.text('Create your club'), findsOneWidget);
+    expect(find.text('FOOTBALL HAS\nAN ECONOMY NOW.'), findsOneWidget);
+    expect(find.text('What GTEX Runs'), findsOneWidget);
+    expect(find.text('Find Your Role'), findsOneWidget);
+    expect(find.text('GTEX Coin (GTC)'), findsOneWidget);
+    expect(find.text('Fan Coin (FNC)'), findsOneWidget);
+    expect(find.text('Open a club'), findsOneWidget);
     expect(find.byType(PageView), findsNothing);
   });
 

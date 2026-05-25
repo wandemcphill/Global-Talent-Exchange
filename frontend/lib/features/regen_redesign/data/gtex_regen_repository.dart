@@ -112,6 +112,13 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
     final List<RegenCreationOrder> liveOrders =
         orders.value?.items ?? const <RegenCreationOrder>[];
     final RequestSonOptions? liveOptions = options.value;
+    final List<GtexParentPlayer> liveParents = _parentsFromOptions(liveOptions);
+    final GtexCreateSonPricing livePricing = _pricingFromOptions(liveOptions);
+    final bool createSonAvailable =
+        isAuthenticated &&
+        creationApi != null &&
+        liveOptions != null &&
+        liveParents.isNotEmpty;
 
     final List<GtexRegenProspect> prospects = <GtexRegenProspect>[
       ...liveStars.map(_prospectFromRisingStar),
@@ -131,8 +138,17 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
         createSonOrders: liveOrders.length,
         awardsThisSeason: liveAwards.length,
       ),
-      pricing: _pricingFromOptions(liveOptions),
-      parentPlayers: _parentsFromOptions(liveOptions, liveStars),
+      pricing: livePricing,
+      parentPlayers: liveParents,
+      createSonAvailable: createSonAvailable,
+      createSonBlockedReason:
+          createSonAvailable
+              ? null
+              : _createSonBlockedReason(
+                liveOptions: liveOptions,
+                optionsError: options.error,
+                hasParents: liveParents.isNotEmpty,
+              ),
       prospects: prospects,
       awards: liveAwards.map(_awardFromResult).toList(growable: false),
       achievementFeed: liveFeed
@@ -359,7 +375,6 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
 
   static List<GtexParentPlayer> _parentsFromOptions(
     RequestSonOptions? options,
-    List<RegenRisingStar> fallbackStars,
   ) {
     if (options != null && options.eligibleParents.isNotEmpty) {
       return options.eligibleParents
@@ -376,26 +391,19 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
           )
           .toList(growable: false);
     }
-    return fallbackStars
-        .take(6)
-        .map(
-          (RegenRisingStar star) => GtexParentPlayer(
-            id: star.player.id,
-            name: star.player.name,
-            position: star.player.position,
-            countryCode: star.player.nationalityCode ?? 'GTEX',
-            clubName: star.player.clubId ?? 'GTEX Regen World',
-            rating: star.player.currentRating,
-            imageUrl: star.player.imageUrl,
-          ),
-        )
-        .toList(growable: false);
+    return const <GtexParentPlayer>[];
   }
 
   static GtexCreateSonPricing _pricingFromOptions(RequestSonOptions? options) {
     final RegenCreationPricing? pricing = options?.pricing;
     if (pricing == null) {
-      return demoWorldData.pricing;
+      return const GtexCreateSonPricing(
+        baseCostCoin: 0,
+        nameCustomizationCoin: 0,
+        nationalityCustomizationCoin: 0,
+        positionCustomizationCoin: 0,
+        specialRequestMinimumCoin: 0,
+      );
     }
     return GtexCreateSonPricing(
       baseCostCoin: pricing.baseCostCoin,
@@ -404,6 +412,23 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
       positionCustomizationCoin: pricing.customizationCostCoin,
       specialRequestMinimumCoin: pricing.customizationCostCoin,
     );
+  }
+
+  static String _createSonBlockedReason({
+    required RequestSonOptions? liveOptions,
+    required Object? optionsError,
+    required bool hasParents,
+  }) {
+    if (!hasParents) {
+      return 'The backend did not return any eligible parent players for this account.';
+    }
+    if (liveOptions?.pricing == null) {
+      return 'The backend did not return live Create-a-Son pricing.';
+    }
+    if (optionsError != null) {
+      return optionsError.toString();
+    }
+    return 'Create-a-Son is not available for this account right now.';
   }
 
   static GtexCreateSonOrder _createSonOrderFromLive(RegenCreationOrder order) {

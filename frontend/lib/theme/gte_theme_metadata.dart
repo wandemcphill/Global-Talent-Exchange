@@ -6,6 +6,7 @@ enum GteThemeId {
   sandHillGold,
   menloNightBlue,
   ultraRed,
+  gtexDaylight,
 }
 
 extension GteThemeIdX on GteThemeId {
@@ -21,6 +22,8 @@ extension GteThemeIdX on GteThemeId {
         return 'menlo_night_blue';
       case GteThemeId.ultraRed:
         return 'ultra_red';
+      case GteThemeId.gtexDaylight:
+        return 'gtex_daylight';
     }
   }
 

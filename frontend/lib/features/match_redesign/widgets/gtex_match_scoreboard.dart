@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/gtex_match_models.dart';
+import 'gtex_match_visual_tokens.dart';
 
 class GtexMatchScoreboard extends StatelessWidget {
   const GtexMatchScoreboard({super.key, required this.match});
@@ -11,28 +12,60 @@ class GtexMatchScoreboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF07130E),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFF18FF88).withOpacity(.24)),
-        boxShadow: const [BoxShadow(blurRadius: 24, color: Colors.black45)],
+        color: GtexMatchVisualTokens.surfaceRaised,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: GtexMatchVisualTokens.border),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(child: _TeamBlock(team: match.home, alignEnd: false)),
-          Column(
+          Row(
             children: [
-              Text('${match.home.score}  -  ${match.away.score}', style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: Colors.white)),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: const Color(0xFF18FF88).withOpacity(.12), borderRadius: BorderRadius.circular(999)),
-                child: Text('${match.minute}\'  ${_phaseLabel(match.phase)}', style: const TextStyle(color: Color(0xFF18FF88), fontWeight: FontWeight.w800)),
+              _LiveStatusBadge(match: match),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '${match.home.name.toUpperCase()} VS ${match.away.name.toUpperCase()}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: GtexMatchVisualTokens.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+              Text(
+                _phaseLabel(match.phase).toUpperCase(),
+                style: const TextStyle(
+                  color: GtexMatchVisualTokens.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: .8,
+                ),
               ),
             ],
           ),
-          Expanded(child: _TeamBlock(team: match.away, alignEnd: true)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _TeamBlock(team: match.home, alignEnd: false)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Text(
+                  '${match.home.score} - ${match.away.score}',
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    color: GtexMatchVisualTokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'Barlow Condensed',
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+              Expanded(child: _TeamBlock(team: match.away, alignEnd: true)),
+            ],
+          ),
         ],
       ),
     );
@@ -58,6 +91,64 @@ class GtexMatchScoreboard extends StatelessWidget {
   }
 }
 
+class _LiveStatusBadge extends StatelessWidget {
+  const _LiveStatusBadge({required this.match});
+
+  final GtexLiveMatchState match;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool live = match.isLive;
+    final String clock =
+        match.phase == GtexMatchPhase.scheduled
+            ? 'PRE'
+            : match.phase == GtexMatchPhase.fullTime
+            ? 'FT'
+            : '${match.minute}\'';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color:
+            live
+                ? const Color(0x2200E87A)
+                : GtexMatchVisualTokens.surfaceOverlay,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color:
+              live
+                  ? const Color(0x6600E87A)
+                  : GtexMatchVisualTokens.borderStrong,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (live) ...[
+            Container(
+              width: 7,
+              height: 7,
+              decoration: const BoxDecoration(
+                color: GtexMatchVisualTokens.live,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 7),
+          ],
+          Text(
+            live ? 'LIVE $clock' : clock,
+            style: const TextStyle(
+              color: GtexMatchVisualTokens.textPrimary,
+              fontFamily: 'JetBrains Mono',
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TeamBlock extends StatelessWidget {
   const _TeamBlock({required this.team, required this.alignEnd});
   final GtexMatchTeam team;
@@ -66,23 +157,55 @@ class _TeamBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final children = [
-      CircleAvatar(
-        backgroundColor: const Color(0xFF18FF88).withOpacity(.16),
-        child: Text(team.shortName.characters.first, style: const TextStyle(color: Color(0xFF18FF88), fontWeight: FontWeight.w900)),
+      Container(
+        width: 36,
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: GtexMatchVisualTokens.surfaceOverlay,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: GtexMatchVisualTokens.borderStrong),
+        ),
+        child: Text(
+          team.shortName.characters.first,
+          style: const TextStyle(
+            color: GtexMatchVisualTokens.live,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
       ),
       const SizedBox(width: 12),
       Flexible(
         child: Column(
-          crossAxisAlignment: alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            Text(team.name, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
-            Text(team.formation, style: TextStyle(color: Colors.white.withOpacity(.58), fontWeight: FontWeight.w700)),
+            Text(
+              team.shortName,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: GtexMatchVisualTokens.textPrimary,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+                letterSpacing: .4,
+              ),
+            ),
+            Text(
+              '${team.name}  |  ${team.formation}',
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: GtexMatchVisualTokens.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
       ),
     ];
     return Row(
-      mainAxisAlignment: alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+      mainAxisAlignment:
+          alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
       children: alignEnd ? children.reversed.toList() : children,
     );
   }

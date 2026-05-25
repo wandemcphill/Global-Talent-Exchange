@@ -42,18 +42,31 @@ class GtexRentalContextPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<String> confederations = countries
-        .map((GtexRentalCountryView item) => item.confederation)
-        .toSet()
-        .toList(growable: false)
-      ..sort();
-    final List<GtexRentalCountryView> filteredCountries = selectedConfederation == null
-        ? countries
-        : countries.where((GtexRentalCountryView item) => item.confederation == selectedConfederation).toList(growable: false);
-    final List<GtexRentalTeamView> filteredTeams = teams.where((GtexRentalTeamView item) {
-      if (selectedCompetitionId != null && item.competitionId != selectedCompetitionId) return false;
-      if (selectedCountryCode != null && item.countryCode != selectedCountryCode) return false;
-      return true;
-    }).toList(growable: false);
+      .map((GtexRentalCountryView item) => item.confederation)
+      .toSet()
+      .toList(growable: false)..sort();
+    final List<GtexRentalCountryView> filteredCountries =
+        selectedConfederation == null
+            ? countries
+            : countries
+                .where(
+                  (GtexRentalCountryView item) =>
+                      item.confederation == selectedConfederation,
+                )
+                .toList(growable: false);
+    final List<GtexRentalTeamView> filteredTeams = teams
+        .where((GtexRentalTeamView item) {
+          if (selectedCompetitionId != null &&
+              item.competitionId != selectedCompetitionId) {
+            return false;
+          }
+          if (selectedCountryCode != null &&
+              item.countryCode != selectedCountryCode) {
+            return false;
+          }
+          return true;
+        })
+        .toList(growable: false);
 
     return Column(
       children: <Widget>[
@@ -72,8 +85,8 @@ class GtexRentalContextPanel extends StatelessWidget {
                 children: <Widget>[
                   Expanded(
                     child: GtexStatusChip(
-                      label: '$basketCount rental picks',
-                      color: GtexColors.gold,
+                      label: '$basketCount SELECTED',
+                      color: GtexColors.cyan,
                     ),
                   ),
                   TextButton.icon(
@@ -88,20 +101,35 @@ class GtexRentalContextPanel extends StatelessWidget {
         ),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(GtexSpacing.md, 0, GtexSpacing.md, GtexSpacing.md),
+            padding: const EdgeInsets.fromLTRB(
+              GtexSpacing.md,
+              0,
+              GtexSpacing.md,
+              GtexSpacing.md,
+            ),
             children: <Widget>[
               _Section(
-                title: 'Competition',
+                title: 'Competition context',
                 child: Column(
-                  children: competitions.map((GtexRentalCompetitionView item) {
-                    return _OptionTile(
-                      title: item.title,
-                      subtitle: '${item.ageBand} • ${item.seasonLabel} • ${item.entryFeeLabel}',
-                      countLabel: item.status.toUpperCase(),
-                      isSelected: selectedCompetitionId == item.id,
-                      onTap: () => onCompetitionSelected(selectedCompetitionId == item.id ? null : item.id),
-                    );
-                  }).toList(growable: false),
+                  children: competitions
+                      .map((GtexRentalCompetitionView item) {
+                        return _OptionTile(
+                          title: item.title,
+                          subtitle:
+                              '${item.ageBand} | ${item.seasonLabel} | ${item.entryFeeLabel}',
+                          countLabel: item.status.toUpperCase(),
+                          countColor:
+                              item.isOpen ? GtexColors.pitch : GtexColors.gold,
+                          isSelected: selectedCompetitionId == item.id,
+                          onTap:
+                              () => onCompetitionSelected(
+                                selectedCompetitionId == item.id
+                                    ? null
+                                    : item.id,
+                              ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ),
               _Section(
@@ -109,41 +137,62 @@ class GtexRentalContextPanel extends StatelessWidget {
                 child: Wrap(
                   spacing: GtexSpacing.xs,
                   runSpacing: GtexSpacing.xs,
-                  children: confederations.map((String confed) {
-                    return ChoiceChip(
-                      label: Text(confed),
-                      selected: selectedConfederation == confed,
-                      onSelected: (_) => onConfederationSelected(selectedConfederation == confed ? null : confed),
-                    );
-                  }).toList(growable: false),
+                  children: confederations
+                      .map((String confed) {
+                        return ChoiceChip(
+                          label: Text(confed),
+                          selected: selectedConfederation == confed,
+                          onSelected:
+                              (_) => onConfederationSelected(
+                                selectedConfederation == confed ? null : confed,
+                              ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ),
               _Section(
-                title: 'Country / Nationality',
+                title: 'Country rental pool',
                 child: Column(
-                  children: filteredCountries.map((GtexRentalCountryView item) {
-                    return _OptionTile(
-                      title: '${item.displayFlag} ${item.countryName}',
-                      subtitle: '${item.confederation} • Budget ${item.rentalBudgetLabel}',
-                      countLabel: '${item.eligiblePlayers}',
-                      isSelected: selectedCountryCode == item.countryCode,
-                      onTap: () => onCountrySelected(selectedCountryCode == item.countryCode ? null : item.countryCode),
-                    );
-                  }).toList(growable: false),
+                  children: filteredCountries
+                      .map((GtexRentalCountryView item) {
+                        return _OptionTile(
+                          title: '${item.displayFlag} ${item.countryName}',
+                          subtitle:
+                              '${item.confederation} | ${item.rentalBudgetLabel}',
+                          countLabel: '${item.eligiblePlayers} LIVE',
+                          countColor: GtexColors.cyan,
+                          isSelected: selectedCountryCode == item.countryCode,
+                          onTap:
+                              () => onCountrySelected(
+                                selectedCountryCode == item.countryCode
+                                    ? null
+                                    : item.countryCode,
+                              ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ),
               _Section(
-                title: 'National Team',
+                title: 'National team',
                 child: Column(
-                  children: filteredTeams.map((GtexRentalTeamView item) {
-                    return _OptionTile(
-                      title: item.name,
-                      subtitle: '${item.ageBand} • ${item.squadRuleLabel}',
-                      countLabel: '${item.eligiblePlayerCount}',
-                      isSelected: selectedTeamId == item.id,
-                      onTap: () => onTeamSelected(selectedTeamId == item.id ? null : item.id),
-                    );
-                  }).toList(growable: false),
+                  children: filteredTeams
+                      .map((GtexRentalTeamView item) {
+                        return _OptionTile(
+                          title: item.name,
+                          subtitle:
+                              '${item.ageBand} | Backend roster rule ${item.squadRuleLabel}',
+                          countLabel: '${item.eligiblePlayerCount} pool',
+                          countColor: GtexColors.pitch,
+                          isSelected: selectedTeamId == item.id,
+                          onTap:
+                              () => onTeamSelected(
+                                selectedTeamId == item.id ? null : item.id,
+                              ),
+                        );
+                      })
+                      .toList(growable: false),
                 ),
               ),
             ],
@@ -170,10 +219,10 @@ class _Section extends StatelessWidget {
           Text(
             title.toUpperCase(),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: GtexColors.textMuted,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.9,
-                ),
+              color: GtexColors.textMuted,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.9,
+            ),
           ),
           const SizedBox(height: GtexSpacing.xs),
           child,
@@ -188,6 +237,7 @@ class _OptionTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.countLabel,
+    this.countColor,
     required this.isSelected,
     required this.onTap,
   });
@@ -195,6 +245,7 @@ class _OptionTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final String countLabel;
+  final Color? countColor;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -215,18 +266,41 @@ class _OptionTile extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: GtexColors.text, fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 Text(
                   subtitle,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: GtexColors.textMuted, fontWeight: FontWeight.w700, fontSize: 12),
+                  style: const TextStyle(
+                    color: GtexColors.textMuted,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
           ),
-          GtexStatusChip(label: countLabel, color: isSelected ? GtexColors.pitch : GtexColors.cyan, compact: true),
+          const SizedBox(width: GtexSpacing.xs),
+          Flexible(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: GtexStatusChip(
+                  label: countLabel,
+                  color:
+                      isSelected
+                          ? GtexColors.pitch
+                          : countColor ?? GtexColors.cyan,
+                  compact: true,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

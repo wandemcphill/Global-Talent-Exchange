@@ -656,12 +656,12 @@ class _CoinTraderToolbar extends StatelessWidget {
           segments: const <ButtonSegment<String>>[
             ButtonSegment<String>(
               value: 'COIN',
-              label: Text('GTEX Coin'),
-              icon: Icon(Icons.monetization_on_outlined),
+              label: Text('GTC'),
+              icon: Icon(Icons.hexagon_outlined),
             ),
             ButtonSegment<String>(
               value: 'CREDIT',
-              label: Text('Fan Coin'),
+              label: Text('FNC'),
               icon: Icon(Icons.stars_outlined),
             ),
           ],
@@ -702,59 +702,63 @@ class _TraderList extends StatelessWidget {
       },
       itemBuilder: (BuildContext context, int index) {
         final GtexCoinTraderProfile trader = traders[index];
-        final GtexCoinTraderRate? rate = trader.primaryRateFor(coinUnit);
-        return GtexPanel(
-          isSelected: trader.id == selected?.id,
-          accent: GtexColors.gold,
-          padding: const EdgeInsets.all(GtexSpacing.sm),
+        return _TraderCard(
+          trader: trader,
+          rate: trader.primaryRateFor(coinUnit),
+          selected: trader.id == selected?.id,
           onTap: () => onSelect(trader),
-          child: Row(
+        );
+      },
+    );
+  }
+}
+
+class _TraderCard extends StatelessWidget {
+  const _TraderCard({
+    required this.trader,
+    required this.rate,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final GtexCoinTraderProfile trader;
+  final GtexCoinTraderRate? rate;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexCoinTraderRate? activeRate = rate;
+    final bool online = trader.isOnline == true;
+    final Color statusColor = online ? GtexColors.pitch : GtexColors.textMuted;
+    return GtexPanel(
+      isSelected: selected,
+      accent: statusColor,
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
             children: <Widget>[
-              CircleAvatar(
-                backgroundColor: GtexColors.gold.withValues(alpha: 0.14),
-                foregroundColor: GtexColors.gold,
-                child: const Icon(Icons.currency_exchange_outlined),
-              ),
+              _TraderAvatar(name: trader.displayName, online: online),
               const SizedBox(width: GtexSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            trader.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: GtexColors.text,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        GtexStatusChip(
-                          label: trader.status,
-                          compact: true,
-                          tone:
-                              trader.isApproved
-                                  ? GtexStatusTone.success
-                                  : GtexStatusTone.warning,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
                     Text(
-                      [
-                        trader.countryCode ?? 'Global',
-                        _titleCase(trader.tier),
-                        _titleCase(trader.verificationLevel),
-                        if (rate != null) ...<String>[
-                          'Buy ${_money(rate.sellRateFiat)} ${rate.fiatCurrency}',
-                          'Sell ${_money(rate.buyRateFiat)} ${rate.fiatCurrency}',
-                          if (rate.isRestricted) rate.governanceLabel,
-                        ],
-                      ].join(' - '),
+                      trader.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: GtexColors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${trader.countryCode ?? 'Global'} desk - ${_titleCase(trader.tier)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: GtexColors.textMuted),
@@ -762,10 +766,101 @@ class _TraderList extends StatelessWidget {
                   ],
                 ),
               ),
+              _OnlinePill(trader: trader),
             ],
           ),
-        );
-      },
+          const SizedBox(height: GtexSpacing.sm),
+          Wrap(
+            spacing: GtexSpacing.xs,
+            runSpacing: GtexSpacing.xs,
+            children: <Widget>[
+              _InfoPill(
+                icon: Icons.star_rate_rounded,
+                label: _ratingLabel(trader.rating),
+                color: GtexColors.gold,
+              ),
+              if (_isVerifiedTier(trader.tier))
+                const _InfoPill(
+                  icon: Icons.verified_outlined,
+                  label: 'Verified',
+                  color: GtexColors.pitch,
+                ),
+              _InfoPill(
+                icon: Icons.swap_horiz_outlined,
+                label: trader.completedTradesLabel,
+              ),
+              _InfoPill(
+                icon: Icons.schedule_outlined,
+                label: trader.responseTimeLabel,
+              ),
+              _InfoPill(
+                icon: Icons.history_outlined,
+                label: trader.tradingSinceLabel,
+              ),
+            ],
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          if (activeRate == null)
+            const Text(
+              'No active quote published for this coin lane.',
+              style: TextStyle(color: GtexColors.textMuted),
+            )
+          else ...<Widget>[
+            _QuoteLine(
+              icon: Icons.south_west_outlined,
+              label: 'Buy ${activeRate.coinLabel}',
+              value:
+                  '${_money(activeRate.sellRateFiat)} ${activeRate.fiatCurrency}',
+            ),
+            const SizedBox(height: 4),
+            _QuoteLine(
+              icon: Icons.north_east_outlined,
+              label: 'Sell ${activeRate.coinLabel}',
+              value:
+                  '${_money(activeRate.buyRateFiat)} ${activeRate.fiatCurrency}',
+            ),
+            const SizedBox(height: 4),
+            _QuoteLine(
+              icon: Icons.account_balance_wallet_outlined,
+              label: 'Liquidity',
+              value:
+                  '${_coin(activeRate.availableLiquidity)} ${activeRate.coinLabel}',
+            ),
+            const SizedBox(height: GtexSpacing.sm),
+            Wrap(
+              spacing: GtexSpacing.xs,
+              runSpacing: GtexSpacing.xs,
+              children: <Widget>[
+                _InfoPill(
+                  icon: Icons.call_received_rounded,
+                  label: 'BUY ${activeRate.coinLabel} FROM TRADER',
+                  color: GtexColors.gold,
+                ),
+                _InfoPill(
+                  icon: Icons.call_made_rounded,
+                  label: 'SELL ${activeRate.coinLabel} TO TRADER',
+                  color: GtexColors.pitch,
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: GtexSpacing.sm),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  trader.onlineLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: GtexColors.textMuted),
+                ),
+              ),
+              if (trader.activeCoinCodes.isNotEmpty)
+                _CoinLaneStrip(labels: trader.activeCoinCodes),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -795,39 +890,75 @@ class _TraderDetail extends StatelessWidget {
     final List<Widget> children = <Widget>[
       GtexPanel(
         title: trader.displayName,
-        subtitle: '${trader.countryCode ?? 'Global'} liquidity partner',
-        accent: GtexColors.gold,
-        trailing: GtexStatusChip(
-          label: trader.isApproved ? 'Verified' : trader.status,
-          icon: Icons.verified_outlined,
-          tone:
-              trader.isApproved
-                  ? GtexStatusTone.success
-                  : GtexStatusTone.warning,
-        ),
-        child: Wrap(
-          spacing: GtexSpacing.md,
-          runSpacing: GtexSpacing.md,
+        subtitle: '${trader.countryCode ?? 'Global'} football coin market desk',
+        accent: trader.isOnline == true ? GtexColors.pitch : GtexColors.gold,
+        trailing: _OnlinePill(trader: trader),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _metric(
-              'Completion',
-              '${trader.completionRate.toStringAsFixed(0)}%',
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _TraderAvatar(
+                  name: trader.displayName,
+                  online: trader.isOnline == true,
+                  large: true,
+                ),
+                const SizedBox(width: GtexSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        trader.bio?.trim().isNotEmpty == true
+                            ? trader.bio!.trim()
+                            : 'Public trader bio not published by backend.',
+                        style: const TextStyle(color: GtexColors.textMuted),
+                      ),
+                      const SizedBox(height: GtexSpacing.sm),
+                      _ChipWrap(
+                        labels: <String>[
+                          _titleCase(trader.verificationLevel),
+                          trader.tradingSinceLabel,
+                          trader.completedTradesLabel,
+                          trader.responseTimeLabel,
+                        ],
+                        fallback: 'Trader profile metadata not published.',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            _metric(
-              'Payout speed',
-              '${trader.averageReleaseMinutes.toStringAsFixed(0)}m',
+            const SizedBox(height: GtexSpacing.md),
+            Wrap(
+              spacing: GtexSpacing.md,
+              runSpacing: GtexSpacing.md,
+              children: <Widget>[
+                _metric(
+                  'Completion',
+                  '${trader.completionRate.toStringAsFixed(0)}%',
+                ),
+                _metric(
+                  'Release speed',
+                  '${trader.averageReleaseMinutes.toStringAsFixed(0)}m',
+                ),
+                _metric('Rating', _ratingLabel(trader.rating)),
+                _metric('Liquidity', _coin(trader.totalLiquidity)),
+                _metric('Volume', _money(trader.completedVolumeFiat)),
+                _metric(
+                  'Dispute score',
+                  trader.disputeScore.toStringAsFixed(1),
+                ),
+              ],
             ),
-            _metric('Rating', trader.rating.toStringAsFixed(1)),
-            _metric('Liquidity', _coin(trader.totalLiquidity)),
-            _metric('Volume', _money(trader.completedVolumeFiat)),
-            _metric('Dispute score', trader.disputeScore.toStringAsFixed(1)),
           ],
         ),
       ),
       const SizedBox(height: GtexSpacing.md),
       if (rate != null) ...<Widget>[
         GtexPanel(
-          title: rate.coinLabel,
+          title: '${rate.coinName} (${rate.coinLabel})',
           subtitle: '${rate.fiatCurrency} controlled football liquidity quote',
           accent: GtexColors.gold,
           trailing: GtexStatusChip(
@@ -847,20 +978,20 @@ class _TraderDetail extends StatelessWidget {
             runSpacing: GtexSpacing.md,
             children: <Widget>[
               _metric(
-                'Buy ${rate.coinLabel} from trader',
+                'BUY ${rate.coinLabel} FROM TRADER',
                 _money(rate.sellRateFiat),
               ),
               _metric(
-                'Sell ${rate.coinLabel} to trader',
+                'SELL ${rate.coinLabel} TO TRADER',
                 _money(rate.buyRateFiat),
               ),
               _metric('Spread', _money(rate.spreadFiat)),
               _metric(
-                'Treasury top-up',
+                'TREASURY TOP-UP',
                 _nullableMoney(rate.treasuryDepositRateFiat),
               ),
               _metric(
-                'Treasury withdrawal',
+                'TREASURY WITHDRAWAL',
                 _nullableMoney(rate.treasuryWithdrawalRateFiat),
               ),
               _metric('Min', _coin(rate.minCoinAmount)),
@@ -899,10 +1030,12 @@ class _TraderDetail extends StatelessWidget {
         runSpacing: GtexSpacing.sm,
         children: <Widget>[
           GtexActionButton(
-            label:
-                isAuthenticated
-                    ? 'Buy ${rate?.coinLabel ?? 'coins'} from trader'
-                    : 'Sign in',
+            label: _traderActionLabel(
+              rate: rate,
+              coinUnit: coinUnit,
+              direction: 'user_buys',
+              isAuthenticated: isAuthenticated,
+            ),
             icon: isAuthenticated ? Icons.call_received : Icons.login,
             accent: GtexColors.gold,
             onPressed:
@@ -913,7 +1046,12 @@ class _TraderDetail extends StatelessWidget {
                     : onOpenLogin,
           ),
           GtexButton(
-            label: 'Sell ${rate?.coinLabel ?? 'coins'} to trader',
+            label: _traderActionLabel(
+              rate: rate,
+              coinUnit: coinUnit,
+              direction: 'user_sells',
+              isAuthenticated: isAuthenticated,
+            ),
             icon: Icons.call_made,
             variant: GtexButtonVariant.secondary,
             onPressed:
@@ -1008,7 +1146,9 @@ class _CreateCoinTradeOrderSheetState
             : rate?.sellRateFiat ?? 0;
     final double fiatTotal = amount * quotedRate;
     final bool rateRestricted = rate?.isRestricted == true;
-    final String coinLabel = rate?.coinLabel ?? 'coins';
+    final bool userSells = widget.direction == 'user_sells';
+    final String coinLabel = rate?.coinLabel ?? 'coin';
+    final String fiatCurrency = rate?.fiatCurrency ?? 'NGN';
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -1022,9 +1162,9 @@ class _CreateCoinTradeOrderSheetState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              widget.direction == 'user_sells'
-                  ? 'Sell $coinLabel to trader'
-                  : 'Buy $coinLabel from trader',
+              userSells
+                  ? 'Sell $coinLabel to ${widget.trader.displayName}'
+                  : 'Buy $coinLabel from ${widget.trader.displayName}',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 color: GtexColors.text,
                 fontWeight: FontWeight.w900,
@@ -1032,8 +1172,16 @@ class _CreateCoinTradeOrderSheetState
             ),
             const SizedBox(height: GtexSpacing.xs),
             Text(
-              '${widget.trader.displayName} - ${rate?.fiatCurrency ?? 'NGN'} escrow order',
+              userSells
+                  ? 'You send $coinLabel into escrow; the trader pays you after acceptance.'
+                  : 'The trader locks $coinLabel for you after accepting the live order.',
               style: const TextStyle(color: GtexColors.textMuted),
+            ),
+            const SizedBox(height: GtexSpacing.md),
+            _TraderOrderSummary(
+              trader: widget.trader,
+              rate: rate,
+              direction: widget.direction,
             ),
             const SizedBox(height: GtexSpacing.md),
             if (rate != null) ...<Widget>[
@@ -1066,7 +1214,8 @@ class _CreateCoinTradeOrderSheetState
                   ),
                   if (fiatTotal > 0)
                     GtexStatusChip(
-                      label: 'Quote ${_money(fiatTotal)} ${rate.fiatCurrency}',
+                      label:
+                          '${_coin(amount)} $coinLabel = ${_money(fiatTotal)} ${rate.fiatCurrency}',
                       icon: Icons.receipt_long_outlined,
                       compact: true,
                     ),
@@ -1093,6 +1242,13 @@ class _CreateCoinTradeOrderSheetState
                 prefixIcon: Icon(Icons.toll_outlined),
               ),
             ),
+            if (fiatTotal > 0) ...<Widget>[
+              const SizedBox(height: GtexSpacing.xs),
+              Text(
+                'Live quote: ${_coin(amount)} $coinLabel = ${_money(fiatTotal)} $fiatCurrency',
+                style: const TextStyle(color: GtexColors.textMuted),
+              ),
+            ],
             const SizedBox(height: GtexSpacing.sm),
             if (widget.trader.termLabels.isNotEmpty ||
                 widget.trader.bankAccountLabels.isNotEmpty) ...<Widget>[
@@ -1108,8 +1264,10 @@ class _CreateCoinTradeOrderSheetState
             TextField(
               controller: _paymentMethodController,
               decoration: const InputDecoration(
-                labelText: 'Payment method',
+                labelText: 'Payment rail',
                 prefixIcon: Icon(Icons.account_balance_outlined),
+                helperText:
+                    'Use a backend-published rail. Paystack is unavailable.',
               ),
             ),
             if (_error != null) ...<Widget>[
@@ -1131,7 +1289,9 @@ class _CreateCoinTradeOrderSheetState
                           ? 'Rate restricted'
                           : _submitting
                           ? 'Creating'
-                          : 'Create order',
+                          : userSells
+                          ? 'Initiate sale'
+                          : 'Proceed to order',
                   icon: Icons.lock_clock_outlined,
                   accent: GtexColors.gold,
                   onPressed: _submitting || rateRestricted ? null : _submit,
@@ -1162,6 +1322,34 @@ class _CreateCoinTradeOrderSheetState
     if (amount == null || amount <= 0) {
       setState(() => _error = 'Enter a valid coin amount.');
       return;
+    }
+    if (rate != null) {
+      if (rate.minCoinAmount > 0 && amount < rate.minCoinAmount) {
+        setState(
+          () =>
+              _error =
+                  'Minimum order is ${_coin(rate.minCoinAmount)} ${rate.coinLabel}.',
+        );
+        return;
+      }
+      if (rate.maxCoinAmount > 0 && amount > rate.maxCoinAmount) {
+        setState(
+          () =>
+              _error =
+                  'Maximum order is ${_coin(rate.maxCoinAmount)} ${rate.coinLabel}.',
+        );
+        return;
+      }
+      if (widget.direction == 'user_buys' &&
+          rate.availableLiquidity > 0 &&
+          amount > rate.availableLiquidity) {
+        setState(
+          () =>
+              _error =
+                  'Trader has ${_coin(rate.availableLiquidity)} ${rate.coinLabel} available.',
+        );
+        return;
+      }
     }
     setState(() {
       _submitting = true;
@@ -1212,12 +1400,14 @@ class _TraderApplyPanel extends StatefulWidget {
 
 class _TraderApplyPanelState extends State<_TraderApplyPanel> {
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _bioController = TextEditingController();
   final TextEditingController _countryController = TextEditingController();
   final TextEditingController _paymentMethodsController = TextEditingController(
     text: 'Bank transfer',
   );
   final TextEditingController _banksController = TextEditingController();
   final TextEditingController _workingHoursController = TextEditingController();
+  final Set<String> _preferredCoinUnits = <String>{'COIN', 'CREDIT'};
   bool _sameNameOnly = true;
   bool _kycRequired = true;
   bool _proofRequired = true;
@@ -1227,6 +1417,7 @@ class _TraderApplyPanelState extends State<_TraderApplyPanel> {
   @override
   void dispose() {
     _nameController.dispose();
+    _bioController.dispose();
     _countryController.dispose();
     _paymentMethodsController.dispose();
     _banksController.dispose();
@@ -1241,16 +1432,34 @@ class _TraderApplyPanelState extends State<_TraderApplyPanel> {
         _TraderLiquidityTopUpPanel(onTopUp: widget.onTopUp),
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
-          title: 'Trader application',
-          subtitle: 'Applications require admin approval before trading.',
+          title: 'Become a coin trader',
+          subtitle:
+              'Apply to operate a live GTC/FNC desk. Admin approval unlocks marketplace visibility.',
           accent: GtexColors.gold,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              const _ApplicationStepHeader(
+                step: '01',
+                title: 'Marketplace identity',
+                body:
+                    'This is the public desk identity buyers and sellers will see.',
+              ),
               TextField(
                 controller: _nameController,
                 decoration: const InputDecoration(
                   labelText: 'Display name',
                   prefixIcon: Icon(Icons.badge_outlined),
+                ),
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              TextField(
+                controller: _bioController,
+                maxLength: 160,
+                decoration: const InputDecoration(
+                  labelText: 'Trader bio',
+                  prefixIcon: Icon(Icons.notes_outlined),
+                  helperText: 'Optional. Keep it specific: desk, hours, rails.',
                 ),
               ),
               const SizedBox(height: GtexSpacing.sm),
@@ -1262,6 +1471,41 @@ class _TraderApplyPanelState extends State<_TraderApplyPanel> {
                 ),
               ),
               const SizedBox(height: GtexSpacing.sm),
+              const _ApplicationStepHeader(
+                step: '02',
+                title: 'Coin lanes',
+                body:
+                    'Choose which live coin markets this desk wants to quote.',
+              ),
+              Wrap(
+                spacing: GtexSpacing.xs,
+                runSpacing: GtexSpacing.xs,
+                children: <Widget>[
+                  FilterChip(
+                    selected: _preferredCoinUnits.contains('COIN'),
+                    label: const Text('GTC'),
+                    avatar: const Icon(Icons.hexagon_outlined, size: 16),
+                    onSelected:
+                        (bool selected) =>
+                            _togglePreferredCoin('COIN', selected),
+                  ),
+                  FilterChip(
+                    selected: _preferredCoinUnits.contains('CREDIT'),
+                    label: const Text('FNC'),
+                    avatar: const Icon(Icons.stars_outlined, size: 16),
+                    onSelected:
+                        (bool selected) =>
+                            _togglePreferredCoin('CREDIT', selected),
+                  ),
+                ],
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              const _ApplicationStepHeader(
+                step: '03',
+                title: 'Settlement rails',
+                body:
+                    'Publish only the bank/payment rails you can support in live trading.',
+              ),
               TextField(
                 controller: _paymentMethodsController,
                 decoration: const InputDecoration(
@@ -1288,20 +1532,20 @@ class _TraderApplyPanelState extends State<_TraderApplyPanel> {
                 ),
               ),
               const SizedBox(height: GtexSpacing.sm),
-              SwitchListTile.adaptive(
+              _SafeSwitchTile(
                 value: _sameNameOnly,
                 onChanged:
                     (bool value) => setState(() => _sameNameOnly = value),
                 title: const Text('Same-name account only'),
                 secondary: const Icon(Icons.verified_user_outlined),
               ),
-              SwitchListTile.adaptive(
+              _SafeSwitchTile(
                 value: _kycRequired,
                 onChanged: (bool value) => setState(() => _kycRequired = value),
                 title: const Text('KYC required'),
                 secondary: const Icon(Icons.assignment_ind_outlined),
               ),
-              SwitchListTile.adaptive(
+              _SafeSwitchTile(
                 value: _proofRequired,
                 onChanged:
                     (bool value) => setState(() => _proofRequired = value),
@@ -1335,6 +1579,10 @@ class _TraderApplyPanelState extends State<_TraderApplyPanel> {
       setState(() => _error = 'Enter a display name.');
       return;
     }
+    if (_preferredCoinUnits.isEmpty) {
+      setState(() => _error = 'Choose at least one coin lane.');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -1361,6 +1609,13 @@ class _TraderApplyPanelState extends State<_TraderApplyPanel> {
         bankAccounts: _csvLabels(_banksController.text)
             .map((String bank) => <String, Object?>{'bank': bank})
             .toList(growable: false),
+        metadata: <String, Object?>{
+          if (_bioController.text.trim().isNotEmpty)
+            'bio': _bioController.text.trim(),
+          'preferred_coin_units': _preferredCoinUnits.toList(growable: false),
+          if (_workingHoursController.text.trim().isNotEmpty)
+            'working_hours': _workingHoursController.text.trim(),
+        },
       );
       widget.onApplied();
     } catch (error) {
@@ -1372,6 +1627,16 @@ class _TraderApplyPanelState extends State<_TraderApplyPanel> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  void _togglePreferredCoin(String coinUnit, bool selected) {
+    setState(() {
+      if (selected) {
+        _preferredCoinUnits.add(coinUnit);
+      } else {
+        _preferredCoinUnits.remove(coinUnit);
+      }
+    });
   }
 }
 
@@ -1385,16 +1650,9 @@ class _ProfileSummaryPanel extends StatelessWidget {
     return GtexPanel(
       title: profile.displayName,
       subtitle:
-          '${profile.countryCode ?? 'Global'} - ${_titleCase(profile.tier)}',
-      accent: GtexColors.gold,
-      trailing: GtexStatusChip(
-        label: profile.status,
-        icon: Icons.verified_outlined,
-        tone:
-            profile.isApproved
-                ? GtexStatusTone.success
-                : GtexStatusTone.warning,
-      ),
+          '${profile.countryCode ?? 'Global'} - ${_titleCase(profile.tier)} - ${profile.onlineLabel}',
+      accent: profile.isOnline == true ? GtexColors.pitch : GtexColors.gold,
+      trailing: _OnlinePill(trader: profile),
       child: Wrap(
         spacing: GtexSpacing.md,
         runSpacing: GtexSpacing.md,
@@ -1408,6 +1666,8 @@ class _ProfileSummaryPanel extends StatelessWidget {
             '${profile.averageReleaseMinutes.toStringAsFixed(0)}m',
           ),
           _metric('Rating', profile.rating.toStringAsFixed(1)),
+          _metric('Trades', profile.completedTrades?.toString() ?? '--'),
+          _metric('Response', profile.responseTimeLabel),
           _metric('Verification', _titleCase(profile.verificationLevel)),
           _metric('Volume', _money(profile.completedVolumeFiat)),
           _metric('Dispute score', profile.disputeScore.toStringAsFixed(1)),
@@ -1523,8 +1783,16 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
         children: <Widget>[
           SegmentedButton<String>(
             segments: const <ButtonSegment<String>>[
-              ButtonSegment<String>(value: 'COIN', label: Text('GTEX Coin')),
-              ButtonSegment<String>(value: 'CREDIT', label: Text('Fan Coin')),
+              ButtonSegment<String>(
+                value: 'COIN',
+                label: Text('GTC'),
+                icon: Icon(Icons.hexagon_outlined),
+              ),
+              ButtonSegment<String>(
+                value: 'CREDIT',
+                label: Text('FNC'),
+                icon: Icon(Icons.stars_outlined),
+              ),
             ],
             selected: <String>{_coinUnit},
             onSelectionChanged: (Set<String> value) {
@@ -1563,7 +1831,7 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
               _numberField(_liquidityController, 'Liquidity'),
             ],
           ),
-          SwitchListTile.adaptive(
+          _SafeSwitchTile(
             value: _isActive,
             onChanged: (bool value) => setState(() => _isActive = value),
             title: const Text('Rate active'),
@@ -1601,7 +1869,7 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
 
   List<String> _guardrailLabels(GtexCoinTraderRate? rate) {
     if (_coinUnit != 'COIN') {
-      return const <String>['Fan Coin rates are separate from GTEX Coin'];
+      return const <String>['FNC rates are separate from GTC'];
     }
     final List<String> labels = <String>[];
     final GtexCoinTraderRate? selectedRate = rate;
@@ -2508,6 +2776,366 @@ class _OrderActionSheetFrame extends StatelessWidget {
   }
 }
 
+class _TraderAvatar extends StatelessWidget {
+  const _TraderAvatar({
+    required this.name,
+    required this.online,
+    this.large = false,
+  });
+
+  final String name;
+  final bool online;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) {
+    final double size = large ? 64 : 40;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        Container(
+          width: size,
+          height: size,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: GtexColors.gold.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(large ? 18 : 12),
+            border: Border.all(color: GtexColors.gold.withValues(alpha: 0.38)),
+          ),
+          child: Text(
+            _initials(name),
+            style: TextStyle(
+              color: GtexColors.gold,
+              fontSize: large ? 22 : 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        Positioned(
+          right: -2,
+          bottom: -2,
+          child: Container(
+            width: large ? 16 : 12,
+            height: large ? 16 : 12,
+            decoration: BoxDecoration(
+              color: online ? GtexColors.pitch : GtexColors.textMuted,
+              shape: BoxShape.circle,
+              border: Border.all(color: GtexColors.panel, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OnlinePill extends StatelessWidget {
+  const _OnlinePill({required this.trader});
+
+  final GtexCoinTraderProfile trader;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool online = trader.isOnline == true;
+    return GtexStatusChip(
+      label:
+          online
+              ? 'LIVE'
+              : trader.isOnline == false
+              ? 'Offline'
+              : 'Status --',
+      icon: online ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+      color: online ? GtexColors.pitch : GtexColors.textMuted,
+      compact: true,
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({
+    required this.icon,
+    required this.label,
+    this.color = GtexColors.textMuted,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: GtexSpacing.sm,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            fit: FlexFit.loose,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color:
+                    color == GtexColors.textMuted
+                        ? GtexColors.textMuted
+                        : color,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CoinLaneStrip extends StatelessWidget {
+  const _CoinLaneStrip({required this.labels});
+
+  final List<String> labels;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      children: labels
+          .map((String label) {
+            final bool fan = label == 'FNC';
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: (fan ? Colors.blueAccent : GtexColors.gold).withValues(
+                  alpha: 0.12,
+                ),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: fan ? Colors.blueAccent : GtexColors.gold,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            );
+          })
+          .toList(growable: false),
+    );
+  }
+}
+
+class _QuoteLine extends StatelessWidget {
+  const _QuoteLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Icon(icon, size: 16, color: GtexColors.gold),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: GtexColors.textMuted),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            color: GtexColors.text,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TraderOrderSummary extends StatelessWidget {
+  const _TraderOrderSummary({
+    required this.trader,
+    required this.rate,
+    required this.direction,
+  });
+
+  final GtexCoinTraderProfile trader;
+  final GtexCoinTraderRate? rate;
+  final String direction;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexCoinTraderRate? activeRate = rate;
+    final bool userSells = direction == 'user_sells';
+    return Container(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      decoration: BoxDecoration(
+        color: GtexColors.panelStrong.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: GtexColors.gold.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              _TraderAvatar(
+                name: trader.displayName,
+                online: trader.isOnline == true,
+              ),
+              const SizedBox(width: GtexSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      trader.displayName,
+                      style: const TextStyle(
+                        color: GtexColors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${_ratingLabel(trader.rating)} - ${trader.completedTradesLabel}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: GtexColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              _OnlinePill(trader: trader),
+            ],
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          if (activeRate == null)
+            const Text(
+              'This trader has not published a live quote for the selected coin.',
+              style: TextStyle(color: GtexColors.textMuted),
+            )
+          else
+            Wrap(
+              spacing: GtexSpacing.sm,
+              runSpacing: GtexSpacing.xs,
+              children: <Widget>[
+                GtexStatusChip(
+                  label:
+                      '${activeRate.coinLabel} available ${_coin(activeRate.availableLiquidity)}',
+                  icon: Icons.account_balance_wallet_outlined,
+                  compact: true,
+                ),
+                GtexStatusChip(
+                  label:
+                      userSells
+                          ? 'Trader buys @ ${_money(activeRate.buyRateFiat)}'
+                          : 'Trader sells @ ${_money(activeRate.sellRateFiat)}',
+                  icon: Icons.price_check_outlined,
+                  compact: true,
+                ),
+                GtexStatusChip(
+                  label: trader.responseTimeLabel,
+                  icon: Icons.schedule_outlined,
+                  compact: true,
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApplicationStepHeader extends StatelessWidget {
+  const _ApplicationStepHeader({
+    required this.step,
+    required this.title,
+    required this.body,
+  });
+
+  final String step;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(
+        top: GtexSpacing.sm,
+        bottom: GtexSpacing.sm,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          GtexStatusChip(label: step, color: GtexColors.gold, compact: true),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(body, style: const TextStyle(color: GtexColors.textMuted)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SafeSwitchTile extends StatelessWidget {
+  const _SafeSwitchTile({
+    required this.value,
+    required this.onChanged,
+    required this.title,
+    required this.secondary,
+  });
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final Widget title;
+  final Widget secondary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: SwitchListTile.adaptive(
+        value: value,
+        onChanged: onChanged,
+        title: title,
+        secondary: secondary,
+      ),
+    );
+  }
+}
+
 class _ChipWrap extends StatelessWidget {
   const _ChipWrap({required this.labels, required this.fallback});
 
@@ -2557,6 +3185,58 @@ String _nullableMoney(double? value) {
 String _coin(double value) {
   final bool whole = value == value.roundToDouble();
   return value.toStringAsFixed(whole ? 0 : 2);
+}
+
+String _ratingLabel(double value) {
+  if (value <= 0) {
+    return 'Rating --';
+  }
+  return '${value.toStringAsFixed(1)} rating';
+}
+
+bool _isVerifiedTier(String value) {
+  final String normalized = value.trim().toLowerCase();
+  return normalized == 'verified' ||
+      normalized == 'gold' ||
+      normalized == 'platinum' ||
+      normalized == 'institutional';
+}
+
+String _traderActionLabel({
+  required GtexCoinTraderRate? rate,
+  required String coinUnit,
+  required String direction,
+  required bool isAuthenticated,
+}) {
+  if (!isAuthenticated) {
+    return 'Sign in';
+  }
+  final String coinLabel = rate?.coinLabel ?? _fallbackCoinLabel(coinUnit);
+  if (direction == 'user_sells') {
+    return 'SELL $coinLabel TO TRADER';
+  }
+  return 'BUY $coinLabel FROM TRADER';
+}
+
+String _fallbackCoinLabel(String coinUnit) {
+  return coinUnit == 'CREDIT' ? 'FNC' : 'GTC';
+}
+
+String _initials(String value) {
+  final List<String> parts = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((String item) => item.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return 'CT';
+  }
+  if (parts.length == 1) {
+    return parts.first
+        .substring(0, parts.first.length >= 2 ? 2 : 1)
+        .toUpperCase();
+  }
+  return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
 }
 
 List<String> _csvLabels(String value) {

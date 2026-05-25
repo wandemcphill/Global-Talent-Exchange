@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/gtex_match_models.dart';
+import 'gtex_match_visual_tokens.dart';
 
 class GtexPostMatchPanel extends StatelessWidget {
   const GtexPostMatchPanel({super.key, required this.match});
@@ -9,30 +10,92 @@ class GtexPostMatchPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final winner = match.home.score == match.away.score
-        ? 'Draw'
-        : match.home.score > match.away.score
-            ? match.home.name
-            : match.away.name;
+    final bool finalWhistle = match.phase == GtexMatchPhase.fullTime;
+    final String resultLabel =
+        match.home.score == match.away.score
+            ? 'DRAW'
+            : match.home.score > match.away.score
+            ? match.home.name.toUpperCase()
+            : match.away.name.toUpperCase();
+
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: const Color(0xFF07130E), borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF18FF88).withOpacity(.18))),
+      padding: const EdgeInsets.all(16),
+      decoration: GtexMatchVisualTokens.panelDecoration(
+        background: GtexMatchVisualTokens.surfaceOverlay,
+        borderColor:
+            finalWhistle
+                ? const Color(0x6600E87A)
+                : GtexMatchVisualTokens.borderStrong,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Post-match summary', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 12),
-          Text('Result: $winner', style: const TextStyle(color: Color(0xFF18FF88), fontWeight: FontWeight.w900)),
+          Row(
+            children: [
+              Icon(
+                finalWhistle
+                    ? Icons.verified_rounded
+                    : Icons.lock_clock_rounded,
+                color:
+                    finalWhistle
+                        ? GtexMatchVisualTokens.live
+                        : GtexMatchVisualTokens.amber,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  finalWhistle ? 'FINAL RESULT AUTHORITY' : 'REPORT LOCKED',
+                  style: const TextStyle(
+                    color: GtexMatchVisualTokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    letterSpacing: .8,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            finalWhistle ? resultLabel : 'MATCH STILL IN PROGRESS',
+            style: const TextStyle(
+              color: GtexMatchVisualTokens.textPrimary,
+              fontFamily: 'Barlow Condensed',
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text('GTEX AI News can generate a match report from final stats, timeline events, player ratings, and trophy/competition context.', style: TextStyle(color: Colors.white.withOpacity(.62), height: 1.35)),
+          Text(
+            finalWhistle
+                ? 'Post-match report data is available only after the backend returns final stats, event ledger, and settlement state.'
+                : 'The post-match surface stays blocked until the persisted match authority declares full time.',
+            style: const TextStyle(
+              color: GtexMatchVisualTokens.textSecondary,
+              height: 1.35,
+            ),
+          ),
           const SizedBox(height: 16),
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: const [
-              _ActionChip(label: 'Generate match report'),
-              _ActionChip(label: 'Open highlights'),
-              _ActionChip(label: 'Update club form'),
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _StatusTag(
+                label: finalWhistle ? 'FINAL STATS READY' : 'AWAITING FT',
+                color:
+                    finalWhistle
+                        ? GtexMatchVisualTokens.live
+                        : GtexMatchVisualTokens.amber,
+              ),
+              const _StatusTag(
+                label: 'NO CLIENT REPORT GENERATION',
+                color: GtexMatchVisualTokens.textSecondary,
+              ),
+              const _StatusTag(
+                label: 'BACKEND AUTHORITY',
+                color: GtexMatchVisualTokens.blue,
+              ),
             ],
           ),
         ],
@@ -41,12 +104,30 @@ class GtexPostMatchPanel extends StatelessWidget {
   }
 }
 
-class _ActionChip extends StatelessWidget {
-  const _ActionChip({required this.label});
+class _StatusTag extends StatelessWidget {
+  const _StatusTag({required this.label, required this.color});
+
   final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return Chip(label: Text(label), backgroundColor: Colors.white.withOpacity(.08), labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800));
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.10),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withOpacity(.30)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          letterSpacing: .6,
+        ),
+      ),
+    );
   }
 }

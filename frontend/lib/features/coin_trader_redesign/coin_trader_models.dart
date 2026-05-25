@@ -5,6 +5,12 @@ class GtexCoinTraderProfile {
     required this.displayName,
     required this.status,
     required this.tier,
+    this.bio,
+    this.isOnline,
+    this.lastSeenAt,
+    this.tradingSince,
+    this.completedTrades,
+    this.responseTimeMinutes,
     this.verificationLevel = 'standard',
     required this.completionRate,
     required this.averageReleaseMinutes,
@@ -26,6 +32,12 @@ class GtexCoinTraderProfile {
   final String? countryCode;
   final String status;
   final String tier;
+  final String? bio;
+  final bool? isOnline;
+  final DateTime? lastSeenAt;
+  final DateTime? tradingSince;
+  final int? completedTrades;
+  final double? responseTimeMinutes;
   final String verificationLevel;
   final double completionRate;
   final double averageReleaseMinutes;
@@ -41,6 +53,7 @@ class GtexCoinTraderProfile {
 
   factory GtexCoinTraderProfile.fromJson(Object? raw) {
     final Map<String, Object?> json = _map(raw);
+    final Map<String, Object?> metadata = _map(json['metadata_json']);
     return GtexCoinTraderProfile(
       id: _string(json['id']),
       userId: _string(json['user_id']),
@@ -48,6 +61,30 @@ class GtexCoinTraderProfile {
       countryCode: _stringOrNull(json['country_code']),
       status: _string(json['status'], fallback: 'applied'),
       tier: _string(json['tier'], fallback: 'bronze'),
+      bio: _stringOrNull(json['bio']) ?? _stringOrNull(metadata['bio']),
+      isOnline:
+          _boolOrNull(json['is_online']) ??
+          _boolOrNull(metadata['is_online']) ??
+          _onlineStatus(metadata['online_status']),
+      lastSeenAt:
+          _dateTime(json['last_seen_at']) ??
+          _dateTime(metadata['last_seen_at']) ??
+          _dateTime(metadata['last_active_at']),
+      tradingSince:
+          _dateTime(json['trading_since']) ??
+          _dateTime(json['created_at']) ??
+          _dateTime(metadata['trading_since']) ??
+          _dateTime(metadata['created_at']),
+      completedTrades:
+          _intOrNull(json['completed_trades']) ??
+          _intOrNull(json['trade_count']) ??
+          _intOrNull(metadata['completed_trades']) ??
+          _intOrNull(metadata['trade_count']),
+      responseTimeMinutes:
+          _doubleOrNull(json['average_response_minutes']) ??
+          _doubleOrNull(json['response_time_minutes']) ??
+          _doubleOrNull(metadata['average_response_minutes']) ??
+          _doubleOrNull(metadata['response_time_minutes']),
       verificationLevel: _string(
         json['verification_level'],
         fallback: 'standard',
@@ -64,7 +101,7 @@ class GtexCoinTraderProfile {
       rates: _list(
         json['rates'],
       ).map(GtexCoinTraderRate.fromJson).toList(growable: false),
-      metadata: _map(json['metadata_json']),
+      metadata: metadata,
     );
   }
 
@@ -91,6 +128,50 @@ class GtexCoinTraderProfile {
       }
     }
     return rates.isEmpty ? null : rates.first;
+  }
+
+  List<String> get activeCoinCodes {
+    final Set<String> labels = <String>{};
+    for (final GtexCoinTraderRate rate in rates) {
+      if (rate.isActive) {
+        labels.add(rate.coinCode);
+      }
+    }
+    return labels.toList(growable: false);
+  }
+
+  String get onlineLabel {
+    if (isOnline == true) {
+      return 'Online now';
+    }
+    if (lastSeenAt != null) {
+      return 'Last active ${_relativeTime(lastSeenAt!)}';
+    }
+    if (isOnline == false) {
+      return 'Offline';
+    }
+    return 'Activity not published';
+  }
+
+  String get tradingSinceLabel {
+    if (tradingSince == null) {
+      return 'Trading since --';
+    }
+    return 'Since ${_monthYear(tradingSince!)}';
+  }
+
+  String get completedTradesLabel {
+    if (completedTrades == null) {
+      return 'Trades not published';
+    }
+    return '$completedTrades trades completed';
+  }
+
+  String get responseTimeLabel {
+    if (responseTimeMinutes == null) {
+      return 'Response not published';
+    }
+    return _minutesLabel(responseTimeMinutes!);
   }
 
   List<String> get paymentMethodLabels {
@@ -228,7 +309,11 @@ class GtexCoinTraderRate {
     );
   }
 
-  String get coinLabel => coinUnit == 'CREDIT' ? 'Fan Coin' : 'GTEX Coin';
+  String get coinCode => coinUnit == 'CREDIT' ? 'FNC' : 'GTC';
+
+  String get coinName => coinUnit == 'CREDIT' ? 'Fan Coin' : 'GTEX Coin';
+
+  String get coinLabel => coinCode;
 
   bool get isGovernanceCompliant =>
       governanceStatus.toLowerCase() == 'compliant';
@@ -333,7 +418,11 @@ class GtexCoinTradeOrder {
 
   String get directionLabel => isUserSells ? 'User sells' : 'User buys';
 
-  String get coinLabel => coinUnit == 'CREDIT' ? 'Fan Coin' : 'GTEX Coin';
+  String get coinCode => coinUnit == 'CREDIT' ? 'FNC' : 'GTC';
+
+  String get coinName => coinUnit == 'CREDIT' ? 'Fan Coin' : 'GTEX Coin';
+
+  String get coinLabel => coinCode;
 
   String get statusLabel => _titleCase(status.replaceAll('_', ' '));
 
@@ -442,6 +531,19 @@ double? _doubleOrNull(Object? value) {
   return double.tryParse(value.toString());
 }
 
+int? _intOrNull(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value.toString());
+}
+
 bool _bool(Object? value, {bool fallback = false}) {
   if (value is bool) {
     return value;
@@ -456,12 +558,97 @@ bool _bool(Object? value, {bool fallback = false}) {
   return fallback;
 }
 
+bool? _boolOrNull(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is bool) {
+    return value;
+  }
+  final String normalized = value.toString().trim().toLowerCase();
+  if (normalized == 'true' ||
+      normalized == '1' ||
+      normalized == 'yes' ||
+      normalized == 'online') {
+    return true;
+  }
+  if (normalized == 'false' ||
+      normalized == '0' ||
+      normalized == 'no' ||
+      normalized == 'offline') {
+    return false;
+  }
+  return null;
+}
+
+bool? _onlineStatus(Object? value) {
+  final String? raw = _stringOrNull(value)?.toLowerCase();
+  if (raw == null) {
+    return null;
+  }
+  if (raw == 'online' || raw == 'available' || raw == 'live') {
+    return true;
+  }
+  if (raw == 'offline' || raw == 'away' || raw == 'unavailable') {
+    return false;
+  }
+  return null;
+}
+
 DateTime? _dateTime(Object? value) {
   final String? raw = _stringOrNull(value);
   if (raw == null) {
     return null;
   }
   return DateTime.tryParse(raw)?.toLocal();
+}
+
+String _relativeTime(DateTime value) {
+  final Duration difference = DateTime.now().difference(value.toLocal());
+  if (difference.inMinutes < 1) {
+    return 'just now';
+  }
+  if (difference.inMinutes < 60) {
+    return '${difference.inMinutes} min ago';
+  }
+  if (difference.inHours < 24) {
+    return '${difference.inHours}h ago';
+  }
+  if (difference.inDays < 7) {
+    return '${difference.inDays}d ago';
+  }
+  return _monthYear(value);
+}
+
+String _monthYear(DateTime value) {
+  const List<String> months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final DateTime local = value.toLocal();
+  return '${months[local.month - 1]} ${local.year}';
+}
+
+String _minutesLabel(double value) {
+  if (value < 1) {
+    return '<1 min';
+  }
+  if (value < 60) {
+    final bool whole = value == value.roundToDouble();
+    return '${value.toStringAsFixed(whole ? 0 : 1)} min';
+  }
+  final double hours = value / 60;
+  return '${hours.toStringAsFixed(hours >= 10 ? 0 : 1)}h';
 }
 
 List<String> _labelMap(Map<String, Object?> values) {

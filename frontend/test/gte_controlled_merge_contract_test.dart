@@ -119,8 +119,8 @@ void main() {
   });
 
   group('controlled merge runtime contract', () {
-    test('theme registry still exposes five selectable themes', () {
-      expect(GteThemeRegistry.themes, hasLength(5));
+    test('theme registry still exposes six selectable themes', () {
+      expect(GteThemeRegistry.themes, hasLength(6));
       expect(
         GteThemeRegistry.themes.map(
           (GteThemeDefinition definition) => definition.metadata.id,

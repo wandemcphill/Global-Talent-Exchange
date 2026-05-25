@@ -423,7 +423,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
       case 'korapay':
         return 'KoraPay';
       case 'paystack':
-        return 'Paystack';
+        return 'Unavailable payment rail';
       default:
         return provider;
     }
@@ -494,7 +494,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
     return GteWalletFlowScaffold(
       title: 'Deposit',
       subtitle:
-          'Add capital through instant checkout or manual bank transfer while preserving GTEX compliance controls.',
+          'Add live wallet value through KoraPay checkout or manual bank transfer review.',
       icon: Icons.add_card_outlined,
       statusLabel: 'FUND WALLET',
       child: RefreshIndicator(
@@ -543,13 +543,32 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'Choose a deposit method',
+                    'Choose live funding rail',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Instant checkout can buy GTEX Coin or Fan Coin. Manual bank transfer credits GTEX Coin after admin review.',
+                    'GTC and FNC stay separate. KoraPay follows the selected live wallet unit; manual bank transfer credits GTC only after admin review.',
                     style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: <Widget>[
+                      _FundingRailChip(
+                        label: 'KoraPay',
+                        value: _providerStatusSummary('korapay'),
+                        icon: Icons.open_in_new_outlined,
+                        accent: GteShellTheme.accentCapital,
+                      ),
+                      _FundingRailChip(
+                        label: 'Manual bank transfer',
+                        value: 'GTC credited after review',
+                        icon: Icons.account_balance_outlined,
+                        accent: GteShellTheme.accentWarm,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -617,11 +636,11 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                     items: const <DropdownMenuItem<GteLedgerUnit>>[
                       DropdownMenuItem<GteLedgerUnit>(
                         value: GteLedgerUnit.coin,
-                        child: Text('GTEX Coin'),
+                        child: Text('GTEX Coin (GTC)'),
                       ),
                       DropdownMenuItem<GteLedgerUnit>(
                         value: GteLedgerUnit.credit,
-                        child: Text('Fan Coin'),
+                        child: Text('Fan Coin (FNC)'),
                       ),
                     ],
                     onChanged:
@@ -636,6 +655,11 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                               });
                             },
                   ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _fundingUnitDescription(_automaticUnit),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _automaticAmountController,
@@ -644,10 +668,11 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                     ),
                     enabled: !_isSubmitting && session == null,
                     decoration: InputDecoration(
-                      labelText: 'Amount',
+                      labelText:
+                          'Amount (${gteLedgerUnitCode(_automaticUnit)})',
                       helperText:
                           _automaticProvider == 'korapay'
-                              ? 'KoraPay currently accepts whole-number NGN amounts.'
+                              ? 'KoraPay sessions are confirmed by the live backend before any balance changes.'
                               : 'Enter the deposit amount to route through the selected gateway.',
                       prefixIcon: const Icon(Icons.payments_outlined),
                     ),
@@ -679,12 +704,16 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 10),
-                    Text('Reference: ${session.reference}'),
+                    SelectableText('Reference: ${session.reference}'),
                     Text(
                       'Amount: ${gteFormatCompetitionAmount(session.amount, session.currency)}',
                     ),
                     Text('Provider: ${_providerLabel(session.provider)}'),
                     Text('Status: ${_titleCase(session.status)}'),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'GTEX credits this wallet only after the backend confirms the gateway callback or verification result.',
+                    ),
                     const SizedBox(height: 14),
                     Wrap(
                       spacing: 10,
@@ -755,7 +784,7 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Create a manual bank transfer request to receive admin payment details and the locked reference that credits GTEX Coin after review.',
+                    'Create a manual bank transfer request to receive real treasury account details and a locked reference. Transfer exactly the shown NGN amount and submit the bank reference for review.',
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -765,7 +794,9 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                     ),
                     enabled: !_isCreatingManualDeposit,
                     decoration: const InputDecoration(
-                      labelText: 'Amount',
+                      labelText: 'GTC amount requested',
+                      helperText:
+                          'Manual bank transfer credits GTC after admin review.',
                       prefixIcon: Icon(Icons.account_balance_outlined),
                     ),
                   ),
@@ -794,14 +825,47 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 10),
-                    Text('Reference: ${activeDeposit.reference}'),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: GteShellTheme.accentWarm.withValues(alpha: 0.1),
+                        border: Border.all(
+                          color: GteShellTheme.accentWarm.withValues(
+                            alpha: 0.22,
+                          ),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'Reference code',
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                          const SizedBox(height: 6),
+                          SelectableText(
+                            activeDeposit.reference,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Transfer exactly ${gteFormatFiat(activeDeposit.amountFiat, currency: activeDeposit.currencyCode)} using this reference.',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     Text(
                       'Amount: ${gteFormatFiat(activeDeposit.amountFiat, currency: activeDeposit.currencyCode)}',
                     ),
                     Text(
-                      'GTEX Coin credited on approval: ${gteFormatCredits(activeDeposit.amountCoin)}',
+                      'GTC on approval: ${gteFormatGtc(activeDeposit.amountCoin)}',
                     ),
                     Text('Status: ${_titleCase(activeDeposit.status.name)}'),
+                    const SizedBox(height: 8),
+                    Text(_manualDepositReviewMessage(activeDeposit)),
                     const SizedBox(height: 10),
                     Text('Bank: ${activeDeposit.bankName}'),
                     Text('Account number: ${activeDeposit.bankAccountNumber}'),
@@ -810,6 +874,16 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
                       Text(
                         'Expires: ${gteFormatDateTime(activeDeposit.expiresAt)}',
                       ),
+                    if (activeDeposit.proofAttachmentId != null) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Proof attached: ${activeDeposit.proofAttachmentId}',
+                      ),
+                    ],
+                    if (activeDeposit.adminNotes != null) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Text('Review note: ${activeDeposit.adminNotes}'),
+                    ],
                     if (activeDeposit.status ==
                         GteDepositStatus.awaitingPayment) ...<Widget>[
                       const SizedBox(height: 16),
@@ -891,6 +965,81 @@ class _GteFundWalletScreenState extends State<GteFundWalletScreen> {
         ),
       ),
     );
+  }
+}
+
+class _FundingRailChip extends StatelessWidget {
+  const _FundingRailChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.accent,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 240,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: accent.withValues(alpha: 0.08),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, color: accent),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(label, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(value, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _fundingUnitDescription(GteLedgerUnit unit) {
+  switch (unit) {
+    case GteLedgerUnit.coin:
+      return 'GTC is the capital coin for transfers, trader settlement, player purchases, and withdrawals.';
+    case GteLedgerUnit.credit:
+      return 'FNC is the fan-economy coin for gifts, reactions, community entries, and activity rewards.';
+    case GteLedgerUnit.unknown:
+      return 'Select a live wallet unit before creating a payment session.';
+  }
+}
+
+String _manualDepositReviewMessage(GteDepositRequest deposit) {
+  switch (deposit.status) {
+    case GteDepositStatus.awaitingPayment:
+      return 'Awaiting your bank transfer details. Balance will not change until review is complete.';
+    case GteDepositStatus.paymentSubmitted:
+      return 'Payment details submitted. GTEX is waiting for admin review.';
+    case GteDepositStatus.underReview:
+      return 'Under review by GTEX treasury. Review state comes from the live backend.';
+    case GteDepositStatus.confirmed:
+      return 'Approved. GTC should be reflected in the wallet ledger.';
+    case GteDepositStatus.rejected:
+      return deposit.adminNotes ??
+          'Rejected by admin review. You can create a new request if needed.';
+    case GteDepositStatus.expired:
+      return 'Expired. Create a fresh request to receive a valid reference.';
+    case GteDepositStatus.disputed:
+      return 'Disputed. Contact support with the bank transfer proof and reference.';
   }
 }
 

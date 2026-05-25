@@ -10,6 +10,8 @@ import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/coin_trader_redesign/coin_trader_redesign.dart';
 import 'package:gte_frontend/features/launch_control_redesign/gtex_feature_flags_launch_control_screen_v2.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
+import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
+import 'package:gte_frontend/features/match/match_viewer_route_screen.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
@@ -30,7 +32,6 @@ import 'package:gte_frontend/screens/match/gtex_match_center_screen_v2.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
 import 'package:gte_frontend/screens/profile/gtex_live_profile_screen.dart';
 import 'package:gte_frontend/screens/support/gte_support_dispute_screens.dart';
-import 'package:gte_frontend/screens/trader/trader_dashboard_screen.dart';
 import 'package:gte_frontend/screens/wallet/gte_kyc_screen.dart';
 import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/widgets/gte_route_integrity_screen.dart';
@@ -138,15 +139,11 @@ GoRouter buildGtexAppRouter({
       ),
       GoRoute(
         path: '/trader',
-        pageBuilder:
+        redirect:
             (BuildContext context, GoRouterState state) =>
-                NoTransitionPage<void>(
-                  key: state.pageKey,
-                  child: TraderDashboardScreen(
-                    controller: controller,
-                    config: config,
-                  ),
-                ),
+                const GteNavigationRoute.wallet(
+                  capitalDestination: GteCapitalDestination.coinTraders,
+                ).path,
       ),
       GoRoute(
         path: '/app/transfer-hub',
@@ -352,10 +349,46 @@ List<RouteBase> _buildLegacyAliasRoutes({
               const GteNavigationRoute.home().path,
     ),
     GoRoute(
+      path: '/world/federations',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies = dependenciesBuilder(
+          context,
+        );
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: GteAppRouteRegistry(
+            dependencies: dependencies,
+          ).buildScreen(context, const WorldFederationsRouteData()),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/world/awards',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies = dependenciesBuilder(
+          context,
+        );
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: GteAppRouteRegistry(
+            dependencies: dependencies,
+          ).buildScreen(context, const WorldAwardsRouteData()),
+        );
+      },
+    ),
+    GoRoute(
       path: '/world',
-      redirect:
-          (BuildContext context, GoRouterState state) =>
-              const RegenUniverseRouteData().toUri().toString(),
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies = dependenciesBuilder(
+          context,
+        );
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: GteAppRouteRegistry(
+            dependencies: dependencies,
+          ).guardedScreenFor(const WorldOverviewRouteData()),
+        );
+      },
     ),
     GoRoute(
       path: '/market',
@@ -448,6 +481,16 @@ List<RouteBase> _buildLegacyAliasRoutes({
               const WorldAwardsRouteData().toUri().toString(),
     ),
     GoRoute(
+      path: '/profile/login',
+      redirect:
+          (BuildContext context, GoRouterState state) => gtexAccountSelectRoute,
+    ),
+    GoRoute(
+      path: '/profile/signup',
+      redirect:
+          (BuildContext context, GoRouterState state) => gtexUserSignupRoute,
+    ),
+    GoRoute(
       path: '/national-team',
       pageBuilder:
           (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
@@ -492,9 +535,31 @@ List<RouteBase> _buildLegacyAliasRoutes({
     ),
     GoRoute(
       path: '/viral',
-      redirect:
-          (BuildContext context, GoRouterState state) =>
-              const ViralFeedRouteData().toUri().toString(),
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies = dependenciesBuilder(
+          context,
+        );
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: GteAppRouteRegistry(
+            dependencies: dependencies,
+          ).buildScreen(context, const ViralFeedRouteData()),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/viral-feed',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies = dependenciesBuilder(
+          context,
+        );
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: GteAppRouteRegistry(
+            dependencies: dependencies,
+          ).buildScreen(context, const ViralFeedRouteData()),
+        );
+      },
     ),
     GoRoute(
       path: '/club',
@@ -631,6 +696,42 @@ List<RouteBase> _buildLegacyAliasRoutes({
       redirect:
           (BuildContext context, GoRouterState state) =>
               const GteNavigationRoute.community().path,
+    ),
+    GoRoute(
+      path: '/matches',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies = dependenciesBuilder(
+          context,
+        );
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: GteLiveMatchHubRouteScreen(
+            dependencies: dependencies,
+            clubId: dependencies.currentClubId,
+            clubName: dependencies.currentClubName,
+          ),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/matches/viewer/:matchKey',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: MatchViewerRouteScreen(matchKey: matchKey),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/match-viewer/:matchKey',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: MatchViewerRouteScreen(matchKey: matchKey),
+        );
+      },
     ),
     GoRoute(
       path: '/match',
@@ -856,7 +957,10 @@ List<RouteBase> _buildFeatureRoutes({
     '/competitions',
     '/player-cards',
     '/world',
+    '/world/awards',
+    '/world/federations',
     '/world/regens',
+    '/viral-feed',
     '/national-team',
     '/football/transfer-center',
     '/streamer-tournaments',

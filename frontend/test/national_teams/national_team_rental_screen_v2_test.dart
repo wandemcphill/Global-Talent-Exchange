@@ -10,7 +10,7 @@ import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
 
 void main() {
   testWidgets(
-    'national rental V2 derives countries from the live eligibility pool',
+    'national rental V2 loads country and team authority before the pool',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1400, 1000);
       tester.view.devicePixelRatio = 1;
@@ -33,10 +33,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(nationalApi.listCompetitionsCalls, 1);
+      expect(nationalApi.listCountriesCalls, 1);
+      expect(nationalApi.lastCountriesCompetitionId, 'comp-1');
+      expect(nationalApi.listTeamsCalls, 2);
+      expect(nationalApi.lastTeamsCompetitionId, 'comp-1');
+      expect(nationalApi.lastTeamsCountryCode, 'NG');
       expect(nationalApi.listRentalPoolCalls, 1);
-      expect(nationalApi.lastRentalPoolCountryCode, isNull);
+      expect(nationalApi.lastRentalPoolCountryCode, 'NG');
       expect(find.text('Nigeria'), findsWidgets);
-      expect(find.text('Live Pool Forward'), findsOneWidget);
+      expect(find.text('Live Pool Forward'), findsWidgets);
     },
   );
 }
@@ -52,6 +57,11 @@ class _FakeNationalTeamApi extends NationalTeamApi {
       );
 
   int listCompetitionsCalls = 0;
+  int listCountriesCalls = 0;
+  int listTeamsCalls = 0;
+  String? lastCountriesCompetitionId;
+  String? lastTeamsCompetitionId;
+  String? lastTeamsCountryCode;
   int listRentalPoolCalls = 0;
   String? lastRentalPoolCountryCode;
 
@@ -73,6 +83,45 @@ class _FakeNationalTeamApi extends NationalTeamApi {
         createdAt: DateTime.parse('2026-03-01T00:00:00Z'),
         updatedAt: DateTime.parse('2026-03-12T00:00:00Z'),
       ),
+    ];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listCountries({
+    String? competitionId,
+  }) async {
+    listCountriesCalls += 1;
+    lastCountriesCompetitionId = competitionId;
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'country_code': 'NG',
+        'country_name': 'Nigeria',
+        'confederation': 'CAF',
+        'eligible_players': 1,
+        'rental_budget_label': 'Backend authority',
+      },
+    ];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listTeams({
+    String? competitionId,
+    String? countryCode,
+  }) async {
+    listTeamsCalls += 1;
+    lastTeamsCompetitionId = competitionId;
+    lastTeamsCountryCode = countryCode;
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'id': 'team-ng',
+        'country_code': 'NG',
+        'name': 'Nigeria Senior',
+        'age_band': 'senior',
+        'competition_id': competitionId,
+        'eligible_players': 1,
+        'min_squad_size': 16,
+        'max_squad_size': 26,
+      },
     ];
   }
 

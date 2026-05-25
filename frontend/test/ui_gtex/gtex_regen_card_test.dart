@@ -23,6 +23,10 @@ void main() {
               potentialLabel: '88 POT',
               ageLabel: '19 yrs',
               portraitSeed: 'regen-liam-carver',
+              generationLabel: 'Gen 2',
+              traitLabels: <String>['Clinical Finisher', 'High Press'],
+              lineageLabel: 'Inherited from Academy Lineage A',
+              awardLabels: <String>['Rare Trait Discovery'],
             ),
           ),
         ),
@@ -33,6 +37,12 @@ void main() {
     expect(find.text('GSI'), findsOneWidget);
     expect(find.text('OVR 78'), findsOneWidget);
     expect(find.text('High-grade'), findsWidgets);
+    expect(find.text('REGEN DNA'), findsOneWidget);
+    expect(find.text('Gen 2'), findsOneWidget);
+    expect(find.text('Clinical Finisher'), findsOneWidget);
+    expect(find.text('High Press'), findsOneWidget);
+    expect(find.text('Inherited from Academy Lineage A'), findsOneWidget);
+    expect(find.text('Rare Trait Discovery'), findsOneWidget);
   });
 
   testWidgets('regen card displays portraitUrl from approved face bank', (

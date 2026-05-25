@@ -99,10 +99,68 @@ void main() {
     await tester.pumpWidget(_surfaceHost(const HomeScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('World'), findsOneWidget);
+    expect(find.text('WORLD PULSE RAIL'), findsOneWidget);
     expect(find.text('World Preview'), findsNothing);
-    expect(find.text('Matchday'), findsOneWidget);
-    expect(find.text('Arena'), findsOneWidget);
+    expect(find.text('Watch matchday'), findsOneWidget);
+    expect(find.text('Read transfer hub'), findsOneWidget);
+  });
+
+  testWidgets('home dashboard copy reflects an admin bootstrap role', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _surfaceHost(
+        const HomeScreen(),
+        profileData: const ProfileData(
+          authenticated: true,
+          user: <String, Object?>{
+            'display_name': 'Ops Lead',
+            'role': 'admin',
+            'permissions': <String>['manage_payment_rails'],
+          },
+          affinityProfile: <String, Object?>{},
+          club: null,
+          followers: 0,
+          following: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('ADMIN DESK'), findsOneWidget);
+    expect(
+      find.text('CONTROL THE LIVE FOOTBALL ECONOMY SAFELY'),
+      findsOneWidget,
+    );
+    expect(find.text('PAYMENTS'), findsOneWidget);
+  });
+
+  testWidgets('home dashboard copy keeps coin trader identity distinct', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _surfaceHost(
+        const HomeScreen(),
+        profileData: const ProfileData(
+          authenticated: true,
+          user: <String, Object?>{
+            'display_name': 'Liquidity Desk',
+            'role': 'coin-trader',
+            'permissions': <String>['manage_coin_trader_rates'],
+          },
+          affinityProfile: <String, Object?>{},
+          club: null,
+          followers: 0,
+          following: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('TRADER DESK'), findsOneWidget);
+    expect(find.text('MAKE THE COIN MARKET FEEL ONLINE'), findsOneWidget);
+    expect(find.text('GTC'), findsOneWidget);
+    expect(find.text('FNC'), findsOneWidget);
   });
 
   testWidgets('world route presents live route truth without preview badges', (
@@ -136,7 +194,10 @@ void main() {
   });
 }
 
-Widget _surfaceHost(Widget child) {
+Widget _surfaceHost(
+  Widget child, {
+  ProfileData profileData = const ProfileData.unauthenticated(),
+}) {
   const CompetitionHubData emptyHub = CompetitionHubData(
     gtexCompetitions: <CompetitionSummary>[],
     hostedCompetitions: <HostedCompetition>[],
@@ -146,9 +207,10 @@ Widget _surfaceHost(Widget child) {
   return ProviderScope(
     overrides: [
       appConfigProvider.overrideWithValue(_testAppConfig),
-      profileDataProvider.overrideWith(
-        (Ref ref) async => const ProfileData.unauthenticated(),
+      isAuthenticatedProvider.overrideWith(
+        (Ref ref) => profileData.authenticated,
       ),
+      profileDataProvider.overrideWith((Ref ref) async => profileData),
       competitionHubProvider.overrideWith((Ref ref) async => emptyHub),
       marketDashboardProvider.overrideWith((Ref ref) async {
         return const MarketDashboardData(

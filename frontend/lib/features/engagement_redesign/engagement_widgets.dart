@@ -5,8 +5,14 @@ import 'engagement_models.dart';
 
 Color notificationColor(GtexNotificationKind kind) {
   switch (kind) {
+    case GtexNotificationKind.transfers:
+      return GtexColors.pitch;
+    case GtexNotificationKind.matches:
+      return GtexColors.cyan;
     case GtexNotificationKind.market:
       return GtexColors.pitch;
+    case GtexNotificationKind.traders:
+      return GtexColors.coinGtex;
     case GtexNotificationKind.club:
       return GtexColors.cyan;
     case GtexNotificationKind.competition:
@@ -15,6 +21,8 @@ Color notificationColor(GtexNotificationKind kind) {
       return GtexColors.purple;
     case GtexNotificationKind.wallet:
       return GtexColors.mint;
+    case GtexNotificationKind.gifts:
+      return GtexColors.coinFan;
     case GtexNotificationKind.kyc:
       return GtexColors.cyan;
     case GtexNotificationKind.dispute:
@@ -103,18 +111,18 @@ class GtexSectionListTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: GtexColors.text,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: GtexColors.textMuted,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: GtexColors.textMuted),
                 ),
               ],
             ),
@@ -152,9 +160,17 @@ class GtexArticleHero extends StatelessWidget {
             spacing: GtexSpacing.xs,
             runSpacing: GtexSpacing.xs,
             children: <Widget>[
-              GtexStatusChip(label: article.categoryLabel, color: accent, icon: Icons.newspaper_outlined),
+              GtexStatusChip(
+                label: article.categoryLabel,
+                color: accent,
+                icon: Icons.newspaper_outlined,
+              ),
               if (article.isBreaking)
-                const GtexStatusChip(label: 'LIVE STORY', color: GtexColors.red, icon: Icons.bolt_outlined),
+                const GtexStatusChip(
+                  label: 'LIVE STORY',
+                  color: GtexColors.red,
+                  icon: Icons.bolt_outlined,
+                ),
               GtexStatusChip(
                 label: 'TRUST ${(article.trustScore * 100).round()}%',
                 color: GtexColors.cyan,
@@ -166,29 +182,83 @@ class GtexArticleHero extends StatelessWidget {
           Text(
             article.title,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: GtexColors.text,
-                  fontWeight: FontWeight.w900,
-                  height: 1.05,
-                ),
+              color: GtexColors.text,
+              fontWeight: FontWeight.w900,
+              height: 1.05,
+            ),
           ),
           const SizedBox(height: GtexSpacing.sm),
           Text(
             article.summary,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: GtexColors.textSecondary,
-                  height: 1.35,
-                ),
+              color: GtexColors.textSecondary,
+              height: 1.35,
+            ),
           ),
           const SizedBox(height: GtexSpacing.lg),
           Text(
             article.body,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: GtexColors.textSecondary,
-                  height: 1.55,
-                ),
+              color: GtexColors.textSecondary,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: GtexSpacing.lg),
+          GtexReactionBar(
+            reactionCount: article.reactionCount,
+            commentCount: article.commentCount,
+            accent: accent,
           ),
         ],
       ),
+    );
+  }
+}
+
+class GtexReactionBar extends StatelessWidget {
+  const GtexReactionBar({
+    super.key,
+    required this.reactionCount,
+    required this.commentCount,
+    this.accent = GtexColors.pitch,
+    this.onReact,
+  });
+
+  final int reactionCount;
+  final int commentCount;
+  final Color accent;
+  final VoidCallback? onReact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: GtexSpacing.xs,
+      runSpacing: GtexSpacing.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        GtexStatusChip(
+          label: '$reactionCount reactions',
+          color: accent,
+          icon: Icons.sports_soccer_outlined,
+        ),
+        GtexStatusChip(
+          label: '$commentCount comments',
+          color: GtexColors.cyan,
+          icon: Icons.chat_bubble_outline,
+        ),
+        if (onReact == null)
+          const GtexStatusChip(
+            label: 'BACKEND OWNED',
+            color: GtexColors.textSecondary,
+            icon: Icons.lock_outline,
+          )
+        else
+          TextButton.icon(
+            onPressed: onReact,
+            icon: const Icon(Icons.add_reaction_outlined),
+            label: const Text('React'),
+          ),
+      ],
     );
   }
 }

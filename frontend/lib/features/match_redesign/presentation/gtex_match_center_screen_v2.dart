@@ -12,6 +12,19 @@ import '../widgets/gtex_post_match_panel.dart';
 import '../widgets/gtex_tactics_panel.dart';
 import 'gtex_match_center_controller.dart';
 
+class _GtexMatchColors {
+  static const Color shell = Color(0xFF0A0C0F);
+  static const Color panel = Color(0xFF111418);
+  static const Color overlay = Color(0xFF181C22);
+  static const Color border = Color(0xFF252D38);
+  static const Color text = Color(0xFFE8EDF4);
+  static const Color muted = Color(0xFF8A97A8);
+  static const Color primary = Color(0xFF00E87A);
+  static const Color amber = Color(0xFFFFB800);
+  static const Color red = Color(0xFFFF3D3D);
+  static const Color blue = Color(0xFF2F80ED);
+}
+
 class GtexMatchCenterScreenV2 extends StatefulWidget {
   const GtexMatchCenterScreenV2({
     super.key,
@@ -52,48 +65,30 @@ class _GtexMatchCenterScreenV2State extends State<GtexMatchCenterScreenV2> {
       builder: (context, _) {
         if (controller.isLoading && controller.state == null) {
           return const Scaffold(
-            backgroundColor: Color(0xFF030806),
-            body: Center(child: CircularProgressIndicator()),
+            backgroundColor: _GtexMatchColors.shell,
+            body: _MatchLoadingState(),
           );
         }
         if (controller.error != null && controller.state == null) {
           return Scaffold(
-            backgroundColor: const Color(0xFF030806),
+            backgroundColor: _GtexMatchColors.shell,
             body: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    color: Colors.redAccent,
-                    size: 42,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Could not load match',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(color: Colors.white),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: controller.load,
-                    child: const Text('Retry'),
-                  ),
-                ],
+              child: _MatchErrorState(
+                message: controller.error.toString(),
+                onRetry: controller.load,
               ),
             ),
           );
         }
         final match = controller.state!;
         return Scaffold(
-          backgroundColor: const Color(0xFF030806),
+          backgroundColor: _GtexMatchColors.shell,
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final wide = constraints.maxWidth >= 1120;
+                  final wide = constraints.maxWidth >= 1080;
                   if (!wide) {
                     return _MobileMatchView(
                       match: match,
@@ -101,16 +96,10 @@ class _GtexMatchCenterScreenV2State extends State<GtexMatchCenterScreenV2> {
                     );
                   }
                   return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SizedBox(
-                        width: 280,
-                        child: _MatchSidePanel(
-                          match: match,
-                          controller: controller,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
                       Expanded(
+                        flex: 7,
                         child: _MainPitchWorkspace(
                           match: match,
                           controller: controller,
@@ -118,7 +107,7 @@ class _GtexMatchCenterScreenV2State extends State<GtexMatchCenterScreenV2> {
                       ),
                       const SizedBox(width: 16),
                       SizedBox(
-                        width: 360,
+                        width: 392,
                         child: _RightLivePanel(
                           match: match,
                           controller: controller,
@@ -147,16 +136,23 @@ class _MainPitchWorkspace extends StatelessWidget {
     return Column(
       children: [
         GtexMatchScoreboard(match: match),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Expanded(
-          child: Center(
-            child: Gtex2dPitch(
-              match: match,
-              onPlayerSelected: controller.selectPitchPlayer,
+          child: _BroadcastPanel(
+            title: 'TACTICAL CAM',
+            trailing: '${match.home.formation} / ${match.away.formation}',
+            child: Center(
+              child: Gtex2dPitch(
+                match: match,
+                onPlayerSelected: controller.selectPitchPlayer,
+              ),
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        _HorizontalTimelineScrub(match: match),
+        const SizedBox(height: 12),
+        _LineupStrip(home: match.home, away: match.away),
         if (match.phase == GtexMatchPhase.fullTime)
           GtexPostMatchPanel(match: match),
       ],
@@ -236,35 +232,90 @@ class _MatchSidePanel extends StatelessWidget {
 }
 
 class _RightLivePanel extends StatelessWidget {
-  const _RightLivePanel({required this.match, required this.controller});
+  const _RightLivePanel({
+    required this.match,
+    required this.controller,
+    this.compact = false,
+  });
 
   final GtexLiveMatchState match;
   final GtexMatchCenterController controller;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    Widget child;
+    if (compact) {
+      return ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          _AnalysisTabs(controller: controller, compact: true),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 240,
+            child: _BroadcastPanel(
+              title: _tabTitle(controller.selectedTab),
+              child: _tabChild(context),
+            ),
+          ),
+          const SizedBox(height: 10),
+          _MomentumPanel(match: match),
+          const SizedBox(height: 10),
+          _EconomyImpactPanel(match: match),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        _AnalysisTabs(controller: controller),
+        const SizedBox(height: 12),
+        Expanded(
+          flex: 3,
+          child: _BroadcastPanel(
+            title: _tabTitle(controller.selectedTab),
+            child: _tabChild(context),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _MomentumPanel(match: match),
+        const SizedBox(height: 12),
+        _EconomyImpactPanel(match: match),
+      ],
+    );
+  }
+
+  Widget _tabChild(BuildContext context) {
     switch (controller.selectedTab) {
       case 1:
-        child = GtexMatchLineups(home: match.home, away: match.away);
-        break;
+        return GtexMatchStatsPanel(match: match);
       case 2:
-        child = GtexMatchStatsPanel(match: match);
-        break;
+        return GtexMatchLineups(home: match.home, away: match.away);
       case 3:
-        child = GtexTacticsPanel(
+        return GtexTacticsPanel(
           isSending: controller.isSendingInstruction,
           onSubmit: controller.sendInstruction,
         );
-        break;
       case 4:
-        child = GtexHighlightsPanel(highlights: match.highlights);
-        break;
+        return GtexHighlightsPanel(highlights: match.highlights);
       case 0:
       default:
-        child = GtexMatchTimeline(events: match.timeline);
+        return GtexMatchTimeline(events: match.timeline);
     }
-    return Container(decoration: _panelDecoration(), child: child);
+  }
+
+  String _tabTitle(int index) {
+    switch (index) {
+      case 1:
+        return 'MATCH STATS';
+      case 2:
+        return 'LINEUPS';
+      case 3:
+        return 'TACTICS';
+      case 4:
+        return 'HIGHLIGHTS';
+      case 0:
+      default:
+        return 'LIVE TIMELINE';
+    }
   }
 }
 
@@ -281,19 +332,21 @@ class _MobileMatchView extends StatelessWidget {
         Row(
           children: [
             const Text(
-              'Match Center',
+              'MATCH CENTER',
               style: TextStyle(
-                color: Colors.white,
+                color: _GtexMatchColors.text,
                 fontWeight: FontWeight.w900,
                 fontSize: 18,
+                letterSpacing: .8,
               ),
             ),
             const Spacer(),
             Text(
               '${match.minute} min',
-              style: TextStyle(
-                color: Colors.white.withOpacity(.58),
+              style: const TextStyle(
+                color: _GtexMatchColors.muted,
                 fontWeight: FontWeight.w800,
+                fontFamily: 'JetBrains Mono',
               ),
             ),
           ],
@@ -303,31 +356,636 @@ class _MobileMatchView extends StatelessWidget {
         const SizedBox(height: 10),
         Expanded(
           flex: 5,
-          child: Center(
-            child: Gtex2dPitch(
-              match: match,
-              onPlayerSelected: controller.selectPitchPlayer,
+          child: _BroadcastPanel(
+            title: 'TACTICAL CAM',
+            child: Center(
+              child: Gtex2dPitch(
+                match: match,
+                onPlayerSelected: controller.selectPitchPlayer,
+              ),
             ),
           ),
         ),
         const SizedBox(height: 10),
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Timeline',
+        _AnalysisTabs(controller: controller, compact: true),
+        const SizedBox(height: 10),
+        Expanded(
+          flex: 4,
+          child: _RightLivePanel(
+            match: match,
+            controller: controller,
+            compact: true,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnalysisTabs extends StatelessWidget {
+  const _AnalysisTabs({required this.controller, this.compact = false});
+
+  final GtexMatchCenterController controller;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = [
+      (0, 'Timeline', Icons.timeline),
+      (1, 'Stats', Icons.bar_chart),
+      (2, 'Lineups', Icons.groups),
+      (3, 'Tactics', Icons.tune),
+      (4, 'Clips', Icons.movie),
+    ];
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tabs.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final tab = tabs[index];
+          final selected = controller.selectedTab == tab.$1;
+          return _TabButton(
+            label: compact ? tab.$2.toUpperCase() : tab.$2,
+            icon: tab.$3,
+            selected: selected,
+            onTap: () => controller.selectTab(tab.$1),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _MatchLoadingState extends StatelessWidget {
+  const _MatchLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: _panelDecoration(),
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: _GtexMatchColors.primary,
+                ),
+              ),
+              SizedBox(height: 14),
+              Text(
+                'Loading live match authority',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _GtexMatchColors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Waiting for persisted match state from the backend.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _GtexMatchColors.muted, height: 1.35),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MatchErrorState extends StatelessWidget {
+  const _MatchErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 460),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: _panelDecoration(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.error_outline, color: _GtexMatchColors.red),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Live match unavailable',
+                    style: TextStyle(
+                      color: _GtexMatchColors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              message,
+              style: const TextStyle(
+                color: _GtexMatchColors.muted,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry live feed'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BroadcastPanel extends StatelessWidget {
+  const _BroadcastPanel({
+    required this.title,
+    required this.child,
+    this.trailing,
+  });
+
+  final String title;
+  final String? trailing;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: _panelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: const BoxDecoration(
+              color: _GtexMatchColors.overlay,
+              border: Border(
+                bottom: BorderSide(color: _GtexMatchColors.border),
+              ),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: _GtexMatchColors.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                    letterSpacing: .6,
+                  ),
+                ),
+                const Spacer(),
+                if (trailing != null)
+                  Text(
+                    trailing!,
+                    style: const TextStyle(
+                      color: _GtexMatchColors.muted,
+                      fontFamily: 'JetBrains Mono',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(padding: const EdgeInsets.all(12), child: child),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HorizontalTimelineScrub extends StatelessWidget {
+  const _HorizontalTimelineScrub({required this.match});
+
+  final GtexLiveMatchState match;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<GtexMatchTimelineEvent> events = match.timeline.reversed
+        .take(8)
+        .toList(growable: false);
+    return SizedBox(
+      height: 82,
+      child: DecoratedBox(
+        decoration: _panelDecoration(),
+        child:
+            events.isEmpty
+                ? const Center(
+                  child: Text(
+                    'No live timeline events returned yet.',
+                    style: TextStyle(color: _GtexMatchColors.muted),
+                  ),
+                )
+                : ListView.separated(
+                  padding: const EdgeInsets.all(10),
+                  scrollDirection: Axis.horizontal,
+                  itemBuilder: (BuildContext context, int index) {
+                    final GtexMatchTimelineEvent event = events[index];
+                    return Container(
+                      width: 210,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _GtexMatchColors.overlay,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _GtexMatchColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          _EventGlyph(type: event.type),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  "${event.minute}'  ${event.title}",
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _GtexMatchColors.text,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  event.playerName ?? event.description,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: _GtexMatchColors.muted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemCount: events.length,
+                ),
+      ),
+    );
+  }
+}
+
+class _LineupStrip extends StatelessWidget {
+  const _LineupStrip({required this.home, required this.away});
+
+  final GtexMatchTeam home;
+  final GtexMatchTeam away;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<({GtexLineupPlayer player, Color color, String team})> players =
+        [
+          for (final GtexLineupPlayer player in home.players.take(5))
+            (
+              player: player,
+              color: _teamColor(home, _GtexMatchColors.primary),
+              team: home.shortName,
+            ),
+          for (final GtexLineupPlayer player in away.players.take(5))
+            (
+              player: player,
+              color: _teamColor(away, _GtexMatchColors.amber),
+              team: away.shortName,
+            ),
+        ];
+    return SizedBox(
+      height: 74,
+      child: DecoratedBox(
+        decoration: _panelDecoration(),
+        child:
+            players.isEmpty
+                ? const Center(
+                  child: Text(
+                    'Lineup feed unavailable for this match.',
+                    style: TextStyle(color: _GtexMatchColors.muted),
+                  ),
+                )
+                : ListView.separated(
+                  padding: const EdgeInsets.all(10),
+                  scrollDirection: Axis.horizontal,
+                  itemBuilder: (BuildContext context, int index) {
+                    final item = players[index];
+                    return _LineupChip(
+                      player: item.player,
+                      color: item.color,
+                      team: item.team,
+                    );
+                  },
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemCount: players.length,
+                ),
+      ),
+    );
+  }
+}
+
+class _LineupChip extends StatelessWidget {
+  const _LineupChip({
+    required this.player,
+    required this.color,
+    required this.team,
+  });
+
+  final GtexLineupPlayer player;
+  final Color color;
+  final String team;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 172,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: _GtexMatchColors.overlay,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: .42)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .16),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${player.shirtNumber}',
+              style: TextStyle(
+                color: color,
+                fontFamily: 'JetBrains Mono',
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  player.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _GtexMatchColors.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$team / ${player.position} / ${player.rating.toStringAsFixed(1)}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _GtexMatchColors.muted,
+                    fontSize: 10,
+                    fontFamily: 'JetBrains Mono',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MomentumPanel extends StatelessWidget {
+  const _MomentumPanel({required this.match});
+
+  final GtexLiveMatchState match;
+
+  @override
+  Widget build(BuildContext context) {
+    final int homeMomentum =
+        (match.homeMomentumPercent ?? match.stats.homePossession).clamp(0, 100);
+    final int awayMomentum = 100 - homeMomentum;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _panelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'LIVE MOMENTUM',
             style: TextStyle(
-              color: Colors.white,
+              color: _GtexMatchColors.text,
               fontWeight: FontWeight.w900,
-              fontSize: 14,
+              fontSize: 12,
+              letterSpacing: .6,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: homeMomentum == 0 ? 1 : homeMomentum,
+                  child: Container(height: 9, color: _GtexMatchColors.primary),
+                ),
+                Expanded(
+                  flex: awayMomentum == 0 ? 1 : awayMomentum,
+                  child: Container(height: 9, color: _GtexMatchColors.amber),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${match.home.shortName} $homeMomentum%',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _GtexMatchColors.primary,
+                    fontFamily: 'JetBrains Mono',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              Text(
+                '$awayMomentum% ${match.away.shortName}',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _GtexMatchColors.amber,
+                  fontFamily: 'JetBrains Mono',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EconomyImpactPanel extends StatelessWidget {
+  const _EconomyImpactPanel({required this.match});
+
+  final GtexLiveMatchState match;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<GtexMatchEconomyImpact> impacts = match.economyImpacts
+        .take(3)
+        .toList(growable: false);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _panelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'ECONOMY IMPACT',
+            style: TextStyle(
+              color: _GtexMatchColors.text,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              letterSpacing: .6,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (impacts.isEmpty)
+            const Text(
+              'No live valuation movement returned for this match.',
+              style: TextStyle(color: _GtexMatchColors.muted, height: 1.35),
+            )
+          else
+            for (final GtexMatchEconomyImpact impact in impacts) ...[
+              _EconomyImpactRow(impact: impact),
+              if (impact != impacts.last) const SizedBox(height: 8),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EconomyImpactRow extends StatelessWidget {
+  const _EconomyImpactRow({required this.impact});
+
+  final GtexMatchEconomyImpact impact;
+
+  @override
+  Widget build(BuildContext context) {
+    final double delta = impact.deltaPercent ?? 0;
+    final Color tone =
+        delta < 0 ? _GtexMatchColors.red : _GtexMatchColors.primary;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            impact.playerName,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _GtexMatchColors.text,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
             ),
           ),
         ),
-        const SizedBox(height: 8),
-        Expanded(
-          flex: 4,
-          child: _RightLivePanel(match: match, controller: controller),
+        const SizedBox(width: 10),
+        Text(
+          impact.currentValueLabel ?? 'LIVE',
+          style: const TextStyle(
+            color: _GtexMatchColors.muted,
+            fontFamily: 'JetBrains Mono',
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          impact.deltaLabel ??
+              '${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(1)}%',
+          style: TextStyle(
+            color: tone,
+            fontFamily: 'JetBrains Mono',
+            fontWeight: FontWeight.w900,
+            fontSize: 11,
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _EventGlyph extends StatelessWidget {
+  const _EventGlyph({required this.type});
+
+  final GtexPitchEventType type;
+
+  @override
+  Widget build(BuildContext context) {
+    final (IconData icon, Color color) = switch (type) {
+      GtexPitchEventType.goal => (
+        Icons.sports_soccer,
+        _GtexMatchColors.primary,
+      ),
+      GtexPitchEventType.shot => (Icons.adjust, _GtexMatchColors.amber),
+      GtexPitchEventType.save => (Icons.back_hand, _GtexMatchColors.blue),
+      GtexPitchEventType.yellowCard => (
+        Icons.crop_portrait,
+        _GtexMatchColors.amber,
+      ),
+      GtexPitchEventType.redCard => (Icons.crop_portrait, _GtexMatchColors.red),
+      GtexPitchEventType.substitution => (
+        Icons.swap_horiz,
+        _GtexMatchColors.blue,
+      ),
+      GtexPitchEventType.tacticalChange => (
+        Icons.tune,
+        _GtexMatchColors.primary,
+      ),
+      _ => (Icons.timeline, _GtexMatchColors.muted),
+    };
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: .36)),
+      ),
+      child: Icon(icon, color: color, size: 18),
     );
   }
 }
@@ -348,43 +1006,42 @@ class _TabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: EdgeInsets.zero,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(6),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color:
                 selected
-                    ? const Color(0xFF18FF88).withOpacity(.14)
-                    : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
+                    ? const Color(0xFF00E87A).withOpacity(.14)
+                    : const Color(0xFF101713),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color:
                   selected
-                      ? const Color(0xFF18FF88).withOpacity(.24)
-                      : Colors.transparent,
+                      ? const Color(0xFF00E87A).withOpacity(.48)
+                      : const Color(0xFF2A3A31),
             ),
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
                 icon,
+                size: 18,
                 color:
-                    selected
-                        ? const Color(0xFF18FF88)
-                        : Colors.white.withOpacity(.58),
+                    selected ? const Color(0xFF00E87A) : _GtexMatchColors.muted,
               ),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color:
-                        selected ? Colors.white : Colors.white.withOpacity(.66),
-                    fontWeight: FontWeight.w900,
-                  ),
+              Text(
+                label,
+                style: TextStyle(
+                  color:
+                      selected ? _GtexMatchColors.text : _GtexMatchColors.muted,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -395,11 +1052,26 @@ class _TabButton extends StatelessWidget {
   }
 }
 
+Color _teamColor(GtexMatchTeam team, Color fallback) {
+  final String? raw = team.primaryColorHex?.trim();
+  if (raw == null || raw.isEmpty) {
+    return fallback;
+  }
+  final String normalized = raw.replaceFirst('#', '');
+  final int? value = int.tryParse(
+    normalized.length == 6 ? 'FF$normalized' : normalized,
+    radix: 16,
+  );
+  if (value == null) {
+    return fallback;
+  }
+  return Color(value);
+}
+
 BoxDecoration _panelDecoration() {
   return BoxDecoration(
-    color: const Color(0xFF07130E),
-    borderRadius: BorderRadius.circular(24),
-    border: Border.all(color: Colors.white.withOpacity(.08)),
-    boxShadow: const [BoxShadow(blurRadius: 24, color: Colors.black38)],
+    color: _GtexMatchColors.panel,
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(color: _GtexMatchColors.border),
   );
 }

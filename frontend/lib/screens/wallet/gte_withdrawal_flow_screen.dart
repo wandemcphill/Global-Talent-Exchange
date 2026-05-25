@@ -88,14 +88,14 @@ class _GteWithdrawalEligibilityScreenState
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        gteFormatCredits(eligibility.withdrawableNow),
+                        gteFormatGtc(eligibility.withdrawableNow),
                         style: Theme.of(
                           context,
                         ).textTheme.displaySmall?.copyWith(fontSize: 30),
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Remaining allowance: ${gteFormatCredits(eligibility.remainingAllowance)}',
+                        'Remaining allowance: ${gteFormatGtc(eligibility.remainingAllowance)}',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 8),
@@ -281,6 +281,69 @@ class _GteWithdrawalRequestScreenState
     super.dispose();
   }
 
+  Future<void> _confirmAndSubmit() async {
+    final GteWithdrawalQuote? quote = _quote;
+    if (quote == null) {
+      setState(() {
+        _error = 'Preview a clear withdrawal quote before submitting.';
+      });
+      return;
+    }
+    GteUserBankAccount? selectedAccount;
+    for (final GteUserBankAccount account in _accounts) {
+      if (account.id == _selectedBankId) {
+        selectedAccount = account;
+        break;
+      }
+    }
+    if (selectedAccount == null) {
+      setState(() {
+        _error = 'Add a bank account to continue.';
+      });
+      return;
+    }
+    final GteUserBankAccount payoutAccount = selectedAccount;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (BuildContext context) => AlertDialog(
+            title: const Text('Confirm GTC withdrawal'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('You are withdrawing ${gteFormatGtc(quote.grossAmount)}.'),
+                const SizedBox(height: 8),
+                Text(
+                  'GTEX will debit ${gteFormatGtc(quote.totalDebit)} including fees.',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Payout destination: ${payoutAccount.bankName} ${payoutAccount.accountNumber}.',
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Estimated payout: ${gteFormatFiat(quote.estimatedFiatPayout, currency: quote.currencyCode)}.',
+                ),
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Confirm withdrawal'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed == true) {
+      await _submit();
+    }
+  }
+
   Future<void> _submit() async {
     final double? amount = double.tryParse(_amountController.text.trim());
     if (amount == null || amount <= 0) {
@@ -430,7 +493,7 @@ class _GteWithdrawalRequestScreenState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  gteFormatCredits(widget.eligibility.withdrawableNow),
+                  gteFormatGtc(widget.eligibility.withdrawableNow),
                   style: Theme.of(
                     context,
                   ).textTheme.displaySmall?.copyWith(fontSize: 28),
@@ -480,7 +543,7 @@ class _GteWithdrawalRequestScreenState
                     decimal: true,
                   ),
                   decoration: const InputDecoration(
-                    labelText: 'Amount (Transfer Balance)',
+                    labelText: 'Amount (GTC)',
                     prefixIcon: Icon(Icons.payments_outlined),
                   ),
                 ),
@@ -544,15 +607,15 @@ class _GteWithdrawalRequestScreenState
                     children: <Widget>[
                       _QuoteMetric(
                         label: 'Gross',
-                        value: gteFormatCredits(_quote!.grossAmount),
+                        value: gteFormatGtc(_quote!.grossAmount),
                       ),
                       _QuoteMetric(
                         label: 'Fee',
-                        value: gteFormatCredits(_quote!.feeAmount),
+                        value: gteFormatGtc(_quote!.feeAmount),
                       ),
                       _QuoteMetric(
                         label: 'Total debit',
-                        value: gteFormatCredits(_quote!.totalDebit),
+                        value: gteFormatGtc(_quote!.totalDebit),
                       ),
                       _QuoteMetric(
                         label: 'Est. payout',
@@ -565,7 +628,7 @@ class _GteWithdrawalRequestScreenState
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Processor: ${_quote!.processorMode.replaceAll('_', ' ')} • Channel: ${_quote!.payoutChannel.replaceAll('_', ' ')}',
+                    'Processor: ${_quote!.processorMode.replaceAll('_', ' ')} - Channel: ${_quote!.payoutChannel.replaceAll('_', ' ')}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   if (_quote!.blockedReason != null) ...<Widget>[
@@ -666,8 +729,12 @@ class _GteWithdrawalRequestScreenState
                     onPressed:
                         _isSubmitting || submitGuardMessage != null
                             ? null
-                            : _submit,
-                    child: Text(_isSubmitting ? 'Submitting...' : 'Submit'),
+                            : _confirmAndSubmit,
+                    child: Text(
+                      _isSubmitting
+                          ? 'Submitting...'
+                          : 'Confirm GTC withdrawal',
+                    ),
                   ),
                 ),
               ],
@@ -774,15 +841,15 @@ class _GteWithdrawalReceiptScreenState
                         children: <Widget>[
                           _QuoteMetric(
                             label: 'Gross',
-                            value: gteFormatCredits(receipt.grossAmount),
+                            value: gteFormatGtc(receipt.grossAmount),
                           ),
                           _QuoteMetric(
                             label: 'Fee',
-                            value: gteFormatCredits(receipt.feeAmount),
+                            value: gteFormatGtc(receipt.feeAmount),
                           ),
                           _QuoteMetric(
                             label: 'Total debit',
-                            value: gteFormatCredits(receipt.totalDebit),
+                            value: gteFormatGtc(receipt.totalDebit),
                           ),
                           _QuoteMetric(
                             label: 'Fiat payout',
@@ -921,7 +988,7 @@ class _GteWithdrawalHistoryScreenState
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${gteFormatCredits(withdrawal.amountCoin)} - ${gteFormatFiat(withdrawal.amountFiat, currency: withdrawal.currencyCode)}',
+                        '${gteFormatGtc(withdrawal.amountCoin)} - ${gteFormatFiat(withdrawal.amountFiat, currency: withdrawal.currencyCode)}',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 6),

@@ -170,12 +170,15 @@ class GtexLaunchControlFeatureGate {
       );
     }
     try {
-      final List<GtexClientFeatureFlag> flags =
-          await GtexLaunchControlApi.standard(
-            baseUrl: baseUrl,
-            accessToken: accessToken,
-            mode: backendMode,
-          ).fetchClientFlags();
+      final GtexLaunchControlApi api =
+          backendMode == GteBackendMode.fixture
+              ? GtexLaunchControlApi.fixture()
+              : GtexLaunchControlApi.standard(
+                baseUrl: baseUrl,
+                accessToken: accessToken,
+                mode: backendMode,
+              );
+      final List<GtexClientFeatureFlag> flags = await api.fetchClientFlags();
       return resolveFromClientFlags(
         featureKey: featureKey,
         route: route,

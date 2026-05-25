@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
-import 'package:gte_frontend/data/gte_exchange_models.dart';
 import 'package:gte_frontend/data/national_team_api.dart';
 import 'package:gte_frontend/features/national_team_rental_redesign/national_team_rental_redesign.dart';
 import 'package:gte_frontend/models/national_team_models.dart';
@@ -107,7 +106,7 @@ class _GtexNationalTeamRentalScreenV2State
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'National-team rentals no longer open with demo defaults. Connect the live API session to load competitions, countries, teams, and eligible players.',
+                      'National-team rentals open only when the live runtime supplies API, session, country, team, and eligibility authority.',
                       style: TextStyle(color: Colors.white70),
                       textAlign: TextAlign.center,
                     ),
@@ -169,14 +168,28 @@ class _GtexNationalTeamRentalScreenV2State
           .toList(growable: false);
 
       final String? competitionId =
-          _selectedCompetitionId ?? _firstOpenCompetition(competitionViews);
+          _openCompetitionId(_selectedCompetitionId, competitionViews) ??
+          _firstOpenCompetition(competitionViews);
+      final List<GtexRentalCountryView> countryViews =
+          await _loadCountryAuthority(competitionId);
+      final String? selectedCountryCode =
+          _selectedCountryCode ?? _firstCountryCode(countryViews);
+      final List<GtexRentalTeamView> teamViews = await _loadTeamAuthority(
+        competitionId: competitionId,
+        countryCode: selectedCountryCode,
+      );
 
       setState(() {
         _competitions = competitionViews;
         _selectedCompetitionId = competitionId;
-        _selectedCountryCode = null;
-        _countries = const <GtexRentalCountryView>[];
-        _teams = const <GtexRentalTeamView>[];
+        _selectedCountryCode = selectedCountryCode;
+        _countries = countryViews;
+        _teams = teamViews;
+        if (competitionId == null) {
+          _players = const <GtexRentalPlayerView>[];
+          _error =
+              'No open national-team rental competition is available from the live backend.';
+        }
       });
       await _loadCurrentPool(serial: serial);
     } catch (error) {
@@ -200,6 +213,8 @@ class _GtexNationalTeamRentalScreenV2State
     if (competitionId == null || competitionId.trim().isEmpty) {
       setState(() {
         _players = const <GtexRentalPlayerView>[];
+        _error =
+            'Select an open national-team rental competition before loading the live pool.';
         _isLoading = false;
       });
       return;
@@ -220,38 +235,29 @@ class _GtexNationalTeamRentalScreenV2State
             countryCode: countryCode,
             auth: widget.isAuthenticated,
           );
-      final Map<String, GteMarketPlayerListItem> imageLookup =
-          await _loadMarketImages(countryCode);
+      final List<GtexRentalTeamView> teamViews = await _loadTeamAuthority(
+        competitionId: competitionId,
+        countryCode: countryCode,
+      );
       if (!mounted || activeSerial != _requestSerial) {
         return;
       }
 
       final List<GtexRentalPlayerView> playerViews = pool.items
-          .map(
-            (NationalTeamRentalPlayer player) =>
-                _rentalPlayerView(player, imageLookup[player.playerId]),
-          )
+          .map(_rentalPlayerView)
           .toList(growable: false);
-      final List<GtexRentalCountryView> countryViews =
-          countryCode == null || _countries.isEmpty
-              ? _countryViewsFromPool(pool.items)
-              : _countries;
-      final String? selectedCountryCode =
-          countryCode ?? _firstCountryCode(countryViews);
-      final List<GtexRentalTeamView> teamViews = _buildTeams(
-        competitions: _competitions,
-        countries: countryViews,
-      );
       final List<String> diagnostics = <String>[
         ...pool.warnings.take(3),
         if (pool.failedCount > pool.warnings.length)
           '${pool.failedCount - pool.warnings.length} more rental records were skipped safely.',
+        if (_countries.isEmpty)
+          'Country authority returned no countries for this competition.',
+        if (teamViews.isEmpty)
+          'Team authority returned no teams for this country.',
       ];
 
       setState(() {
-        _countries = countryViews;
         _teams = teamViews;
-        _selectedCountryCode = selectedCountryCode;
         _players = playerViews;
         _poolWarning =
             pool.partial || pool.failedCount > 0
@@ -274,28 +280,14 @@ class _GtexNationalTeamRentalScreenV2State
     }
   }
 
-  Future<Map<String, GteMarketPlayerListItem>> _loadMarketImages(
-    String? countryCode,
-  ) async {
-    if (countryCode == null || countryCode.trim().isEmpty) {
-      return const <String, GteMarketPlayerListItem>{};
-    }
-    try {
-      final GteMarketPlayerListView marketPlayers = await widget.controller!.api
-          .fetchMarketNationalTeamEligiblePlayers(countryCode, limit: 200);
-      return <String, GteMarketPlayerListItem>{
-        for (final GteMarketPlayerListItem player in marketPlayers.items)
-          player.playerId: player,
-      };
-    } catch (_) {
-      return const <String, GteMarketPlayerListItem>{};
-    }
-  }
-
   void _selectCompetition(String? competitionId) {
     setState(() {
       _selectedCompetitionId =
-          competitionId ?? _firstOpenCompetition(_competitions);
+          _openCompetitionId(competitionId, _competitions) ??
+          _firstOpenCompetition(_competitions);
+      _selectedCountryCode = null;
+      _teams = const <GtexRentalTeamView>[];
+      _players = const <GtexRentalPlayerView>[];
     });
     _loadCurrentPool();
   }
@@ -303,6 +295,7 @@ class _GtexNationalTeamRentalScreenV2State
   void _selectCountry(String? countryCode) {
     setState(() {
       _selectedCountryCode = countryCode ?? _firstCountryCode(_countries);
+      _teams = const <GtexRentalTeamView>[];
     });
     _loadCurrentPool();
   }
@@ -323,7 +316,10 @@ class _GtexNationalTeamRentalScreenV2State
       return;
     }
     setState(() {
-      _selectedCompetitionId = team.competitionId;
+      _selectedCompetitionId = _openCompetitionId(
+        team.competitionId,
+        _competitions,
+      );
       _selectedCountryCode = team.countryCode;
     });
     _loadCurrentPool();
@@ -338,11 +334,18 @@ class _GtexNationalTeamRentalScreenV2State
       return;
     }
     final String? competitionId = _selectedCompetitionId;
+    final GtexRentalCompetitionView? competition = _competitionForId(
+      competitionId,
+    );
     final GtexRentalCountryView? country = _countryForCode(
       _selectedCountryCode ?? players.first.countryCode,
     );
-    if (competitionId == null || country == null) {
-      _showSnack('Choose a competition and country before payment.');
+    if (competitionId == null || competition?.isOpen != true) {
+      _showSnack('Choose an open live competition before payment.');
+      return;
+    }
+    if (country == null) {
+      _showSnack('Choose a country before payment.');
       return;
     }
 
@@ -396,31 +399,44 @@ class _GtexNationalTeamRentalScreenV2State
     );
   }
 
-  List<GtexRentalCountryView> _countryViewsFromPool(
-    List<NationalTeamRentalPlayer> players,
-  ) {
-    final Map<String, int> counts = <String, int>{};
-    final Map<String, String> names = <String, String>{};
-    for (final NationalTeamRentalPlayer player in players) {
-      final String code = (player.countryCode ?? '').trim().toUpperCase();
-      if (code.isEmpty || code == 'WORLD') {
-        continue;
-      }
-      counts[code] = (counts[code] ?? 0) + 1;
-      final String name = (player.nationality ?? _countryNameFor(code)).trim();
-      if (name.isNotEmpty) {
-        names[code] = name;
-      }
+  Future<List<GtexRentalCountryView>> _loadCountryAuthority(
+    String? competitionId,
+  ) async {
+    if (competitionId == null || competitionId.trim().isEmpty) {
+      return const <GtexRentalCountryView>[];
     }
+    final List<Map<String, dynamic>> rows = await _nationalTeamApi
+        .listCountries(competitionId: competitionId);
     final List<GtexRentalCountryView> countries = <GtexRentalCountryView>[
-      for (final MapEntry<String, int> entry in counts.entries)
-        GtexRentalCountryView(
-          countryCode: entry.key,
-          countryName: names[entry.key] ?? _countryNameFor(entry.key),
-          confederation: _inferConfederation(entry.key),
-          eligiblePlayers: entry.value,
-          rentalBudgetLabel: 'Backend eligible pool',
-        ),
+      for (final Map<String, dynamic> row in rows)
+        if (_mapText(row, const <String>['country_code', 'code']).isNotEmpty)
+          GtexRentalCountryView(
+            countryCode:
+                _mapText(row, const <String>[
+                  'country_code',
+                  'code',
+                ]).toUpperCase(),
+            countryName: _mapText(row, const <String>[
+              'country_name',
+              'name',
+              'label',
+            ], fallback: 'Country not returned'),
+            confederation: _mapText(row, const <String>[
+              'confederation',
+              'federation',
+              'region',
+            ], fallback: 'Backend authority'),
+            eligiblePlayers: _mapInt(row, const <String>[
+              'eligible_players',
+              'eligible_player_count',
+              'player_count',
+            ]),
+            rentalBudgetLabel: _mapText(row, const <String>[
+              'rental_budget_label',
+              'budget_label',
+            ], fallback: 'Backend authority'),
+            flagEmoji: _mapText(row, const <String>['flag_emoji', 'flag']),
+          ),
     ];
     countries.sort(
       (GtexRentalCountryView left, GtexRentalCountryView right) =>
@@ -429,53 +445,77 @@ class _GtexNationalTeamRentalScreenV2State
     return countries;
   }
 
-  List<GtexRentalTeamView> _buildTeams({
-    required List<GtexRentalCompetitionView> competitions,
-    required List<GtexRentalCountryView> countries,
-  }) {
+  Future<List<GtexRentalTeamView>> _loadTeamAuthority({
+    required String? competitionId,
+    required String? countryCode,
+  }) async {
+    if (competitionId == null || competitionId.trim().isEmpty) {
+      return const <GtexRentalTeamView>[];
+    }
+    final List<Map<String, dynamic>> rows = await _nationalTeamApi.listTeams(
+      competitionId: competitionId,
+      countryCode: countryCode,
+    );
     return <GtexRentalTeamView>[
-      for (final GtexRentalCompetitionView competition in competitions)
-        for (final GtexRentalCountryView country in countries)
+      for (final Map<String, dynamic> row in rows)
+        if (_mapText(row, const <String>['id', 'team_id']).isNotEmpty)
           GtexRentalTeamView(
-            id: '${competition.id}::${country.countryCode}',
-            countryCode: country.countryCode,
-            name: '${country.countryName} ${competition.ageBand}',
-            ageBand: competition.ageBand,
-            competitionId: competition.id,
-            eligiblePlayerCount: country.eligiblePlayers,
-            minSquadSize: 16,
-            maxSquadSize: competition.ageBand.contains('U17') ? 21 : 26,
+            id: _mapText(row, const <String>['id', 'team_id']),
+            countryCode:
+                _mapText(row, const <String>[
+                  'country_code',
+                  'code',
+                ], fallback: countryCode ?? '').toUpperCase(),
+            name: _mapText(row, const <String>[
+              'name',
+              'team_name',
+              'country_name',
+            ], fallback: 'Team not returned'),
+            ageBand: _mapText(row, const <String>[
+              'age_band',
+              'ageBand',
+            ], fallback: 'Open'),
+            competitionId: _mapText(row, const <String>[
+              'competition_id',
+              'competitionId',
+            ], fallback: competitionId),
+            eligiblePlayerCount: _mapInt(row, const <String>[
+              'eligible_players',
+              'eligible_player_count',
+              'player_count',
+            ]),
+            minSquadSize: _mapInt(row, const <String>[
+              'min_squad_size',
+              'minSquadSize',
+            ]),
+            maxSquadSize: _mapInt(row, const <String>[
+              'max_squad_size',
+              'maxSquadSize',
+            ]),
+            entryId: _mapText(row, const <String>['entry_id', 'entryId']),
           ),
     ];
   }
 
-  GtexRentalPlayerView _rentalPlayerView(
-    NationalTeamRentalPlayer player,
-    GteMarketPlayerListItem? marketPlayer,
-  ) {
-    final double rentalCost =
-        player.loanPriceCoin ??
-        ((player.baseValueCoin ?? marketPlayer?.currentValueCredits ?? 0) *
-            0.2);
+  GtexRentalPlayerView _rentalPlayerView(NationalTeamRentalPlayer player) {
     return GtexRentalPlayerView(
       playerId: player.playerId,
       name: player.playerName,
-      position: player.primaryPosition ?? marketPlayer?.position ?? 'POS',
-      age: player.age ?? marketPlayer?.age,
-      rating: player.overallRating ?? marketPlayer?.averageRating,
+      position: _notEmpty(player.primaryPosition, fallback: 'POS'),
+      age: player.age,
+      rating: player.overallRating,
       nationality:
-          player.nationality ??
-          marketPlayer?.nationality ??
-          _countryNameFor(player.countryCode),
-      countryCode:
-          player.countryCode ?? marketPlayer?.nationalityCode ?? 'WORLD',
-      clubName:
-          player.currentClubName ??
-          marketPlayer?.currentClubName ??
-          'National rental pool',
-      rentalCostCredits: rentalCost,
+          player.nationality?.trim().isNotEmpty == true
+              ? player.nationality!
+              : _countryNameFor(player.countryCode),
+      countryCode: _notEmpty(player.countryCode, fallback: 'WORLD'),
+      clubName: _notEmpty(
+        player.currentClubName,
+        fallback: 'Club not returned',
+      ),
+      rentalCostCredits: player.loanPriceCoin,
       sourceBucket: player.sourceBucket,
-      imageUrl: player.imageUrl ?? player.portraitUrl ?? marketPlayer?.imageUrl,
+      imageUrl: player.imageUrl ?? player.portraitUrl,
       portraitUrl: player.portraitUrl,
       portraitStatus: player.portraitStatus,
       portraitMissingReason: player.portraitMissingReason,
@@ -520,7 +560,34 @@ class _GtexNationalTeamRentalScreenV2State
         return competition.id;
       }
     }
-    return competitions.first.id;
+    return null;
+  }
+
+  String? _openCompetitionId(
+    String? competitionId,
+    List<GtexRentalCompetitionView> competitions,
+  ) {
+    final GtexRentalCompetitionView? competition = _competitionForId(
+      competitionId,
+      competitions: competitions,
+    );
+    return competition?.isOpen == true ? competition!.id : null;
+  }
+
+  GtexRentalCompetitionView? _competitionForId(
+    String? competitionId, {
+    List<GtexRentalCompetitionView>? competitions,
+  }) {
+    if (competitionId == null || competitionId.trim().isEmpty) {
+      return null;
+    }
+    for (final GtexRentalCompetitionView competition
+        in competitions ?? _competitions) {
+      if (competition.id == competitionId) {
+        return competition;
+      }
+    }
+    return null;
   }
 
   String? _firstCountryCode(List<GtexRentalCountryView> countries) {
@@ -539,74 +606,52 @@ class _GtexNationalTeamRentalScreenV2State
     return normalized.isEmpty ? 'Open' : normalized.toUpperCase();
   }
 
-  String _inferConfederation(String countryCode) {
-    final String code = countryCode.toUpperCase();
-    const Set<String> caf = <String>{
-      'NG',
-      'GH',
-      'SN',
-      'CI',
-      'CM',
-      'EG',
-      'MA',
-      'ZA',
-      'DZ',
-      'TN',
-    };
-    const Set<String> conmebol = <String>{
-      'AR',
-      'BR',
-      'CL',
-      'CO',
-      'EC',
-      'PE',
-      'PY',
-      'UY',
-      'VE',
-      'BO',
-    };
-    const Set<String> concacaf = <String>{
-      'US',
-      'USA',
-      'CA',
-      'CAN',
-      'MX',
-      'MEX',
-      'JM',
-      'CR',
-      'HN',
-      'PA',
-    };
-    const Set<String> afc = <String>{
-      'JP',
-      'KR',
-      'AU',
-      'SA',
-      'IR',
-      'QA',
-      'AE',
-      'CN',
-      'IN',
-    };
-    if (caf.contains(code)) {
-      return 'CAF';
-    }
-    if (conmebol.contains(code)) {
-      return 'CONMEBOL';
-    }
-    if (concacaf.contains(code)) {
-      return 'CONCACAF';
-    }
-    if (afc.contains(code)) {
-      return 'AFC';
-    }
-    return 'UEFA';
-  }
-
   String _friendlyError(Object error) {
     final String message = error.toString().replaceFirst('Exception: ', '');
     return message.trim().isEmpty
         ? 'National-team rentals could not load.'
         : message;
+  }
+
+  String _mapText(
+    Map<String, dynamic> row,
+    List<String> keys, {
+    String fallback = '',
+  }) {
+    for (final String key in keys) {
+      final Object? value = row[key];
+      if (value == null) {
+        continue;
+      }
+      final String parsed = value.toString().trim();
+      if (parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+
+  int _mapInt(Map<String, dynamic> row, List<String> keys) {
+    for (final String key in keys) {
+      final Object? value = row[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.toInt();
+      }
+      if (value != null) {
+        final int? parsed = int.tryParse(value.toString());
+        if (parsed != null) {
+          return parsed;
+        }
+      }
+    }
+    return 0;
+  }
+
+  String _notEmpty(String? value, {required String fallback}) {
+    final String? trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? fallback : trimmed;
   }
 }

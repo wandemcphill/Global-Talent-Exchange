@@ -60,11 +60,11 @@ class GtexStatusChip extends StatelessWidget {
 
   Color _toneColor(GtexStatusTone? tone) {
     return switch (tone) {
-      GtexStatusTone.success => GtexColors.pitch,
-      GtexStatusTone.warning => GtexColors.orange,
-      GtexStatusTone.danger => GtexColors.red,
-      GtexStatusTone.premium => GtexColors.gold,
-      GtexStatusTone.neutral || null => GtexColors.cyan,
+      GtexStatusTone.success => GtexColors.accentPrimary,
+      GtexStatusTone.warning => GtexColors.accentAmber,
+      GtexStatusTone.danger => GtexColors.accentRed,
+      GtexStatusTone.premium => GtexColors.coinGtex,
+      GtexStatusTone.neutral || null => GtexColors.accentBlue,
     };
   }
 }

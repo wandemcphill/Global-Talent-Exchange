@@ -29,6 +29,10 @@ class GtexShortlistBasket extends StatelessWidget {
     this.title = 'Shortlist Basket',
     this.checkoutLabel = 'Continue to payment',
     this.onCheckout,
+    this.balanceLabel,
+    this.remainingLabel,
+    this.insufficientLabel,
+    this.onTopUpWallet,
     this.emptyTitle = 'No players shortlisted yet',
     this.emptyMessage =
         'Browse leagues, divisions, and clubs, then add players to your basket.',
@@ -39,11 +43,17 @@ class GtexShortlistBasket extends StatelessWidget {
   final String title;
   final String checkoutLabel;
   final VoidCallback? onCheckout;
+  final String? balanceLabel;
+  final String? remainingLabel;
+  final String? insufficientLabel;
+  final VoidCallback? onTopUpWallet;
   final String emptyTitle;
   final String emptyMessage;
 
   @override
   Widget build(BuildContext context) {
+    final bool blockedByBalance =
+        insufficientLabel != null && insufficientLabel!.trim().isNotEmpty;
     if (items.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(GtexSpacing.md),
@@ -104,6 +114,19 @@ class GtexShortlistBasket extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
+                            'PLAYER PURCHASE',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(
+                              color: GtexColors.gold,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.7,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
                             item.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -129,6 +152,7 @@ class GtexShortlistBasket extends StatelessWidget {
                       item.priceLabel,
                       style: const TextStyle(
                         color: GtexColors.gold,
+                        fontFamily: 'JetBrains Mono',
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -155,6 +179,8 @@ class GtexShortlistBasket extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              const _BasketRailHeader(),
+              const SizedBox(height: GtexSpacing.sm),
               Row(
                 children: <Widget>[
                   const Expanded(
@@ -171,15 +197,47 @@ class GtexShortlistBasket extends StatelessWidget {
                     totalLabel,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: GtexColors.gold,
+                      fontFamily: 'JetBrains Mono',
                       fontWeight: FontWeight.w900,
                     ),
                   ),
                 ],
               ),
+              if (balanceLabel != null || remainingLabel != null) ...<Widget>[
+                const SizedBox(height: GtexSpacing.sm),
+                Wrap(
+                  spacing: GtexSpacing.xs,
+                  runSpacing: GtexSpacing.xs,
+                  children: <Widget>[
+                    if (balanceLabel != null)
+                      _BasketMoneyChip(
+                        label: 'Wallet',
+                        value: balanceLabel!,
+                        color: GtexColors.pitch,
+                      ),
+                    if (remainingLabel != null)
+                      _BasketMoneyChip(
+                        label: 'After purchase',
+                        value: remainingLabel!,
+                        color:
+                            blockedByBalance
+                                ? GtexColors.danger
+                                : GtexColors.cyan,
+                      ),
+                  ],
+                ),
+              ],
+              if (blockedByBalance) ...<Widget>[
+                const SizedBox(height: GtexSpacing.sm),
+                _BasketWarning(
+                  message: insufficientLabel!,
+                  onTopUpWallet: onTopUpWallet,
+                ),
+              ],
               const SizedBox(height: GtexSpacing.sm),
               GtexActionButton(
                 label: checkoutLabel,
-                onPressed: onCheckout,
+                onPressed: blockedByBalance ? null : onCheckout,
                 icon: Icons.lock_open_outlined,
                 accent: GtexColors.gold,
               ),
@@ -187,6 +245,133 @@ class GtexShortlistBasket extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _BasketRailHeader extends StatelessWidget {
+  const _BasketRailHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: GtexSpacing.sm,
+        vertical: GtexSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: GtexColors.gold.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),
+        border: Border.all(color: GtexColors.gold.withValues(alpha: 0.28)),
+      ),
+      child: const Row(
+        children: <Widget>[
+          Icon(Icons.account_balance_wallet_outlined, size: 16),
+          SizedBox(width: GtexSpacing.xs),
+          Expanded(
+            child: Text(
+              'Wallet GTC only - KoraPay/manual top-up if balance is short',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: GtexColors.gold,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BasketMoneyChip extends StatelessWidget {
+  const _BasketMoneyChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: GtexSpacing.sm,
+        vertical: GtexSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            '$label: ',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: GtexColors.textMuted,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontFamily: 'JetBrains Mono',
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BasketWarning extends StatelessWidget {
+  const _BasketWarning({required this.message, this.onTopUpWallet});
+
+  final String message;
+  final VoidCallback? onTopUpWallet;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(GtexSpacing.sm),
+      decoration: BoxDecoration(
+        color: GtexColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        border: Border.all(color: GtexColors.danger.withValues(alpha: 0.26)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: GtexColors.danger,
+            size: 18,
+          ),
+          const SizedBox(width: GtexSpacing.xs),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: GtexColors.text,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (onTopUpWallet != null) ...<Widget>[
+            const SizedBox(width: GtexSpacing.xs),
+            TextButton(onPressed: onTopUpWallet, child: const Text('Top up')),
+          ],
+        ],
+      ),
     );
   }
 }

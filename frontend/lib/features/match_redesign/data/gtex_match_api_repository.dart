@@ -21,7 +21,10 @@ class ApiBackedMatchRepository implements GtexMatchRepository {
     final Map<String, dynamic> payload = await _client.getMap(
       '/api/matches/$matchId/state',
     );
-    if (payload['fixture'] == true || payload['demo'] == true) {
+    if (payload['fixture'] == true ||
+        payload['demo'] == true ||
+        payload['mock'] == true ||
+        payload['synthetic'] == true) {
       throw StateError('Match $matchId returned fixture data in live runtime.');
     }
     return _parseLiveMatchState(payload, expectedMatchId: matchId);
@@ -69,8 +72,8 @@ GtexLiveMatchState _parseLiveMatchState(
   ], fallback: expectedMatchId);
   return GtexLiveMatchState(
     matchId: matchId,
-    home: _parseTeam(home, fallbackId: 'home', fallbackName: 'Home'),
-    away: _parseTeam(away, fallbackId: 'away', fallbackName: 'Away'),
+    home: _parseTeam(home, fallbackId: 'home'),
+    away: _parseTeam(away, fallbackId: 'away'),
     minute: _int(payload, const <String>['minute', 'clock'], fallback: 0),
     phase: _phase(
       _string(payload, const <String>[
@@ -88,6 +91,15 @@ GtexLiveMatchState _parseLiveMatchState(
     highlights: _list(payload['highlights'])
         .map((Object? value) => _parseHighlight(_asMap(value)))
         .toList(growable: false),
+    homeMomentumPercent: _nullableInt(payload, const <String>[
+      'home_momentum_percent',
+      'homeMomentumPercent',
+    ]),
+    economyImpacts: _list(
+          payload['economy_impacts'] ?? payload['economyImpacts'],
+        )
+        .map((Object? value) => _parseEconomyImpact(_asMap(value)))
+        .toList(growable: false),
     isWatchedByOwner: _bool(payload, const <String>[
       'is_watched_by_owner',
       'isWatchedByOwner',
@@ -98,17 +110,17 @@ GtexLiveMatchState _parseLiveMatchState(
 GtexMatchTeam _parseTeam(
   Map<String, Object?> json, {
   required String fallbackId,
-  required String fallbackName,
 }) {
-  final String name = _string(json, const <String>[
+  final String name = _requiredString(json, const <String>[
     'name',
-  ], fallback: fallbackName);
+  ], 'match team name');
   return GtexMatchTeam(
-    id: _string(json, const <String>[
-      'id',
-      'team_id',
-      'teamId',
-    ], fallback: fallbackId),
+    id: _string(
+      json,
+      const <String>['id', 'team_id', 'teamId'],
+      fallback:
+          fallbackId == 'home' || fallbackId == 'away' ? name : fallbackId,
+    ),
     name: name,
     shortName: _string(json, const <String>[
       'short_name',
@@ -130,10 +142,10 @@ GtexMatchTeam _parseTeam(
 }
 
 GtexLineupPlayer _parseLineupPlayer(Map<String, Object?> json) {
-  final String name = _string(json, const <String>[
+  final String name = _requiredString(json, const <String>[
     'name',
     'label',
-  ], fallback: 'Player');
+  ], 'lineup player name');
   return GtexLineupPlayer(
     id: _string(json, const <String>[
       'id',
@@ -156,10 +168,10 @@ GtexLineupPlayer _parseLineupPlayer(Map<String, Object?> json) {
 }
 
 GtexPitchPlayer _parsePitchPlayer(Map<String, Object?> json) {
-  final String name = _string(json, const <String>[
+  final String name = _requiredString(json, const <String>[
     'name',
     'label',
-  ], fallback: 'Player');
+  ], 'pitch player name');
   return GtexPitchPlayer(
     playerId: _string(json, const <String>[
       'player_id',
@@ -180,14 +192,21 @@ GtexPitchPlayer _parsePitchPlayer(Map<String, Object?> json) {
 }
 
 GtexMatchTimelineEvent _parseTimelineEvent(Map<String, Object?> json) {
+  final String rawType = _string(json, const <String>[
+    'type',
+  ], fallback: 'pass');
+  final String? description = _nullableString(json, const <String>[
+    'description',
+    'summary',
+  ]);
   return GtexMatchTimelineEvent(
     minute: _int(json, const <String>['minute', 'clock'], fallback: 0),
-    type: _eventType(_string(json, const <String>['type'], fallback: 'pass')),
-    title: _string(json, const <String>['title'], fallback: 'Live event'),
-    description: _string(json, const <String>[
-      'description',
-      'summary',
-    ], fallback: ''),
+    type: _eventType(rawType),
+    title:
+        _nullableString(json, const <String>['title']) ??
+        description ??
+        rawType.replaceAll('_', ' '),
+    description: description ?? '',
     teamId: _nullableString(json, const <String>['team_id', 'teamId']),
     playerName: _nullableString(json, const <String>[
       'player_name',
@@ -242,14 +261,47 @@ GtexMatchStats _parseStats(Map<String, Object?> json) {
 }
 
 GtexMatchHighlight _parseHighlight(Map<String, Object?> json) {
+  final String? title = _nullableString(json, const <String>['title']);
+  final String summary = _string(json, const <String>[
+    'summary',
+    'description',
+  ], fallback: '');
+  if (title == null && summary.isEmpty) {
+    throw StateError('Live match highlight is missing title and summary.');
+  }
   return GtexMatchHighlight(
     minute: _int(json, const <String>['minute'], fallback: 0),
-    title: _string(json, const <String>['title'], fallback: 'Highlight'),
-    summary: _string(json, const <String>[
-      'summary',
-      'description',
-    ], fallback: ''),
+    title: title ?? summary,
+    summary: summary,
     importance: _int(json, const <String>['importance'], fallback: 1),
+  );
+}
+
+GtexMatchEconomyImpact _parseEconomyImpact(Map<String, Object?> json) {
+  final String playerName = _requiredString(json, const <String>[
+    'player_name',
+    'playerName',
+    'name',
+  ], 'economy impact player name');
+  return GtexMatchEconomyImpact(
+    playerName: playerName,
+    teamId: _nullableString(json, const <String>['team_id', 'teamId']),
+    currentValueLabel: _nullableString(json, const <String>[
+      'current_value_label',
+      'currentValueLabel',
+      'current_value',
+      'currentValue',
+    ]),
+    deltaLabel: _nullableString(json, const <String>[
+      'delta_label',
+      'deltaLabel',
+      'value_delta',
+      'valueDelta',
+    ]),
+    deltaPercent: _nullableDouble(json, const <String>[
+      'delta_percent',
+      'deltaPercent',
+    ]),
   );
 }
 
@@ -340,6 +392,18 @@ String _string(
   return _nullableString(json, keys) ?? fallback;
 }
 
+String _requiredString(
+  Map<String, Object?> json,
+  List<String> keys,
+  String fieldName,
+) {
+  final String? value = _nullableString(json, keys);
+  if (value == null) {
+    throw StateError('Live match payload missing $fieldName.');
+  }
+  return value;
+}
+
 String? _nullableString(Map<String, Object?> json, List<String> keys) {
   for (final String key in keys) {
     final Object? value = json[key];
@@ -365,6 +429,14 @@ int _int(
   return int.tryParse(raw) ?? double.tryParse(raw)?.round() ?? fallback;
 }
 
+int? _nullableInt(Map<String, Object?> json, List<String> keys) {
+  final String? raw = _nullableString(json, keys);
+  if (raw == null) {
+    return null;
+  }
+  return int.tryParse(raw) ?? double.tryParse(raw)?.round();
+}
+
 double _double(
   Map<String, Object?> json,
   List<String> keys, {
@@ -375,6 +447,14 @@ double _double(
     return fallback;
   }
   return double.tryParse(raw) ?? fallback;
+}
+
+double? _nullableDouble(Map<String, Object?> json, List<String> keys) {
+  final String? raw = _nullableString(json, keys);
+  if (raw == null) {
+    return null;
+  }
+  return double.tryParse(raw);
 }
 
 bool _bool(Map<String, Object?> json, List<String> keys) {

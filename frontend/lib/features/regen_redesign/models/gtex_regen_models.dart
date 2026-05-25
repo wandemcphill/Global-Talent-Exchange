@@ -30,6 +30,8 @@ class GtexRegenWorldData {
     required this.parentPlayers,
     required this.pricing,
     required this.stats,
+    this.createSonAvailable = true,
+    this.createSonBlockedReason,
   });
 
   final List<GtexRegenProspect> prospects;
@@ -39,6 +41,8 @@ class GtexRegenWorldData {
   final List<GtexParentPlayer> parentPlayers;
   final GtexCreateSonPricing pricing;
   final GtexRegenWorldStats stats;
+  final bool createSonAvailable;
+  final String? createSonBlockedReason;
 }
 
 class GtexRegenWorldStats {

@@ -25,14 +25,25 @@ class TransferCenterScreen extends ConsumerStatefulWidget {
 }
 
 class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
+  late final TextEditingController _searchController;
+  String _query = '';
+  String _statusFilter = 'all';
+
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
     trackFeatureEvent(
       topic: 'transfer_center',
       name: 'transfer_center_viewed',
       dedupeKey: 'transfer-center-view',
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -42,9 +53,9 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
     );
     final bool authenticated = ref.watch(isAuthenticatedProvider);
     return AppPageLayout(
-      title: 'Transfer Center',
+      title: 'Transfer Hub',
       subtitle:
-          'A dedicated transfer route now uses live listings, detail views, bidding, watchlists, and negotiation context.',
+          'Live listings, bid stacks, watchlists, and negotiation context from the backend transfer authority.',
       trailing: DataSourceBadge(
         status:
             value.hasError ? DataSourceStatus.blocked : DataSourceStatus.live,
@@ -53,17 +64,19 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
         value.when(
           data: (List<TransferCenterListingRecord> listings) {
             final clubContext = ref.watch(clubContextProvider);
+            final List<TransferCenterListingRecord> filteredListings =
+                _filterListings(listings);
             return Column(
               children: <Widget>[
                 GtexHeroPanel(
                   eyebrow: 'TRANSFER COMMAND',
                   title: 'Live negotiation board',
                   description:
-                      'Premium transfer-center surface for open listings, active bidders, and club-authorized deal flow.',
+                      'Football-market desk for open listings, active bidders, and club-authorized deal flow.',
                   metrics: <Widget>[
                     _MetricChip(
                       label: 'Open listings',
-                      value: '${listings.length}',
+                      value: '${filteredListings.length}',
                       tone: GtexSurfaceTone.live,
                     ),
                     _MetricChip(
@@ -81,43 +94,115 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
                 ),
                 const SizedBox(height: spacingMD),
                 _SectionCard(
+                  title: 'Search the live market',
+                  subtitle:
+                      'Filter by player, club, market signal, channel, or transfer status. Results are cut from the live listing payload only.',
+                  trailing: TextButton(
+                    onPressed:
+                        _query.isEmpty && _statusFilter == 'all'
+                            ? null
+                            : () {
+                              setState(() {
+                                _query = '';
+                                _statusFilter = 'all';
+                                _searchController.clear();
+                              });
+                            },
+                    child: const Text('Reset filters'),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      TextField(
+                        key: const Key('transfer-center-search'),
+                        controller: _searchController,
+                        onChanged:
+                            (String value) =>
+                                setState(() => _query = value.trim()),
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search_rounded),
+                          labelText: 'Search by name, club, signal, channel',
+                          helperText:
+                              'Only returned live listings appear in these results.',
+                        ),
+                      ),
+                      const SizedBox(height: spacingSM),
+                      _StatusFilterChips(
+                        statuses: _availableStatuses(listings),
+                        activeStatus: _statusFilter,
+                        onSelected:
+                            (String status) =>
+                                setState(() => _statusFilter = status),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: spacingMD),
+                _SectionCard(
                   title: 'Live listings',
                   subtitle:
                       'Each listing opens a live detail route with bidders and negotiation state.',
                   child:
-                      listings.isEmpty
+                      filteredListings.isEmpty
                           ? const _EmptyState(
                             message:
-                                'No live transfer listings are open right now.',
+                                'No live transfer listings match the current filters.',
                           )
-                          : Column(
-                            children: listings
-                                .map(
-                                  (
-                                    TransferCenterListingRecord listing,
-                                  ) => Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: spacingSM,
-                                    ),
-                                    child: GtexListTile(
-                                      title: listing.playerName,
-                                      subtitle:
-                                          '${listing.status} | bid ${listing.currentHighestBid.toStringAsFixed(0)} | ${listing.bidCount} bids | ${listing.watchlistCount} watchlists',
-                                      leadingIcon: Icons.candlestick_chart,
-                                      tone: GtexSurfaceTone.live,
-                                      trailing: FilledButton(
-                                        onPressed:
-                                            () => context.push(
-                                              AppRoutes.transferCenterDetailLocation(
-                                                listing.id,
+                          : LayoutBuilder(
+                            builder: (
+                              BuildContext context,
+                              BoxConstraints constraints,
+                            ) {
+                              final bool grid = constraints.maxWidth >= 860;
+                              if (!grid) {
+                                return Column(
+                                  children: filteredListings
+                                      .map(
+                                        (
+                                          TransferCenterListingRecord listing,
+                                        ) => Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: spacingSM,
+                                          ),
+                                          child: _TransferListingCard(
+                                            listing: listing,
+                                            onOpen:
+                                                () => context.push(
+                                                  AppRoutes.transferCenterDetailLocation(
+                                                    listing.id,
+                                                  ),
+                                                ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(growable: false),
+                                );
+                              }
+                              return Wrap(
+                                spacing: spacingSM,
+                                runSpacing: spacingSM,
+                                children: filteredListings
+                                    .map(
+                                      (
+                                        TransferCenterListingRecord listing,
+                                      ) => SizedBox(
+                                        width:
+                                            (constraints.maxWidth - spacingSM) /
+                                            2,
+                                        child: _TransferListingCard(
+                                          listing: listing,
+                                          onOpen:
+                                              () => context.push(
+                                                AppRoutes.transferCenterDetailLocation(
+                                                  listing.id,
+                                                ),
                                               ),
-                                            ),
-                                        child: const Text('Open'),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                )
-                                .toList(growable: false),
+                                    )
+                                    .toList(growable: false),
+                              );
+                            },
                           ),
                 ),
               ],
@@ -140,6 +225,43 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
         ),
       ],
     );
+  }
+
+  List<TransferCenterListingRecord> _filterListings(
+    List<TransferCenterListingRecord> listings,
+  ) {
+    final String normalizedQuery = _query.toLowerCase();
+    return listings
+        .where((TransferCenterListingRecord listing) {
+          final bool statusMatches =
+              _statusFilter == 'all' ||
+              listing.status.toLowerCase() == _statusFilter.toLowerCase();
+          if (!statusMatches) {
+            return false;
+          }
+          if (normalizedQuery.isEmpty) {
+            return true;
+          }
+          final String haystack =
+              <String>[
+                listing.playerName,
+                listing.currentClubName ?? '',
+                listing.status,
+                listing.marketSignal,
+                listing.channel,
+              ].join(' ').toLowerCase();
+          return haystack.contains(normalizedQuery);
+        })
+        .toList(growable: false);
+  }
+
+  List<String> _availableStatuses(List<TransferCenterListingRecord> listings) {
+    final Set<String> statuses = <String>{
+      for (final TransferCenterListingRecord listing in listings)
+        if (listing.status.trim().isNotEmpty) listing.status.trim(),
+    };
+    final List<String> sorted = statuses.toList(growable: false)..sort();
+    return <String>['all', ...sorted];
   }
 }
 
@@ -227,7 +349,7 @@ class _TransferCenterDetailScreenState
                       label: 'Status',
                       value: stringValue(
                         detail.listing['status'],
-                        fallback: 'open',
+                        fallback: 'unavailable',
                       ),
                       tone: GtexSurfaceTone.live,
                     ),
@@ -499,7 +621,8 @@ class _TransferCenterDetailScreenState
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Bid amount',
-                    helperText: 'Enter a positive amount in transfer coin.',
+                    helperText:
+                        'Enter a positive amount; backend validates currency and balance.',
                   ),
                 ),
                 actions: <Widget>[
@@ -689,15 +812,137 @@ class _SectionCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    this.trailing,
   });
 
   final String title;
   final String subtitle;
   final Widget child;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
-    return GtexSectionPanel(title: title, subtitle: subtitle, child: child);
+    return GtexSectionPanel(
+      title: title,
+      subtitle: subtitle,
+      trailing: trailing,
+      child: child,
+    );
+  }
+}
+
+class _StatusFilterChips extends StatelessWidget {
+  const _StatusFilterChips({
+    required this.statuses,
+    required this.activeStatus,
+    required this.onSelected,
+  });
+
+  final List<String> statuses;
+  final String activeStatus;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: statuses
+            .map(
+              (String status) => Padding(
+                padding: const EdgeInsets.only(right: spacingSM),
+                child: ChoiceChip(
+                  label: Text(status == 'all' ? 'All live listings' : status),
+                  selected: status == activeStatus,
+                  onSelected: (_) => onSelected(status),
+                ),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+  }
+}
+
+class _TransferListingCard extends StatelessWidget {
+  const _TransferListingCard({required this.listing, required this.onOpen});
+
+  final TransferCenterListingRecord listing;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexSurfaceTone statusTone = switch (listing.status.toLowerCase()) {
+      'open' => GtexSurfaceTone.live,
+      'negotiating' || 'offer_only' || 'offer only' => GtexSurfaceTone.warning,
+      'closed' || 'expired' || 'unavailable' => GtexSurfaceTone.neutral,
+      _ => GtexSurfaceTone.info,
+    };
+    return GtexListTile(
+      title: listing.playerName,
+      subtitle:
+          '${listing.currentClubName ?? 'Club unavailable'} | ${listing.marketSignal}',
+      leadingIcon: Icons.sync_alt_rounded,
+      tone: statusTone,
+      trailing: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 260),
+        child: Wrap(
+          spacing: spacingXS,
+          runSpacing: spacingXS,
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            _MiniListingMetric(
+              label: 'Bid',
+              value: listing.currentHighestBid.toStringAsFixed(0),
+            ),
+            _MiniListingMetric(
+              label: 'Base',
+              value: listing.basePrice.toStringAsFixed(0),
+            ),
+            _MiniListingMetric(
+              label: 'Watch',
+              value: '${listing.watchlistCount}',
+            ),
+            FilledButton(onPressed: onOpen, child: const Text('Open')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniListingMetric extends StatelessWidget {
+  const _MiniListingMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.32),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
   }
 }
 

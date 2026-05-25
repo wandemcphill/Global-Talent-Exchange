@@ -64,9 +64,7 @@ class _GtexNationalTeamRentalScreenState
   void initState() {
     super.initState();
     _searchController = TextEditingController();
-    if (widget.competitions.isNotEmpty) {
-      _selectedCompetitionId = widget.competitions.first.id;
-    }
+    _selectedCompetitionId = _firstOpenCompetitionId(widget.competitions);
     if (widget.countries.isNotEmpty) {
       _selectedCountryCode = widget.countries.first.countryCode;
     }
@@ -75,8 +73,9 @@ class _GtexNationalTeamRentalScreenState
   @override
   void didUpdateWidget(covariant GtexNationalTeamRentalScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_selectedCompetitionId == null && widget.competitions.isNotEmpty) {
-      _selectedCompetitionId = widget.competitions.first.id;
+    if (_selectedCompetitionId == null ||
+        !_isOpenCompetitionId(_selectedCompetitionId)) {
+      _selectedCompetitionId = _firstOpenCompetitionId(widget.competitions);
     }
     if (_selectedCountryCode == null && widget.countries.isNotEmpty) {
       _selectedCountryCode = widget.countries.first.countryCode;
@@ -113,15 +112,15 @@ class _GtexNationalTeamRentalScreenState
     return GtexMasterDetailScaffold(
       title: 'National Team Rentals',
       subtitle:
-          'Build temporary national squads by country, team, eligibility pool, and rental basket.',
+          'Select a competition, inspect backend eligibility, and build a temporary national squad from the live rental pool.',
       mobileLeftTitle: 'Browse countries',
       leftPanelWidth: 330,
       rightPanelWidth: 380,
-      accent: GtexColors.gold,
+      accent: GtexColors.cyan,
       actions: <Widget>[
         IconButton.filledTonal(
           tooltip: 'Refresh rental pool',
-          onPressed: widget.isLoading ? null : (widget.onRefresh ?? () {}),
+          onPressed: widget.isLoading ? null : widget.onRefresh,
           icon: const Icon(Icons.sync),
         ),
         if (!widget.isAuthenticated)
@@ -161,20 +160,24 @@ class _GtexNationalTeamRentalScreenState
         selectedTeamName: team?.name,
         onSelectPlayer: _selectPlayer,
         onToggleBasket: _toggleBasket,
-        onRefresh: widget.onRefresh ?? () {},
+        onRefresh: widget.onRefresh,
       ),
       rightPanel: GtexRentalSummaryPanel(
         selectedPlayer: selectedPlayer,
+        selectedCompetition: _selectedCompetition(),
+        selectedTeam: team,
         basketState: _basketState,
         isAuthenticated: widget.isAuthenticated,
         showPayment: _showPayment,
-        onOpenLogin: widget.onOpenLogin ?? () {},
+        onOpenLogin: widget.onOpenLogin,
         onToggleBasket: _toggleBasket,
         onRemoveFromBasket: _removeFromBasket,
         onReviewPayment: () => setState(() => _showPayment = true),
         onBackToBasket: () => setState(() => _showPayment = false),
         onConfirmPayment:
-            () => widget.onSubmitRentalBasket?.call(_basketState.items),
+            widget.onSubmitRentalBasket == null
+                ? null
+                : () => widget.onSubmitRentalBasket?.call(_basketState.items),
       ),
     );
   }
@@ -223,14 +226,27 @@ class _GtexNationalTeamRentalScreenState
     return null;
   }
 
+  GtexRentalCompetitionView? _selectedCompetition() {
+    if (_selectedCompetitionId == null) return null;
+    for (final GtexRentalCompetitionView competition in widget.competitions) {
+      if (competition.id == _selectedCompetitionId && competition.isOpen) {
+        return competition;
+      }
+    }
+    return null;
+  }
+
   void _setCompetition(String? value) {
     setState(() {
-      _selectedCompetitionId = value;
+      _selectedCompetitionId =
+          _isOpenCompetitionId(value)
+              ? value
+              : _firstOpenCompetitionId(widget.competitions);
       _selectedTeamId = null;
       _selectedPlayerId = null;
       _showPayment = false;
     });
-    widget.onCompetitionSelected?.call(value);
+    widget.onCompetitionSelected?.call(_selectedCompetitionId);
   }
 
   void _setConfederation(String? value) {
@@ -296,13 +312,35 @@ class _GtexNationalTeamRentalScreenState
   void _clearFilters() {
     setState(() {
       _searchController.clear();
-      _selectedCompetitionId =
-          widget.competitions.isEmpty ? null : widget.competitions.first.id;
+      _selectedCompetitionId = _firstOpenCompetitionId(widget.competitions);
       _selectedConfederation = null;
       _selectedCountryCode = null;
       _selectedTeamId = null;
       _selectedPlayerId = null;
       _showPayment = false;
     });
+  }
+
+  String? _firstOpenCompetitionId(
+    List<GtexRentalCompetitionView> competitions,
+  ) {
+    for (final GtexRentalCompetitionView competition in competitions) {
+      if (competition.isOpen) {
+        return competition.id;
+      }
+    }
+    return null;
+  }
+
+  bool _isOpenCompetitionId(String? competitionId) {
+    if (competitionId == null || competitionId.trim().isEmpty) {
+      return false;
+    }
+    for (final GtexRentalCompetitionView competition in widget.competitions) {
+      if (competition.id == competitionId) {
+        return competition.isOpen;
+      }
+    }
+    return false;
   }
 }

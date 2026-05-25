@@ -59,7 +59,7 @@ class TransferCenterListingRecord {
       basePrice: numberValue(json['base_price']),
       currentHighestBid: numberValue(json['current_highest_bid']),
       highestBidderId: stringOrNullValue(json['highest_bidder_id']),
-      status: stringValue(json['status'], fallback: 'open'),
+      status: stringValue(json['status'], fallback: 'unavailable'),
       watchlistCount: intValue(json['watchlist_count']),
       bidCount: intValue(json['bid_count']),
       marketSignal: stringValue(

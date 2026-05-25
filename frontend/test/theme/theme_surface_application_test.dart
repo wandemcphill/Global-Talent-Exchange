@@ -56,7 +56,7 @@ void main() {
     expect(find.byType(BackdropFilter), findsWidgets);
   });
 
-  testWidgets('theme picker shows the five production themes', (
+  testWidgets('theme picker shows the six production themes', (
     WidgetTester tester,
   ) async {
     final GteThemeController controller = GteThemeController(
@@ -82,6 +82,8 @@ void main() {
     expect(find.text('Menlo Night Blue'), findsOneWidget);
     await _scrollTo(tester, find.text('Ultra Red'));
     expect(find.text('Ultra Red'), findsOneWidget);
+    await _scrollTo(tester, find.text('Matchday Light'));
+    expect(find.text('Matchday Light'), findsOneWidget);
   });
 }
 

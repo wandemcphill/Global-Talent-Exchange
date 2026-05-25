@@ -70,6 +70,47 @@ class NationalTeamApi {
     }, () => _requireFixtures().listCompetitions());
   }
 
+  Future<List<Map<String, dynamic>>> listCountries({
+    String? competitionId,
+  }) async {
+    final Object? payload = await client.request(
+      'GET',
+      _nationalAlias('/api/national/countries'),
+      query: <String, Object?>{
+        if (competitionId != null && competitionId.trim().isNotEmpty)
+          'competition_id': competitionId.trim(),
+      },
+      auth: false,
+    );
+    return _mapListPayload(
+      payload,
+      listKeys: const <String>['countries', 'items', 'results'],
+      label: 'national countries',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> listTeams({
+    String? competitionId,
+    String? countryCode,
+  }) async {
+    final Object? payload = await client.request(
+      'GET',
+      _nationalAlias('/api/national/teams'),
+      query: <String, Object?>{
+        if (competitionId != null && competitionId.trim().isNotEmpty)
+          'competition_id': competitionId.trim(),
+        if (countryCode != null && countryCode.trim().isNotEmpty)
+          'country_code': countryCode.trim().toUpperCase(),
+      },
+      auth: false,
+    );
+    return _mapListPayload(
+      payload,
+      listKeys: const <String>['teams', 'items', 'results'],
+      label: 'national teams',
+    );
+  }
+
   Future<NationalTeamRentalPlayerCollection> listRentalPool(
     String competitionId, {
     int limit = 200,
@@ -178,6 +219,33 @@ class NationalTeamApi {
       );
     }
     return resolvedFixtures;
+  }
+
+  List<Map<String, dynamic>> _mapListPayload(
+    Object? payload, {
+    required List<String> listKeys,
+    required String label,
+  }) {
+    Object? resolved = payload;
+    if (payload is Map) {
+      for (final String key in listKeys) {
+        final Object? candidate = payload[key];
+        if (candidate is List) {
+          resolved = candidate;
+          break;
+        }
+      }
+    }
+    if (resolved is! List) {
+      throw GteApiException(
+        type: GteApiErrorType.parsing,
+        message: 'Unexpected $label response shape.',
+      );
+    }
+    return resolved
+        .whereType<Map>()
+        .map((Map<dynamic, dynamic> item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
   }
 }
 

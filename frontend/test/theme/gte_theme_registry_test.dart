@@ -7,7 +7,7 @@ import 'package:gte_frontend/theme/gte_theme_registry.dart';
 
 void main() {
   group('GteThemeRegistry', () {
-    test('registers the five production themes', () {
+    test('registers the six production themes', () {
       expect(
         GteThemeRegistry.themes.map(
           (GteThemeDefinition theme) => theme.metadata.label,
@@ -18,6 +18,7 @@ void main() {
           'Sand Hill Gold',
           'Menlo Night Blue',
           'Ultra Red',
+          'Matchday Light',
         ]),
       );
     });

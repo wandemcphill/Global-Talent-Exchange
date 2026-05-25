@@ -48,7 +48,7 @@ class GteShellTheme {
     final GteThemeMotion motion = resolvedDefinition.motion;
     final ColorScheme colorScheme = ColorScheme.fromSeed(
       seedColor: resolvedDefinition.primaryColor,
-      brightness: Brightness.dark,
+      brightness: resolvedDefinition.metadata.brightness,
     ).copyWith(
       primary: resolvedDefinition.primaryColor,
       onPrimary: resolvedDefinition.onPrimaryColor,

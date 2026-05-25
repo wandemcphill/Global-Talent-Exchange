@@ -48,9 +48,11 @@ class GteCompetitionsHubScreenV2 extends StatelessWidget {
       repository: LiveGtexCompetitionRepositoryAdapter(
         controller: controller,
         isAuthenticated: isAuthenticated,
+        canHostCompetitions: canHostCompetitions,
         onOpenLogin: onOpenLogin,
         inviteCode: inviteCode,
       ),
+      canCreateCompetitions: isAuthenticated && canHostCompetitions,
     );
   }
 }
@@ -60,12 +62,14 @@ class LiveGtexCompetitionRepositoryAdapter
   const LiveGtexCompetitionRepositoryAdapter({
     required this.controller,
     required this.isAuthenticated,
+    this.canHostCompetitions = false,
     this.onOpenLogin,
     this.inviteCode,
   });
 
   final CompetitionController controller;
   final bool isAuthenticated;
+  final bool canHostCompetitions;
   final VoidCallback? onOpenLogin;
   final String? inviteCode;
 
@@ -102,7 +106,12 @@ class LiveGtexCompetitionRepositoryAdapter
   Future<void> joinCompetition(String competitionId) async {
     if (!isAuthenticated) {
       onOpenLogin?.call();
-      return;
+      throw StateError('Sign in to create a GTEX competition.');
+    }
+    if (!canHostCompetitions) {
+      throw StateError(
+        'This account is not cleared to host GTEX competitions yet.',
+      );
     }
     await controller.openCompetition(competitionId, inviteCode: inviteCode);
     await controller.joinSelectedCompetition(inviteCode: inviteCode);

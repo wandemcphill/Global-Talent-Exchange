@@ -59,6 +59,7 @@ class GteThemeTypography {
 
   TextTheme buildTextTheme({required Color primary, required Color muted}) {
     final TextStyle displayBase = TextStyle(
+      fontFamily: 'BarlowCondensed',
       fontSize: displaySize,
       fontWeight: displayWeight,
       letterSpacing: displayLetterSpacing,
@@ -66,18 +67,21 @@ class GteThemeTypography {
       color: primary,
     );
     final TextStyle headlineBase = TextStyle(
+      fontFamily: 'BarlowCondensed',
       fontSize: headlineSize,
       fontWeight: headlineWeight,
       letterSpacing: headlineLetterSpacing,
       color: primary,
     );
     final TextStyle titleBase = TextStyle(
+      fontFamily: 'BarlowCondensed',
       fontSize: titleSize,
       fontWeight: titleWeight,
       letterSpacing: titleLetterSpacing,
       color: primary,
     );
     final TextStyle bodyBase = TextStyle(
+      fontFamily: 'Inter',
       fontSize: bodySize,
       fontWeight: bodyWeight,
       letterSpacing: bodyLetterSpacing,
@@ -85,12 +89,14 @@ class GteThemeTypography {
       color: primary,
     );
     final TextStyle captionBase = TextStyle(
+      fontFamily: 'Inter',
       fontSize: captionSize,
       letterSpacing: captionLetterSpacing,
       height: bodyHeight - 0.08,
       color: muted,
     );
     final TextStyle labelBase = TextStyle(
+      fontFamily: 'Inter',
       fontSize: labelSize,
       fontWeight: labelWeight,
       letterSpacing: labelLetterSpacing,

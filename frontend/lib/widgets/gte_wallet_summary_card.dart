@@ -13,6 +13,12 @@ class GteWalletSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color coinAccent =
+        summary.currency == GteLedgerUnit.credit
+            ? const Color(0xFF3D7EFF)
+            : GteShellTheme.accentCapital;
+    final String unitName = gteFormatLedgerUnitName(summary.currency);
+    final String unitCode = gteLedgerUnitCode(summary.currency);
     final double utilization =
         summary.totalBalance <= 0
             ? 0
@@ -24,7 +30,7 @@ class GteWalletSummaryCard extends StatelessWidget {
 
     return GteSurfacePanel(
       emphasized: true,
-      accentColor: GteShellTheme.accentCapital,
+      accentColor: coinAccent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -36,12 +42,14 @@ class GteWalletSummaryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Funds summary',
+                      '$unitCode funds summary',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Available balance, reserved balance, and readiness for your next move.',
+                      summary.currency == GteLedgerUnit.credit
+                          ? 'Fan Coin is your activity and gifting balance. It is tracked separately from withdrawable GTEX Coin.'
+                          : 'GTEX Coin is your transfer, trading, and withdrawal balance. Reserved funds stay locked to pending moves.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -60,10 +68,10 @@ class GteWalletSummaryCard extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  gteFormatLedgerUnitName(summary.currency).toUpperCase(),
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: GteShellTheme.accentCapital,
-                  ),
+                  unitCode,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: coinAccent),
                 ),
               ),
             ],
@@ -76,7 +84,7 @@ class GteWalletSummaryCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(24),
               gradient: LinearGradient(
                 colors: <Color>[
-                  GteShellTheme.accentCapital.withValues(alpha: 0.18),
+                  coinAccent.withValues(alpha: 0.18),
                   Colors.white.withValues(alpha: 0.03),
                 ],
               ),
@@ -106,16 +114,14 @@ class GteWalletSummaryCard extends StatelessWidget {
                     value: freeRatio,
                     minHeight: 10,
                     backgroundColor: Colors.white.withValues(alpha: 0.06),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      GteShellTheme.accentCapital,
-                    ),
+                    valueColor: AlwaysStoppedAnimation<Color>(coinAccent),
                   ),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   utilization <= 0
-                      ? 'No ${gteFormatLedgerUnitName(summary.currency)} is currently reserved.'
-                      : '${(utilization * 100).toStringAsFixed(0)}% of total ${gteFormatLedgerUnitName(summary.currency)} is tied to pending moves.',
+                      ? 'No $unitName is currently reserved.'
+                      : '${(utilization * 100).toStringAsFixed(0)}% of total $unitName is tied to pending moves.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -128,7 +134,7 @@ class GteWalletSummaryCard extends StatelessWidget {
             children: <Widget>[
               GteMetricChip(
                 label: 'Pending',
-                value: gteFormatAmountForUnit(
+                value: gteFormatShortAmountForUnit(
                   summary.reservedBalance,
                   summary.currency,
                 ),
@@ -136,7 +142,7 @@ class GteWalletSummaryCard extends StatelessWidget {
               ),
               GteMetricChip(
                 label: 'Total',
-                value: gteFormatAmountForUnit(
+                value: gteFormatShortAmountForUnit(
                   summary.totalBalance,
                   summary.currency,
                 ),

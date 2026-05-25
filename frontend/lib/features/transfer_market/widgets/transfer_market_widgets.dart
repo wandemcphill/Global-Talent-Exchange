@@ -188,7 +188,7 @@ class TransferPlayerCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'Current Bid',
+                    'Current Bid (GTC)',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: spacingXS),
@@ -595,7 +595,7 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
                     ],
                     decoration: InputDecoration(
                       labelText: 'Bid amount (millions)',
-                      prefixText: '\$',
+                      prefixText: 'GTC ',
                       suffixText: 'M',
                       helperText:
                           'Suggested minimum ${AppFormatters.money(minimumBid)}',

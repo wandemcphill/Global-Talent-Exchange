@@ -7,6 +7,8 @@ class GtexRentalSummaryPanel extends StatelessWidget {
   const GtexRentalSummaryPanel({
     super.key,
     required this.selectedPlayer,
+    required this.selectedCompetition,
+    required this.selectedTeam,
     required this.basketState,
     required this.isAuthenticated,
     required this.showPayment,
@@ -19,21 +21,26 @@ class GtexRentalSummaryPanel extends StatelessWidget {
   });
 
   final GtexRentalPlayerView? selectedPlayer;
+  final GtexRentalCompetitionView? selectedCompetition;
+  final GtexRentalTeamView? selectedTeam;
   final GtexRentalBasketState basketState;
   final bool isAuthenticated;
   final bool showPayment;
-  final VoidCallback onOpenLogin;
+  final VoidCallback? onOpenLogin;
   final ValueChanged<GtexRentalPlayerView> onToggleBasket;
   final ValueChanged<String> onRemoveFromBasket;
   final VoidCallback onReviewPayment;
   final VoidCallback onBackToBasket;
-  final VoidCallback onConfirmPayment;
+  final VoidCallback? onConfirmPayment;
 
   @override
   Widget build(BuildContext context) {
-    if (showPayment) {
+    final bool competitionOpen = selectedCompetition?.isOpen ?? false;
+    if (showPayment && competitionOpen) {
       return _PaymentReview(
         basketState: basketState,
+        selectedCompetition: selectedCompetition,
+        selectedTeam: selectedTeam,
         isAuthenticated: isAuthenticated,
         onOpenLogin: onOpenLogin,
         onBack: onBackToBasket,
@@ -68,11 +75,11 @@ class GtexRentalSummaryPanel extends StatelessWidget {
                       ? GtexColors.purple
                       : GtexColors.pitch,
               trailing: GtexStatusChip(
-                label: selectedPlayer!.isPreseededRegen ? 'REGEN' : 'REAL',
+                label: selectedPlayer!.availabilityLabel,
                 color:
-                    selectedPlayer!.isPreseededRegen
-                        ? GtexColors.purple
-                        : GtexColors.pitch,
+                    selectedPlayer!.rentalEligible
+                        ? GtexColors.pitch
+                        : GtexColors.gold,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,11 +94,47 @@ class GtexRentalSummaryPanel extends StatelessWidget {
                   const SizedBox(height: GtexSpacing.xs),
                   Text(
                     selectedPlayer!.eligibilityNote ??
-                        'Eligible for the selected national-team rental pool.',
+                        (selectedPlayer!.rentalEligible
+                            ? 'Backend returned this player as eligible for the selected rental pool.'
+                            : 'Backend did not return an eligibility message.'),
                     style: const TextStyle(
                       color: GtexColors.textMuted,
                       fontWeight: FontWeight.w600,
                     ),
+                  ),
+                  if (!selectedPlayer!.rentalEligible) ...<Widget>[
+                    const SizedBox(height: GtexSpacing.sm),
+                    GtexBlockedState(
+                      compact: true,
+                      title: 'Rental action blocked',
+                      reason: selectedPlayer!.ruleSourceLabel,
+                      severity: GtexBlockedSeverity.locked,
+                      resolution:
+                          'Eligibility is controlled by the live national-team backend.',
+                    ),
+                  ],
+                  const SizedBox(height: GtexSpacing.sm),
+                  Wrap(
+                    spacing: GtexSpacing.xs,
+                    runSpacing: GtexSpacing.xs,
+                    children: <Widget>[
+                      GtexStatusChip(
+                        label:
+                            selectedPlayer!.isPreseededRegen
+                                ? 'REGEN GEN-X'
+                                : 'REAL PLAYER',
+                        color:
+                            selectedPlayer!.isPreseededRegen
+                                ? GtexColors.purple
+                                : GtexColors.pitch,
+                        compact: true,
+                      ),
+                      GtexStatusChip(
+                        label: selectedPlayer!.sourceLabel,
+                        color: GtexColors.cyan,
+                        compact: true,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: GtexSpacing.sm),
                   Row(
@@ -137,18 +180,62 @@ class GtexRentalSummaryPanel extends StatelessWidget {
             ),
           ),
         Expanded(
-          child: GtexShortlistBasket(
-            title: 'Rental Basket',
-            checkoutLabel: 'Review rental payment',
-            emptyTitle: 'No rental players selected',
-            emptyMessage:
-                'Choose a country or national team, then add eligible players to build your temporary squad.',
-            items: lineItems,
-            totalLabel: basketState.totalLabel,
-            onCheckout:
-                basketState.items.isEmpty || !basketState.allEligible
-                    ? null
-                    : onReviewPayment,
+          child: Column(
+            children: <Widget>[
+              if (selectedCompetition == null)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    GtexSpacing.md,
+                    0,
+                    GtexSpacing.md,
+                    GtexSpacing.sm,
+                  ),
+                  child: GtexBlockedState(
+                    compact: true,
+                    title: 'Competition required',
+                    reason:
+                        'Select a live national competition before reviewing rental payment.',
+                    severity: GtexBlockedSeverity.info,
+                    resolution:
+                        'Competition context controls backend eligibility and rental duration.',
+                  ),
+                ),
+              if (selectedCompetition != null && !competitionOpen)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    GtexSpacing.md,
+                    0,
+                    GtexSpacing.md,
+                    GtexSpacing.sm,
+                  ),
+                  child: GtexBlockedState(
+                    compact: true,
+                    title: 'Competition closed',
+                    reason:
+                        '${selectedCompetition!.title} is ${selectedCompetition!.status}; rental payment is disabled until the backend opens a live competition.',
+                    severity: GtexBlockedSeverity.locked,
+                    resolution:
+                        'Choose an open national competition returned by the live backend.',
+                  ),
+                ),
+              Expanded(
+                child: GtexShortlistBasket(
+                  title: 'Rental Basket',
+                  checkoutLabel: 'Review rental payment',
+                  emptyTitle: 'No rental players selected',
+                  emptyMessage:
+                      'Choose a country or national team, then add backend-eligible players to build your temporary squad.',
+                  items: lineItems,
+                  totalLabel: basketState.totalLabel,
+                  onCheckout:
+                      basketState.items.isEmpty ||
+                              !basketState.allEligible ||
+                              !competitionOpen
+                          ? null
+                          : onReviewPayment,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -159,6 +246,8 @@ class GtexRentalSummaryPanel extends StatelessWidget {
 class _PaymentReview extends StatelessWidget {
   const _PaymentReview({
     required this.basketState,
+    required this.selectedCompetition,
+    required this.selectedTeam,
     required this.isAuthenticated,
     required this.onOpenLogin,
     required this.onBack,
@@ -166,10 +255,12 @@ class _PaymentReview extends StatelessWidget {
   });
 
   final GtexRentalBasketState basketState;
+  final GtexRentalCompetitionView? selectedCompetition;
+  final GtexRentalTeamView? selectedTeam;
   final bool isAuthenticated;
-  final VoidCallback onOpenLogin;
+  final VoidCallback? onOpenLogin;
   final VoidCallback onBack;
-  final VoidCallback onConfirm;
+  final VoidCallback? onConfirm;
 
   @override
   Widget build(BuildContext context) {
@@ -208,13 +299,17 @@ class _PaymentReview extends StatelessWidget {
                   label: 'Rental subtotal',
                   value: basketState.totalLabel,
                 ),
-                const _PaymentRow(
+                _PaymentRow(
                   label: 'Competition entry',
-                  value: 'From selected tournament',
+                  value: selectedCompetition?.title ?? 'Select competition',
+                ),
+                _PaymentRow(
+                  label: 'Roster rule',
+                  value: selectedTeam?.squadRuleLabel ?? 'Backend rule pending',
                 ),
                 const _PaymentRow(
                   label: 'Settlement',
-                  value: 'Wallet / GTEX coin',
+                  value: 'Wallet / GTEX Coin',
                 ),
               ],
             ),
@@ -231,6 +326,17 @@ class _PaymentReview extends StatelessWidget {
             ),
           ),
           const Spacer(),
+          if (!isAuthenticated && onOpenLogin == null)
+            const Padding(
+              padding: EdgeInsets.only(bottom: GtexSpacing.sm),
+              child: GtexBlockedState(
+                compact: true,
+                title: 'Sign-in route unavailable',
+                reason:
+                    'The app did not provide a live sign-in action for national-team rentals.',
+                severity: GtexBlockedSeverity.locked,
+              ),
+            ),
           GtexActionButton(
             label:
                 isAuthenticated
@@ -267,11 +373,16 @@ class _PaymentRow extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: GtexColors.text,
-              fontWeight: FontWeight.w900,
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: GtexColors.text,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ],

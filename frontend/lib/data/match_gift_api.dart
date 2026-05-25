@@ -5,18 +5,35 @@ class MatchGiftCatalogItem {
   const MatchGiftCatalogItem({
     required this.key,
     required this.label,
+    required this.description,
     required this.fanCoinAmount,
   });
 
   final String key;
   final String label;
+  final String description;
   final double fanCoinAmount;
 }
 
 const List<MatchGiftCatalogItem> kMatchGiftCatalog = <MatchGiftCatalogItem>[
-  MatchGiftCatalogItem(key: 'fire', label: 'Fire', fanCoinAmount: 2),
-  MatchGiftCatalogItem(key: 'applause', label: 'Applause', fanCoinAmount: 5),
-  MatchGiftCatalogItem(key: 'crown', label: 'Crown', fanCoinAmount: 20),
+  MatchGiftCatalogItem(
+    key: 'fire',
+    label: 'Terrace Roar',
+    description: 'A quick FNC salute for a live moment.',
+    fanCoinAmount: 2,
+  ),
+  MatchGiftCatalogItem(
+    key: 'applause',
+    label: 'Stand Ovation',
+    description: 'Boost a host, player, or creator after a big play.',
+    fanCoinAmount: 5,
+  ),
+  MatchGiftCatalogItem(
+    key: 'crown',
+    label: 'Captain Crown',
+    description: 'Premium matchday recognition settled by the gift engine.',
+    fanCoinAmount: 20,
+  ),
 ];
 
 class MatchGiftTarget {

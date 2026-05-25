@@ -495,8 +495,9 @@ class _WalletBalancePanel extends StatelessWidget {
     return ListView(
       children: <Widget>[
         GtexPanel(
-          title: 'Capital position',
-          subtitle: 'Real wallet data from the existing account API.',
+          title: 'GTC capital rail',
+          subtitle:
+              'GTEX Coin is live transfer capital for trades, signings, escrow and withdrawals.',
           accent: GtexColors.gold,
           child: Wrap(
             spacing: GtexSpacing.md,
@@ -506,7 +507,7 @@ class _WalletBalancePanel extends StatelessWidget {
                 width: 210,
                 child: GtexMetricTile(
                   label: 'Available',
-                  value: gteFormatCredits(wallet.availableBalance),
+                  value: gteFormatGtc(wallet.availableBalance),
                   icon: Icons.flash_on_outlined,
                   accent: GtexColors.gold,
                 ),
@@ -515,7 +516,7 @@ class _WalletBalancePanel extends StatelessWidget {
                 width: 210,
                 child: GtexMetricTile(
                   label: 'Reserved',
-                  value: gteFormatCredits(wallet.reservedBalance),
+                  value: gteFormatGtc(wallet.reservedBalance),
                   icon: Icons.lock_clock_outlined,
                   accent: GtexColors.cyan,
                 ),
@@ -524,7 +525,7 @@ class _WalletBalancePanel extends StatelessWidget {
                 width: 210,
                 child: GtexMetricTile(
                   label: 'Total balance',
-                  value: gteFormatCredits(wallet.totalBalance),
+                  value: gteFormatGtc(wallet.totalBalance),
                   icon: Icons.account_balance_outlined,
                   accent: GtexColors.pitch,
                 ),
@@ -534,7 +535,7 @@ class _WalletBalancePanel extends StatelessWidget {
         ),
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
-          title: 'Portfolio exposure',
+          title: 'Player-market exposure',
           subtitle: 'Player assets and cash posture from the portfolio API.',
           accent: GtexColors.pitch,
           child: Wrap(
@@ -545,7 +546,7 @@ class _WalletBalancePanel extends StatelessWidget {
                 width: 210,
                 child: GtexMetricTile(
                   label: 'Market value',
-                  value: gteFormatCredits(portfolio?.totalMarketValue ?? 0),
+                  value: gteFormatGtc(portfolio?.totalMarketValue ?? 0),
                   icon: Icons.trending_up,
                   accent: GtexColors.pitch,
                 ),
@@ -554,7 +555,7 @@ class _WalletBalancePanel extends StatelessWidget {
                 width: 210,
                 child: GtexMetricTile(
                   label: 'Equity',
-                  value: gteFormatCredits(portfolio?.totalEquity ?? 0),
+                  value: gteFormatGtc(portfolio?.totalEquity ?? 0),
                   icon: Icons.stacked_line_chart,
                   accent: GtexColors.cyan,
                 ),
@@ -563,7 +564,7 @@ class _WalletBalancePanel extends StatelessWidget {
                 width: 210,
                 child: GtexMetricTile(
                   label: 'Unrealized P/L',
-                  value: gteFormatCredits(portfolio?.unrealizedPlTotal ?? 0),
+                  value: gteFormatGtc(portfolio?.unrealizedPlTotal ?? 0),
                   icon: Icons.show_chart,
                   accent:
                       (portfolio?.unrealizedPlTotal ?? 0) >= 0
@@ -580,13 +581,13 @@ class _WalletBalancePanel extends StatelessWidget {
           runSpacing: GtexSpacing.sm,
           children: <Widget>[
             GtexActionButton(
-              label: 'Top up',
+              label: 'Top up GTC',
               icon: Icons.add_card_outlined,
               accent: GtexColors.gold,
               onPressed: onTopUp,
             ),
             GtexActionButton(
-              label: 'Withdraw',
+              label: 'Withdraw GTC',
               icon: Icons.account_balance_outlined,
               accent: GtexColors.cyan,
               onPressed: onWithdraw,
@@ -648,7 +649,7 @@ class _OrdersPanel extends StatelessWidget {
                 ),
               ),
               Text(
-                gteFormatCredits(order.reservedAmount),
+                gteFormatGtc(order.reservedAmount),
                 style: const TextStyle(
                   color: GtexColors.gold,
                   fontWeight: FontWeight.w900,
@@ -705,7 +706,7 @@ class _HoldingsPanel extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Qty ${holding.quantity.toStringAsFixed(2)} - Avg ${gteFormatCredits(holding.averageCost)}',
+                      'Qty ${holding.quantity.toStringAsFixed(2)} - Avg ${gteFormatGtc(holding.averageCost)}',
                       style: const TextStyle(color: GtexColors.textMuted),
                     ),
                   ],
@@ -715,7 +716,7 @@ class _HoldingsPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
                   Text(
-                    gteFormatCredits(holding.marketValue),
+                    gteFormatGtc(holding.marketValue),
                     style: const TextStyle(
                       color: GtexColors.text,
                       fontWeight: FontWeight.w900,

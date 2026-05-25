@@ -21,6 +21,7 @@ class GteDepositHistoryScreen extends StatefulWidget {
 
 class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
   late Future<List<GteWalletTransactionRecord>> _transactionsFuture;
+  String _activeFilter = 'all';
 
   @override
   void initState() {
@@ -71,6 +72,8 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
           }
           final List<GteWalletTransactionRecord> transactions =
               snapshot.data ?? <GteWalletTransactionRecord>[];
+          final List<GteWalletTransactionRecord> filteredTransactions =
+              _filterTransactions(transactions, _activeFilter);
           if (transactions.isEmpty) {
             return const Center(
               child: GteStatePanel(
@@ -85,52 +88,31 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
             onRefresh: _refresh,
             child: ListView.separated(
               padding: const EdgeInsets.all(20),
-              itemCount: transactions.length,
+              itemCount:
+                  filteredTransactions.isEmpty
+                      ? 2
+                      : filteredTransactions.length + 1,
               separatorBuilder: (_, index) => const SizedBox(height: 12),
               itemBuilder: (BuildContext context, int index) {
+                if (index == 0) {
+                  return _TransactionFilterRail(
+                    activeFilter: _activeFilter,
+                    onChanged:
+                        (String filter) =>
+                            setState(() => _activeFilter = filter),
+                  );
+                }
+                if (filteredTransactions.isEmpty) {
+                  return GteStatePanel(
+                    title: 'No ${_titleCase(_activeFilter)} activity',
+                    message:
+                        'The live ledger has no transactions in this category yet.',
+                    icon: Icons.receipt_long_outlined,
+                  );
+                }
                 final GteWalletTransactionRecord transaction =
-                    transactions[index];
-                final bool isCredit =
-                    transaction.type.toLowerCase() == 'credit';
-                final Color statusColor =
-                    transaction.status.toLowerCase() == 'verified'
-                        ? GteShellTheme.positive
-                        : transaction.status.toLowerCase() == 'failed'
-                        ? GteShellTheme.negative
-                        : GteShellTheme.accentWarm;
-                return GteSurfacePanel(
-                  accentColor: GteShellTheme.accentCapital,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        transaction.reference,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_titleCase(transaction.type)} | ${_titleCase(transaction.status)}',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: statusColor),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        gteFormatCredits(
-                          isCredit ? transaction.amount : -transaction.amount,
-                        ),
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      if (transaction.createdAt != null) ...<Widget>[
-                        const SizedBox(height: 6),
-                        Text(
-                          'Created ${gteFormatDateTime(transaction.createdAt)}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ],
-                  ),
-                );
+                    filteredTransactions[index - 1];
+                return _HistoryTransactionCard(transaction: transaction);
               },
             ),
           );
@@ -138,6 +120,214 @@ class _GteDepositHistoryScreenState extends State<GteDepositHistoryScreen> {
       ),
     );
   }
+}
+
+class _TransactionFilterRail extends StatelessWidget {
+  const _TransactionFilterRail({
+    required this.activeFilter,
+    required this.onChanged,
+  });
+
+  static const List<String> filters = <String>[
+    'all',
+    'deposits',
+    'withdrawals',
+    'transfers',
+    'purchases',
+    'rentals',
+    'trades',
+  ];
+
+  final String activeFilter;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: filters.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (BuildContext context, int index) {
+          final String filter = filters[index];
+          return ChoiceChip(
+            label: Text(_titleCase(filter)),
+            selected: activeFilter == filter,
+            onSelected: (_) => onChanged(filter),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HistoryTransactionCard extends StatelessWidget {
+  const _HistoryTransactionCard({required this.transaction});
+
+  final GteWalletTransactionRecord transaction;
+
+  @override
+  Widget build(BuildContext context) {
+    final String type = transaction.type.toLowerCase();
+    final bool isCredit = type == 'credit' || type.contains('deposit');
+    final Color statusColor = _statusColor(transaction.status);
+    final Color amountColor =
+        isCredit ? GteShellTheme.positive : GteShellTheme.negative;
+    return GteSurfacePanel(
+      accentColor: statusColor,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: statusColor.withValues(alpha: 0.12),
+              border: Border.all(color: statusColor.withValues(alpha: 0.22)),
+            ),
+            child: Icon(_transactionIcon(type), color: statusColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  _transactionTitle(type, isCredit),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '${transaction.createdAt == null ? 'Time unavailable' : gteFormatDateTime(transaction.createdAt)} - ${_truncateId(transaction.reference)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: statusColor.withValues(alpha: 0.12),
+                    border: Border.all(
+                      color: statusColor.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Text(
+                    _titleCase(transaction.status),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: statusColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            gteFormatGtc(isCredit ? transaction.amount : -transaction.amount),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: amountColor,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<GteWalletTransactionRecord> _filterTransactions(
+  List<GteWalletTransactionRecord> transactions,
+  String filter,
+) {
+  if (filter == 'all') {
+    return transactions;
+  }
+  return transactions
+      .where((GteWalletTransactionRecord transaction) {
+        final String type = transaction.type.toLowerCase();
+        return switch (filter) {
+          'deposits' => type.contains('deposit') || type == 'credit',
+          'withdrawals' => type.contains('withdraw'),
+          'transfers' => type.contains('transfer') || type.contains('send'),
+          'purchases' => type.contains('purchase') || type.contains('player'),
+          'rentals' => type.contains('rent'),
+          'trades' => type.contains('trade'),
+          _ => true,
+        };
+      })
+      .toList(growable: false);
+}
+
+Color _statusColor(String status) {
+  switch (status.toLowerCase()) {
+    case 'verified':
+    case 'confirmed':
+    case 'completed':
+    case 'success':
+      return GteShellTheme.positive;
+    case 'failed':
+    case 'rejected':
+    case 'expired':
+      return GteShellTheme.negative;
+    default:
+      return GteShellTheme.accentWarm;
+  }
+}
+
+IconData _transactionIcon(String type) {
+  if (type.contains('withdraw')) {
+    return Icons.account_balance_outlined;
+  }
+  if (type.contains('trade')) {
+    return Icons.currency_exchange_outlined;
+  }
+  if (type.contains('purchase') || type.contains('player')) {
+    return Icons.person_search_outlined;
+  }
+  if (type.contains('rent')) {
+    return Icons.flag_outlined;
+  }
+  if (type.contains('transfer') || type.contains('send')) {
+    return Icons.swap_horiz_outlined;
+  }
+  return type.contains('credit') || type.contains('deposit')
+      ? Icons.south_west_outlined
+      : Icons.north_east_outlined;
+}
+
+String _transactionTitle(String type, bool isCredit) {
+  if (type.contains('deposit')) {
+    return 'Wallet deposit';
+  }
+  if (type.contains('withdraw')) {
+    return 'Withdrawal request';
+  }
+  if (type.contains('trade')) {
+    return 'Coin trade settlement';
+  }
+  if (type.contains('purchase')) {
+    return 'Player purchase';
+  }
+  if (type.contains('rent')) {
+    return 'National rental payment';
+  }
+  if (type.contains('transfer') || type.contains('send')) {
+    return 'Wallet transfer';
+  }
+  return isCredit ? 'Wallet credit' : 'Wallet debit';
+}
+
+String _truncateId(String value) {
+  if (value.length <= 18) {
+    return value;
+  }
+  return '${value.substring(0, 8)}...${value.substring(value.length - 6)}';
 }
 
 String _titleCase(String value) {

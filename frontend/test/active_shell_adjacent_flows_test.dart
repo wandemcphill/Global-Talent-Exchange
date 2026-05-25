@@ -84,9 +84,9 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Club funds'));
-      await _pumpUntilText(tester, 'Capital position');
+      await _pumpUntilText(tester, 'GTC capital rail');
       expect(find.text('Wallet & Capital'), findsWidgets);
-      expect(find.text('Top up'), findsOneWidget);
+      expect(find.text('Top up GTC'), findsOneWidget);
 
       expect(find.byTooltip('Creator community'), findsNothing);
 
@@ -134,8 +134,8 @@ void main() {
 
       await tester.ensureVisible(walletNavChip);
       await tester.tap(walletNavChip);
-      await _pumpUntilText(tester, 'Capital position');
-      expect(find.text('Top up'), findsOneWidget);
+      await _pumpUntilText(tester, 'GTC capital rail');
+      expect(find.text('Top up GTC'), findsOneWidget);
       await tester.pumpAndSettle();
     },
   );
@@ -175,11 +175,11 @@ void main() {
       final Finder walletOverviewButton = find.text('Wallet overview');
       await tester.ensureVisible(walletOverviewButton);
       await tester.tap(walletOverviewButton);
-      await _pumpUntilText(tester, 'Club funds');
+      await _pumpUntilText(tester, 'Wallet command desk');
       expect(find.text('Club Wallet'), findsOneWidget);
-      expect(find.text('Club funds'), findsOneWidget);
-      expect(find.text('GTEX COIN'), findsWidgets);
-      expect(find.text('FAN COIN'), findsWidgets);
+      expect(find.text('Wallet command desk'), findsOneWidget);
+      expect(find.text('GTC'), findsWidgets);
+      expect(find.text('FNC'), findsWidgets);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Money moves');
@@ -187,7 +187,7 @@ void main() {
       final Finder fundWalletButton = find.text('Fund wallet');
       await tester.ensureVisible(fundWalletButton);
       await tester.tap(fundWalletButton);
-      await _pumpUntilText(tester, 'Choose a deposit method');
+      await _pumpUntilText(tester, 'Choose live funding rail');
       expect(find.text('Deposit'), findsOneWidget);
       expect(find.text('Continue to KoraPay'), findsOneWidget);
       await tester.pageBack();

@@ -70,13 +70,13 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Send gift'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Crown'));
+      await tester.tap(find.text('Captain Crown'));
       await tester.pumpAndSettle();
 
       expect(giftClient.lastTarget?.recipientUserId, 'creator-user-1');
       expect(giftClient.lastGift?.key, 'crown');
       expect(
-        find.text('Crown sent to Studio Kai for 20.0000 Fan Coin.'),
+        find.text('Captain Crown sent to Studio Kai for 20.0000 Fan Coin.'),
         findsOneWidget,
       );
     },

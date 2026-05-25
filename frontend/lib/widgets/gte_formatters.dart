@@ -44,8 +44,38 @@ String gteFormatFanCoins(double value) {
   return _gteFormatUnitAmount(value, 'Fan Coin');
 }
 
+String gteFormatGtc(double value) {
+  return _gteFormatUnitAmount(value, 'GTC');
+}
+
+String gteFormatFnc(double value) {
+  return _gteFormatUnitAmount(value, 'FNC');
+}
+
+String gteFormatShortAmountForUnit(double value, GteLedgerUnit unit) {
+  switch (unit) {
+    case GteLedgerUnit.coin:
+      return gteFormatGtc(value);
+    case GteLedgerUnit.credit:
+      return gteFormatFnc(value);
+    case GteLedgerUnit.unknown:
+      return _gteFormatUnitAmount(value, 'Unit');
+  }
+}
+
 String gteFormatFanCoin(double value) {
   return gteFormatFanCoins(value);
+}
+
+String gteLedgerUnitCode(GteLedgerUnit unit) {
+  switch (unit) {
+    case GteLedgerUnit.credit:
+      return 'FNC';
+    case GteLedgerUnit.coin:
+      return 'GTC';
+    case GteLedgerUnit.unknown:
+      return 'UNIT';
+  }
 }
 
 String gteFormatLedgerUnitName(GteLedgerUnit unit) {

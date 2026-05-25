@@ -104,7 +104,7 @@ class GtexRentalPlayerView {
   final String nationality;
   final String countryCode;
   final String clubName;
-  final double rentalCostCredits;
+  final double? rentalCostCredits;
   final String sourceBucket;
   final String? imageUrl;
   final String? portraitUrl;
@@ -132,34 +132,41 @@ class GtexRentalPlayerView {
   String get ratingLabel =>
       rating == null ? 'GSI TBD' : 'GSI ${rating!.round()}';
   String get sourceLabel =>
-      isPreseededRegen ? 'Pre-seeded regen' : sourceBucket;
+      isPreseededRegen ? 'NATIONAL SEED' : _sourceBucketLabel(sourceBucket);
   String get rarityLabel {
-    final int? score = gsiScore;
-    if (isPreseededRegen) return 'National Seed';
-    if (score != null && score >= 90) return 'Legend Tier';
-    if (score != null && score >= 84) return 'Elite';
-    if (score != null && score >= 76) return 'Rare';
-    return 'Squad Depth';
+    if (isPreseededRegen) return 'NATIONAL SEED';
+    return 'RENTAL POOL';
   }
 
   String get marketHeatLabel {
-    final int? score = gsiScore;
-    if (score == null) return 'Scout watch';
-    if (score >= 88) return 'Hot demand';
-    if (score >= 78) return 'Rising';
-    return 'Value lane';
+    if (rentalEligible) return 'BACKEND ELIGIBLE';
+    return 'BACKEND LOCKED';
   }
 
-  String get transferTrendLabel {
-    final int? score = gsiScore;
-    if (score == null) return 'Trend TBD';
-    if (score >= 84) return 'Up';
-    if (score < 68) return 'Sleeper';
-    return 'Stable';
-  }
+  String get transferTrendLabel => 'LIVE POOL';
 
   String get demandLabel =>
-      isPreseededRegen ? 'Pool exclusive' : 'Live rental demand';
+      isPreseededRegen ? 'NATIONAL SEED' : 'BACKEND ELIGIBLE';
+
+  String get availabilityLabel {
+    if (rentalEligible) return 'AVAILABLE';
+    final String reason =
+        eligibilityReasons.isNotEmpty
+            ? eligibilityReasons.first
+            : (eligibilityNote ?? 'Backend locked');
+    return 'LOCKED - ${reason.toUpperCase()}';
+  }
+
+  String get ruleSourceLabel =>
+      eligibilityReasons.isEmpty
+          ? 'Backend rules clear'
+          : eligibilityReasons.join(' | ');
+
+  static String _sourceBucketLabel(String value) {
+    final String normalized = value.trim().replaceAll('_', ' ');
+    if (normalized.isEmpty) return 'BACKEND SOURCE';
+    return normalized.toUpperCase();
+  }
 }
 
 class GtexRentalBasketState {
@@ -178,7 +185,7 @@ class GtexRentalBasketState {
   double get totalCredits => items.fold<double>(
     0,
     (double total, GtexRentalPlayerView player) =>
-        total + player.rentalCostCredits,
+        total + (player.rentalCostCredits ?? 0),
   );
 
   String get totalLabel => GtexRentalFormatters.credits(totalCredits);
@@ -210,247 +217,16 @@ class GtexRentalFormatters {
   const GtexRentalFormatters._();
 
   static String credits(double? value) {
-    if (value == null) return 'TBD';
+    if (value == null) return 'GTEX TBD';
     if (value >= 1000000000) {
-      return 'GTC ${(value / 1000000000).toStringAsFixed(1)}B';
+      return 'GTEX ${(value / 1000000000).toStringAsFixed(1)}B';
     }
     if (value >= 1000000) {
-      return 'GTC ${(value / 1000000).toStringAsFixed(1)}M';
+      return 'GTEX ${(value / 1000000).toStringAsFixed(1)}M';
     }
     if (value >= 1000) {
-      return 'GTC ${(value / 1000).toStringAsFixed(1)}K';
+      return 'GTEX ${(value / 1000).toStringAsFixed(1)}K';
     }
-    return 'GTC ${value.toStringAsFixed(0)}';
+    return 'GTEX ${value.toStringAsFixed(0)}';
   }
-}
-
-class GtexNationalTeamRentalDemoData {
-  const GtexNationalTeamRentalDemoData._();
-
-  static const List<GtexRentalCompetitionView> competitions =
-      <GtexRentalCompetitionView>[
-        GtexRentalCompetitionView(
-          id: 'gtex-u20-world-cup-2026',
-          title: 'GTEX U20 World Cup',
-          seasonLabel: '2026 Season',
-          ageBand: 'U20',
-          status: 'open',
-          entryFeeLabel: 'GTC 25K',
-          description:
-              'Build a national squad with real players and pre-seeded regens.',
-        ),
-        GtexRentalCompetitionView(
-          id: 'gtex-afcon-2026',
-          title: 'GTEX AFCON',
-          seasonLabel: '2026 Finals',
-          ageBand: 'Senior',
-          status: 'active',
-          entryFeeLabel: 'GTC 40K',
-          description:
-              'African national-team competition with rental pool support.',
-        ),
-        GtexRentalCompetitionView(
-          id: 'gtex-u17-world-cup-2026',
-          title: 'GTEX U17 World Cup',
-          seasonLabel: '2026 Youth',
-          ageBand: 'U17',
-          status: 'open',
-          entryFeeLabel: 'GTC 15K',
-          description:
-              'Youth tournament powered by national pre-seeded regens.',
-        ),
-      ];
-
-  static const List<GtexRentalCountryView> countries = <GtexRentalCountryView>[
-    GtexRentalCountryView(
-      countryCode: 'NG',
-      countryName: 'Nigeria',
-      confederation: 'CAF',
-      eligiblePlayers: 42,
-      rentalBudgetLabel: 'GTC 2.8M',
-    ),
-    GtexRentalCountryView(
-      countryCode: 'GH',
-      countryName: 'Ghana',
-      confederation: 'CAF',
-      eligiblePlayers: 31,
-      rentalBudgetLabel: 'GTC 2.1M',
-    ),
-    GtexRentalCountryView(
-      countryCode: 'SN',
-      countryName: 'Senegal',
-      confederation: 'CAF',
-      eligiblePlayers: 36,
-      rentalBudgetLabel: 'GTC 2.5M',
-    ),
-    GtexRentalCountryView(
-      countryCode: 'GB-ENG',
-      countryName: 'England',
-      confederation: 'UEFA',
-      eligiblePlayers: 58,
-      rentalBudgetLabel: 'GTC 5.2M',
-    ),
-    GtexRentalCountryView(
-      countryCode: 'BR',
-      countryName: 'Brazil',
-      confederation: 'CONMEBOL',
-      eligiblePlayers: 64,
-      rentalBudgetLabel: 'GTC 6.1M',
-    ),
-  ];
-
-  static const List<GtexRentalTeamView> teams = <GtexRentalTeamView>[
-    GtexRentalTeamView(
-      id: 'ng-u20',
-      countryCode: 'NG',
-      name: 'Nigeria U20',
-      ageBand: 'U20',
-      competitionId: 'gtex-u20-world-cup-2026',
-      eligiblePlayerCount: 24,
-      minSquadSize: 16,
-      maxSquadSize: 23,
-    ),
-    GtexRentalTeamView(
-      id: 'ng-senior',
-      countryCode: 'NG',
-      name: 'Nigeria Senior',
-      ageBand: 'Senior',
-      competitionId: 'gtex-afcon-2026',
-      eligiblePlayerCount: 18,
-      minSquadSize: 18,
-      maxSquadSize: 26,
-    ),
-    GtexRentalTeamView(
-      id: 'gh-u20',
-      countryCode: 'GH',
-      name: 'Ghana U20',
-      ageBand: 'U20',
-      competitionId: 'gtex-u20-world-cup-2026',
-      eligiblePlayerCount: 21,
-      minSquadSize: 16,
-      maxSquadSize: 23,
-    ),
-    GtexRentalTeamView(
-      id: 'sn-senior',
-      countryCode: 'SN',
-      name: 'Senegal Senior',
-      ageBand: 'Senior',
-      competitionId: 'gtex-afcon-2026',
-      eligiblePlayerCount: 22,
-      minSquadSize: 18,
-      maxSquadSize: 26,
-    ),
-    GtexRentalTeamView(
-      id: 'eng-u20',
-      countryCode: 'GB-ENG',
-      name: 'England U20',
-      ageBand: 'U20',
-      competitionId: 'gtex-u20-world-cup-2026',
-      eligiblePlayerCount: 30,
-      minSquadSize: 16,
-      maxSquadSize: 23,
-    ),
-    GtexRentalTeamView(
-      id: 'br-u17',
-      countryCode: 'BR',
-      name: 'Brazil U17',
-      ageBand: 'U17',
-      competitionId: 'gtex-u17-world-cup-2026',
-      eligiblePlayerCount: 33,
-      minSquadSize: 16,
-      maxSquadSize: 21,
-    ),
-  ];
-
-  static const List<GtexRentalPlayerView> players = <GtexRentalPlayerView>[
-    GtexRentalPlayerView(
-      playerId: 'ng-001',
-      name: 'T. Adebayo',
-      position: 'ST',
-      age: 19,
-      rating: 78.4,
-      nationality: 'Nigeria',
-      countryCode: 'NG',
-      clubName: 'Lagos Meteors',
-      rentalCostCredits: 240000,
-      sourceBucket: 'SportMonks',
-      eligibilityNote: 'Eligible for Nigeria U20',
-    ),
-    GtexRentalPlayerView(
-      playerId: 'ng-002',
-      name: 'M. Okoro',
-      position: 'CM',
-      age: 18,
-      rating: 74.8,
-      nationality: 'Nigeria',
-      countryCode: 'NG',
-      clubName: 'GTEX National Seed',
-      rentalCostCredits: 95000,
-      sourceBucket: 'national_seed',
-      eligibilityNote: 'Pre-seeded to fill national pool',
-      isPreseededRegen: true,
-    ),
-    GtexRentalPlayerView(
-      playerId: 'ng-003',
-      name: 'S. Balogun',
-      position: 'CB',
-      age: 20,
-      rating: 73.1,
-      nationality: 'Nigeria',
-      countryCode: 'NG',
-      clubName: 'Abuja Royals',
-      rentalCostCredits: 155000,
-      sourceBucket: 'SportMonks',
-      eligibilityNote: 'Senior and U20 eligible',
-    ),
-    GtexRentalPlayerView(
-      playerId: 'gh-001',
-      name: 'K. Mensah',
-      position: 'LW',
-      age: 19,
-      rating: 76.2,
-      nationality: 'Ghana',
-      countryCode: 'GH',
-      clubName: 'Accra Galaxy',
-      rentalCostCredits: 210000,
-      sourceBucket: 'SportMonks',
-    ),
-    GtexRentalPlayerView(
-      playerId: 'sn-001',
-      name: 'I. Diouf',
-      position: 'DM',
-      age: 24,
-      rating: 81.0,
-      nationality: 'Senegal',
-      countryCode: 'SN',
-      clubName: 'Dakar Lions',
-      rentalCostCredits: 430000,
-      sourceBucket: 'SportMonks',
-    ),
-    GtexRentalPlayerView(
-      playerId: 'eng-001',
-      name: 'J. Whitmore',
-      position: 'RW',
-      age: 19,
-      rating: 79.5,
-      nationality: 'England',
-      countryCode: 'GB-ENG',
-      clubName: 'North London Reds',
-      rentalCostCredits: 520000,
-      sourceBucket: 'SportMonks',
-    ),
-    GtexRentalPlayerView(
-      playerId: 'br-001',
-      name: 'L. Moreira',
-      position: 'CAM',
-      age: 16,
-      rating: 77.7,
-      nationality: 'Brazil',
-      countryCode: 'BR',
-      clubName: 'GTEX National Seed',
-      rentalCostCredits: 185000,
-      sourceBucket: 'national_seed',
-      isPreseededRegen: true,
-    ),
-  ];
 }

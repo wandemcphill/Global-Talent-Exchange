@@ -12,11 +12,13 @@ class GtexCompetitionsHubScreenV2 extends StatefulWidget {
     this.repository,
     this.initialCompetitionId,
     this.allowFixtureData = false,
+    this.canCreateCompetitions = true,
   });
 
   final GtexCompetitionRepository? repository;
   final String? initialCompetitionId;
   final bool allowFixtureData;
+  final bool canCreateCompetitions;
 
   @override
   State<GtexCompetitionsHubScreenV2> createState() =>
@@ -163,6 +165,16 @@ class _GtexCompetitionsHubScreenV2State
           icon: Icons.add_circle_outline,
           accent: GtexColors.gold,
           onPressed: () {
+            if (!widget.canCreateCompetitions) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Competition hosting requires a signed-in account with host access.',
+                  ),
+                ),
+              );
+              return;
+            }
             Navigator.of(context).push<void>(
               MaterialPageRoute<void>(
                 builder:
@@ -554,28 +566,27 @@ class _GtexCompetitionsHubScreenV2State
         const SizedBox(height: GtexSpacing.md),
         Expanded(
           child: GtexPanel(
-            title: 'Ops checklist',
+            title: 'Live OS payload',
             subtitle:
-                'Designed for user-hosted, creator-hosted, and admin progress monitoring.',
+                'Derived from the Competition OS response for this competition.',
             accent: GtexColors.cyan,
             child: Column(
-              children: const <Widget>[
+              children: <Widget>[
                 _ChecklistRow(
-                  label: 'Registration rules verified',
-                  complete: true,
-                ),
-                _ChecklistRow(label: 'Fixtures generated', complete: true),
-                _ChecklistRow(
-                  label: 'Payment settlement monitored',
-                  complete: true,
+                  label: 'Fixtures returned by backend',
+                  complete: detail.fixtures.isNotEmpty,
                 ),
                 _ChecklistRow(
-                  label: 'Dispute window configured',
-                  complete: false,
+                  label: 'Standings returned by backend',
+                  complete: detail.standings.isNotEmpty,
                 ),
                 _ChecklistRow(
-                  label: 'Final awards/news queued',
-                  complete: false,
+                  label: 'Progress stages returned by backend',
+                  complete: detail.stages.isNotEmpty,
+                ),
+                _ChecklistRow(
+                  label: 'Rules returned by backend',
+                  complete: detail.rules.isNotEmpty,
                 ),
               ],
             ),
@@ -624,9 +635,8 @@ class _GtexCompetitionCreateScreenV2State
   int _maxClubs = 16;
   String _rulePreset = 'Balanced cup rules';
   String _visibility = 'Public';
-  final TextEditingController _title = TextEditingController(
-    text: 'Weekend Talent Cup',
-  );
+  bool _saving = false;
+  final TextEditingController _title = TextEditingController();
 
   GtexCompetitionRepository? get _repository =>
       widget.repository ??
@@ -675,29 +685,58 @@ class _GtexCompetitionCreateScreenV2State
                 ),
               const Spacer(),
               GtexActionButton(
-                label: _step == 2 ? 'Save draft' : 'Continue',
+                label:
+                    _saving
+                        ? 'Saving...'
+                        : _step == 2
+                        ? 'Create live draft'
+                        : 'Continue',
                 icon: _step == 2 ? Icons.save_outlined : Icons.arrow_forward,
                 accent: GtexColors.gold,
-                onPressed: () async {
-                  if (_step < 2) {
-                    setState(() => _step += 1);
-                    return;
-                  }
-                  await repository.createCompetition(
-                    GtexCompetitionDraft(
-                      title: _title.text,
-                      kind: _kind,
-                      entryFeeCredits: _entryFee,
-                      maxClubs: _maxClubs,
-                      rulePreset: _rulePreset,
-                      visibility: _visibility,
-                    ),
-                  );
-                  if (!context.mounted) {
-                    return;
-                  }
-                  Navigator.of(context).pop();
-                },
+                onPressed:
+                    _saving
+                        ? null
+                        : () async {
+                          if (_step == 0 && _title.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Add a competition title first.'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (_step < 2) {
+                            setState(() => _step += 1);
+                            return;
+                          }
+                          setState(() => _saving = true);
+                          try {
+                            await repository.createCompetition(
+                              GtexCompetitionDraft(
+                                title: _title.text.trim(),
+                                kind: _kind,
+                                entryFeeCredits: _entryFee,
+                                maxClubs: _maxClubs,
+                                rulePreset: _rulePreset,
+                                visibility: _visibility,
+                              ),
+                            );
+                            if (!context.mounted) {
+                              return;
+                            }
+                            Navigator.of(context).pop();
+                          } catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(error.toString())),
+                              );
+                            }
+                          } finally {
+                            if (mounted) {
+                              setState(() => _saving = false);
+                            }
+                          }
+                        },
               ),
             ],
           ),
@@ -714,7 +753,7 @@ class _GtexCompetitionCreateScreenV2State
           controller: _title,
           decoration: const InputDecoration(
             labelText: 'Competition title',
-            hintText: 'Weekend Talent Cup',
+            hintText: 'Enter the title your clubs will see',
           ),
         ),
         const SizedBox(height: GtexSpacing.md),
@@ -791,9 +830,12 @@ class _GtexCompetitionCreateScreenV2State
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         GtexPanel(
-          title: _title.text,
+          title:
+              _title.text.trim().isEmpty
+                  ? 'Untitled competition'
+                  : _title.text.trim(),
           subtitle:
-              'Review before Codex wires this to publish preview / live backend creation.',
+              'Review the live draft payload before it is sent to Competition OS.',
           accent: GtexColors.gold,
           child: Column(
             children: <Widget>[

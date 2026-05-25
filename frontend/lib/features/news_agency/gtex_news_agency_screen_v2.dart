@@ -30,6 +30,7 @@ class _GtexNewsAgencyScreenV2State extends State<GtexNewsAgencyScreenV2> {
   late Future<List<GtexNewsArticle>> _articlesFuture;
   GtexNewsCategory? _category;
   GtexNewsArticle? _selected;
+  String _query = '';
 
   @override
   void initState() {
@@ -101,27 +102,39 @@ class _GtexNewsAgencyScreenV2State extends State<GtexNewsAgencyScreenV2> {
             onAction: _refresh,
           );
         }
-        final List<GtexNewsArticle> visible =
-            _category == null
-                ? articles
-                : articles
-                    .where(
-                      (GtexNewsArticle article) =>
-                          article.category == _category,
-                    )
-                    .toList(growable: false);
+        final String query = _query.trim().toLowerCase();
+        final List<GtexNewsArticle> visible = articles
+            .where((GtexNewsArticle article) {
+              final bool categoryMatches =
+                  _category == null || article.category == _category;
+              if (!categoryMatches) {
+                return false;
+              }
+              if (query.isEmpty) {
+                return true;
+              }
+              return <String?>[
+                article.title,
+                article.summary,
+                article.body,
+                article.relatedEntity,
+                article.heroLabel,
+                article.categoryLabel,
+              ].whereType<String>().join(' ').toLowerCase().contains(query);
+            })
+            .toList(growable: false);
         final GtexNewsArticle selected =
             _selected != null &&
-                    articles.any(
+                    visible.any(
                       (GtexNewsArticle article) => article.id == _selected!.id,
                     )
                 ? _selected!
-                : articles.first;
+                : (visible.isEmpty ? articles.first : visible.first);
 
         return GtexMasterDetailScaffold(
-          title: 'GTEX AI News Agency',
+          title: 'Newsroom',
           subtitle:
-              'AI-powered football stories from transfers, regens, tournaments, clubs, jackpot, rentals and market movement.',
+              'Live football economy desk: transfers, clubs, regens, tournaments, rentals, gifts and market movement from backend story feed.',
           accent: GtexColors.gold,
           mobileLeftTitle: 'Headlines',
           leftPanelWidth: 350,
@@ -139,6 +152,12 @@ class _GtexNewsAgencyScreenV2State extends State<GtexNewsAgencyScreenV2> {
             articles: visible,
             selected: selected,
             category: _category,
+            query: _query,
+            onQueryChanged:
+                (String value) => setState(() {
+                  _query = value;
+                  _selected = null;
+                }),
             onCategoryChanged:
                 (GtexNewsCategory? category) =>
                     setState(() => _category = category),
@@ -146,7 +165,7 @@ class _GtexNewsAgencyScreenV2State extends State<GtexNewsAgencyScreenV2> {
                 (GtexNewsArticle article) =>
                     setState(() => _selected = article),
           ),
-          detail: _NewsArticleDetail(article: selected),
+          detail: _NewsArticleDetail(article: selected, articles: articles),
           rightPanel: _NewsRightRail(article: selected, articles: articles),
         );
       },
@@ -197,6 +216,20 @@ GtexNewsArticle _articleFromStory(StoryFeedItem story) {
     trustScore: _metadataDouble(metadata, <String>[
       'trust_score',
       'trustScore',
+    ]),
+    reactionCount: _metadataInt(metadata, <String>[
+      'reaction_count',
+      'reactionCount',
+      'reactions',
+      'reactions_count',
+      'reactionsCount',
+    ]),
+    commentCount: _metadataInt(metadata, <String>[
+      'comment_count',
+      'commentCount',
+      'comments',
+      'comments_count',
+      'commentsCount',
     ]),
   );
 }
@@ -273,11 +306,32 @@ double _metadataDouble(Map<String, Object?> metadata, List<String> keys) {
   return 0.92;
 }
 
+int _metadataInt(Map<String, Object?> metadata, List<String> keys) {
+  for (final String key in keys) {
+    final Object? value = metadata[key];
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.round();
+    }
+    if (value is String) {
+      final int? parsed = int.tryParse(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+  }
+  return 0;
+}
+
 class _NewsLeftPanel extends StatelessWidget {
   const _NewsLeftPanel({
     required this.articles,
     required this.selected,
     required this.category,
+    required this.query,
+    required this.onQueryChanged,
     required this.onCategoryChanged,
     required this.onSelected,
   });
@@ -285,6 +339,8 @@ class _NewsLeftPanel extends StatelessWidget {
   final List<GtexNewsArticle> articles;
   final GtexNewsArticle selected;
   final GtexNewsCategory? category;
+  final String query;
+  final ValueChanged<String> onQueryChanged;
   final ValueChanged<GtexNewsCategory?> onCategoryChanged;
   final ValueChanged<GtexNewsArticle> onSelected;
 
@@ -292,7 +348,7 @@ class _NewsLeftPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
-        const GtexSearchField(hintText: 'Search GTEX news'),
+        GtexSearchField(hintText: 'Search newsroom', onChanged: onQueryChanged),
         const SizedBox(height: GtexSpacing.md),
         SizedBox(
           height: 42,
@@ -312,7 +368,7 @@ class _NewsLeftPanel extends StatelessWidget {
                   padding: const EdgeInsets.only(right: GtexSpacing.xs),
                   child: ChoiceChip(
                     selected: category == item,
-                    label: Text(item.name),
+                    label: Text(_categoryFilterLabel(item)),
                     onSelected: (_) => onCategoryChanged(item),
                   ),
                 ),
@@ -351,22 +407,52 @@ class _NewsLeftPanel extends StatelessWidget {
   }
 }
 
+String _categoryFilterLabel(GtexNewsCategory category) {
+  switch (category) {
+    case GtexNewsCategory.breaking:
+      return 'Breaking';
+    case GtexNewsCategory.transfers:
+      return 'Transfers';
+    case GtexNewsCategory.clubs:
+      return 'Clubs';
+    case GtexNewsCategory.regens:
+      return 'Regens';
+    case GtexNewsCategory.awards:
+      return 'Awards';
+    case GtexNewsCategory.tournaments:
+      return 'Tournaments';
+    case GtexNewsCategory.nationalTeams:
+      return 'National';
+    case GtexNewsCategory.jackpot:
+      return 'Jackpot';
+    case GtexNewsCategory.market:
+      return 'Market';
+    case GtexNewsCategory.creators:
+      return 'Creators';
+    case GtexNewsCategory.disputes:
+      return 'Disputes';
+  }
+}
+
 class _NewsArticleDetail extends StatelessWidget {
-  const _NewsArticleDetail({required this.article});
+  const _NewsArticleDetail({required this.article, required this.articles});
 
   final GtexNewsArticle article;
+  final List<GtexNewsArticle> articles;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(GtexSpacing.lg),
       children: <Widget>[
+        _LiveTransferTicker(articles: articles),
+        const SizedBox(height: GtexSpacing.md),
         GtexArticleHero(article: article),
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'GTEX story intelligence',
           subtitle:
-              'Related entities and explainability should be wired to backend generated story metadata.',
+              'Related entities and explainability come from backend story metadata.',
           accent: newsCategoryColor(article.category),
           child: Wrap(
             spacing: GtexSpacing.sm,
@@ -385,7 +471,7 @@ class _NewsArticleDetail extends StatelessWidget {
                   icon: Icons.star_border_outlined,
                 ),
               GtexStatusChip(
-                label: 'AI VERIFIED',
+                label: 'SOURCE CHECKED',
                 color: GtexColors.cyan,
                 icon: Icons.auto_awesome_outlined,
               ),
@@ -393,6 +479,54 @@ class _NewsArticleDetail extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LiveTransferTicker extends StatelessWidget {
+  const _LiveTransferTicker({required this.articles});
+
+  final List<GtexNewsArticle> articles;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<GtexNewsArticle> tickerItems = articles
+        .where(
+          (GtexNewsArticle article) =>
+              article.category == GtexNewsCategory.transfers ||
+              article.category == GtexNewsCategory.market ||
+              article.isBreaking,
+        )
+        .take(6)
+        .toList(growable: false);
+    return GtexPanel(
+      title: 'Live transfer ticker',
+      subtitle:
+          tickerItems.isEmpty
+              ? 'No backend transfer ticker items are live yet.'
+              : 'Backend-published market movement and breaking stories.',
+      accent: GtexColors.pitch,
+      child:
+          tickerItems.isEmpty
+              ? Text(
+                'The ticker stays empty until live transfer or market stories arrive from the story feed.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: GtexColors.textMuted),
+              )
+              : Wrap(
+                spacing: GtexSpacing.sm,
+                runSpacing: GtexSpacing.sm,
+                children: tickerItems
+                    .map(
+                      (GtexNewsArticle item) => GtexStatusChip(
+                        label: item.title,
+                        color: newsCategoryColor(item.category),
+                        icon: Icons.trending_up_outlined,
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
     );
   }
 }
