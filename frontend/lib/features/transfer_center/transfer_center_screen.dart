@@ -476,31 +476,56 @@ class _TransferCenterDetailScreenState
     String playerName,
   ) async {
     final TextEditingController bidController = TextEditingController();
+    final TextEditingController pinController = TextEditingController();
     try {
-      final double? amount = await showDialog<double>(
+      final _TransferBidSubmission?
+      submission = await showDialog<_TransferBidSubmission>(
         context: context,
         builder: (BuildContext context) {
           return AnimatedBuilder(
-            animation: bidController,
+            animation: Listenable.merge(<Listenable>[
+              bidController,
+              pinController,
+            ]),
             builder: (BuildContext context, Widget? child) {
               final double? parsedAmount = double.tryParse(
                 bidController.text.trim(),
               );
-              final bool canSubmit = parsedAmount != null && parsedAmount > 0;
+              final String pin = pinController.text.trim();
+              final bool canSubmit =
+                  parsedAmount != null &&
+                  parsedAmount > 0 &&
+                  RegExp(r'^\d{4}$').hasMatch(pin);
               return GtexActionDialog(
                 eyebrow: 'TRANSFER CENTER',
                 title: 'Bid for $playerName',
                 description:
                     'Submit a live transfer bid from the negotiation board. Invalid amounts stay blocked before the request is sent.',
                 leadingIcon: Icons.gavel_rounded,
-                content: TextField(
-                  controller: bidController,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Bid amount',
-                    helperText: 'Enter a positive amount in transfer coin.',
-                  ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    TextField(
+                      controller: bidController,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Bid amount',
+                        helperText: 'Enter a positive amount in transfer coin.',
+                      ),
+                    ),
+                    const SizedBox(height: spacingMD),
+                    TextField(
+                      controller: pinController,
+                      keyboardType: TextInputType.number,
+                      obscureText: true,
+                      maxLength: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Security PIN',
+                        counterText: '',
+                      ),
+                    ),
+                  ],
                 ),
                 actions: <Widget>[
                   TextButton(
@@ -510,7 +535,12 @@ class _TransferCenterDetailScreenState
                   FilledButton(
                     onPressed:
                         canSubmit
-                            ? () => Navigator.of(context).pop(parsedAmount)
+                            ? () => Navigator.of(context).pop(
+                              _TransferBidSubmission(
+                                amount: parsedAmount,
+                                securityPin: pin,
+                              ),
+                            )
                             : null,
                     child: const Text('Submit'),
                   ),
@@ -520,7 +550,7 @@ class _TransferCenterDetailScreenState
           );
         },
       );
-      if (amount == null || amount <= 0) {
+      if (submission == null || submission.amount <= 0) {
         return;
       }
       await ref
@@ -528,7 +558,8 @@ class _TransferCenterDetailScreenState
           .placeBid(
             listingId: widget.listingId,
             clubId: clubId,
-            amount: amount,
+            amount: submission.amount,
+            securityPin: submission.securityPin,
           );
       trackFeatureEvent(
         topic: 'transfer_center',
@@ -536,7 +567,7 @@ class _TransferCenterDetailScreenState
         payload: <String, Object?>{
           'listing_id': widget.listingId,
           'club_id': clubId,
-          'amount': amount,
+          'amount': submission.amount,
         },
       );
       ref.invalidate(transferCenterDetailProvider(widget.listingId));
@@ -550,6 +581,9 @@ class _TransferCenterDetailScreenState
         return;
       }
       AppFeedback.showError(this.context, error);
+    } finally {
+      bidController.dispose();
+      pinController.dispose();
     }
   }
 
@@ -749,6 +783,16 @@ class _BlockedCard extends StatelessWidget {
       icon: Icons.warning_amber_rounded,
     );
   }
+}
+
+class _TransferBidSubmission {
+  const _TransferBidSubmission({
+    required this.amount,
+    required this.securityPin,
+  });
+
+  final double amount;
+  final String securityPin;
 }
 
 String _durationLabel(int seconds) {

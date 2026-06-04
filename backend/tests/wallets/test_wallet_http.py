@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -28,8 +29,28 @@ from app.services.runtime_control_service import RuntimeControlService
 from app.treasury.service import GTEX_PLATFORM_POSITIONING, TreasuryService
 from app.wallets.router import router
 from app.wallets.service import LedgerPosting, WalletService
-from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.models.wallet import LedgerEntryReason, LedgerTransactionType, LedgerUnit
 from app.models.user import KycStatus
+
+
+class FakeCacheBackend:
+    enabled = True
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+
+    def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+    def set(self, key: str, value: str, ttl_seconds: int) -> None:
+        self.values[key] = value
+
+    def delete_many(self, keys: list[str]) -> None:
+        for key in keys:
+            self.values.pop(key, None)
+
+    def ping(self) -> bool:
+        return True
 
 
 @pytest.fixture()
@@ -180,19 +201,27 @@ def test_get_portfolio_returns_empty_holdings_for_new_user(api_context) -> None:
 
 def test_get_wallet_summary_returns_available_reserved_and_total_balances(api_context) -> None:
     client, session, current_user = api_context
-    player = _create_player(session)
     _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
-
-    order_response = client.post(
-        "/api/orders",
-        json={
-            "player_id": player.id,
-            "side": "buy",
-            "quantity": 10,
-            "max_price": 5,
-        },
+    wallet_service = WalletService()
+    user_account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+    escrow_account = wallet_service.get_user_escrow_account(session, current_user, LedgerUnit.COIN)
+    wallet_service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(
+                account=user_account, amount=Decimal("-50"), transaction_type=LedgerTransactionType.WITHDRAWAL
+            ),
+            LedgerPosting(
+                account=escrow_account, amount=Decimal("50"), transaction_type=LedgerTransactionType.WITHDRAWAL
+            ),
+        ],
+        reason=LedgerEntryReason.WITHDRAWAL_HOLD,
+        reference="wallet-http-summary-hold",
+        description="Wallet HTTP summary hold",
+        actor=current_user,
+        transaction_type=LedgerTransactionType.WITHDRAWAL,
     )
-    assert order_response.status_code == 201
+    session.commit()
 
     response = client.get("/api/wallets/summary", params={"currency": "coin"})
 
@@ -201,30 +230,43 @@ def test_get_wallet_summary_returns_available_reserved_and_total_balances(api_co
     assert set(payload) == {
         "available_balance",
         "reserved_balance",
+        "locked_balance",
+        "pending_withdrawal_balance",
+        "lock_reasons",
         "total_balance",
         "currency",
     }
     assert payload["currency"] == "coin"
     assert Decimal(str(payload["available_balance"])) == Decimal("50.0000")
     assert Decimal(str(payload["reserved_balance"])) == Decimal("50.0000")
+    assert Decimal(str(payload["locked_balance"])) == Decimal("50.0000")
+    assert Decimal(str(payload["pending_withdrawal_balance"])) == Decimal("0.0000")
+    assert len(payload["lock_reasons"]) == 1
+    lock_reason = payload["lock_reasons"][0]
+    assert lock_reason["code"] == "wallet_hold"
+    assert lock_reason["label"] == "Wallet holds"
+    assert Decimal(str(lock_reason["amount"])) == Decimal("50.0000")
+    assert lock_reason["currency"] == "coin"
+    assert lock_reason["source"] == "wallet"
+    assert lock_reason["reference"]
+    assert lock_reason["message"] == "Wallet holds: 50.0000 coin"
     assert Decimal(str(payload["total_balance"])) == Decimal("100.0000")
 
 
 def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
     client, session, current_user = api_context
-    player = _create_player(session, provider_external_id="player-wallet-ledger")
     _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
-
-    order_response = client.post(
-        "/api/orders",
-        json={
-            "player_id": player.id,
-            "side": "buy",
-            "quantity": 10,
-            "max_price": 5,
-        },
+    WalletService().request_payout(
+        session,
+        user=current_user,
+        amount=Decimal("50"),
+        destination_reference="bank:test-wallet-ledger",
+        unit=LedgerUnit.COIN,
+        withdrawal_fee_bps=0,
+        minimum_fee=Decimal("0.0000"),
+        actor=current_user,
     )
-    assert order_response.status_code == 201
+    session.commit()
 
     response = client.get("/api/wallets/ledger", params={"page": 1, "page_size": 3})
 
@@ -261,8 +303,8 @@ def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
     payment_event_response = client.post(
         "/api/wallets/payment-events",
         json={
-            "provider": "paystack",
-            "provider_reference": "paystack-ref-001",
+            "provider": "korapay",
+            "provider_reference": "korapay-ref-001",
             "amount": "50.0000",
             "pack_code": "starter-50",
         },
@@ -297,7 +339,7 @@ def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
         "processed_at",
         "ledger_transaction_id",
     }
-    assert payment_payload["provider"] == "paystack"
+    assert payment_payload["provider"] == "korapay"
     assert payment_payload["status"] == "pending"
 
 
@@ -314,8 +356,8 @@ def test_payment_event_rejects_when_wallet_transaction_lock_exists(api_context) 
     response = client.post(
         "/api/wallets/payment-events",
         json={
-            "provider": "paystack",
-            "provider_reference": "paystack-ref-locked",
+            "provider": "korapay",
+            "provider_reference": "korapay-ref-locked",
             "amount": "50.0000",
             "pack_code": "starter-50",
         },
@@ -345,6 +387,24 @@ def test_create_trade_withdrawal_request_reserves_balance(api_context) -> None:
     assert payload["processor_mode"] == "manual_bank_transfer"
     assert Decimal(str(payload["fee_amount"])) == Decimal("5.0000")
     assert Decimal(str(payload["total_debit"])) == Decimal("25.0000")
+
+    overview_response = client.get("/api/wallets/overview")
+    assert overview_response.status_code == 200, overview_response.text
+    overview = overview_response.json()
+    assert Decimal(str(overview["available_balance"])) == Decimal("75.0000")
+    assert Decimal(str(overview["reserved_balance"])) == Decimal("25.0000")
+    assert Decimal(str(overview["locked_balance"])) == Decimal("25.0000")
+    assert Decimal(str(overview["pending_withdrawal_balance"])) == Decimal("20.0000")
+    assert Decimal(str(overview["pending_withdrawals"])) == Decimal("20.0000")
+    assert len(overview["lock_reasons"]) == 1
+    lock_reason = overview["lock_reasons"][0]
+    assert lock_reason["code"] == "withdrawal_hold"
+    assert lock_reason["label"] == "Withdrawal holds"
+    assert Decimal(str(lock_reason["amount"])) == Decimal("25.0000")
+    assert lock_reason["currency"] == "coin"
+    assert lock_reason["source"] == "withdrawal"
+    assert str(lock_reason["reference"]).startswith("payout-request:")
+    assert lock_reason["message"] == "Withdrawal holds: 25.0000 coin"
 
 
 def test_create_competition_withdrawal_request_is_blocked_by_default(api_context) -> None:
@@ -428,7 +488,7 @@ def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> Non
     assert payload["processor_mode"] == "manual_bank_transfer"
     assert payload["egame_withdrawals_enabled"] is True
     labels = {item["label"]: item["value"] for item in payload["insights"]}
-    assert labels["Withdrawal rail"] == "Bank transfer"
+    assert labels["Withdrawal rail"] == "Manual bank transfer"
     assert labels["E-game cash-out"] == "Enabled"
 
 
@@ -436,10 +496,10 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     client, session, current_user = api_context
     _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
     _enable_automatic_deposits(session)
-    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
-    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
     monkeypatch.delenv("GTE_KORAPAY_SECRET_KEY", raising=False)
     monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_PRIVATE_KEY", raising=False)
     client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -453,11 +513,17 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["country_code"] == "NG"
+    assert Decimal(str(payload["available_balance"])) == Decimal("50.0000")
+    assert Decimal(str(payload["reserved_balance"])) == Decimal("0.0000")
+    assert Decimal(str(payload["locked_balance"])) == Decimal("0.0000")
+    assert Decimal(str(payload["pending_withdrawal_balance"])) == Decimal("0.0000")
+    assert payload["lock_reasons"] == []
     assert payload["required_policy_acceptances_missing"] == 0
     assert payload["policy_blocked"] is False
     assert payload["deposit_mode"] == "gateway"
     assert payload["withdrawal_mode"] == "bank_transfer"
-    assert payload["payment_provider_status"]["paystack"] == "mock"
+    assert set(payload["payment_provider_status"]) == {"bank_transfer_manual", "korapay"}
+    assert payload["payment_provider_status"]["bank_transfer_manual"] == "blocked"
     assert payload["payment_provider_status"]["korapay"] == "unavailable"
 
 
@@ -465,8 +531,6 @@ def test_wallet_overview_supports_hybrid_bank_transfer_and_korapay(api_context, 
     client, session, current_user = api_context
     _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
     _enable_hybrid_deposits(session)
-    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
-    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
     monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", "sk_test_launch")
     client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
@@ -481,7 +545,8 @@ def test_wallet_overview_supports_hybrid_bank_transfer_and_korapay(api_context, 
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["deposit_mode"] == "hybrid"
-    assert payload["payment_provider_status"]["paystack"] == "mock"
+    assert set(payload["payment_provider_status"]) == {"bank_transfer_manual", "korapay"}
+    assert payload["payment_provider_status"]["bank_transfer_manual"] == "ready"
     assert payload["payment_provider_status"]["korapay"] == "ready"
 
 
@@ -504,15 +569,15 @@ def test_manual_deposit_request_is_not_blocked_by_missing_policy_acceptance(api_
     assert Decimal(str(payload["amount_coin"])) == Decimal("5.0000")
 
 
-def test_wallet_overview_marks_missing_paystack_secret_unavailable_in_production(api_context, monkeypatch) -> None:
+def test_wallet_overview_marks_missing_korapay_secret_unavailable_in_production(api_context, monkeypatch) -> None:
     client, session, current_user = api_context
     _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
     _enable_automatic_deposits(session)
     monkeypatch.setenv("GTE_APP_ENV", "production")
-    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
-    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
     monkeypatch.delenv("GTE_KORAPAY_SECRET_KEY", raising=False)
     monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_PRIVATE_KEY", raising=False)
     client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -525,8 +590,63 @@ def test_wallet_overview_marks_missing_paystack_secret_unavailable_in_production
 
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["payment_provider_status"]["paystack"] == "unavailable"
+    assert set(payload["payment_provider_status"]) == {"bank_transfer_manual", "korapay"}
+    assert payload["payment_provider_status"]["bank_transfer_manual"] == "blocked"
     assert payload["payment_provider_status"]["korapay"] == "unavailable"
+
+
+def test_wallet_overview_and_eligibility_block_null_cached_balance(api_context) -> None:
+    client, _, current_user = api_context
+    cache_backend = FakeCacheBackend()
+    client.app.state.cache_backend = cache_backend
+    cache_backend.values[WalletService._wallet_summary_cache_key(current_user.id, LedgerUnit.COIN)] = json.dumps(
+        {
+            "user_id": current_user.id,
+            "currency": LedgerUnit.COIN.value,
+            "balance": None,
+            "locked": "0.0000",
+            "total": "0.0000",
+        }
+    )
+
+    for path in ("/api/wallets/overview", "/api/wallets/withdrawals/eligibility"):
+        response = client.get(path)
+
+        assert response.status_code == 503, response.text
+        assert response.json()["detail"] == "Balance data unavailable — sync in progress."
+
+
+@pytest.mark.parametrize("provider_key", ["paystack", "retired_gateway"])
+def test_retired_provider_is_not_exposed_as_wallet_gateway(api_context, provider_key: str) -> None:
+    client, session, _ = api_context
+    _enable_automatic_deposits(session)
+
+    top_up_response = client.post(
+        "/wallets/top-up/initiate",
+        json={
+            "amount": "1000.0000",
+            "provider": provider_key,
+            "unit": "coin",
+        },
+    )
+    webhook_response = client.post(f"/wallets/providers/{provider_key}/webhook", json={})
+    quote_response = client.post(
+        "/wallets/purchase-orders/quote",
+        json={
+            "amount": "1000.0000",
+            "input_unit": "fiat",
+            "provider_key": provider_key,
+            "unit": "coin",
+            "source_scope": "wallet",
+        },
+    )
+
+    assert top_up_response.status_code == 404
+    assert top_up_response.json()["detail"] == "Unknown payment provider."
+    assert webhook_response.status_code == 404
+    assert f"Unknown payment provider '{provider_key}'" in webhook_response.json()["detail"]
+    assert quote_response.status_code == 404
+    assert f"Unknown payment provider '{provider_key}'" in quote_response.json()["detail"]
 
 
 def test_provider_webhook_rejects_stub_provider(api_context) -> None:
@@ -535,7 +655,7 @@ def test_provider_webhook_rejects_stub_provider(api_context) -> None:
     response = client.post("/wallets/providers/cards/webhook", json={})
 
     assert response.status_code == 404
-    assert "not currently available" in response.json()["detail"]
+    assert "Unknown payment provider 'cards'" in response.json()["detail"]
 
 
 def test_purchase_order_quote_rejects_stub_provider(api_context) -> None:
@@ -553,7 +673,7 @@ def test_purchase_order_quote_rejects_stub_provider(api_context) -> None:
     )
 
     assert response.status_code == 404
-    assert "not currently available" in response.json()["detail"]
+    assert "Unknown payment provider 'cards'" in response.json()["detail"]
 
 
 def test_wallet_overview_handles_missing_country_policy_rows(api_context) -> None:

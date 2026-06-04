@@ -76,40 +76,65 @@ def _build_payload_with_manifestable_highlights() -> object:
     raise AssertionError("Expected a replay payload with event-backed highlight clips.")
 
 
-def test_match_engine_routes_expose_render_sync_and_post_match_analytics() -> None:
+def test_match_engine_render_sync_routes_are_hidden_or_quarantined() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=58))
+    _insert_match(session_factory, replay_payload)
+
+    openapi_paths = app.openapi()["paths"]
+    public_render_sync_operations = [
+        f"{method.upper()} {path}"
+        for path, method in (
+            ("/match-engine/render-sync", "post"),
+            ("/match-engine/render-sync/{match_key}", "get"),
+            ("/api/match-engine/render-sync", "post"),
+            ("/api/match-engine/render-sync/{match_key}", "get"),
+        )
+        if (openapi_paths.get(path, {}).get(method) or {}).get("deprecated") is not True
+        and openapi_paths.get(path, {}).get(method) is not None
+    ]
+    assert public_render_sync_operations == []
+
+    with TestClient(app) as client:
+        render_sync = client.get(f"/api/match-engine/render-sync/{replay_payload.match_id}")
+
+    assert render_sync.status_code in {404, 410}
+    if render_sync.status_code == 410:
+        detail = str(render_sync.json().get("detail", "")).lower()
+        assert "deprecated" in detail or "quarantined" in detail or "hidden" in detail
+
+
+def test_match_engine_route_exposes_post_match_analytics_without_render_sync() -> None:
     app, session_factory = _build_app()
     replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=58))
     _insert_match(session_factory, replay_payload)
 
     with TestClient(app) as client:
-        render_sync = client.get(f"/api/match-engine/render-sync/{replay_payload.match_id}")
         analytics = client.get(f"/api/match-engine/analytics/{replay_payload.match_id}")
 
-    assert render_sync.status_code == 200
     assert analytics.status_code == 200
 
-    render_body = render_sync.json()
     analytics_body = analytics.json()
 
-    assert render_body["match_id"] == replay_payload.match_id
-    assert render_body["seed"] == replay_payload.seed
-    assert render_body["events"]
     assert analytics_body["match_id"] == replay_payload.match_id
     assert analytics_body["score"] == f"{replay_payload.summary.home_score}-{replay_payload.summary.away_score}"
     assert analytics_body["shot_map"]
     assert analytics_body["team_heatmaps"]
 
 
-def test_match_engine_simulate_route_returns_unity_ready_contract() -> None:
+def test_match_engine_simulate_route_returns_canonical_2d_contract() -> None:
     app, _ = _build_app()
-    request_payload = build_request(seed=58, match_id="unity-ready-match")
+    request_payload = build_request(seed=58, match_id="canonical-2d-match")
 
     with TestClient(app) as client:
         response = client.post("/api/match-engine/simulate", json=request_payload.model_dump(mode="json"))
 
     assert response.status_code == 200
     body = response.json()
-    assert body["match_id"] == "unity-ready-match"
+    assert body["match_id"] == "canonical-2d-match"
+    assert "render_sync" not in body
+    assert "unity" not in str(body).lower()
+    assert "3d" not in str(body).lower()
     assert body["score"]["home"] >= 0
     assert body["score"]["away"] >= 0
     assert body["stats"]["home"]["team_id"] == request_payload.home_team.team_id

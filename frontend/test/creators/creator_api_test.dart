@@ -442,6 +442,90 @@ void main() {
       expect(summary.insights, <String>['Finance summary only']);
     },
   );
+
+  test(
+    'creator api marks partial finance payloads instead of inventing state',
+    () async {
+      final _PathTransport transport = _PathTransport(
+        <String, GteTransportResponse>{
+          '/api/v2/creators/me/finance': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'currency': 'credits',
+              'total_gift_income': '0.0000',
+            },
+          ),
+          '/api/v2/media-engine/me/clip-earnings': const GteTransportResponse(
+            statusCode: 404,
+            body: <String, Object?>{'detail': 'Not found.'},
+          ),
+          '/media-engine/me/clip-earnings': const GteTransportResponse(
+            statusCode: 404,
+            body: <String, Object?>{'detail': 'Not found.'},
+          ),
+        },
+      );
+      final CreatorApi api = CreatorApi.standard(
+        baseUrl: 'https://example.test',
+        accessToken: 'token-1',
+        mode: GteBackendMode.live,
+        transport: transport,
+      );
+
+      final CreatorFinanceSummary summary = await api.fetchCreatorFinance();
+
+      expect(summary.hasCompleteBackendPayload, isFalse);
+      expect(summary.hasWalletPayload, isFalse);
+      expect(summary.hasClipEarningsPayload, isFalse);
+    },
+  );
+
+  test(
+    'creator api rejects profile payloads without required identity',
+    () async {
+      final _PathTransport transport = _PathTransport(
+        <String, GteTransportResponse>{
+          '/api/v2/creators/me/summary': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'profile': <String, Object?>{
+                'user_id': 'user-1',
+                'display_name': 'Missing Handle',
+              },
+            },
+          ),
+          '/api/v2/creators/me/competitions': const GteTransportResponse(
+            statusCode: 200,
+            body: <Object?>[],
+          ),
+          '/api/v2/creators/me/finance': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'currency': 'credits',
+              'total_gift_income': '0.0000',
+            },
+          ),
+        },
+      );
+      final CreatorApi api = CreatorApi.standard(
+        baseUrl: 'https://example.test',
+        accessToken: 'token-1',
+        mode: GteBackendMode.live,
+        transport: transport,
+      );
+
+      await expectLater(
+        api.fetchCreatorProfile(),
+        throwsA(
+          isA<GteApiException>().having(
+            (GteApiException error) => error.type,
+            'type',
+            GteApiErrorType.parsing,
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _PathTransport implements GteTransport {
@@ -460,4 +544,3 @@ class _PathTransport implements GteTransport {
         );
   }
 }
-

@@ -17,6 +17,7 @@ from app.models import Base
 from app.models.competition_match import CompetitionMatch
 from app.viral.router import router as viral_router
 from backend.tests.match_engine.helpers import build_request
+from backend.tests.support.signup_payloads import player_signup_payload
 
 
 class _FakeProducer:
@@ -141,14 +142,13 @@ def test_new_user_signup_feed_refresh_changes_content_after_feedback() -> None:
 
     with TestClient(app) as client:
         register_response = client.post(
-            "/auth/register",
-            json={
-                "email": "system.feed@example.com",
-                "username": "system.feed.user",
-                "password": "SuperSecret1",
-                "full_name": "System Feed User",
-                "region_code": "NG",
-            },
+            "/auth/signup/player",
+            json=player_signup_payload(
+                email="system.feed@example.com",
+                username="system_feed_user",
+                password="SuperSecret1",
+                full_name="System Feed User",
+            ),
         )
 
         assert register_response.status_code == 201, register_response.text

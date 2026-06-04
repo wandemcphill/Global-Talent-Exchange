@@ -4,7 +4,6 @@ import '../../app/gte_app_config.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_authed_api.dart';
 import '../../features/shared/data/gte_feature_support.dart';
-import '../../services/match_3d_monetization_service.dart';
 import '../auth/auth_identity_store.dart';
 import '../models/auth_presentation.dart';
 import '../models/auth_session.dart';
@@ -161,18 +160,6 @@ final Provider<FederationContext?> federationContextProvider =
       return FederationContext(id: federationId, name: session?.federationName);
     });
 
-final Provider<Match3dUserEntitlement> match3dEntitlementProvider =
-    Provider<Match3dUserEntitlement>((Ref ref) {
-      final AuthSession? session = ref.watch(authProvider);
-      final bool signedIn = session?.isAuthenticated ?? false;
-      final bool premium = _hasMatch3dPremiumAccess(session);
-      return Match3dUserEntitlement(
-        isPremiumUser: premium,
-        premiumCameraAccess: signedIn,
-        fastReplayAccess: signedIn,
-      );
-    });
-
 final Provider<GteAppConfig> appConfigProvider = Provider<GteAppConfig>(
   (Ref ref) => GteAppConfig.fromRuntimeEnvironment(),
 );
@@ -223,7 +210,7 @@ final FutureProvider<void> sessionHydrationProvider = FutureProvider<void>((
   try {
     final Map<String, dynamic> payload = await ref
         .read(authedApiProvider)
-        .getMap('/api/session/bootstrap');
+        .getMap('/api/v2/session/bootstrap');
     await ref
         .read(appSessionControllerProvider.notifier)
         .mergeProfile(Map<String, Object?>.from(payload));
@@ -275,14 +262,4 @@ bool _hasAdminPermission(AuthSession? session, String permission) {
     return false;
   }
   return session.isSuperAdmin || session.hasPermission(permission);
-}
-
-bool _hasMatch3dPremiumAccess(AuthSession? session) {
-  if (session == null || !session.isAuthenticated) {
-    return false;
-  }
-  return session.hasAnyPermission(const <String>[
-    'match_3d_premium',
-    'match_3d_access',
-  ]);
 }

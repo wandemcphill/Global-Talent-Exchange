@@ -161,8 +161,23 @@ class ApiRateLimiter:
     def _rule_for_request(self, request: Request) -> RateLimitRule:
         path = (request.url.path or "/").lower()
         method = request.method.upper()
-        if path in {"/auth/login", "/api/auth/login"}:
+        if path in {
+            "/api/v2/auth/login",
+            "/api/v2/auth/signup/player",
+            "/api/v2/auth/signup/organization",
+            "/api/v2/auth/refresh",
+            "/api/v2/session/bootstrap",
+        }:
             return self._rules()[0]
+        if path in {
+            "/api/v2/auth/recovery/challenge",
+            "/api/v2/auth/recovery/request",
+            "/api/v2/auth/recovery/reset",
+            "/api/v2/auth/recovery/reset-with-questions",
+        }:
+            return self._rules()[0]
+        if path == "/api/v2/auth/pin/verify":
+            return self._rules()[1]
         if path in {
             "/market/buy",
             "/market/sell",

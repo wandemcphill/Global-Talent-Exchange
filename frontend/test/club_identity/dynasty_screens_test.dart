@@ -15,34 +15,34 @@ import 'package:gte_frontend/features/club_identity/dynasty/widgets/era_history_
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('dynasty screen shows loading state while repository is pending',
-      (WidgetTester tester) async {
-    final Completer<DynastyProfileDto> completer =
-        Completer<DynastyProfileDto>();
-    final _StubDynastyRepository repository = _StubDynastyRepository(
-      loadProfile: (_) => completer.future,
-    );
+  testWidgets(
+    'dynasty screen shows loading state while repository is pending',
+    (WidgetTester tester) async {
+      final Completer<DynastyProfileDto> completer =
+          Completer<DynastyProfileDto>();
+      final _StubDynastyRepository repository = _StubDynastyRepository(
+        loadProfile: (_) => completer.future,
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: DynastyScreen(
-          clubId: 'atlas-fc',
-          repository: repository,
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: DynastyScreen(clubId: 'atlas-fc', repository: repository),
         ),
-      ),
-    );
+      );
 
-    expect(find.byType(DynastyLoadingPanel), findsNWidgets(3));
+      expect(find.byType(DynastyLoadingPanel), findsNWidgets(3));
 
-    completer.complete(_sampleProfile(score: 78));
-    await tester.pumpAndSettle();
+      completer.complete(_sampleProfile(score: 78));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Atlas FC'), findsOneWidget);
-  });
+      expect(find.text('Atlas FC'), findsOneWidget);
+    },
+  );
 
-  testWidgets('dynasty screen renders success state from repository data',
-      (WidgetTester tester) async {
+  testWidgets('dynasty screen renders success state from repository data', (
+    WidgetTester tester,
+  ) async {
     final _StubDynastyRepository repository = _StubDynastyRepository(
       loadProfile: (_) async => _sampleProfile(score: 78),
     );
@@ -50,10 +50,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
-        home: DynastyScreen(
-          clubId: 'atlas-fc',
-          repository: repository,
-        ),
+        home: DynastyScreen(clubId: 'atlas-fc', repository: repository),
       ),
     );
     await tester.pumpAndSettle();
@@ -64,8 +61,9 @@ void main() {
     expect(find.text('Last four seasons'), findsOneWidget);
   });
 
-  testWidgets('dynasty screen shows error state and retries',
-      (WidgetTester tester) async {
+  testWidgets('dynasty screen shows error state and retries', (
+    WidgetTester tester,
+  ) async {
     int attempts = 0;
     final _StubDynastyRepository repository = _StubDynastyRepository(
       loadProfile: (_) async {
@@ -80,10 +78,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
-        home: DynastyScreen(
-          clubId: 'atlas-fc',
-          repository: repository,
-        ),
+        home: DynastyScreen(clubId: 'atlas-fc', repository: repository),
       ),
     );
     await tester.pumpAndSettle();
@@ -97,21 +92,19 @@ void main() {
     expect(find.text('Tier: Big club'), findsOneWidget);
   });
 
-  testWidgets('era history renders derived eras in chronological order',
-      (WidgetTester tester) async {
+  testWidgets('era history renders derived eras in chronological order', (
+    WidgetTester tester,
+  ) async {
     final _StubDynastyRepository repository = _StubDynastyRepository(
-      loadHistory: (_) async =>
-          _sampleHistory(ordered: false, includeEras: false),
+      loadHistory:
+          (_) async => _sampleHistory(ordered: false, includeEras: false),
       loadEras: (_) async => throw Exception('eras endpoint unavailable'),
     );
 
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
-        home: EraHistoryScreen(
-          clubId: 'atlas-fc',
-          repository: repository,
-        ),
+        home: EraHistoryScreen(clubId: 'atlas-fc', repository: repository),
       ),
     );
     await tester.pumpAndSettle();
@@ -131,37 +124,39 @@ void main() {
     expect(secondEra, findsOneWidget);
   });
 
-  testWidgets('leaderboard renders mapped rows correctly',
-      (WidgetTester tester) async {
+  testWidgets('leaderboard renders mapped rows correctly', (
+    WidgetTester tester,
+  ) async {
     final _StubDynastyRepository repository = _StubDynastyRepository(
-      loadLeaderboard: ({int limit = 25}) async => <DynastyLeaderboardEntryDto>[
-        const DynastyLeaderboardEntryDto(
-          clubId: 'harbor-city',
-          clubName: 'Harbor City',
-          dynastyStatus: DynastyStatus.active,
-          currentEraLabel: DynastyEraType.continentalDynasty,
-          activeDynastyFlag: true,
-          dynastyScore: 88,
-          reasons: <String>['Continental silver keeps the run alive.'],
-        ),
-        const DynastyLeaderboardEntryDto(
-          clubId: 'atlas-fc',
-          clubName: 'Atlas FC',
-          dynastyStatus: DynastyStatus.active,
-          currentEraLabel: DynastyEraType.dominantEra,
-          activeDynastyFlag: true,
-          dynastyScore: 78,
-          reasons: <String>['Two league titles completed the dominant run.'],
-        ),
-      ],
+      loadLeaderboard:
+          ({int limit = 25}) async => <DynastyLeaderboardEntryDto>[
+            const DynastyLeaderboardEntryDto(
+              clubId: 'harbor-city',
+              clubName: 'Harbor City',
+              dynastyStatus: DynastyStatus.active,
+              currentEraLabel: DynastyEraType.continentalDynasty,
+              activeDynastyFlag: true,
+              dynastyScore: 88,
+              reasons: <String>['Continental silver keeps the run alive.'],
+            ),
+            const DynastyLeaderboardEntryDto(
+              clubId: 'atlas-fc',
+              clubName: 'Atlas FC',
+              dynastyStatus: DynastyStatus.active,
+              currentEraLabel: DynastyEraType.dominantEra,
+              activeDynastyFlag: true,
+              dynastyScore: 78,
+              reasons: <String>[
+                'Two league titles completed the dominant run.',
+              ],
+            ),
+          ],
     );
 
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
-        home: DynastyLeaderboardScreen(
-          repository: repository,
-        ),
+        home: DynastyLeaderboardScreen(repository: repository),
       ),
     );
     await tester.pumpAndSettle();
@@ -172,11 +167,14 @@ void main() {
     expect(find.text('88'), findsOneWidget);
     expect(find.text('78'), findsOneWidget);
     expect(
-        find.text('Continental silver keeps the run alive.'), findsOneWidget);
+      find.text('Continental silver keeps the run alive.'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('dynasty score card respects tier thresholds',
-      (WidgetTester tester) async {
+  testWidgets('dynasty score card respects tier thresholds', (
+    WidgetTester tester,
+  ) async {
     Future<void> pumpForScore(int score) async {
       final _StubDynastyRepository repository = _StubDynastyRepository(
         loadProfile: (_) async => _sampleProfile(score: score),
@@ -211,17 +209,17 @@ class _StubDynastyRepository implements DynastyRepository {
     Future<DynastyHistoryDto> Function(String clubId)? loadHistory,
     Future<List<DynastyEraDto>> Function(String clubId)? loadEras,
     Future<List<DynastyLeaderboardEntryDto>> Function({int limit})?
-        loadLeaderboard,
-  })  : _loadProfile = loadProfile,
-        _loadHistory = loadHistory,
-        _loadEras = loadEras,
-        _loadLeaderboard = loadLeaderboard;
+    loadLeaderboard,
+  }) : _loadProfile = loadProfile,
+       _loadHistory = loadHistory,
+       _loadEras = loadEras,
+       _loadLeaderboard = loadLeaderboard;
 
   final Future<DynastyProfileDto> Function(String clubId)? _loadProfile;
   final Future<DynastyHistoryDto> Function(String clubId)? _loadHistory;
   final Future<List<DynastyEraDto>> Function(String clubId)? _loadEras;
   final Future<List<DynastyLeaderboardEntryDto>> Function({int limit})?
-      _loadLeaderboard;
+  _loadLeaderboard;
 
   @override
   Future<DynastyProfileDto> fetchDynastyProfile(String clubId) {
@@ -260,9 +258,7 @@ class _StubDynastyRepository implements DynastyRepository {
   }
 }
 
-DynastyProfileDto _sampleProfile({
-  required int score,
-}) {
+DynastyProfileDto _sampleProfile({required int score}) {
   final List<DynastySeasonSummaryDto> seasons = _sampleSeasons();
   final List<DynastySnapshotDto> timeline = _sampleTimeline(score: score);
   final List<DynastyEraDto> eras = <DynastyEraDto>[
@@ -278,9 +274,10 @@ DynastyProfileDto _sampleProfile({
       reasons: <String>['The rise became sustained.'],
     ),
     DynastyEraDto(
-      eraLabel: score >= 70
-          ? DynastyEraType.dominantEra
-          : DynastyEraType.emergingPower,
+      eraLabel:
+          score >= 70
+              ? DynastyEraType.dominantEra
+              : DynastyEraType.emergingPower,
       dynastyStatus: DynastyStatus.active,
       startSeasonId: '2021',
       startSeasonLabel: '2021/22',
@@ -328,41 +325,43 @@ DynastyHistoryDto _sampleHistory({
   bool includeEras = true,
 }) {
   final List<DynastySnapshotDto> timeline = _sampleTimeline(score: 78);
-  final List<DynastySnapshotDto> snapshots = ordered
-      ? timeline
-      : <DynastySnapshotDto>[timeline[2], timeline[0], timeline[1]];
+  final List<DynastySnapshotDto> snapshots =
+      ordered
+          ? timeline
+          : <DynastySnapshotDto>[timeline[2], timeline[0], timeline[1]];
   return DynastyHistoryDto(
     clubId: 'atlas-fc',
     clubName: 'Atlas FC',
     dynastyTimeline: snapshots,
-    eras: includeEras
-        ? <DynastyEraDto>[
-            const DynastyEraDto(
-              eraLabel: DynastyEraType.emergingPower,
-              dynastyStatus: DynastyStatus.active,
-              startSeasonId: '2020',
-              startSeasonLabel: '2020/21',
-              endSeasonId: '2020',
-              endSeasonLabel: '2020/21',
-              peakScore: 52,
-              active: false,
-              reasons: <String>['The rise became sustained.'],
-            ),
-            const DynastyEraDto(
-              eraLabel: DynastyEraType.dominantEra,
-              dynastyStatus: DynastyStatus.active,
-              startSeasonId: '2021',
-              startSeasonLabel: '2021/22',
-              endSeasonId: '2022',
-              endSeasonLabel: '2022/23',
-              peakScore: 78,
-              active: true,
-              reasons: <String>[
-                'Two league titles completed the dominant run.'
-              ],
-            ),
-          ]
-        : const <DynastyEraDto>[],
+    eras:
+        includeEras
+            ? <DynastyEraDto>[
+              const DynastyEraDto(
+                eraLabel: DynastyEraType.emergingPower,
+                dynastyStatus: DynastyStatus.active,
+                startSeasonId: '2020',
+                startSeasonLabel: '2020/21',
+                endSeasonId: '2020',
+                endSeasonLabel: '2020/21',
+                peakScore: 52,
+                active: false,
+                reasons: <String>['The rise became sustained.'],
+              ),
+              const DynastyEraDto(
+                eraLabel: DynastyEraType.dominantEra,
+                dynastyStatus: DynastyStatus.active,
+                startSeasonId: '2021',
+                startSeasonLabel: '2021/22',
+                endSeasonId: '2022',
+                endSeasonLabel: '2022/23',
+                peakScore: 78,
+                active: true,
+                reasons: <String>[
+                  'Two league titles completed the dominant run.',
+                ],
+              ),
+            ]
+            : const <DynastyEraDto>[],
     events: const <DynastyEventDto>[
       DynastyEventDto(
         seasonId: '2022',
@@ -384,9 +383,7 @@ DynastyHistoryDto _sampleHistory({
   );
 }
 
-List<DynastySnapshotDto> _sampleTimeline({
-  required int score,
-}) {
+List<DynastySnapshotDto> _sampleTimeline({required int score}) {
   final List<DynastySeasonSummaryDto> seasons = _sampleSeasons();
   return <DynastySnapshotDto>[
     DynastySnapshotDto(
@@ -424,9 +421,10 @@ List<DynastySnapshotDto> _sampleTimeline({
       clubId: 'atlas-fc',
       clubName: 'Atlas FC',
       dynastyStatus: DynastyStatus.active,
-      eraLabel: score >= 70
-          ? DynastyEraType.dominantEra
-          : DynastyEraType.emergingPower,
+      eraLabel:
+          score >= 70
+              ? DynastyEraType.dominantEra
+              : DynastyEraType.emergingPower,
       activeDynasty: true,
       dynastyScore: score >= 70 ? 70 : score,
       reasons: const <String>['The club stopped looking temporary.'],
@@ -457,9 +455,10 @@ List<DynastySnapshotDto> _sampleTimeline({
       clubId: 'atlas-fc',
       clubName: 'Atlas FC',
       dynastyStatus: DynastyStatus.active,
-      eraLabel: score >= 70
-          ? DynastyEraType.dominantEra
-          : DynastyEraType.emergingPower,
+      eraLabel:
+          score >= 70
+              ? DynastyEraType.dominantEra
+              : DynastyEraType.emergingPower,
       activeDynasty: true,
       dynastyScore: score,
       reasons: const <String>['Two league titles completed the dominant run.'],

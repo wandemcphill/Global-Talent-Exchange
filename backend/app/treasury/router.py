@@ -259,9 +259,7 @@ def get_dispute_detail(
     if dispute is None or dispute.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dispute not found.")
     messages = session.scalars(
-        select(DisputeMessage)
-        .where(DisputeMessage.dispute_id == dispute.id)
-        .order_by(DisputeMessage.created_at.asc())
+        select(DisputeMessage).where(DisputeMessage.dispute_id == dispute.id).order_by(DisputeMessage.created_at.asc())
     ).all()
     return AdminDisputeView(
         id=dispute.id,
@@ -291,7 +289,9 @@ def get_dispute_detail(
     )
 
 
-@api_router.post("/disputes/{dispute_id}/messages", response_model=AdminDisputeMessageView, status_code=status.HTTP_201_CREATED)
+@api_router.post(
+    "/disputes/{dispute_id}/messages", response_model=AdminDisputeMessageView, status_code=status.HTTP_201_CREATED
+)
 def add_dispute_message(
     dispute_id: str,
     payload: DisputeMessageRequest,
@@ -443,38 +443,41 @@ def treasury_dashboard(
     )
     pending_withdrawals = session.scalar(
         select(func.count(TreasuryWithdrawalRequest.id)).where(
-            TreasuryWithdrawalRequest.status.in_([
-                TreasuryWithdrawalStatus.PENDING_REVIEW,
-                TreasuryWithdrawalStatus.APPROVED,
-                TreasuryWithdrawalStatus.PROCESSING,
-            ])
+            TreasuryWithdrawalRequest.status.in_(
+                [
+                    TreasuryWithdrawalStatus.PENDING_REVIEW,
+                    TreasuryWithdrawalStatus.APPROVED,
+                    TreasuryWithdrawalStatus.PROCESSING,
+                ]
+            )
         )
     )
     pending_kyc = session.scalar(
         select(func.count(KycProfile.id)).where(KycProfile.status.in_([KycStatus.PENDING, KycStatus.UNDER_REVIEW]))
     )
     open_disputes = session.scalar(
-        select(func.count(Dispute.id)).where(
-            Dispute.status.in_(["open", "awaiting_admin", "awaiting_user"])
-        )
+        select(func.count(Dispute.id)).where(Dispute.status.in_(["open", "awaiting_admin", "awaiting_user"]))
     )
     deposits_confirmed_today = session.scalar(
-        select(func.count(DepositRequest.id)).where(DepositRequest.confirmed_at >= now.replace(hour=0, minute=0, second=0, microsecond=0))
+        select(func.count(DepositRequest.id)).where(
+            DepositRequest.confirmed_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
+        )
     )
     withdrawals_paid_today = session.scalar(
-        select(func.count(TreasuryWithdrawalRequest.id)).where(TreasuryWithdrawalRequest.paid_at >= now.replace(hour=0, minute=0, second=0, microsecond=0))
+        select(func.count(TreasuryWithdrawalRequest.id)).where(
+            TreasuryWithdrawalRequest.paid_at >= now.replace(hour=0, minute=0, second=0, microsecond=0)
+        )
     )
-    wallet_liability = session.scalar(
-        select(func.coalesce(func.sum(DepositRequest.amount_coin), 0))
-    )
+    wallet_liability = session.scalar(select(func.coalesce(func.sum(DepositRequest.amount_coin), 0)))
     pending_treasury_exposure = session.scalar(
-        select(func.coalesce(func.sum(TreasuryWithdrawalRequest.amount_coin), 0))
-        .where(
-            TreasuryWithdrawalRequest.status.in_([
-                TreasuryWithdrawalStatus.PENDING_REVIEW,
-                TreasuryWithdrawalStatus.APPROVED,
-                TreasuryWithdrawalStatus.PROCESSING,
-            ])
+        select(func.coalesce(func.sum(TreasuryWithdrawalRequest.amount_coin), 0)).where(
+            TreasuryWithdrawalRequest.status.in_(
+                [
+                    TreasuryWithdrawalStatus.PENDING_REVIEW,
+                    TreasuryWithdrawalStatus.APPROVED,
+                    TreasuryWithdrawalStatus.PROCESSING,
+                ]
+            )
         )
     )
     return TreasuryDashboardView(
@@ -558,7 +561,9 @@ def admin_confirm_deposit(
     _require_permission(request, actor, "manage_treasury_withdrawals")
     service = _service(request)
     try:
-        deposit = service.confirm_deposit(session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes"))
+        deposit = service.confirm_deposit(
+            session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes")
+        )
         session.commit()
     except TreasuryConflictError as exc:
         session.rollback()
@@ -576,7 +581,9 @@ def admin_reject_deposit(
 ) -> DepositRequestView:
     _require_permission(request, actor, "manage_treasury_withdrawals")
     service = _service(request)
-    deposit = service.reject_deposit(session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes"))
+    deposit = service.reject_deposit(
+        session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes")
+    )
     session.commit()
     return DepositRequestView.model_validate(deposit)
 
@@ -591,7 +598,9 @@ def admin_review_deposit(
 ) -> DepositRequestView:
     _require_permission(request, actor, "manage_treasury_withdrawals")
     service = _service(request)
-    deposit = service.mark_deposit_under_review(session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes"))
+    deposit = service.mark_deposit_under_review(
+        session, actor=actor, deposit_request_id=deposit_id, admin_notes=(payload or {}).get("admin_notes")
+    )
     session.commit()
     return DepositRequestView.model_validate(deposit)
 
@@ -624,7 +633,9 @@ def list_admin_withdrawals(
             )
         )
     total = session.scalar(select(func.count()).select_from(query.subquery()))
-    rows = session.execute(query.order_by(TreasuryWithdrawalRequest.created_at.desc()).limit(limit).offset(offset)).all()
+    rows = session.execute(
+        query.order_by(TreasuryWithdrawalRequest.created_at.desc()).limit(limit).offset(offset)
+    ).all()
     items = [
         AdminWithdrawalView(
             id=withdrawal.id,
@@ -908,7 +919,9 @@ def get_admin_dispute(
     )
 
 
-@admin_router.post("/disputes/{dispute_id}/messages", response_model=AdminDisputeMessageView, status_code=status.HTTP_201_CREATED)
+@admin_router.post(
+    "/disputes/{dispute_id}/messages", response_model=AdminDisputeMessageView, status_code=status.HTTP_201_CREATED
+)
 def add_admin_dispute_message(
     request: Request,
     dispute_id: str,

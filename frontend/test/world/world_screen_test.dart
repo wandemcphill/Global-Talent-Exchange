@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:gte_frontend/core/theme/app_theme.dart';
-import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
-import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
+import 'package:gte_frontend/features/compete/providers/live_competitions_provider.dart';
+import 'package:gte_frontend/features/compete/domain/streamer_tournament_engine_models.dart';
 import 'package:gte_frontend/features/world/live_world_provider.dart';
 import 'package:gte_frontend/features/world/world_screen.dart';
 import 'package:gte_frontend/models/competition_models.dart';
@@ -78,7 +78,10 @@ void main() {
     expect(find.text('Arena families'), findsOneWidget);
     expect(find.text('Rising stars'), findsOneWidget);
     expect(find.text('Federations'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Open federations'), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, 'Open federations'),
+      findsOneWidget,
+    );
 
     await tester.scrollUntilVisible(
       find.text('Ayo Akin'),

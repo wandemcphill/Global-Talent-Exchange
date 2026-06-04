@@ -33,13 +33,12 @@ void main() {
   });
 
   test('fetch and save jerseys parse jersey payloads', () async {
-  final JerseySetDto jerseys = _sampleIdentity().jerseySet;
-    final _RecordingTransport transport = _RecordingTransport(
-      <GteTransportResponse>[
-        GteTransportResponse(statusCode: 200, body: jerseys.toJson()),
-        GteTransportResponse(statusCode: 200, body: jerseys.toJson()),
-      ],
-    );
+    final JerseySetDto jerseys = _sampleIdentity().jerseySet;
+    final _RecordingTransport transport =
+        _RecordingTransport(<GteTransportResponse>[
+          GteTransportResponse(statusCode: 200, body: jerseys.toJson()),
+          GteTransportResponse(statusCode: 200, body: jerseys.toJson()),
+        ]);
     final ClubIdentityApiRepository repository = ClubIdentityApiRepository(
       config: const GteRepositoryConfig(
         baseUrl: 'http://127.0.0.1:8000',
@@ -113,8 +112,9 @@ void main() {
   });
 
   test('match identity falls back when missing from payload', () async {
-    final Map<String, dynamic> payload =
-        _identityPayload(includeMatchIdentity: false);
+    final Map<String, dynamic> payload = _identityPayload(
+      includeMatchIdentity: false,
+    );
     final _RecordingTransport transport = _RecordingTransport(
       <GteTransportResponse>[
         GteTransportResponse(statusCode: 200, body: payload),
@@ -131,14 +131,11 @@ void main() {
 
     final identity = await repository.fetchIdentity('atlas-fc');
 
-    expect(
-      identity.matchIdentity.homeKitColors,
-      <String>[
-        identity.jerseySet.home.primaryColor,
-        identity.jerseySet.home.secondaryColor,
-        identity.jerseySet.home.accentColor,
-      ],
-    );
+    expect(identity.matchIdentity.homeKitColors, <String>[
+      identity.jerseySet.home.primaryColor,
+      identity.jerseySet.home.secondaryColor,
+      identity.jerseySet.home.accentColor,
+    ]);
     expect(
       identity.matchIdentity.generatedBadge.initials,
       identity.badgeProfile.initials,
@@ -173,4 +170,3 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
-

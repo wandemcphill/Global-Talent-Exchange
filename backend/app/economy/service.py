@@ -54,8 +54,8 @@ DEFAULT_GIFTS: tuple[dict[str, object], ...] = (
 DEFAULT_SERVICE_PRICING: tuple[dict[str, object], ...] = (
     {
         "service_key": "premium-video-view",
-        "title": "Friendly 3D Match View",
-        "description": "Ticket a friendly 3D match viewing session for the Fan Coin watch layer.",
+        "title": "Friendly Match View",
+        "description": "Ticket a friendly 2D broadcast match viewing session for the Fan Coin watch layer.",
         "price_coin": Decimal("0.0500"),
         "price_fancoin_equivalent": Decimal("5.0000"),
         "active": True,
@@ -63,7 +63,7 @@ DEFAULT_SERVICE_PRICING: tuple[dict[str, object], ...] = (
     {
         "service_key": "ranked-match-view",
         "title": "Ranked Match View",
-        "description": "Spectate a ranked 3D match with live reactions and gifting enabled.",
+        "description": "Spectate a ranked 2D broadcast match with live reactions and gifting enabled.",
         "price_coin": Decimal("0.1000"),
         "price_fancoin_equivalent": Decimal("10.0000"),
         "active": True,
@@ -71,7 +71,7 @@ DEFAULT_SERVICE_PRICING: tuple[dict[str, object], ...] = (
     {
         "service_key": "tournament-match-view",
         "title": "Tournament Match View",
-        "description": "Access a tournament-stage 3D match stream with premium watch-party energy.",
+        "description": "Access a tournament-stage 2D broadcast match stream with premium watch-party energy.",
         "price_coin": Decimal("0.2000"),
         "price_fancoin_equivalent": Decimal("20.0000"),
         "active": True,

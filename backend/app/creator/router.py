@@ -4,6 +4,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.creator.contracts import (
+    CampaignContractResponse,
+    CampaignStatusUpdateRequest,
+    CreateCampaignContractRequest,
+    CreatorCampaignsContractResponse,
+    CreatorModerationInboxContractResponse,
+    CreatorProfileContractResponse,
+    CreatorSettlementsContractResponse,
+    CreatorWalletContractResponse,
+    CreatorWithdrawalContractResponse,
+    CreatorWithdrawalRequest,
+    SponsoredClipContractResponse,
+    SponsoredClipsContractResponse,
+    SubmitClipContractRequest,
+)
+from app.creator.module7_service import (
+    CreatorContractBlocked,
+    CreatorContractNotFound,
+    CreatorModule7ContractService,
+)
 from app.models.user import User
 from app.schemas.creator_application import (
     CreatorAdminDashboardView,
@@ -66,6 +86,10 @@ def get_creator_share_market_service(session: Session = Depends(get_session)) ->
     return CreatorClubShareMarketService(session)
 
 
+def get_creator_module7_service(session: Session = Depends(get_session)) -> CreatorModule7ContractService:
+    return CreatorModule7ContractService(session)
+
+
 def raise_creator_application_http(exc: CreatorApplicationError) -> None:
     if isinstance(exc, CreatorApplicationNotFoundError):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -99,6 +123,12 @@ def raise_creator_share_market_http(exc: CreatorClubShareMarketError) -> None:
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.reason) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason) from exc
+
+
+def raise_creator_module7_http(exc: CreatorContractBlocked | CreatorContractNotFound) -> None:
+    if isinstance(exc, CreatorContractBlocked):
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail()) from exc
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 creator_router = APIRouter(prefix="/creator", tags=["creator"])
@@ -170,6 +200,145 @@ def get_my_creator_application(
     return CreatorApplicationView.model_validate(service.serialize_application(application))
 
 
+@creator_router.get("/profile", response_model=CreatorProfileContractResponse)
+def get_creator_profile_contract(
+    current_user: User = Depends(get_current_user),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> CreatorProfileContractResponse:
+    return service.get_profile(actor=current_user)
+
+
+@creator_router.get("/campaigns", response_model=CreatorCampaignsContractResponse)
+def list_creator_campaign_contracts(
+    current_user: User = Depends(get_current_user),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> CreatorCampaignsContractResponse:
+    return service.list_campaigns(actor=current_user)
+
+
+@creator_router.post("/campaigns", response_model=CampaignContractResponse, status_code=status.HTTP_201_CREATED)
+def create_creator_campaign_contract(
+    payload: CreateCampaignContractRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> CampaignContractResponse:
+    try:
+        response = service.create_campaign(actor=current_user, payload=payload)
+        session.commit()
+    except CreatorContractBlocked as exc:
+        session.commit()
+        raise_creator_module7_http(exc)
+    return response
+
+
+@creator_router.get("/campaigns/{campaign_id}", response_model=CampaignContractResponse)
+def get_creator_campaign_contract(
+    campaign_id: str,
+    current_user: User = Depends(get_current_user),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> CampaignContractResponse:
+    try:
+        return service.get_campaign(actor=current_user, campaign_id=campaign_id)
+    except CreatorContractNotFound as exc:
+        raise_creator_module7_http(exc)
+
+
+@creator_router.patch("/campaigns/{campaign_id}/status", response_model=CampaignContractResponse)
+def update_creator_campaign_status_contract(
+    campaign_id: str,
+    payload: CampaignStatusUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> CampaignContractResponse:
+    try:
+        response = service.update_campaign_status(actor=current_user, campaign_id=campaign_id, payload=payload)
+        session.commit()
+    except CreatorContractBlocked as exc:
+        session.commit()
+        raise_creator_module7_http(exc)
+    return response
+
+
+@creator_router.get("/clips", response_model=SponsoredClipsContractResponse)
+def list_creator_clip_contracts(
+    current_user: User = Depends(get_current_user),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> SponsoredClipsContractResponse:
+    return service.list_clips(actor=current_user)
+
+
+@creator_router.post("/clips", response_model=SponsoredClipContractResponse, status_code=status.HTTP_201_CREATED)
+def submit_creator_clip_contract(
+    payload: SubmitClipContractRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> SponsoredClipContractResponse:
+    try:
+        response = service.submit_clip(actor=current_user, payload=payload)
+        session.commit()
+    except CreatorContractBlocked as exc:
+        session.commit()
+        raise_creator_module7_http(exc)
+    return response
+
+
+@creator_router.get("/clips/{clip_id}", response_model=SponsoredClipContractResponse)
+def get_creator_clip_contract(
+    clip_id: str,
+    current_user: User = Depends(get_current_user),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> SponsoredClipContractResponse:
+    try:
+        return service.get_clip(actor=current_user, clip_id=clip_id)
+    except CreatorContractNotFound as exc:
+        raise_creator_module7_http(exc)
+
+
+@creator_router.get("/wallet", response_model=CreatorWalletContractResponse)
+def get_creator_wallet_contract(
+    current_user: User = Depends(get_current_user),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> CreatorWalletContractResponse:
+    return service.get_wallet(actor=current_user)
+
+
+@creator_router.post(
+    "/wallet/withdraw", response_model=CreatorWithdrawalContractResponse, status_code=status.HTTP_201_CREATED
+)
+def request_creator_withdrawal_contract(
+    payload: CreatorWithdrawalRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> CreatorWithdrawalContractResponse:
+    try:
+        response = service.request_withdrawal(actor=current_user, payload=payload)
+        session.commit()
+    except CreatorContractBlocked as exc:
+        session.commit()
+        raise_creator_module7_http(exc)
+    return response
+
+
+@creator_router.get("/settlements", response_model=CreatorSettlementsContractResponse)
+def list_creator_settlement_contracts(
+    current_user: User = Depends(get_current_user),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> CreatorSettlementsContractResponse:
+    return service.list_settlements(actor=current_user)
+
+
+@creator_router.get("/moderation", response_model=CreatorModerationInboxContractResponse)
+def get_creator_moderation_contract(
+    current_user: User = Depends(get_current_user),
+    service: CreatorModule7ContractService = Depends(get_creator_module7_service),
+) -> CreatorModerationInboxContractResponse:
+    return service.get_moderation_inbox(actor=current_user)
+
+
 @creator_router.get("/cards", response_model=list[CreatorCardView])
 def list_creator_cards(
     current_user: User = Depends(get_current_user),
@@ -190,7 +359,9 @@ def list_creator_card_listings(
     return [CreatorCardListingView.model_validate(item) for item in listings]
 
 
-@creator_router.post("/cards/{creator_card_id}/list", response_model=CreatorCardListingView, status_code=status.HTTP_201_CREATED)
+@creator_router.post(
+    "/cards/{creator_card_id}/list", response_model=CreatorCardListingView, status_code=status.HTTP_201_CREATED
+)
 def create_creator_card_listing(
     creator_card_id: str,
     payload: CreatorCardListingCreateRequest,
@@ -250,7 +421,9 @@ def swap_creator_cards(
     return CreatorCardSwapView.model_validate(swap)
 
 
-@creator_router.post("/cards/{creator_card_id}/loan", response_model=CreatorCardLoanView, status_code=status.HTTP_201_CREATED)
+@creator_router.post(
+    "/cards/{creator_card_id}/loan", response_model=CreatorCardLoanView, status_code=status.HTTP_201_CREATED
+)
 def loan_creator_card(
     creator_card_id: str,
     payload: CreatorCardLoanCreateRequest,
@@ -305,7 +478,9 @@ def get_creator_club_fan_share_market(
     return CreatorClubShareMarketView.model_validate(service.serialize_market(market, viewer=current_user))
 
 
-@creator_router.post("/clubs/{club_id}/fan-share-market", response_model=CreatorClubShareMarketView, status_code=status.HTTP_201_CREATED)
+@creator_router.post(
+    "/clubs/{club_id}/fan-share-market", response_model=CreatorClubShareMarketView, status_code=status.HTTP_201_CREATED
+)
 def issue_creator_club_fan_shares(
     club_id: str,
     payload: CreatorClubShareMarketIssueRequest,
@@ -329,7 +504,11 @@ def issue_creator_club_fan_shares(
     return CreatorClubShareMarketView.model_validate(service.serialize_market(market, viewer=current_user))
 
 
-@creator_router.post("/clubs/{club_id}/fan-share-market/purchase", response_model=CreatorClubSharePurchaseView, status_code=status.HTTP_201_CREATED)
+@creator_router.post(
+    "/clubs/{club_id}/fan-share-market/purchase",
+    response_model=CreatorClubSharePurchaseView,
+    status_code=status.HTTP_201_CREATED,
+)
 def purchase_creator_club_fan_shares(
     club_id: str,
     payload: CreatorClubSharePurchaseRequest,
@@ -362,7 +541,9 @@ def get_my_creator_club_fan_share_holding(
     return CreatorClubShareHoldingView.model_validate(service.serialize_holding(holding))
 
 
-@creator_router.get("/clubs/{club_id}/fan-share-market/distributions", response_model=list[CreatorClubShareDistributionView])
+@creator_router.get(
+    "/clubs/{club_id}/fan-share-market/distributions", response_model=list[CreatorClubShareDistributionView]
+)
 def list_creator_club_fan_share_distributions(
     club_id: str,
     current_user: User = Depends(get_current_user),

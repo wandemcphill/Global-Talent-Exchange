@@ -6,8 +6,9 @@ import 'package:gte_frontend/screens/referrals/referral_rewards_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('reward history screen keeps community reward copy',
-      (WidgetTester tester) async {
+  testWidgets('reward history screen keeps community reward copy', (
+    WidgetTester tester,
+  ) async {
     final ReferralController controller = ReferralController(
       api: ReferralApi.fixture(),
     );

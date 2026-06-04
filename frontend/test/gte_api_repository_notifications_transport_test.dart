@@ -65,4 +65,3 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
-

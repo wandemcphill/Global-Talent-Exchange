@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from collections import defaultdict
@@ -19,11 +20,63 @@ LEGACY_VERSION_PREFIX = "/api/v2"
 API_VERSION_HEADER = "X-API-Version"
 PUBLIC_EXEMPT_PATHS = ("/health", "/ready", "/version", "/docs", "/openapi.json", "/redoc")
 PUBLIC_EXEMPT_PREFIXES = ("/generated-media", "/tts")
+_RETIRED_TRANSFER_BID_REVIEW_QUEUE = "/" + "/".join(("api", "admin", "transfers", "bids", "review" + "-queue"))
+_RETIRED_REALTIME_MATCH_GATEWAY = "/realtime/matches/{match_id}/gateway"
+_RETIRED_REALTIME_MATCH_STREAM = "/realtime/matches/{match_id}/stream"
+# Quarantined legacy pseudo-render payload. It may exist behind backend
+# retirement guards temporarily, but generated contracts must never expose it.
+_QUARANTINED_MATCH_VIEWER_ILLUSION = "/match-viewer/{match_key}/illusion"
+_RETIRED_MATCH_ENGINE_RENDER_SYNC = "/match-engine/render-sync"
+_RETIRED_MATCH_ENGINE_RENDER_SYNC_BY_KEY = "/match-engine/render-sync/{match_key}"
+
+
+def _versioned_retired_variants(path: str) -> set[str]:
+    return {
+        path,
+        f"/api{path}",
+        f"/api/v1{path}",
+        f"/api/v2{path}",
+    }
+
+
+RETIRED_PRODUCTION_PATHS = frozenset(
+    {
+        _RETIRED_TRANSFER_BID_REVIEW_QUEUE,
+        _RETIRED_TRANSFER_BID_REVIEW_QUEUE.replace("/api/", "/api/v1/", 1),
+        _RETIRED_TRANSFER_BID_REVIEW_QUEUE.replace("/api/", "/api/v2/", 1),
+        *_versioned_retired_variants(_RETIRED_REALTIME_MATCH_GATEWAY),
+        *_versioned_retired_variants(_RETIRED_REALTIME_MATCH_STREAM),
+        *_versioned_retired_variants(_QUARANTINED_MATCH_VIEWER_ILLUSION),
+        *_versioned_retired_variants(_RETIRED_MATCH_ENGINE_RENDER_SYNC),
+        *_versioned_retired_variants(_RETIRED_MATCH_ENGINE_RENDER_SYNC_BY_KEY),
+    }
+)
 _PARAM_RE = re.compile(r"\{([^}]+)\}")
 _NON_ALPHANUMERIC_RE = re.compile(r"[^a-zA-Z0-9]+")
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Generate GTEX API contract artifacts.",
+    )
+    parser.add_argument(
+        "--from-shared",
+        "--dart-only",
+        action="store_true",
+        dest="from_shared",
+        help=(
+            "Render only the frontend Dart binding from shared/api_contract.json. "
+            "Use this when the shared contract has been patched directly and the "
+            "docs route inventories have not caught up yet."
+        ),
+    )
+    args = parser.parse_args()
+    if args.from_shared:
+        contract = _read_json(CONTRACT_PATH)
+        FRONTEND_GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+        DART_BINDING_PATH.write_text(_render_dart_binding(contract), encoding="utf-8")
+        return 0
+
     route_map = _read_json(DOCS_DIR / "ROUTE_MAP.json")
     final_api_schema = _read_json(DOCS_DIR / "FINAL_API_SCHEMA.json")
     deprecation_map = _read_json(DOCS_DIR / "DEPRECATION_MAP.json")
@@ -62,8 +115,13 @@ def _build_contract(
         public_aliases = effective_paths or [legacy_path]
         preferred_source_path = _preferred_public_path(public_aliases)
         canonical_path = _canonicalize_path(preferred_source_path)
+        canonical_path = _canonical_payment_path(canonical_path)
+        if _is_retired_production_path(canonical_path):
+            continue
         aliases = set()
         for alias_source in {legacy_path, *public_aliases}:
+            if _is_retired_production_path(alias_source):
+                continue
             aliases.update(_route_aliases(alias_source, canonical_path))
         aliases = sorted(aliases)
         route_key = _route_key(method, canonical_path)
@@ -90,7 +148,12 @@ def _build_contract(
         target = str(entry.get("to") or "").strip()
         if not alias or not target:
             continue
+        if _is_retired_production_path(alias) or _is_retired_production_path(target):
+            continue
         deprecated_aliases[alias] = _canonicalize_path(target)
+
+    _remove_noncanonical_payment_aliases(contract_routes, websocket_entries, deprecated_aliases)
+    canonical_paths = _canonical_paths_from(contract_routes, websocket_entries)
 
     return {
         "version": API_VERSION,
@@ -126,10 +189,29 @@ def _canonicalize_path(path: str) -> str:
     return f"{API_VERSION_PREFIX}{normalized}"
 
 
+def _canonical_payment_path(path: str) -> str:
+    if path == f"{API_VERSION_PREFIX}/wallets/providers/{{provider_key}}/webhook":
+        return f"{API_VERSION_PREFIX}/wallets/providers/korapay/webhook"
+    return path
+
+
+def _is_retired_production_path(path: str) -> bool:
+    normalized = _normalize_path(path)
+    return normalized in RETIRED_PRODUCTION_PATHS or _canonicalize_path(normalized) in RETIRED_PRODUCTION_PATHS
+
+
 def _route_aliases(legacy_path: str, canonical_path: str) -> set[str]:
+    if _is_canonical_payment_only_path(canonical_path):
+        return {canonical_path}
+    if canonical_path.startswith(f"{API_VERSION_PREFIX}/auth/"):
+        return {canonical_path}
     aliases = {canonical_path, _normalize_path(legacy_path)}
     legacy = _normalize_path(legacy_path)
-    if canonical_path.startswith(f"{API_VERSION_PREFIX}/") and legacy.startswith("/api/"):
+    if (
+        canonical_path.startswith(f"{API_VERSION_PREFIX}/")
+        and legacy.startswith("/api/")
+        and not legacy.startswith(f"{API_VERSION_PREFIX}/")
+    ):
         aliases.add(f"/api/v1/{legacy[len('/api/'):].lstrip('/')}")
     elif not legacy.startswith(("/api/", "/auth/", "/ws/")) and legacy != "/":
         aliases.add(f"/api{legacy}")
@@ -142,6 +224,57 @@ def _route_aliases(legacy_path: str, canonical_path: str) -> set[str]:
         suffix = legacy[len("/ws/") :]
         aliases.add(f"/api/v1/ws/{suffix}")
     return aliases
+
+
+def _is_canonical_payment_only_path(path: str) -> bool:
+    return path.startswith(f"{API_VERSION_PREFIX}/integrations/payments/") or path == (
+        f"{API_VERSION_PREFIX}/wallets/providers/korapay/webhook"
+    )
+
+
+def _remove_noncanonical_payment_aliases(
+    contract_routes: dict[str, dict[str, dict[str, Any]]],
+    websocket_entries: dict[str, dict[str, Any]],
+    deprecated_aliases: dict[str, str],
+) -> None:
+    for domain_entries in contract_routes.values():
+        for route_key, entry in list(domain_entries.items()):
+            canonical = _canonical_payment_path(str(entry.get("canonical_path") or ""))
+            if not _is_canonical_payment_only_path(canonical):
+                continue
+            entry["canonical_path"] = canonical
+            entry["aliases"] = [canonical]
+            expected_key = _route_key(str(entry.get("method") or ""), canonical)
+            if expected_key != route_key:
+                domain_entries[expected_key] = entry
+                del domain_entries[route_key]
+    for route_key, entry in list(websocket_entries.items()):
+        canonical = _canonical_payment_path(str(entry.get("canonical_path") or ""))
+        if not _is_canonical_payment_only_path(canonical):
+            continue
+        entry["canonical_path"] = canonical
+        entry["aliases"] = [canonical]
+        expected_key = _route_key(str(entry.get("method") or ""), canonical)
+        if expected_key != route_key:
+            websocket_entries[expected_key] = entry
+            del websocket_entries[route_key]
+    for alias, target in list(deprecated_aliases.items()):
+        canonical = _canonical_payment_path(target)
+        if _is_canonical_payment_only_path(canonical):
+            del deprecated_aliases[alias]
+
+
+def _canonical_paths_from(
+    contract_routes: dict[str, dict[str, dict[str, Any]]],
+    websocket_entries: dict[str, dict[str, Any]],
+) -> dict[str, str]:
+    canonical_paths: dict[str, str] = {}
+    for domain_entries in contract_routes.values():
+        for route_key, entry in domain_entries.items():
+            canonical_paths[str(entry["canonical_path"])] = route_key
+    for route_key, entry in websocket_entries.items():
+        canonical_paths[str(entry["canonical_path"])] = route_key
+    return canonical_paths
 
 
 def _preferred_public_path(paths: list[str]) -> str:

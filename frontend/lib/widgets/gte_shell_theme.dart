@@ -410,28 +410,16 @@ Color _surfaceTint(
 }
 
 BoxDecoration gteBackdropDecoration() {
-  final GteThemeTokens tokens = GteShellTheme.activeTokens;
-  final GteThemeVisuals visuals = GteShellTheme.activeVisuals;
   return BoxDecoration(
-    gradient: LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: <Color>[
-        tokens.background,
-        Color.alphaBlend(
-          visuals.ambientPrimary.withValues(alpha: 0.08),
-          tokens.backgroundSoft,
-        ),
-        Color.alphaBlend(
-          visuals.ambientSecondary.withValues(alpha: 0.06),
-          tokens.backgroundSoft,
-        ),
-        Color.alphaBlend(
-          visuals.ambientTertiary.withValues(alpha: 0.08),
-          tokens.panelElevated,
-        ),
-      ],
-      stops: const <double>[0.03, 0.28, 0.68, 1],
+    color: const Color(0xFF050807),
+    image: DecorationImage(
+      image: const AssetImage('assets/media/gtex_matchday_wallpaper.png'),
+      fit: BoxFit.cover,
+      alignment: Alignment.center,
+      colorFilter: ColorFilter.mode(
+        Colors.black.withValues(alpha: 0.42),
+        BlendMode.darken,
+      ),
     ),
   );
 }

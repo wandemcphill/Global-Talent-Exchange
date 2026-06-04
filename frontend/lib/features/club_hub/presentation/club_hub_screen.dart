@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/club_controller.dart';
+import 'package:gte_frontend/controllers/club_ops_controller.dart';
+import 'package:gte_frontend/data/club_ops_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/club_hub/widgets/club_hub_components.dart';
+import 'package:gte_frontend/features/club_hub/widgets/squad_readiness_panel.dart';
 import 'package:gte_frontend/features/club_navigation/club_navigation.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/features/shell/shell.dart' as shell;
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 import 'package:gte_frontend/widgets/gtex_branding.dart';
 
-class ClubHubScreen extends StatelessWidget {
+class ClubHubScreen extends StatefulWidget {
   const ClubHubScreen({
     super.key,
     required this.clubId,
@@ -22,6 +27,7 @@ class ClubHubScreen extends StatelessWidget {
     this.onOpenLogin,
     this.initialTab = ClubNavigationTab.squad,
     this.navigationDependencies,
+    this.operationsController,
   });
 
   final String clubId;
@@ -33,23 +39,34 @@ class ClubHubScreen extends StatelessWidget {
   final VoidCallback? onOpenLogin;
   final ClubNavigationTab initialTab;
   final GteNavigationDependencies? navigationDependencies;
+  final ClubOpsController? operationsController;
+
+  @override
+  State<ClubHubScreen> createState() => _ClubHubScreenState();
+}
+
+class _ClubHubScreenState extends State<ClubHubScreen> {
+  ClubOpsController? _ownedOperationsController;
+
+  ClubOpsController? get _operationsController =>
+      widget.operationsController ?? _ownedOperationsController;
 
   GteNavigationDependencies get _dependencies =>
-      navigationDependencies ??
+      widget.navigationDependencies ??
       GteNavigationDependencies(
-        apiBaseUrl: baseUrl,
-        backendMode: backendMode,
-        currentClubId: clubId,
-        currentClubName: clubName,
-        isAuthenticated: isAuthenticated,
+        apiBaseUrl: widget.baseUrl,
+        backendMode: widget.backendMode,
+        currentClubId: widget.clubId,
+        currentClubName: widget.clubName,
+        isAuthenticated: widget.isAuthenticated,
       );
 
   String get _resolvedClubName {
-    final String? trimmed = clubName?.trim();
+    final String? trimmed = widget.clubName?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {
       return trimmed;
     }
-    return clubId
+    return widget.clubId
         .split('-')
         .where((String fragment) => fragment.isNotEmpty)
         .map(
@@ -61,7 +78,54 @@ class ClubHubScreen extends StatelessWidget {
 
   bool get _ownsWorkspace {
     final String? currentClubId = _dependencies.currentClubId?.trim();
-    return currentClubId != null && currentClubId == clubId;
+    return currentClubId != null && currentClubId == widget.clubId;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureOperationsController();
+  }
+
+  @override
+  void didUpdateWidget(ClubHubScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.operationsController != widget.operationsController ||
+        oldWidget.clubId != widget.clubId ||
+        oldWidget.baseUrl != widget.baseUrl ||
+        oldWidget.backendMode != widget.backendMode) {
+      _disposeOwnedOperationsController();
+      _ensureOperationsController();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeOwnedOperationsController();
+    super.dispose();
+  }
+
+  void _ensureOperationsController() {
+    if (!widget.isAuthenticated || widget.operationsController != null) {
+      widget.operationsController?.loadClubData();
+      return;
+    }
+    _ownedOperationsController = ClubOpsController(
+      api:
+          widget.backendMode == GteBackendMode.fixture
+              ? ClubOpsApi.fixture(baseUrl: widget.baseUrl)
+              : ClubOpsApi.standard(
+                baseUrl: widget.baseUrl,
+                mode: widget.backendMode,
+              ),
+      clubId: widget.clubId,
+      clubName: widget.clubName,
+    )..loadClubData();
+  }
+
+  void _disposeOwnedOperationsController() {
+    _ownedOperationsController?.dispose();
+    _ownedOperationsController = null;
   }
 
   Future<void> _openRoute(BuildContext context, GteAppRouteData route) {
@@ -92,9 +156,32 @@ class ClubHubScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildOperationsPanel() {
+    final ClubOpsController? operationsController = _operationsController;
+    final Widget panel = ClubHqOperationsPanel(
+      data: widget.controller?.data,
+      operationsController: operationsController,
+      onRefresh: operationsController?.refreshClubData,
+    );
+    final ClubController? clubController = widget.controller;
+    if (clubController == null) {
+      return panel;
+    }
+    return AnimatedBuilder(
+      animation: clubController,
+      builder: (BuildContext context, Widget? child) {
+        return ClubHqOperationsPanel(
+          data: clubController.data,
+          operationsController: operationsController,
+          onRefresh: operationsController?.refreshClubData,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (!isAuthenticated) {
+    if (!widget.isAuthenticated) {
       return Container(
         decoration: gteBackdropDecoration(),
         child: Scaffold(
@@ -107,8 +194,8 @@ class ClubHubScreen extends StatelessWidget {
               title: 'Sign in to open club routes',
               message:
                   'Club extensions need an authenticated session before world context, owner inbox, and club-scoped flows can open.',
-              actionLabel: onOpenLogin == null ? null : 'Sign in',
-              onAction: onOpenLogin,
+              actionLabel: widget.onOpenLogin == null ? null : 'Sign in',
+              onAction: widget.onOpenLogin,
               icon: Icons.login_outlined,
               accentColor: GteShellTheme.accentClub,
             ),
@@ -180,6 +267,19 @@ class ClubHubScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
+            _ClubCommandOperatingPanel(
+              controller: widget.controller,
+              isOwnerWorkspace: _ownsWorkspace,
+              onOpenLogin: widget.onOpenLogin,
+            ),
+            const SizedBox(height: 18),
+            _ClubCommandSquadReadinessSection(
+              controller: widget.controller,
+              fallbackClubName: _resolvedClubName,
+            ),
+            const SizedBox(height: 18),
+            _buildOperationsPanel(),
+            const SizedBox(height: 18),
             GteSurfacePanel(
               accentColor: GteShellTheme.accentClub,
               child: Column(
@@ -214,7 +314,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               ClubIdentityJerseysRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -226,7 +326,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               ClubReputationOverviewRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -238,7 +338,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               ClubTrophyCabinetRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -250,7 +350,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               ClubDynastyOverviewRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -262,7 +362,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               ClubAiAssistantRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -274,7 +374,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               ClubReplaysRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -311,7 +411,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               CreatorShareMarketClubRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -324,7 +424,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               CreatorStadiumClubRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -336,7 +436,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               ClubSaleMarketDetailRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -358,7 +458,7 @@ class ClubHubScreen extends StatelessWidget {
                                 ? () => _openRoute(
                                   context,
                                   ClubSaleMarketOwnerOffersRouteData(
-                                    clubId: clubId,
+                                    clubId: widget.clubId,
                                     clubName: _resolvedClubName,
                                   ),
                                 )
@@ -403,7 +503,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               WorldClubContextRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -416,7 +516,7 @@ class ClubHubScreen extends StatelessWidget {
                             () => _openRoute(
                               context,
                               WorldClubContextRouteData(
-                                clubId: clubId,
+                                clubId: widget.clubId,
                                 clubName: _resolvedClubName,
                               ),
                             ),
@@ -486,5 +586,360 @@ class ClubHubScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ClubCommandSquadReadinessSection extends StatelessWidget {
+  const _ClubCommandSquadReadinessSection({
+    required this.controller,
+    required this.fallbackClubName,
+  });
+
+  final ClubController? controller;
+  final String fallbackClubName;
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller != null) {
+      return AnimatedBuilder(
+        animation: controller!,
+        builder: (BuildContext context, Widget? child) {
+          return _buildPanel();
+        },
+      );
+    }
+    return _buildPanel();
+  }
+
+  Widget _buildPanel() {
+    final ClubController? mountedController = controller;
+    final data = mountedController?.data;
+    final bool isSyncing = mountedController?.isLoading == true;
+    final String? errorMessage = mountedController?.errorMessage;
+
+    if (data != null) {
+      return SquadReadinessPanel(
+        snapshot: SquadReadinessSnapshot.fromDashboard(
+          data,
+          isSyncing: isSyncing,
+          errorMessage: errorMessage,
+        ),
+      );
+    }
+
+    return SquadReadinessPanel(
+      snapshot: SquadReadinessSnapshot.blocked(
+        clubName: fallbackClubName,
+        message:
+            mountedController == null
+                ? 'No club dashboard controller is mounted on this route yet.'
+                : isSyncing
+                ? 'Club dashboard payload is still syncing.'
+                : errorMessage ?? 'Club dashboard payload has not loaded yet.',
+      ),
+    );
+  }
+}
+
+class _ClubCommandOperatingPanel extends StatelessWidget {
+  const _ClubCommandOperatingPanel({
+    required this.controller,
+    required this.isOwnerWorkspace,
+    required this.onOpenLogin,
+  });
+
+  final ClubController? controller;
+  final bool isOwnerWorkspace;
+  final VoidCallback? onOpenLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller != null) {
+      return AnimatedBuilder(
+        animation: controller!,
+        builder: (BuildContext context, Widget? child) {
+          return _buildPanel(context);
+        },
+      );
+    }
+    return _buildPanel(context);
+  }
+
+  Widget _buildPanel(BuildContext context) {
+    final data = controller?.data;
+    final bool isLoading = controller?.isLoading == true;
+    final String? error = controller?.errorMessage;
+    final bool hasController = controller != null;
+    final bool hasData = data != null;
+
+    final List<_ClubCommandSignal> signals = <_ClubCommandSignal>[
+      _ClubCommandSignal(
+        title: 'Squad readiness',
+        value:
+            !hasController
+                ? 'BLOCKED'
+                : isLoading
+                ? 'SYNCING'
+                : data?.playerCount == null
+                ? 'UNKNOWN'
+                : '${data!.playerCount}',
+        state:
+            !hasController
+                ? shell.GtexSurfaceState.blocked
+                : isLoading
+                ? shell.GtexSurfaceState.syncing
+                : data?.playerCount == null
+                ? shell.GtexSurfaceState.degraded
+                : data!.playerCount! > 0
+                ? shell.GtexSurfaceState.confirmed
+                : shell.GtexSurfaceState.empty,
+        message:
+            !hasController
+                ? 'No club dashboard controller is mounted on this route yet.'
+                : data?.playerCount == null
+                ? 'The backend has not exposed registered squad count for this club.'
+                : data!.playerCount! > 0
+                ? 'Registered players are present in the club dashboard payload.'
+                : 'The club dashboard returned no registered players.',
+        icon: Icons.groups_outlined,
+      ),
+      _ClubCommandSignal(
+        title: 'Formation health',
+        value: hasData ? 'PENDING' : 'WAITING',
+        state:
+            hasData
+                ? shell.GtexSurfaceState.pending
+                : isLoading
+                ? shell.GtexSurfaceState.syncing
+                : shell.GtexSurfaceState.empty,
+        message:
+            'Formation health is waiting for a dedicated squad-shape endpoint; no match state is invented here.',
+        icon: Icons.grid_view_outlined,
+      ),
+      _ClubCommandSignal(
+        title: 'Scouting',
+        value:
+            !hasData
+                ? 'WAITING'
+                : data.reputation.recentEvents.isEmpty
+                ? 'EMPTY'
+                : '${data.reputation.recentEvents.length}',
+        state:
+            !hasData
+                ? shell.GtexSurfaceState.empty
+                : data.reputation.recentEvents.isEmpty
+                ? shell.GtexSurfaceState.empty
+                : shell.GtexSurfaceState.confirmed,
+        message:
+            !hasData || data.reputation.recentEvents.isEmpty
+                ? 'No scouting or reputation events are present in this club snapshot.'
+                : 'Recent reputation events are available for club intelligence review.',
+        icon: Icons.manage_search_outlined,
+      ),
+      _ClubCommandSignal(
+        title: 'Finance',
+        value: 'PENDING',
+        state:
+            error != null
+                ? shell.GtexSurfaceState.degraded
+                : shell.GtexSurfaceState.pending,
+        message:
+            'Club finance remains explicit until a finance payload is mounted in this hub.',
+        icon: Icons.account_balance_wallet_outlined,
+      ),
+      _ClubCommandSignal(
+        title: 'Academy',
+        value:
+            !hasData ? 'WAITING' : '${data.trophyCabinet.academyHonorsCount}',
+        state:
+            !hasData
+                ? shell.GtexSurfaceState.empty
+                : data.trophyCabinet.academyHonorsCount > 0
+                ? shell.GtexSurfaceState.confirmed
+                : shell.GtexSurfaceState.empty,
+        message:
+            !hasData || data.trophyCabinet.academyHonorsCount == 0
+                ? 'No academy honors are present in this club payload yet.'
+                : 'Academy honors are confirmed in the trophy cabinet payload.',
+        icon: Icons.school_outlined,
+      ),
+      _ClubCommandSignal(
+        title: 'Sponsorships',
+        value:
+            !hasData
+                ? 'WAITING'
+                : data.catalog.any(_isSponsorshipCatalogItem)
+                ? 'FOUND'
+                : 'EMPTY',
+        state:
+            !hasData
+                ? shell.GtexSurfaceState.empty
+                : data.catalog.any(_isSponsorshipCatalogItem)
+                ? shell.GtexSurfaceState.confirmed
+                : shell.GtexSurfaceState.empty,
+        message:
+            !hasData || !data.catalog.any(_isSponsorshipCatalogItem)
+                ? 'No sponsorship block is present in this club payload.'
+                : 'Sponsorship catalog entries are available for this club.',
+        icon: Icons.handshake_outlined,
+      ),
+    ];
+
+    return GteSurfacePanel(
+      key: const Key('club-command-operating-panel'),
+      accentColor: GteShellTheme.accentClub,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Icon(Icons.dashboard_customize_outlined),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Club operating board',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'The club route exposes what is ready, blocked, empty, or waiting for backend truth before deeper migration.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              if (!isOwnerWorkspace && onOpenLogin != null) ...<Widget>[
+                const SizedBox(width: 12),
+                FilledButton.tonalIcon(
+                  onPressed: onOpenLogin,
+                  icon: const Icon(Icons.login_outlined),
+                  label: const Text('Sign in'),
+                ),
+              ],
+            ],
+          ),
+          if (error != null) ...<Widget>[
+            const SizedBox(height: 14),
+            Text(
+              error,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: GteShellTheme.warning),
+            ),
+          ],
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final bool compact = constraints.maxWidth < 760;
+              final double width =
+                  compact
+                      ? constraints.maxWidth
+                      : (constraints.maxWidth - 24) / 3;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: signals
+                    .map(
+                      (_ClubCommandSignal signal) => SizedBox(
+                        width: width,
+                        child: _ClubCommandSignalTile(signal: signal),
+                      ),
+                    )
+                    .toList(growable: false),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  static bool _isSponsorshipCatalogItem(dynamic item) {
+    final String category = item.category.toString().toLowerCase();
+    final String title = item.title.toString().toLowerCase();
+    return category.contains('sponsor') || title.contains('sponsor');
+  }
+}
+
+class _ClubCommandSignal {
+  const _ClubCommandSignal({
+    required this.title,
+    required this.value,
+    required this.state,
+    required this.message,
+    required this.icon,
+  });
+
+  final String title;
+  final String value;
+  final shell.GtexSurfaceState state;
+  final String message;
+  final IconData icon;
+}
+
+class _ClubCommandSignalTile extends StatelessWidget {
+  const _ClubCommandSignalTile({required this.signal});
+
+  final _ClubCommandSignal signal;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = _colorFor(signal.state);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(signal.icon, color: color, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                signal.state.name.toUpperCase(),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(signal.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(signal.value, style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text(signal.message, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  Color _colorFor(shell.GtexSurfaceState state) {
+    switch (state) {
+      case shell.GtexSurfaceState.confirmed:
+      case shell.GtexSurfaceState.data:
+        return GteShellTheme.positive;
+      case shell.GtexSurfaceState.blocked:
+      case shell.GtexSurfaceState.error:
+        return GteShellTheme.negative;
+      case shell.GtexSurfaceState.pending:
+      case shell.GtexSurfaceState.degraded:
+        return GteShellTheme.warning;
+      case shell.GtexSurfaceState.loading:
+      case shell.GtexSurfaceState.syncing:
+      case shell.GtexSurfaceState.reconnecting:
+        return GteShellTheme.accentClub;
+      case shell.GtexSurfaceState.empty:
+        return GteShellTheme.textMuted;
+    }
   }
 }

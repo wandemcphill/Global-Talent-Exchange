@@ -31,6 +31,7 @@ from app.models.competition_invite import CompetitionInvite
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_playoff import CompetitionPlayoff
 from app.models.competition_prize_rule import CompetitionPrizeRule
 from app.models.competition_reward import CompetitionReward
 from app.models.competition_reward_pool import CompetitionRewardPool
@@ -40,6 +41,18 @@ from app.models.competition_schedule_job import CompetitionScheduleJob
 from app.models.competition_seed_rule import CompetitionSeedRule
 from app.models.competition_visibility_rule import CompetitionVisibilityRule
 from app.models.club_profile import ClubProfile
+from app.competitions.schemas import (
+    CompetitionBracketContract,
+    CompetitionBracketLifecycleView,
+    CompetitionBracketMatchView as CompetitionBracketMatchContractView,
+    CompetitionBracketRoundView as CompetitionBracketRoundContractView,
+    CompetitionBracketSideView,
+    CompetitionDataStatus,
+    CompetitionFeedState,
+    CompetitionFixtureMatchView,
+    CompetitionFixturesContract,
+    CompetitionStandingsContract,
+)
 from app.schemas.competition_core import (
     CompetitionCorePayload,
     CompetitionCreateRequest as CompetitionCoreCreateRequest,
@@ -1019,18 +1032,181 @@ class CompetitionOrchestrator:
         )
         return tuple(self._round_view(item) for item in rounds)
 
+    def fixtures_contract(self, competition_id: str) -> CompetitionFixturesContract | None:
+        competition = self.session.get(Competition, competition_id)
+        if competition is None:
+            return None
+        matches = self._competition_matches(competition.id)
+        participant_count = self._participant_count(competition.id)
+        missing_data: list[str] = []
+        degraded_reasons: list[str] = []
+        blocked_reason = None
+        reason = None
+
+        try:
+            rule_set = self._rule_set(competition.id)
+        except CompetitionActionError:
+            rule_set = None
+            missing_data.append("rules")
+            blocked_reason = "rules_missing"
+
+        if not matches:
+            if blocked_reason is None and rule_set is not None and participant_count < rule_set.min_participants:
+                missing_data.append("participants")
+                blocked_reason = "minimum_participants_not_met"
+            if blocked_reason is not None:
+                status_value: CompetitionDataStatus = "blocked"
+                reason = blocked_reason
+            elif competition.status in {
+                CompetitionStatus.LIVE.value,
+                CompetitionStatus.IN_PROGRESS.value,
+                CompetitionStatus.COMPLETED.value,
+                CompetitionStatus.SETTLED.value,
+            }:
+                status_value = "degraded"
+                reason = "fixtures_missing_after_launch"
+                missing_data.append("fixtures")
+                degraded_reasons.append(reason)
+            elif participant_count == 0:
+                status_value = "empty"
+                reason = "no_participants"
+            else:
+                status_value = "syncing"
+                reason = "fixtures_not_generated"
+                missing_data.append("fixtures")
+        else:
+            status_value = "synced"
+            reason = "fixtures_synced"
+
+        completed_fixtures = sum(1 for match in matches if match.status == MatchStatus.COMPLETED.value)
+        authoritative_scores = completed_fixtures > 0
+        if not matches:
+            score_status = "no_fixtures"
+        elif completed_fixtures == len(matches):
+            score_status = "complete"
+        elif completed_fixtures:
+            score_status = "partial"
+        else:
+            score_status = "pending_results"
+
+        state = self._competition_feed_state(
+            competition=competition,
+            status_value=status_value,
+            reason=reason,
+            blocked_reason=blocked_reason,
+            missing_data=missing_data,
+            degraded_reasons=degraded_reasons,
+            authoritative=bool(matches),
+        )
+        return CompetitionFixturesContract(
+            competition_id=competition.id,
+            state=state,
+            status=status_value,
+            item_count=len(matches),
+            total_fixtures=len(matches),
+            completed_fixtures=completed_fixtures,
+            score_status=score_status,
+            authoritative_scores=authoritative_scores,
+            items=tuple(self._fixture_match_view(match) for match in matches),
+        )
+
     def fixtures(self, competition_id: str) -> tuple[CompetitionMatchView, ...] | None:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
-        matches = list(
-            self.session.scalars(
-                select(CompetitionMatch)
-                .where(CompetitionMatch.competition_id == competition_id)
-                .order_by(CompetitionMatch.match_date, CompetitionMatch.round_number, CompetitionMatch.slot_sequence)
-            ).all()
-        )
+        matches = self._competition_matches(competition_id)
         return tuple(self._match_view(match) for match in matches)
+
+    def standings_contract(
+        self,
+        competition_id: str,
+        *,
+        group_key: str | None = None,
+    ) -> CompetitionStandingsContract | None:
+        competition = self.session.get(Competition, competition_id)
+        if competition is None:
+            return None
+        participant_count = self._participant_count(competition.id)
+        matches = self._competition_matches(competition.id)
+        completed_matches = sum(1 for match in matches if match.status == MatchStatus.COMPLETED.value)
+        standing_rows = self._standing_rows(competition.id, group_key=group_key)
+        stale_completed_matches = [
+            match for match in matches if match.status == MatchStatus.COMPLETED.value and not match.stats_applied
+        ]
+        missing_data: list[str] = []
+        degraded_reasons: list[str] = []
+        blocked_reason = None
+        reason = None
+        items: tuple[CompetitionStandingView, ...] = ()
+
+        try:
+            rule_set = self._rule_set(competition.id)
+        except CompetitionActionError:
+            rule_set = None
+            missing_data.append("rules")
+            blocked_reason = "rules_missing"
+
+        if blocked_reason is not None:
+            status_value: CompetitionDataStatus = "blocked"
+            reason = blocked_reason
+        elif participant_count == 0:
+            status_value = "empty"
+            reason = "no_participants"
+        elif not standing_rows:
+            if group_key is not None:
+                status_value = "empty"
+                reason = "group_has_no_standings"
+            elif competition.status in {
+                CompetitionStatus.LIVE.value,
+                CompetitionStatus.IN_PROGRESS.value,
+                CompetitionStatus.COMPLETED.value,
+                CompetitionStatus.SETTLED.value,
+            }:
+                status_value = "degraded"
+                reason = "standings_missing_after_launch"
+                degraded_reasons.append(reason)
+            else:
+                status_value = "syncing"
+                reason = "standings_not_persisted"
+            missing_data.append("standings")
+        elif stale_completed_matches:
+            status_value = "degraded"
+            reason = "standing_stats_not_applied"
+            missing_data.append("standings")
+            degraded_reasons.append(reason)
+        else:
+            status_value = "synced"
+            reason = "standings_synced"
+
+        if rule_set is not None and standing_rows:
+            items = self._standing_views(
+                competition,
+                rule_set=rule_set,
+                group_key=group_key,
+                standing_rows=standing_rows,
+            )
+
+        standings_complete = bool(participant_count and matches and completed_matches == len(matches))
+        state = self._competition_feed_state(
+            competition=competition,
+            status_value=status_value,
+            reason=reason,
+            blocked_reason=blocked_reason,
+            missing_data=missing_data,
+            degraded_reasons=degraded_reasons,
+            authoritative=bool(items) and status_value in {"synced", "degraded"},
+        )
+        return CompetitionStandingsContract(
+            competition_id=competition.id,
+            state=state,
+            status=status_value,
+            item_count=len(items),
+            total_participants=len(standing_rows) if group_key is not None else participant_count,
+            total_matches=len(matches),
+            completed_matches=completed_matches,
+            standings_complete=standings_complete,
+            items=items,
+        )
 
     def standings(
         self, competition_id: str, *, group_key: str | None = None
@@ -1039,17 +1215,116 @@ class CompetitionOrchestrator:
         if competition is None:
             return None
         rule_set = self._rule_set(competition.id)
-        standings = self.lifecycle_service.match_service.standings(
+        return self._standing_views(competition, rule_set=rule_set, group_key=group_key)
+
+    def bracket_contract(self, competition_id: str) -> CompetitionBracketContract | None:
+        competition = self.session.get(Competition, competition_id)
+        if competition is None:
+            return None
+        participant_count = self._participant_count(competition.id)
+        matches = self._competition_matches(competition.id)
+        rounds = self._competition_rounds(competition.id)
+        playoffs = self._competition_playoffs(competition.id)
+        bracket_rounds = self._bracket_round_views(rounds=rounds, matches=matches, playoffs=playoffs)
+        missing_data: list[str] = []
+        degraded_reasons: list[str] = []
+        blocked_reason = None
+        reason = None
+        bracket_published = bool(bracket_rounds)
+
+        try:
+            rule_set = self._rule_set(competition.id)
+        except CompetitionActionError:
+            rule_set = None
+            missing_data.append("rules")
+            blocked_reason = "rules_missing"
+
+        if blocked_reason is not None:
+            status_value: CompetitionDataStatus = "blocked"
+            reason = blocked_reason
+        elif competition.format == CompetitionFormat.LEAGUE.value and not bracket_rounds:
+            status_value = "empty"
+            reason = "competition_has_no_bracket"
+        elif not bracket_rounds:
+            if rule_set is not None and participant_count < rule_set.min_participants:
+                status_value = "blocked"
+                blocked_reason = "minimum_participants_not_met"
+                reason = blocked_reason
+                missing_data.append("participants")
+            elif competition.status in {
+                CompetitionStatus.LIVE.value,
+                CompetitionStatus.IN_PROGRESS.value,
+                CompetitionStatus.COMPLETED.value,
+                CompetitionStatus.SETTLED.value,
+            }:
+                status_value = "degraded"
+                reason = "bracket_missing_after_launch"
+                missing_data.append("bracket")
+                degraded_reasons.append(reason)
+            else:
+                status_value = "syncing"
+                reason = "bracket_not_published"
+                missing_data.append("bracket")
+        else:
+            status_value = "synced"
+            reason = "bracket_synced"
+
+        state = self._competition_feed_state(
+            competition=competition,
+            status_value=status_value,
+            reason=reason,
+            blocked_reason=blocked_reason,
+            missing_data=missing_data,
+            degraded_reasons=degraded_reasons,
+            authoritative=bracket_published,
+        )
+        generated_at = datetime.now(timezone.utc)
+        return CompetitionBracketContract(
             competition_id=competition.id,
-            rule_set=rule_set,
+            bracket_id=f"competition-bracket:{competition.id}" if bracket_published else None,
+            title=competition.name,
+            revision=competition.updated_at.isoformat() if competition.updated_at is not None else None,
+            lifecycle=CompetitionBracketLifecycleView(
+                stage=competition.stage,
+                status=competition.status,
+                bracket_published=bracket_published,
+                reason=reason,
+                blocked_reason=blocked_reason,
+                degraded=status_value == "degraded",
+                degraded_reasons=tuple(degraded_reasons),
+                starts_at=competition.launched_at or competition.scheduled_start_at,
+                completed_at=competition.completed_at or competition.settled_at,
+                updated_at=competition.updated_at,
+            ),
+            state=state,
+            status=status_value,
+            rounds=tuple(bracket_rounds),
+            generated_at=generated_at,
+            updated_at=competition.updated_at,
+            backend_warnings=tuple([*missing_data, *degraded_reasons]),
+        )
+
+    def _standing_views(
+        self,
+        competition: Competition,
+        *,
+        rule_set: CompetitionRuleSet,
+        group_key: str | None = None,
+        standing_rows: Iterable[CompetitionParticipant] | None = None,
+    ) -> tuple[CompetitionStandingView, ...]:
+        source_rows = list(standing_rows) if standing_rows is not None else self._standing_rows(
+            competition.id,
             group_key=group_key,
         )
+        standings = self._rank_persisted_standing_rows(source_rows, rule_set=rule_set)
+        reward_map = self._reward_map_for_competition(competition.id)
         history_map = self.progression_service.history_map_for_competition(competition.id)
         profile_map = self.progression_service.profile_map(participant.club_id for participant in standings)
         views: list[CompetitionStandingView] = []
         for index, participant in enumerate(standings, start=1):
             history = history_map.get(participant.club_id)
             profile = profile_map.get(participant.club_id)
+            reward = reward_map.get(participant.club_id)
             views.append(
                 CompetitionStandingView(
                     club_id=participant.club_id,
@@ -1065,12 +1340,14 @@ class CompetitionOrchestrator:
                     points=participant.points,
                     rank=index,
                     reward_amount=(
-                        self.progression_service.minor_to_decimal(history.earnings_minor)
+                        self.progression_service.minor_to_decimal(reward.amount_minor)
+                        if reward is not None
+                        else self.progression_service.minor_to_decimal(history.earnings_minor)
                         if history is not None
                         else Decimal("0.0000")
                     ),
-                    reward_currency=history.currency if history is not None else None,
-                    reward_status=history.reward_status if history is not None else None,
+                    reward_currency=reward.currency if reward is not None else (history.currency if history is not None else None),
+                    reward_status=reward.status if reward is not None else (history.reward_status if history is not None else None),
                     badge_code=history.badge_code if history is not None else None,
                     title_awarded=history.title_awarded if history is not None else None,
                     ranking_points_delta=history.ranking_points_delta if history is not None else 0,
@@ -1451,6 +1728,326 @@ class CompetitionOrchestrator:
             or 0
         )
 
+    def _competition_matches(self, competition_id: str) -> list[CompetitionMatch]:
+        return list(
+            self.session.scalars(
+                select(CompetitionMatch)
+                .where(CompetitionMatch.competition_id == competition_id)
+                .order_by(CompetitionMatch.match_date, CompetitionMatch.round_number, CompetitionMatch.slot_sequence)
+            ).all()
+        )
+
+    def _competition_rounds(self, competition_id: str) -> list[CompetitionRound]:
+        return list(
+            self.session.scalars(
+                select(CompetitionRound)
+                .where(CompetitionRound.competition_id == competition_id)
+                .order_by(CompetitionRound.stage, CompetitionRound.group_key, CompetitionRound.round_number)
+            ).all()
+        )
+
+    def _competition_playoffs(self, competition_id: str) -> list[CompetitionPlayoff]:
+        return list(
+            self.session.scalars(
+                select(CompetitionPlayoff)
+                .where(CompetitionPlayoff.competition_id == competition_id)
+                .order_by(CompetitionPlayoff.slot_index.asc(), CompetitionPlayoff.created_at.asc())
+            ).all()
+        )
+
+    def _standing_rows(self, competition_id: str, *, group_key: str | None = None) -> list[CompetitionParticipant]:
+        stmt = select(CompetitionParticipant).where(CompetitionParticipant.competition_id == competition_id)
+        if group_key is not None:
+            stmt = stmt.where(CompetitionParticipant.group_key == group_key)
+        return list(self.session.scalars(stmt).all())
+
+    @staticmethod
+    def _rank_persisted_standing_rows(
+        rows: Iterable[CompetitionParticipant],
+        *,
+        rule_set: CompetitionRuleSet,
+    ) -> list[CompetitionParticipant]:
+        tie_breaks = tuple(rule_set.league_tie_break_order or ("points", "goal_diff", "goals_for", "wins"))
+
+        def sort_key(row: CompetitionParticipant) -> tuple[object, ...]:
+            key: list[object] = []
+            for rule in tie_breaks:
+                if rule == "points":
+                    key.append(-int(row.points or 0))
+                elif rule == "goal_diff":
+                    key.append(-int(row.goal_diff or 0))
+                elif rule == "goals_for":
+                    key.append(-int(row.goals_for or 0))
+                elif rule == "wins":
+                    key.append(-int(row.wins or 0))
+                elif rule == "losses":
+                    key.append(int(row.losses or 0))
+                elif rule == "seed":
+                    key.append(int(row.seed or 999_999))
+            key.extend(
+                [
+                    -int(row.wins or 0),
+                    int(row.losses or 0),
+                    int(row.seed or 999_999),
+                    row.club_id,
+                ]
+            )
+            return tuple(key)
+
+        return sorted(rows, key=sort_key)
+
+    def _reward_map_for_competition(self, competition_id: str) -> dict[str, CompetitionReward]:
+        rewards = list(
+            self.session.scalars(
+                select(CompetitionReward).where(
+                    CompetitionReward.competition_id == competition_id,
+                    CompetitionReward.club_id.is_not(None),
+                )
+            ).all()
+        )
+        selected: dict[str, CompetitionReward] = {}
+        for reward in rewards:
+            club_id = reward.club_id
+            if not club_id:
+                continue
+            current = selected.get(club_id)
+            if current is None or self._reward_sort_key(reward) < self._reward_sort_key(current):
+                selected[club_id] = reward
+        return selected
+
+    @staticmethod
+    def _reward_sort_key(reward: CompetitionReward) -> tuple[bool, int, datetime]:
+        return (
+            reward.placement is None,
+            int(reward.placement or 999_999),
+            reward.created_at or datetime.min.replace(tzinfo=timezone.utc),
+        )
+
+    def _competition_feed_state(
+        self,
+        *,
+        competition: Competition,
+        status_value: CompetitionDataStatus,
+        reason: str | None,
+        blocked_reason: str | None,
+        missing_data: Iterable[str],
+        degraded_reasons: Iterable[str],
+        authoritative: bool,
+    ) -> CompetitionFeedState:
+        return CompetitionFeedState(
+            status=status_value,
+            reason=reason,
+            blocked_reason=blocked_reason,
+            missing_data=tuple(dict.fromkeys(item for item in missing_data if item)),
+            degraded_reasons=tuple(dict.fromkeys(item for item in degraded_reasons if item)),
+            authoritative=authoritative,
+            generated_at=datetime.now(timezone.utc),
+            updated_at=competition.updated_at,
+        )
+
+    def _bracket_round_views(
+        self,
+        *,
+        rounds: list[CompetitionRound],
+        matches: list[CompetitionMatch],
+        playoffs: list[CompetitionPlayoff],
+    ) -> list[CompetitionBracketRoundContractView]:
+        bracket_stages = frozenset({"knockout", "playoff", "final", "semifinal", "quarterfinal"})
+        bracket_matches = [
+            match
+            for match in matches
+            if match.requires_winner or match.stage in bracket_stages
+        ]
+        bracket_playoffs = [playoff for playoff in playoffs if playoff.round_id or playoff.match_id]
+        if not bracket_matches and not bracket_playoffs:
+            return []
+        rounds_by_id = {round_entry.id: round_entry for round_entry in rounds}
+        match_ids = {match.id for match in bracket_matches}
+        playoffs_by_match_id = {playoff.match_id: playoff for playoff in playoffs if playoff.match_id}
+        unmatched_playoffs = [
+            playoff for playoff in bracket_playoffs if playoff.match_id is None or playoff.match_id not in match_ids
+        ]
+        competition_id = next(
+            (
+                item.competition_id
+                for item in [*bracket_matches, *bracket_playoffs]
+                if item.competition_id
+            ),
+            None,
+        )
+        participants = (
+            list(
+                self.session.scalars(
+                    select(CompetitionParticipant).where(CompetitionParticipant.competition_id == competition_id)
+                ).all()
+            )
+            if competition_id is not None
+            else []
+        )
+        participants_by_club = {participant.club_id: participant for participant in participants}
+        participants_by_seed = {participant.seed: participant for participant in participants if participant.seed is not None}
+        matches_by_round: dict[str, list[CompetitionMatch]] = defaultdict(list)
+        for match in bracket_matches:
+            matches_by_round[match.round_id].append(match)
+        playoffs_by_round: dict[str, list[CompetitionPlayoff]] = defaultdict(list)
+        for playoff in unmatched_playoffs:
+            if playoff.round_id is not None:
+                playoffs_by_round[playoff.round_id].append(playoff)
+
+        bracket_rounds: list[CompetitionBracketRoundContractView] = []
+        round_ids = set(matches_by_round) | set(playoffs_by_round)
+        ordered_round_ids = sorted(
+            round_ids,
+            key=lambda round_id: (
+                rounds_by_id[round_id].round_number if round_id in rounds_by_id else 999_999,
+                round_id,
+            ),
+        )
+        for fallback_order, round_id in enumerate(ordered_round_ids, start=1):
+            round_entry = rounds_by_id.get(round_id)
+            round_matches = matches_by_round.get(round_id, [])
+            round_playoffs = playoffs_by_round.get(round_id, [])
+            ordered_matches = sorted(round_matches, key=lambda item: (item.round_number, item.slot_sequence, item.id))
+            match_views = [
+                self._bracket_match_view(
+                    match=match,
+                    playoff=playoffs_by_match_id.get(match.id),
+                    participants_by_club=participants_by_club,
+                    participants_by_seed=participants_by_seed,
+                    fallback_order=index,
+                )
+                for index, match in enumerate(ordered_matches, start=1)
+            ]
+            next_order = len(match_views) + 1
+            for index, playoff in enumerate(
+                sorted(round_playoffs, key=lambda item: (item.slot_index or 999_999, item.id)),
+                start=next_order,
+            ):
+                match_views.append(
+                    self._bracket_playoff_slot_view(
+                        playoff=playoff,
+                        participants_by_club=participants_by_club,
+                        participants_by_seed=participants_by_seed,
+                        fallback_order=index,
+                    )
+                )
+            statuses = [match.status for match in ordered_matches] + [playoff.status for playoff in round_playoffs]
+            completed_count = sum(1 for status in statuses if status == MatchStatus.COMPLETED.value)
+            if statuses and completed_count == len(statuses):
+                round_status = MatchStatus.COMPLETED.value
+            elif any(status == MatchStatus.IN_PROGRESS.value for status in statuses):
+                round_status = MatchStatus.IN_PROGRESS.value
+            else:
+                round_status = round_entry.status if round_entry is not None else (statuses[0] if statuses else MatchStatus.SCHEDULED.value)
+            bracket_rounds.append(
+                CompetitionBracketRoundContractView(
+                    id=round_id,
+                    order=round_entry.round_number if round_entry is not None else fallback_order,
+                    name=round_entry.name if round_entry is not None else None,
+                    status=round_status,
+                    matches=tuple(match_views),
+                    starts_at=round_entry.starts_at if round_entry is not None else None,
+                    completed_at=round_entry.ends_at if round_entry is not None else None,
+                )
+            )
+        return sorted(bracket_rounds, key=lambda item: (item.order, item.id))
+
+    def _bracket_match_view(
+        self,
+        *,
+        match: CompetitionMatch,
+        playoff: CompetitionPlayoff | None,
+        participants_by_club: dict[str, CompetitionParticipant],
+        participants_by_seed: dict[int, CompetitionParticipant],
+        fallback_order: int,
+    ) -> CompetitionBracketMatchContractView:
+        completed = match.status == MatchStatus.COMPLETED.value
+        return CompetitionBracketMatchContractView(
+            id=match.id,
+            round_id=match.round_id,
+            order=playoff.slot_index if playoff is not None and playoff.slot_index is not None else fallback_order,
+            label=None,
+            status=match.status,
+            home=self._bracket_side_view(
+                club_id=match.home_club_id,
+                seed=playoff.home_seed if playoff is not None else None,
+                score=match.home_score if completed else None,
+                participants_by_club=participants_by_club,
+                participants_by_seed=participants_by_seed,
+            ),
+            away=self._bracket_side_view(
+                club_id=match.away_club_id,
+                seed=playoff.away_seed if playoff is not None else None,
+                score=match.away_score if completed else None,
+                participants_by_club=participants_by_club,
+                participants_by_seed=participants_by_seed,
+            ),
+            home_score=match.home_score if completed else None,
+            away_score=match.away_score if completed else None,
+            winner_participant_id=match.winner_club_id if completed else None,
+            live_match_id=match.id,
+            scheduled_at=match.scheduled_at,
+            completed_at=match.completed_at,
+        )
+
+    def _bracket_playoff_slot_view(
+        self,
+        *,
+        playoff: CompetitionPlayoff,
+        participants_by_club: dict[str, CompetitionParticipant],
+        participants_by_seed: dict[int, CompetitionParticipant],
+        fallback_order: int,
+    ) -> CompetitionBracketMatchContractView:
+        completed = playoff.status == MatchStatus.COMPLETED.value
+        return CompetitionBracketMatchContractView(
+            id=playoff.id,
+            round_id=playoff.round_id,
+            order=playoff.slot_index if playoff.slot_index is not None else fallback_order,
+            label=None,
+            status=playoff.status,
+            home=self._bracket_side_view(
+                club_id=None,
+                seed=playoff.home_seed,
+                score=None,
+                participants_by_club=participants_by_club,
+                participants_by_seed=participants_by_seed,
+            ),
+            away=self._bracket_side_view(
+                club_id=None,
+                seed=playoff.away_seed,
+                score=None,
+                participants_by_club=participants_by_club,
+                participants_by_seed=participants_by_seed,
+            ),
+            home_score=None,
+            away_score=None,
+            winner_participant_id=playoff.winner_club_id if completed else None,
+            live_match_id=None,
+            scheduled_at=None,
+            completed_at=None,
+        )
+
+    @staticmethod
+    def _bracket_side_view(
+        *,
+        club_id: str | None,
+        seed: int | None,
+        score: int | None,
+        participants_by_club: dict[str, CompetitionParticipant],
+        participants_by_seed: dict[int, CompetitionParticipant],
+    ) -> CompetitionBracketSideView:
+        participant = participants_by_club.get(club_id) if club_id is not None else None
+        if participant is None and seed is not None:
+            participant = participants_by_seed.get(seed)
+        resolved_club_id = club_id or (participant.club_id if participant is not None else None)
+        return CompetitionBracketSideView(
+            participant_id=participant.id if participant is not None else None,
+            club_id=resolved_club_id,
+            name=resolved_club_id,
+            seed=seed if seed is not None else (participant.seed if participant is not None else None),
+            score=score,
+        )
+
     def _participant(self, competition_id: str, club_id: str) -> CompetitionParticipant | None:
         return self.session.scalar(
             select(CompetitionParticipant).where(
@@ -1497,6 +2094,29 @@ class CompetitionOrchestrator:
             away_score=match.away_score,
             winner_club_id=match.winner_club_id,
             decided_by_penalties=match.decided_by_penalties,
+            requires_winner=match.requires_winner,
+        )
+
+    def _fixture_match_view(self, match: CompetitionMatch) -> CompetitionFixtureMatchView:
+        completed = match.status == MatchStatus.COMPLETED.value
+        return CompetitionFixtureMatchView(
+            id=match.id,
+            competition_id=match.competition_id,
+            round_id=match.round_id,
+            round_number=match.round_number,
+            stage=match.stage,
+            group_key=match.group_key,
+            home_club_id=match.home_club_id,
+            away_club_id=match.away_club_id,
+            scheduled_at=match.scheduled_at,
+            match_date=match.match_date,
+            window=FixtureWindow(match.window) if match.window else None,
+            slot_sequence=match.slot_sequence,
+            status=MatchStatus(match.status),
+            home_score=match.home_score if completed else None,
+            away_score=match.away_score if completed else None,
+            winner_club_id=match.winner_club_id if completed else None,
+            decided_by_penalties=match.decided_by_penalties if completed else False,
             requires_winner=match.requires_winner,
         )
 

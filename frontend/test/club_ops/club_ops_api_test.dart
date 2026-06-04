@@ -207,4 +207,3 @@ void main() {
     expect(updated.outstandingValue, 4200);
   });
 }
-

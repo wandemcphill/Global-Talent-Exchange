@@ -3,33 +3,79 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.admin_finance.schemas import (
     AccountControlUpsertRequest,
     AccountControlView,
+    AdminBulkActionRequest,
+    AdminBulkActionStatusView,
     AdminEconomySimulationConfig,
     AdminEconomySimulationResultView,
+    AdminExportRequest,
+    AdminExportStatusView,
     AdminFinanceControlTowerView,
     AdminFinanceWebhookResultView,
+    AdminLockAcquireRequest,
+    AdminLockStateView,
     ManualPriceOverrideUpsertRequest,
     ManualPriceOverrideView,
     MatchKillSwitchUpsertRequest,
     MatchKillSwitchView,
+    PaymentQueueActionRequest,
+    PaymentQueueActionResultView,
+    PaymentQueueView,
     PaymentReconciliationSummaryView,
     WalletProtectionSummaryView,
     WalletTransactionLockView,
 )
 from app.admin_finance.service import AdminFinanceService
+from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
 from app.auth.dependencies import get_current_admin, get_session
-from app.live_matches.service import ensure_live_match_hub
 from app.models.user import User
 from app.services.runtime_control_service import RuntimeControlService
-
+from app.treasury.service import TreasuryConflictError
+from app.wallets.service import WalletService
 
 router = APIRouter(prefix="/api/admin/finance", tags=["admin-finance"])
-webhook_router = APIRouter(prefix="/integrations/payments", tags=["payments"])
+webhook_router = APIRouter(prefix="/api/v2/integrations/payments", tags=["payments"])
+
+
+def _require_payment_queue_permission(request: Request, actor: User) -> None:
+    service = AdminGodModeService(
+        wallet_service=WalletService(cache_backend=getattr(request.app.state, "cache_backend", None))
+    )
+    try:
+        profile = service.resolve_profile(actor, service._load_state(request.app))
+        service._assert_has_permission(profile, "manage_treasury_withdrawals")
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
+def _require_admin_notes(payload: PaymentQueueActionRequest | dict | None) -> str:
+    if isinstance(payload, PaymentQueueActionRequest):
+        raw_notes = payload.admin_notes or payload.reason or payload.notes
+    else:
+        raw_notes = (
+            None if payload is None else payload.get("admin_notes") or payload.get("reason") or payload.get("notes")
+        )
+    notes = str(raw_notes or "").strip()
+    if not notes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="admin_notes is required.")
+    return notes
+
+
+def _queue_service(request: Request, session: Session) -> AdminFinanceService:
+    return AdminFinanceService(session=session, settings=request.app.state.settings)
+
+
+def _ensure_live_match_hub(app):
+    from app.live_matches.service import ensure_live_match_hub
+
+    return ensure_live_match_hub(app)
 
 
 @router.get("/control-tower", response_model=AdminFinanceControlTowerView)
@@ -243,7 +289,7 @@ def upsert_match_kill_switch(
         reason=payload.reason,
         updated_by_user_id=actor.id,
     )
-    hub = ensure_live_match_hub(request.app)
+    hub = _ensure_live_match_hub(request.app)
     if payload.enabled:
         hub.halt_match(payload.match_id, reason=payload.reason, actor_user_id=actor.id)
     else:
@@ -269,7 +315,7 @@ def clear_match_kill_switch(
         reason=None,
         updated_by_user_id=actor.id,
     )
-    ensure_live_match_hub(request.app).clear_match_halt(match_id)
+    _ensure_live_match_hub(request.app).clear_match_halt(match_id)
     return MatchKillSwitchView(
         match_id=item.match_id,
         enabled=item.enabled,
@@ -286,11 +332,7 @@ def get_wallet_protection_summary(
     _: User = Depends(get_current_admin),
 ) -> WalletProtectionSummaryView:
     control_service = RuntimeControlService(request.app)
-    frozen_wallet_accounts = sum(
-        1
-        for item in control_service.list_account_controls()
-        if item.freeze_wallet
-    )
+    frozen_wallet_accounts = sum(1 for item in control_service.list_account_controls() if item.freeze_wallet)
     active_wallet_locks = [
         WalletTransactionLockView.model_validate(item, from_attributes=True).model_dump(mode="json")
         for item in control_service.list_wallet_transaction_locks()
@@ -315,27 +357,414 @@ def get_payment_reconciliation_summary(
     return PaymentReconciliationSummaryView.model_validate(payload)
 
 
-@webhook_router.post("/paystack/webhook", response_model=AdminFinanceWebhookResultView)
-async def handle_paystack_webhook(
+@router.get("/locks/{resource_type}/{resource_id}", response_model=AdminLockStateView)
+def get_admin_resource_lock(
     request: Request,
+    resource_type: str,
+    resource_id: str,
+    actor: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
-) -> AdminFinanceWebhookResultView:
+) -> AdminLockStateView:
+    _require_payment_queue_permission(request, actor)
+    state = _queue_service(request, session).get_admin_lock_state(
+        actor=actor,
+        resource_type=resource_type,
+        resource_id=resource_id,
+    )
+    return AdminLockStateView.model_validate(state)
+
+
+@router.post("/locks/{resource_type}/{resource_id}", response_model=AdminLockStateView)
+def acquire_admin_resource_lock(
+    request: Request,
+    resource_type: str,
+    resource_id: str,
+    payload: AdminLockAcquireRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> AdminLockStateView:
+    _require_payment_queue_permission(request, actor)
     try:
-        raw_body = await request.body()
-        payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
-    except Exception:
-        raw_body = b""
-        payload = {}
-    try:
-        result = AdminFinanceService(session=session, settings=request.app.state.settings).handle_paystack_webhook(
-            payload,
-            raw_body=raw_body,
-            headers=dict(request.headers),
+        state = _queue_service(request, session).acquire_admin_lock(
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            ttl_seconds=(payload or AdminLockAcquireRequest()).ttl_seconds,
         )
+        session.commit()
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return AdminLockStateView.model_validate(state)
+
+
+@router.delete("/locks/{resource_type}/{resource_id}", response_model=AdminLockStateView)
+def release_admin_resource_lock(
+    request: Request,
+    resource_type: str,
+    resource_id: str,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> AdminLockStateView:
+    _require_payment_queue_permission(request, actor)
+    try:
+        state = _queue_service(request, session).release_admin_lock(
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+        session.commit()
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return AdminLockStateView.model_validate(state)
+
+
+@router.post("/exports", response_model=AdminExportStatusView, status_code=status.HTTP_202_ACCEPTED)
+def request_admin_export(
+    request: Request,
+    payload: AdminExportRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> AdminExportStatusView:
+    _require_payment_queue_permission(request, actor)
+    try:
+        result = _queue_service(request, session).request_admin_export(
+            actor=actor,
+            export_type=payload.export_type,
+            export_format=payload.format,
+            filters=payload.filters,
+        )
+        session.commit()
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
-    session.commit()
-    return AdminFinanceWebhookResultView.model_validate(result)
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return AdminExportStatusView.model_validate(result)
+
+
+@router.get("/exports/{export_id}/download")
+def download_admin_export(
+    request: Request,
+    export_id: str,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> Response:
+    _require_payment_queue_permission(request, actor)
+    service = _queue_service(request, session)
+    try:
+        result = service.complete_admin_export(actor=actor, export_id=export_id)
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if result.get("status") != "ready":
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content=jsonable_encoder(result),
+        )
+    try:
+        artifact = service.get_admin_export_artifact(export_id=export_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    filename = str(artifact.get("filename") or f"{export_id}.export")
+    artifact_content_type = str(artifact.get("content_type") or "application/octet-stream")
+    media_type = "text/csv" if artifact_content_type == "text/csv" else "application/octet-stream"
+    return Response(
+        content=str(artifact["content"]),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-GTEX-Audit-Ref": str(result.get("audit_reference") or ""),
+            "X-GTEX-Artifact-Content-Type": artifact_content_type,
+        },
+    )
+
+
+@router.get("/exports/{export_id}", response_model=AdminExportStatusView)
+def get_admin_export_status(
+    request: Request,
+    export_id: str,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> AdminExportStatusView:
+    _require_payment_queue_permission(request, actor)
+    try:
+        result = _queue_service(request, session).complete_admin_export(actor=actor, export_id=export_id)
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return AdminExportStatusView.model_validate(result)
+
+
+@router.get("/payment-queue", response_model=PaymentQueueView)
+def get_admin_payment_queue(
+    request: Request,
+    tab: str | None = Query(default=None),
+    q: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueView:
+    _require_payment_queue_permission(request, actor)
+    try:
+        payload = _queue_service(request, session).get_admin_payment_queue(
+            actor=actor,
+            tab=tab,
+            q=q,
+            limit=limit,
+            offset=offset,
+        )
+        return PaymentQueueView.model_validate(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+@router.post(
+    "/payment-queue/bulk-actions",
+    response_model=AdminBulkActionStatusView,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def request_admin_payment_queue_bulk_action(
+    request: Request,
+    payload: AdminBulkActionRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> AdminBulkActionStatusView:
+    _require_payment_queue_permission(request, actor)
+    try:
+        result = _queue_service(request, session).request_admin_bulk_action(
+            actor=actor,
+            item_type=payload.item_type,
+            action=payload.action,
+            item_ids=payload.item_ids,
+            admin_notes=payload.admin_notes,
+        )
+        session.commit()
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return AdminBulkActionStatusView.model_validate(result)
+
+
+@router.get("/payment-queue/bulk-actions/{bulk_action_id}", response_model=AdminBulkActionStatusView)
+def get_admin_payment_queue_bulk_action_status(
+    request: Request,
+    bulk_action_id: str,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> AdminBulkActionStatusView:
+    _require_payment_queue_permission(request, actor)
+    try:
+        result = _queue_service(request, session).get_admin_bulk_action_status(bulk_action_id=bulk_action_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return AdminBulkActionStatusView.model_validate(result)
+
+
+@router.post("/payment-queue/deposits/{deposit_id}/review", response_model=PaymentQueueActionResultView)
+def review_admin_payment_queue_deposit(
+    request: Request,
+    deposit_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_deposit_queue_action(request, session, actor, deposit_id, payload, "review")
+
+
+@router.post("/payment-queue/deposits/{deposit_id}/approve", response_model=PaymentQueueActionResultView)
+def approve_admin_payment_queue_deposit(
+    request: Request,
+    deposit_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_deposit_queue_action(request, session, actor, deposit_id, payload, "approve")
+
+
+@router.post("/payment-queue/deposits/{deposit_id}/reject", response_model=PaymentQueueActionResultView)
+def reject_admin_payment_queue_deposit(
+    request: Request,
+    deposit_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_deposit_queue_action(request, session, actor, deposit_id, payload, "reject")
+
+
+@router.post("/payment-queue/deposits/{deposit_id}/reinstate", response_model=PaymentQueueActionResultView)
+def reinstate_admin_payment_queue_deposit(
+    request: Request,
+    deposit_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_deposit_queue_action(request, session, actor, deposit_id, payload, "reinstate")
+
+
+def _run_deposit_queue_action(
+    request: Request,
+    session: Session,
+    actor: User,
+    deposit_id: str,
+    payload: PaymentQueueActionRequest | dict | None,
+    action: str,
+) -> PaymentQueueActionResultView:
+    _require_payment_queue_permission(request, actor)
+    notes = _require_admin_notes(payload)
+    service = _queue_service(request, session)
+    try:
+        if action == "review":
+            result = service.review_payment_queue_deposit(actor=actor, deposit_id=deposit_id, admin_notes=notes)
+        elif action == "approve":
+            result = service.approve_payment_queue_deposit(actor=actor, deposit_id=deposit_id, admin_notes=notes)
+        elif action == "reject":
+            result = service.reject_payment_queue_deposit(actor=actor, deposit_id=deposit_id, admin_notes=notes)
+        else:
+            result = service.reinstate_payment_queue_deposit(actor=actor, deposit_id=deposit_id, admin_notes=notes)
+        session.commit()
+        return PaymentQueueActionResultView.model_validate(result)
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.post("/payment-queue/withdrawals/{withdrawal_id}/approve", response_model=PaymentQueueActionResultView)
+def approve_admin_payment_queue_withdrawal(
+    request: Request,
+    withdrawal_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_withdrawal_queue_action(request, session, actor, withdrawal_id, payload, "approve")
+
+
+@router.post("/payment-queue/withdrawals/{withdrawal_id}/reject", response_model=PaymentQueueActionResultView)
+def reject_admin_payment_queue_withdrawal(
+    request: Request,
+    withdrawal_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_withdrawal_queue_action(request, session, actor, withdrawal_id, payload, "reject")
+
+
+@router.post("/payment-queue/withdrawals/{withdrawal_id}/reinstate", response_model=PaymentQueueActionResultView)
+def reinstate_admin_payment_queue_withdrawal(
+    request: Request,
+    withdrawal_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_withdrawal_queue_action(request, session, actor, withdrawal_id, payload, "reinstate")
+
+
+def _run_withdrawal_queue_action(
+    request: Request,
+    session: Session,
+    actor: User,
+    withdrawal_id: str,
+    payload: PaymentQueueActionRequest | dict | None,
+    action: str,
+) -> PaymentQueueActionResultView:
+    _require_payment_queue_permission(request, actor)
+    notes = _require_admin_notes(payload)
+    service = _queue_service(request, session)
+    try:
+        if action == "approve":
+            result = service.approve_payment_queue_withdrawal(
+                actor=actor, withdrawal_id=withdrawal_id, admin_notes=notes
+            )
+        elif action == "reject":
+            result = service.reject_payment_queue_withdrawal(
+                actor=actor, withdrawal_id=withdrawal_id, admin_notes=notes
+            )
+        else:
+            result = service.reinstate_payment_queue_withdrawal(
+                actor=actor, withdrawal_id=withdrawal_id, admin_notes=notes
+            )
+        session.commit()
+        return PaymentQueueActionResultView.model_validate(result)
+    except (TreasuryConflictError, ValueError) as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.post(
+    "/payment-queue/bids/windows/{window_id}/bids/{bid_id}/approve", response_model=PaymentQueueActionResultView
+)
+def approve_admin_payment_queue_bid(
+    request: Request,
+    window_id: str,
+    bid_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_bid_queue_action(request, session, actor, window_id, bid_id, payload, "approve")
+
+
+@router.post(
+    "/payment-queue/bids/windows/{window_id}/bids/{bid_id}/reject", response_model=PaymentQueueActionResultView
+)
+def reject_admin_payment_queue_bid(
+    request: Request,
+    window_id: str,
+    bid_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_bid_queue_action(request, session, actor, window_id, bid_id, payload, "reject")
+
+
+@router.post(
+    "/payment-queue/bids/windows/{window_id}/bids/{bid_id}/counter", response_model=PaymentQueueActionResultView
+)
+def counter_admin_payment_queue_bid(
+    request: Request,
+    window_id: str,
+    bid_id: str,
+    payload: PaymentQueueActionRequest | None = None,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> PaymentQueueActionResultView:
+    return _run_bid_queue_action(request, session, actor, window_id, bid_id, payload, "counter")
+
+
+def _run_bid_queue_action(
+    request: Request,
+    session: Session,
+    actor: User,
+    window_id: str,
+    bid_id: str,
+    payload: PaymentQueueActionRequest | dict | None,
+    action: str,
+) -> PaymentQueueActionResultView:
+    _require_payment_queue_permission(request, actor)
+    notes = _require_admin_notes(payload)
+    try:
+        result = _queue_service(request, session).record_payment_queue_bid_action(
+            actor=actor,
+            window_id=window_id,
+            bid_id=bid_id,
+            action=action,
+            admin_notes=notes,
+        )
+        session.commit()
+        return PaymentQueueActionResultView.model_validate(result)
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @webhook_router.post("/korapay/webhook", response_model=AdminFinanceWebhookResultView)

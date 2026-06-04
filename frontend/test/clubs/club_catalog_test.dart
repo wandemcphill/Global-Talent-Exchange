@@ -8,8 +8,9 @@ import 'package:gte_frontend/widgets/clubs/catalog_item_card.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('club catalog confirms transparent purchase flow',
-      (WidgetTester tester) async {
+  testWidgets('club catalog confirms transparent purchase flow', (
+    WidgetTester tester,
+  ) async {
     final ClubController controller = ClubController(
       api: ClubApi.fixture(),
       clubId: 'royal-lagos-fc',

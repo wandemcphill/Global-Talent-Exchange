@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
+import pytest
+
 from app.common.enums.competition_type import CompetitionType
 from app.common.enums.fixture_window import FixtureWindow
 from app.common.enums.replay_visibility import ReplayVisibility
@@ -114,3 +116,8 @@ def test_run_match_simulation_projects_suspensions_when_discipline_breaks_down()
     assert suspension["reason"] in {"straight_red", "second_yellow", "yellow_accumulation"}
     assert suspension["applies_from"] == "next_match"
     assert simulation["growth_hook"]["players"]
+
+
+def test_run_match_simulation_rejects_unqualified_payloads_without_fabricating_results() -> None:
+    with pytest.raises(ValueError, match="MatchSimulationRequest or MatchSimulationJob"):
+        run_match_simulation({"match_id": "legacy-fixture", "home_team": "Loose Home", "away_team": "Loose Away"})

@@ -13,6 +13,7 @@ import '../../../widgets/gtex_branding.dart';
 import '../../../shared/widgets/gtex_premium_panels.dart';
 import '../../../widgets/football_player_card.dart';
 import '../../../widgets/player_card_avatar.dart';
+import '../../shell/shell.dart' as shell;
 import '../data/player_card_marketplace_models.dart';
 import 'player_card_marketplace_controller.dart';
 
@@ -245,6 +246,12 @@ class _PlayerCardMarketplaceScreenState
                   ],
                   const SizedBox(height: 18),
                   _ExecutionSummaryPanel(controller: _controller),
+                  const SizedBox(height: 18),
+                  _TransferOperatingPanel(
+                    controller: _controller,
+                    hasAuth: _hasAuth,
+                    onOpenLogin: widget.onOpenLogin,
+                  ),
                   const SizedBox(height: 18),
                   GteSurfacePanel(
                     padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1177,6 +1184,275 @@ class _ExecutionSummaryPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _TransferOperatingPanel extends StatelessWidget {
+  const _TransferOperatingPanel({
+    required this.controller,
+    required this.hasAuth,
+    required this.onOpenLogin,
+  });
+
+  final PlayerCardMarketplaceController controller;
+  final bool hasAuth;
+  final VoidCallback? onOpenLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    final int openSaleCount =
+        controller.marketplaceSales.items.where(_isOpenListing).length;
+    final int openLoanCount =
+        controller.marketplaceLoans.items.where(_isOpenListing).length;
+    final int totalOpen = openSaleCount + openLoanCount;
+    final bool isCheckoutPending =
+        controller.isBuyingSaleListing ||
+        controller.isCreatingLoanNegotiation ||
+        controller.isCounteringLoanNegotiation ||
+        controller.isAcceptingLoanNegotiation;
+    final bool hasConfirmedActivity =
+        controller.latestSaleExecution != null ||
+        controller.latestLoanNegotiation != null ||
+        controller.latestLoanContract != null ||
+        controller.latestSwapExecution != null;
+
+    return GteSurfacePanel(
+      key: const Key('transfer-operating-panel'),
+      accentColor: const Color(0xFF91C9FF),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Icon(Icons.hub_outlined, color: Color(0xFF91C9FF)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Transfer hub',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Basket, checkout, and activity stay tied to confirmed marketplace records. Missing rails remain explicit instead of pretending an order exists.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              if (!hasAuth && onOpenLogin != null) ...<Widget>[
+                const SizedBox(width: 12),
+                FilledButton.tonalIcon(
+                  onPressed: onOpenLogin,
+                  icon: const Icon(Icons.login_outlined),
+                  label: const Text('Sign in'),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final bool stacked = constraints.maxWidth < 880;
+              final List<Widget> tiles = <Widget>[
+                _TransferOperatingTile(
+                  state:
+                      !hasAuth
+                          ? shell.GtexSurfaceState.blocked
+                          : controller.isLoadingMarketplace
+                          ? shell.GtexSurfaceState.syncing
+                          : shell.GtexSurfaceState.empty,
+                  title: 'Transfer basket',
+                  value: !hasAuth ? 'BLOCKED' : '0 ACTIVE',
+                  message:
+                      !hasAuth
+                          ? 'Basket creation needs an authenticated club account.'
+                          : totalOpen > 0
+                          ? '$totalOpen open listing${totalOpen == 1 ? '' : 's'} are available, but no backend-confirmed basket is active.'
+                          : 'No backend-confirmed basket exists for this session yet.',
+                  icon: Icons.shopping_bag_outlined,
+                ),
+                _TransferOperatingTile(
+                  state:
+                      !hasAuth
+                          ? shell.GtexSurfaceState.blocked
+                          : isCheckoutPending
+                          ? shell.GtexSurfaceState.pending
+                          : controller.marketplaceError != null && totalOpen > 0
+                          ? shell.GtexSurfaceState.degraded
+                          : totalOpen > 0
+                          ? shell.GtexSurfaceState.confirmed
+                          : shell.GtexSurfaceState.empty,
+                  title: 'Checkout readiness',
+                  value:
+                      !hasAuth
+                          ? 'SIGN IN'
+                          : isCheckoutPending
+                          ? 'PENDING'
+                          : totalOpen > 0
+                          ? 'READY'
+                          : 'WAITING',
+                  message:
+                      !hasAuth
+                          ? 'Checkout is blocked until the user session is confirmed.'
+                          : isCheckoutPending
+                          ? 'The latest transfer action is waiting for backend confirmation.'
+                          : totalOpen > 0
+                          ? 'Open listings can enter checkout from their listing actions.'
+                          : 'Checkout stays empty until an open sale or loan listing is returned.',
+                  icon: Icons.fact_check_outlined,
+                ),
+                _TransferOperatingTile(
+                  state:
+                      controller.actionError != null
+                          ? shell.GtexSurfaceState.error
+                          : hasConfirmedActivity
+                          ? shell.GtexSurfaceState.confirmed
+                          : controller.isLoadingMarketplace ||
+                              controller.isLoadingSupport
+                          ? shell.GtexSurfaceState.syncing
+                          : shell.GtexSurfaceState.empty,
+                  title: 'Activity feed',
+                  value: hasConfirmedActivity ? 'CONFIRMED' : 'NO EVENTS',
+                  message: _activityMessage(),
+                  icon: Icons.receipt_long_outlined,
+                ),
+              ];
+
+              if (stacked) {
+                return Column(
+                  children: tiles
+                      .map(
+                        (Widget tile) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: tile,
+                        ),
+                      )
+                      .toList(growable: false),
+                );
+              }
+              return Row(
+                children: tiles
+                    .map(
+                      (Widget tile) => Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: tile,
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  static bool _isOpenListing(PlayerCardMarketplaceListing listing) {
+    return listing.status.toLowerCase() == 'open';
+  }
+
+  String _activityMessage() {
+    if (controller.actionError != null) {
+      return controller.actionError!;
+    }
+    final PlayerCardMarketplaceSaleExecution? sale =
+        controller.latestSaleExecution;
+    if (sale != null) {
+      return 'Latest confirmed sale: ${gteFormatCredits(sale.grossCredits)} gross, ${gteFormatCredits(sale.sellerNetCredits)} net to seller.';
+    }
+    final PlayerCardMarketplaceLoanNegotiation? negotiation =
+        controller.latestLoanNegotiation;
+    if (negotiation != null) {
+      return 'Latest loan negotiation is ${negotiation.status.toUpperCase()} with ${gteFormatCredits(negotiation.proposedFeeCredits)} proposed.';
+    }
+    final PlayerCardMarketplaceLoanContract? contract =
+        controller.latestLoanContract;
+    if (contract != null) {
+      return 'Latest loan contract is ${contract.contractStatus.toUpperCase()} and due ${gteFormatDateTime(contract.dueAt)}.';
+    }
+    if (controller.isLoadingMarketplace || controller.isLoadingSupport) {
+      return 'Marketplace and squad support feeds are syncing.';
+    }
+    return 'Confirmed Buy Now, loan, and listing actions will appear here.';
+  }
+}
+
+class _TransferOperatingTile extends StatelessWidget {
+  const _TransferOperatingTile({
+    required this.state,
+    required this.title,
+    required this.value,
+    required this.message,
+    required this.icon,
+  });
+
+  final shell.GtexSurfaceState state;
+  final String title;
+  final String value;
+  final String message;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = _stateColor(state);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                state.name.toUpperCase(),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(value, style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text(message, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  Color _stateColor(shell.GtexSurfaceState state) {
+    switch (state) {
+      case shell.GtexSurfaceState.confirmed:
+      case shell.GtexSurfaceState.data:
+        return GteShellTheme.positive;
+      case shell.GtexSurfaceState.blocked:
+      case shell.GtexSurfaceState.error:
+        return GteShellTheme.negative;
+      case shell.GtexSurfaceState.pending:
+      case shell.GtexSurfaceState.degraded:
+        return GteShellTheme.accentWarm;
+      case shell.GtexSurfaceState.loading:
+      case shell.GtexSurfaceState.syncing:
+      case shell.GtexSurfaceState.reconnecting:
+        return const Color(0xFF91C9FF);
+      case shell.GtexSurfaceState.empty:
+        return GteShellTheme.textMuted;
+    }
   }
 }
 

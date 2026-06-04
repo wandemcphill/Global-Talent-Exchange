@@ -35,6 +35,7 @@ void main() {
 
     expect(find.text('Use demo credentials'), findsNothing);
     expect(find.text('Use admin credentials'), findsNothing);
+    expect(find.text('Recover account'), findsOneWidget);
     expect(fields, hasLength(2));
     expect(fields[0].controller?.text, isEmpty);
     expect(fields[1].controller?.text, isEmpty);

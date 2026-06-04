@@ -1,12 +1,20 @@
 import 'gte_api_repository.dart';
 import 'gte_authed_api.dart';
+import 'gte_api_contract.dart';
 import 'gte_http_transport.dart';
 import 'gte_models.dart';
+import '../models/creator_application_models.dart';
+import '../models/moderation_models.dart';
+import '../models/risk_ops_models.dart';
 
 class AdminCommandCenterApi {
   AdminCommandCenterApi({required this.client});
 
   final GteAuthedApi client;
+  final Map<String, Map<String, String>> _depositActionEndpointsById =
+      <String, Map<String, String>>{};
+
+  static const String _paymentQueuePath = '/api/v2/admin/finance/payment-queue';
 
   factory AdminCommandCenterApi.standard({
     required String baseUrl,
@@ -76,8 +84,65 @@ class AdminCommandCenterApi {
     String? status,
     String? query,
   }) async {
+    final Object? payload = await _requestPaymentQueue(
+      'GET',
+      _paymentQueuePath,
+      query: <String, Object?>{
+        'limit': limit,
+        'offset': offset,
+        if (_paymentQueueTabForStatus(status) case final String tab) 'tab': tab,
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      },
+    );
+    return _adminDepositPageFromPaymentQueue(
+      payload,
+      limit: limit,
+      offset: offset,
+      status: status,
+    );
+  }
+
+  Future<void> adminReviewDeposit(
+    String depositId, {
+    String? adminNotes,
+  }) async {
+    await _runDepositQueueAction(
+      depositId,
+      preferredActions: const <String>['review', 'reinstate'],
+      body: _notesPayload(adminNotes),
+    );
+  }
+
+  Future<void> adminConfirmDeposit(
+    String depositId, {
+    String? adminNotes,
+  }) async {
+    await _runDepositQueueAction(
+      depositId,
+      preferredActions: const <String>['approve'],
+      body: _notesPayload(adminNotes),
+    );
+  }
+
+  Future<void> adminRejectDeposit(
+    String depositId, {
+    String? adminNotes,
+  }) async {
+    await _runDepositQueueAction(
+      depositId,
+      preferredActions: const <String>['reject'],
+      body: _notesPayload(adminNotes),
+    );
+  }
+
+  Future<GteAdminQueuePage<GteAdminWithdrawal>> fetchAdminWithdrawals({
+    int limit = 20,
+    int offset = 0,
+    String? status,
+    String? query,
+  }) async {
     final Map<String, dynamic> payload = await client.getMap(
-      '/api/admin/treasury/deposits',
+      '/api/admin/treasury/withdrawals',
       query: <String, Object?>{
         'limit': limit,
         'offset': offset,
@@ -85,43 +150,184 @@ class AdminCommandCenterApi {
         if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
       },
     );
-    return GteAdminQueuePage<GteAdminDeposit>.fromJson(
+    return GteAdminQueuePage<GteAdminWithdrawal>.fromJson(
       payload,
-      GteAdminDeposit.fromJson,
+      GteAdminWithdrawal.fromJson,
     );
   }
 
-  Future<GteDepositRequest> adminReviewDeposit(
-    String depositId, {
-    String? adminNotes,
+  Future<GteAdminQueuePage<GteAdminKyc>> fetchAdminKyc({
+    int limit = 20,
+    int offset = 0,
+    String? status,
+    String? query,
   }) async {
-    final Object? payload = await client.post(
-      '/api/admin/treasury/deposits/$depositId/review',
-      body: _notesPayload(adminNotes),
+    final Map<String, dynamic> payload = await client.getMap(
+      '/api/admin/treasury/kyc',
+      query: <String, Object?>{
+        'limit': limit,
+        'offset': offset,
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      },
     );
-    return GteDepositRequest.fromJson(payload);
+    return GteAdminQueuePage<GteAdminKyc>.fromJson(
+      payload,
+      GteAdminKyc.fromJson,
+    );
   }
 
-  Future<GteDepositRequest> adminConfirmDeposit(
-    String depositId, {
-    String? adminNotes,
+  Future<GteAdminQueuePage<GteDispute>> fetchAdminDisputes({
+    int limit = 20,
+    int offset = 0,
+    String? status,
+    String? query,
   }) async {
-    final Object? payload = await client.post(
-      '/api/admin/treasury/deposits/$depositId/confirm',
-      body: _notesPayload(adminNotes),
+    final Map<String, dynamic> payload = await client.getMap(
+      '/api/admin/treasury/disputes',
+      query: <String, Object?>{
+        'limit': limit,
+        'offset': offset,
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      },
     );
-    return GteDepositRequest.fromJson(payload);
+    return GteAdminQueuePage<GteDispute>.fromJson(payload, GteDispute.fromJson);
   }
 
-  Future<GteDepositRequest> adminRejectDeposit(
-    String depositId, {
-    String? adminNotes,
-  }) async {
-    final Object? payload = await client.post(
-      '/api/admin/treasury/deposits/$depositId/reject',
-      body: _notesPayload(adminNotes),
+  Future<AdminTransferBidReviewFeed> fetchTransferBidReviewFeed() async {
+    final Object? payload = await _requestPaymentQueue(
+      'GET',
+      _paymentQueuePath,
+      query: const <String, Object?>{'tab': 'bids', 'limit': 50, 'offset': 0},
     );
-    return GteDepositRequest.fromJson(payload);
+    return _transferBidReviewFeedFromPaymentQueue(payload);
+  }
+
+  Future<void> adminRunTransferBidAction(
+    AdminTransferBid bid, {
+    required String action,
+    required String adminNotes,
+  }) async {
+    final String normalizedAction = action.trim().toLowerCase();
+    if (normalizedAction.isEmpty) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Choose a bid audit action before submitting.',
+      );
+    }
+    if (bid.availableActions.isNotEmpty &&
+        !bid.supportsAction(normalizedAction)) {
+      throw GteApiException(
+        type: GteApiErrorType.validation,
+        message:
+            'Backend did not expose $normalizedAction for this bid audit row.',
+      );
+    }
+    final Map<String, Object?>? body = _notesPayload(adminNotes);
+    if (body == null) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Admin notes are required for bid audit actions.',
+      );
+    }
+    final String fallbackPath =
+        '$_paymentQueuePath/bids/windows/${Uri.encodeComponent(bid.windowId)}/bids/${Uri.encodeComponent(bid.id)}/$normalizedAction';
+    await _requestPaymentQueue(
+      'POST',
+      bid.actionEndpointFor(normalizedAction) ?? fallbackPath,
+      body: body,
+    );
+  }
+
+  AdminTransferBidReviewFeed _transferBidReviewFeedFromPaymentQueue(
+    Object? value,
+  ) {
+    final Map<String, Object?> payload = GteJson.map(
+      value,
+      label: 'admin payment queue',
+    );
+    final List<AdminTransferBid> bids = GteJson.list(
+      _paymentQueueSectionItems(payload, 'bids'),
+      label: 'admin payment queue bid items',
+    ).map(AdminTransferBid.fromJson).toList(growable: false);
+    final Map<String, AdminTransferWindow> windowsById =
+        <String, AdminTransferWindow>{};
+    for (final AdminTransferBid bid in bids) {
+      windowsById.putIfAbsent(
+        bid.windowId,
+        () => AdminTransferWindow.fromBidReview(bid),
+      );
+    }
+    return AdminTransferBidReviewFeed(
+      windows: windowsById.values.toList(growable: false),
+      bids: bids,
+    );
+  }
+
+  Future<List<ModerationReport>> fetchAdminModerationReports({
+    String? status,
+    String? priority,
+    String? targetType,
+  }) async {
+    final List<dynamic> payload = await _getListPayload(
+      '/api/admin/moderation/reports',
+      query: <String, Object?>{
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+        if (priority != null && priority.trim().isNotEmpty)
+          'priority': priority.trim(),
+        if (targetType != null && targetType.trim().isNotEmpty)
+          'target_type': targetType.trim(),
+      },
+    );
+    return payload.map(ModerationReport.fromJson).toList(growable: false);
+  }
+
+  Future<List<CreatorApplicationView>> fetchAdminCreatorApplications({
+    String? status,
+  }) async {
+    final List<dynamic> payload = await _getListPayload(
+      '/api/admin/creator/applications',
+      query: <String, Object?>{
+        if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+      },
+    );
+    return payload.map(CreatorApplicationView.fromJson).toList(growable: false);
+  }
+
+  Future<RiskOverview> fetchRiskOverview() async {
+    final Map<String, dynamic> payload = await client.getMap(
+      '/admin/risk-ops/overview',
+    );
+    return RiskOverview.fromJson(payload);
+  }
+
+  Future<List<dynamic>> _getListPayload(
+    String path, {
+    Map<String, Object?> query = const <String, Object?>{},
+  }) async {
+    final Object? payload = await client.request('GET', path, query: query);
+    if (payload is List) {
+      return payload;
+    }
+    if (payload is Map) {
+      final Map<String, Object?> map = Map<String, Object?>.from(payload);
+      for (final String key in <String>[
+        'items',
+        'reports',
+        'applications',
+        'results',
+      ]) {
+        final Object? value = map[key];
+        if (value is List) {
+          return value;
+        }
+      }
+    }
+    throw const GteApiException(
+      type: GteApiErrorType.parsing,
+      message: 'Unexpected queue response shape.',
+    );
   }
 
   Future<AdminPaymentRailsState> fetchPaymentRails() async {
@@ -255,12 +461,488 @@ class AdminCommandCenterApi {
         .toString();
   }
 
+  GteAdminQueuePage<GteAdminDeposit> _adminDepositPageFromPaymentQueue(
+    Object? value, {
+    required int limit,
+    required int offset,
+    String? status,
+  }) {
+    final Map<String, Object?> payload = GteJson.map(
+      value,
+      label: 'admin payment queue',
+    );
+    final String? normalizedStatus = _normalizeStatusFilter(status);
+    final List<Object?> rawItems = <Object?>[
+      ..._paymentQueueSectionItems(payload, 'pending'),
+      ..._paymentQueueSectionItems(payload, 'approved'),
+      ..._paymentQueueSectionItems(payload, 'rejected'),
+    ];
+    final List<GteAdminDeposit> items = <GteAdminDeposit>[];
+    _depositActionEndpointsById.clear();
+    for (final Object? rawItem in rawItems) {
+      final Map<String, Object?> item = GteJson.map(
+        rawItem,
+        label: 'admin payment queue deposit',
+      );
+      _cacheDepositActionEndpoints(item);
+      if (normalizedStatus != null &&
+          _normalizeStatusFilter(item['status']) != normalizedStatus) {
+        continue;
+      }
+      items.add(GteAdminDeposit.fromJson(item));
+    }
+
+    return GteAdminQueuePage<GteAdminDeposit>(
+      items: items,
+      total:
+          _paymentQueueSectionTotal(payload, 'pending') +
+          _paymentQueueSectionTotal(payload, 'approved') +
+          _paymentQueueSectionTotal(payload, 'rejected'),
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  List<Object?> _paymentQueueSectionItems(
+    Map<String, Object?> payload,
+    String key,
+  ) {
+    final Map<String, Object?> section = _paymentQueueSection(payload, key);
+    return GteJson.list(
+      GteJson.value(section, <String>['items']) ?? const <Object?>[],
+      label: 'admin payment queue $key items',
+    );
+  }
+
+  int _paymentQueueSectionTotal(Map<String, Object?> payload, String key) {
+    return GteJson.integer(_paymentQueueSection(payload, key), <String>[
+      'total',
+    ], fallback: 0);
+  }
+
+  Map<String, Object?> _paymentQueueSection(
+    Map<String, Object?> payload,
+    String key,
+  ) {
+    final Object? sections = GteJson.value(payload, <String>['sections']);
+    if (sections is Map && sections[key] is Map) {
+      return Map<String, Object?>.from(sections[key] as Map);
+    }
+    return GteJson.map(
+      GteJson.value(payload, <String>[key]) ?? const <String, Object?>{},
+      label: 'admin payment queue $key section',
+    );
+  }
+
+  void _cacheDepositActionEndpoints(Map<String, Object?> item) {
+    final String id = GteJson.string(item, <String>['id'], fallback: '');
+    if (id.isEmpty) {
+      return;
+    }
+    final Object? rawEndpoints = GteJson.value(item, <String>[
+      'action_endpoints',
+      'actionEndpoints',
+    ]);
+    if (rawEndpoints is! Map) {
+      return;
+    }
+    final Map<String, String> endpoints = <String, String>{};
+    rawEndpoints.forEach((Object? key, Object? value) {
+      final String action = key?.toString().trim().toLowerCase() ?? '';
+      final String path = value?.toString().trim() ?? '';
+      if (action.isNotEmpty && path.isNotEmpty) {
+        endpoints[action] = path;
+      }
+    });
+    if (endpoints.isNotEmpty) {
+      _depositActionEndpointsById[id] = endpoints;
+    }
+  }
+
+  String? _paymentQueueTabForStatus(String? status) {
+    final String? normalized = _normalizeStatusFilter(status);
+    if (normalized == null) {
+      return null;
+    }
+    switch (normalized) {
+      case 'payment_submitted':
+      case 'under_review':
+      case 'disputed':
+        return 'pending';
+      case 'confirmed':
+        return 'approved';
+      case 'rejected':
+        return 'rejected';
+    }
+    return null;
+  }
+
+  String? _normalizeStatusFilter(Object? status) {
+    final String normalized = status?.toString().trim().toLowerCase() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  Future<void> _runDepositQueueAction(
+    String depositId, {
+    required List<String> preferredActions,
+    Object? body,
+  }) async {
+    final Map<String, String> cached =
+        _depositActionEndpointsById[depositId] ?? const <String, String>{};
+    String? path;
+    for (final String action in preferredActions) {
+      path = cached[action];
+      if (path != null && path.trim().isNotEmpty) {
+        break;
+      }
+    }
+    final String fallbackAction = preferredActions.first;
+    await _requestPaymentQueue(
+      'POST',
+      path ?? '$_paymentQueuePath/deposits/$depositId/$fallbackAction',
+      body: body,
+    );
+  }
+
+  Future<Object?> _requestPaymentQueue(
+    String method,
+    String path, {
+    Map<String, Object?> query = const <String, Object?>{},
+    Object? body,
+  }) async {
+    final String accessToken = client.accessToken?.trim() ?? '';
+    if (accessToken.isEmpty) {
+      throw const GteApiException(
+        type: GteApiErrorType.unauthorized,
+        message: 'Authentication required for this action.',
+      );
+    }
+    final GteTransportResponse response = await client.transport.send(
+      GteTransportRequest(
+        method: method,
+        uri: _rawUriFor(_canonicalPaymentQueuePath(path), query),
+        headers: gteVersionedApiHeaders(<String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        }),
+        body: body,
+      ),
+    );
+    if (response.statusCode >= 400) {
+      throw GteApiException(
+        type: _apiErrorType(response.statusCode),
+        message: gteApiErrorMessage(
+          response.body,
+          fallback: 'Admin payment queue request failed.',
+        ),
+        statusCode: response.statusCode,
+      );
+    }
+    return gteApiSuccessPayload(response.body);
+  }
+
+  Uri _rawUriFor(String path, Map<String, Object?> queryParameters) {
+    final Uri baseUri = Uri.parse(
+      client.config.baseUrl.endsWith('/')
+          ? client.config.baseUrl
+          : '${client.config.baseUrl}/',
+    );
+    final Uri resolved = baseUri.resolve(
+      path.startsWith('/') ? path.substring(1) : path,
+    );
+    final Map<String, String> query = <String, String>{};
+    for (final MapEntry<String, Object?> entry in queryParameters.entries) {
+      if (entry.value == null) {
+        continue;
+      }
+      query[entry.key] = entry.value.toString();
+    }
+    return query.isEmpty ? resolved : resolved.replace(queryParameters: query);
+  }
+
+  String _canonicalPaymentQueuePath(String path) {
+    final String trimmed = path.trim();
+    final String normalized = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+    if (normalized.startsWith('/api/admin/finance/payment-queue')) {
+      return normalized.replaceFirst(
+        '/api/admin/finance/payment-queue',
+        _paymentQueuePath,
+      );
+    }
+    return normalized;
+  }
+
+  GteApiErrorType _apiErrorType(int statusCode) {
+    if (statusCode == 401 || statusCode == 403) {
+      return GteApiErrorType.unauthorized;
+    }
+    if (statusCode == 404) {
+      return GteApiErrorType.notFound;
+    }
+    if (statusCode == 422) {
+      return GteApiErrorType.validation;
+    }
+    if (statusCode >= 500) {
+      return GteApiErrorType.unavailable;
+    }
+    return GteApiErrorType.unknown;
+  }
+
   Map<String, Object?>? _notesPayload(String? notes) {
     final String trimmed = notes?.trim() ?? '';
     if (trimmed.isEmpty) {
       return null;
     }
     return <String, Object?>{'admin_notes': trimmed};
+  }
+}
+
+class AdminTransferBidReviewFeed {
+  const AdminTransferBidReviewFeed({required this.windows, required this.bids});
+
+  final List<AdminTransferWindow> windows;
+  final List<AdminTransferBid> bids;
+
+  int get submittedCount =>
+      bids.where((AdminTransferBid bid) => bid.isSubmitted).length;
+}
+
+class AdminTransferWindow {
+  const AdminTransferWindow({
+    required this.id,
+    required this.territoryCode,
+    required this.label,
+    required this.status,
+    required this.opensOn,
+    required this.closesOn,
+  });
+
+  final String id;
+  final String territoryCode;
+  final String label;
+  final String status;
+  final String opensOn;
+  final String closesOn;
+
+  factory AdminTransferWindow.fromBidReview(AdminTransferBid bid) {
+    return AdminTransferWindow(
+      id: bid.windowId,
+      territoryCode: 'GLOBAL',
+      label: bid.windowLabel,
+      status: 'review',
+      opensOn: 'unknown',
+      closesOn: 'unknown',
+    );
+  }
+
+  factory AdminTransferWindow.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'transfer window',
+    );
+    return AdminTransferWindow(
+      id: GteJson.string(json, <String>['id']),
+      territoryCode: GteJson.string(json, <String>[
+        'territory_code',
+        'territoryCode',
+      ], fallback: 'GLOBAL'),
+      label: GteJson.string(json, <String>['label'], fallback: 'Window'),
+      status: GteJson.string(json, <String>['status'], fallback: 'unknown'),
+      opensOn: GteJson.string(json, <String>[
+        'opens_on',
+        'opensOn',
+      ], fallback: 'unknown'),
+      closesOn: GteJson.string(json, <String>[
+        'closes_on',
+        'closesOn',
+      ], fallback: 'unknown'),
+    );
+  }
+}
+
+class AdminTransferBid {
+  const AdminTransferBid({
+    required this.id,
+    required this.windowId,
+    required this.windowLabel,
+    required this.playerId,
+    required this.status,
+    required this.bidAmount,
+    required this.structuredTermsJson,
+    this.availableActions = const <String>[],
+    this.actionEndpoints = const <String, String>{},
+    this.sellingClubId,
+    this.buyingClubId,
+    this.wageOfferAmount,
+    this.sellOnClausePct,
+    this.walletReservationStatus,
+    this.walletReservedAmount,
+    this.walletReservationReference,
+    this.actionState,
+    this.businessActionState,
+    this.blockedReason,
+    this.auditReference,
+    this.auditTrail = const <String>[],
+    this.severity,
+    this.escalationState,
+    this.notes,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String windowId;
+  final String windowLabel;
+  final String playerId;
+  final String? sellingClubId;
+  final String? buyingClubId;
+  final String status;
+  final double bidAmount;
+  final List<String> availableActions;
+  final Map<String, String> actionEndpoints;
+  final double? wageOfferAmount;
+  final double? sellOnClausePct;
+  final Map<String, Object?> structuredTermsJson;
+  final String? walletReservationStatus;
+  final double? walletReservedAmount;
+  final String? walletReservationReference;
+  final String? actionState;
+  final String? businessActionState;
+  final String? blockedReason;
+  final String? auditReference;
+  final List<String> auditTrail;
+  final String? severity;
+  final String? escalationState;
+  final String? notes;
+  final DateTime? updatedAt;
+
+  String get normalizedStatus => status.trim().toLowerCase();
+  bool get isSubmitted => normalizedStatus == 'submitted';
+  bool supportsAction(String action) =>
+      availableActions.contains(action.trim().toLowerCase());
+  String? actionEndpointFor(String action) =>
+      actionEndpoints[action.trim().toLowerCase()];
+  Map<String, Object?> get walletReservationTerms => GteJson.map(
+    structuredTermsJson,
+    keys: <String>['wallet_reservation', 'walletReservation'],
+  );
+  bool get hasWalletReservationPayload {
+    if (walletReservationStatus?.trim().isNotEmpty == true ||
+        walletReservedAmount != null ||
+        walletReservationReference?.trim().isNotEmpty == true) {
+      return true;
+    }
+    final Map<String, Object?> reservation = walletReservationTerms;
+    return reservation.isNotEmpty ||
+        structuredTermsJson.containsKey('reservation_id') ||
+        structuredTermsJson.containsKey('wallet_reservation_id') ||
+        structuredTermsJson.containsKey('reserved_amount');
+  }
+
+  factory AdminTransferBid.fromJson(Object? value, {String? windowLabel}) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'transfer bid');
+    final Map<String, Object?> structuredTermsJson = GteJson.map(
+      json,
+      keys: <String>['structured_terms_json', 'structuredTermsJson'],
+    );
+    final Map<String, Object?> walletReservation = GteJson.map(
+      structuredTermsJson,
+      keys: <String>['wallet_reservation', 'walletReservation'],
+    );
+    return AdminTransferBid(
+      id: GteJson.string(json, <String>['id']),
+      windowId: GteJson.string(json, <String>['window_id', 'windowId']),
+      windowLabel:
+          windowLabel?.trim().isNotEmpty == true
+              ? windowLabel!.trim()
+              : GteJson.string(json, <String>[
+                'window_label',
+                'windowLabel',
+              ], fallback: 'Transfer window'),
+      playerId: GteJson.string(json, <String>['player_id', 'playerId']),
+      sellingClubId: GteJson.stringOrNull(json, <String>[
+        'selling_club_id',
+        'sellingClubId',
+      ]),
+      buyingClubId: GteJson.stringOrNull(json, <String>[
+        'buying_club_id',
+        'buyingClubId',
+      ]),
+      status: GteJson.string(json, <String>['status'], fallback: 'unknown'),
+      bidAmount: GteJson.number(json, <String>['bid_amount', 'bidAmount']),
+      availableActions: _adminNormalizedStringList(json, <String>[
+        'available_actions',
+        'availableActions',
+      ]),
+      actionEndpoints: _adminStringMap(json, <String>[
+        'action_endpoints',
+        'actionEndpoints',
+      ]),
+      wageOfferAmount: _adminOptionalNumber(json, <String>[
+        'wage_offer_amount',
+        'wageOfferAmount',
+      ]),
+      sellOnClausePct: _adminOptionalNumber(json, <String>[
+        'sell_on_clause_pct',
+        'sellOnClausePct',
+      ]),
+      structuredTermsJson: structuredTermsJson,
+      walletReservationStatus:
+          GteJson.stringOrNull(json, <String>[
+            'wallet_reservation_status',
+            'walletReservationStatus',
+          ]) ??
+          GteJson.stringOrNull(walletReservation, <String>['status']),
+      walletReservedAmount:
+          _adminOptionalNumber(json, <String>[
+            'wallet_reserved_amount',
+            'walletReservedAmount',
+          ]) ??
+          _adminOptionalNumber(walletReservation, <String>[
+            'amount_gtex_coin',
+            'amountGtexCoin',
+            'reserved_amount',
+            'reservedAmount',
+            'amount',
+          ]),
+      walletReservationReference:
+          GteJson.stringOrNull(json, <String>[
+            'wallet_reservation_reference',
+            'walletReservationReference',
+          ]) ??
+          GteJson.stringOrNull(walletReservation, <String>[
+            'reference',
+            'reservation_id',
+            'reservationId',
+            'key',
+          ]),
+      actionState: GteJson.stringOrNull(json, <String>[
+        'action_state',
+        'actionState',
+      ]),
+      businessActionState: GteJson.stringOrNull(json, <String>[
+        'business_action_state',
+        'businessActionState',
+      ]),
+      blockedReason: GteJson.stringOrNull(json, <String>[
+        'blocked_reason',
+        'blockedReason',
+      ]),
+      auditReference: GteJson.stringOrNull(json, <String>[
+        'audit_reference',
+        'auditReference',
+      ]),
+      auditTrail: _adminStringList(json, <String>['audit_trail', 'auditTrail']),
+      severity: GteJson.stringOrNull(json, <String>['severity']),
+      escalationState: GteJson.stringOrNull(json, <String>[
+        'escalation_state',
+        'escalationState',
+      ]),
+      notes: GteJson.stringOrNull(json, <String>['notes']),
+      updatedAt: GteJson.dateTimeOrNull(json, <String>[
+        'updated_at',
+        'updatedAt',
+      ]),
+    );
   }
 }
 
@@ -282,6 +964,67 @@ class AdminPaymentRailsState {
       reason: GteJson.stringOrNull(json, <String>['reason']),
     );
   }
+}
+
+List<String> _adminNormalizedStringList(
+  Map<String, Object?> json,
+  List<String> keys,
+) {
+  final Object? value = GteJson.value(json, keys);
+  final Iterable<Object?> values =
+      value is List ? value : <Object?>[if (value != null) value];
+  final List<String> items = <String>[];
+  for (final Object? item in values) {
+    final String normalized = item?.toString().trim().toLowerCase() ?? '';
+    if (normalized.isNotEmpty && !items.contains(normalized)) {
+      items.add(normalized);
+    }
+  }
+  return items;
+}
+
+List<String> _adminStringList(Map<String, Object?> json, List<String> keys) {
+  final Object? value = GteJson.value(json, keys);
+  final Iterable<Object?> values =
+      value is List ? value : <Object?>[if (value != null) value];
+  final List<String> items = <String>[];
+  for (final Object? item in values) {
+    final String stringValue = item?.toString().trim() ?? '';
+    if (stringValue.isNotEmpty && !items.contains(stringValue)) {
+      items.add(stringValue);
+    }
+  }
+  return items;
+}
+
+Map<String, String> _adminStringMap(
+  Map<String, Object?> json,
+  List<String> keys,
+) {
+  final Object? value = GteJson.value(json, keys);
+  if (value is! Map) {
+    return const <String, String>{};
+  }
+  final Map<String, String> map = <String, String>{};
+  value.forEach((Object? key, Object? rawValue) {
+    final String normalizedKey = key?.toString().trim().toLowerCase() ?? '';
+    final String stringValue = rawValue?.toString().trim() ?? '';
+    if (normalizedKey.isNotEmpty && stringValue.isNotEmpty) {
+      map[normalizedKey] = stringValue;
+    }
+  });
+  return map;
+}
+
+double? _adminOptionalNumber(Map<String, Object?> json, List<String> keys) {
+  final Object? value = GteJson.value(json, keys);
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value.toString());
 }
 
 class AdminPaymentRail {

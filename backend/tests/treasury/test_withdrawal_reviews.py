@@ -13,7 +13,8 @@ from app.models.risk_ops import AmlCase, SystemEvent
 from app.models.treasury import RateDirection, TreasuryWithdrawalStatus
 from app.models.withdrawal_review import WithdrawalReview
 from app.models.wallet import PayoutRequest, PayoutStatus
-from app.treasury.service import TreasuryService
+from app.policies.service import PolicyService
+from app.treasury.service import TreasuryConflictError, TreasuryService
 from app.wallets.service import LedgerPosting, WalletService
 
 
@@ -85,12 +86,29 @@ def _configure_withdrawal_settings(session) -> None:
     session.flush()
 
 
+def _seed_policy_acceptances(session, user) -> None:
+    service = PolicyService(session)
+    service.seed_defaults()
+    profile = service.ensure_user_region_profile(user=user, region_code="NG")
+    profile.region_code = "NG"
+    for version in service.list_missing_acceptances(user_id=user.id):
+        service.accept_document(
+            user_id=user.id,
+            document_key=version.document.document_key,
+            version_label=version.version_label,
+            ip_address=None,
+            device_id=None,
+        )
+    session.commit()
+
+
 def test_withdrawal_review_creates_review_and_audit(session) -> None:
     _seed_policy(session)
     user = _create_user(session, email="withdrawal@example.com", username="withdrawaluser")
     admin = _create_user(session, email="admin@example.com", username="adminuser")
     user.kyc_status = KycStatus.FULLY_VERIFIED
     session.commit()
+    _seed_policy_acceptances(session, user)
     _configure_withdrawal_settings(session)
     _seed_balance(session, user=user, amount=Decimal("100.0000"))
 
@@ -137,11 +155,84 @@ def test_withdrawal_review_creates_review_and_audit(session) -> None:
     assert review.status_to == TreasuryWithdrawalStatus.APPROVED.value
     assert review.fee_amount == withdrawal.fee_amount
     assert review.net_amount == withdrawal.net_amount
+    assert review.notes == "approved"
 
     audit = session.scalar(
         select(TreasuryAuditEvent).where(TreasuryAuditEvent.resource_id == withdrawal.id)
     )
     assert audit is not None
+    assert audit.event_type == "treasury.withdrawal.status_changed"
+    assert audit.payload["status"] == TreasuryWithdrawalStatus.APPROVED.value
+    assert audit.payload["previous"] == TreasuryWithdrawalStatus.PENDING_REVIEW.value
+    assert audit.payload["notes"] == "approved"
+
+
+def test_admin_lock_blocks_withdrawal_review_by_other_admin(session) -> None:
+    _seed_policy(session)
+    user = _create_user(session, email="locked-withdrawal@example.com", username="lockedwithdrawal")
+    locker = _create_user(session, email="locker-admin@example.com", username="lockeradmin")
+    reviewer = _create_user(session, email="reviewer-admin@example.com", username="revieweradmin")
+    user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+    _seed_policy_acceptances(session, user)
+    _configure_withdrawal_settings(session)
+    _seed_balance(session, user=user, amount=Decimal("100.0000"))
+
+    treasury = TreasuryService()
+    bank_account = treasury.create_user_bank_account(
+        session,
+        user=user,
+        bank_name="Lock Bank",
+        account_number="1234567890",
+        account_name="Locked User",
+        bank_code="001",
+        currency_code="NGN",
+        set_active=True,
+    )
+    withdrawal = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("10.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="lock-test",
+    )
+    treasury.acquire_admin_lock(
+        session,
+        actor=locker,
+        resource_type="treasury_withdrawal",
+        resource_id=withdrawal.id,
+        ttl_seconds=300,
+    )
+    session.commit()
+
+    lock_state = treasury.get_admin_lock_state(
+        session,
+        actor=reviewer,
+        resource_type="treasury_withdrawal",
+        resource_id=withdrawal.id,
+    )
+
+    assert lock_state["state"] == "locked_by_other"
+    assert lock_state["action_state"] == "blocked"
+    assert lock_state["audit_reference"]
+    with pytest.raises(TreasuryConflictError, match="Locked by locker-admin@example.com"):
+        treasury.review_withdrawal_status(
+            session,
+            actor=reviewer,
+            withdrawal_id=withdrawal.id,
+            status=TreasuryWithdrawalStatus.APPROVED,
+            admin_notes="should be blocked",
+        )
+
+    released = treasury.release_admin_lock(
+        session,
+        actor=locker,
+        resource_type="treasury_withdrawal",
+        resource_id=withdrawal.id,
+    )
+    assert released["state"] == "unlocked"
+    assert released["audit_reference"]
 
 
 def test_withdrawal_risk_flags_and_dispute_event(session) -> None:
@@ -150,6 +241,7 @@ def test_withdrawal_risk_flags_and_dispute_event(session) -> None:
     admin = _create_user(session, email="riskadmin@example.com", username="riskadmin")
     user.kyc_status = KycStatus.FULLY_VERIFIED
     session.commit()
+    _seed_policy_acceptances(session, user)
     _configure_withdrawal_settings(session)
     _seed_balance(session, user=user, amount=Decimal("7000.0000"))
 
@@ -194,12 +286,73 @@ def test_withdrawal_risk_flags_and_dispute_event(session) -> None:
     assert system_event is not None
 
 
+def test_rejected_withdrawal_cannot_reinstate_after_wallet_hold_release(session) -> None:
+    _seed_policy(session)
+    user = _create_user(session, email="release-block@example.com", username="releaseblock")
+    admin = _create_user(session, email="release-admin@example.com", username="releaseadmin")
+    user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+    _seed_policy_acceptances(session, user)
+    _configure_withdrawal_settings(session)
+    _seed_balance(session, user=user, amount=Decimal("100.0000"))
+
+    treasury = TreasuryService()
+    bank_account = treasury.create_user_bank_account(
+        session,
+        user=user,
+        bank_name="Release Bank",
+        account_number="2222222222",
+        account_name="Release User",
+        bank_code="004",
+        currency_code="NGN",
+        set_active=True,
+    )
+    session.commit()
+
+    withdrawal = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("10.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="release-block",
+    )
+    session.commit()
+
+    treasury.review_withdrawal_status(
+        session,
+        actor=admin,
+        withdrawal_id=withdrawal.id,
+        status=TreasuryWithdrawalStatus.REJECTED,
+        admin_notes="release funds",
+    )
+    session.commit()
+
+    payout = session.get(PayoutRequest, withdrawal.payout_request_id)
+    assert payout is not None
+    assert payout.settlement_transaction_id is not None
+
+    with pytest.raises(TreasuryConflictError, match="re-reserve funds"):
+        treasury.review_withdrawal_status(
+            session,
+            actor=admin,
+            withdrawal_id=withdrawal.id,
+            status=TreasuryWithdrawalStatus.PENDING_REVIEW,
+            admin_notes="try reinstating released funds",
+        )
+
+    refreshed = session.get(type(withdrawal), withdrawal.id)
+    assert refreshed is not None
+    assert refreshed.status == TreasuryWithdrawalStatus.REJECTED
+
+
 def test_withdrawal_batching_moves_approved_requests_to_processing(session) -> None:
     _seed_policy(session)
     user = _create_user(session, email="batching@example.com", username="batchinguser")
     admin = _create_user(session, email="batch-admin@example.com", username="batchadmin")
     user.kyc_status = KycStatus.FULLY_VERIFIED
     session.commit()
+    _seed_policy_acceptances(session, user)
     _configure_withdrawal_settings(session)
     _seed_balance(session, user=user, amount=Decimal("250.0000"))
 

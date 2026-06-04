@@ -68,8 +68,8 @@ class PaymentEventCreate(WalletRequestModel):
         title="PaymentEventCreate",
         json_schema_extra={
             "example": {
-                "provider": "paystack",
-                "provider_reference": "paystack-ref-001",
+                "provider": "korapay",
+                "provider_reference": "korapay-ref-001",
                 "amount": "50.0000",
                 "pack_code": "starter-50",
             }
@@ -307,8 +307,8 @@ class PaymentEventView(BaseModel):
         json_schema_extra={
             "example": {
                 "id": "pay-123",
-                "provider": "paystack",
-                "provider_reference": "paystack-ref-001",
+                "provider": "korapay",
+                "provider_reference": "korapay-ref-001",
                 "pack_code": "starter-50",
                 "amount": "50.0000",
                 "unit": "credit",
@@ -370,6 +370,16 @@ class WalletConversionView(WalletConversionQuoteView):
     reference: str
 
 
+class WalletLockReasonView(BaseModel):
+    code: str
+    label: str
+    amount: Decimal
+    currency: LedgerUnit
+    source: str = "wallet"
+    reference: str | None = None
+    message: str
+
+
 class WalletSummaryView(BaseModel):
     model_config = ConfigDict(
         title="WalletSummaryView",
@@ -377,6 +387,19 @@ class WalletSummaryView(BaseModel):
             "example": {
                 "available_balance": "50.0000",
                 "reserved_balance": "50.0000",
+                "locked_balance": "50.0000",
+                "pending_withdrawal_balance": "0.0000",
+                "lock_reasons": [
+                    {
+                        "code": "transfer_bid_reservation",
+                        "label": "Transfer bid reservations",
+                        "amount": "50.0000",
+                        "currency": "credit",
+                        "source": "transfer_bid",
+                        "reference": "transfer_bid:bid-123",
+                        "message": "Transfer bid reservations: 50.0000 credit",
+                    }
+                ],
                 "total_balance": "100.0000",
                 "currency": "credit",
             }
@@ -385,6 +408,9 @@ class WalletSummaryView(BaseModel):
 
     available_balance: Decimal
     reserved_balance: Decimal
+    locked_balance: Decimal = Decimal("0.0000")
+    pending_withdrawal_balance: Decimal = Decimal("0.0000")
+    lock_reasons: list[WalletLockReasonView] = Field(default_factory=list)
     total_balance: Decimal
     currency: LedgerUnit
 
@@ -524,6 +550,9 @@ class WalletAdaptiveInsightView(BaseModel):
 class WalletAdaptiveOverviewView(BaseModel):
     available_balance: Decimal
     reserved_balance: Decimal
+    locked_balance: Decimal = Decimal("0.0000")
+    pending_withdrawal_balance: Decimal = Decimal("0.0000")
+    lock_reasons: list[WalletLockReasonView] = Field(default_factory=list)
     total_balance: Decimal
     currency: LedgerUnit
     withdrawable_balance: Decimal
@@ -542,6 +571,10 @@ class WalletAdaptiveOverviewView(BaseModel):
 
 class WalletOverviewView(BaseModel):
     available_balance: Decimal
+    reserved_balance: Decimal = Decimal("0.0000")
+    locked_balance: Decimal = Decimal("0.0000")
+    pending_withdrawal_balance: Decimal = Decimal("0.0000")
+    lock_reasons: list[WalletLockReasonView] = Field(default_factory=list)
     pending_deposits: Decimal
     pending_withdrawals: Decimal
     total_inflow: Decimal
@@ -582,7 +615,7 @@ class WalletTransactionRecordView(BaseModel):
 
 class WalletTopUpInitiateRequest(BaseModel):
     amount: Decimal
-    provider: str = Field(default="paystack", min_length=3, max_length=32)
+    provider: str = Field(default="korapay", min_length=3, max_length=32)
     unit: LedgerUnit = LedgerUnit.COIN
     callback_url: str | None = Field(default=None, max_length=2048)
 

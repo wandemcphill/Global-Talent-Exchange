@@ -5,14 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../core/actions/action_pipeline.dart';
 import '../core/actions/event_service.dart';
 import '../core/theme/app_motion.dart';
-import '../controllers/competition_controller.dart';
-import '../data/competition_api.dart';
+import '../features/compete/providers/competition_controller.dart';
+import '../features/compete/repositories/competition_api.dart';
 import '../data/gte_api_repository.dart';
-import '../features/competitions/live_competitions_hub_screen.dart';
-import '../features/competitions/live_competitions_provider.dart';
+import '../features/compete/presentation/live_competitions_hub_screen.dart';
+import '../features/compete/providers/live_competitions_provider.dart';
 import '../features/home/home_screen.dart';
-import '../features/match/match_screen.dart';
-import '../features/match/match_viewer_route_screen.dart';
+import '../features/match_center/match_screen.dart';
+import '../features/match_center/match_viewer_route_screen.dart';
 import '../features/national_teams/national_teams_screen.dart';
 import '../features/profile/profile_admin_screen.dart';
 import '../features/profile/profile_login_screen.dart';
@@ -31,7 +31,7 @@ import '../shared/models/auth_session.dart';
 import '../shared/providers/auth_provider.dart';
 import '../shared/widgets/app_shell_scaffold.dart';
 import '../widgets/gte_route_integrity_screen.dart';
-import '../screens/competitions/competition_create_screen.dart';
+import '../features/compete/presentation/screens/competition_create_screen.dart';
 import 'app_destinations.dart';
 
 CompetitionFamilyRoute _competitionFamilyFromSegment(String value) {
@@ -326,33 +326,36 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
       ),
       GoRoute(
         path: AppRoutes.matchesBroadcast,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Broadcast package'),
+        redirect: (BuildContext context, GoRouterState state) {
+          final String matchKey = state.pathParameters['matchKey'] ?? '';
+          return matchKey.isEmpty
+              ? AppRoutes.matches
+              : AppRoutes.matchesViewerLocation(matchKey);
+        },
       ),
       GoRoute(
-        path: AppRoutes.matchesThreeD,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Advanced match viewing'),
+        path: AppRoutes.legacyMatchRuntime,
+        redirect: (BuildContext context, GoRouterState state) {
+          final String matchKey = state.pathParameters['matchKey'] ?? '';
+          return matchKey.isEmpty
+              ? AppRoutes.matches
+              : AppRoutes.matchesViewerLocation(matchKey);
+        },
       ),
       GoRoute(
-        path: AppRoutes.matchesNativeThreeD,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Advanced match viewing'),
+        path: AppRoutes.legacyBlockedMatchRuntime,
+        redirect:
+            (BuildContext context, GoRouterState state) => AppRoutes.matches,
       ),
       GoRoute(
         path: AppRoutes.matchesSpectate,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Spectate mode'),
+        redirect:
+            (BuildContext context, GoRouterState state) => AppRoutes.matches,
       ),
       GoRoute(
         path: AppRoutes.matchesSimulate,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Match simulation tools'),
+        redirect:
+            (BuildContext context, GoRouterState state) => AppRoutes.matches,
       ),
     ],
   );

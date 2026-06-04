@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import '../data/gte_api_repository.dart';
 import '../data/gte_mock_api.dart';
 import '../data/gte_models.dart';
+import '../features/capital/wallet/data/capital_wallet_api.dart';
+import '../features/capital/wallet/data/capital_wallet_display_snapshot.dart';
 
 @Deprecated(
   'Use GteFrontendApp and GteExchangeController for the canonical MVP app.',
@@ -11,6 +13,7 @@ class GteAppController extends ChangeNotifier {
   GteAppController({GteApiRepository? api}) : _api = api ?? GteMockApi();
 
   final GteApiRepository _api;
+  late final CapitalWalletApi _walletApi = capitalWalletApiForRepository(_api);
   final GteRequestGate _bootstrapGate = GteRequestGate();
   final GteRequestGate _marketGate = GteRequestGate();
   final GteRequestGate _authGate = GteRequestGate();
@@ -27,7 +30,8 @@ class GteAppController extends ChangeNotifier {
   List<PlayerSnapshot> players = <PlayerSnapshot>[];
   MarketPulse? marketPulse;
   GteAuthSession? session;
-  GteWalletSummary? walletSummary;
+  CapitalWalletDisplaySnapshot? _walletDisplay;
+  CapitalWalletDisplaySnapshot? get walletDisplay => _walletDisplay;
   GteWalletLedgerPage? walletLedger;
   GtePortfolioView? portfolio;
   GtePortfolioSummary? portfolioSummary;
@@ -157,8 +161,8 @@ class GteAppController extends ChangeNotifier {
     try {
       final List<dynamic> payload =
           await Future.wait<dynamic>(<Future<dynamic>>[
-            _api.fetchWalletSummary(currency: GteLedgerUnit.coin),
-            _api.fetchWalletLedger(page: 1, pageSize: 5),
+            _walletApi.fetchDisplaySnapshot(currency: GteLedgerUnit.coin),
+            _walletApi.fetchLedger(page: 1, pageSize: 5),
             _api.fetchPortfolio(),
             _api.fetchPortfolioSummary(),
             _api.listOrders(limit: 10, offset: 0),
@@ -167,7 +171,7 @@ class GteAppController extends ChangeNotifier {
         return;
       }
 
-      walletSummary = payload[0] as GteWalletSummary;
+      _walletDisplay = payload[0] as CapitalWalletDisplaySnapshot;
       walletLedger = payload[1] as GteWalletLedgerPage;
       portfolio = payload[2] as GtePortfolioView;
       portfolioSummary = payload[3] as GtePortfolioSummary;
@@ -208,7 +212,7 @@ class GteAppController extends ChangeNotifier {
   Future<void> signOut() async {
     await _api.logout();
     session = null;
-    walletSummary = null;
+    _walletDisplay = null;
     walletLedger = null;
     portfolio = null;
     portfolioSummary = null;

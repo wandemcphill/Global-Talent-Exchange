@@ -1,19 +1,57 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+from fastapi import FastAPI
 import pytest
-from sqlalchemy import create_engine
 
-from app.main import create_app
+from app.core.api_contract import install_api_contracts, register_versioned_route_aliases
+from app.auth.router import router as auth_router
+from app.market.router import router as market_router
+from app.national_team_engine.router import router as national_team_router
+from app.orders.router import api_router as orders_api_router
+from app.orders.router import legacy_router as orders_legacy_router
+from app.portfolio.router import router as portfolio_router
+from app.regen_universe.router import router as regen_universe_router
+from app.trader.router import router as trader_router
+from app.wallets.router import _api_operation_id as wallet_api_operation_id
+from app.wallets.router import wallet_router
 
 
-@pytest.fixture()
-def contract_app(tmp_path):
-    database_url = f"sqlite+pysqlite:///{(tmp_path / 'gte_contract_test.db').as_posix()}"
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    app = create_app(engine=engine, run_migration_check=True)
-    with TestClient(app) as client:
-        yield app, client
+@pytest.fixture(scope="module")
+def api_contract_openapi() -> dict:
+    app = FastAPI()
+    install_api_contracts(app)
+
+    def include_router_with_contract_aliases(router, **kwargs) -> None:
+        route_offset = len(app.router.routes)
+        app.include_router(router, **kwargs)
+        register_versioned_route_aliases(app, app.router.routes[route_offset:])
+
+    include_router_with_contract_aliases(orders_legacy_router)
+    include_router_with_contract_aliases(
+        orders_api_router,
+        generate_unique_id_function=wallet_api_operation_id,
+    )
+    for router in (
+        market_router,
+        portfolio_router,
+        wallet_router,
+        auth_router,
+        trader_router,
+        national_team_router,
+        regen_universe_router,
+    ):
+        include_router_with_contract_aliases(router)
+    include_router_with_contract_aliases(
+        portfolio_router,
+        prefix="/api",
+        generate_unique_id_function=wallet_api_operation_id,
+    )
+    include_router_with_contract_aliases(
+        wallet_router,
+        prefix="/api",
+        generate_unique_id_function=wallet_api_operation_id,
+    )
+    return app.openapi()
 
 
 def _resolve_response_component(openapi: dict, schema: dict) -> tuple[str, dict]:
@@ -29,9 +67,10 @@ def _resolve_response_component(openapi: dict, schema: dict) -> tuple[str, dict]
     raise AssertionError(f"Unsupported response schema shape: {schema}")
 
 
-def test_target_api_contracts_are_documented_with_stable_operation_ids(contract_app) -> None:
-    app, _client = contract_app
-    openapi = app.openapi()
+def test_target_api_contracts_are_documented_with_stable_operation_ids(
+    api_contract_openapi,
+) -> None:
+    openapi = api_contract_openapi
     expected_operations = {
         ("/api/orders", "get"): "api_list_orders_api_orders_get",
         ("/api/orders", "post"): "api_place_order_api_orders_post",
@@ -92,14 +131,17 @@ def test_target_api_contracts_are_documented_with_stable_operation_ids(contract_
     assert "/api/api/orders/{order_id}/cancel" not in openapi["paths"]
 
 
-def test_versioned_contract_paths_publish_standard_response_and_error_schemas(contract_app) -> None:
-    app, _client = contract_app
-    openapi = app.openapi()
+def test_versioned_contract_paths_publish_standard_response_and_error_schemas(
+    api_contract_openapi,
+) -> None:
+    openapi = api_contract_openapi
 
     assert "/api/v2/orders" in openapi["paths"]
-    assert "/api/v2/auth/signup/user" in openapi["paths"]
-    assert "/api/v2/auth/signup/creator" in openapi["paths"]
-    assert "/api/v2/auth/signup/trader" in openapi["paths"]
+    assert "/api/v2/auth/signup/player" in openapi["paths"]
+    assert "/api/v2/auth/signup/organization" in openapi["paths"]
+    assert "/api/v2/auth/signup/user" not in openapi["paths"]
+    assert "/api/v2/auth/signup/creator" not in openapi["paths"]
+    assert "/api/v2/auth/signup/trader" not in openapi["paths"]
     assert "/api/v2/auth/register" not in openapi["paths"]
     assert "/api/v2/trader/overview" in openapi["paths"]
     assert "/api/v2/trader/markets" in openapi["paths"]
@@ -130,8 +172,8 @@ def test_versioned_contract_paths_publish_standard_response_and_error_schemas(co
     assert "$ref" in request_schema
 
 
-def test_old_public_register_is_removed_from_contract_and_returns_gone(contract_app) -> None:
-    _app, client = contract_app
+def test_old_public_register_is_removed_from_contract_and_route_table(mounted_app_client) -> None:
+    client = mounted_app_client
     response = client.post(
         "/auth/register",
         json={
@@ -145,33 +187,32 @@ def test_old_public_register_is_removed_from_contract_and_returns_gone(contract_
     )
 
     assert response.status_code == 410, response.text
+    assert response.json()["code"] == "DEPRECATED_ROUTE"
 
 
-def test_versioned_signup_user_wraps_success_envelope(contract_app) -> None:
-    _app, client = contract_app
+def test_versioned_signup_player_wraps_success_envelope(mounted_app_client) -> None:
+    client = mounted_app_client
     response = client.post(
-        "/api/v2/auth/signup/user",
+        "/api/v2/auth/signup/player",
         headers={"X-API-Version": "2"},
         json={
             "email": "contract-user@example.com",
             "full_name": "Contract User",
-            "username": "contract_user",
             "country": "NG",
-            "state": "Lagos",
-            "city": "Lagos",
             "password": "SuperSecret1",
-            "club_name": "Contract Sporting",
-            "club_short_tag": "CSP",
-            "club_country": "NG",
-            "club_state": "Lagos",
-            "club_locality": "Yaba",
-            "club_type": "academy",
-            "football_identity": "club_owner",
-            "compliance": {
-                "government_id_attachment_id": "gov-contract",
-                "selfie_attachment_id": "selfie-contract",
-                "country_confirmation": "NG",
-            },
+            "preferred_position": "Forward",
+            "date_of_birth": "2006-05-12",
+            "pin": "2718",
+            "recovery_questions": [
+                {
+                    "question": "Which academy did I first train with?",
+                    "answer": "Surulere Stars",
+                },
+                {
+                    "question": "What nickname did my first coach call me?",
+                    "answer": "Flash",
+                },
+            ],
         },
     )
 

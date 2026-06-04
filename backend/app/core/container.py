@@ -104,6 +104,7 @@ class Container:
         from app.core.jobs import InlineJobBackend
         from app.ingestion.pipeline import NormalizedMatchEventPipeline
         from app.infrastructure.outbox import RedisKafkaOutboxPublisher
+        from app.integrations.ai_brain_client import create_ai_brain_event_bridge_from_env
         from app.global_memory.projections import GlobalMemoryProjectionService
         from app.jobs import IngestionJobRunner
         from app.market.projections import MarketSummaryProjector
@@ -156,6 +157,9 @@ class Container:
         event_publisher.subscribe(fraud_detection.handle_event)
         event_publisher.subscribe(security_monitoring.handle_event)
         event_publisher.subscribe(self.global_memory_projector.handle_event)
+        ai_brain_event_bridge = create_ai_brain_event_bridge_from_env()
+        if ai_brain_event_bridge is not None:
+            event_publisher.subscribe(ai_brain_event_bridge.handle_event)
         if _use_local_match_command_bridge(self.settings):
             event_publisher.subscribe(
                 LocalMatchCommandBridge(

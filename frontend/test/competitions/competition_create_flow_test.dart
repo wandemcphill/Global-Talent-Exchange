@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/features/compete/providers/competition_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
-import 'package:gte_frontend/screens/competitions/competition_create_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_publish_preview_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_share_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_create_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_publish_preview_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_share_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {

@@ -40,25 +40,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Home'), findsWidgets);
-    expect(find.text('Matchday'), findsWidgets);
-    expect(find.text('Home sync'), findsOneWidget);
+    expect(find.text('World'), findsWidgets);
+    expect(find.text('Compete'), findsWidgets);
+    expect(find.text('World sync'), findsOneWidget);
     expect(find.text('Market'), findsWidgets);
 
-    final Finder marketNavChip = find.ancestor(
-      of: find.text('Market').last,
-      matching: find.byType(InkWell),
-    );
-    await tester.ensureVisible(marketNavChip);
-    await tester.tap(marketNavChip);
+    final Finder marketNavLabel = find.text('Market').first;
+    await tester.ensureVisible(marketNavLabel);
+    await tester.tap(marketNavLabel);
     await tester.pumpAndSettle();
 
     expect(find.text('Player market'), findsOneWidget);
     expect(find.text('PLAYER MARKET'), findsOneWidget);
-    expect(
-      find.textContaining('Search player, club'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Search player, club'), findsOneWidget);
   });
 }
 

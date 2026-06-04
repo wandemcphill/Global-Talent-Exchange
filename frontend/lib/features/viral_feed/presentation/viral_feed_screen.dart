@@ -694,7 +694,6 @@ class _RouteStatusBadge extends StatelessWidget {
     final Color color = switch (status) {
       DataSourceStatus.live => tokens.positive,
       DataSourceStatus.blocked => tokens.negative,
-      DataSourceStatus.demo => tokens.warning,
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

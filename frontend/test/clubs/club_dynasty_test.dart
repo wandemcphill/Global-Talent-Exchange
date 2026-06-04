@@ -6,8 +6,9 @@ import 'package:gte_frontend/screens/clubs/club_dynasty_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('club dynasty shows timeline and legacy milestones',
-      (WidgetTester tester) async {
+  testWidgets('club dynasty shows timeline and legacy milestones', (
+    WidgetTester tester,
+  ) async {
     final ClubController controller = ClubController(
       api: ClubApi.fixture(),
       clubId: 'atlas-republic',

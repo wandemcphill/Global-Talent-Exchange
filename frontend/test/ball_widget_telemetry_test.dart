@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/widgets/match/ball_widget.dart';
-import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/widgets/ball_widget.dart';
+import 'package:gte_frontend/features/match_center/widgets/pitch_2d_widget.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 

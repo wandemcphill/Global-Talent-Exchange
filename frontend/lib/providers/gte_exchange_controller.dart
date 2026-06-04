@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../app/gte_app_config.dart';
 import '../core/app_feedback.dart';
 import '../domain/match/match_weights.dart';
 
@@ -10,6 +11,10 @@ import '../data/gte_api_repository.dart';
 import '../data/gte_exchange_api_client.dart';
 import '../data/gte_exchange_models.dart';
 import '../data/gte_models.dart';
+import '../features/capital/disputes/data/capital_dispute_api.dart';
+import '../features/capital/trader/data/trader_api.dart';
+import '../features/capital/wallet/data/capital_wallet_api.dart';
+import '../features/capital/wallet/data/capital_wallet_display_snapshot.dart';
 
 const int _marketPageSize = 500;
 
@@ -18,6 +23,21 @@ class GteExchangeController extends ChangeNotifier {
 
   final GteExchangeApiClient _api;
   GteExchangeApiClient get api => _api;
+  late final CapitalWalletApi _walletApi = capitalWalletApiForRepository(
+    _api.repository,
+  );
+  CapitalWalletApi get walletApi => _walletApi;
+  late final CapitalDisputeApi _disputeApi = capitalDisputeApiForClient(_api);
+  CapitalDisputeApi get disputeApi => _disputeApi;
+  TraderApi createTraderApi(GteAppConfig config) {
+    return createCapitalTraderApi(
+      baseUrl: config.apiBaseUrl,
+      accessToken: accessToken,
+      backendMode: config.backendMode,
+      transport: _api.transport,
+    );
+  }
+
   final GteRequestGate _marketGate = GteRequestGate();
   final GteRequestGate _playerGate = GteRequestGate();
   final GteRequestGate _portfolioGate = GteRequestGate();
@@ -65,7 +85,8 @@ class GteExchangeController extends ChangeNotifier {
   GteMarketPlayerListView? marketPage;
   GtePlayerMarketSnapshot? selectedPlayer;
   PlayerProfile? selectedProfile;
-  GteWalletSummary? walletSummary;
+  CapitalWalletDisplaySnapshot? _walletDisplay;
+  CapitalWalletDisplaySnapshot? get walletDisplay => _walletDisplay;
   GtePortfolioView? portfolio;
   GtePortfolioSummary? portfolioSummary;
   GteComplianceStatus? complianceStatus;
@@ -412,52 +433,10 @@ class GteExchangeController extends ChangeNotifier {
     }
   }
 
-  Future<void> register({
-    required String fullName,
-    required String phoneNumber,
-    required String email,
-    required String password,
-    required bool isOver18,
-    required String regionCode,
-    String? username,
-  }) async {
-    final int requestId = _authGate.begin();
-    authError = null;
-    isSigningIn = true;
-    notifyListeners();
-
-    try {
-      final GteAuthSession nextSession = await _api.register(
-        fullName: fullName,
-        phoneNumber: phoneNumber,
-        email: email,
-        password: password,
-        isOver18: isOver18,
-        regionCode: regionCode,
-        username: username,
-      );
-      if (!_authGate.isActive(requestId)) {
-        return;
-      }
-      session = nextSession;
-      authError = null;
-      await refreshAccount();
-    } catch (error) {
-      if (_authGate.isActive(requestId)) {
-        authError = AppFeedback.messageFor(error);
-      }
-    } finally {
-      if (_authGate.isActive(requestId)) {
-        isSigningIn = false;
-        notifyListeners();
-      }
-    }
-  }
-
   Future<void> signOut() async {
     await _api.logout();
     session = null;
-    walletSummary = null;
+    _walletDisplay = null;
     portfolio = null;
     portfolioSummary = null;
     complianceStatus = null;
@@ -604,12 +583,11 @@ class GteExchangeController extends ChangeNotifier {
 
     final Future<void> task = () async {
       try {
-        final List<dynamic> payload = await Future.wait<dynamic>(
-          <Future<dynamic>>[
-            _api.fetchComplianceStatus(),
-            _api.fetchPolicyRequirements(),
-          ],
-        );
+        final List<dynamic> payload =
+            await Future.wait<dynamic>(<Future<dynamic>>[
+              _walletApi.fetchComplianceStatus(),
+              _walletApi.fetchPolicyRequirements(),
+            ]);
         if (!_complianceGate.isActive(requestId)) {
           return;
         }
@@ -649,14 +627,14 @@ class GteExchangeController extends ChangeNotifier {
       try {
         final List<dynamic> payload =
             await Future.wait<dynamic>(<Future<dynamic>>[
-              _api.fetchWalletSummary(currency: GteLedgerUnit.coin),
+              _walletApi.fetchDisplaySnapshot(currency: GteLedgerUnit.coin),
               _api.fetchPortfolio(),
               _api.fetchPortfolioSummary(),
             ]);
         if (!_portfolioGate.isActive(requestId)) {
           return;
         }
-        walletSummary = payload[0] as GteWalletSummary;
+        _walletDisplay = payload[0] as CapitalWalletDisplaySnapshot;
         portfolio = payload[1] as GtePortfolioView;
         portfolioSummary = payload[2] as GtePortfolioSummary;
         portfolioSyncedAt = DateTime.now().toUtc();

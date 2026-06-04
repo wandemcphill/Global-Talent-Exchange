@@ -4,6 +4,13 @@ Verified against the current workspace on 2026-04-11.
 
 This document is the Phase 0 source of truth for backend/frontend alignment. It replaces the older audit snapshot where that snapshot no longer matches this checkout.
 
+## Canonical Override - 2026-06-04
+
+The production GTEX direction is now the canonical Flutter/backend football operating system.
+The active match experience is 2D broadcast-style match center only.
+Legacy Unity, native 3D, pseudo-3D, and original visual runtime work is quarantined and must not be promoted into production navigation, deploy gates, monetization, CTAs, or product-facing contracts.
+Older route rows below that describe 3D/native/Unity as live are retained only as historical audit context when not updated.
+
 ## Status Labels
 
 - `LIVE`: reachable UI path and real backend path are both present
@@ -12,6 +19,7 @@ This document is the Phase 0 source of truth for backend/frontend alignment. It 
 - `HIDDEN`: backend exists, but the UI surface is hidden or blocked
 - `UNWIRED`: backend exists, no meaningful frontend path verified
 - `DECISION_REQUIRED`: backend module exists, but product scope still needs ship/hide/deprecate decision
+- `QUARANTINED`: legacy/reference surface may exist, but is hidden from production and must not be promoted without explicit user direction
 - `STALE_AUDIT_CLOSED`: the older audit claim is not true for this checkout
 
 ## Baseline Inventory
@@ -52,12 +60,12 @@ This document is the Phase 0 source of truth for backend/frontend alignment. It 
 | Federation Detail | `HIDDEN` | Deep route |
 | National Team Detail | `HIDDEN` | Deep route |
 | Competition Detail | `HIDDEN` | Deep route |
-| 2D Match Viewer | `HIDDEN` | Deep route |
+| 2D Match Viewer | `LIVE_WITH_GAP` | Canonical match direction; deep route/surface still needs final route-depth and realtime verification |
 | Broadcast+ Viewer | `HIDDEN` | Deep route |
-| 3D Match Viewer | `HIDDEN` | Deep route |
+| 3D Match Viewer | `QUARANTINED` | Legacy/reference only; no production promotion |
 | 2D Spectate Probe | `HIDDEN` | Deep route |
 | Simulation | `HIDDEN` | Reserved for explicit fixture-mode local simulation |
-| Native 3D | `LIVE_WITH_GAP` | Route is still marked placeholder while Android native bridge exists |
+| Native 3D | `QUARANTINED` | Android/native bridge code may exist, but production GTEX must not route or monetize it |
 
 ### Known route-integrity walls still present in screen implementations
 
@@ -118,7 +126,7 @@ These items were valid for an older snapshot but are not open defects in this ch
 | Sponsorship | `sponsorship_engine` | Sponsorship contract/package screens plus admin APIs | `READ_ONLY` | Contract and package views exist, but user-side offer discovery and application flow are missing. | `A6`, `A8` |
 | Replay | `matches` replay endpoints | Match replay calls from frontend | `LIVE_WITH_GAP` | Frontend replay works through match replay endpoints. | `A8` |
 | Replay archive | `replay_archive` | No verified dedicated UI path | `UNWIRED` | Archive-specific policy and retrieval routes exist, but the frontend is not using them as the primary replay surface. | `A8` |
-| Matches and 3D | `matches`, `live_matches`, `match_engine`, 3D bridge paths | 2D viewer, broadcast, Flutter 3D, Android native bridge | `LIVE_WITH_GAP` | Rich match surfaces exist and Android native bridge exists, but deep-route/gating truthfulness still needs cleanup. | `A4`, `A5` |
+| Match center | `matches`, `live_matches`, realtime match streams | 2D viewer, broadcast match center | `LIVE_WITH_GAP` | Canonical direction is 2D broadcast match center with backend-authored score, timeline, stats, positions, commentary, and reconnect state. Legacy 3D/native bridge paths are quarantined. | `A4`, `A5` |
 | World simulation | `world_simulation`, `football_universe`, related world routes | Football world simulation feature/screens | `LIVE` | Contrary to the old audit, this is wired in the current checkout. | Regression coverage only |
 | Streamer tournament engine | `streamer_tournament_engine` | Live streamer engine route/screen | `LIVE` | Current surface is wired. | Regression coverage only |
 | Creator-league settlements/admin | Creator-league admin and settlement paths | Creator league admin screen/routes | `LIVE` | Admin settlement flow exists in current checkout. | Regression coverage only |

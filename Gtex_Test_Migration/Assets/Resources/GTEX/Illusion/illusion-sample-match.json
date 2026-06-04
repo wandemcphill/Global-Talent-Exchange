@@ -1,0 +1,152 @@
+{
+  "matchId": "illusion-phase-1-sample",
+  "homeTeam": "Kano Pillars",
+  "awayTeam": "Enyimba FC",
+  "seed": 1337,
+  "events": [
+    {
+      "minute": 0,
+      "type": "commentary",
+      "team": "home",
+      "commentary": "Kickoff. GTEX illusion playback is live."
+    },
+    {
+      "minute": 3,
+      "type": "pass",
+      "team": "home",
+      "from": "home-6",
+      "to": "home-8",
+      "commentary": "Kano Pillars settle into a short passing rhythm."
+    },
+    {
+      "minute": 7,
+      "type": "pass",
+      "team": "home",
+      "from": "home-8",
+      "to": "home-10",
+      "commentary": "The ball is worked into the left half-space."
+    },
+    {
+      "minute": 11,
+      "type": "dribble",
+      "team": "home",
+      "player": "home-10",
+      "duration": 1.35,
+      "x": 21,
+      "z": 19,
+      "commentary": "The winger carries forward, waiting for the striker to move."
+    },
+    {
+      "minute": 15,
+      "type": "through_pass",
+      "team": "home",
+      "from": "home-10",
+      "to": "home-9",
+      "duration": 1.25,
+      "commentary": "A measured through pass splits the defensive line."
+    },
+    {
+      "minute": 18,
+      "type": "shot",
+      "team": "home",
+      "player": "home-9",
+      "duration": 1.15,
+      "outcome": "save",
+      "commentary": "The striker gets the shot away."
+    },
+    {
+      "minute": 19,
+      "type": "save",
+      "team": "away",
+      "player": "away-1",
+      "commentary": "The keeper reads it and gathers cleanly."
+    },
+    {
+      "minute": 28,
+      "type": "pass",
+      "team": "away",
+      "from": "away-4",
+      "to": "away-6",
+      "commentary": "Enyimba rebuild from the back instead of clearing long."
+    },
+    {
+      "minute": 35,
+      "type": "tackle",
+      "team": "home",
+      "player": "home-5",
+      "target": "away-10",
+      "commentary": "Kano Pillars step in early and halt the counter."
+    },
+    {
+      "minute": 44,
+      "type": "pass",
+      "team": "home",
+      "from": "home-7",
+      "to": "home-11",
+      "commentary": "A switch of play arrives cleanly at feet before half-time."
+    },
+    {
+      "minute": 48,
+      "type": "pass",
+      "team": "home",
+      "from": "home-11",
+      "to": "home-9",
+      "commentary": "A low pass finds the striker at the edge of the area."
+    },
+    {
+      "minute": 51,
+      "type": "shot",
+      "team": "home",
+      "player": "home-9",
+      "duration": 1.2,
+      "outcome": "goal",
+      "commentary": "This time the angle is clean."
+    },
+    {
+      "minute": 52,
+      "type": "goal",
+      "team": "home",
+      "player": "home-9",
+      "commentary": "Goal. Kano Pillars take the lead."
+    },
+    {
+      "minute": 66,
+      "type": "foul",
+      "team": "away",
+      "player": "away-5",
+      "target": "home-10",
+      "commentary": "Enyimba break up the next attack with a foul."
+    },
+    {
+      "minute": 74,
+      "type": "through_pass",
+      "team": "away",
+      "from": "away-8",
+      "to": "away-9",
+      "duration": 1.25,
+      "commentary": "Enyimba finally find space behind the defence."
+    },
+    {
+      "minute": 77,
+      "type": "shot",
+      "team": "away",
+      "player": "away-9",
+      "duration": 1.1,
+      "outcome": "save",
+      "commentary": "The away striker tests the keeper from a narrow lane."
+    },
+    {
+      "minute": 78,
+      "type": "save",
+      "team": "home",
+      "player": "home-1",
+      "commentary": "The home keeper holds position and makes the save."
+    },
+    {
+      "minute": 90,
+      "type": "commentary",
+      "team": "home",
+      "commentary": "Full time. Phase 1 playback complete."
+    }
+  ]
+}

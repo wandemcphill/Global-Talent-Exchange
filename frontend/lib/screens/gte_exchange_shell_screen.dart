@@ -10,7 +10,7 @@ class GteExchangeShellScreen extends StatelessWidget {
     required this.controller,
     required this.apiBaseUrl,
     required this.backendMode,
-    this.initialPath = '/app/home',
+    this.initialPath = '/app/world',
   });
 
   factory GteExchangeShellScreen.fromPath({

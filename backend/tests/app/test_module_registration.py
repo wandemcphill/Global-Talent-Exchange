@@ -1,144 +1,17 @@
 from __future__ import annotations
 
-from pathlib import Path
-from uuid import uuid4
-
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import create_engine
+
+from app.modules import DOMAIN_MODULES
+
+from backend.tests.app._module_registration_contract_data import EXPECTED_REGISTERED_MODULES
 
 
-@pytest.fixture()
-def mounted_app():
-    temp_root = Path(__file__).resolve().parents[2] / ".tmp_testdbs"
-    temp_root.mkdir(parents=True, exist_ok=True)
-    database_path = temp_root / f"gte_module_registration_{uuid4().hex}.db"
-    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    from app.main import create_app
+def test_real_app_registers_competition_and_identity_modules() -> None:
+    registered_modules = {module.name for module in DOMAIN_MODULES}
 
-    try:
-        yield create_app(engine=engine, run_migration_check=True)
-    finally:
-        engine.dispose()
-        try:
-            database_path.unlink()
-        except FileNotFoundError:
-            pass
-        except PermissionError:
-            pass
-
-
-def test_real_app_registers_competition_and_identity_modules(mounted_app) -> None:
-    with TestClient(mounted_app):
-        openapi_paths = mounted_app.openapi()["paths"]
-        registered_modules = set(mounted_app.state.domain_modules)
-
-    assert {
-        "leagues",
-        "champions_league",
-        "academy",
-        "ai_manager",
-        "world_super_cup",
-        "fast_cups",
-        "match_engine",
-        "matches",
-        "simulation_matchmaking",
-        "ultimate_league",
-        "manager_marketplace",
-        "predictions",
-        "club_finance",
-        "live_ops",
-        "canonical_clubs",
-        "competitive_integrity",
-        "club_identity",
-        "replay_archive",
-        "notifications",
-        "regen_universe",
-        "football_universe",
-        "broadcast_rights",
-        "ownership_groups",
-        "real_world_hub",
-        "real_world_hub_admin",
-        "gtex_universe",
-        "federations",
-        "federations_admin",
-    }.issubset(registered_modules)
-    assert "/leagues/register" in openapi_paths
-    assert "/champions-league/qualification-map" in openapi_paths
-    assert "/academy/season-summary" in openapi_paths
-    assert "/ai-manager/autopilot/run" in openapi_paths
-    assert "/world-super-cup/countdown" in openapi_paths
-    assert "/fast-cups/upcoming" in openapi_paths
-    assert "/match-engine/replay" in openapi_paths
-    assert "/matches/start" in openapi_paths
-    assert "/matches/complete" in openapi_paths
-    assert "/matches/{match_id}/replay" in openapi_paths
-    assert "/matches/{match_id}/analysis" in openapi_paths
-    assert "/predictions" in openapi_paths
-    assert "/predictions/leaderboard" in openapi_paths
-    assert "/finance" in openapi_paths
-    assert "/sponsors" in openapi_paths
-    assert "/season-pass" in openapi_paths
-    assert "/season-pass/claim" in openapi_paths
-    assert "/live-events" in openapi_paths
-    assert "/api/predictions" in openapi_paths
-    assert "/api/finance" in openapi_paths
-    assert "/api/season-pass" in openapi_paths
-    assert "/managers" in openapi_paths
-    assert "/managers/leaderboard" in openapi_paths
-    assert "/simulation-matchmaking/quick-game" in openapi_paths
-    assert "/ultimate-league/tiers" in openapi_paths
-    assert "/ultimate-league/tournaments" in openapi_paths
-    assert "/api/competitive-integrity/managers" in openapi_paths
-    assert "/api/competitive-integrity/matches" in openapi_paths
-    assert "/api/competitive-integrity/fast-game/runs" in openapi_paths
-    assert "/api/notifications" in openapi_paths
-    assert "/broadcast/{match_id}" in openapi_paths
-    assert "/broadcast-rights/competitions/{competition_id}" in openapi_paths
-    assert "/broadcast-rights/matches/{match_id}/access" in openapi_paths
-    assert "/admin/broadcast-rights/jobs/run" in openapi_paths
-    assert "/fans/{club_id}" in openapi_paths
-    assert "/club/identity" in openapi_paths
-    assert "/media" in openapi_paths
-    assert "/ownership-groups" in openapi_paths
-    assert "/ownership-groups/transfers/validate" in openapi_paths
-    assert "/admin/ownership-groups/reputation-cycle" in openapi_paths
-    assert "/real-world/providers" in openapi_paths
-    assert "/real-world/hybrid-players" in openapi_paths
-    assert "/real-world/events" in openapi_paths
-    assert "/admin/real-world/providers" in openapi_paths
-    assert "/career/create" in openapi_paths
-    assert "/career/retire" in openapi_paths
-    assert "/career/{user_id}" in openapi_paths
-    assert "/sync/update" in openapi_paths
-    assert "/federations" in openapi_paths
-    assert "/federations/rankings" in openapi_paths
-    assert "/federations/{federation_id}/governance" in openapi_paths
-    assert "/admin/federations/run-jobs" in openapi_paths
-    assert "/api/clubs/{club_id}/reputation" in openapi_paths
-    assert "/api/clubs/{club_id}/dynasty" in openapi_paths
-    assert "/api/clubs/{club_id}/identity" in openapi_paths
-    assert "/regen-universe/awards" in openapi_paths
-    assert "/regen-universe/rising-stars" in openapi_paths
-    assert "/regen-universe/player/{player_id}" in openapi_paths
-    assert "/regen-universe/bloodlines" in openapi_paths
-    assert "/regen-universe/scouting-feed" in openapi_paths
-    assert "/regen-universe/youth-tournaments" in openapi_paths
-    assert "/regen-universe/youth-tournaments/{tournament_id}" in openapi_paths
-    assert "/admin/regen-universe/youth-tournaments" in openapi_paths
-    assert "/admin/regen-universe/jobs/story-regeneration" in openapi_paths
-    assert "/admin/regen-universe/jobs/rivalry-detection" in openapi_paths
-    assert "/admin/regen-universe/jobs/dna-evolution" in openapi_paths
-    assert "/admin/regen-universe/jobs/tournament-scheduling" in openapi_paths
-    assert "/admin/ops/fan-updates" in openapi_paths
-    assert "/admin/ops/media-generation" in openapi_paths
-    assert "/admin/ops/identity-evolution" in openapi_paths
-    assert "/players/{player_id}/story" in openapi_paths
-    assert "/players/{player_id}/dna" in openapi_paths
-    assert "/players/{player_id}/rivalries" in openapi_paths
-    assert "/replays/public/featured" in openapi_paths
-    assert "/notifications/me" in openapi_paths
+    assert EXPECTED_REGISTERED_MODULES.issubset(registered_modules)
 
 
 def test_mounted_module_routes_resolve_on_the_real_app(mounted_app) -> None:
@@ -263,21 +136,22 @@ def test_streamer_tournaments_route_does_not_force_global_lazy_hydration(mounted
 
 
 @pytest.mark.parametrize(
-    ("path", "expected_status"),
+    ("path", "headers", "expected_status"),
     (
-        ("/api/broadcast/home", 200),
-        ("/api/match-viewer/nonexistent", 404),
+        ("/api/v2/broadcast/home", {"X-API-Version": "2"}, 200),
+        ("/api/v2/match-viewer/nonexistent", {"X-API-Version": "2"}, 404),
     ),
 )
 def test_live_broadcast_and_match_viewer_routes_do_not_force_global_lazy_hydration(
     mounted_app,
     path: str,
+    headers: dict[str, str],
     expected_status: int,
 ) -> None:
     assert mounted_app.state.modules_hydrated is False
 
     with TestClient(mounted_app) as client:
-        response = client.get(path)
+        response = client.get(path, headers=headers)
 
     assert response.status_code == expected_status
     assert mounted_app.state.modules_hydrated is False

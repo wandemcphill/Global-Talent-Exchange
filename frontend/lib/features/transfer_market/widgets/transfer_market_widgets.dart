@@ -321,6 +321,7 @@ class TransferBidSheet extends ConsumerStatefulWidget {
 
 class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
   late final TextEditingController _bidController;
+  late final TextEditingController _pinController;
   late final FocusNode _bidFocusNode;
   int _inputErrorCount = 0;
 
@@ -333,12 +334,14 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
     _bidController = TextEditingController(
       text: minimumBid > 0 ? minimumBid.toStringAsFixed(1) : '',
     );
+    _pinController = TextEditingController();
     _bidFocusNode = FocusNode();
   }
 
   @override
   void dispose() {
     _bidController.dispose();
+    _pinController.dispose();
     _bidFocusNode.dispose();
     super.dispose();
   }
@@ -347,8 +350,11 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
     final TransferMarketNotifier notifier = ref.read(transferProvider.notifier);
     final double minimumBid = notifier.minimumBidFor(widget.playerId);
     final double? parsedBid = double.tryParse(_bidController.text.trim());
+    final String securityPin = _pinController.text.trim();
 
-    if (parsedBid == null || parsedBid < minimumBid) {
+    if (parsedBid == null ||
+        parsedBid < minimumBid ||
+        !RegExp(r'^\d{4}$').hasMatch(securityPin)) {
       setState(() {
         _inputErrorCount += 1;
       });
@@ -356,7 +362,9 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Bid must be at least ${AppFormatters.money(minimumBid)}.',
+            parsedBid == null || parsedBid < minimumBid
+                ? 'Bid must be at least ${AppFormatters.money(minimumBid)}.'
+                : 'Enter your 4-digit security PIN.',
           ),
         ),
       );
@@ -366,6 +374,7 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
     final double? placedBid = await notifier.submitBid(
       widget.playerId,
       parsedBid,
+      securityPin: securityPin,
     );
     if (!mounted) {
       return;
@@ -386,6 +395,7 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
       ..selection = TextSelection.fromPosition(
         TextPosition(offset: _bidController.text.length),
       );
+    _pinController.clear();
 
     FocusScope.of(context).unfocus();
     HapticFeedback.selectionClick();
@@ -564,23 +574,43 @@ class _TransferBidSheetState extends ConsumerState<TransferBidSheet> {
                 const SizedBox(height: spacingMD),
                 AppShake(
                   trigger: _inputErrorCount,
-                  child: TextField(
-                    key: const Key('transfer-bid-input'),
-                    controller: _bidController,
-                    focusNode: _bidFocusNode,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  child: Column(
+                    children: <Widget>[
+                      TextField(
+                        key: const Key('transfer-bid-input'),
+                        controller: _bidController,
+                        focusNode: _bidFocusNode,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                        ],
+                        decoration: InputDecoration(
+                          labelText: 'Bid amount (millions)',
+                          prefixText: '\$',
+                          suffixText: 'M',
+                          helperText:
+                              'Suggested minimum ${AppFormatters.money(minimumBid)}',
+                        ),
+                      ),
+                      const SizedBox(height: spacingMD),
+                      TextField(
+                        key: const Key('transfer-bid-pin-input'),
+                        controller: _pinController,
+                        keyboardType: TextInputType.number,
+                        obscureText: true,
+                        maxLength: 4,
+                        inputFormatters: <TextInputFormatter>[
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(4),
+                        ],
+                        decoration: const InputDecoration(
+                          labelText: 'Security PIN',
+                          counterText: '',
+                        ),
+                      ),
                     ],
-                    decoration: InputDecoration(
-                      labelText: 'Bid amount (millions)',
-                      prefixText: '\$',
-                      suffixText: 'M',
-                      helperText:
-                          'Suggested minimum ${AppFormatters.money(minimumBid)}',
-                    ),
                   ),
                 ),
                 const SizedBox(height: spacingMD),

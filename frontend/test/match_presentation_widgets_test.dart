@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/commentary_ribbon_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/formation_board_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/roster_card_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/scorebug_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/standings_context_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/storyline_panel_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/tactical_hud_widget.dart';
-import 'package:gte_frontend/features/match/presentation/broadcast_scene_director.dart';
+import 'package:gte_frontend/features/match_center/presentation/broadcast_package_models.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/commentary_ribbon_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/formation_board_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/roster_card_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/scorebug_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/standings_context_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/storyline_panel_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/tactical_hud_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/broadcast_scene_director.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 

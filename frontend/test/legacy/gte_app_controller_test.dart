@@ -9,7 +9,7 @@ void main() {
     'controller bootstrap loads players and derived market counts',
     () async {
       final GteAppController controller = GteAppController(
-        api: GteMockApi(latency: Duration.zero),
+        api: GteMockApi.capitalFixtures(latency: Duration.zero),
       );
 
       await controller.bootstrap();
@@ -23,7 +23,7 @@ void main() {
 
   test('tracking actions update player collections and market pulse', () async {
     final GteAppController controller = GteAppController(
-      api: GteMockApi(latency: Duration.zero),
+      api: GteMockApi.capitalFixtures(latency: Duration.zero),
     );
 
     await controller.bootstrap();
@@ -44,7 +44,7 @@ void main() {
 
   test('sign in loads wallet, portfolio, and order state', () async {
     final GteAppController controller = GteAppController(
-      api: GteMockApi(latency: Duration.zero),
+      api: GteMockApi.capitalFixtures(latency: Duration.zero),
     );
 
     await controller.signIn(
@@ -53,7 +53,7 @@ void main() {
     );
 
     expect(controller.session?.user.username, 'fixture_trader');
-    expect(controller.walletSummary?.availableBalance, 1200);
+    expect(controller.walletDisplay?.availableBalance, 1200);
     expect(controller.portfolio?.holdings, isNotEmpty);
     expect(controller.portfolioSummary?.totalEquity, greaterThan(0));
     expect(controller.orders?.items, isNotEmpty);

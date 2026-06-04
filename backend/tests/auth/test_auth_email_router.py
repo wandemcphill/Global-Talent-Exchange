@@ -15,7 +15,15 @@ from app.models.user import User
 from app.services.email.email_service import EmailService
 from app.services.email.providers.base import EmailProvider
 from app.services.email.schemas import EmailMessage, EmailSendResult
-from backend.tests.support.signup_payloads import user_signup_payload
+
+API_V2_HEADERS = {"X-API-Version": "2"}
+
+
+def _response_data(response) -> dict[str, object]:
+    payload = response.json()
+    if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+        return payload["data"]
+    return payload
 
 
 def _email_config() -> EmailConfig:
@@ -83,36 +91,53 @@ def _extract_code(message: EmailMessage) -> str:
     raise AssertionError("Expected code line in email body.")
 
 
-def test_user_signup_route_triggers_confirmation_email_and_preserves_signup_response(app_client) -> None:
+def _player_signup_payload(*, email: str, full_name: str = "Fan User", password: str = TEST_PASSWORD) -> dict[str, object]:
+    return {
+        "full_name": full_name,
+        "email": email,
+        "password": password,
+        "country": "NG",
+        "preferred_position": "Forward",
+        "date_of_birth": "2006-05-12",
+        "pin": "2718",
+        "recovery_questions": [
+            {
+                "question": "Which academy did I first train with?",
+                "answer": "Surulere Stars",
+            },
+            {
+                "question": "What nickname did my first coach call me?",
+                "answer": "Flash",
+            },
+        ],
+    }
+
+
+def test_player_signup_route_preserves_response_without_confirmation_email(app_client) -> None:
     app, client = app_client
     provider = RecordingEmailProvider()
     app.state.email_service = _build_email_service(provider)
 
     response = client.post(
-        "/auth/signup/user",
-        json=user_signup_payload(
+        "/api/v2/auth/signup/player",
+        json=_player_signup_payload(
             email="fan.confirm@example.com",
-            username="fanconfirm",
             full_name="Fan User",
             password=TEST_PASSWORD,
         ),
+        headers=API_V2_HEADERS,
     )
 
     assert response.status_code == 201, response.text
-    assert response.json()["access_token"]
-    assert response.json()["user"]["email"] == "fan.confirm@example.com"
-    assert len(provider.messages) == 1
-    assert provider.messages[0].subject == "Confirm your GTEX account"
-    assert "Confirmation code" in provider.messages[0].html_body
-
-    confirm_response = client.post("/auth/confirm-email", json={"code": _extract_code(provider.messages[0])})
-
-    assert confirm_response.status_code == 200, confirm_response.text
+    payload = _response_data(response)
+    assert payload["access_token"]
+    assert payload["user"]["email"] == "fan.confirm@example.com"
+    assert provider.messages == []
 
     with app.state.session_factory() as session:
         user = session.scalar(select(User).where(User.email == "fan.confirm@example.com"))
         assert user is not None
-        assert user.email_verified_at is not None
+        assert user.email_verified_at is None
 
 
 def test_recovery_request_triggers_email_and_reset_route_updates_password(app_client) -> None:
@@ -121,22 +146,26 @@ def test_recovery_request_triggers_email_and_reset_route_updates_password(app_cl
     app.state.email_service = _build_email_service(provider)
 
     register_response = client.post(
-        "/auth/signup/user",
-        json=user_signup_payload(
+        "/api/v2/auth/signup/player",
+        json=_player_signup_payload(
             email="fan.recover@example.com",
-            username="fanrecover",
             full_name="Fan User",
             password=TEST_PASSWORD,
         ),
+        headers=API_V2_HEADERS,
     )
     assert register_response.status_code == 201, register_response.text
     provider.messages.clear()
 
-    recovery_response = client.post("/auth/recovery/request", json={"email": "fan.recover@example.com"})
+    recovery_response = client.post(
+        "/api/v2/auth/recovery/request",
+        json={"email": "fan.recover@example.com"},
+        headers=API_V2_HEADERS,
+    )
 
     assert recovery_response.status_code == 200, recovery_response.text
     assert (
-        recovery_response.json()["detail"]
+        _response_data(recovery_response)["detail"]
         == "If an account exists for that email, recovery instructions have been sent."
     )
     assert len(provider.messages) == 1
@@ -144,36 +173,38 @@ def test_recovery_request_triggers_email_and_reset_route_updates_password(app_cl
     assert "Recovery code" in provider.messages[0].html_body
 
     reset_response = client.post(
-        "/auth/recovery/reset",
+        "/api/v2/auth/recovery/reset",
         json={
             "code": _extract_code(provider.messages[0]),
             "new_password": RECOVERY_TEST_PASSWORD,
             "confirm_new_password": RECOVERY_TEST_PASSWORD,
         },
+        headers=API_V2_HEADERS,
     )
     assert reset_response.status_code == 200, reset_response.text
 
     login_response = client.post(
-        "/auth/login",
+        "/api/v2/auth/login",
         json={"email": "fan.recover@example.com", "password": RECOVERY_TEST_PASSWORD},
+        headers=API_V2_HEADERS,
     )
 
     assert login_response.status_code == 200, login_response.text
 
 
-def test_user_signup_route_does_not_fail_when_email_delivery_fails(app_client) -> None:
+def test_player_signup_route_does_not_depend_on_email_delivery(app_client) -> None:
     app, client = app_client
     app.state.email_service = _build_email_service(FailingEmailProvider())
 
     response = client.post(
-        "/auth/signup/user",
-        json=user_signup_payload(
+        "/api/v2/auth/signup/player",
+        json=_player_signup_payload(
             email="fan.failure@example.com",
-            username="fanfailure",
             full_name="Fan User",
             password=TEST_PASSWORD,
         ),
+        headers=API_V2_HEADERS,
     )
 
     assert response.status_code == 201, response.text
-    assert response.json()["user"]["email"] == "fan.failure@example.com"
+    assert _response_data(response)["user"]["email"] == "fan.failure@example.com"

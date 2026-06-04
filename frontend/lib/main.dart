@@ -55,7 +55,10 @@ Future<void> main() async {
           ),
           initialAuthSessionProvider.overrideWithValue(storedSession),
         ],
-        child: GtexApp(themeController: themeController),
+        child: GtexApp(
+          themeController: themeController,
+          authSessionStore: authSessionStore,
+        ),
       ),
     );
   } on StateError catch (error, stackTrace) {
@@ -82,11 +85,13 @@ class GtexApp extends StatelessWidget {
     this.themeController,
     this.config,
     this.controller,
+    this.authSessionStore,
   });
 
   final GteThemeController? themeController;
   final GteAppConfig? config;
   final GteExchangeController? controller;
+  final AuthSessionStore? authSessionStore;
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +99,7 @@ class GtexApp extends StatelessWidget {
       config: config ?? _bootstrapConfig,
       controller: controller ?? _bootstrapController,
       themeController: themeController,
+      authSessionStore: authSessionStore,
     );
   }
 }

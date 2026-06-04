@@ -9,6 +9,7 @@ from backend.tests.app._module_registration_contract_data import (
     CREATOR_MEDIA_OPENAPI_ABSENT_PATHS,
     CREATOR_MEDIA_OPENAPI_PRESENT_PATHS,
     EXPECTED_REGISTERED_MODULES,
+    MATCH_ENGINE_OPENAPI_ABSENT_PATHS,
     MATCH_ENGINE_OPENAPI_PRESENT_PATHS,
     NAMESPACED_OPENAPI_ABSENT_PATHS,
     NAMESPACED_OPENAPI_PRESENT_PATHS,
@@ -30,6 +31,14 @@ def test_real_app_openapi_exposes_expected_match_engine_paths(
     path: str,
 ) -> None:
     assert path in mounted_app_contract_snapshot["openapi_paths"]
+
+
+@pytest.mark.parametrize("path", MATCH_ENGINE_OPENAPI_ABSENT_PATHS)
+def test_real_app_openapi_hides_legacy_match_engine_render_sync_paths(
+    mounted_app_contract_snapshot,
+    path: str,
+) -> None:
+    assert path not in mounted_app_contract_snapshot["openapi_paths"]
 
 
 @pytest.mark.parametrize("path", CORE_OPENAPI_PRESENT_PATHS)

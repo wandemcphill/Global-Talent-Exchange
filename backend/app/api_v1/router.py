@@ -9,12 +9,20 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 
 from app.auth.dependencies import get_current_user
 from app.auth.security import TokenError, decode_access_token
 from app.core.container import ApplicationContext
-from app.live_matches.router import build_unity_live_payload_for_app, _require_unity_live_access_for_websocket
+from app.live_matches.router import (
+    build_legacy_match_runtime_payload_for_app,
+    _require_legacy_match_runtime_enabled,
+    _require_legacy_match_runtime_access_for_websocket,
+)
 from app.models.user import User
+from app.segments.clubs.segment_club_ops import build_squad_players_from_academy
+from app.services.academy_service import AcademyService, get_academy_service
+from app.services.club_finance_service import ClubFinanceService, get_club_finance_service
 
 from .schemas import (
     ApiEnvelope,
@@ -44,35 +52,35 @@ def _metrics_for_app(app):
     return getattr(getattr(app, "state", None), "metrics", None)
 
 
-def _record_unity_live_websocket_metric(app, *, event: str, result: str) -> None:
+def _record_legacy_match_runtime_websocket_metric(app, *, event: str, result: str) -> None:
     metrics = _metrics_for_app(app)
     if metrics is None:
         return
     try:
-        metrics.record_unity_live_websocket_event(event=event, result=result)
+        metrics.record_legacy_match_runtime_websocket_event(event=event, result=result)
     except Exception:
         logger.exception(
-            "api_v1.metrics.unity_live_websocket_failed event=%s result=%s",
+            "api_v1.metrics.legacy_match_runtime_websocket_failed event=%s result=%s",
             event,
             result,
         )
 
 
-def _record_unity_live_payload_metric(app, *, transport: str, result: str) -> None:
+def _record_legacy_match_runtime_payload_metric(app, *, transport: str, result: str) -> None:
     metrics = _metrics_for_app(app)
     if metrics is None:
         return
     try:
-        metrics.record_unity_live_payload(transport=transport, result=result)
+        metrics.record_legacy_match_runtime_payload(transport=transport, result=result)
     except Exception:
         logger.exception(
-            "api_v1.metrics.unity_live_payload_failed transport=%s result=%s",
+            "api_v1.metrics.legacy_match_runtime_payload_failed transport=%s result=%s",
             transport,
             result,
         )
 
 
-def _unity_live_metric_result_for_status(status_code: int) -> str:
+def _legacy_match_runtime_metric_result_for_status(status_code: int) -> str:
     mapping = {
         400: "bad_request",
         401: "unauthorized",
@@ -240,12 +248,12 @@ def get_player(
 def get_club_squad(
     club_id: str,
     _current_user: User = Depends(get_current_user),
-    service: GlobalApiV1Service = Depends(get_service),
+    academy_service: AcademyService = Depends(get_academy_service),
 ) -> ApiEnvelope[dict[str, Any]]:
-    try:
-        payload = service.get_club_squad(club_id)
-    except GlobalApiV1Error as exc:
-        _raise_global_api_http_error(exc)
+    payload = {
+        "club_id": club_id,
+        "players": list(build_squad_players_from_academy(club_id, academy_service)),
+    }
     return ok(payload)
 
 
@@ -253,13 +261,9 @@ def get_club_squad(
 def get_club_finances(
     club_id: str,
     _current_user: User = Depends(get_current_user),
-    service: GlobalApiV1Service = Depends(get_service),
+    finance_service: ClubFinanceService = Depends(get_club_finance_service),
 ) -> ApiEnvelope[dict[str, Any]]:
-    try:
-        payload = service.get_club_finances(club_id)
-    except GlobalApiV1Error as exc:
-        _raise_global_api_http_error(exc)
-    return ok(payload)
+    return ok(jsonable_encoder(finance_service.get_finance_overview(club_id)))
 
 
 @router.get("/clubs/{club_id}/fans", response_model=ApiEnvelope[dict[str, Any]])
@@ -511,8 +515,8 @@ def vote_on_federation(
 
 @router.websocket("/ws/match/{match_id}")
 async def stream_match_commentary(websocket: WebSocket, match_id: str) -> None:
-    if str(websocket.query_params.get("format") or "").strip().lower() == "unity":
-        await _stream_unity_live_match(websocket, match_id)
+    if str(websocket.query_params.get("format") or "").strip().lower() == "legacy":
+        await _stream_legacy_match_runtime(websocket, match_id)
         return
 
     user = _resolve_websocket_user(websocket)
@@ -534,15 +538,16 @@ async def stream_match_commentary(websocket: WebSocket, match_id: str) -> None:
         return
 
 
-async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
+async def _stream_legacy_match_runtime(websocket: WebSocket, match_id: str) -> None:
     app = websocket.scope["app"]
     websocket_accepted = False
     stale_iterations = 0
     stale_state_recorded = False
 
     try:
-        _require_unity_live_access_for_websocket(websocket, match_id=match_id)
-        payload = build_unity_live_payload_for_app(app, match_id)
+        _require_legacy_match_runtime_enabled()
+        _require_legacy_match_runtime_access_for_websocket(websocket, match_id=match_id)
+        payload = build_legacy_match_runtime_payload_for_app(app, match_id)
     except HTTPException as exc:
         close_code = (
             4404
@@ -554,32 +559,32 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
             if exc.status_code == status.HTTP_404_NOT_FOUND
             else "unauthorized" if exc.status_code == status.HTTP_401_UNAUTHORIZED else "bootstrap_failed"
         )
-        _record_unity_live_websocket_metric(app, event="reject", result=close_reason)
-        _record_unity_live_payload_metric(
+        _record_legacy_match_runtime_websocket_metric(app, event="reject", result=close_reason)
+        _record_legacy_match_runtime_payload_metric(
             app,
             transport="websocket",
-            result=_unity_live_metric_result_for_status(exc.status_code),
+            result=_legacy_match_runtime_metric_result_for_status(exc.status_code),
         )
         await websocket.close(code=close_code, reason=close_reason)
         return
     except Exception:
-        logger.exception("api_v1.unity_match_stream.bootstrap_failed match_id=%s", match_id)
-        _record_unity_live_websocket_metric(app, event="reject", result="bootstrap_failed")
-        _record_unity_live_payload_metric(app, transport="websocket", result="error")
+        logger.exception("api_v1.legacy_match_runtime_stream.bootstrap_failed match_id=%s", match_id)
+        _record_legacy_match_runtime_websocket_metric(app, event="reject", result="bootstrap_failed")
+        _record_legacy_match_runtime_payload_metric(app, transport="websocket", result="error")
         await websocket.close(code=1011)
         return
 
     await websocket.accept()
     websocket_accepted = True
-    _record_unity_live_websocket_metric(app, event="accepted", result="success")
-    last_signature = _unity_payload_signature(payload)
+    _record_legacy_match_runtime_websocket_metric(app, event="accepted", result="success")
+    last_signature = _legacy_match_runtime_payload_signature(payload)
     await websocket.send_json(payload)
 
     try:
         while True:
             await asyncio.sleep(0.1)
-            payload = build_unity_live_payload_for_app(app, match_id)
-            signature = _unity_payload_signature(payload)
+            payload = build_legacy_match_runtime_payload_for_app(app, match_id)
+            signature = _legacy_match_runtime_payload_signature(payload)
             if signature != last_signature:
                 await websocket.send_json(payload)
                 last_signature = signature
@@ -592,9 +597,9 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
                 stale_iterations += 1
                 if stale_iterations >= 50 and not stale_state_recorded:
                     stale_state_recorded = True
-                    _record_unity_live_websocket_metric(app, event="stale_state", result="detected")
+                    _record_legacy_match_runtime_websocket_metric(app, event="stale_state", result="detected")
                     logger.warning(
-                        "api_v1.unity_match_stream.stale_state_detected match_id=%s frame_id=%s",
+                        "api_v1.legacy_match_runtime_stream.stale_state_detected match_id=%s frame_id=%s",
                         match_id,
                         payload.get("frameId"),
                     )
@@ -602,31 +607,31 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
                 "live",
                 "in_progress",
             }:
-                _record_unity_live_websocket_metric(app, event="closed", result="terminal")
+                _record_legacy_match_runtime_websocket_metric(app, event="closed", result="terminal")
                 break
     except WebSocketDisconnect:
-        _record_unity_live_websocket_metric(app, event="closed", result="client_disconnect")
+        _record_legacy_match_runtime_websocket_metric(app, event="closed", result="client_disconnect")
         return
     except HTTPException as exc:
-        _record_unity_live_websocket_metric(
+        _record_legacy_match_runtime_websocket_metric(
             app,
             event="closed",
-            result=_unity_live_metric_result_for_status(exc.status_code),
+            result=_legacy_match_runtime_metric_result_for_status(exc.status_code),
         )
-        _record_unity_live_payload_metric(
+        _record_legacy_match_runtime_payload_metric(
             app,
             transport="websocket",
-            result=_unity_live_metric_result_for_status(exc.status_code),
+            result=_legacy_match_runtime_metric_result_for_status(exc.status_code),
         )
         logger.warning(
-            "api_v1.unity_match_stream.terminated match_id=%s status_code=%s",
+            "api_v1.legacy_match_runtime_stream.terminated match_id=%s status_code=%s",
             match_id,
             exc.status_code,
         )
     except Exception:
-        _record_unity_live_websocket_metric(app, event="closed", result="error")
-        _record_unity_live_payload_metric(app, transport="websocket", result="error")
-        logger.exception("api_v1.unity_match_stream.failed match_id=%s", match_id)
+        _record_legacy_match_runtime_websocket_metric(app, event="closed", result="error")
+        _record_legacy_match_runtime_payload_metric(app, transport="websocket", result="error")
+        logger.exception("api_v1.legacy_match_runtime_stream.failed match_id=%s", match_id)
     finally:
         try:
             if websocket_accepted:
@@ -635,7 +640,7 @@ async def _stream_unity_live_match(websocket: WebSocket, match_id: str) -> None:
             pass
 
 
-def _unity_payload_signature(payload: dict[str, Any]) -> tuple[object, ...]:
+def _legacy_match_runtime_payload_signature(payload: dict[str, Any]) -> tuple[object, ...]:
     players = payload.get("players") or []
     player_motion_sample: tuple[object, ...] = tuple(
         (
@@ -728,6 +733,32 @@ def _resolve_websocket_user(websocket: WebSocket) -> User | None:
         if user is None or not user.is_active:
             return None
         return user
+
+
+_DEPRECATED_SYNTHETIC_ROUTE_FINGERPRINTS = frozenset(
+    {
+        ("/api/v2/users/{user_id}/follow", ("POST",)),
+        ("/api/v2/tasks", ("GET",)),
+        ("/api/v2/tasks/{task_id}/claim", ("POST",)),
+        ("/api/v2/tournaments/{tournament_id}/join", ("POST",)),
+        ("/api/v2/federations", ("POST",)),
+        ("/api/v2/federations/{federation_id}/join", ("POST",)),
+        ("/api/v2/federations/vote", ("POST",)),
+    }
+)
+
+
+def _hide_deprecated_synthetic_routes() -> None:
+    router.routes = [
+        route
+        for route in router.routes
+        if not isinstance(route, APIRoute)
+        or (route.path, tuple(sorted(route.methods or ())))
+        not in _DEPRECATED_SYNTHETIC_ROUTE_FINGERPRINTS
+    ]
+
+
+_hide_deprecated_synthetic_routes()
 
 
 __all__ = ["install_exception_handlers", "router"]

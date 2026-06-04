@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/features/compete/compete.dart';
 
 void main() {
   test('parses backend-style competition summary payload', () {
@@ -10,6 +10,15 @@ void main() {
         'format': 'league',
         'visibility': 'public',
         'status': 'open_for_join',
+        'lifecycle': <String, Object?>{
+          'stage': 'scheduled',
+          'bracket_published': true,
+        },
+        'score_visibility': true,
+        'broadcast_visibility': false,
+        'verification_status': 'verified',
+        'walkover_count': 1,
+        'forfeit_count': 2,
         'creator_id': 'creator-9',
         'creator_name': 'Creator Nine',
         'participant_count': 7,
@@ -46,6 +55,12 @@ void main() {
     expect(summary.payoutStructure, hasLength(3));
     expect(summary.joinEligibility.eligible, isTrue);
     expect(summary.beginnerFriendly, isTrue);
+    expect(summary.lifecycle?.stage, CompetitionLifecycleStage.scheduled);
+    expect(summary.scoreVisible, isTrue);
+    expect(summary.broadcastVisible, isFalse);
+    expect(summary.verificationStatus, 'verified');
+    expect(summary.walkoverCount, 1);
+    expect(summary.forfeitCount, 2);
   });
 
   test('parses nested financial payload variation', () {

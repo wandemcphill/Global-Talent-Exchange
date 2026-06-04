@@ -4,18 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
-import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
+import 'package:gte_frontend/features/match_center/live_match_session.dart';
+import 'package:gte_frontend/features/compete/providers/live_competitions_provider.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
-import 'package:gte_frontend/features/match/live_match_viewer_route_support.dart';
+import 'package:gte_frontend/features/match_center/live_match_viewer_route_support.dart';
 import 'package:gte_frontend/features/profile/live_profile_provider.dart';
-import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
+import 'package:gte_frontend/features/compete/domain/streamer_tournament_engine_models.dart';
 import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
 import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
 import 'package:gte_frontend/features/world/live_world_provider.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/hosted_competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
 import 'package:gte_frontend/navigation/app_router.dart';
 import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
@@ -26,7 +27,7 @@ import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   testWidgets(
-    'router mounts live 2D routes, live broadcast, gated Flutter 3D, and profile admin',
+    'router mounts live 2D routes, redirects retired match lanes, and profile admin',
     (WidgetTester tester) async {
       final ProviderContainer container = _buildContainer(
         session: const AuthSession(
@@ -35,7 +36,7 @@ void main() {
           refreshToken: 'refresh-token-1',
           sessionId: 'session-1',
           role: 'admin',
-          permissions: <String>['match_3d_premium'],
+          permissions: <String>['legacy_match_runtime'],
         ),
       );
       addTearDown(container.dispose);
@@ -51,22 +52,36 @@ void main() {
 
       router.go(AppRoutes.matchesViewerLocation('live-match-001'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('match-2d-score-strip')), findsWidgets);
-      expect(find.byKey(const Key('match-pitch-2d-canvas')), findsWidgets);
+      expect(find.byKey(const Key('match-center-scorebug')), findsWidgets);
+      expect(find.byKey(const Key('match-center-pitch-shell')), findsWidgets);
       expect(find.text('Route blocked'), findsNothing);
 
       router.go(AppRoutes.matchesBroadcastLocation('live-match-001'));
       await tester.pumpAndSettle();
-      expect(find.text('Broadcast package coming soon'), findsOneWidget);
+      expect(find.byKey(const Key('match-center-scorebug')), findsWidgets);
+      expect(find.byKey(const Key('match-center-pitch-shell')), findsWidgets);
+      expect(find.text('Broadcast package coming soon'), findsNothing);
 
-      router.go(AppRoutes.matchesThreeDLocation('live-match-001'));
+      router.go(AppRoutes.legacyMatchRuntimeLocation('live-match-001'));
       await tester.pumpAndSettle();
-      expect(find.text('Advanced match viewing coming soon'), findsOneWidget);
-      expect(find.text('FLUTTER_3D'), findsNothing);
+      expect(find.byKey(const Key('match-center-scorebug')), findsWidgets);
+      expect(find.byKey(const Key('match-center-pitch-shell')), findsWidgets);
+      expect(find.text('Route blocked'), findsNothing);
 
-      router.go(AppRoutes.matchesNativeThreeD);
+      router.go(AppRoutes.legacyBlockedMatchRuntime);
       await tester.pumpAndSettle();
-      expect(find.text('Advanced match viewing coming soon'), findsOneWidget);
+      expect(find.text('Fixtures'), findsOneWidget);
+      expect(find.text('Route blocked'), findsNothing);
+
+      router.go(AppRoutes.matchesSpectate);
+      await tester.pumpAndSettle();
+      expect(find.text('Fixtures'), findsOneWidget);
+      expect(find.text('Spectate mode coming soon'), findsNothing);
+
+      router.go(AppRoutes.matchesSimulate);
+      await tester.pumpAndSettle();
+      expect(find.text('Fixtures'), findsOneWidget);
+      expect(find.text('Match simulation tools coming soon'), findsNothing);
 
       router.go(AppRoutes.streamerEngine);
       await tester.pumpAndSettle();
@@ -224,6 +239,15 @@ class _FakeLiveMatchViewerRepository implements LiveMatchViewerRepository {
       matchKey: matchKey,
       viewer: <String, Object?>{'title': competition.name},
       competition: competition,
+      spectateSession: LiveMatchSpectateSession(
+        id: 'route-test-session',
+        matchId: matchKey,
+        channel: 'match:$matchKey:events',
+        websocketPath:
+            '/api/matches/$matchKey/stream?session_id=route-test-session',
+        commentaryWebsocketPath:
+            '/api/matches/$matchKey/commentary/stream?session_id=route-test-session',
+      ),
     );
   }
 }
@@ -257,7 +281,7 @@ MatchViewState _routeQualifiedViewState(String matchKey, MatchViewState state) {
     segmentEndSeconds: segmentEndSeconds,
     hasMoreSegments: state.hasMoreSegments,
     nextSegmentToken: state.nextSegmentToken,
-    monetization: state.monetization,
+    engagement: state.engagement,
     presentationPackage: state.presentationPackage,
   );
 }

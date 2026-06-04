@@ -5,7 +5,7 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_exchange_models.dart';
 import 'package:gte_frontend/data/gte_mock_api.dart';
 import 'package:gte_frontend/data/gte_models.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 
 void main() {
   test('standard client defaults to live mode', () {
@@ -14,6 +14,19 @@ void main() {
     );
 
     expect(client.config.mode, GteBackendMode.live);
+  });
+
+  test('standard client clamps legacy live fallback mode to live', () {
+    final GteExchangeApiClient client = GteExchangeApiClient.standard(
+      baseUrl: 'https://example.test',
+      mode: GteBackendMode.liveThenFixture,
+    );
+
+    expect(client.config.mode, GteBackendMode.live);
+    expect(
+      (client.repository as GteModeAwareApiRepository).config.mode,
+      GteBackendMode.live,
+    );
   });
 
   test('fixture client paginates and filters the market directory', () async {
@@ -85,6 +98,37 @@ void main() {
       expect(snapshot, isNotNull);
       expect(snapshot?.playerId, 'lamine-yamal');
       expect(snapshot?.availabilityBadge.available, isTrue);
+
+      final GtePlayerLifecycleSnapshot? transferRoomSnapshot = await client
+          .fetchPlayerLifecycleSnapshot('victor-osimhen');
+      expect(transferRoomSnapshot?.playerId, 'victor-osimhen');
+      expect(transferRoomSnapshot?.transferStatus.lastBidStatus, 'submitted');
+    },
+  );
+
+  test(
+    'transfer status preserves canonical bid statuses without remapping',
+    () {
+      const List<String> statuses = <String>[
+        'submitted',
+        'pending',
+        'counter',
+        'accepted',
+        'completed',
+        'withdrawn',
+        'rejected',
+      ];
+
+      for (final String status in statuses) {
+        final GteTransferStatusView transferStatus =
+            GteTransferStatusView.fromJson(<String, Object?>{
+              'window_open': true,
+              'eligible': true,
+              'last_bid_status': status,
+            });
+
+        expect(transferStatus.lastBidStatus, status);
+      }
     },
   );
 

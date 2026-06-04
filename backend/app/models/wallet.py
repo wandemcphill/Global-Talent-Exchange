@@ -91,9 +91,6 @@ class LedgerSourceTag(StrEnum):
 
 
 class PaymentProvider(StrEnum):
-    MONNIFY = "monnify"
-    FLUTTERWAVE = "flutterwave"
-    PAYSTACK = "paystack"
     KORAPAY = "korapay"
 
 

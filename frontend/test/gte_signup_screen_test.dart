@@ -7,8 +7,9 @@ import 'package:gte_frontend/screens/gte_signup_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('signup surface exposes creator access request entry',
-      (WidgetTester tester) async {
+  testWidgets('signup surface exposes creator access request entry', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 2200);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() {
@@ -36,5 +37,34 @@ void main() {
 
     expect(find.text('Creator access request'), findsOneWidget);
     expect(find.text('Create account to continue'), findsOneWidget);
+  });
+
+  testWidgets('signup surface uses frictionless trust fields', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteSignupScreen(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Player'), findsOneWidget);
+    expect(find.text('Organization'), findsOneWidget);
+    expect(find.text('Security PIN'), findsOneWidget);
+    expect(find.text('Recovery question 1'), findsOneWidget);
+    expect(find.text('Recovery question 2'), findsOneWidget);
   });
 }

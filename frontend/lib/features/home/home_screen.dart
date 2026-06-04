@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/gte_app_config.dart';
 import '../../core/app_feedback.dart';
-import '../../features/competitions/live_competitions_provider.dart';
+import '../../features/compete/providers/live_competitions_provider.dart';
 import '../../features/profile/live_profile_provider.dart';
 import '../../features/tasks/live_tasks_provider.dart';
 import '../../features/transfer_market/live_market_provider.dart';

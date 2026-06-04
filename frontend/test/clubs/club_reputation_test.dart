@@ -6,8 +6,9 @@ import 'package:gte_frontend/screens/clubs/club_reputation_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('club reputation shows earned prestige contributors',
-      (WidgetTester tester) async {
+  testWidgets('club reputation shows earned prestige contributors', (
+    WidgetTester tester,
+  ) async {
     final ClubController controller = ClubController(
       api: ClubApi.fixture(),
       clubId: 'royal-lagos-fc',

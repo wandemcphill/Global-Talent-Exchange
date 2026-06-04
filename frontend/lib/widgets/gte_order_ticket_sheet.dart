@@ -66,8 +66,10 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('Place order',
-                      style: Theme.of(context).textTheme.headlineSmall),
+                  Text(
+                    'Place order',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     widget.snapshot.detail.identity.playerName,
@@ -83,16 +85,22 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                       children: <Widget>[
                         GteMetricChip(
                           label: 'Available GTEX Coin',
-                          value: widget.controller.walletSummary == null
-                              ? '--'
-                              : gteFormatCredits(widget
-                                  .controller.walletSummary!.availableBalance),
+                          value:
+                              widget.controller.walletDisplay == null
+                                  ? '--'
+                                  : gteFormatCredits(
+                                    widget
+                                        .controller
+                                        .walletDisplay!
+                                        .availableBalance,
+                                  ),
                         ),
                         GteMetricChip(
                           label: 'Owned quantity',
-                          value: holding == null
-                              ? '0.00'
-                              : holding.quantity.toStringAsFixed(2),
+                          value:
+                              holding == null
+                                  ? '0.00'
+                                  : holding.quantity.toStringAsFixed(2),
                         ),
                         GteMetricChip(
                           label: 'Reference',
@@ -100,9 +108,10 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                         ),
                         GteMetricChip(
                           label: 'Est. notional',
-                          value: estimatedNotional == null
-                              ? '--'
-                              : gteFormatCredits(estimatedNotional),
+                          value:
+                              estimatedNotional == null
+                                  ? '--'
+                                  : gteFormatCredits(estimatedNotional),
                         ),
                       ],
                     ),
@@ -139,8 +148,9 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                   TextField(
                     controller: _quantityController,
                     enabled: !widget.controller.isSubmittingOrder,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
                       labelText: 'Quantity',
@@ -156,8 +166,9 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                   TextField(
                     controller: _priceController,
                     enabled: !widget.controller.isSubmittingOrder,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     textInputAction: TextInputAction.done,
                     decoration: const InputDecoration(
                       labelText: 'Max price (optional)',
@@ -195,8 +206,9 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                     const SizedBox(height: 12),
                     Text(
                       _validationMessage ?? widget.controller.orderError!,
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 20),
@@ -204,20 +216,22 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                     children: <Widget>[
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: widget.controller.isSubmittingOrder
-                              ? null
-                              : () => Navigator.of(context).pop(),
+                          onPressed:
+                              widget.controller.isSubmittingOrder
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
                           child: const Text('Close'),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton(
-                          onPressed: widget.controller.isSubmittingOrder
-                              ? null
-                              : () {
-                                  _submit();
-                                },
+                          onPressed:
+                              widget.controller.isSubmittingOrder
+                                  ? null
+                                  : () {
+                                    _submit();
+                                  },
                           child: Text(
                             widget.controller.isSubmittingOrder
                                 ? 'Submitting...'

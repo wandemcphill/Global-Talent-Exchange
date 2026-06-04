@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gte_frontend/features/match/presentation/real_match_scene_director.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/commentary_ribbon_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/match_moment_banner_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/match_recap_board_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/player_ratings_strip_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/real_match_scorebug_widget.dart';
-import 'package:gte_frontend/features/match/presentation/widgets/real_match_tactical_hud_widget.dart';
-import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/real_match_engine_presentation.dart';
+import 'package:gte_frontend/features/match_center/presentation/real_match_scene_director.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/commentary_ribbon_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/match_moment_banner_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/match_recap_board_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/player_ratings_strip_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/real_match_scorebug_widget.dart';
+import 'package:gte_frontend/features/match_center/presentation/widgets/real_match_tactical_hud_widget.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/real_match_engine_presentation.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 

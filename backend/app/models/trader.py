@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -58,6 +59,16 @@ class TraderProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     interests_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     wallet_label: Mapped[str] = mapped_column(String(120), nullable=False, default="GTEX Trading Wallet")
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", server_default="active")
+    liquidity_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    completion_rate: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000")
+    average_release_seconds: Mapped[Decimal] = mapped_column(
+        Numeric(12, 4),
+        nullable=False,
+        default=Decimal("0.0000"),
+        server_default="0.0000",
+    )
+    rating_score: Mapped[Decimal] = mapped_column(Numeric(7, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000")
+    metrics_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TraderSecurity(UUIDPrimaryKeyMixin, TimestampMixin, Base):

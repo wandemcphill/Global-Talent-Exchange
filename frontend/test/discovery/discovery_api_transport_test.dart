@@ -117,4 +117,3 @@ Map<String, Object?> _savedSearchJson(String id) => <String, Object?>{
   'alerts_enabled': true,
   'metadata_json': const <String, Object?>{},
 };
-

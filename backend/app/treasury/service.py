@@ -48,6 +48,9 @@ GTEX_LEGAL_DISCLOSURES = (
     "Platform controls mechanics.",
     "Rewards are promotional for GTEX competitions.",
 )
+ADMIN_RESOURCE_LOCK_TTL_SECONDS = 10 * 60
+ADMIN_LOCK_ACQUIRED_EVENT = "admin.lock.acquired"
+ADMIN_LOCK_RELEASED_EVENT = "admin.lock.released"
 KYC_LIMITS: dict[str, Decimal] = {
     "basic": Decimal("50000.0000"),
     "verified": Decimal("500000.0000"),
@@ -134,8 +137,170 @@ class TreasuryService:
                 session.add(bank_account)
                 session.flush()
             settings.active_bank_account_id = bank_account.id
-            session.flush()
+        session.flush()
         return settings
+
+    def get_admin_lock_state(
+        self,
+        session: Session,
+        *,
+        actor: User | None,
+        resource_type: str,
+        resource_id: str,
+    ) -> dict[str, Any]:
+        active_event = self._active_admin_lock_event(
+            session,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+        if active_event is None:
+            return {
+                "state": "unlocked",
+                "action_state": "enabled",
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+                "locked_by_user_id": None,
+                "locked_by_email": None,
+                "locked_at": None,
+                "expires_at": None,
+                "blocked_reason": None,
+                "audit_reference": None,
+            }
+
+        payload = dict(active_event.payload or {})
+        locked_by_user_id = str(payload.get("locked_by_user_id") or active_event.actor_user_id or "")
+        locked_by_email = str(payload.get("locked_by_email") or active_event.actor_email or "")
+        locked_at = self._parse_lock_datetime(payload.get("locked_at")) or active_event.created_at
+        expires_at = self._parse_lock_datetime(payload.get("expires_at"))
+        locked_by_current_actor = actor is not None and locked_by_user_id == actor.id
+        state = "locked_by_me" if locked_by_current_actor else "locked_by_other"
+        locker_label = locked_by_email or locked_by_user_id or "another admin"
+        blocked_reason = None
+        if not locked_by_current_actor:
+            blocked_reason = f"Locked by {locker_label}"
+            if expires_at is not None:
+                blocked_reason = f"{blocked_reason} until {expires_at.isoformat()}"
+            blocked_reason = f"{blocked_reason}."
+        return {
+            "state": state,
+            "action_state": "enabled" if locked_by_current_actor else "blocked",
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "locked_by_user_id": locked_by_user_id or None,
+            "locked_by_email": locked_by_email or None,
+            "locked_at": locked_at,
+            "expires_at": expires_at,
+            "blocked_reason": blocked_reason,
+            "audit_reference": active_event.id,
+        }
+
+    def acquire_admin_lock(
+        self,
+        session: Session,
+        *,
+        actor: User,
+        resource_type: str,
+        resource_id: str,
+        ttl_seconds: int = ADMIN_RESOURCE_LOCK_TTL_SECONDS,
+    ) -> dict[str, Any]:
+        current = self.get_admin_lock_state(
+            session,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+        if current["state"] == "locked_by_other":
+            raise TreasuryConflictError(str(current["blocked_reason"] or "Resource is locked by another admin."))
+
+        locked_at = utcnow()
+        expires_at = locked_at + timedelta(seconds=max(1, int(ttl_seconds)))
+        audit = self._audit(
+            session,
+            actor=actor,
+            event_type=ADMIN_LOCK_ACQUIRED_EVENT,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            summary=f"Acquired admin lock for {resource_type}:{resource_id}.",
+            payload={
+                "state": "locked_by_me",
+                "locked_by_user_id": actor.id,
+                "locked_by_email": actor.email,
+                "locked_at": locked_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "ttl_seconds": max(1, int(ttl_seconds)),
+                "occurred_at": locked_at.isoformat(),
+            },
+        )
+        state = self.get_admin_lock_state(
+            session,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+        state["audit_reference"] = audit.id
+        return state
+
+    def release_admin_lock(
+        self,
+        session: Session,
+        *,
+        actor: User,
+        resource_type: str,
+        resource_id: str,
+    ) -> dict[str, Any]:
+        current = self.get_admin_lock_state(
+            session,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+        if current["state"] == "locked_by_other":
+            raise TreasuryConflictError(str(current["blocked_reason"] or "Resource is locked by another admin."))
+        if current["state"] == "unlocked":
+            return current
+
+        released_at = utcnow()
+        audit = self._audit(
+            session,
+            actor=actor,
+            event_type=ADMIN_LOCK_RELEASED_EVENT,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            summary=f"Released admin lock for {resource_type}:{resource_id}.",
+            payload={
+                "state": "unlocked",
+                "released_by_user_id": actor.id,
+                "released_by_email": actor.email,
+                "released_at": released_at.isoformat(),
+                "previous_lock_audit_reference": current.get("audit_reference"),
+                "occurred_at": released_at.isoformat(),
+            },
+        )
+        state = self.get_admin_lock_state(
+            session,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+        state["audit_reference"] = audit.id
+        return state
+
+    def assert_admin_resource_mutable(
+        self,
+        session: Session,
+        *,
+        actor: User,
+        resource_type: str,
+        resource_id: str,
+    ) -> None:
+        state = self.get_admin_lock_state(
+            session,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+        if state["state"] == "locked_by_other":
+            raise TreasuryConflictError(str(state["blocked_reason"] or "Resource is locked by another admin."))
 
     def ensure_user_bank_account(self, session: Session, user: User) -> UserBankAccount | None:
         return session.scalar(
@@ -287,6 +452,12 @@ class TreasuryService:
         admin_notes: str | None = None,
     ) -> DepositRequest:
         request = self._get_deposit_or_raise(session, deposit_request_id)
+        self.assert_admin_resource_mutable(
+            session,
+            actor=actor,
+            resource_type="deposit_request",
+            resource_id=request.id,
+        )
         if request.status == DepositStatus.CONFIRMED and request.ledger_transaction_id:
             return request
         if request.status not in {DepositStatus.PAYMENT_SUBMITTED, DepositStatus.UNDER_REVIEW}:
@@ -325,7 +496,7 @@ class TreasuryService:
             resource_type="deposit_request",
             resource_id=request.id,
             summary=f"Confirmed deposit {request.reference}.",
-            payload={"reference": request.reference},
+            payload={"reference": request.reference, "notes": admin_notes or ""},
         )
         self.track_event(session, "deposit_confirmed", user=user, metadata={"deposit_request_id": request.id})
         self.create_notification(
@@ -348,6 +519,12 @@ class TreasuryService:
         admin_notes: str | None = None,
     ) -> DepositRequest:
         request = self._get_deposit_or_raise(session, deposit_request_id)
+        self.assert_admin_resource_mutable(
+            session,
+            actor=actor,
+            resource_type="deposit_request",
+            resource_id=request.id,
+        )
         if request.status == DepositStatus.REJECTED:
             return request
         if request.status == DepositStatus.CONFIRMED:
@@ -390,6 +567,12 @@ class TreasuryService:
         admin_notes: str | None = None,
     ) -> DepositRequest:
         request = self._get_deposit_or_raise(session, deposit_request_id)
+        self.assert_admin_resource_mutable(
+            session,
+            actor=actor,
+            resource_type="deposit_request",
+            resource_id=request.id,
+        )
         if request.status == DepositStatus.CONFIRMED:
             return request
         request.status = DepositStatus.UNDER_REVIEW
@@ -404,7 +587,7 @@ class TreasuryService:
             resource_type="deposit_request",
             resource_id=request.id,
             summary=f"Marked deposit {request.reference} under review.",
-            payload={"reference": request.reference},
+            payload={"reference": request.reference, "notes": admin_notes or ""},
         )
         return request
 
@@ -719,6 +902,12 @@ class TreasuryService:
         admin_notes: str | None = None,
     ) -> TreasuryWithdrawalRequest:
         request = self._get_withdrawal_or_raise(session, withdrawal_id)
+        self.assert_admin_resource_mutable(
+            session,
+            actor=actor,
+            resource_type="treasury_withdrawal",
+            resource_id=request.id,
+        )
         payout_request = session.get(PayoutRequest, request.payout_request_id)
         if payout_request is None:
             raise TreasuryError("Withdrawal request references missing payout request.")
@@ -726,6 +915,15 @@ class TreasuryService:
         previous = request.status
         if previous == TreasuryWithdrawalStatus.PAID:
             return request
+        if (
+            status == TreasuryWithdrawalStatus.PENDING_REVIEW
+            and previous in {TreasuryWithdrawalStatus.REJECTED, TreasuryWithdrawalStatus.CANCELLED}
+            and payout_request.settlement_transaction_id is not None
+        ):
+            raise TreasuryConflictError(
+                "Rejected or cancelled withdrawal funds were already released; "
+                "create a new withdrawal request to re-reserve funds."
+            )
 
         request.status = status
         request.admin_user_id = actor.id
@@ -807,7 +1005,7 @@ class TreasuryService:
             resource_type="treasury_withdrawal",
             resource_id=request.id,
             summary=f"Changed withdrawal {request.reference} to {status.value}.",
-            payload={"status": status.value, "previous": previous.value},
+            payload={"status": status.value, "previous": previous.value, "notes": admin_notes or ""},
         )
         user = session.get(User, request.user_id)
         if user is not None:
@@ -840,6 +1038,21 @@ class TreasuryService:
         ).all()
         if not selected:
             raise TreasuryConflictError("No withdrawals matched the requested batch filter.")
+        locked_ids = [
+            request.id
+            for request in selected
+            if self.get_admin_lock_state(
+                session,
+                actor=actor,
+                resource_type="treasury_withdrawal",
+                resource_id=request.id,
+            )["state"]
+            == "locked_by_other"
+        ]
+        if locked_ids:
+            raise TreasuryConflictError(
+                "One or more withdrawals are locked by another admin: " + ", ".join(locked_ids)
+            )
 
         batch_id = f"WDBATCH-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}"
         created_at = utcnow()
@@ -1263,6 +1476,57 @@ class TreasuryService:
         session.add(record)
         session.flush()
         return record
+
+    def _active_admin_lock_event(
+        self,
+        session: Session,
+        *,
+        resource_type: str,
+        resource_id: str,
+    ) -> TreasuryAuditEvent | None:
+        events = session.scalars(
+            select(TreasuryAuditEvent)
+            .where(
+                TreasuryAuditEvent.resource_type == resource_type,
+                TreasuryAuditEvent.resource_id == resource_id,
+                TreasuryAuditEvent.event_type.in_([ADMIN_LOCK_ACQUIRED_EVENT, ADMIN_LOCK_RELEASED_EVENT]),
+            )
+            .order_by(TreasuryAuditEvent.created_at.desc())
+            .limit(50)
+        ).all()
+        if not events:
+            return None
+        ordered_events = sorted(
+            events,
+            key=lambda event: (
+                self._parse_lock_datetime((event.payload or {}).get("occurred_at"))
+                or event.created_at
+                or datetime.min.replace(tzinfo=timezone.utc)
+            ),
+            reverse=True,
+        )
+        latest_event = ordered_events[0]
+        if latest_event.event_type == ADMIN_LOCK_RELEASED_EVENT:
+            return None
+        expires_at = self._parse_lock_datetime((latest_event.payload or {}).get("expires_at"))
+        if expires_at is not None and expires_at <= utcnow():
+            return None
+        return latest_event
+
+    @staticmethod
+    def _parse_lock_datetime(value: object) -> datetime | None:
+        if isinstance(value, datetime):
+            parsed = value
+        elif isinstance(value, str) and value.strip():
+            try:
+                parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        else:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
 
     def _audit(
         self,

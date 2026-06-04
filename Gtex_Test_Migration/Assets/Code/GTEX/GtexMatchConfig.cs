@@ -298,6 +298,8 @@ namespace FStudio.GTEX
         {
             switch (NormalizeRuntimeModeToken(runtimeMode))
             {
+                case "illusion":
+                    return GtexRuntimeMode.IllusionRuntime;
                 case "simulation":
                     return GtexRuntimeMode.LocalSimulation;
                 case "original-visual":
@@ -358,6 +360,16 @@ namespace FStudio.GTEX
                 case "visual-runtime":
                 case "visualruntime":
                     return "original-visual";
+                case "illusion":
+                case "illusion-runtime":
+                case "illusionruntime":
+                case "illusion-engine":
+                case "illusionengine":
+                case "event-playback":
+                case "eventplayback":
+                case "visualizer":
+                case "visualiser":
+                    return "illusion";
                 case "live":
                 case "live-playback":
                 case "liveplayback":
@@ -381,6 +393,15 @@ namespace FStudio.GTEX
                 case "originalvisualruntime":
                 case "visual-runtime":
                 case "visualruntime":
+                case "illusion":
+                case "illusion-runtime":
+                case "illusionruntime":
+                case "illusion-engine":
+                case "illusionengine":
+                case "event-playback":
+                case "eventplayback":
+                case "visualizer":
+                case "visualiser":
                 case "live":
                 case "live-playback":
                 case "liveplayback":

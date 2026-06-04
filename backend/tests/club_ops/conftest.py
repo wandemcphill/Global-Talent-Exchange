@@ -30,6 +30,7 @@ from app.services.academy_training_service import AcademyTrainingService, get_ac
 from app.services.club_budget_service import ClubBudgetService, get_club_budget_service
 from app.services.club_cashflow_service import ClubCashflowService, get_club_cashflow_service
 from app.services.club_finance_service import ClubFinanceService, ClubOpsStore, get_club_finance_service
+from app.services.club_formation_service import ClubFormationService, get_club_formation_service
 from app.services.club_ops_admin_service import ClubOpsAdminService, get_club_ops_admin_service
 from app.services.club_ops_analytics_service import ClubOpsAnalyticsService, get_club_ops_analytics_service
 from app.services.club_sponsorship_service import ClubSponsorshipService, get_club_sponsorship_service
@@ -45,6 +46,7 @@ from app.services.youth_prospect_service import YouthProspectService, get_youth_
 def build_club_ops_services() -> dict[str, object]:
     store = ClubOpsStore()
     finance = ClubFinanceService(store=store)
+    formation = ClubFormationService(store=store)
     budget = ClubBudgetService(finance_service=finance)
     cashflow = ClubCashflowService(finance_service=finance)
     catalog = SponsorshipCatalogService()
@@ -82,6 +84,7 @@ def build_club_ops_services() -> dict[str, object]:
     return {
         "store": store,
         "finance": finance,
+        "formation": formation,
         "budget": budget,
         "cashflow": cashflow,
         "catalog": catalog,
@@ -114,6 +117,7 @@ def club_ops_app(club_ops_services):
     app.include_router(club_ops_router)
     app.include_router(admin_club_ops_router)
     app.dependency_overrides[get_club_finance_service] = lambda: club_ops_services["finance"]
+    app.dependency_overrides[get_club_formation_service] = lambda: club_ops_services["formation"]
     app.dependency_overrides[get_club_budget_service] = lambda: club_ops_services["budget"]
     app.dependency_overrides[get_club_cashflow_service] = lambda: club_ops_services["cashflow"]
     app.dependency_overrides[get_sponsorship_catalog_service] = lambda: club_ops_services["catalog"]

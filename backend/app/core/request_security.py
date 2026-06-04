@@ -34,7 +34,6 @@ _SIGNATURE_HEADER_NAMES = frozenset(
         "authorization",
         "cookie",
         "set-cookie",
-        "x-paystack-signature",
         "x-korapay-signature",
         "x-signature",
         "x-signature-sha256",
@@ -69,11 +68,25 @@ def extract_access_token_subject(request: Request) -> str | None:
 
 def extract_client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
+    client_host = str(request.client.host) if request.client is not None and request.client.host else ""
+    if forwarded and _is_trusted_forwarding_peer(client_host):
         return forwarded.split(",", 1)[0].strip()
-    if request.client is not None and request.client.host:
-        return str(request.client.host)
+    if client_host:
+        return client_host
     return "unknown"
+
+
+def _is_trusted_forwarding_peer(host: str) -> bool:
+    candidate = host.strip().lower()
+    if candidate in {"127.0.0.1", "::1", "localhost"}:
+        return True
+    if candidate.startswith(("10.", "192.168.")):
+        return True
+    if candidate.startswith("172."):
+        parts = candidate.split(".")
+        if len(parts) >= 2 and parts[1].isdigit():
+            return 16 <= int(parts[1]) <= 31
+    return False
 
 
 @dataclass(frozen=True, slots=True)

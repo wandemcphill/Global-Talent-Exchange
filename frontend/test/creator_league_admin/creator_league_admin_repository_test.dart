@@ -1,69 +1,75 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
-import 'package:gte_frontend/features/creator_league_admin/data/creator_league_admin_models.dart';
-import 'package:gte_frontend/features/creator_league_admin/data/creator_league_admin_repository.dart';
+import 'package:gte_frontend/features/capital/settlement/creator_league_admin/data/creator_league_admin_models.dart';
+import 'package:gte_frontend/features/capital/settlement/creator_league_admin/data/creator_league_admin_repository.dart';
 
 void main() {
-  test('creator league admin repository targets the canonical competitions prefix',
-      () async {
-    final _RecordingTransport transport = _RecordingTransport(
-      <GteTransportResponse>[
-        GteTransportResponse(statusCode: 200, body: _configPayload()),
-        GteTransportResponse(
-          statusCode: 200,
-          body: _financialReportPayload(),
-        ),
-        GteTransportResponse(
-          statusCode: 200,
-          body: <Object?>[_settlementPayload()],
-        ),
-      ],
-    );
-    final CreatorLeagueAdminApiRepository repository =
-        CreatorLeagueAdminApiRepository(
-      client: GteAuthedApi(
-        config: const GteRepositoryConfig(
-          baseUrl: 'http://127.0.0.1:8000',
-          mode: GteBackendMode.live,
-        ),
-        transport: transport,
-        accessToken: 'token-123',
-      ),
-    );
+  test(
+    'creator league admin repository targets the canonical competitions prefix',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport(
+        <GteTransportResponse>[
+          GteTransportResponse(statusCode: 200, body: _configPayload()),
+          GteTransportResponse(
+            statusCode: 200,
+            body: _financialReportPayload(),
+          ),
+          GteTransportResponse(
+            statusCode: 200,
+            body: <Object?>[_settlementPayload()],
+          ),
+        ],
+      );
+      final CreatorLeagueAdminApiRepository repository =
+          CreatorLeagueAdminApiRepository(
+            client: GteAuthedApi(
+              config: const GteRepositoryConfig(
+                baseUrl: 'http://127.0.0.1:8000',
+                mode: GteBackendMode.live,
+              ),
+              transport: transport,
+              accessToken: 'token-123',
+            ),
+          );
 
-    final CreatorLeagueConfig overview = await repository.fetchOverview();
-    final CreatorLeagueFinancialReport report =
-        await repository.fetchFinancialReport(
-      const CreatorLeagueFinancialReportQuery(seasonId: 'creator-season-1'),
-    );
-    final List<CreatorLeagueSettlement> settlements =
-        await repository.listSettlements(
-      const CreatorLeagueFinancialSettlementsQuery(
-        seasonId: 'creator-season-1',
-      ),
-    );
+      final CreatorLeagueConfig overview = await repository.fetchOverview();
+      final CreatorLeagueFinancialReport report = await repository
+          .fetchFinancialReport(
+            const CreatorLeagueFinancialReportQuery(
+              seasonId: 'creator-season-1',
+            ),
+          );
+      final List<CreatorLeagueSettlement> settlements = await repository
+          .listSettlements(
+            const CreatorLeagueFinancialSettlementsQuery(
+              seasonId: 'creator-season-1',
+            ),
+          );
 
-    expect(overview.leagueKey, 'creator_league');
-    expect(report.config.leagueKey, 'creator_league');
-    expect(settlements.single.seasonId, 'creator-season-1');
-    expect(
-      transport.requests.map((GteTransportRequest request) => request.uri.path),
-      <String>[
-        '/api/v2/competitions/creator-league',
-        '/api/v2/competitions/creator-league/financial-report',
-        '/api/v2/competitions/creator-league/financial-settlements',
-      ],
-    );
-    expect(
-      transport.requests[1].uri.queryParameters['season_id'],
-      'creator-season-1',
-    );
-    expect(
-      transport.requests[2].uri.queryParameters['season_id'],
-      'creator-season-1',
-    );
-  });
+      expect(overview.leagueKey, 'creator_league');
+      expect(report.config.leagueKey, 'creator_league');
+      expect(settlements.single.seasonId, 'creator-season-1');
+      expect(
+        transport.requests.map(
+          (GteTransportRequest request) => request.uri.path,
+        ),
+        <String>[
+          '/api/v2/creator-league',
+          '/api/v2/creator-league/financial-report',
+          '/api/v2/creator-league/financial-settlements',
+        ],
+      );
+      expect(
+        transport.requests[1].uri.queryParameters['season_id'],
+        'creator-season-1',
+      );
+      expect(
+        transport.requests[2].uri.queryParameters['season_id'],
+        'creator-season-1',
+      );
+    },
+  );
 }
 
 Map<String, Object?> _configPayload() {
@@ -132,4 +138,3 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
-

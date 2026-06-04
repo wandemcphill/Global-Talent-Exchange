@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.live_matches.generated_stream_policy import synthetic_match_presentation_enabled
 from app.schemas.match_viewer import (
     MatchMode,
     MatchTimelineFrameView,
@@ -70,9 +71,10 @@ class MatchViewerScalingService:
             target_duration=target_duration,
             mode=mode,
         )
+        allow_synthetic_presentation = mode is MatchMode.CINEMATIC and synthetic_match_presentation_enabled()
         events = (
             scaled_events
-            if mode is not MatchMode.CINEMATIC
+            if not allow_synthetic_presentation
             else self._with_cinematic_events(scaled_events, target_duration)
         )
         event_lookup = {event.event_id: event for event in events}
@@ -84,7 +86,7 @@ class MatchViewerScalingService:
             mode=mode,
             event_lookup=event_lookup,
         )
-        if mode is MatchMode.CINEMATIC:
+        if allow_synthetic_presentation:
             frames = self._with_cinematic_frames(
                 frames,
                 events=events,

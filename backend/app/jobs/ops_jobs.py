@@ -22,6 +22,7 @@ from app.services.storage_media_service import MediaStorageService
 from app.storage import LocalObjectStorage
 from app.workers.integrity_scan_worker import IntegrityScanWorker
 from app.workers.media_retention_worker import MediaRetentionWorker
+from app.workers.trader_payment_window_worker import TraderPaymentWindowWorker
 
 
 @dataclass(slots=True)
@@ -68,6 +69,12 @@ class OpsJobRunner:
                 "integrity_scan": worker.run_integrity_scan(),
                 "cluster_scan": worker.run_suspicious_cluster_scan(),
             }
+            session.commit()
+        return results
+
+    def run_trader_payment_window_maintenance(self, *, limit: int = 200) -> dict[str, Any]:
+        with self.session_factory() as session:
+            results = TraderPaymentWindowWorker(session=session).expire_payment_windows(limit=limit)
             session.commit()
         return results
 

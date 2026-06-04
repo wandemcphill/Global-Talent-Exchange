@@ -94,6 +94,9 @@ class ClubOpsStore:
     owner_son_lifetime_counts_by_user: dict[str, int] = field(default_factory=dict)
     owner_son_pending_requests_by_club: dict[str, list[object]] = field(default_factory=dict)
     owner_son_fulfilled_requests_by_club: dict[str, list[object]] = field(default_factory=dict)
+    formation_records_by_club: dict[str, dict[str, object]] = field(default_factory=dict)
+    active_formation_id_by_club: dict[str, str] = field(default_factory=dict)
+    formation_audit_by_id: dict[str, list[object]] = field(default_factory=dict)
     club_labels: dict[str, str] = field(default_factory=dict)
     lock: RLock = field(default_factory=RLock)
 
@@ -115,13 +118,25 @@ class ClubFinanceService:
 
     def get_finance_overview(self, club_id: str) -> ClubFinanceOverviewResponse:
         self.ensure_club_setup(club_id)
-        accounts = tuple(self._account_view(record) for record in self._accounts_for_club(club_id).values())
+        account_records = self._accounts_for_club(club_id)
+        accounts = tuple(self._account_view(record) for record in account_records.values())
+        operating_account = account_records[ClubFinanceAccountType.OPERATING_BALANCE]
+        cashflow = self.get_cashflow_summary(club_id)
         return ClubFinanceOverviewResponse(
             club_id=club_id,
             currency=_DEFAULT_CURRENCY,
+            balance_summary={
+                "balance": operating_account.balance_minor / 100,
+                "current_balance": operating_account.balance_minor / 100,
+                "balance_minor": operating_account.balance_minor,
+                "revenue": cashflow.total_income_minor / 100,
+                "expenses": cashflow.total_expense_minor / 100,
+                "transfer_budget": self.get_budget_snapshot(club_id).available_budget_minor / 100,
+                "updated_at": cashflow.as_of,
+            },
             accounts=accounts,
             budget=self.get_budget_snapshot(club_id),
-            cashflow=self.get_cashflow_summary(club_id),
+            cashflow=cashflow,
         )
 
     def get_ledger(self, club_id: str) -> ClubFinanceLedgerResponse:

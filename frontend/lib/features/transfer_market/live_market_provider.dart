@@ -4,8 +4,9 @@ import '../../core/app_feedback.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_authed_api.dart';
 import '../../data/gte_exchange_api_client.dart';
-import '../../data/gte_models.dart';
 import '../../data/player_service.dart';
+import '../../features/capital/wallet/data/capital_wallet_api.dart';
+import '../../features/capital/wallet/providers/capital_wallet_providers.dart';
 import '../../features/shared/data/gte_feature_support.dart';
 import '../../models/player.dart';
 import '../../shared/providers/auth_provider.dart';
@@ -277,38 +278,16 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
 
     if (authenticated) {
       try {
-        final GteExchangeApiClient exchangeApi = ref.read(
-          exchangeApiClientProvider,
-        );
-        final List<dynamic> walletPayload =
-            await Future.wait<dynamic>(<Future<dynamic>>[
-              exchangeApi.fetchWalletSummary(currency: GteLedgerUnit.coin),
-              exchangeApi.fetchWalletSummary(currency: GteLedgerUnit.credit),
-              exchangeApi.fetchWalletOverview(),
-              exchangeApi.fetchComplianceStatus(),
-            ], eagerError: true);
-        final GteWalletSummary coinSummary =
-            walletPayload[0] as GteWalletSummary;
-        final GteWalletSummary creditSummary =
-            walletPayload[1] as GteWalletSummary;
-        final GteWalletOverview overview =
-            walletPayload[2] as GteWalletOverview;
-        final GteComplianceStatus compliance =
-            walletPayload[3] as GteComplianceStatus;
+        final CapitalWalletMarketSnapshot walletSnapshot =
+            await ref.read(capitalWalletApiProvider).fetchMarketSnapshot();
         wallet = MarketWalletSnapshot(
-          coinBalance: coinSummary.availableBalance,
-          creditBalance: creditSummary.availableBalance,
-          totalEquity: coinSummary.totalBalance,
-          canTradeMarket: compliance.canTradeMarket,
-          canDeposit: compliance.canDeposit,
-          canWithdraw: compliance.canWithdrawPlatformRewards,
-          complianceMessage:
-              overview.policyBlocked
-                  ? overview.policyBlockReason ??
-                      'Policy restrictions are blocking wallet actions.'
-                  : compliance.hasMissingRequiredPolicies
-                  ? 'Compliance action required before full trading is enabled.'
-                  : 'Wallet and compliance state loaded from live backend.',
+          coinBalance: walletSnapshot.coinAvailableBalance,
+          creditBalance: walletSnapshot.creditAvailableBalance,
+          totalEquity: walletSnapshot.totalCoinBalance,
+          canTradeMarket: walletSnapshot.canTradeMarket,
+          canDeposit: walletSnapshot.canDeposit,
+          canWithdraw: walletSnapshot.canWithdraw,
+          complianceMessage: walletSnapshot.complianceMessage,
         );
       } catch (error) {
         if (await _expireProtectedMarketSession(ref, error)) {

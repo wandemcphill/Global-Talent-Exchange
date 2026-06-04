@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/gte_app_config.dart';
 import '../../data/gte_api_repository.dart';
-import '../../features/competitions/live_competitions_provider.dart';
+import '../../features/compete/providers/live_competitions_provider.dart';
 import '../../features/transfer_market/live_market_provider.dart';
 import '../../services/reliability/reliable_websocket_manager.dart';
 import 'auth_provider.dart';

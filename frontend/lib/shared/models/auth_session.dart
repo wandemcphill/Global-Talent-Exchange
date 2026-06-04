@@ -13,6 +13,10 @@ class AuthSession {
     this.clubName,
     this.federationId,
     this.federationName,
+    this.trustedDeviceToken,
+    this.trustedDeviceId,
+    this.deviceTrusted = false,
+    this.biometricEnabled = false,
     this.rawJson = const <String, Object?>{},
   });
 
@@ -29,6 +33,10 @@ class AuthSession {
   final String? clubName;
   final String? federationId;
   final String? federationName;
+  final String? trustedDeviceToken;
+  final String? trustedDeviceId;
+  final bool deviceTrusted;
+  final bool biometricEnabled;
   final Map<String, Object?> rawJson;
 
   bool get isAuthenticated => accessToken.trim().isNotEmpty;
@@ -152,6 +160,20 @@ class AuthSession {
       clubName: club?.displayName,
       federationId: federation?.id,
       federationName: federation?.displayName,
+      trustedDeviceToken: _firstString(mergedRaw, const <String>[
+        'trusted_device_token',
+        'trustedDeviceToken',
+      ]),
+      trustedDeviceId: _firstString(mergedRaw, const <String>[
+        'trusted_device_id',
+        'trustedDeviceId',
+      ]),
+      deviceTrusted: _boolValue(
+        mergedRaw['device_trusted'] ?? mergedRaw['deviceTrusted'],
+      ),
+      biometricEnabled: _boolValue(
+        mergedRaw['biometric_enabled'] ?? mergedRaw['biometricEnabled'],
+      ),
       rawJson: Map<String, Object?>.unmodifiable(mergedRaw),
     );
   }
@@ -168,6 +190,11 @@ class AuthSession {
       'refresh_token': refreshToken,
       'session_id': sessionId,
       'refresh_expires_in': refreshExpiresIn,
+      if (trustedDeviceToken != null)
+        'trusted_device_token': trustedDeviceToken,
+      if (trustedDeviceId != null) 'trusted_device_id': trustedDeviceId,
+      'device_trusted': deviceTrusted,
+      'biometric_enabled': biometricEnabled,
     };
     if (_firstString(nextRaw, const <String>['role']) == null &&
         role.trim().isNotEmpty) {
@@ -204,6 +231,10 @@ class AuthSession {
     String? clubName,
     String? federationId,
     String? federationName,
+    String? trustedDeviceToken,
+    String? trustedDeviceId,
+    bool? deviceTrusted,
+    bool? biometricEnabled,
     Map<String, Object?>? rawJson,
   }) {
     return AuthSession(
@@ -220,6 +251,10 @@ class AuthSession {
       clubName: clubName ?? this.clubName,
       federationId: federationId ?? this.federationId,
       federationName: federationName ?? this.federationName,
+      trustedDeviceToken: trustedDeviceToken ?? this.trustedDeviceToken,
+      trustedDeviceId: trustedDeviceId ?? this.trustedDeviceId,
+      deviceTrusted: deviceTrusted ?? this.deviceTrusted,
+      biometricEnabled: biometricEnabled ?? this.biometricEnabled,
       rawJson: rawJson ?? this.rawJson,
     );
   }
@@ -239,6 +274,11 @@ class AuthSession {
       if (clubName != null) 'club_name': clubName,
       if (federationId != null) 'federation_id': federationId,
       if (federationName != null) 'federation_name': federationName,
+      if (trustedDeviceToken != null)
+        'trusted_device_token': trustedDeviceToken,
+      if (trustedDeviceId != null) 'trusted_device_id': trustedDeviceId,
+      'device_trusted': deviceTrusted,
+      'biometric_enabled': biometricEnabled,
       'raw_json': rawJson,
     };
   }
@@ -283,6 +323,14 @@ Map<String, Object?>? _mapValue(Object? value) {
     );
   }
   return null;
+}
+
+bool _boolValue(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  final String normalized = value?.toString().trim().toLowerCase() ?? '';
+  return normalized == 'true' || normalized == '1' || normalized == 'yes';
 }
 
 List<Object?> _listValue(Object? value) {

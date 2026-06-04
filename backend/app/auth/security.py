@@ -11,8 +11,20 @@ from typing import Any
 
 from app.core.config import get_settings
 
+try:
+    from argon2 import PasswordHasher
+    from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+except ImportError:  # pragma: no cover - exercised only in environments without optional crypto deps.
+    PasswordHasher = None  # type: ignore[assignment]
+    InvalidHashError = VerificationError = VerifyMismatchError = ValueError  # type: ignore[misc,assignment]
+
 PBKDF2_DIGEST = "sha256"
 PBKDF2_ITERATIONS = 390000
+ARGON2_HASHER = (
+    PasswordHasher(time_cost=3, memory_cost=65536, parallelism=2)
+    if PasswordHasher is not None
+    else None
+)
 ACCESS_TOKEN_TTL_SECONDS = 15 * 60
 REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
 AUTH_SECRET_ENV = "GTE_AUTH_SECRET"
@@ -44,12 +56,32 @@ def hash_password(password: str) -> str:
     if len(password) < 8:
         raise ValueError("Passwords must be at least 8 characters long.")
 
+    return hash_sensitive_secret(password)
+
+
+def hash_sensitive_secret(value: str) -> str:
+    if not value:
+        raise ValueError("Secret value is required.")
+    if ARGON2_HASHER is not None:
+        return ARGON2_HASHER.hash(value)
     salt = os.urandom(16)
-    digest = hashlib.pbkdf2_hmac(PBKDF2_DIGEST, password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    digest = hashlib.pbkdf2_hmac(PBKDF2_DIGEST, value.encode("utf-8"), salt, PBKDF2_ITERATIONS)
     return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt.hex()}${digest.hex()}"
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
+    return verify_sensitive_secret(password, stored_hash)
+
+
+def verify_sensitive_secret(value: str, stored_hash: str) -> bool:
+    if stored_hash.startswith("$argon2"):
+        if ARGON2_HASHER is None:
+            return False
+        try:
+            return bool(ARGON2_HASHER.verify(stored_hash, value))
+        except (InvalidHashError, VerificationError, VerifyMismatchError, ValueError):
+            return False
+
     try:
         scheme, iterations_text, salt_hex, digest_hex = stored_hash.split("$", maxsplit=3)
     except ValueError:
@@ -58,10 +90,13 @@ def verify_password(password: str, stored_hash: str) -> bool:
     if scheme != "pbkdf2_sha256":
         return False
 
-    iterations = int(iterations_text)
-    salt = bytes.fromhex(salt_hex)
-    expected_digest = bytes.fromhex(digest_hex)
-    candidate_digest = hashlib.pbkdf2_hmac(PBKDF2_DIGEST, password.encode("utf-8"), salt, iterations)
+    try:
+        iterations = int(iterations_text)
+        salt = bytes.fromhex(salt_hex)
+        expected_digest = bytes.fromhex(digest_hex)
+    except ValueError:
+        return False
+    candidate_digest = hashlib.pbkdf2_hmac(PBKDF2_DIGEST, value.encode("utf-8"), salt, iterations)
     return hmac.compare_digest(candidate_digest, expected_digest)
 
 

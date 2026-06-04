@@ -334,8 +334,8 @@ def test_platform_infra_dashboard_reports_runtime_contracts(tmp_path) -> None:
     engine.dispose()
 
 
-def test_live_playback_dashboard_and_alert_rules_cover_p6_failure_modes() -> None:
-    dashboard_path = PROJECT_ROOT / "ops" / "observability" / "grafana" / "dashboards" / "gtex-live-playback.json"
+def test_live_match_center_dashboard_and_alert_rules_cover_p6_failure_modes() -> None:
+    dashboard_path = PROJECT_ROOT / "ops" / "observability" / "grafana" / "dashboards" / "gtex-live-match-center.json"
     alert_rules_path = PROJECT_ROOT / "ops" / "observability" / "prometheus" / "rules" / "gtex-alerts.yml"
 
     dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
@@ -344,15 +344,15 @@ def test_live_playback_dashboard_and_alert_rules_cover_p6_failure_modes() -> Non
     )
     alert_rules = alert_rules_path.read_text(encoding="utf-8")
 
-    assert dashboard.get("title") == "GTEX Live Playback"
-    assert "gtex_unity_live_access_total" in panel_queries
-    assert "gtex_unity_live_payload_total" in panel_queries
-    assert "gtex_unity_live_websocket_events_total" in panel_queries
-    assert "gtex_unity_live_generated_match_total" in panel_queries
+    assert dashboard.get("title") == "GTEX Live Match Center"
+    assert "gtex_legacy_match_runtime_access_total" in panel_queries
+    assert "gtex_legacy_match_runtime_payload_total" in panel_queries
+    assert "gtex_legacy_match_runtime_websocket_events_total" in panel_queries
+    assert "gtex_legacy_match_runtime_generated_match_total" in panel_queries
 
-    assert "GTexUnityLiveRefreshFailuresHigh" in alert_rules
-    assert "GTexUnityLivePayloadFailuresHigh" in alert_rules
-    assert "GTexUnityLiveStaleStateDetected" in alert_rules
-    assert "GTexUnityLiveWebsocketRejectsHigh" in alert_rules
-    assert "GTexUnityLiveReconnectChurnHigh" in alert_rules
-    assert "GTexUnityLiveMatchGenerationFailuresHigh" in alert_rules
+    assert "GTexLegacyMatchRuntimeRefreshFailuresHigh" in alert_rules
+    assert "GTexLegacyMatchRuntimePayloadFailuresHigh" in alert_rules
+    assert "GTexLegacyMatchRuntimeStaleStateDetected" in alert_rules
+    assert "GTexLegacyMatchRuntimeWebsocketRejectsHigh" in alert_rules
+    assert "GTexLegacyMatchRuntimeReconnectChurnHigh" in alert_rules
+    assert "GTexLegacyMatchRuntimeGenerationFailuresHigh" in alert_rules

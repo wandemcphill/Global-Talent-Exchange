@@ -27,6 +27,7 @@ class RegenCreationOrderStatus(StrEnum):
     PAID = "paid"
     GENERATING = "generating"
     GENERATED = "generated"
+    CANCELLED = "cancelled"
     FAILED = "failed"
     REFUNDED = "refunded"
 

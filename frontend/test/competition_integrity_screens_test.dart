@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
-import 'package:gte_frontend/screens/competitions/gte_halftime_analytics_screen.dart';
-import 'package:gte_frontend/screens/competitions/gte_match_highlights_screen.dart';
+import 'package:gte_frontend/features/match_center/presentation/gte_halftime_analytics_screen.dart';
+import 'package:gte_frontend/features/match_center/presentation/gte_match_highlights_screen.dart';
 
 void main() {
   testWidgets('match highlights screen renders honest unavailable state', (

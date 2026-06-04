@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import time
+from datetime import date
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -14,19 +15,34 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import BACKEND_ROOT, load_settings
 from app.core.database import load_model_modules
-from app.auth.router import login_user, register_user, signup_user
+from app.auth.router import login_user, signup_player_frictionless
 from app.auth.security import decode_access_token, decode_refresh_token
-from app.auth.schemas import LoginRequest, RegisterRequest, UserClubSignupRequest
+from app.auth.schemas import (
+    LoginRequest,
+    PlayerFrictionlessSignupRequest,
+    RecoveryQuestionInput,
+)
 from app.auth.service import AuthService
 from app.main import create_app
 from app.models import Base
 from app.models.club_profile import ClubType
 from app.models.user import User, UserRole
 from app.users.router import read_current_user
-from backend.tests.support.signup_payloads import user_signup_payload
 
 TEST_PASSWORD = "SuperSecret1"  # pragma: allowlist secret
 WRONG_PASSWORD = "WrongPassword1"  # pragma: allowlist secret
+API_V2_HEADERS = {"X-API-Version": "2"}
+
+
+def _auth_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}", **API_V2_HEADERS}
+
+
+def _response_data(response) -> dict[str, object]:
+    payload = response.json()
+    if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+        return payload["data"]
+    return payload
 
 
 @pytest.fixture()
@@ -78,14 +94,15 @@ def app_client(tmp_path):
 
 def _bootstrap_admin_login(client: TestClient) -> dict[str, object]:
     response = client.post(
-        "/auth/login",
+        "/api/v2/auth/login",
         json={
             "email": os.environ["GTE_BOOTSTRAP_ADMIN_EMAIL"],
             "password": os.environ["GTE_BOOTSTRAP_ADMIN_PASSWORD"],
         },
+        headers=API_V2_HEADERS,
     )
     assert response.status_code == 200, response.text
-    return response.json()
+    return _response_data(response)
 
 
 def _ensure_bootstrap_admin(app, *, timeout_seconds: float = 20.0) -> None:
@@ -128,28 +145,67 @@ def _create_authenticated_user(app):
         return user.id, issued_session.access_token, issued_session.refresh_token
 
 
-def _signup_user_direct(
+def _player_signup_payload(
+    *,
+    email: str,
+    full_name: str = "Fan User",
+    password: str = TEST_PASSWORD,
+) -> dict[str, object]:
+    return {
+        "full_name": full_name,
+        "email": email,
+        "password": password,
+        "country": "NG",
+        "preferred_position": "Forward",
+        "date_of_birth": "2006-05-12",
+        "pin": "2718",
+        "recovery_questions": [
+            {
+                "question": "Which academy did I first train with?",
+                "answer": "Surulere Stars",
+            },
+            {
+                "question": "What nickname did my first coach call me?",
+                "answer": "Flash",
+            },
+        ],
+    }
+
+
+def _signup_player_direct(
     session,
     *,
     email: str,
     username: str,
     full_name: str = "Fan User",
 ):
-    return signup_user(
-        UserClubSignupRequest(
-            **user_signup_payload(
-                email=email,
-                username=username,
-                full_name=full_name,
-                password=TEST_PASSWORD,
-            )
+    del username
+    return signup_player_frictionless(
+        PlayerFrictionlessSignupRequest(
+            full_name=full_name,
+            email=email,
+            password=TEST_PASSWORD,
+            country="NG",
+            preferred_position="Forward",
+            date_of_birth=date(2006, 5, 12),
+            pin="2718",
+            recovery_questions=[
+                RecoveryQuestionInput(
+                    question="Which academy did I first train with?",
+                    answer="Surulere Stars",
+                ),
+                RecoveryQuestionInput(
+                    question="What nickname did my first coach call me?",
+                    answer="Flash",
+                ),
+            ],
         ),
         session,
     )
 
 
 def test_register_login_and_me_flow(session) -> None:
-    register_response = _signup_user_direct(
+    register_response = _signup_player_direct(
         session,
         email="fan@example.com",
         username="fanuser",
@@ -182,14 +238,14 @@ def test_register_login_and_me_flow(session) -> None:
 
 
 def test_duplicate_registration_returns_conflict(session) -> None:
-    _signup_user_direct(
+    _signup_player_direct(
         session,
         email="fan@example.com",
         username="fanuser",
     )
 
     with pytest.raises(HTTPException) as exc_info:
-        _signup_user_direct(
+        _signup_player_direct(
             session,
             email="fan@example.com",
             username="fanuser2",
@@ -217,7 +273,7 @@ def test_login_with_invalid_credentials_returns_unauthorized(session) -> None:
     assert exc_info.value.status_code == 401
 
 
-def test_public_register_route_is_gone(app_client) -> None:
+def test_public_register_route_is_removed(app_client) -> None:
     _app, client = app_client
 
     register_response = client.post(
@@ -232,6 +288,7 @@ def test_public_register_route_is_gone(app_client) -> None:
     )
 
     assert register_response.status_code == 410, register_response.text
+    assert register_response.json()["code"] == "DEPRECATED_ROUTE"
 
 
 def test_api_auth_me_returns_authenticated_user(app_client) -> None:
@@ -239,12 +296,12 @@ def test_api_auth_me_returns_authenticated_user(app_client) -> None:
     user_id, token, _refresh_token = _create_authenticated_user(app)
 
     response = client.get(
-        "/api/auth/me",
-        headers={"Authorization": f"Bearer {token}"},
+        "/api/v2/auth/me",
+        headers=_auth_headers(token),
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    payload = _response_data(response)
     assert payload["id"] == user_id
     assert payload["email"] == "fan@example.com"
     assert payload["username"] == "fanuser"
@@ -266,8 +323,8 @@ def test_api_auth_me_patch_updates_allowed_profile_fields(app_client) -> None:
     user_id, token, _refresh_token = _create_authenticated_user(app)
 
     response = client.patch(
-        "/api/auth/me",
-        headers={"Authorization": f"Bearer {token}"},
+        "/api/v2/auth/me",
+        headers=_auth_headers(token),
         json={
             "display_name": "Updated Fan",
             "avatar_url": "https://cdn.example.com/avatar.png",
@@ -278,7 +335,7 @@ def test_api_auth_me_patch_updates_allowed_profile_fields(app_client) -> None:
     )
 
     assert response.status_code == 200
-    payload = response.json()
+    payload = _response_data(response)
     assert payload["id"] == user_id
     assert payload["display_name"] == "Updated Fan"
     assert payload["avatar_url"] == "https://cdn.example.com/avatar.png"
@@ -296,8 +353,8 @@ def test_api_auth_me_patch_validation_rejects_invalid_avatar_url(app_client) -> 
     _user_id, token, _refresh_token = _create_authenticated_user(app)
 
     response = client.patch(
-        "/api/auth/me",
-        headers={"Authorization": f"Bearer {token}"},
+        "/api/v2/auth/me",
+        headers=_auth_headers(token),
         json={"avatar_url": "not-a-url"},
     )
 
@@ -310,8 +367,8 @@ def test_api_auth_me_patch_rejects_protected_fields(app_client) -> None:
     _user_id, token, _refresh_token = _create_authenticated_user(app)
 
     response = client.patch(
-        "/api/auth/me",
-        headers={"Authorization": f"Bearer {token}"},
+        "/api/v2/auth/me",
+        headers=_auth_headers(token),
         json={"email": "owner@example.com"},
     )
 
@@ -322,17 +379,17 @@ def test_api_auth_me_patch_rejects_protected_fields(app_client) -> None:
 def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     _app, client = app_client
     login_response = client.post(
-        "/auth/signup/user",
-        json=user_signup_payload(
+        "/api/v2/auth/signup/player",
+        json=_player_signup_payload(
             email="bootstrap@example.com",
-            username="bootstrapuser",
             full_name="Bootstrap User",
             password=TEST_PASSWORD,
         ),
+        headers=API_V2_HEADERS,
     )
 
     assert login_response.status_code == 201, login_response.text
-    issued = login_response.json()
+    issued = _response_data(login_response)
     refresh_response = client.post(
         "/api/v2/auth/refresh",
         json={"refresh_token": issued["refresh_token"]},
@@ -359,10 +416,13 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     assert bootstrap_response.status_code == 200, bootstrap_response.text
     bootstrap = bootstrap_response.json()["data"]
     assert bootstrap["user"]["id"] == refreshed["user"]["id"]
-    assert bootstrap["club"]["owner_user_id"] == refreshed["user"]["id"]
+    if bootstrap["club"] is not None:
+        assert bootstrap["club"]["owner_user_id"] == refreshed["user"]["id"]
+        assert "players.view" in bootstrap["permissions"]
+    else:
+        assert bootstrap["permissions"] == []
     assert bootstrap["wallet"]["currency"] in {"credit", "coin"}
     assert bootstrap["compliance"]["country_code"] == "NG"
-    assert "players.view" in bootstrap["permissions"]
 
     logout_response = client.post(
         "/api/v2/auth/logout",
@@ -387,22 +447,6 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
         },
     )
     assert revoked_bootstrap.status_code == 401
-
-
-def test_legacy_register_function_returns_gone(session) -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        register_user(
-            RegisterRequest(
-                email="telemetry-register@example.com",
-                username="telemetryregister",
-                password=TEST_PASSWORD,
-                full_name="Telemetry Register",
-                region_code="NG",
-            ),
-            session,
-        )
-
-    assert exc_info.value.status_code == 410
 
 
 def test_login_user_logs_completion(session, caplog: pytest.LogCaptureFixture) -> None:
@@ -471,11 +515,11 @@ def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(app_c
     _ensure_bootstrap_admin(app)
 
     super_payload = _bootstrap_admin_login(client)
-    super_headers = {"Authorization": f"Bearer {super_payload['access_token']}"}
+    super_headers = _auth_headers(str(super_payload["access_token"]))
     scoped_email = "scoped-auth-router@example.com"
     scoped_password = TEST_PASSWORD
     create_response = client.post(
-        "/api/admin/access",
+        "/api/v2/admin/access",
         headers=super_headers,
         json={
             "email": scoped_email,
@@ -488,18 +532,19 @@ def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(app_c
     assert create_response.status_code == 201, create_response.text
 
     login_response = client.post(
-        "/auth/login",
+        "/api/v2/auth/login",
         json={"email": scoped_email, "password": scoped_password},
+        headers=API_V2_HEADERS,
     )
 
     assert login_response.status_code == 200, login_response.text
-    payload = login_response.json()
+    payload = _response_data(login_response)
     assert "manage_manager_catalog" in payload["permissions"]
     assert payload["landing_route"] == "/profile/admin"
 
     me_response = client.get(
-        "/api/auth/me",
-        headers={"Authorization": f"Bearer {payload['access_token']}"},
+        "/api/v2/auth/me",
+        headers=_auth_headers(str(payload["access_token"])),
     )
     assert me_response.status_code == 200, me_response.text
-    assert "manage_manager_catalog" in me_response.json()["permissions"]
+    assert "manage_manager_catalog" in _response_data(me_response)["permissions"]

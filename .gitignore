@@ -15,6 +15,9 @@ backend/.tmp_*.out
 backend/.tmp_*.db
 backend/.tmp_*.db-*
 backend/config/.runtime/
+backend/generated_media/
+backend/manual_phase1_checks/
+backend/pytesttmp_phase1_admin/
 .vscode/
 .env
 .env.*

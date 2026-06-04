@@ -189,4 +189,3 @@ const Map<String, Object?> _fanWarProfileJson = <String, Object?>{
   'scoring_config_json': <String, Object?>{},
   'metadata_json': <String, Object?>{},
 };
-

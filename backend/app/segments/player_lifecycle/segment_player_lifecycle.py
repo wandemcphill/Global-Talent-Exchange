@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.models.user import User
 from app.schemas.player_lifecycle import (
+    AdminTransferBidReviewActionRequest,
+    AdminTransferBidReviewActionResponse,
+    AdminTransferBidReviewQueueView,
     BigClubApproachRequest,
     CareerEntryView,
     ContractCreateRequest,
@@ -31,13 +35,17 @@ from app.schemas.player_lifecycle import (
     PlayerOverviewView,
     PlayerLifecycleSnapshotView,
     TransferBidAcceptRequest,
+    TransferBidCounterRequest,
     TransferBidCreateRequest,
     TransferBidRejectRequest,
+    TransferBidWithdrawRequest,
     TransferBidView,
     TransferWindowView,
 )
 from app.services.player_lifecycle_service import (
+    PlayerLifecycleConflictError,
     PlayerLifecycleNotFoundError,
+    PlayerLifecyclePermissionError,
     PlayerLifecycleService,
     PlayerLifecycleValidationError,
 )
@@ -52,6 +60,10 @@ def _service(session: Session = Depends(get_session)) -> PlayerLifecycleService:
 def _raise_for_lifecycle_error(exc: Exception) -> None:
     if isinstance(exc, PlayerLifecycleNotFoundError):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, PlayerLifecycleConflictError):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if isinstance(exc, PlayerLifecyclePermissionError):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     if isinstance(exc, PlayerLifecycleValidationError):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     raise exc
@@ -240,6 +252,43 @@ def get_transfer_window(
         _raise_for_lifecycle_error(exc)
 
 
+@router.get("/api/admin/transfers/bids/review-queue", response_model=AdminTransferBidReviewQueueView)
+def list_admin_transfer_bid_reviews(
+    bid_status: str | None = Query(default=None, alias="status"),
+    window_id: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    service: PlayerLifecycleService = Depends(_service),
+    actor: User = Depends(get_current_admin),
+) -> AdminTransferBidReviewQueueView:
+    del actor
+    return service.list_admin_transfer_bid_reviews(
+        status_filter=bid_status,
+        window_id=window_id,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "/api/admin/transfers/windows/{window_id}/bids/{bid_id}/review-actions",
+    response_model=AdminTransferBidReviewActionResponse,
+)
+def record_admin_transfer_bid_review_action(
+    window_id: str,
+    bid_id: str,
+    payload: AdminTransferBidReviewActionRequest,
+    service: PlayerLifecycleService = Depends(_service),
+    actor: User = Depends(get_current_admin),
+) -> AdminTransferBidReviewActionResponse:
+    try:
+        return service.record_admin_transfer_bid_review_action(window_id, bid_id, payload, actor=actor)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
 @router.get("/api/transfers/windows/{window_id}/bids", response_model=list[TransferBidView])
 def list_transfer_window_bids(window_id: str, service: PlayerLifecycleService = Depends(_service)) -> list[TransferBidView]:
     return [service.to_transfer_bid_view(item) for item in service.list_window_bids(window_id)]
@@ -250,10 +299,19 @@ def create_transfer_bid(
     window_id: str,
     payload: TransferBidCreateRequest,
     service: PlayerLifecycleService = Depends(_service),
+    actor: User = Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> TransferBidView:
     try:
-        return service.to_transfer_bid_view(service.create_bid(window_id, payload))
-    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        return service.to_transfer_bid_view(
+            service.create_bid(window_id, payload, actor=actor, idempotency_key=idempotency_key)
+        )
+    except (
+        PlayerLifecycleConflictError,
+        PlayerLifecycleNotFoundError,
+        PlayerLifecyclePermissionError,
+        PlayerLifecycleValidationError,
+    ) as exc:
         _raise_for_lifecycle_error(exc)
 
 
@@ -263,10 +321,19 @@ def accept_transfer_bid(
     bid_id: str,
     payload: TransferBidAcceptRequest,
     service: PlayerLifecycleService = Depends(_service),
+    actor: User = Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> TransferBidView:
     try:
-        return service.to_transfer_bid_view(service.accept_bid(window_id, bid_id, payload))
-    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        return service.to_transfer_bid_view(
+            service.accept_bid(window_id, bid_id, payload, actor=actor, idempotency_key=idempotency_key)
+        )
+    except (
+        PlayerLifecycleConflictError,
+        PlayerLifecycleNotFoundError,
+        PlayerLifecyclePermissionError,
+        PlayerLifecycleValidationError,
+    ) as exc:
         _raise_for_lifecycle_error(exc)
 
 
@@ -276,10 +343,63 @@ def reject_transfer_bid(
     bid_id: str,
     payload: TransferBidRejectRequest,
     service: PlayerLifecycleService = Depends(_service),
+    actor: User = Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> TransferBidView:
     try:
-        return service.to_transfer_bid_view(service.reject_bid(window_id, bid_id, payload))
-    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        return service.to_transfer_bid_view(
+            service.reject_bid(window_id, bid_id, payload, actor=actor, idempotency_key=idempotency_key)
+        )
+    except (
+        PlayerLifecycleConflictError,
+        PlayerLifecycleNotFoundError,
+        PlayerLifecyclePermissionError,
+        PlayerLifecycleValidationError,
+    ) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.post("/api/transfers/windows/{window_id}/bids/{bid_id}/counter", response_model=TransferBidView, status_code=status.HTTP_201_CREATED)
+def counter_transfer_bid(
+    window_id: str,
+    bid_id: str,
+    payload: TransferBidCounterRequest,
+    service: PlayerLifecycleService = Depends(_service),
+    actor: User = Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> TransferBidView:
+    try:
+        return service.to_transfer_bid_view(
+            service.counter_bid(window_id, bid_id, payload, actor=actor, idempotency_key=idempotency_key)
+        )
+    except (
+        PlayerLifecycleConflictError,
+        PlayerLifecycleNotFoundError,
+        PlayerLifecyclePermissionError,
+        PlayerLifecycleValidationError,
+    ) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
+@router.post("/api/transfers/windows/{window_id}/bids/{bid_id}/withdraw", response_model=TransferBidView)
+def withdraw_transfer_bid(
+    window_id: str,
+    bid_id: str,
+    payload: TransferBidWithdrawRequest,
+    service: PlayerLifecycleService = Depends(_service),
+    actor: User = Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> TransferBidView:
+    try:
+        return service.to_transfer_bid_view(
+            service.withdraw_bid(window_id, bid_id, payload, actor=actor, idempotency_key=idempotency_key)
+        )
+    except (
+        PlayerLifecycleConflictError,
+        PlayerLifecycleNotFoundError,
+        PlayerLifecyclePermissionError,
+        PlayerLifecycleValidationError,
+    ) as exc:
         _raise_for_lifecycle_error(exc)
 
 

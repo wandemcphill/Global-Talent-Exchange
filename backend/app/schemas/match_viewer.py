@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 
 from app.common.schemas.base import CommonSchema
 from app.fairness.spend_balance_controller import SpendTier, TournamentFairnessMode
 from app.match_engine.simulation.models import PlayerRole
-from app.services.ads.schemas import MatchViewerMonetizationView
+from app.services.ads.schemas import MatchAdPlacementView, MatchViewerMonetizationView
 
 
 class MatchViewerEventType(StrEnum):
@@ -108,6 +108,13 @@ class MatchMode(StrEnum):
     QUICK = "quick"
     STANDARD = "standard"
     CINEMATIC = "cinematic"
+
+
+class MatchViewerAvailabilityStatus(StrEnum):
+    READY = "ready"
+    EMPTY = "empty"
+    DEGRADED = "degraded"
+    BLOCKED = "blocked"
 
 
 class MatchViewerPointView(CommonSchema):
@@ -264,7 +271,7 @@ class MatchViewStateView(CommonSchema):
     events: list[MatchViewerEventView] = Field(default_factory=list)
     frames: list[MatchTimelineFrameView] = Field(default_factory=list)
     presentation_package: "MatchViewerPresentationPackageView | None" = None
-    monetization: MatchViewerMonetizationView | None = None
+    engagement: "MatchViewerEngagementView | None" = None
 
 
 class MatchViewerPresentationPlayerView(CommonSchema):
@@ -347,6 +354,100 @@ class MatchViewerPresentationPackageView(CommonSchema):
     commentary_highlights: list[str] = Field(default_factory=list)
 
 
+class MatchViewerAdStateView(CommonSchema):
+    status: MatchViewerAvailabilityStatus = MatchViewerAvailabilityStatus.EMPTY
+    ads_enabled: bool = False
+    placements: list[MatchAdPlacementView] = Field(default_factory=list)
+    metadata: dict[str, object] = Field(default_factory=dict)
+    status_detail: str | None = None
+
+
+class MatchViewerGiftTargetView(CommonSchema):
+    recipient_user_id: str
+    recipient_label: str
+    source_scope: str
+    target_type: str = "match_host"
+
+
+class MatchViewerGiftCatalogItemView(CommonSchema):
+    key: str
+    display_name: str
+    tier: str | None = None
+    fancoin_price: float = Field(default=0.0, ge=0.0)
+    animation_key: str | None = None
+    sound_key: str | None = None
+    description: str | None = None
+
+
+class MatchViewerGiftCatalogStateView(CommonSchema):
+    status: MatchViewerAvailabilityStatus = MatchViewerAvailabilityStatus.EMPTY
+    source: str = "gift_engine_catalog"
+    items: list[MatchViewerGiftCatalogItemView] = Field(default_factory=list)
+    status_detail: str | None = None
+    blocked_reason: str | None = None
+
+
+class MatchViewerGiftSessionStateView(CommonSchema):
+    status: MatchViewerAvailabilityStatus = MatchViewerAvailabilityStatus.BLOCKED
+    active: bool = False
+    can_send: bool = False
+    session_id: str | None = None
+    send_endpoint: str | None = None
+    blocked_reason: str | None = None
+    status_detail: str | None = None
+
+
+class MatchViewerGiftContextView(CommonSchema):
+    status: MatchViewerAvailabilityStatus = MatchViewerAvailabilityStatus.BLOCKED
+    target: MatchViewerGiftTargetView | None = None
+    catalog: MatchViewerGiftCatalogStateView = Field(default_factory=MatchViewerGiftCatalogStateView)
+    session: MatchViewerGiftSessionStateView = Field(default_factory=MatchViewerGiftSessionStateView)
+    status_detail: str | None = None
+
+
+class MatchViewerEventSourceStateView(CommonSchema):
+    status: MatchViewerAvailabilityStatus = MatchViewerAvailabilityStatus.BLOCKED
+    source: str
+    backend_authored: bool = True
+    event_count: int = Field(default=0, ge=0)
+    incident_event_count: int = Field(default=0, ge=0)
+    presentation_only_event_count: int = Field(default=0, ge=0)
+    blocked_reason: str | None = None
+    degraded_reason: str | None = None
+
+
+class MatchViewerCommentaryLineView(CommonSchema):
+    event_id: str
+    clock_label: str
+    event_type: MatchViewerEventType
+    text: str
+
+
+class MatchViewerCommentaryStateView(CommonSchema):
+    status: MatchViewerAvailabilityStatus = MatchViewerAvailabilityStatus.BLOCKED
+    source: str = "timeline_events"
+    lines: list[MatchViewerCommentaryLineView] = Field(default_factory=list)
+    event_count: int = Field(default=0, ge=0)
+    status_detail: str | None = None
+    blocked_reason: str | None = None
+    degraded_reason: str | None = None
+
+
+class MatchViewerReactionStateView(CommonSchema):
+    status: MatchViewerAvailabilityStatus = MatchViewerAvailabilityStatus.EMPTY
+    source: str = "presentation_package"
+    cards: list[MatchViewerReactionCardView] = Field(default_factory=list)
+    status_detail: str | None = None
+
+
+class MatchViewerEngagementView(CommonSchema):
+    ads: MatchViewerAdStateView = Field(default_factory=MatchViewerAdStateView)
+    gifting: MatchViewerGiftContextView = Field(default_factory=MatchViewerGiftContextView)
+    event_source: MatchViewerEventSourceStateView
+    commentary: MatchViewerCommentaryStateView = Field(default_factory=MatchViewerCommentaryStateView)
+    reactions: MatchViewerReactionStateView = Field(default_factory=MatchViewerReactionStateView)
+
+
 class FairnessIndicatorStatus(StrEnum):
     VERIFIED = "verified"
     UNVERIFIED = "unverified"
@@ -364,13 +465,23 @@ class MatchFairnessIndicatorView(CommonSchema):
     label: str = "Fair Play Pending"
     message: str | None = None
     no_pay_to_win: bool = True
-    visual_only_monetization: bool = True
+    visual_only_engagement: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("visual_only_engagement", "visual_only_monetization"),
+    )
     server_authoritative: bool = True
     tournament_fairness_mode: TournamentFairnessMode | None = None
     home_spend_tier: SpendTier | None = None
     away_spend_tier: SpendTier | None = None
     squad_balance_policy: str | None = None
     soft_balance_applied: bool = False
+
+    @field_validator("message", mode="before")
+    @classmethod
+    def _neutralize_message(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        return value.replace("Monetization remains visual only.", "Engagement features remain visual only.")
 
 
 class MatchTimelineProofView(CommonSchema):

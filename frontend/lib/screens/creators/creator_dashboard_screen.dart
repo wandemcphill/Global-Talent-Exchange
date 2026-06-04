@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../controllers/creator_controller.dart';
+import '../../features/creator/presentation/creator_canonical_surface.dart';
 import '../../models/creator_models.dart';
 import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
@@ -8,9 +9,20 @@ import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
 
 class CreatorDashboardScreen extends StatefulWidget {
-  const CreatorDashboardScreen({super.key, required this.controller});
+  const CreatorDashboardScreen({
+    super.key,
+    required this.controller,
+    this.isAuthenticated = true,
+    this.hasApprovedCreatorAccess = true,
+    this.onOpenLogin,
+    this.onOpenCreatorAccessRequest,
+  });
 
   final CreatorController controller;
+  final bool isAuthenticated;
+  final bool hasApprovedCreatorAccess;
+  final VoidCallback? onOpenLogin;
+  final VoidCallback? onOpenCreatorAccessRequest;
 
   @override
   State<CreatorDashboardScreen> createState() => _CreatorDashboardScreenState();
@@ -56,6 +68,21 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
             ),
           );
         }
+        if (!widget.isAuthenticated || !widget.hasApprovedCreatorAccess) {
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: CreatorCanonicalSurface(
+              profile: profile,
+              finance: finance,
+              isAuthenticated: widget.isAuthenticated,
+              hasApprovedCreatorAccess: widget.hasApprovedCreatorAccess,
+              syncedAt: widget.controller.syncedAt,
+              isSyncing: widget.controller.isSyncing,
+              onOpenLogin: widget.onOpenLogin,
+              onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
+            ),
+          );
+        }
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
           children: <Widget>[
@@ -77,12 +104,35 @@ class _CreatorDashboardScreenState extends State<CreatorDashboardScreen> {
                     runSpacing: 12,
                     children: <Widget>[
                       Chip(label: Text(profile.handleLabel)),
-                      Chip(label: Text('Tier: ${profile.tier}')),
-                      Chip(label: Text('Share code: ${profile.shareCode}')),
+                      Chip(
+                        label: Text(
+                          profile.tier.trim().isEmpty
+                              ? 'Tier: awaiting backend'
+                              : 'Tier: ${profile.tier}',
+                        ),
+                      ),
+                      Chip(
+                        label: Text(
+                          profile.shareCode.trim().isEmpty
+                              ? 'Share code: awaiting backend'
+                              : 'Share code: ${profile.shareCode}',
+                        ),
+                      ),
                     ],
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 18),
+            CreatorCanonicalSurface(
+              profile: profile,
+              finance: finance,
+              isAuthenticated: widget.isAuthenticated,
+              hasApprovedCreatorAccess: widget.hasApprovedCreatorAccess,
+              syncedAt: widget.controller.syncedAt,
+              isSyncing: widget.controller.isSyncing,
+              onOpenLogin: widget.onOpenLogin,
+              onOpenCreatorAccessRequest: widget.onOpenCreatorAccessRequest,
             ),
             const SizedBox(height: 18),
             GteSurfacePanel(

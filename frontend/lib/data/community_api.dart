@@ -45,7 +45,7 @@ class CommunityApi {
   Future<CommunityDigest> fetchDigest() {
     return client.withFallback<CommunityDigest>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/api/community/digest',
+        _communityAbsolutePath(client, '/api/v2/community/digest'),
       );
       return CommunityDigest.fromJson(payload);
     }, fixtures.digest);
@@ -54,7 +54,10 @@ class CommunityApi {
   Future<bool> fetchCreatorClubFollowing({required String clubId}) async {
     return client.withFallback<bool>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/api/community/creator-clubs/$clubId/fan-state',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/creator-clubs/$clubId/fan-state',
+        ),
       );
       final Object? following = payload['following'];
       if (following is bool) {
@@ -68,9 +71,19 @@ class CommunityApi {
     await client.withFallback<void>(() async {
       await client.request(
         'POST',
-        '/api/community/creator-clubs/$clubId/follow',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/creator-clubs/$clubId/follow',
+        ),
         body: const <String, Object?>{
-          'metadata_json': <String, Object?>{'source': 'active_shell'},
+          'metadata_json': <String, Object?>{
+            'source': 'active_shell',
+            'surface': 'community',
+            'action': 'creator_club.follow',
+            'role_required': 'authenticated_member',
+            'realtime_topic': 'community.creator_clubs',
+            'audit_schema': 'community.surface.v1',
+          },
         },
       );
     }, () async => fixtures.followCreatorClub(clubId));
@@ -80,7 +93,10 @@ class CommunityApi {
     await client.withFallback<void>(() async {
       await client.request(
         'DELETE',
-        '/api/community/creator-clubs/$clubId/follow',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/creator-clubs/$clubId/follow',
+        ),
       );
     }, () async => fixtures.unfollowCreatorClub(clubId));
   }
@@ -88,7 +104,7 @@ class CommunityApi {
   Future<List<CommunityWatchlistItem>> listWatchlist() {
     return client.withFallback<List<CommunityWatchlistItem>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/api/community/watchlist',
+        _communityAbsolutePath(client, '/api/v2/community/watchlist'),
       );
       return payload
           .map(CommunityWatchlistItem.fromJson)
@@ -107,14 +123,17 @@ class CommunityApi {
       () async {
         final Object? payload = await client.request(
           'POST',
-          '/api/community/watchlist',
+          _communityAbsolutePath(client, '/api/v2/community/watchlist'),
           body: <String, Object?>{
             'competition_key': competitionKey,
             'competition_title': competitionTitle,
             'competition_type': competitionType,
             'notify_on_story': notifyOnStory,
             'notify_on_launch': notifyOnLaunch,
-            'metadata_json': <String, Object?>{},
+            'metadata_json': _communityAuditMetadata(
+              action: 'watchlist.add',
+              realtimeTopic: 'community.watchlist',
+            ),
           },
         );
         return CommunityWatchlistItem.fromJson(payload);
@@ -130,7 +149,10 @@ class CommunityApi {
     return client.withFallback<void>(() async {
       await client.request(
         'DELETE',
-        '/api/community/watchlist/$competitionKey',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/watchlist/$competitionKey',
+        ),
       );
     }, () async => fixtures.removeWatchlist(competitionKey));
   }
@@ -138,7 +160,7 @@ class CommunityApi {
   Future<List<LiveThread>> listLiveThreads({String? competitionKey}) {
     return client.withFallback<List<LiveThread>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/api/community/live-threads',
+        _communityAbsolutePath(client, '/api/v2/community/live-threads'),
         query: <String, Object?>{
           if (competitionKey != null && competitionKey.isNotEmpty)
             'competition_key': competitionKey,
@@ -157,13 +179,16 @@ class CommunityApi {
       () async {
         final Object? payload = await client.request(
           'POST',
-          '/api/community/live-threads',
+          _communityAbsolutePath(client, '/api/v2/community/live-threads'),
           body: <String, Object?>{
             'thread_key': threadKey,
             'title': title,
             if (competitionKey != null) 'competition_key': competitionKey,
             'pinned': false,
-            'metadata_json': <String, Object?>{},
+            'metadata_json': _communityAuditMetadata(
+              action: 'live_thread.create',
+              realtimeTopic: 'community.live_threads',
+            ),
           },
         );
         return LiveThread.fromJson(payload);
@@ -175,7 +200,10 @@ class CommunityApi {
   Future<LiveThread> fetchLiveThread(String threadId) {
     return client.withFallback<LiveThread>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/api/community/live-threads/$threadId',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/live-threads/$threadId',
+        ),
       );
       return LiveThread.fromJson(payload);
     }, () async => fixtures.getLiveThread(threadId));
@@ -184,7 +212,10 @@ class CommunityApi {
   Future<List<LiveThreadMessage>> listLiveThreadMessages(String threadId) {
     return client.withFallback<List<LiveThreadMessage>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/api/community/live-threads/$threadId/messages',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/live-threads/$threadId/messages',
+        ),
       );
       return payload.map(LiveThreadMessage.fromJson).toList(growable: false);
     }, () async => fixtures.liveThreadMessages(threadId));
@@ -197,10 +228,16 @@ class CommunityApi {
     return client.withFallback<LiveThreadMessage>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/api/community/live-threads/$threadId/messages',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/live-threads/$threadId/messages',
+        ),
         body: <String, Object?>{
           'body': body,
-          'metadata_json': <String, Object?>{},
+          'metadata_json': _communityAuditMetadata(
+            action: 'live_thread.message.post',
+            realtimeTopic: 'community.live_thread_messages',
+          ),
         },
       );
       return LiveThreadMessage.fromJson(payload);
@@ -210,7 +247,10 @@ class CommunityApi {
   Future<List<PrivateMessageThread>> listPrivateThreads() {
     return client.withFallback<List<PrivateMessageThread>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/api/community/private-messages/threads',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/private-messages/threads',
+        ),
       );
       return payload.map(PrivateMessageThread.fromJson).toList(growable: false);
     }, fixtures.privateThreads);
@@ -224,12 +264,18 @@ class CommunityApi {
     return client.withFallback<PrivateMessageThread>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/api/community/private-messages/threads',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/private-messages/threads',
+        ),
         body: <String, Object?>{
           'participant_user_ids': participantUserIds,
           'subject': subject,
           'initial_message': initialMessage,
-          'metadata_json': <String, Object?>{},
+          'metadata_json': _communityAuditMetadata(
+            action: 'private_thread.create',
+            realtimeTopic: 'community.private_messages',
+          ),
         },
       );
       return PrivateMessageThread.fromJson(payload);
@@ -239,7 +285,10 @@ class CommunityApi {
   Future<PrivateMessageThread> fetchPrivateThread(String threadId) {
     return client.withFallback<PrivateMessageThread>(() async {
       final Map<String, dynamic> payload = await client.getMap(
-        '/api/community/private-messages/threads/$threadId',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/private-messages/threads/$threadId',
+        ),
       );
       return PrivateMessageThread.fromJson(payload);
     }, () async => fixtures.getPrivateThread(threadId));
@@ -248,7 +297,10 @@ class CommunityApi {
   Future<List<PrivateMessage>> listPrivateMessages(String threadId) {
     return client.withFallback<List<PrivateMessage>>(() async {
       final List<dynamic> payload = await client.getList(
-        '/api/community/private-messages/threads/$threadId/messages',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/private-messages/threads/$threadId/messages',
+        ),
       );
       return payload.map(PrivateMessage.fromJson).toList(growable: false);
     }, () async => fixtures.privateMessages(threadId));
@@ -261,15 +313,43 @@ class CommunityApi {
     return client.withFallback<PrivateMessage>(() async {
       final Object? payload = await client.request(
         'POST',
-        '/api/community/private-messages/threads/$threadId/messages',
+        _communityAbsolutePath(
+          client,
+          '/api/v2/community/private-messages/threads/$threadId/messages',
+        ),
         body: <String, Object?>{
           'body': body,
-          'metadata_json': <String, Object?>{},
+          'metadata_json': _communityAuditMetadata(
+            action: 'private_message.post',
+            realtimeTopic: 'community.private_messages',
+          ),
         },
       );
       return PrivateMessage.fromJson(payload);
     }, () async => fixtures.postPrivateMessage(threadId, body));
   }
+}
+
+Map<String, Object?> _communityAuditMetadata({
+  required String action,
+  required String realtimeTopic,
+}) {
+  return <String, Object?>{
+    'source': 'active_shell',
+    'surface': 'community',
+    'action': action,
+    'role_required': 'authenticated_member',
+    'realtime_topic': realtimeTopic,
+    'audit_schema': 'community.surface.v1',
+  };
+}
+
+String _communityAbsolutePath(GteAuthedApi client, String path) {
+  final String base =
+      client.config.baseUrl.endsWith('/')
+          ? client.config.baseUrl.substring(0, client.config.baseUrl.length - 1)
+          : client.config.baseUrl;
+  return '$base$path';
 }
 
 class _CommunityFixtures {

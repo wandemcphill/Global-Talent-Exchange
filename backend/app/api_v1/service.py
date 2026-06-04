@@ -119,7 +119,7 @@ def _default_state() -> GlobalApiV1State:
     ]
     state.competitions = [
         {"id": "comp_1", "name": "West Africa Super League", "status": "live", "clubs": 20},
-        {"id": "comp_2", "name": "Unity Cup", "status": "registration", "clubs": 8},
+        {"id": "comp_2", "name": "Continental Cup", "status": "registration", "clubs": 8},
     ]
     state.history_records = [
         {"id": "rec_1", "title": "Longest unbeaten run", "holder": "Lagos Titans", "value": 18},
@@ -177,7 +177,7 @@ def _default_state() -> GlobalApiV1State:
     state.tournaments = {
         "t1": {
             "id": "t1",
-            "name": "Unity Cup",
+            "name": "Continental Cup",
             "status": "registration",
             "format": "8-team knockout",
             "entry_fee": 25000,

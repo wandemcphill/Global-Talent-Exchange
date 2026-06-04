@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
-import subprocess
 import sys
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
 from urllib import error, parse, request
 
-from verify_unity_routes import RenderUnityRouteVerificationError, derive_api_base_url, verify_unity_live_routes
+from verify_match_center_routes import (
+    RenderMatchCenterRouteVerificationError,
+    derive_api_base_url,
+    verify_match_center_routes,
+)
 
 DEFAULT_SERVICE_ORDER = ("API", "OUTBOX", "SIMULATION", "PROJECTIONS", "WEB")
 RENDER_API_BASE_URL = "https://api.render.com/v1"
@@ -378,106 +380,6 @@ def _run_health_check(*, url: str, timeout_seconds: int, poll_interval_seconds: 
     raise RenderDeployError(f"Health check failed for {url}: {last_error}")
 
 
-def _run_unity_live_playback_check(*, health_url: str) -> None:
-    if not _get_bool_env("RENDER_VERIFY_UNITY_LIVE_PLAYBACK", False):
-        return
-
-    repo_root = Path(__file__).resolve().parents[2]
-    provision_script = repo_root / "tools" / "provision_gtex_live_match.py"
-    if not provision_script.exists():
-        raise RenderDeployError(f"Unity live playback verification script was not found: {provision_script}")
-
-    verify_profile = _optional_env("RENDER_UNITY_LIVE_VERIFY_PROFILE") or "staging"
-    base_url = _optional_env("RENDER_UNITY_LIVE_VERIFY_BASE_URL") or derive_api_base_url(health_url)
-    match_id = _optional_env("RENDER_UNITY_LIVE_VERIFY_MATCH_ID")
-    user_access_token = _optional_env("RENDER_UNITY_LIVE_VERIFY_USER_ACCESS_TOKEN")
-    user_email = _optional_env("RENDER_UNITY_LIVE_VERIFY_USER_EMAIL")
-    user_password = _optional_env("RENDER_UNITY_LIVE_VERIFY_USER_PASSWORD")
-    allow_match_generation = _get_bool_env("RENDER_UNITY_LIVE_VERIFY_ALLOW_MATCH_GENERATION", True)
-    skip_websocket_verify = _get_bool_env("RENDER_UNITY_LIVE_VERIFY_SKIP_WEBSOCKET", False)
-    pay_to_view = _get_bool_env("RENDER_UNITY_LIVE_VERIFY_PAY_TO_VIEW", False)
-    tick_count = max(1, _get_int_env("RENDER_UNITY_LIVE_VERIFY_TICK_COUNT", 1))
-    command_timeout_seconds = max(60, _get_int_env("RENDER_UNITY_LIVE_VERIFY_TIMEOUT_SECONDS", 240))
-
-    if not user_access_token and (not user_email or not user_password):
-        raise RenderDeployError(
-            "Unity live playback verification is enabled but no credentials were configured. "
-            "Set RENDER_UNITY_LIVE_VERIFY_USER_ACCESS_TOKEN or both "
-            "RENDER_UNITY_LIVE_VERIFY_USER_EMAIL and RENDER_UNITY_LIVE_VERIFY_USER_PASSWORD."
-        )
-
-    command = [
-        sys.executable,
-        str(provision_script),
-        "--profile",
-        verify_profile,
-        "--base-url",
-        base_url,
-        "--dry-run",
-        "--tick-count",
-        str(tick_count),
-    ]
-
-    if user_access_token:
-        command.extend(["--user-access-token", user_access_token])
-    else:
-        command.extend(["--user-email", user_email, "--user-password", user_password])
-
-    if match_id:
-        command.extend(["--match-id", match_id])
-    if allow_match_generation:
-        command.append("--allow-match-generation")
-    if skip_websocket_verify:
-        command.append("--skip-websocket-verify")
-    if pay_to_view:
-        command.append("--pay-to-view")
-
-    _log(f"[unity-live] verifying hosted playback against {base_url}")
-    result = subprocess.run(
-        command,
-        cwd=str(repo_root),
-        capture_output=True,
-        text=True,
-        timeout=command_timeout_seconds,
-        check=False,
-    )
-
-    stdout = (result.stdout or "").strip()
-    stderr = (result.stderr or "").strip()
-    if result.returncode != 0:
-        detail = stderr or stdout or f"exit code {result.returncode}"
-        raise RenderDeployError(f"Unity live playback verification failed: {detail}")
-
-    try:
-        summary = json.loads(stdout)
-    except json.JSONDecodeError as exc:
-        raise RenderDeployError(
-            "Unity live playback verification did not return valid JSON. " f"stdout={stdout!r} stderr={stderr!r}"
-        ) from exc
-
-    if not isinstance(summary, dict):
-        raise RenderDeployError(f"Unity live playback verification returned an unexpected payload: {summary!r}")
-
-    websocket_summary = summary.get("websocket")
-    if not skip_websocket_verify:
-        if not isinstance(websocket_summary, dict):
-            raise RenderDeployError("Unity live playback verification did not include websocket advancement details.")
-        first_frame_id = websocket_summary.get("first_frame_id")
-        second_frame_id = websocket_summary.get("second_frame_id")
-        first_clock = websocket_summary.get("first_clock_minute")
-        second_clock = websocket_summary.get("second_clock_minute")
-        if first_frame_id == second_frame_id and first_clock == second_clock:
-            raise RenderDeployError("Unity live playback websocket probe did not advance frame or clock state.")
-
-    _log(
-        "[unity-live] "
-        f"match={summary.get('match_id')} "
-        f"http_frame={summary.get('http_frame_id')} "
-        f"http_clock={summary.get('http_clock_minute')} "
-        f"status={summary.get('http_status')}"
-    )
-
-
 def _deploy_with_hook_only(
     client: RenderHookClient,
     *,
@@ -556,8 +458,7 @@ def main() -> int:
     deploy_timeout_seconds = _get_int_env("RENDER_DEPLOY_TIMEOUT_SECONDS", 1800)
     health_timeout_seconds = _get_int_env("RENDER_HEALTH_TIMEOUT_SECONDS", 180)
     poll_interval_seconds = _get_int_env("RENDER_POLL_INTERVAL_SECONDS", 10)
-    verify_unity_routes_after_deploy = _get_bool_env("RENDER_VERIFY_UNITY_ROUTES", True)
-    unity_route_probe_match_id = _optional_env("RENDER_UNITY_ROUTE_PROBE_MATCH_ID") or "gtex-render-route-probe"
+    verify_match_center_routes_after_deploy = _get_bool_env("RENDER_VERIFY_MATCH_CENTER_ROUTES", True)
     api_health_url = _optional_env("RENDER_HEALTH_URL_API") or health_url
 
     if any(target.env_key == "API" for target in targets) and not api_health_url:
@@ -589,17 +490,13 @@ def main() -> int:
                 )
 
             if target.env_key == "API" and target_health_url:
-                if verify_unity_routes_after_deploy:
+                if verify_match_center_routes_after_deploy:
                     try:
                         api_base_url = derive_api_base_url(target_health_url)
-                        verify_unity_live_routes(
-                            api_base_url,
-                            probe_match_id=unity_route_probe_match_id,
-                        )
-                    except RenderUnityRouteVerificationError as exc:
+                        verify_match_center_routes(api_base_url)
+                    except RenderMatchCenterRouteVerificationError as exc:
                         raise RenderDeployError(str(exc)) from exc
-                    _log(f"[unity-routes] {api_base_url} passed")
-                _run_unity_live_playback_check(health_url=target_health_url)
+                    _log(f"[match-center-routes] {api_base_url} passed")
 
     except Exception as exc:  # noqa: BLE001
         if deploy_mode == "hook-only":

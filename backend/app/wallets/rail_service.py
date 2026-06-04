@@ -16,16 +16,19 @@ from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrde
 from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.risk_ops import RiskSeverity, SystemEventSeverity
 from app.models.treasury import RateDirection, TreasurySettings
-from app.models.user import User
+from app.models.user import PublicAccountType, User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.risk_ops_engine.service import RiskOpsService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 from app.wallets.providers.base import ProviderEvent, ProviderEventType
+from app.wallets.providers.registry import get_live_provider_adapter
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 RISK_AMOUNT_THRESHOLD = Decimal("5000.0000")
 RISK_FREQUENCY_THRESHOLD = 3
 RISK_WINDOW_HOURS = 24
+TRADER_PAYMENT_WINDOW_MINUTES = 30
+TRADER_DISPUTE_ESCALATION_HOURS = 24
 
 
 class WalletRailError(ValueError):
@@ -84,6 +87,7 @@ class WalletRailService:
         processor_mode: str,
         payout_channel: str,
     ) -> PurchaseOrderQuote:
+        provider_key = self._normalize_purchase_order_provider(provider_key)
         input_unit = input_unit.strip().lower()
         if input_unit not in {"fiat", "coin"}:
             raise WalletRailError("Input unit must be fiat or coin.")
@@ -142,6 +146,7 @@ class WalletRailService:
             processor_mode=processor_mode,
             payout_channel=payout_channel,
         )
+        provider_key = quote.provider_key
         reference = self._generate_reference(prefix="PO", model=FancoinPurchaseOrder)
         status = (
             PurchaseOrderStatus.PROCESSING if processor_mode == "automatic_gateway" else PurchaseOrderStatus.REVIEWING
@@ -182,6 +187,22 @@ class WalletRailService:
             )
         )
         return order
+
+    @staticmethod
+    def _normalize_purchase_order_provider(provider_key: str) -> str:
+        normalized = str(provider_key or "").strip().lower()
+        if not normalized:
+            raise WalletRailError("Payment provider is required.")
+        if normalized == "bank_transfer_manual":
+            raise WalletRailError(
+                "Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders."
+            )
+        try:
+            get_live_provider_adapter(normalized)
+        except KeyError as exc:
+            message = exc.args[0] if exc.args else str(exc)
+            raise WalletRailError(message) from exc
+        return normalized
 
     def settle_purchase_order(self, *, order: FancoinPurchaseOrder, actor: User | None = None) -> FancoinPurchaseOrder:
         if order.status == PurchaseOrderStatus.SETTLED and order.ledger_transaction_id:
@@ -253,9 +274,11 @@ class WalletRailService:
     def mark_purchase_order_failed(
         self, *, order: FancoinPurchaseOrder, status: PurchaseOrderStatus, notes: str | None = None
     ) -> FancoinPurchaseOrder:
+        now = utcnow()
         order.status = status
-        order.failed_at = utcnow()
+        order.failed_at = now
         order.notes = notes or order.notes
+        self._stamp_purchase_order_status(order, status, now=now)
         self.session.flush()
         return order
 
@@ -275,7 +298,7 @@ class WalletRailService:
         if order.ledger_transaction_id is None:
             order.status = status
             order.notes = notes or order.notes
-            order.reversed_at = utcnow()
+            self._stamp_purchase_order_status(order, status)
             self.session.flush()
             return order
         user = self.session.get(User, order.user_id)
@@ -315,7 +338,7 @@ class WalletRailService:
             )
             order.status = status
             order.notes = notes or order.notes
-            order.reversed_at = utcnow()
+            self._stamp_purchase_order_status(order, status)
         except InsufficientBalanceError:
             order.status = PurchaseOrderStatus.DISPUTED
             order.notes = notes or order.notes
@@ -513,6 +536,81 @@ class WalletRailService:
             .order_by(FancoinPurchaseOrder.created_at.desc())
             .limit(limit)
         ).all()
+
+    def expire_trader_payment_windows(
+        self,
+        *,
+        reference_time: datetime | None = None,
+        payment_window_minutes: int = TRADER_PAYMENT_WINDOW_MINUTES,
+        dispute_escalation_hours: int = TRADER_DISPUTE_ESCALATION_HOURS,
+        limit: int = 200,
+    ) -> dict[str, Any]:
+        reference_time = reference_time or utcnow()
+        expiry_cutoff = reference_time - timedelta(minutes=max(1, payment_window_minutes))
+        stale_statuses = [
+            PurchaseOrderStatus.REQUESTED,
+            PurchaseOrderStatus.REVIEWING,
+            PurchaseOrderStatus.PROCESSING,
+        ]
+        orders = self.session.scalars(
+            select(FancoinPurchaseOrder)
+            .join(User, User.id == FancoinPurchaseOrder.user_id)
+            .where(
+                User.account_type == PublicAccountType.COIN_TRADER,
+                FancoinPurchaseOrder.status.in_(stale_statuses),
+                FancoinPurchaseOrder.created_at <= expiry_cutoff,
+            )
+            .order_by(FancoinPurchaseOrder.created_at.asc(), FancoinPurchaseOrder.id.asc())
+            .limit(max(1, limit))
+        ).all()
+        expired_ids: list[str] = []
+        refunded_ids: list[str] = []
+        disputed_ids: list[str] = []
+        risk_service = RiskOpsService(self.session)
+        for order in orders:
+            if order.ledger_transaction_id:
+                self.reverse_purchase_order(
+                    order=order,
+                    status=PurchaseOrderStatus.REFUNDED,
+                    actor=None,
+                    notes="Coin-trader payment window expired after settlement; auto-refund attempted.",
+                )
+                if order.status == PurchaseOrderStatus.DISPUTED:
+                    disputed_ids.append(order.id)
+                else:
+                    refunded_ids.append(order.id)
+            else:
+                self.mark_purchase_order_failed(
+                    order=order,
+                    status=PurchaseOrderStatus.EXPIRED,
+                    notes="Coin-trader payment window expired before provider settlement.",
+                )
+                expired_ids.append(order.id)
+            risk_service.log_audit(
+                actor_user_id=None,
+                action_key="trader.payment_window.expired",
+                resource_type="purchase_order",
+                resource_id=order.id,
+                detail="Coin-trader payment window maintenance updated a stale purchase order.",
+                metadata_json={
+                    "status": order.status.value if hasattr(order.status, "value") else str(order.status),
+                    "reference": order.reference,
+                    "payment_window_minutes": payment_window_minutes,
+                },
+            )
+        escalation_cutoff = reference_time - timedelta(hours=max(1, dispute_escalation_hours))
+        escalated_ids = self._escalate_stale_trader_disputes(escalation_cutoff=escalation_cutoff, limit=limit)
+        self.session.flush()
+        return {
+            "expired_count": len(expired_ids),
+            "refunded_count": len(refunded_ids),
+            "disputed_count": len(disputed_ids),
+            "escalated_dispute_count": len(escalated_ids),
+            "expired_ids": expired_ids,
+            "refunded_ids": refunded_ids,
+            "disputed_ids": disputed_ids,
+            "escalated_dispute_ids": escalated_ids,
+        }
 
     def _map_provider_event(self, event_type: ProviderEventType) -> PurchaseOrderStatus | None:
         mapping = {
@@ -808,6 +906,59 @@ class WalletRailService:
             )
         )
         return int(count or 0)
+
+    def _stamp_purchase_order_status(
+        self,
+        order: FancoinPurchaseOrder,
+        status: PurchaseOrderStatus,
+        *,
+        now: datetime | None = None,
+    ) -> None:
+        now = now or utcnow()
+        if status in {PurchaseOrderStatus.REFUNDED, PurchaseOrderStatus.CHARGEBACK, PurchaseOrderStatus.REVERSED}:
+            order.reversed_at = now
+        if status == PurchaseOrderStatus.REFUNDED:
+            order.refunded_at = now
+        elif status == PurchaseOrderStatus.CHARGEBACK:
+            order.chargeback_at = now
+        elif status == PurchaseOrderStatus.REVERSED:
+            order.reversed_at = now
+        elif status == PurchaseOrderStatus.CANCELLED:
+            order.cancelled_at = now
+        elif status == PurchaseOrderStatus.EXPIRED:
+            order.expired_at = now
+
+    def _escalate_stale_trader_disputes(self, *, escalation_cutoff: datetime, limit: int) -> list[str]:
+        disputed_orders = self.session.scalars(
+            select(FancoinPurchaseOrder)
+            .join(User, User.id == FancoinPurchaseOrder.user_id)
+            .where(
+                User.account_type == PublicAccountType.COIN_TRADER,
+                FancoinPurchaseOrder.status == PurchaseOrderStatus.DISPUTED,
+                FancoinPurchaseOrder.updated_at <= escalation_cutoff,
+            )
+            .order_by(FancoinPurchaseOrder.updated_at.asc(), FancoinPurchaseOrder.id.asc())
+            .limit(max(1, limit))
+        ).all()
+        escalated_ids: list[str] = []
+        for order in disputed_orders:
+            self._create_system_event(
+                event_key=f"trader-payment-window-dispute-escalation-{order.id}",
+                severity=SystemEventSeverity.CRITICAL,
+                title="Coin-trader payment dispute requires review",
+                body="A coin-trader payment window dispute remains unresolved past the escalation window.",
+                subject_type="purchase_order",
+                subject_id=order.id,
+                metadata={
+                    "user_id": order.user_id,
+                    "reference": order.reference,
+                    "provider_key": order.provider_key,
+                    "net_amount": str(order.net_amount),
+                    "status": order.status.value if hasattr(order.status, "value") else str(order.status),
+                },
+            )
+            escalated_ids.append(order.id)
+        return escalated_ids
 
     def _create_system_event(
         self,

@@ -73,9 +73,7 @@ void main() {
           body: const <String, Object?>{
             'status': 'active',
             'role': 'member_club',
-            'metadata_json': <String, Object?>{
-              'entry_violations': <Object?>[],
-            },
+            'metadata_json': <String, Object?>{'entry_violations': <Object?>[]},
           },
         ),
         GteTransportResponse(
@@ -154,4 +152,3 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
-

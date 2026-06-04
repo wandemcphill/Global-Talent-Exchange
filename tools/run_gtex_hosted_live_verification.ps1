@@ -25,7 +25,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root = 'C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE'
-$unityConfigPath = Join-Path $root 'Gtex_Test_Migration\Assets\Resources\GTEX\match-config.json'
+$runtimeConfigPath = Join-Path $root 'tmp\gtex_match_center_config.json'
 $bootstrapPath = Join-Path $root 'tmp\gtex_hosted_live_verification_bootstrap.json'
 
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
@@ -41,7 +41,7 @@ $arguments = @(
     'tools\provision_gtex_live_match.py',
     '--profile', $Profile,
     '--base-url', $BaseUrl,
-    '--unity-config', $unityConfigPath,
+    '--runtime-config', $runtimeConfigPath,
     '--bootstrap-path', $bootstrapPath,
     '--dry-run'
 )
@@ -56,11 +56,15 @@ else {
     throw 'Hosted live verification requires either -UserAccessToken or both -UserEmail and -UserPassword.'
 }
 
+if ($AllowMatchGeneration.IsPresent) {
+    throw 'Hosted staging/production verification does not allow -AllowMatchGeneration. Use -MatchId for an existing backend-authored live match.'
+}
+
 if (-not [string]::IsNullOrWhiteSpace($MatchId)) {
     $arguments += @('--match-id', $MatchId)
 }
-elseif ($AllowMatchGeneration.IsPresent) {
-    $arguments += '--allow-match-generation'
+else {
+    throw 'Hosted staging/production verification requires -MatchId for an existing backend-authored live match. Generated/local match truth is not allowed.'
 }
 
 if ($SkipWebsocketVerify.IsPresent) {

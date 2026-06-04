@@ -140,6 +140,10 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, 'View Player'), findsOneWidget);
     expect(find.text('Buy Now'), findsOneWidget);
     expect(find.text('Refresh desk'), findsOneWidget);
+    expect(find.text('Transfer hub'), findsOneWidget);
+    expect(find.text('Transfer basket'), findsOneWidget);
+    expect(find.text('Checkout readiness'), findsOneWidget);
+    expect(find.text('Activity feed'), findsOneWidget);
     expect(find.text('Loan contracts'), findsNothing);
     expect(find.text('Watchlist is empty'), findsNothing);
 
@@ -282,9 +286,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Jude Bellingham'), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Sign in'), findsWidgets);
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Sign in').first);
       await tester.pumpAndSettle();
       expect(openedLogin, isTrue);
 

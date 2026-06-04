@@ -3,14 +3,17 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 import logging
+from typing import Callable
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.security import TokenError, decode_access_token
 from app.db import get_session as get_database_session
 from app.models.auth_session import AuthSession
+from app.models.auth_trust import TrustedDevice
 from app.models.user import PublicAccountType, User, UserRole
 from app.services.runtime_control_service import RuntimeControlService
 
@@ -246,6 +249,56 @@ def get_current_trading_user(
     except WalletFundingError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return current_user
+
+
+def require_sensitive_action_pin(
+    action_type: str,
+    base_dependency: Callable[..., User] = get_current_wallet_user,
+):
+    async def _dependency(
+        request: Request,
+        current_user: User = Depends(base_dependency),
+        session: Session = Depends(get_session),
+    ) -> User:
+        if current_user.pin_hash is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Security PIN enrollment is required for this action.",
+            )
+        auth_session = getattr(request.state, "auth_session", None)
+        auth_session_id = getattr(auth_session, "id", None)
+        if not isinstance(auth_session_id, str) or not auth_session_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authenticated session is invalid.",
+            )
+        auth_device_id = getattr(auth_session, "device_id", None)
+        if not isinstance(auth_device_id, str) or not auth_device_id:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="A trusted device is required for sensitive account actions.",
+            )
+        trusted_device = session.scalar(
+            select(TrustedDevice).where(
+                TrustedDevice.user_id == current_user.id,
+                TrustedDevice.device_id == auth_device_id,
+            )
+        )
+        if trusted_device is None or not trusted_device.trusted or trusted_device.risk_score >= 80:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="This device must be trusted before sensitive account actions can continue.",
+            )
+        cache_backend = getattr(request.app.state, "cache_backend", None)
+        cache_key = f"auth:pin:{current_user.id}:{auth_session_id}:{action_type}"
+        if cache_backend is not None and cache_backend.get(cache_key) == "1":
+            return current_user
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Security PIN verification is required for this action.",
+        )
+
+    return _dependency
 
 
 def get_current_match_user(

@@ -4,12 +4,13 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 
 ## Module Mount Summary
 
-- Backend module mounts discovered: **156**
+- Backend module mounts discovered: **157**
 - Router paths mounted more than once: **0**
 
 ## KEEP
 
 - `DELETE /api/admin/finance/account-controls/{}`: `/api/admin/finance/account-controls/{user_id}` in `backend/app/admin_finance/router.py` (clear_account_control) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `DELETE /api/admin/finance/locks/{}/{}`: `/api/admin/finance/locks/{resource_type}/{resource_id}` in `backend/app/admin_finance/router.py` (release_admin_resource_lock) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/admin/finance/manual-price-overrides/{}/{}`: `/api/admin/finance/manual-price-overrides/{asset_type}/{asset_id}` in `backend/app/admin_finance/router.py` (delete_manual_price_override) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/admin/finance/match-kill-switches/{}`: `/api/admin/finance/match-kill-switches/{match_id}` in `backend/app/admin_finance/router.py` (clear_match_kill_switch) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/community/creator-clubs/{}/follow`: `/api/community/creator-clubs/{club_id}/follow` in `backend/app/community_engine/router.py` (unfollow_creator_club) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -18,6 +19,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `DELETE /api/notifications/subscriptions/{}`: `/api/notifications/subscriptions/{subscription_id}` in `backend/app/notifications/router.py` (delete_subscription) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/player-cards/watchlist/{}`: `/api/player-cards/watchlist/{watchlist_id}` in `backend/app/player_cards/router.py` (remove_watchlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/social/follows`: `/api/social/follows` in `backend/app/club_social/router.py` (unfollow_target) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `DELETE /api/transfer-market/basket/{}`: `/api/transfer-market/basket/{player_id}` in `backend/app/transfer_market/router.py` (remove_market_basket_item) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /creator-league/tiers/{}`: `/creator-league/tiers/{tier_id}` in `backend/app/competitions/creator_league_router.py` (delete_creator_league_tier) - Highest-ranked non-v1 route for this signature.
 - `DELETE /follow/{}`: `/follow/{user_id}` in `backend/app/users/router.py` (unfollow_user) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /player-cards/watchlist/{}`: `/api/player-cards/watchlist/{watchlist_id}` in `backend/app/player_cards/router.py` (remove_watchlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -102,8 +104,12 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/admin/discovery/featured-rails`: `/api/admin/discovery/featured-rails` in `backend/app/discovery_engine/router.py` (list_featured_rails) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/finance/account-controls`: `/api/admin/finance/account-controls` in `backend/app/admin_finance/router.py` (list_account_controls) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/finance/control-tower`: `/api/admin/finance/control-tower` in `backend/app/admin_finance/router.py` (get_control_tower) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /api/admin/finance/exports/{}`: `/api/admin/finance/exports/{export_id}` in `backend/app/admin_finance/router.py` (get_admin_export_status) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /api/admin/finance/locks/{}/{}`: `/api/admin/finance/locks/{resource_type}/{resource_id}` in `backend/app/admin_finance/router.py` (get_admin_resource_lock) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/finance/manual-price-overrides`: `/api/admin/finance/manual-price-overrides` in `backend/app/admin_finance/router.py` (list_manual_price_overrides) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/finance/match-kill-switches`: `/api/admin/finance/match-kill-switches` in `backend/app/admin_finance/router.py` (list_match_kill_switches) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /api/admin/finance/payment-queue`: `/api/admin/finance/payment-queue` in `backend/app/admin_finance/router.py` (get_admin_payment_queue) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /api/admin/finance/payment-queue/bulk-actions/{}`: `/api/admin/finance/payment-queue/bulk-actions/{bulk_action_id}` in `backend/app/admin_finance/router.py` (get_admin_payment_queue_bulk_action_status) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/finance/reconciliation`: `/api/admin/finance/reconciliation` in `backend/app/admin_finance/router.py` (get_payment_reconciliation_summary) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/finance/wallet-protection`: `/api/admin/finance/wallet-protection` in `backend/app/admin_finance/router.py` (get_wallet_protection_summary) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/god-mode/audit-events`: `/api/admin/god-mode/audit-events` in `backend/app/admin_godmode/router.py` (read_audit_events) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -158,7 +164,6 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/analytics/device-fingerprint`: `/api/analytics/device-fingerprint` in `backend/app/analytics/router.py` (get_device_fingerprint) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/analytics/influencer-leaderboard`: `/api/analytics/influencer-leaderboard` in `backend/app/analytics/router.py` (get_influencer_leaderboard) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/attachments/{}`: `/api/attachments/{attachment_id}` in `backend/app/attachments/router.py` (download_attachment) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/auth/me`: `/api/auth/me` in `backend/app/auth/router.py` (read_current_user_profile) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/awards/categories`: `/api/awards/categories` in `backend/app/awards/router.py` (list_award_categories) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/awards/ceremony`: `/api/awards/ceremony` in `backend/app/awards/router.py` (get_awards_ceremony) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/awards/nominees`: `/api/awards/nominees` in `backend/app/awards/router.py` (list_award_nominees) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -189,6 +194,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/clubs/{}/branding`: `/api/clubs/{club_id}/branding` in `backend/app/segments/clubs/segment_clubs.py` (get_branding) - Highest-ranked non-v1 route for this signature.
 - `GET /api/clubs/{}/challenges`: `/api/clubs/{club_id}/challenges` in `backend/app/club_social/router.py` (list_club_challenges) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/clubs/{}/contracts`: `/api/clubs/{club_id}/contracts` in `backend/app/segments/player_lifecycle/segment_player_lifecycle.py` (get_club_contracts) - Highest-ranked non-v1 route for this signature.
+- `GET /api/clubs/{}/dashboard`: `/api/clubs/{club_id}/dashboard` in `backend/app/segments/clubs/segment_club_ops.py` (get_canonical_club_dashboard) - Highest-ranked non-v1 route for this signature.
 - `GET /api/clubs/{}/dynasty`: `/api/clubs/{club_id}/dynasty` in `backend/app/club_identity/dynasty/api/router.py` (get_club_dynasty_profile) - Highest-ranked non-v1 route for this signature.
 - `GET /api/clubs/{}/dynasty/history`: `/api/clubs/{club_id}/dynasty/history` in `backend/app/club_identity/dynasty/api/router.py` (get_club_dynasty_history) - Highest-ranked non-v1 route for this signature.
 - `GET /api/clubs/{}/eras`: `/api/clubs/{club_id}/eras` in `backend/app/club_identity/dynasty/api/router.py` (get_club_eras) - Highest-ranked non-v1 route for this signature.
@@ -203,13 +209,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/clubs/{}/ownership`: `/api/clubs/{club_id}/ownership` in `backend/app/club_ownership/router.py` (get_club_ownership) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/clubs/{}/prestige`: `/api/clubs/{club_id}/prestige` in `backend/app/club_identity/reputation/router.py` (get_club_prestige) - Highest-ranked non-v1 route for this signature.
 - `GET /api/clubs/{}/purchases`: `/api/clubs/{club_id}/purchases` in `backend/app/segments/clubs/segment_clubs.py` (list_purchases) - Highest-ranked non-v1 route for this signature.
-- `GET /api/clubs/{}/reputation`: `/api/clubs/{club_id}/reputation` in `backend/app/club_identity/reputation/router.py` (get_club_reputation) - Highest-ranked non-v1 route for this signature.
-- `GET /api/clubs/{}/reputation/history`: `/api/clubs/{club_id}/reputation/history` in `backend/app/club_identity/reputation/router.py` (get_club_reputation_history) - Highest-ranked non-v1 route for this signature.
-- `GET /api/clubs/{}/rivalries`: `/api/clubs/{club_id}/rivalries` in `backend/app/club_social/router.py` (list_rivalries) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/clubs/{}/rivalries/{}`: `/api/clubs/{club_id}/rivalries/{opponent_club_id}` in `backend/app/club_social/router.py` (get_rivalry_detail) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/clubs/{}/sale-market`: `/api/clubs/{club_id}/sale-market` in `backend/app/club_sale_market/router.py` (get_public_club_sale_market_listing) - Highest-ranked non-v1 route for this signature.
-- `GET /api/clubs/{}/sale-market/assistant`: `/api/clubs/{club_id}/sale-market/assistant` in `backend/app/club_sale_market/router.py` (get_club_sale_market_assistant) - Highest-ranked non-v1 route for this signature.
-- ... and 1491 more
+- ... and 1549 more
 
 ## MIGRATE_TO
 

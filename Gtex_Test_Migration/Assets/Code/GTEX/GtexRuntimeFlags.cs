@@ -10,7 +10,8 @@ namespace FStudio.GTEX
         Auto,
         Live,
         LocalSimulation,
-        OriginalVisualRuntime
+        OriginalVisualRuntime,
+        IllusionRuntime
     }
 
     public static class GtexRuntimeFlags
@@ -21,7 +22,9 @@ namespace FStudio.GTEX
 
         public static bool IsOriginalVisualRuntime { get; private set; }
 
-        public static bool UsesGtexScoreAuthority => IsLocalSimulation || IsOriginalVisualRuntime;
+        public static bool IsIllusionRuntime { get; private set; }
+
+        public static bool UsesGtexScoreAuthority => IsLocalSimulation || IsOriginalVisualRuntime || IsIllusionRuntime;
 
         public static bool IsUnattendedPlayback { get; private set; }
 
@@ -30,6 +33,7 @@ namespace FStudio.GTEX
             IsLocalSimulation = mode == GtexBootMode.LocalSimulation;
             IsLiveMode = mode == GtexBootMode.Live;
             IsOriginalVisualRuntime = mode == GtexBootMode.OriginalVisualRuntime;
+            IsIllusionRuntime = mode == GtexBootMode.IllusionRuntime;
             IsUnattendedPlayback = unattended;
         }
     }
@@ -58,9 +62,19 @@ namespace FStudio.GTEX
                 return GtexBootMode.OriginalVisualRuntime;
             }
 
+            if (IsIllusionRuntimeToken(requestedRuntimeMode))
+            {
+                return GtexBootMode.IllusionRuntime;
+            }
+
             if (config != null && config.ResolveRuntimeMode() == GtexRuntimeMode.OriginalVisualRuntime)
             {
                 return GtexBootMode.OriginalVisualRuntime;
+            }
+
+            if (config != null && config.ResolveRuntimeMode() == GtexRuntimeMode.IllusionRuntime)
+            {
+                return GtexBootMode.IllusionRuntime;
             }
 
             var hasLiveConfig = HasLiveConfig(config);
@@ -83,6 +97,7 @@ namespace FStudio.GTEX
                    HasArg("capture") ||
                    HasArg("unattended") ||
                    mode == GtexBootMode.OriginalVisualRuntime ||
+                   mode == GtexBootMode.IllusionRuntime ||
                    mode == GtexBootMode.LocalSimulation;
         }
 
@@ -108,6 +123,12 @@ namespace FStudio.GTEX
                 config.enableStadiumUpgrade = false;
                 config.showBroadcastScaffolding = false;
                 config.showCrowd = false;
+            }
+
+            if (mode == GtexBootMode.IllusionRuntime)
+            {
+                config.runtimeMode = "illusion";
+                config.allowLocalSimulationInProductionScene = true;
             }
         }
 
@@ -275,6 +296,30 @@ namespace FStudio.GTEX
                 case "original-visual-runtime":
                 case "originalvisual":
                 case "original-visual":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool IsIllusionRuntimeToken(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            switch (value.Trim().ToLowerInvariant())
+            {
+                case "illusion":
+                case "illusionruntime":
+                case "illusion-runtime":
+                case "illusionengine":
+                case "illusion-engine":
+                case "eventplayback":
+                case "event-playback":
+                case "visualizer":
+                case "visualiser":
                     return true;
                 default:
                     return false;

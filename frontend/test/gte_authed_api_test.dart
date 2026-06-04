@@ -329,4 +329,3 @@ class _QueuedTransport implements GteTransport {
     return responses.removeAt(0);
   }
 }
-

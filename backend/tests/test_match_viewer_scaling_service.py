@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-from functools import lru_cache
-
 from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.live_matches.generated_stream_policy import SYNTHETIC_MATCH_PRESENTATION_FLAG
 from app.schemas.match_viewer import MatchMode
 from app.services.match_timeline_service import MatchTimelineService
 from app.services.match_viewer_scaling_service import MatchViewerScalingService
 from backend.tests.match_engine.helpers import build_request
 
 
-@lru_cache(maxsize=1)
-def _scaled_views():
+def _scaled_views(*, require_presentation_beats: bool = False):
     simulation_service = MatchSimulationService()
     timeline_service = MatchTimelineService()
     scaling_service = MatchViewerScalingService()
@@ -21,7 +19,7 @@ def _scaled_views():
         quick = scaling_service.transform(base_view, MatchMode.QUICK)
         standard = scaling_service.transform(base_view, MatchMode.STANDARD)
         cinematic = scaling_service.transform(base_view, MatchMode.CINEMATIC)
-        if any("presentation_only" in event.flags for event in cinematic.events):
+        if not require_presentation_beats or any("presentation_only" in event.flags for event in cinematic.events):
             return base_view, quick, standard, cinematic
     raise AssertionError("Unable to find a replay that produces cinematic presentation beats.")
 
@@ -50,7 +48,15 @@ def test_match_viewer_scaling_adjusts_density_by_mode() -> None:
     _, quick, standard, cinematic = _scaled_views()
 
     assert len(quick.frames) < len(standard.frames)
-    assert len(cinematic.frames) > len(standard.frames)
+    assert len(cinematic.frames) >= len(standard.frames)
     assert not any("presentation_only" in event.flags for event in quick.events)
+    assert not any("presentation_only" in event.flags for event in cinematic.events)
+
+
+def test_cinematic_presentation_beats_require_internal_flag(monkeypatch) -> None:
+    monkeypatch.setenv(SYNTHETIC_MATCH_PRESENTATION_FLAG, "1")
+    _, _, standard, cinematic = _scaled_views(require_presentation_beats=True)
+
+    assert len(cinematic.frames) > len(standard.frames)
     assert any("presentation_only" in event.flags for event in cinematic.events)
 

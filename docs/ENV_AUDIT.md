@@ -12,7 +12,7 @@
 
 ## Drift Risks
 
-- Hardcoded localhost or alternate base-url defaults detected in frontend data files: **177**
+- Hardcoded localhost or alternate base-url defaults detected in frontend data files: **206**
 - These should be consolidated behind the shared runtime config before any destructive backend route cleanup.
 
 ## Source Evidence

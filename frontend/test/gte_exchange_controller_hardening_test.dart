@@ -40,7 +40,7 @@ void main() {
     await controller.signIn(email: 'demo@gtex.test', password: 'password');
     await controller.refreshAccount();
 
-    expect(controller.walletSummary, isNotNull);
+    expect(controller.walletDisplay, isNotNull);
     expect(controller.portfolio, isNotNull);
     expect(controller.portfolioSyncedAt, isNotNull);
     expect(controller.ordersSyncedAt, isNotNull);

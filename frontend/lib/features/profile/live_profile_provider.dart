@@ -89,7 +89,7 @@ final FutureProvider<ProfileData> profileDataProvider =
         return const ProfileData.unauthenticated();
       }
       final GteAuthedApi api = ref.watch(authedApiProvider);
-      final JsonMap me = await api.getMap('/api/auth/me');
+      final JsonMap me = await api.getMap('/api/v2/auth/me');
       final JsonMap user = await api.getMap('/users/me');
       final JsonMap affinity = await api.getMap('/users/me/profile');
       final String userId = stringValue(

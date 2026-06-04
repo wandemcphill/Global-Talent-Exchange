@@ -26,9 +26,11 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - run: rm -rf build/unit_test_assets build/native_assets
       - run: python tool/check_analyzer_hard_errors.py
       - run: |
           if [ -d test ]; then
+            rm -rf build/unit_test_assets build/native_assets
             flutter test
           fi
 
@@ -63,6 +65,8 @@ jobs:
           backend/tests/leaderboards/test_ranking_service.py
           backend/tests/wallets/test_wallet_event_backbone.py
           -q
+      - name: Verify production guardrails
+        run: python -m pytest backend/tests/ops/test_canonical_production_guards.py -q
       - name: Verify backend app contract harness
         run: >
           python -m pytest
@@ -72,7 +76,7 @@ jobs:
           backend/tests/app/test_module_registration_hydration.py
           -q
 
-  backend-live-playback-tests:
+  backend-live-match-center-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,165 +93,22 @@ jobs:
           backend/tests/live_matches/test_live_match_hot_path_cache.py
           backend/tests/live_matches/test_live_match_sampling.py
           backend/tests/match_engine/test_live_match_experience_contract.py
+          backend/tests/realtime/test_match_websocket_gateway.py
+          backend/tests/app/test_realtime_match_stream.py
           backend/tests/test_match_timeline_service.py
           -q
 
-  unity-windows-build:
-    if: vars.GTEX_ENABLE_WINDOWS_UNITY_CI == 'true'
-    runs-on:
-      - self-hosted
-      - windows
-      - unity
-    timeout-minutes: 90
-    defaults:
-      run:
-        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -command ". '{0}'"
-    env:
-      UNITY_EDITOR_PATH: ${{ vars.GTEX_UNITY_EDITOR_PATH }}
-      GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
-      GTEX_UNITY_BUILD_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_windows_build.log
-      GTEX_FORCE_CLEAN_LIBRARY: "false"
-      GTEX_UNITY_RUNNER_PROFILE_ROOT: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}
-      LOCALAPPDATA: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\LocalAppData
-      APPDATA: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\RoamingAppData
-      TEMP: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\Temp
-      TMP: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\Temp
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify Unity CI configuration
-        run: |
-          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
-
-          if ([string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)) {
-            "Missing GTEX_UNITY_EDITOR_PATH on runner." | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Set repository variable GTEX_UNITY_EDITOR_PATH to the Unity editor executable on the Windows runner."
-          }
-          if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
-            "Unity editor path does not exist: $env:UNITY_EDITOR_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Unity editor path does not exist: $env:UNITY_EDITOR_PATH"
-          }
-          if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
-            "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
-          }
-
-          foreach ($path in @(
-            $env:GTEX_UNITY_RUNNER_PROFILE_ROOT,
-            $env:LOCALAPPDATA,
-            $env:APPDATA,
-            $env:TEMP
-          )) {
-            New-Item -ItemType Directory -Force -Path $path | Out-Null
-          }
-
-          $runnerIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-          Write-Host "Unity runner identity: $runnerIdentity"
-          Write-Host "LOCALAPPDATA: $env:LOCALAPPDATA"
-          Write-Host "APPDATA: $env:APPDATA"
-          Write-Host "TEMP: $env:TEMP"
-
-          if ($runnerIdentity -match 'NETWORK SERVICE') {
-            Write-Warning "The GitHub Actions runner is executing as NETWORK SERVICE. Unity batchmode builds on this account usually fail unless that service identity has its own Unity license."
-          }
-      - name: Clean Unity transient folders
-        run: |
-          $project = $env:GTEX_UNITY_PROJECT_PATH
-
-          if (Test-Path "$project\Temp") {
-            Remove-Item -Recurse -Force "$project\Temp" -ErrorAction Stop
-          }
-          if (Test-Path "$project\obj") {
-            Remove-Item -Recurse -Force "$project\obj" -ErrorAction Stop
-          }
-
-          if ($env:GTEX_FORCE_CLEAN_LIBRARY -eq "true") {
-            if (Test-Path "$project\Library") {
-              Write-Warning "Removing Unity Library because GTEX_FORCE_CLEAN_LIBRARY=true."
-              Remove-Item -Recurse -Force "$project\Library" -ErrorAction Stop
-            }
-          }
-      - name: Build GTEX Windows player
-        run: |
-          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
-
-          & $env:UNITY_EDITOR_PATH `
-            -batchmode -quit -nographics `
-            -buildTarget StandaloneWindows64 `
-            -projectPath $env:GTEX_UNITY_PROJECT_PATH `
-            -executeMethod FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64ProductionFromCommandLine `
-            -logFile $env:GTEX_UNITY_BUILD_LOG
-
-          $exitCode = $LASTEXITCODE
-          if ($exitCode -ne 0) {
-            if (Test-Path $env:GTEX_UNITY_BUILD_LOG) {
-              Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
-
-              $licenseFailurePatterns = @(
-                'No valid Unity Editor license found',
-                'Found 0 entitlement groups and 0 free entitlements matching requested entitlement ids',
-                "'com.unity.editor.headless' was not found"
-              )
-
-              foreach ($pattern in $licenseFailurePatterns) {
-                if (Select-String -Path $env:GTEX_UNITY_BUILD_LOG -Pattern $pattern -Quiet) {
-                  $runnerIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-                  throw (
-                    "Unity Windows batch build failed before project compilation because the runner account does not have a usable Unity Editor license. " +
-                    "Runner account: $runnerIdentity. " +
-                    "Activate Unity for that account or run the self-hosted runner service as the Windows user that already owns the Unity activation. " +
-                    "The job now redirects LOCALAPPDATA/APPDATA/TEMP to workspace-owned folders, so cache-path errors are not the remaining blocker. " +
-                    "See $env:GTEX_UNITY_BUILD_LOG for the full Unity licensing log."
-                  )
-                }
-              }
-            }
-            throw "Unity Windows batch build failed with exit code $exitCode."
-          }
-      - name: Verify Unity build log
-        run: |
-          if (-not (Test-Path $env:GTEX_UNITY_BUILD_LOG)) {
-            throw "Unity build log was not produced: $env:GTEX_UNITY_BUILD_LOG"
-          }
-
-          $errorPatterns = @(
-            'error CS',
-            'Compilation failed',
-            "Build completed with a result of 'Failed'",
-            'Aborting batchmode due to failure'
-          )
-
-          foreach ($pattern in $errorPatterns) {
-            if (Select-String -Path $env:GTEX_UNITY_BUILD_LOG -Pattern $pattern -Quiet) {
-              Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
-              throw "Unity build log contains failure marker: $pattern"
-            }
-          }
-      - name: Copy build log to local fallback folder
-        if: always()
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path C:\runner-artifacts | Out-Null
-          Copy-Item "$env:GTEX_UNITY_BUILD_LOG" "C:\runner-artifacts\gtex_test_migration_windows_build.log" -Force
-      - name: Upload Unity build log
-        if: always() && hashFiles('tmp/gtex_test_migration_windows_build.log') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: gtex-test-migration-windows-build-log
-          path: tmp/gtex_test_migration_windows_build.log
-          if-no-files-found: warn
-
   deploy-production:
     if: >-
+      always() &&
       github.ref == 'refs/heads/main' &&
       needs.frontend-tests.result == 'success' &&
       needs.backend-tests.result == 'success' &&
-      needs.backend-live-playback-tests.result == 'success' &&
-      (needs.unity-windows-build.result == 'success' || needs.unity-windows-build.result == 'skipped')
+      needs.backend-live-match-center-tests.result == 'success'
     needs:
       - frontend-tests
       - backend-tests
-      - backend-live-playback-tests
-      - unity-windows-build
+      - backend-live-match-center-tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
@@ -260,7 +121,9 @@ jobs:
           python-version: "3.14"
       - run: python -m pip install --upgrade pip
       - run: python -m pip install httpx websockets
-      - run: python -m py_compile ops/render/deploy.py ops/render/verify_unity_routes.py tools/provision_gtex_live_match.py
+      - run: python -m py_compile ops/render/deploy.py ops/render/verify_match_center_routes.py
+      - name: Verify canonical production ops guardrails
+        run: python tools/quality/run_gtex_canonical_acceptance.py --diff-base=
       - name: Check Render deploy config
         id: render-config
         shell: bash
@@ -283,8 +146,8 @@ jobs:
 
           if [ "${#missing[@]}" -gt 0 ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping production deploy. Missing: ${missing[*]}"
-            exit 0
+            echo "Production deploy is not configured. Missing: ${missing[*]}"
+            exit 1
           fi
 
           echo "configured=true" >> "$GITHUB_OUTPUT"
@@ -299,17 +162,4 @@ jobs:
           RENDER_DEPLOY_HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
           RENDER_SERVICE_ORDER: ${{ vars.RENDER_SERVICE_ORDER }}
           RENDER_HEALTH_URL: ${{ vars.RENDER_HEALTH_URL }}
-          RENDER_VERIFY_UNITY_ROUTES: "true"
-          RENDER_UNITY_ROUTE_PROBE_MATCH_ID: gtex-render-route-probe
-          RENDER_VERIFY_UNITY_LIVE_PLAYBACK: ${{ vars.RENDER_VERIFY_UNITY_LIVE_PLAYBACK }}
-          RENDER_UNITY_LIVE_VERIFY_PROFILE: production
-          RENDER_UNITY_LIVE_VERIFY_BASE_URL: ${{ vars.RENDER_UNITY_LIVE_VERIFY_BASE_URL }}
-          RENDER_UNITY_LIVE_VERIFY_USER_ACCESS_TOKEN: ${{ secrets.RENDER_UNITY_LIVE_VERIFY_USER_ACCESS_TOKEN }}
-          RENDER_UNITY_LIVE_VERIFY_USER_EMAIL: ${{ secrets.RENDER_UNITY_LIVE_VERIFY_USER_EMAIL }}
-          RENDER_UNITY_LIVE_VERIFY_USER_PASSWORD: ${{ secrets.RENDER_UNITY_LIVE_VERIFY_USER_PASSWORD }}
-          RENDER_UNITY_LIVE_VERIFY_MATCH_ID: ${{ vars.RENDER_UNITY_LIVE_VERIFY_MATCH_ID }}
-          RENDER_UNITY_LIVE_VERIFY_ALLOW_MATCH_GENERATION: ${{ vars.RENDER_UNITY_LIVE_VERIFY_ALLOW_MATCH_GENERATION }}
-          RENDER_UNITY_LIVE_VERIFY_SKIP_WEBSOCKET: ${{ vars.RENDER_UNITY_LIVE_VERIFY_SKIP_WEBSOCKET }}
-          RENDER_UNITY_LIVE_VERIFY_PAY_TO_VIEW: ${{ vars.RENDER_UNITY_LIVE_VERIFY_PAY_TO_VIEW }}
-          RENDER_UNITY_LIVE_VERIFY_TICK_COUNT: ${{ vars.RENDER_UNITY_LIVE_VERIFY_TICK_COUNT }}
-          RENDER_UNITY_LIVE_VERIFY_TIMEOUT_SECONDS: ${{ vars.RENDER_UNITY_LIVE_VERIFY_TIMEOUT_SECONDS }}
+          RENDER_VERIFY_MATCH_CENTER_ROUTES: "true"

@@ -126,7 +126,7 @@ void main() {
     },
   );
 
-  test('signupUser sends hard-cutover auth payload', () async {
+  test('signupPlayer sends frictionless auth payload', () async {
     final _RecordingTransport transport = _RecordingTransport(
       <GteTransportResponse>[
         GteTransportResponse(
@@ -157,84 +157,59 @@ void main() {
       ),
       transport: transport,
       fixtures: GteMockApi(latency: Duration.zero),
+      deviceIdentityStore: _FixedDeviceIdentityStore('test-device-1'),
     );
 
-    await repository.signupUser(
-      const GteUserSignupRequest(
+    await repository.signupPlayer(
+      GtePlayerFrictionlessSignupRequest(
         email: 'qa@example.com',
         fullName: 'QA User',
-        username: 'qa_user',
         password: testPassword,
         country: 'NG',
-        state: 'Lagos',
-        city: 'Lagos',
-        clubName: 'QA Sporting',
-        clubShortTag: 'QAS',
-        clubCountry: 'NG',
-        clubState: 'Lagos',
-        clubLocality: 'Yaba',
-        clubType: 'academy',
-        footballIdentity: 'club_owner',
-        compliance: GteComplianceSignupPayload(
-          governmentIdAttachmentId: 'gov-qa',
-          selfieAttachmentId: 'selfie-qa',
-          countryConfirmation: 'NG',
-        ),
+        preferredPosition: 'Forward',
+        dateOfBirth: DateTime.utc(2006, 5, 12),
+        pin: '2718',
+        recoveryQuestions: const <GteRecoveryQuestionInput>[
+          GteRecoveryQuestionInput(
+            question: 'Which academy did I first train with?',
+            answer: 'Surulere Stars',
+          ),
+          GteRecoveryQuestionInput(
+            question: 'What nickname did my first coach call me?',
+            answer: 'Flash',
+          ),
+        ],
       ),
     );
 
     expect(transport.requests, hasLength(1));
-    expect(transport.requests.single.uri.path, '/api/v2/auth/signup/user');
+    expect(transport.requests.single.uri.path, '/api/v2/auth/signup/player');
     expect(transport.requests.single.body, <String, Object?>{
-      'email': 'qa@example.com',
       'full_name': 'QA User',
-      'username': 'qa_user',
+      'email': 'qa@example.com',
       'password': testPassword,
       'country': 'NG',
-      'state': 'Lagos',
-      'city': 'Lagos',
-      'club_name': 'QA Sporting',
-      'club_short_tag': 'QAS',
-      'club_country': 'NG',
-      'club_state': 'Lagos',
-      'club_locality': 'Yaba',
-      'club_type': 'academy',
-      'football_identity': 'club_owner',
-      'compliance': <String, Object?>{
-        'government_id_attachment_id': 'gov-qa',
-        'selfie_attachment_id': 'selfie-qa',
-        'country_confirmation': 'NG',
+      'preferred_position': 'Forward',
+      'date_of_birth': '2006-05-12',
+      'pin': '2718',
+      'recovery_questions': <Object?>[
+        <String, Object?>{
+          'question': 'Which academy did I first train with?',
+          'answer': 'Surulere Stars',
+        },
+        <String, Object?>{
+          'question': 'What nickname did my first coach call me?',
+          'answer': 'Flash',
+        },
+      ],
+      'device': <String, Object?>{
+        'device_id': 'test-device-1',
+        'install_id': 'test-device-1',
+        'os': 'flutter',
+        'device_model': 'gtex-mobile',
+        'biometric_enabled': false,
       },
     });
-  });
-
-  test('register is rejected locally after hard cutover', () async {
-    final _RecordingTransport transport = _RecordingTransport(
-      const <GteTransportResponse>[],
-    );
-    final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
-      config: const GteRepositoryConfig(
-        baseUrl: 'http://127.0.0.1:8000',
-        mode: GteBackendMode.live,
-      ),
-      transport: transport,
-      fixtures: GteMockApi(latency: Duration.zero),
-    );
-
-    expect(
-      () => repository.register(
-        const GteAuthRegisterRequest(
-          email: 'qa@example.com',
-          fullName: 'QA User',
-          phoneNumber: '08000000000',
-          isOver18: true,
-          regionCode: 'NG',
-          password: testPassword,
-        ),
-      ),
-      throwsA(isA<UnsupportedError>()),
-    );
-    expect(transport.requests, isEmpty);
   });
 
   test(
@@ -743,6 +718,72 @@ void main() {
     },
   );
 
+  test(
+    'login sends trusted-device token in headers and device payload',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport(
+        <GteTransportResponse>[
+          GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'access_token': 'live-token',
+              'refresh_token': 'refresh-live-token',
+              'session_id': 'live-session',
+              'token_type': 'bearer',
+              'expires_in': 3600,
+              'user': <String, Object?>{
+                'id': 'user-1',
+                'email': 'qa@example.com',
+                'username': 'qa_user',
+                'display_name': 'QA User',
+                'role': 'user',
+              },
+            },
+          ),
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'wallet': <String, Object?>{},
+              'compliance': <String, Object?>{},
+            },
+          ),
+        ],
+      );
+      final MemoryTrustedDeviceTokenStore trustedDeviceTokenStore =
+          MemoryTrustedDeviceTokenStore();
+      await trustedDeviceTokenStore.writeTrustedDeviceToken(
+        'trusted-device-token-123456',
+      );
+      final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        fixtures: GteMockApi(latency: Duration.zero),
+        deviceIdentityStore: _FixedDeviceIdentityStore('test-device-1'),
+        trustedDeviceTokenStore: trustedDeviceTokenStore,
+      );
+
+      await repository.login(
+        const GteAuthLoginRequest(
+          email: 'qa@example.com',
+          password: testPassword,
+        ),
+      );
+
+      final Map<String, Object?> requestBody =
+          transport.requests.first.body as Map<String, Object?>;
+      final Map<String, Object?> device =
+          requestBody['device'] as Map<String, Object?>;
+      expect(
+        transport.requests.first.headers['X-Trusted-Device-Token'],
+        'trusted-device-token-123456',
+      );
+      expect(device['trusted_device_token'], 'trusted-device-token-123456');
+    },
+  );
+
   test('logout clears persisted auth session', () async {
     final GteMemoryTokenStore tokenStore = GteMemoryTokenStore();
     final MemoryAuthSessionStore authSessionStore = MemoryAuthSessionStore();
@@ -1004,5 +1045,19 @@ class _RecordingPulseFixtureApi extends GteMockApi {
         ),
       ],
     );
+  }
+}
+
+class _FixedDeviceIdentityStore implements DeviceIdentityStore {
+  _FixedDeviceIdentityStore(this._deviceId);
+
+  String? _deviceId;
+
+  @override
+  Future<String?> readDeviceId() async => _deviceId;
+
+  @override
+  Future<void> writeDeviceId(String? deviceId) async {
+    _deviceId = deviceId;
   }
 }

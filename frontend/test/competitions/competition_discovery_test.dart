@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/features/compete/providers/competition_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/models/competition_models.dart';
-import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_discovery_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('discovery shows safe sections and creator filtering',
-      (WidgetTester tester) async {
+  testWidgets('discovery shows safe sections and creator filtering', (
+    WidgetTester tester,
+  ) async {
     tester.view.physicalSize = const Size(1440, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);

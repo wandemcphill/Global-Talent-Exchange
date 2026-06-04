@@ -242,4 +242,3 @@ class _QueuedTransport implements GteTransport {
     return queue.removeAt(0);
   }
 }
-

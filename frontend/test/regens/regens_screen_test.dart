@@ -73,6 +73,124 @@ void main() {
       findsWidgets,
     );
   });
+
+  testWidgets('regen world marks incomplete backend records as sync states', (
+    WidgetTester tester,
+  ) async {
+    await _pumpRegensScreen(tester, _closureHubData());
+
+    expect(find.textContaining('Backend sync pending'), findsWidgets);
+    expect(
+      find.textContaining('Missing backend truth: generation'),
+      findsWidgets,
+    );
+    expect(find.textContaining('Backend truth blocked'), findsWidgets);
+    expect(find.textContaining('Nationality pending'), findsWidgets);
+    expect(find.textContaining('Unknown Prospect'), findsNothing);
+  });
+
+  testWidgets(
+    'regen world searches filters and sorts backend-published truth',
+    (WidgetTester tester) async {
+      await _pumpRegensScreen(tester, _closureHubData());
+
+      await tester.enterText(find.byType(TextField), 'PAC 96');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Kojo Armah / GEN-3'), findsOneWidget);
+      expect(find.textContaining('Tomas Silva / GEN-2'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'Adade Line');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Kojo Armah / GEN-3'), findsOneWidget);
+      expect(find.textContaining('Tomas Silva / GEN-2'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'Aerial Threat');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Tomas Silva / GEN-2'), findsOneWidget);
+      expect(find.textContaining('Kojo Armah / GEN-3'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), '1.2M');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Tomas Silva / GEN-2'), findsOneWidget);
+      expect(find.textContaining('Kojo Armah / GEN-3'), findsNothing);
+
+      await tester.enterText(find.byType(TextField), '');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('GEN-3'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Kojo Armah / GEN-3'), findsOneWidget);
+      expect(find.textContaining('Tomas Silva / GEN-2'), findsNothing);
+
+      await tester.tap(find.text('All Generations'));
+      await tester.pumpAndSettle();
+      await _selectDropdownOption(tester, 'All Nationalities', 'Brazil');
+      expect(find.textContaining('Tomas Silva / GEN-2'), findsOneWidget);
+      expect(find.textContaining('Kojo Armah / GEN-3'), findsNothing);
+
+      await _selectDropdownOption(tester, 'Brazil', 'All Nationalities');
+      await _selectDropdownOption(tester, 'All Rarities', 'mythic');
+      expect(find.textContaining('Kojo Armah / GEN-3'), findsOneWidget);
+      expect(find.textContaining('Tomas Silva / GEN-2'), findsNothing);
+
+      await _selectDropdownOption(tester, 'mythic', 'All Rarities');
+      await tester.tap(find.text('Sort: Potential'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sort: Value').last);
+      await tester.pumpAndSettle();
+
+      final Finder tomas = find.textContaining('Tomas Silva / GEN-2');
+      final Finder kojo = find.textContaining('Kojo Armah / GEN-3');
+      expect(tomas, findsOneWidget);
+      expect(kojo, findsOneWidget);
+      expect(tester.getTopLeft(tomas).dy, lessThan(tester.getTopLeft(kojo).dy));
+    },
+  );
+}
+
+Future<void> _pumpRegensScreen(
+  WidgetTester tester,
+  RegenUniverseHubData data,
+) async {
+  tester.view.physicalSize = const Size(1400, 1800);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        authProvider.overrideWith(
+          (Ref ref) => const AuthSession(
+            userId: 'user-1',
+            accessToken: 'token-1',
+            refreshToken: '',
+            sessionId: 'session-1',
+            role: 'user',
+          ),
+        ),
+        regenUniverseHubProvider.overrideWith((Ref ref) async => data),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.dark(),
+        home: const Scaffold(body: RegensScreen()),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _selectDropdownOption(
+  WidgetTester tester,
+  String currentLabel,
+  String optionLabel,
+) async {
+  await tester.tap(find.text(currentLabel));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(optionLabel).last);
+  await tester.pumpAndSettle();
 }
 
 RegenUniverseHubData _sampleHubData() {
@@ -169,6 +287,7 @@ RegenUniverseHubData _sampleHubData() {
       ),
     ],
     nationalRegens: <NationalRegenSeed>[nationalSeed],
+    bloodlines: const <RegenBloodlineChain>[],
     scoutingFeed: <RegenScoutingFeedItem>[
       RegenScoutingFeedItem(
         feedId: 'feed-1',
@@ -253,3 +372,184 @@ RegenUniverseHubData _sampleHubData() {
     ],
   );
 }
+
+RegenUniverseHubData _closureHubData() {
+  const RegenUniversePlayer kojo = RegenUniversePlayer(
+    id: 'kojo-armah',
+    name: 'Kojo Armah',
+    age: 17,
+    nationality: 'Ghana',
+    nationalityCode: 'GH',
+    position: 'CM',
+    potential: 86,
+    currentRating: 72,
+    growthCurve: 0.84,
+    sourceType: 'generated',
+    clubId: 'club-ghana',
+    generationNumber: 3,
+    generationLabel: 'GEN-3',
+    rarityTier: 'mythic',
+    originStory: 'Accra academy creator with late-blooming press resistance.',
+    projectedValueCoin: 950000,
+    traits: <String>['Press Resistant'],
+    lineage: <String>['Adade Line'],
+    dnaProfile: RegenDnaProfile(
+      ratings: <String, int>{
+        'PAC': 96,
+        'SHO': 72,
+        'PAS': 88,
+        'DRI': 91,
+        'DEF': 64,
+        'PHY': 78,
+      },
+    ),
+  );
+  const RegenUniversePlayer tomas = RegenUniversePlayer(
+    id: 'tomas-silva',
+    name: 'Tomas Silva',
+    age: 16,
+    nationality: 'Brazil',
+    nationalityCode: 'BR',
+    position: 'ST',
+    potential: 84,
+    currentRating: 69,
+    growthCurve: 0.78,
+    sourceType: 'generated',
+    clubId: 'club-brazil',
+    generationNumber: 2,
+    generationLabel: 'GEN-2',
+    rarityTier: 'elite',
+    originStory: 'Sao Paulo finisher projected for high-value aerial growth.',
+    projectedValueCoin: 1200000,
+    traits: <String>['Aerial Threat'],
+    lineage: <String>['Silva Ladder'],
+    dnaProfile: RegenDnaProfile(
+      ratings: <String, int>{
+        'PAC': 82,
+        'SHO': 89,
+        'PAS': 67,
+        'DRI': 81,
+        'DEF': 45,
+        'PHY': 92,
+      },
+    ),
+  );
+  const RegenUniversePlayer incomplete = RegenUniversePlayer(
+    id: 'sync-pending',
+    name: 'Nnamdi Okoro',
+    age: 15,
+    nationality: 'Nigeria',
+    nationalityCode: 'NG',
+    position: 'RW',
+    potential: 81,
+    currentRating: 63,
+    growthCurve: 0.71,
+    sourceType: 'generated',
+    clubId: 'club-ng',
+  );
+
+  return RegenUniverseHubData(
+    risingStars: <RegenRisingStar>[
+      RegenRisingStar(
+        playerId: kojo.id,
+        player: kojo,
+        momentumLabel: 'Backend direct truth',
+        storySnippet: null,
+        badges: const <String>[],
+        marketValueCoin: null,
+        details: _sparseDetailsFor(kojo),
+      ),
+      RegenRisingStar(
+        playerId: tomas.id,
+        player: tomas,
+        momentumLabel: 'Backend direct truth',
+        storySnippet: null,
+        badges: const <String>[],
+        marketValueCoin: null,
+        details: _sparseDetailsFor(tomas),
+      ),
+      RegenRisingStar(
+        playerId: incomplete.id,
+        player: incomplete,
+        momentumLabel: 'Awaiting backend profile',
+        storySnippet: null,
+        badges: const <String>[],
+        marketValueCoin: null,
+        details: _sparseDetailsFor(incomplete),
+      ),
+    ],
+    awards: const <RegenAwardResult>[],
+    nationalRegens: const <NationalRegenSeed>[],
+    bloodlines: const <RegenBloodlineChain>[],
+    scoutingFeed: const <RegenScoutingFeedItem>[],
+    tracking: _emptyTracking,
+    creationOrders: <RegenCreationOrder>[
+      RegenCreationOrder(
+        id: 'blocked-order',
+        userId: 'user-1',
+        clubId: 'club-1',
+        requestType: 'son',
+        parentPlayerId: 'parent-1',
+        requestedName: 'Kai Pending',
+        requestedPosition: 'ST',
+        amountCoin: 2500,
+        currency: 'COIN',
+        paymentMethod: 'wallet',
+        status: 'generated',
+        createdAt: DateTime.utc(2032, 1, 1),
+        updatedAt: DateTime.utc(2032, 1, 1),
+        generatedPlayerId: 'blocked-player',
+        generatedRegenProfileId: 'blocked-profile',
+        generatedAt: DateTime.utc(2032, 1, 1),
+        generatedPlayer: const RegenCreationGeneratedPlayer(
+          playerId: 'blocked-player',
+          regenProfileId: 'blocked-profile',
+          fullName: 'Kai Pending',
+          age: 15,
+          position: 'ST',
+          currentRating: 62,
+          potentialRating: 82,
+          generationNumber: 2,
+          generationLabel: 'GEN-2',
+          traits: <String>['Late Runner'],
+          lineage: <String>['Pending Line'],
+          dnaProfile: RegenDnaProfile(
+            ratings: <String, int>{
+              'PAC': 74,
+              'SHO': 79,
+              'PAS': 61,
+              'DRI': 75,
+              'DEF': 38,
+              'PHY': 70,
+            },
+          ),
+          originStory: 'Awaiting backend country assignment.',
+          projectedValueCoin: 300000,
+          rarityTier: 'rare',
+        ),
+      ),
+    ],
+  );
+}
+
+RegenWorldDetails _sparseDetailsFor(RegenUniversePlayer player) {
+  return RegenWorldDetails(
+    key: player.id,
+    name: player.name,
+    nationality: player.nationality,
+    nationalityCode: player.nationalityCode,
+    position: player.position,
+    age: player.age,
+    currentRating: player.currentRating,
+    potentialRating: player.potential,
+  );
+}
+
+const RegenGenerationTracking _emptyTracking = RegenGenerationTracking(
+  totalSeededPlayers: 0,
+  seedTypes: <RegenGenerationTrackingEntry>[],
+  rarityBreakdown: <RegenGenerationTrackingEntry>[],
+  countryDistribution: <RegenGenerationTrackingEntry>[],
+  globalPeakRating: 0,
+  trackedAchievements: <String>[],
+);

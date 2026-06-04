@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
-import 'package:gte_frontend/data/match_gift_api.dart';
+import 'package:gte_frontend/features/match_center/data/match_gift_api.dart';
 
 void main() {
   test('match gift api uses canonical api routes', () async {
@@ -58,4 +58,3 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
-

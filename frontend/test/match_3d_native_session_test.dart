@@ -1,20 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/models/match_3d_native_session.dart';
-import 'package:gte_frontend/services/match_3d_bridge.dart';
+import 'package:gte_frontend/features/3d/models/match_3d_native_session.dart';
+import 'package:gte_frontend/features/3d/services/match_3d_bridge.dart';
 
 void main() {
   test(
-    'bridge exposes runtime info and session state when backend supports it',
+    'bridge remains unavailable and never opens backend sessions in quarantine',
     () async {
       final _FakeSessionBridgeBackend backend = _FakeSessionBridgeBackend();
       final Match3DBridge bridge = Match3DBridge(backend: backend);
       const Match3dNativeSessionDescriptor descriptor =
           Match3dNativeSessionDescriptor(
-            sessionId: 'native_match_3d:test-match',
-            matchId: 'test-match',
-            source: 'fixture',
+            sessionId: 'native_match_3d:backend-authored-match',
+            matchId: 'backend-authored-match',
+            source: 'backend-authored-3d-quarantine',
             homeTeamId: 'home',
             homeTeamName: 'Lagos Stars',
             awayTeamId: 'away',
@@ -26,68 +26,51 @@ void main() {
             expectedPlayerCount: 22,
           );
 
+      final bool nativeAvailable = await bridge.isNativeAvailable();
       final Match3dNativeRuntimeInfo runtimeInfo =
           await bridge.getRuntimeInfo();
+      final Match3dAndroidLiveBootstrapResult staged = await bridge
+          .stageLiveBootstrap(<String, Object?>{
+            'matchId': descriptor.matchId,
+            'source': descriptor.source,
+          });
       final Match3dNativeSessionState opened = await bridge.openSession(
         descriptor,
       );
-      final Match3dNativeSessionState state = (await bridge.getSessionState())!;
+      final Match3dNativeSessionState? state = await bridge.getSessionState();
+      await bridge.sendEvent(<String, dynamic>{
+        'type': 'SCENE_SYNC',
+        'matchId': descriptor.matchId,
+      });
       final Match3dNativeSessionState closed = await bridge.closeSession(
         sessionId: descriptor.sessionId,
       );
 
-      expect(runtimeInfo.available, isTrue);
-      expect(runtimeInfo.supportsSessions, isTrue);
-      expect(runtimeInfo.runtime, 'native_match_3d_canvas');
-      expect(opened.isOpen, isTrue);
-      expect(opened.sessionId, descriptor.sessionId);
-      expect(state.matchId, descriptor.matchId);
-      expect(state.lifecycle, Match3dNativeSessionLifecycle.open);
-      expect(closed.lifecycle, Match3dNativeSessionLifecycle.closed);
-      expect(backend.openRequests.single['matchId'], descriptor.matchId);
-      expect(
-        (backend.openRequests.single['homeTeam']
-            as Map<String, Object?>)['teamName'],
-        'Lagos Stars',
-      );
-    },
-  );
-
-  test(
-    'bridge falls back cleanly when backend does not support sessions',
-    () async {
-      final _LegacyMatch3dBridgeBackend backend = _LegacyMatch3dBridgeBackend();
-      final Match3DBridge bridge = Match3DBridge(backend: backend);
-      const Match3dNativeSessionDescriptor descriptor =
-          Match3dNativeSessionDescriptor(
-            sessionId: 'native_match_3d:legacy-match',
-            matchId: 'legacy-match',
-            source: 'fixture',
-            homeTeamId: 'home',
-            homeTeamName: 'Lagos Stars',
-            awayTeamId: 'away',
-            awayTeamName: 'Abuja City',
-            initialFrameId: 'frame-2',
-            initialClockMinute: 9,
-            initialPhase: 'openPlay',
-            initialCameraPreset: 'tactical_high',
-            expectedPlayerCount: 22,
-          );
-
-      final Match3dNativeRuntimeInfo runtimeInfo =
-          await bridge.getRuntimeInfo();
-      final Match3dNativeSessionState session = await bridge.openSession(
-        descriptor,
-      );
-
-      expect(runtimeInfo.available, isTrue);
+      expect(nativeAvailable, isFalse);
+      expect(runtimeInfo.available, isFalse);
       expect(runtimeInfo.supportsSessions, isFalse);
-      expect(session.lifecycle, Match3dNativeSessionLifecycle.unavailable);
-      expect(session.sessionId, descriptor.sessionId);
+      expect(
+        runtimeInfo.sessionLifecycle,
+        Match3dNativeSessionLifecycle.unavailable,
+      );
+      expect(staged.staged, isFalse);
+      expect(staged.message, contains('quarantined'));
+      expect(opened.lifecycle, Match3dNativeSessionLifecycle.unavailable);
+      expect(opened.sessionId, descriptor.sessionId);
+      expect(opened.matchId, descriptor.matchId);
+      expect(state, isNull);
+      expect(closed.lifecycle, Match3dNativeSessionLifecycle.unavailable);
+      expect(closed.sessionId, descriptor.sessionId);
+      expect(backend.runtimeInfoRequests, 0);
+      expect(backend.stageRequests, isEmpty);
+      expect(backend.openRequests, isEmpty);
+      expect(backend.closeRequests, isEmpty);
+      expect(backend.sessionStateRequests, 0);
+      expect(backend.handledEvents, isEmpty);
     },
   );
 
-  test('runtime event parsing preserves session and sync metadata', () {
+  test('runtime event parsing preserves backend-authored sync metadata', () {
     final Match3dNativeRuntimeEvent event =
         Match3dNativeRuntimeEvent.fromMap(<String, Object?>{
           'type': 'SCENE_SYNC_ACK',
@@ -98,8 +81,8 @@ void main() {
           'supportsSessions': true,
           'platformViewAttached': true,
           'sessionStatus': 'open',
-          'sessionId': 'native_match_3d:test-match',
-          'matchId': 'test-match',
+          'sessionId': 'native_match_3d:backend-authored-match',
+          'matchId': 'backend-authored-match',
           'status': 'open',
           'ackCount': 3,
           'entityCount': 25,
@@ -118,6 +101,7 @@ void main() {
     );
     expect(event.sessionState, isNotNull);
     expect(event.sessionState!.ackCount, 3);
+    expect(event.sessionState!.playerCount, 22);
     expect(event.frameId, 'frame-9');
     expect(event.actionType, 'attack');
   });
@@ -127,7 +111,13 @@ class _FakeSessionBridgeBackend
     implements Match3dBridgeBackend, Match3dBridgeSessionBackend {
   final StreamController<dynamic> _controller =
       StreamController<dynamic>.broadcast();
+  final List<Map<String, Object?>> stageRequests = <Map<String, Object?>>[];
   final List<Map<String, Object?>> openRequests = <Map<String, Object?>>[];
+  final List<String?> closeRequests = <String?>[];
+  final List<Map<String, dynamic>> handledEvents = <Map<String, dynamic>>[];
+  int runtimeInfoRequests = 0;
+  int sessionStateRequests = 0;
+
   Match3dNativeSessionState _state = const Match3dNativeSessionState(
     sessionId: '',
     matchId: '',
@@ -147,11 +137,13 @@ class _FakeSessionBridgeBackend
 
   @override
   Future<void> handleEvent(Map<String, dynamic> event) async {
+    handledEvents.add(event);
     _controller.add(event);
   }
 
   @override
   Future<Map<String, dynamic>> getRuntimeInfo() async {
+    runtimeInfoRequests += 1;
     return <String, dynamic>{
       'available': true,
       'platform': 'android',
@@ -170,6 +162,7 @@ class _FakeSessionBridgeBackend
   Future<Map<String, dynamic>> stageLiveBootstrap(
     Map<String, Object?> request,
   ) async {
+    stageRequests.add(request);
     return <String, dynamic>{
       'staged': true,
       'bootstrapPath': '/android/files/tmp/gtex-live-bootstrap.json',
@@ -198,6 +191,7 @@ class _FakeSessionBridgeBackend
 
   @override
   Future<Map<String, dynamic>> closeSession({String? sessionId}) async {
+    closeRequests.add(sessionId);
     _state = Match3dNativeSessionState(
       sessionId: sessionId ?? '',
       matchId: _state.matchId,
@@ -215,22 +209,9 @@ class _FakeSessionBridgeBackend
   }
 
   @override
-  Future<Map<String, dynamic>> getSessionState() async => _state.toMap();
-}
-
-class _LegacyMatch3dBridgeBackend implements Match3dBridgeBackend {
-  final StreamController<dynamic> _controller =
-      StreamController<dynamic>.broadcast();
-
-  @override
-  Stream<dynamic> get events => _controller.stream;
-
-  @override
-  Future<bool> isAvailable() async => true;
-
-  @override
-  Future<void> handleEvent(Map<String, dynamic> event) async {
-    _controller.add(event);
+  Future<Map<String, dynamic>> getSessionState() async {
+    sessionStateRequests += 1;
+    return _state.toMap();
   }
 }
 

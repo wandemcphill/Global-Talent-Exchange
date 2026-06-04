@@ -7,8 +7,9 @@ import 'package:gte_frontend/screens/clubs/club_jersey_designer_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('club jersey designer switches active kit',
-      (WidgetTester tester) async {
+  testWidgets('club jersey designer switches active kit', (
+    WidgetTester tester,
+  ) async {
     final ClubController controller = ClubController(
       api: ClubApi.fixture(),
       clubId: 'royal-lagos-fc',

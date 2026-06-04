@@ -25,9 +25,9 @@ The 3D lane remains honestly positioned as a Flutter-rendered match presentation
   - Primary viewer shell: `frontend/lib/screens/match/gtex_match_viewer_screen.dart`
   - Owns the replay lane shell, render-mode switching, scorebug, commentary ribbon, tactical HUD, ratings strip, recap boards, replay controls, continuation handling, and camera-aware scene presentation.
 
-- `/matches/native-3d`
-  - Truth screen: `frontend/lib/features/match/match_native_3d_blocked_screen.dart`
-  - Remains disclosed and blocked until GTEX has a verified native runtime bridge.
+- `/internal/dev/blocked-match-runtime`
+  - Truth screen: `frontend/lib/features/match_center/blocked_match_runtime_screen.dart`
+  - Remains hidden and blocked until GTEX has a verified runtime bridge.
 
 ## Broadcast Package Modules
 

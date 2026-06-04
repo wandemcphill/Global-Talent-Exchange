@@ -166,5 +166,5 @@ def test_match_stream_websocket_endpoint_accepts_connections(realtime_app) -> No
 
     assert payload == {
         "type": "subscription_ack",
-        "data": {"topics": ["match:match-123", "commentary:match-123"]},
+        "data": {"topics": [match_event_channel("match-123"), "commentary:match-123"]},
     }

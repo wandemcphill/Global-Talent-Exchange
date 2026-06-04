@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
-import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
-import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart';
+import 'package:gte_frontend/features/compete/domain/streamer_tournament_engine_models.dart';
+import 'package:gte_frontend/features/compete/repositories/streamer_tournament_engine_repository.dart';
 
 void main() {
   test('streamer tournament api uses canonical api routes', () async {
@@ -195,4 +195,3 @@ Map<String, Object?> _riskSignalJson(String id) => <String, Object?>{
   'reviewed_by_user_id': null,
   'metadata_json': const <String, Object?>{},
 };
-

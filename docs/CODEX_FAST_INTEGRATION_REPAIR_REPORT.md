@@ -29,8 +29,8 @@
 - `frontend/lib/features/match/match_screen.dart`
 - `frontend/lib/features/match/match_spectate_screen.dart`
 - `frontend/lib/features/match/match_broadcast_screen.dart`
-- `frontend/lib/features/match/match_3d_route_screen.dart`
-- `frontend/lib/features/match/match_native_3d_blocked_screen.dart`
+- `frontend/lib/features/match_center/legacy_match_runtime_blocked_screen.dart`
+- `frontend/lib/features/match_center/blocked_match_runtime_screen.dart`
 - `frontend/lib/features/match/match_simulate_screen.dart`
 - `frontend/lib/features/match/match_viewer_capability.dart`
 - `frontend/lib/features/match/match_viewer_route_screen.dart`
@@ -41,7 +41,7 @@
 - `frontend/lib/features/profile/profile_god_mode_screen.dart`
 - `frontend/lib/features/viral_feed/presentation/viral_feed_screen.dart`
 - `frontend/lib/screens/admin/god_mode_admin_screen.dart`
-- `frontend/lib/screens/match/gtex_match_3d_screen.dart`
+- `frontend/lib/features/match_center/presentation/gtex_match_runtime_blocked_screen.dart`
 - `frontend/lib/services/match_3d_bridge.dart`
 
 ### Frontend API and tests

@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/competition_api.dart';
+import '../../features/compete/repositories/competition_api.dart';
 import '../../data/gte_exchange_api_client.dart';
 import '../../data/player_service.dart';
-import '../../data/hosted_competition_api.dart';
-import '../../features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart';
+import '../../features/compete/repositories/hosted_competition_api.dart';
+import '../../features/compete/repositories/streamer_tournament_engine_repository.dart';
 import 'auth_provider.dart';
 
 final Provider<GteExchangeApiClient> exchangeApiClientProvider =

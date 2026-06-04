@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/real_match_engine_presentation.dart';
-import 'package:gte_frontend/models/match_3d_scene_graph.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
-import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/real_match_engine_presentation.dart';
+import 'package:gte_frontend/features/3d/models/match_3d_scene_graph.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
+import 'package:gte_frontend/features/3d/widgets/match_3d/gtex_3d_scene.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 
@@ -11,7 +11,15 @@ void main() {
   test(
     'scene graph uses backend pressure telemetry for camera and experience',
     () {
-      final MatchViewState viewState = buildBroadcastTestViewState();
+      final MatchViewState viewState =
+          buildBackendAuthored3dQuarantineViewState();
+      expect(viewState.source, 'backend-authored-3d-quarantine');
+      expect(
+        viewState.frames.every(
+          (MatchTimelineFrame frame) => !frame.isSynthetic,
+        ),
+        isTrue,
+      );
       final MatchTimelineFrame frame = viewState.frames[1].copyWith(
         possessionPhase: MatchPossessionPhase.boxAttack,
         transitionState: MatchTransitionState.homeBreak,
@@ -25,6 +33,9 @@ void main() {
           ownerPlayerId: 'home-9',
         ),
       );
+
+      expect(frame.players, hasLength(22));
+      expect(frame.isSynthetic, isFalse);
 
       final Match3dSceneGraph sceneGraph = Gtex3dScene.describeGraph(
         viewState: viewState,
@@ -53,7 +64,9 @@ void main() {
   );
 
   test('scene graph uses backend restart telemetry for set-piece framing', () {
-    final MatchViewState viewState = buildBroadcastTestViewState();
+    final MatchViewState viewState =
+        buildBackendAuthored3dQuarantineViewState();
+    expect(viewState.source, 'backend-authored-3d-quarantine');
     final MatchTimelineFrame frame = viewState.frames[1].copyWith(
       phase: MatchViewerPhase.setPiece,
       possessionPhase: MatchPossessionPhase.setPiece,
@@ -67,6 +80,9 @@ void main() {
         state: 'placed',
       ),
     );
+
+    expect(frame.players, hasLength(22));
+    expect(frame.isSynthetic, isFalse);
 
     final Match3dSceneGraph sceneGraph = Gtex3dScene.describeGraph(
       viewState: viewState,

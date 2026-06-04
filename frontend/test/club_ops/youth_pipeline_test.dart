@@ -5,8 +5,9 @@ import 'package:gte_frontend/screens/clubs/youth_pipeline_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('youth pipeline screen shows funnel stages and notes',
-      (WidgetTester tester) async {
+  testWidgets('youth pipeline screen shows funnel stages and notes', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
@@ -19,10 +20,7 @@ void main() {
     expect(find.text('Pipeline summary'), findsOneWidget);
     expect(find.text('Tracked'), findsOneWidget);
     expect(find.text('Scholarship'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Pipeline notes'),
-      300,
-    );
+    await tester.scrollUntilVisible(find.text('Pipeline notes'), 300);
     expect(find.text('Pipeline notes'), findsOneWidget);
   });
 }

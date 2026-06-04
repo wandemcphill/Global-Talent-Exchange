@@ -152,9 +152,55 @@ class TransferBidView(CommonSchema):
     bid_amount: Decimal
     wage_offer_amount: Decimal | None = None
     sell_on_clause_pct: Decimal | None = None
+    wallet_reservation_status: str | None = None
+    wallet_reserved_amount: Decimal | None = None
+    wallet_reservation_reference: str | None = None
     structured_terms_json: dict[str, object] = Field(default_factory=dict)
     notes: str | None = None
     updated_at: datetime
+
+
+class AdminTransferBidAuditEventView(CommonSchema):
+    id: str
+    event_type: str
+    event_status: str
+    occurred_on: date
+    summary: str
+    details_json: dict[str, object] = Field(default_factory=dict)
+    updated_at: datetime
+
+
+class AdminTransferBidReviewView(TransferBidView):
+    window_label: str | None = None
+    severity: Literal["low", "medium", "high", "critical"]
+    escalation_state: str
+    audit_reference: str
+    audit_trail: tuple[AdminTransferBidAuditEventView, ...] = Field(default_factory=tuple)
+    action_state: Literal["audit_only", "read_only"] = "audit_only"
+    available_actions: tuple[str, ...] = Field(default_factory=tuple)
+    blocked_reason: str
+
+
+class AdminTransferBidReviewQueueView(CommonSchema):
+    items: tuple[AdminTransferBidReviewView, ...] = Field(default_factory=tuple)
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+
+
+class AdminTransferBidReviewActionRequest(CommonSchema):
+    action: Literal["acknowledge", "escalate", "note"]
+    reason: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=500)
+    escalation_state: str | None = Field(default=None, max_length=64)
+
+
+class AdminTransferBidReviewActionResponse(CommonSchema):
+    review: AdminTransferBidReviewView
+    audit_event: AdminTransferBidAuditEventView
+    action_state: Literal["audit_recorded"] = "audit_recorded"
+    business_state_changed: bool = False
+    wallet_state_changed: bool = False
 
 
 class TransferSummaryView(CommonSchema):
@@ -358,8 +404,6 @@ class PlayerOverviewView(CommonSchema):
     recent_events: tuple[PlayerLifecycleEventView, ...] = Field(default_factory=tuple)
 
 
-
-
 class PlayerLifecycleSnapshotView(CommonSchema):
     player_id: str
     player_name: str
@@ -435,6 +479,18 @@ class TransferBidAcceptRequest(CommonSchema):
 
 class TransferBidRejectRequest(CommonSchema):
     reason: str | None = Field(default=None, max_length=200)
+
+
+class TransferBidWithdrawRequest(CommonSchema):
+    reason: str | None = Field(default=None, max_length=200)
+
+
+class TransferBidCounterRequest(CommonSchema):
+    bid_amount: Decimal | None = Field(default=None, ge=0)
+    wage_offer_amount: Decimal | None = Field(default=None, ge=0)
+    contract_years: int | None = Field(default=None, ge=1, le=5)
+    sell_on_clause_pct: Decimal | None = Field(default=None, ge=0, le=100)
+    notes: str | None = Field(default=None, max_length=500)
 
 
 class RegenTransferListingRequest(CommonSchema):

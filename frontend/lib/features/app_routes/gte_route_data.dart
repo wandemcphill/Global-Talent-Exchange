@@ -16,6 +16,8 @@ class GteAppRouteNames {
   static const String competitionJoin = 'competitions.join';
   static const String competitionShare = 'competitions.share';
   static const String competitionWorldSuperCup = 'competitions.world-super-cup';
+  static const String liveMatchHub = 'matches.hub';
+  static const String liveMatchViewer = 'matches.viewer';
   static const String streamerTournamentsList = 'streamer-tournaments.list';
   static const String streamerTournamentDetail = 'streamer-tournaments.detail';
   static const String fanPredictionMatch = 'fan-predictions.match';
@@ -31,6 +33,7 @@ class GteAppRouteNames {
       'club-sale-market.owner-offers';
   static const String worldOverview = 'world.overview';
   static const String regenUniverse = 'world.regens';
+  static const String regenBuildASon = 'world.regens.build-a-son';
   static const String newsDesk = 'news.desk';
   static const String worldClubContext = 'world.club-context';
   static const String worldCompetitionContext = 'world.competition-context';
@@ -110,6 +113,14 @@ class GteAppRouteCatalog {
           path: '/streamer-tournaments/:tournamentId',
         ),
         GteAppRouteRegistration(
+          name: GteAppRouteNames.liveMatchHub,
+          path: '/matches',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.liveMatchViewer,
+          path: '/matches/viewer/:matchKey',
+        ),
+        GteAppRouteRegistration(
           name: GteAppRouteNames.fanPredictionMatch,
           path: '/fan-predictions/matches/:matchId',
         ),
@@ -154,9 +165,10 @@ class GteAppRouteCatalog {
           path: '/world/regens',
         ),
         GteAppRouteRegistration(
-          name: GteAppRouteNames.newsDesk,
-          path: '/news',
+          name: GteAppRouteNames.regenBuildASon,
+          path: '/world/regens/build-a-son',
         ),
+        GteAppRouteRegistration(name: GteAppRouteNames.newsDesk, path: '/news'),
         GteAppRouteRegistration(
           name: GteAppRouteNames.worldClubContext,
           path: '/world/clubs/:clubId',
@@ -180,10 +192,6 @@ class GteAppRouteCatalog {
         GteAppRouteRegistration(
           name: GteAppRouteNames.footballTransferCenter,
           path: '/football/transfer-center',
-        ),
-        GteAppRouteRegistration(
-          name: GteAppRouteNames.broadcastDesk,
-          path: '/broadcast/live',
         ),
         GteAppRouteRegistration(
           name: GteAppRouteNames.gtexJackpot,
@@ -664,6 +672,28 @@ class ClubReplaysRouteData extends GteClubScopedRouteData {
   );
 }
 
+class LiveMatchHubRouteData extends GteAppRouteData {
+  const LiveMatchHubRouteData();
+
+  @override
+  String get name => GteAppRouteNames.liveMatchHub;
+
+  @override
+  Uri toUri() => _buildUri(path: '/matches');
+}
+
+class LiveMatchViewerRouteData extends GteAppRouteData {
+  const LiveMatchViewerRouteData({required this.matchKey});
+
+  final String matchKey;
+
+  @override
+  String get name => GteAppRouteNames.liveMatchViewer;
+
+  @override
+  Uri toUri() => _buildUri(path: '/matches/viewer/$matchKey');
+}
+
 class StreamerTournamentsListRouteData extends GteAppRouteData {
   const StreamerTournamentsListRouteData();
 
@@ -815,6 +845,16 @@ class RegenUniverseRouteData extends GteAppRouteData {
   Uri toUri() => _buildUri(path: '/world/regens');
 }
 
+class RegenBuildASonRouteData extends GteAppRouteData {
+  const RegenBuildASonRouteData();
+
+  @override
+  String get name => GteAppRouteNames.regenBuildASon;
+
+  @override
+  Uri toUri() => _buildUri(path: '/world/regens/build-a-son');
+}
+
 class NewsDeskRouteData extends GteAppRouteData {
   const NewsDeskRouteData();
 
@@ -905,11 +945,13 @@ class FootballTransferCenterRouteData extends GteAppRouteData {
 class BroadcastDeskRouteData extends GteAppRouteData {
   const BroadcastDeskRouteData();
 
+  // Kept only for in-progress callers; this route is not cataloged or parsed
+  // from production URLs while matchday launch stays on the 2D realtime center.
   @override
   String get name => GteAppRouteNames.broadcastDesk;
 
   @override
-  Uri toUri() => _buildUri(path: '/broadcast/live');
+  Uri toUri() => _buildUri(path: '/app/compete');
 }
 
 class GtexJackpotRouteData extends GteAppRouteData {
@@ -1129,6 +1171,14 @@ class GteAppRouteParser {
           return null;
         }
         return StreamerTournamentDetailRouteData(tournamentId: tournamentId);
+      case GteAppRouteNames.liveMatchHub:
+        return const LiveMatchHubRouteData();
+      case GteAppRouteNames.liveMatchViewer:
+        final String? matchKey = _nonEmpty(pathParameters['matchKey']);
+        if (matchKey == null) {
+          return null;
+        }
+        return LiveMatchViewerRouteData(matchKey: matchKey);
       case GteAppRouteNames.fanPredictionMatch:
         final String? matchId = _nonEmpty(pathParameters['matchId']);
         if (matchId == null) {
@@ -1177,6 +1227,8 @@ class GteAppRouteParser {
         return const WorldOverviewRouteData();
       case GteAppRouteNames.regenUniverse:
         return const RegenUniverseRouteData();
+      case GteAppRouteNames.regenBuildASon:
+        return const RegenBuildASonRouteData();
       case GteAppRouteNames.newsDesk:
         return const NewsDeskRouteData();
       case GteAppRouteNames.worldClubContext:
@@ -1206,8 +1258,6 @@ class GteAppRouteParser {
         return FootballTransferCenterRouteData(
           tab: gteTransferCenterTabFromRaw(queryParameters['tab']),
         );
-      case GteAppRouteNames.broadcastDesk:
-        return const BroadcastDeskRouteData();
       case GteAppRouteNames.gtexJackpot:
         return const GtexJackpotRouteData();
       case GteAppRouteNames.clubAiAssistant:
@@ -1386,6 +1436,16 @@ class GteAppRouteParser {
       return null;
     }
 
+    if (segments.first == 'matches') {
+      if (segments.length == 1) {
+        return const LiveMatchHubRouteData();
+      }
+      if (segments.length == 3 && segments[1] == 'viewer') {
+        return LiveMatchViewerRouteData(matchKey: segments[2]);
+      }
+      return null;
+    }
+
     if (segments.length == 3 &&
         segments.first == 'fan-predictions' &&
         segments[1] == 'matches') {
@@ -1433,6 +1493,11 @@ class GteAppRouteParser {
       if (segments.length == 2 && segments[1] == 'regens') {
         return const RegenUniverseRouteData();
       }
+      if (segments.length == 3 &&
+          segments[1] == 'regens' &&
+          segments[2] == 'build-a-son') {
+        return const RegenBuildASonRouteData();
+      }
       if (segments.length == 3 && segments[1] == 'clubs') {
         return WorldClubContextRouteData(
           clubId: segments[2],
@@ -1468,12 +1533,6 @@ class GteAppRouteParser {
       return FootballTransferCenterRouteData(
         tab: gteTransferCenterTabFromRaw(uri.queryParameters['tab']),
       );
-    }
-
-    if (segments.length == 2 &&
-        segments.first == 'broadcast' &&
-        segments[1] == 'live') {
-      return const BroadcastDeskRouteData();
     }
 
     if (segments.length == 2 &&

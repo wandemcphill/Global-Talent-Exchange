@@ -1,8 +1,7 @@
-import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
-import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_monetization.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/presentation/broadcast_package_models.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 
 MatchViewState buildBroadcastTestViewState({
   bool scoreless = false,
@@ -274,11 +273,89 @@ MatchViewState buildBroadcastTestViewState({
     awayTeam: awayTeam,
     events: events,
     frames: frames,
-    monetization:
-        includeMonetization
-            ? _buildMonetization(events)
-            : const MatchViewerMonetization(),
     presentationPackage: presentationPackage ?? buildBroadcastTestPackage(),
+  );
+}
+
+MatchViewState buildBackendAuthored3dQuarantineViewState({
+  bool includeMonetization = false,
+}) {
+  final MatchViewState base = buildBroadcastTestViewState(
+    includeMonetization: includeMonetization,
+  );
+  final MatchEvent offsideEvent = _event(
+    id: 'offside-away',
+    sequence: 4,
+    type: MatchViewerEventType.offside,
+    timeSeconds: 4,
+    minute: 24,
+    homeScore: 1,
+    awayScore: 0,
+    bannerText: 'Offside',
+    commentary:
+        'The assistant flag confirms Abuja were beyond the defensive line.',
+    flags: const <String>['offside', 'disallowed'],
+    teamId: 'away',
+  );
+  final List<MatchEvent> events = <MatchEvent>[
+    ...base.events.where(
+      (MatchEvent event) =>
+          event.id != 'goal-away-disallowed' &&
+          event.id != 'miss-home' &&
+          event.timeSeconds < offsideEvent.timeSeconds,
+    ),
+    offsideEvent,
+    ...base.events.where(
+      (MatchEvent event) =>
+          event.id != 'goal-away-disallowed' &&
+          event.id != 'miss-home' &&
+          event.timeSeconds > offsideEvent.timeSeconds,
+    ),
+  ];
+  final List<MatchTimelineFrame> frames = base.frames
+      .map((MatchTimelineFrame frame) {
+        MatchTimelineFrame expanded = frame.copyWith(
+          players: _fullSquadPlayers(
+            shift: frame.timeSeconds.clamp(0, 8).toDouble(),
+            homeAttacking: frame.ball.position.x >= 50,
+          ),
+        );
+
+        if (frame.id == 'f2') {
+          expanded = expanded.copyWith(
+            overlayText: 'Checking...',
+            pausePlayback: true,
+            stage: MatchPlaybackStage.review,
+            cameraPreset: MatchCameraPreset.varReplay,
+          );
+        }
+        if (frame.id == 'f3') {
+          expanded = expanded.copyWith(
+            overlayText: 'Confirmed',
+            stage: MatchPlaybackStage.decision,
+            cameraPreset: MatchCameraPreset.goalCelebration,
+            celebrationTeamId: 'home',
+          );
+        }
+        if (frame.id == 'f5') {
+          expanded = expanded.copyWith(
+            activeEventId: 'offside-away',
+            overlayText: 'OFFSIDE',
+            pausePlayback: true,
+            flagAnimation: true,
+            stage: MatchPlaybackStage.decision,
+            cameraPreset: MatchCameraPreset.assistantFlag,
+          );
+        }
+        return expanded;
+      })
+      .toList(growable: false);
+
+  return base.copyWith(
+    source: 'backend-authored-3d-quarantine',
+    supportsOffside: true,
+    events: events,
+    frames: frames,
   );
 }
 
@@ -526,63 +603,6 @@ MatchPresentationPackage buildBroadcastTestPackage() {
   );
 }
 
-MatchViewerMonetization _buildMonetization(List<MatchEvent> events) {
-  MatchEvent? goalEvent;
-  for (final MatchEvent event in events) {
-    if (event.type == MatchViewerEventType.goal) {
-      goalEvent = event;
-      break;
-    }
-  }
-  return MatchViewerMonetization(
-    adsEnabled: true,
-    placements: <MatchAdPlacement>[
-      const MatchAdPlacement(
-        id: 'fixture-preroll',
-        type: MatchAdPlacementType.preRoll,
-        placement: 'video_preroll',
-        brand: 'BetKing',
-        message: 'BetKing presents this highlight start',
-        activeFromSecond: 0,
-        activeUntilSecond: 12,
-        targetingTags: <String>['country:NG', 'wallet:low'],
-      ),
-      if (goalEvent != null)
-        MatchAdPlacement(
-          id: 'fixture-sponsored-goal',
-          type: MatchAdPlacementType.sponsoredHighlight,
-          placement: 'highlight_overlay',
-          brand: 'MTN',
-          message: 'Goal of the Match powered by MTN',
-          eventId: goalEvent.id,
-          activeFromSecond: goalEvent.timeSeconds.floor(),
-          activeUntilSecond: goalEvent.timeSeconds.floor() + 8,
-          targetingTags: const <String>['country:NG', 'wallet:low'],
-        ),
-      const MatchAdPlacement(
-        id: 'fixture-live-banner',
-        type: MatchAdPlacementType.liveBanner,
-        placement: 'live_overlay',
-        brand: 'Flutterwave',
-        message: 'Flutterwave Fast Payouts',
-        activeFromSecond: 14,
-        activeUntilSecond: 72,
-        targetingTags: <String>['country:NG', 'wallet:low'],
-      ),
-      const MatchAdPlacement(
-        id: 'fixture-rewarded',
-        type: MatchAdPlacementType.rewardedAd,
-        placement: 'rewarded_panel',
-        brand: 'MTN',
-        message: 'Watch MTN and earn 50 coins',
-        rewardCoins: 50,
-        ctaLabel: 'Watch Ad +50',
-        targetingTags: <String>['country:NG', 'wallet:low'],
-      ),
-    ],
-  );
-}
-
 MatchEvent _event({
   required String id,
   required int sequence,
@@ -718,6 +738,239 @@ List<MatchViewerPlayerFrame> _players({
       line: MatchPlayerLine.attack,
       x: 42 + awayLead,
       y: 54,
+    ),
+  ];
+}
+
+List<MatchViewerPlayerFrame> _fullSquadPlayers({
+  required double shift,
+  required bool homeAttacking,
+}) {
+  final double homeLead = homeAttacking ? shift : -shift;
+  final double awayLead = homeAttacking ? -shift : shift;
+  return <MatchViewerPlayerFrame>[
+    _player(
+      playerId: 'home-1',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '1',
+      role: MatchViewerRole.goalkeeper,
+      line: MatchPlayerLine.goalkeeper,
+      x: 10 + homeLead * 0.1,
+      y: 50,
+    ),
+    _player(
+      playerId: 'home-2',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '2',
+      role: MatchViewerRole.defender,
+      line: MatchPlayerLine.defense,
+      x: 28 + homeLead * 0.35,
+      y: 18,
+    ),
+    _player(
+      playerId: 'home-4',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '4',
+      role: MatchViewerRole.defender,
+      line: MatchPlayerLine.defense,
+      x: 30 + homeLead * 0.3,
+      y: 38,
+    ),
+    _player(
+      playerId: 'home-5',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '5',
+      role: MatchViewerRole.defender,
+      line: MatchPlayerLine.defense,
+      x: 30 + homeLead * 0.3,
+      y: 62,
+    ),
+    _player(
+      playerId: 'home-3',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '3',
+      role: MatchViewerRole.defender,
+      line: MatchPlayerLine.defense,
+      x: 28 + homeLead * 0.35,
+      y: 82,
+    ),
+    _player(
+      playerId: 'home-6',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '6',
+      role: MatchViewerRole.midfielder,
+      line: MatchPlayerLine.midfield,
+      x: 44 + homeLead * 0.5,
+      y: 35,
+    ),
+    _player(
+      playerId: 'home-8',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '8',
+      role: MatchViewerRole.midfielder,
+      line: MatchPlayerLine.midfield,
+      x: 46 + homeLead * 0.45,
+      y: 50,
+    ),
+    _player(
+      playerId: 'home-10',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '10',
+      role: MatchViewerRole.midfielder,
+      line: MatchPlayerLine.midfield,
+      x: 49 + homeLead * 0.55,
+      y: 65,
+      highlighted: true,
+    ),
+    _player(
+      playerId: 'home-7',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '7',
+      role: MatchViewerRole.forward,
+      line: MatchPlayerLine.attack,
+      x: 62 + homeLead,
+      y: 24,
+    ),
+    _player(
+      playerId: 'home-9',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '9',
+      role: MatchViewerRole.forward,
+      line: MatchPlayerLine.attack,
+      x: 66 + homeLead,
+      y: 50,
+      highlighted: true,
+    ),
+    _player(
+      playerId: 'home-11',
+      teamId: 'home',
+      side: MatchViewerSide.home,
+      label: '11',
+      role: MatchViewerRole.forward,
+      line: MatchPlayerLine.attack,
+      x: 62 + homeLead,
+      y: 76,
+    ),
+    _player(
+      playerId: 'away-1',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '1',
+      role: MatchViewerRole.goalkeeper,
+      line: MatchPlayerLine.goalkeeper,
+      x: 90 + awayLead * 0.1,
+      y: 50,
+    ),
+    _player(
+      playerId: 'away-2',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '2',
+      role: MatchViewerRole.defender,
+      line: MatchPlayerLine.defense,
+      x: 72 + awayLead * 0.35,
+      y: 18,
+    ),
+    _player(
+      playerId: 'away-4',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '4',
+      role: MatchViewerRole.defender,
+      line: MatchPlayerLine.defense,
+      x: 70 + awayLead * 0.3,
+      y: 38,
+    ),
+    _player(
+      playerId: 'away-5',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '5',
+      role: MatchViewerRole.defender,
+      line: MatchPlayerLine.defense,
+      x: 70 + awayLead * 0.3,
+      y: 62,
+    ),
+    _player(
+      playerId: 'away-3',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '3',
+      role: MatchViewerRole.defender,
+      line: MatchPlayerLine.defense,
+      x: 72 + awayLead * 0.35,
+      y: 82,
+    ),
+    _player(
+      playerId: 'away-6',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '6',
+      role: MatchViewerRole.midfielder,
+      line: MatchPlayerLine.midfield,
+      x: 56 + awayLead * 0.5,
+      y: 35,
+    ),
+    _player(
+      playerId: 'away-8',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '8',
+      role: MatchViewerRole.midfielder,
+      line: MatchPlayerLine.midfield,
+      x: 54 + awayLead * 0.45,
+      y: 50,
+    ),
+    _player(
+      playerId: 'away-10',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '10',
+      role: MatchViewerRole.midfielder,
+      line: MatchPlayerLine.midfield,
+      x: 51 + awayLead * 0.55,
+      y: 65,
+    ),
+    _player(
+      playerId: 'away-7',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '7',
+      role: MatchViewerRole.forward,
+      line: MatchPlayerLine.attack,
+      x: 38 + awayLead,
+      y: 24,
+    ),
+    _player(
+      playerId: 'away-9',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '9',
+      role: MatchViewerRole.forward,
+      line: MatchPlayerLine.attack,
+      x: 34 + awayLead,
+      y: 50,
+      highlighted: true,
+    ),
+    _player(
+      playerId: 'away-11',
+      teamId: 'away',
+      side: MatchViewerSide.away,
+      label: '11',
+      role: MatchViewerRole.forward,
+      line: MatchPlayerLine.attack,
+      x: 38 + awayLead,
+      y: 76,
     ),
   ];
 }

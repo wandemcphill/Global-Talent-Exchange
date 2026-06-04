@@ -7,8 +7,9 @@ import 'package:gte_frontend/widgets/clubs/featured_trophy_card.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('club trophy cabinet opens trophy detail modal',
-      (WidgetTester tester) async {
+  testWidgets('club trophy cabinet opens trophy detail modal', (
+    WidgetTester tester,
+  ) async {
     final ClubController controller = ClubController(
       api: ClubApi.fixture(),
       clubId: 'lagos-comets',

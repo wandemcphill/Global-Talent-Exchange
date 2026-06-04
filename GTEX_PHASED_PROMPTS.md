@@ -1,6 +1,15 @@
 # GTEX Phased Prompts
 
-These prompts are rewritten to fit the current GTEX codebase.
+These prompts are legacy quarantine records, not active production instructions.
+
+## Canonical Override - 2026-06-04
+
+GTEX production work is now the canonical Flutter/backend football operating system.
+The active match experience is 2D broadcast-style match center only.
+Legacy Unity, native 3D, pseudo-3D, and original visual runtime work must stay hidden/quarantined from production routes, deploy gates, monetization, CTAs, and navigation.
+Do not implement prompts in this file unless the user explicitly asks for legacy quarantine maintenance.
+
+Historical context:
 
 Context that must be respected:
 - GTEX currently sits on top of an existing 3D match engine.
@@ -16,7 +25,7 @@ Context that must be respected:
 - Prompt C and Prompt D are integration and evidence phases, not replacement phases.
 - Prompt E is the earliest phase allowed to replace ownership away from legacy engine classes.
 
-## Prompt C2: Implement Now
+## Prompt C2: Legacy Quarantined Prompt - Do Not Implement In Production
 
 ### Controlled Original Visual Runtime Pivot
 

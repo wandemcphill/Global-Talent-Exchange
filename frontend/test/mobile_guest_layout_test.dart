@@ -41,10 +41,10 @@ void main() {
   testWidgets('guest home fits a small phone viewport', (
     WidgetTester tester,
   ) async {
-    await pumpGuestShell(tester, initialPath: '/app/home');
+    await pumpGuestShell(tester, initialPath: '/app/world');
 
     final Object? exception = tester.takeException();
-    expect(find.text('Home'), findsWidgets);
+    expect(find.text('World'), findsWidgets);
     expect(exception, isNull, reason: '$exception');
   });
 

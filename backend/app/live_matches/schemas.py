@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 from app.common.schemas.base import CommonSchema
 from app.match_engine.schemas import (
@@ -42,6 +42,23 @@ class LiveMatchPossessionEstimateView(CommonSchema):
 class LiveMatchRenderPointView(CommonSchema):
     x: float = Field(ge=0.0, le=100.0)
     y: float = Field(ge=0.0, le=100.0)
+
+
+class LiveMatchDataIssueView(CommonSchema):
+    code: str
+    field: str | None = None
+    severity: str = "degraded"
+    message: str | None = None
+
+
+class LiveMatchOverlayReadinessView(CommonSchema):
+    status: str = "syncing"
+    scorebug_ready: bool = False
+    timeline_ready: bool = False
+    commentary_ready: bool = False
+    stats_ready: bool = False
+    pitch_2d_ready: bool = False
+    blockers: list[str] = Field(default_factory=list)
 
 
 class LiveMatchSpeedModeView(CommonSchema):
@@ -96,19 +113,58 @@ class LiveMatchStreamEventView(CommonSchema):
     target_position: LiveMatchRenderPointView | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    stats: dict[str, Any] = Field(default_factory=dict)
+    xg: dict[str, Any] = Field(default_factory=dict)
+    momentum: dict[str, Any] = Field(default_factory=dict)
+    overlay_readiness: LiveMatchOverlayReadinessView | None = None
+    inspector_state: dict[str, Any] = Field(default_factory=dict)
+    intelligence_state: dict[str, Any] = Field(default_factory=dict)
     experience: MatchExperienceLayerView | None = None
+    score_authoritative: bool = False
+    clock_authoritative: bool = False
+    minute_authoritative: bool = False
+    commentary_authoritative: bool = False
+    stats_authoritative: bool = False
+    xg_authoritative: bool = False
+    momentum_authoritative: bool = False
+    overlay_authoritative: bool = False
+    inspector_authoritative: bool = False
+    intelligence_authoritative: bool = False
+    data_status: str = "syncing"
+    missing_data: list[LiveMatchDataIssueView] = Field(default_factory=list)
+    degraded: bool = False
+    blocked: bool = False
 
 
 class LiveMatchSnapshotView(CommonSchema):
     score: LiveMatchScoreView
     possession_estimate: LiveMatchPossessionEstimateView
     current_minute: int = Field(ge=0, le=120)
+    clock_label: str | None = None
+    phase: str = "unknown"
     momentum_indicator: str
     win_probability: LiveMatchWinProbabilityView | None = None
     market_pulse: LiveMatchMarketPulseView | None = None
     dramatic_event: bool = False
     status: str = "live"
     read_only: bool = True
+    score_authoritative: bool = False
+    clock_authoritative: bool = False
+    minute_authoritative: bool = False
+    phase_authoritative: bool = False
+    events_authoritative: bool = False
+    timeline_event_count: int = Field(default=0, ge=0)
+    commentary_event_count: int = Field(default=0, ge=0)
+    stats: dict[str, Any] = Field(default_factory=dict)
+    xg: dict[str, Any] = Field(default_factory=dict)
+    momentum: dict[str, Any] = Field(default_factory=dict)
+    overlay_readiness: LiveMatchOverlayReadinessView = Field(default_factory=LiveMatchOverlayReadinessView)
+    inspector_state: dict[str, Any] = Field(default_factory=dict)
+    intelligence_state: dict[str, Any] = Field(default_factory=dict)
+    data_status: str = "syncing"
+    missing_data: list[LiveMatchDataIssueView] = Field(default_factory=list)
+    degraded: bool = False
+    blocked: bool = False
 
 
 class LiveMatchStateView(CommonSchema):
@@ -121,6 +177,10 @@ class LiveMatchStateView(CommonSchema):
     snapshot: LiveMatchSnapshotView
     crowd_state: MatchCrowdStateView | None = None
     spectator_sync: MatchSpectatorSyncView | None = None
+    data_status: str = "syncing"
+    missing_data: list[LiveMatchDataIssueView] = Field(default_factory=list)
+    degraded: bool = False
+    blocked: bool = False
 
 
 class SpectatorSessionView(CommonSchema):
@@ -141,7 +201,10 @@ class SpectatorSessionView(CommonSchema):
     access_source: str | None = None
     rights_owner_id: str | None = None
     viewing_fee_coin: Decimal = Decimal("0.0000")
-    premium_features: dict[str, bool] = Field(default_factory=dict)
+    engagement_features: dict[str, bool] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("engagement_features", "premium_features"),
+    )
     sponsored_overlays: list[dict[str, Any]] = Field(default_factory=list)
     stadium_ads: list[dict[str, Any]] = Field(default_factory=list)
     channel_context: dict[str, Any] = Field(default_factory=dict)
@@ -150,7 +213,7 @@ class SpectatorSessionView(CommonSchema):
     reactions_enabled: bool = True
 
 
-class UnityLiveAccessView(CommonSchema):
+class LegacyMatchRuntimeAccessView(CommonSchema):
     match_id: str
     spectator_session_id: str
     access_token: str
@@ -163,7 +226,7 @@ class UnityLiveAccessView(CommonSchema):
     refresh_path: str
 
 
-class UnityLiveAccessRefreshRequest(CommonSchema):
+class LegacyMatchRuntimeAccessRefreshRequest(CommonSchema):
     refresh_token: str
 
 

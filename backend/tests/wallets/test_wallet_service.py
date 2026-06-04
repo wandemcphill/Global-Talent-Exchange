@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import json
 from shutil import copyfile
 
 from sqlalchemy import create_engine, func, select
@@ -16,6 +17,7 @@ from app.wallets.service import (
     LedgerError,
     LedgerPosting,
     UnbalancedTransactionError,
+    WalletBalanceUnavailableError,
     WalletService,
 )
 from app.wallets.wallet_service import WalletTransactionPosting, WalletTransactionService
@@ -99,8 +101,8 @@ def test_verify_payment_event_credits_user_with_append_only_entries(session) -> 
     payment_event = service.create_payment_event(
         session,
         user=user,
-        provider="monnify",
-        provider_reference="monnify-ref-001",
+        provider="korapay",
+        provider_reference="korapay-ref-001",
         amount=Decimal("50"),
         pack_code="starter-50",
     )
@@ -133,8 +135,8 @@ def test_verify_payment_event_rejects_duplicate_verification(session) -> None:
     payment_event = service.create_payment_event(
         session,
         user=user,
-        provider="monnify",
-        provider_reference="monnify-ref-idempotent-001",
+        provider="korapay",
+        provider_reference="korapay-ref-idempotent-001",
         amount=Decimal("25"),
         pack_code="starter-25",
     )
@@ -318,7 +320,256 @@ def test_get_wallet_summary_uses_write_through_cache(session, monkeypatch) -> No
 
     assert summary.available_balance == Decimal("15.0000")
     assert summary.reserved_balance == Decimal("0.0000")
+    assert summary.locked_balance == Decimal("0.0000")
+    assert summary.pending_withdrawal_balance == Decimal("0.0000")
+    assert summary.lock_reasons == ()
     assert cache_backend.values[service._wallet_summary_cache_key(user.id, LedgerUnit.CREDIT)]
+
+
+def test_get_wallet_summary_blocks_explicit_null_cached_balance(session) -> None:
+    user = _create_user(session)
+    cache_backend = FakeCacheBackend()
+    service = WalletService(cache_backend=cache_backend)
+    cache_backend.values[service._wallet_summary_cache_key(user.id, LedgerUnit.COIN)] = json.dumps(
+        {
+            "user_id": user.id,
+            "currency": LedgerUnit.COIN.value,
+            "balance": None,
+            "locked": "0.0000",
+            "total": "0.0000",
+        }
+    )
+
+    with pytest.raises(WalletBalanceUnavailableError, match="Balance data unavailable"):
+        service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
+
+
+def test_get_balance_blocks_explicit_null_cached_balance(session) -> None:
+    user = _create_user(session)
+    cache_backend = FakeCacheBackend()
+    service = WalletService(cache_backend=cache_backend)
+    account = service.get_user_account(session, user, LedgerUnit.COIN)
+    session.commit()
+    cache_backend.values[service._balance_cache_key(account.id)] = json.dumps(
+        {
+            "account_id": account.id,
+            "account_code": account.code,
+            "owner_user_id": user.id,
+            "unit": LedgerUnit.COIN.value,
+            "balance": None,
+        }
+    )
+
+    with pytest.raises(WalletBalanceUnavailableError, match="Balance data unavailable"):
+        service.get_balance(session, account)
+
+
+def test_get_wallet_summary_derives_structured_transfer_bid_lock_reasons(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("120")),
+            LedgerPosting(account=platform_account, amount=Decimal("-120")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-transfer-bid-lock",
+        actor=user,
+    )
+    session.commit()
+
+    service.reserve_transfer_bid_funds(
+        session,
+        user=user,
+        transfer_bid_id="bid-structured-1",
+        amount=Decimal("35"),
+        unit=LedgerUnit.COIN,
+        actor=user,
+    )
+    session.commit()
+
+    summary = service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
+
+    assert summary.available_balance == Decimal("85.0000")
+    assert summary.reserved_balance == Decimal("35.0000")
+    assert summary.locked_balance == Decimal("35.0000")
+    assert summary.pending_withdrawal_balance == Decimal("0.0000")
+    assert len(summary.lock_reasons) == 1
+    reason = summary.lock_reasons[0]
+    assert reason.code == "transfer_bid_reservation"
+    assert reason.label == "Transfer bid reservations"
+    assert reason.amount == Decimal("35.0000")
+    assert reason.currency == LedgerUnit.COIN
+    assert reason.source == "transfer_bid"
+    assert reason.reference == "transfer_bid:bid-structured-1"
+
+
+def test_replace_transfer_bid_reservation_leaves_exact_replacement_hold(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("120")),
+            LedgerPosting(account=platform_account, amount=Decimal("-120")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-transfer-bid-replace",
+        actor=user,
+    )
+    session.commit()
+
+    service.reserve_transfer_bid_funds(
+        session,
+        user=user,
+        transfer_bid_id="bid-replace-1",
+        amount=Decimal("35"),
+        unit=LedgerUnit.COIN,
+        actor=user,
+    )
+    session.commit()
+
+    service.replace_transfer_bid_reservation(
+        session,
+        user=user,
+        transfer_bid_id="bid-replace-1",
+        replacement_amount=Decimal("55"),
+        unit=LedgerUnit.COIN,
+        release_reason="counter",
+        actor=user,
+    )
+    session.commit()
+
+    assert service.get_transfer_bid_reserved_amount(
+        session,
+        user=user,
+        transfer_bid_id="bid-replace-1",
+        unit=LedgerUnit.COIN,
+    ) == Decimal("55.0000")
+    summary = service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
+
+    assert summary.available_balance == Decimal("65.0000")
+    assert summary.reserved_balance == Decimal("55.0000")
+    assert summary.locked_balance == Decimal("55.0000")
+    assert len(summary.lock_reasons) == 1
+    reason = summary.lock_reasons[0]
+    assert reason.code == "transfer_bid_reservation"
+    assert reason.amount == Decimal("55.0000")
+    assert reason.reference == "transfer_bid:bid-replace-1"
+
+
+def test_release_transfer_bid_reservation_withdrawn_is_idempotent(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("75")),
+            LedgerPosting(account=platform_account, amount=Decimal("-75")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-transfer-bid-withdrawn",
+        actor=user,
+    )
+    session.commit()
+
+    service.reserve_transfer_bid_funds(
+        session,
+        user=user,
+        transfer_bid_id="bid-withdrawn-1",
+        amount=Decimal("25"),
+        unit=LedgerUnit.COIN,
+        actor=user,
+    )
+    session.commit()
+
+    first_release = service.release_transfer_bid_reservation(
+        session,
+        user=user,
+        transfer_bid_id="bid-withdrawn-1",
+        release_reason="withdrawn",
+        unit=LedgerUnit.COIN,
+        actor=user,
+    )
+    session.commit()
+    transaction_count_after_release = session.scalar(
+        select(func.count()).select_from(LedgerTransaction)
+    )
+
+    second_release = service.release_transfer_bid_reservation(
+        session,
+        user=user,
+        transfer_bid_id="bid-withdrawn-1",
+        release_reason="withdrawn",
+        unit=LedgerUnit.COIN,
+        actor=user,
+    )
+    session.commit()
+
+    assert first_release
+    assert second_release == []
+    assert session.scalar(select(func.count()).select_from(LedgerTransaction)) == transaction_count_after_release
+    assert service.get_transfer_bid_reserved_amount(
+        session,
+        user=user,
+        transfer_bid_id="bid-withdrawn-1",
+        unit=LedgerUnit.COIN,
+    ) == Decimal("0.0000")
+    summary = service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
+    assert summary.available_balance == Decimal("75.0000")
+    assert summary.reserved_balance == Decimal("0.0000")
+    assert summary.locked_balance == Decimal("0.0000")
+    assert summary.lock_reasons == ()
+
+
+def test_get_wallet_summary_derives_pending_withdrawal_balance_from_backend_payouts(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("100")),
+            LedgerPosting(account=platform_account, amount=Decimal("-100")),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="seed-withdrawal-lock",
+        actor=user,
+    )
+    session.commit()
+
+    service.request_payout(
+        session,
+        user=user,
+        amount=Decimal("20"),
+        destination_reference="bank:test",
+        unit=LedgerUnit.COIN,
+        source_scope="trade",
+        actor=user,
+    )
+    session.commit()
+
+    summary = service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
+
+    assert summary.available_balance == Decimal("75.0000")
+    assert summary.reserved_balance == Decimal("25.0000")
+    assert summary.locked_balance == Decimal("25.0000")
+    assert summary.pending_withdrawal_balance == Decimal("20.0000")
+    assert len(summary.lock_reasons) == 1
+    reason = summary.lock_reasons[0]
+    assert reason.code == "withdrawal_hold"
+    assert reason.label == "Withdrawal holds"
+    assert reason.amount == Decimal("25.0000")
+    assert reason.currency == LedgerUnit.COIN
+    assert reason.source == "withdrawal"
 
 
 def test_convert_wallet_units_moves_value_across_coin_and_credit_wallets(session) -> None:

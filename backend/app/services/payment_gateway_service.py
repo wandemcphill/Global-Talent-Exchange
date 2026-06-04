@@ -56,7 +56,7 @@ class PaymentGatewayService:
             else:
                 deposits_enabled = automatic_deposits_enabled and bool(rail.get("deposits_enabled"))
                 is_live = automatic_deposits_enabled and bool(rail.get("is_live"))
-                method_group = "regional_processor"
+                method_group = "automatic_gateway"
             methods.append(
                 PaymentMethod(
                     method_key=provider_key,
@@ -71,20 +71,6 @@ class PaymentGatewayService:
                 )
             )
 
-        if self.settings.crypto_deposit_enabled:
-            methods.append(
-                PaymentMethod(
-                    method_key="crypto_deposit",
-                    display_name="Crypto Deposit",
-                    provider_key=self.settings.crypto_provider_key,
-                    method_group="crypto",
-                    unit=LedgerUnit.CREDIT,
-                    deposits_enabled=True,
-                    withdrawals_enabled=False,
-                    is_live=True,
-                    maintenance_message=None,
-                )
-            )
         return methods
 
     def quote_deposit(
@@ -101,7 +87,7 @@ class PaymentGatewayService:
     ) -> PurchaseOrderQuote:
         provider_key = provider_key or self._resolve_provider(method_key)
         if unit is None:
-            unit = LedgerUnit.CREDIT if method_key == "crypto_deposit" else LedgerUnit.COIN
+            unit = LedgerUnit.COIN
         if provider_key == "bank_transfer_manual":
             raise PaymentGatewayError(
                 "Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders."
@@ -137,7 +123,7 @@ class PaymentGatewayService:
     ):
         provider_key = provider_key or self._resolve_provider(method_key)
         if unit is None:
-            unit = LedgerUnit.CREDIT if method_key == "crypto_deposit" else LedgerUnit.COIN
+            unit = LedgerUnit.COIN
         if provider_key == "bank_transfer_manual":
             raise PaymentGatewayError(
                 "Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders."
@@ -199,10 +185,6 @@ class PaymentGatewayService:
         return [dict(rail) for rail in DEFAULT_PAYMENT_RAILS]
 
     def _resolve_provider(self, method_key: str | None) -> str:
-        if method_key == "crypto_deposit":
-            if not self.settings.crypto_deposit_enabled:
-                raise PaymentGatewayError("Crypto deposit rail is disabled.")
-            return self.settings.crypto_provider_key
         if method_key:
             return method_key
         rails = self._load_payment_rails()
@@ -214,10 +196,6 @@ class PaymentGatewayService:
         raise PaymentGatewayError("No active payment provider is configured.")
 
     def _assert_provider_enabled(self, provider_key: str) -> None:
-        if provider_key == self.settings.crypto_provider_key:
-            if not self.settings.crypto_deposit_enabled:
-                raise PaymentGatewayError("Crypto deposit rail is disabled.")
-            return
         if provider_key == "bank_transfer_manual":
             raise PaymentGatewayError("Manual bank transfer must be handled through the treasury deposit flow.")
         rails = self._load_payment_rails()
@@ -231,7 +209,9 @@ class PaymentGatewayService:
     @staticmethod
     def _display_name(provider_key: str) -> str:
         if provider_key == "bank_transfer_manual":
-            return "Bank Transfer"
+            return "Manual bank transfer"
+        if provider_key == "korapay":
+            return "KoraPay"
         label = provider_key.replace("_", " ").title()
         return label
 

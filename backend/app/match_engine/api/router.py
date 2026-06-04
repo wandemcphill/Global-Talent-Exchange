@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.cache import HotPathCache
@@ -272,7 +272,7 @@ def simulate_match(
         replay_payload = service.build_replay_payload(payload)
         return _build_simulation_response(replay_payload)
     except Exception as exc:
-        logger.exception("Failed to build Unity simulation payload for match %s", payload.match_id)
+        logger.exception("Failed to build match simulation payload for match %s", payload.match_id)
         raise HTTPException(status_code=503, detail="Match simulation is temporarily unavailable.") from exc
 
 
@@ -304,21 +304,28 @@ def create_match_summary(
     return service.build_summary(payload)
 
 
-@legacy_router.post("/render-sync", response_model=MatchRenderSyncPayloadView)
-@api_router.post("/render-sync", response_model=MatchRenderSyncPayloadView)
+@legacy_router.post(
+    "/render-sync",
+    response_model=MatchRenderSyncPayloadView,
+    include_in_schema=False,
+)
+@api_router.post(
+    "/render-sync",
+    response_model=MatchRenderSyncPayloadView,
+    include_in_schema=False,
+)
 def create_match_render_sync(
     payload: MatchSimulationRequest,
     service: MatchSimulationService = Depends(get_match_simulation_service),
     fairness_guard: FairnessGuard = Depends(get_fairness_guard),
 ) -> MatchRenderSyncPayloadView:
-    try:
-        fairness_guard.validate_public_request(payload)
-    except FairnessViolation as exc:
-        raise HTTPException(status_code=400, detail=exc.detail) from exc
-    replay_payload = service.build_replay_payload(payload)
-    if replay_payload.render_sync is None:
-        raise HTTPException(status_code=500, detail="Render sync contract could not be built.")
-    return replay_payload.render_sync
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Render-sync payloads are quarantined from production. "
+            "Use backend-authored 2D match-center stream contracts instead."
+        ),
+    )
 
 
 @legacy_router.post("/analytics", response_model=MatchPostMatchAnalyticsView)
@@ -338,16 +345,27 @@ def create_post_match_analytics(
     return replay_payload.post_match_analytics
 
 
-@legacy_router.get("/render-sync/{match_key}", response_model=MatchRenderSyncPayloadView)
-@api_router.get("/render-sync/{match_key}", response_model=MatchRenderSyncPayloadView)
+@legacy_router.get(
+    "/render-sync/{match_key}",
+    response_model=MatchRenderSyncPayloadView,
+    include_in_schema=False,
+)
+@api_router.get(
+    "/render-sync/{match_key}",
+    response_model=MatchRenderSyncPayloadView,
+    include_in_schema=False,
+)
 def read_match_render_sync(
     match_key: str,
     session: Session = Depends(get_session),
 ) -> MatchRenderSyncPayloadView:
-    payload = _load_stored_replay_payload(match_key, session)
-    if payload.render_sync is None:
-        raise HTTPException(status_code=404, detail=f"Render sync payload for {match_key} was not found.")
-    return payload.render_sync
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Render-sync payloads are quarantined from production. "
+            "Use backend-authored 2D match-center stream contracts instead."
+        ),
+    )
 
 
 @legacy_router.get("/analytics/{match_key}", response_model=MatchPostMatchAnalyticsView)

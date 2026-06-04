@@ -15,7 +15,7 @@ from backend.tests.support.secrets import (
     TEST_AUTH_SECRET,
     TEST_PASSWORD,
 )
-from backend.tests.support.signup_payloads import user_signup_payload
+from backend.tests.support.signup_payloads import player_signup_payload
 
 SMOKE_DEMO_PLAYER_COUNT = 12
 DEFAULT_TEST_DATABASE_URL = (
@@ -213,8 +213,8 @@ def auth_user_factory(client, app_session_factory):
         username = unique_suffix.replace("-", "_")
         password = TEST_PASSWORD
         response = client.post(
-            "/auth/signup/user",
-            json=user_signup_payload(
+            "/auth/signup/player",
+            json=player_signup_payload(
                 email=email,
                 username=username,
                 password=password,

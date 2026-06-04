@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import '../data/gte_exchange_models.dart';
-import '../data/live_match_fixtures.dart';
+import 'package:gte_frontend/features/match_center/data/live_match_fixtures.dart';
 import '../features/player_card_marketplace/data/player_card_marketplace_models.dart';
 import '../models/academy_models.dart';
 import '../models/player_avatar.dart';

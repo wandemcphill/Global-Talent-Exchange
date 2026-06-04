@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_feedback.dart';
-import '../../data/competition_control_repository.dart';
+import '../../features/compete/repositories/competition_control_repository.dart';
 import '../../data/gte_api_repository.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';

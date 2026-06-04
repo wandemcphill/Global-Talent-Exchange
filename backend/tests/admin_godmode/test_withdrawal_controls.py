@@ -187,7 +187,7 @@ def test_manual_bank_transfer_mode_blocks_gateway_deposit_endpoint(admin_wallet_
     response = client.post(
         "/api/wallets/payment-events",
         json={
-            "provider": "monnify",
+            "provider": "korapay",
             "provider_reference": "bank-manual-ref-001",
             "amount": "50.0000",
             "pack_code": "starter-50",
@@ -195,7 +195,7 @@ def test_manual_bank_transfer_mode_blocks_gateway_deposit_endpoint(admin_wallet_
     )
 
     assert response.status_code == 409
-    assert "manual bank transfer" in response.json()["detail"].lower()
+    assert "deposits are disabled" in response.json()["detail"].lower()
 
 
 def test_automatic_gateway_mode_allows_gateway_deposit_endpoint(admin_wallet_context) -> None:
@@ -217,7 +217,7 @@ def test_automatic_gateway_mode_allows_gateway_deposit_endpoint(admin_wallet_con
     response = client.post(
         "/api/wallets/payment-events",
         json={
-            "provider": "monnify",
+            "provider": "korapay",
             "provider_reference": "gateway-ref-001",
             "amount": "50.0000",
             "pack_code": "starter-50",
@@ -225,7 +225,7 @@ def test_automatic_gateway_mode_allows_gateway_deposit_endpoint(admin_wallet_con
     )
 
     assert response.status_code == 201
-    assert response.json()["provider"] == "monnify"
+    assert response.json()["provider"] == "korapay"
 
 
 def test_competition_withdrawal_can_be_enabled_for_bank_transfer_review(admin_wallet_context) -> None:

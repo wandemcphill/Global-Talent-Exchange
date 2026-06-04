@@ -11,7 +11,7 @@ import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/screens/gte_portfolio_screen.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen.dart';
-import 'package:gte_frontend/screens/wallet/gte_withdrawal_flow_screen.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_withdrawal_flow_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
@@ -160,7 +160,7 @@ void main() {
       await tester.tap(fundWalletButton);
       await _pumpUntilText(tester, 'Choose a deposit method');
       expect(find.text('Deposit'), findsOneWidget);
-      expect(find.text('Continue to Paystack'), findsOneWidget);
+      expect(find.text('Continue to KoraPay'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
       await _pumpUntilText(tester, 'Wallet actions');

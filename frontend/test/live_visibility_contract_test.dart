@@ -6,7 +6,7 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_mock_api.dart';
-import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
+import 'package:gte_frontend/features/compete/providers/live_competitions_provider.dart';
 import 'package:gte_frontend/features/federations/live_federations_provider.dart';
 import 'package:gte_frontend/features/national_teams/live_national_teams_provider.dart';
 import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
@@ -750,4 +750,3 @@ class _PathTransport implements GteTransport {
         );
   }
 }
-

@@ -20,7 +20,6 @@ class DataSourceBadge extends StatelessWidget {
     final Color color = switch (status) {
       DataSourceStatus.live => theme.primaryColor,
       DataSourceStatus.blocked => tokens.negative,
-      DataSourceStatus.demo => theme.secondaryColor,
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: spacingSM, vertical: 6),

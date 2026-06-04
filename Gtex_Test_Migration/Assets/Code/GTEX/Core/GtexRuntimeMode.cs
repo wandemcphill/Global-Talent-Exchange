@@ -4,6 +4,7 @@ namespace FStudio.GTEX.Core
     {
         LivePlayback,
         LocalSimulation,
-        OriginalVisualRuntime
+        OriginalVisualRuntime,
+        IllusionRuntime
     }
 }

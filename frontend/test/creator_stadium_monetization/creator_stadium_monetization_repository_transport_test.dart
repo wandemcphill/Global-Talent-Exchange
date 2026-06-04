@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
-import 'package:gte_frontend/features/creator_stadium_monetization/data/creator_stadium_monetization_models.dart';
-import 'package:gte_frontend/features/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart';
+import 'package:gte_frontend/features/capital/settlement/creator_stadium_monetization/data/creator_stadium_monetization_models.dart';
+import 'package:gte_frontend/features/capital/settlement/creator_stadium_monetization/data/creator_stadium_monetization_repository.dart';
 
 void main() {
   test(
@@ -90,4 +90,3 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
-

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/data/regen_universe_api.dart';
 
 void main() {
@@ -89,6 +90,48 @@ void main() {
       await expectLater(api.listAwards(), throwsA(isA<GteApiException>()));
     },
   );
+
+  test(
+    'regen universe live player payloads must publish core football facts',
+    () async {
+      final RegenUniverseApi api = RegenUniverseApi.withClient(
+        client: GteAuthedApi(
+          config: const GteRepositoryConfig(
+            baseUrl: 'https://example.test',
+            mode: GteBackendMode.live,
+          ),
+          transport: _PathTransport(<String, GteTransportResponse>{
+            '/api/v2/regen-universe/rising-stars': const GteTransportResponse(
+              statusCode: 200,
+              body: <String, Object?>{
+                'entries': <Object?>[
+                  <String, Object?>{
+                    'player_id': 'regen-1',
+                    'player': <String, Object?>{
+                      'id': 'regen-1',
+                      'name': 'Ayo Future',
+                      'age': 16,
+                      'nationality': 'Nigeria',
+                      'position': 'ST',
+                      'current_rating': 71,
+                      'growth_curve': 0.82,
+                      'source_type': 'generated',
+                    },
+                  },
+                ],
+              },
+            ),
+          }),
+          mode: GteBackendMode.live,
+        ),
+      );
+
+      await expectLater(
+        api.listRisingStars(),
+        throwsA(isA<GteParsingException>()),
+      );
+    },
+  );
 }
 
 class _PathTransport implements GteTransport {
@@ -107,4 +150,3 @@ class _PathTransport implements GteTransport {
         );
   }
 }
-

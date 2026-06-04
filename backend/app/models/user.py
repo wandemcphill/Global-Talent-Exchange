@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, String
+from sqlalchemy import Boolean, Date, DateTime, Enum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -50,8 +50,13 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     avatar_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     favourite_club: Mapped[str | None] = mapped_column(String(160), nullable=True)
     nationality: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(120), nullable=True)
     preferred_position: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    date_of_birth: Mapped[date | None] = mapped_column(Date(), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    trust_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    verified_status: Mapped[str] = mapped_column(String(40), nullable=False, default="basic", server_default="basic")
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", native_enum=False),
         nullable=False,

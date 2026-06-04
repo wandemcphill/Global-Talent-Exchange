@@ -16,8 +16,10 @@ from app.core.cache import CacheBackend, NullCacheBackend
 from app.core.events import DomainEvent, EventPublisher
 from app.broadcast_network.stadium_service import StadiumImmersionProfile, StadiumImmersionService
 from app.live_matches.schemas import (
+    LiveMatchDataIssueView,
     LiveMatchPossessionEstimateView,
     LiveMatchMarketPulseView,
+    LiveMatchOverlayReadinessView,
     LiveMatchRenderPointView,
     LiveMatchScoreView,
     LiveMatchSnapshotView,
@@ -25,7 +27,7 @@ from app.live_matches.schemas import (
     LiveMatchStreamEventView,
     LiveMatchWinProbabilityView,
 )
-from app.match_engine.commentary.live_engine import GeneratedCommentary, LiveCommentaryEngine
+from app.match_engine.commentary.live_engine import LiveCommentaryEngine
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.match_engine.schemas import (
     MatchCommentaryCueView,
@@ -52,6 +54,13 @@ class LiveMatchError(ValueError):
 BatchCallback = Callable[[str, list[LiveMatchStreamEventView], LiveMatchSnapshotView], None]
 CompleteCallback = Callable[[str], None]
 AttendanceOverlayProvider = Callable[[str, MatchCrowdStateView | None], MatchCrowdStateView | None]
+
+_ISSUE_SEVERITY_ORDER = {
+    "blocked": 3,
+    "degraded": 2,
+    "syncing": 1,
+    "empty": 1,
+}
 
 
 @dataclass(slots=True)
@@ -97,6 +106,204 @@ class LiveMatchPlaybackContext:
     elapsed_runtime_seconds: float
     target_runtime_seconds: float
     is_live: bool
+
+
+def _data_issue(
+    code: str,
+    *,
+    field: str | None,
+    severity: str,
+    message: str,
+) -> LiveMatchDataIssueView:
+    return LiveMatchDataIssueView(code=code, field=field, severity=severity, message=message)
+
+
+def _append_issue_once(issues: list[LiveMatchDataIssueView], issue: LiveMatchDataIssueView) -> None:
+    if any(existing.code == issue.code and existing.field == issue.field for existing in issues):
+        return
+    issues.append(issue)
+
+
+def _contract_status(issues: Sequence[LiveMatchDataIssueView]) -> str:
+    if not issues:
+        return "ready"
+    highest = max((_ISSUE_SEVERITY_ORDER.get(issue.severity, 0) for issue in issues), default=0)
+    if highest >= _ISSUE_SEVERITY_ORDER["blocked"]:
+        return "blocked"
+    if highest >= _ISSUE_SEVERITY_ORDER["degraded"]:
+        return "degraded"
+    severities = {issue.severity for issue in issues}
+    if "empty" in severities:
+        return "empty"
+    return "syncing"
+
+
+def _issues_blocked(issues: Sequence[LiveMatchDataIssueView]) -> bool:
+    return any(issue.severity == "blocked" for issue in issues)
+
+
+def _issues_degraded(issues: Sequence[LiveMatchDataIssueView]) -> bool:
+    return any(issue.severity in {"degraded", "syncing", "empty"} for issue in issues)
+
+
+def _event_score(event: LiveMatchStreamEventView) -> tuple[int, int] | None:
+    home = event.home_score
+    away = event.away_score
+    if home is None:
+        home = event.metadata.get("home_score")
+    if away is None:
+        away = event.metadata.get("away_score")
+    if home is None or away is None:
+        return None
+    try:
+        return int(home), int(away)
+    except (TypeError, ValueError):
+        return None
+
+
+def _latest_authoritative_score(events: Sequence[LiveMatchStreamEventView]) -> tuple[int, int] | None:
+    for event in reversed(events):
+        score = _event_score(event)
+        if score is not None:
+            return score
+    return None
+
+
+def _event_clock_label(event: LiveMatchStreamEventView) -> str | None:
+    for value in (event.clock_label, event.meta.get("clock_label"), event.metadata.get("clock_label")):
+        text = str(value or "").strip()
+        if text:
+            return text
+    return None
+
+
+def _event_phase(event: LiveMatchStreamEventView) -> str | None:
+    for value in (event.meta.get("phase"), event.metadata.get("phase"), event.metadata.get("match_phase")):
+        text = str(value or "").strip()
+        if text:
+            return text
+    return None
+
+
+def _event_xg(event: LiveMatchStreamEventView) -> float | None:
+    for value in (event.meta.get("xg"), event.metadata.get("xg"), event.metadata.get("chance_quality")):
+        if value is None:
+            continue
+        try:
+            return max(0.0, float(value))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _payload_available(payload: dict[str, object] | None) -> bool:
+    if not payload:
+        return False
+    if "available" in payload:
+        return bool(payload.get("available"))
+    status = str(payload.get("status") or "").strip().lower()
+    if status:
+        return status in {"ready", "synced", "live", "confirmed"}
+    return True
+
+
+def _snapshot_payload(
+    payload: dict[str, object],
+    *,
+    source: str,
+    available: bool = True,
+) -> dict[str, object]:
+    resolved = dict(payload)
+    resolved.setdefault("source", source)
+    resolved.setdefault("available", available)
+    return resolved
+
+
+def _event_mapping(event: LiveMatchStreamEventView, key: str) -> dict[str, object] | None:
+    direct = getattr(event, key)
+    if isinstance(direct, dict) and direct:
+        return dict(direct)
+    for container in (event.metadata, event.meta):
+        value = container.get(key)
+        if isinstance(value, dict) and value:
+            return dict(value)
+    return None
+
+
+def _latest_authored_mapping(
+    events: Sequence[LiveMatchStreamEventView],
+    key: str,
+    authoritative_key: str,
+) -> dict[str, object] | None:
+    for event in reversed(events):
+        payload = _event_mapping(event, key)
+        if payload is None:
+            continue
+        if bool(getattr(event, authoritative_key)) or _payload_available(payload):
+            return _snapshot_payload(payload, source="backend_authored_event")
+    return None
+
+
+def _build_live_stats(events: Sequence[LiveMatchStreamEventView]) -> tuple[dict[str, object], dict[str, object]]:
+    stats: dict[str, object] = {
+        "source": "backend_live_match_hub",
+        "available": False,
+        "derived_available": bool(events),
+        "home": {"events": 0, "shots": 0, "goals": 0, "cards": 0},
+        "away": {"events": 0, "shots": 0, "goals": 0, "cards": 0},
+        "unknown_events": 0,
+    }
+    xg_totals = {"home": 0.0, "away": 0.0}
+    xg_seen = {"home": False, "away": False}
+    for event in events:
+        side = str(event.team_side or event.metadata.get("team_side") or "").strip().lower()
+        if side not in {"home", "away"}:
+            stats["unknown_events"] = int(stats["unknown_events"]) + 1
+            continue
+        side_stats = dict(stats[side])
+        side_stats["events"] = int(side_stats["events"]) + 1
+        if event.event_type in {"goal", "shot"}:
+            side_stats["shots"] = int(side_stats["shots"]) + 1
+        if event.event_type == "goal":
+            side_stats["goals"] = int(side_stats["goals"]) + 1
+        if event.event_type == "card":
+            side_stats["cards"] = int(side_stats["cards"]) + 1
+        stats[side] = side_stats
+        xg = _event_xg(event)
+        if xg is not None:
+            xg_totals[side] += xg
+            xg_seen[side] = True
+    any_xg = any(xg_seen.values())
+    xg_payload: dict[str, object] = {
+        "source": "backend_live_match_hub",
+        "available": any_xg,
+        "home": round(xg_totals["home"], 3) if xg_seen["home"] else None,
+        "away": round(xg_totals["away"], 3) if xg_seen["away"] else None,
+    }
+    return stats, xg_payload
+
+
+def _overlay_readiness(
+    *,
+    status: str,
+    score_authoritative: bool,
+    clock_authoritative: bool,
+    timeline_event_count: int,
+    commentary_event_count: int,
+    stats_available: bool,
+    pitch_2d_ready: bool,
+    issues: Sequence[LiveMatchDataIssueView],
+) -> LiveMatchOverlayReadinessView:
+    blockers = [issue.code for issue in issues if issue.severity == "blocked"]
+    return LiveMatchOverlayReadinessView(
+        status=status,
+        scorebug_ready=score_authoritative and clock_authoritative,
+        timeline_ready=timeline_event_count > 0,
+        commentary_ready=commentary_event_count > 0,
+        stats_ready=stats_available,
+        pitch_2d_ready=pitch_2d_ready,
+        blockers=blockers,
+    )
 
 
 @dataclass(slots=True)
@@ -597,6 +804,110 @@ class LiveMatchHub:
         sequence_id = int(event.sequence_id or event.sequence or index)
         importance_score = float(event.importance_score or event.meta.get("importance", 0.0) or 0.0)
         audio_stem_channels = list(event.audio_stem_channels or ["commentary", "crowd", "stadium_fx"])
+        missing_data = list(event.missing_data)
+        score_authoritative = event.home_score is not None and event.away_score is not None
+        clock_authoritative = bool(str(event.clock_label or "").strip())
+        minute_authoritative = True
+        commentary_authoritative = bool(str(event.commentary or event.metadata.get("description") or "").strip())
+        stats_authoritative = event.stats_authoritative or _event_mapping(event, "stats") is not None
+        xg_authoritative = event.xg_authoritative or _event_mapping(event, "xg") is not None or _event_xg(event) is not None
+        momentum_authoritative = event.momentum_authoritative or _event_mapping(event, "momentum") is not None
+        overlay_authoritative = event.overlay_authoritative or event.overlay_readiness is not None
+        inspector_authoritative = event.inspector_authoritative or _event_mapping(event, "inspector_state") is not None
+        intelligence_authoritative = (
+            event.intelligence_authoritative or _event_mapping(event, "intelligence_state") is not None
+        )
+        if not score_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_score",
+                    field="score",
+                    severity="blocked",
+                    message="The backend event did not include an authoritative scoreline.",
+                ),
+            )
+        if not clock_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_clock",
+                    field="clock_label",
+                    severity="degraded",
+                    message="The backend event did not include an authoritative match clock label.",
+                ),
+            )
+        if not commentary_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_commentary",
+                    field="commentary",
+                    severity="degraded",
+                    message="The backend event did not include authored commentary.",
+                ),
+            )
+        if not stats_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_stats",
+                    field="stats",
+                    severity="degraded",
+                    message="The backend event did not include authoritative live stats.",
+                ),
+            )
+        if not xg_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_xg",
+                    field="xg",
+                    severity="degraded",
+                    message="The backend event did not include authoritative xG.",
+                ),
+            )
+        if not momentum_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_momentum",
+                    field="momentum",
+                    severity="degraded",
+                    message="The backend event did not include authoritative momentum.",
+                ),
+            )
+        if not overlay_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_overlay_readiness",
+                    field="overlay_readiness",
+                    severity="degraded",
+                    message="The backend event did not include overlay readiness.",
+                ),
+            )
+        if not inspector_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_inspector_state",
+                    field="inspector_state",
+                    severity="degraded",
+                    message="The backend event did not include inspector state.",
+                ),
+            )
+        if not intelligence_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_intelligence_state",
+                    field="intelligence_state",
+                    severity="degraded",
+                    message="The backend event did not include intelligence state.",
+                ),
+            )
+        data_status = _contract_status(missing_data)
         experience = event.experience
         if stadium_profile is not None and experience is not None and experience.crowd is not None:
             crowd = experience.crowd.model_copy(
@@ -618,6 +929,20 @@ class LiveMatchHub:
                 "importance_score": importance_score,
                 "audio_stem_channels": audio_stem_channels,
                 "experience": experience,
+                "score_authoritative": score_authoritative,
+                "clock_authoritative": clock_authoritative,
+                "minute_authoritative": minute_authoritative,
+                "commentary_authoritative": commentary_authoritative,
+                "stats_authoritative": stats_authoritative,
+                "xg_authoritative": xg_authoritative,
+                "momentum_authoritative": momentum_authoritative,
+                "overlay_authoritative": overlay_authoritative,
+                "inspector_authoritative": inspector_authoritative,
+                "intelligence_authoritative": intelligence_authoritative,
+                "data_status": data_status,
+                "missing_data": missing_data,
+                "degraded": _issues_degraded(missing_data),
+                "blocked": _issues_blocked(missing_data),
             }
         )
 
@@ -635,6 +960,27 @@ class LiveMatchHub:
             home_possession=home_possession,
             dramatic_event=False,
         )
+        missing_data = [
+            _data_issue(
+                "waiting_for_authoritative_events",
+                field="timeline_events",
+                severity="syncing",
+                message="The live event feed has not delivered authoritative match events yet.",
+            ),
+            _data_issue(
+                "missing_authoritative_score",
+                field="score",
+                severity="blocked",
+                message="The backend has not delivered an authoritative scoreline yet.",
+            ),
+            _data_issue(
+                "missing_authoritative_clock",
+                field="clock_label",
+                severity="degraded",
+                message="The backend has not delivered an authoritative match clock yet.",
+            ),
+        ]
+        data_status = _contract_status(missing_data)
         return LiveMatchSnapshotView(
             score=LiveMatchScoreView(home=0, away=0),
             possession_estimate=LiveMatchPossessionEstimateView(
@@ -642,6 +988,8 @@ class LiveMatchHub:
                 away=away_possession,
             ),
             current_minute=0,
+            clock_label=None,
+            phase="syncing",
             momentum_indicator="balanced",
             win_probability=win_probability,
             market_pulse=_build_market_pulse(
@@ -652,6 +1000,41 @@ class LiveMatchHub:
             dramatic_event=False,
             status="live",
             read_only=read_only,
+            score_authoritative=False,
+            clock_authoritative=False,
+            minute_authoritative=False,
+            phase_authoritative=False,
+            events_authoritative=False,
+            timeline_event_count=0,
+            commentary_event_count=0,
+            stats={"source": "backend_live_match_hub", "available": False},
+            xg={"source": "backend_live_match_hub", "available": False, "home": None, "away": None},
+            momentum={"indicator": "balanced", "source": "backend_live_match_hub", "available": False},
+            overlay_readiness=_overlay_readiness(
+                status=data_status,
+                score_authoritative=False,
+                clock_authoritative=False,
+                timeline_event_count=0,
+                commentary_event_count=0,
+                stats_available=False,
+                pitch_2d_ready=False,
+                issues=missing_data,
+            ),
+            inspector_state={
+                "status": "syncing",
+                "source": "backend_live_match_hub",
+                "event_count": 0,
+            },
+            intelligence_state={
+                "status": "syncing",
+                "source": "backend_live_match_hub",
+                "xg_available": False,
+                "momentum_available": False,
+            },
+            data_status=data_status,
+            missing_data=missing_data,
+            degraded=_issues_degraded(missing_data),
+            blocked=_issues_blocked(missing_data),
         )
 
     def _start_runtime(self, runtime: _LiveMatchRuntime) -> None:
@@ -720,13 +1103,17 @@ class LiveMatchHub:
             team_side = render_team_side
         position = self._render_point(render.get("origin"))
         target_position = self._render_point(render.get("target"), fallback=position)
-        generated_commentary = self.commentary_engine.generate(
-            match_id=match_id,
-            event=raw_event,
-            home_team_id=home_team_id,
-            away_team_id=away_team_id,
-            home_team_name=home_team_name,
-            away_team_name=away_team_name,
+        del home_team_name, away_team_name
+        commentary_metadata = _dict_value(raw_event.metadata.get("commentary"))
+        commentary_line = _text_value(raw_event.commentary) or _text_value(commentary_metadata.get("line"))
+        commentary_tier = _text_value(raw_event.metadata.get("commentary_tier")) or _text_value(
+            commentary_metadata.get("tier")
+        )
+        commentary_provider = _text_value(raw_event.metadata.get("commentary_provider")) or _text_value(
+            commentary_metadata.get("provider")
+        )
+        commentary_context = _dict_value(raw_event.metadata.get("commentary_context")) or _dict_value(
+            commentary_metadata.get("context")
         )
 
         metadata = {
@@ -737,13 +1124,13 @@ class LiveMatchHub:
                 raw_event.secondary_player.player_name if raw_event.secondary_player is not None else None
             ),
             "raw_event_type": raw_event.event_type.value,
-            "description": generated_commentary.line,
+            "description": commentary_line,
             "home_score": raw_event.home_score,
             "away_score": raw_event.away_score,
             "team_side": team_side,
-            "commentary_tier": generated_commentary.tier,
-            "commentary_provider": generated_commentary.provider,
-            "commentary_context": generated_commentary.context,
+            "commentary_tier": commentary_tier,
+            "commentary_provider": commentary_provider,
+            "commentary_context": commentary_context,
             "source_event_id": raw_event.event_id,
             "sequence_id": raw_event.sequence,
         }
@@ -762,8 +1149,8 @@ class LiveMatchHub:
             "review_decision": raw_event.metadata.get("review_decision"),
             "clock_label": raw_event.clock_label,
             "presentation_second": raw_event.presentation_second,
-            "commentary_tier": generated_commentary.tier,
-            "commentary_provider": generated_commentary.provider,
+            "commentary_tier": commentary_tier,
+            "commentary_provider": commentary_provider,
             "source_event_id": raw_event.event_id,
             "sequence_id": raw_event.sequence,
         }
@@ -795,7 +1182,7 @@ class LiveMatchHub:
                 raw_event=raw_event, team_side=team_side, home_team_id=home_team_id, away_team_id=away_team_id
             ),
             secondary_player=raw_event.secondary_player.player_name if raw_event.secondary_player is not None else None,
-            commentary=generated_commentary.line,
+            commentary=commentary_line,
             home_score=raw_event.home_score,
             away_score=raw_event.away_score,
             clock_label=raw_event.clock_label,
@@ -806,7 +1193,9 @@ class LiveMatchHub:
                 or mapped_type == "goal"
                 or raw_event.event_type is MatchEventType.RED_CARD
             ),
-            audio_stem_channels=["commentary", "crowd", "stadium_fx"],
+            audio_stem_channels=(
+                ["commentary", "crowd", "stadium_fx"] if commentary_line is not None else ["crowd", "stadium_fx"]
+            ),
             position=position,
             target_position=target_position,
             meta=meta,
@@ -821,7 +1210,8 @@ class LiveMatchHub:
                 team_side=team_side,
                 max_latency_ms=max_latency_ms,
                 checkpoint_interval_seconds=checkpoint_interval_seconds,
-                generated_commentary=generated_commentary,
+                commentary_line=commentary_line,
+                commentary_metadata=commentary_metadata,
             ),
         )
 
@@ -861,16 +1251,68 @@ class LiveMatchHub:
         return raw_event.primary_player.player_id if raw_event.primary_player is not None else None
 
     def _build_snapshot(self, runtime: _LiveMatchRuntime) -> LiveMatchSnapshotView:
-        score = LiveMatchScoreView(home=0, away=0)
+        score_values = _latest_authoritative_score(runtime.published_events)
+        score_authoritative = score_values is not None
+        score = LiveMatchScoreView(
+            home=0 if score_values is None else score_values[0],
+            away=0 if score_values is None else score_values[1],
+        )
         current_minute = 0
+        clock_label = None
+        phase = "unknown"
+        phase_authoritative = False
         recent_events = runtime.published_events[-3:]
+        missing_data: list[LiveMatchDataIssueView] = []
         if runtime.published_events:
             latest = runtime.published_events[-1]
-            score = LiveMatchScoreView(
-                home=int(latest.metadata.get("home_score", 0) or 0),
-                away=int(latest.metadata.get("away_score", 0) or 0),
-            )
             current_minute = latest.minute
+            clock_label = _event_clock_label(latest)
+            phase_candidate = _event_phase(latest)
+            if phase_candidate:
+                phase = phase_candidate
+                phase_authoritative = True
+            else:
+                phase = "live" if runtime.live else "completed"
+                _append_issue_once(
+                    missing_data,
+                    _data_issue(
+                        "missing_authoritative_phase",
+                        field="phase",
+                        severity="degraded",
+                        message="The backend event feed did not include an authoritative match phase.",
+                    ),
+                )
+        else:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "waiting_for_authoritative_events",
+                    field="timeline_events",
+                    severity="syncing",
+                    message="The live event feed has not delivered authoritative match events yet.",
+                ),
+            )
+        if not score_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_score",
+                    field="score",
+                    severity="blocked",
+                    message="The live event feed has not delivered an authoritative scoreline.",
+                ),
+            )
+        clock_authoritative = clock_label is not None
+        if not clock_authoritative:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_clock",
+                    field="clock_label",
+                    severity="degraded",
+                    message="The live event feed has not delivered an authoritative match clock label.",
+                ),
+            )
 
         home_possession = runtime.base_home_possession
         for event in recent_events:
@@ -907,6 +1349,131 @@ class LiveMatchHub:
                 momentum = "home"
             elif away_weight > home_weight:
                 momentum = "away"
+        stats, xg = _build_live_stats(runtime.published_events)
+        authored_stats = _latest_authored_mapping(
+            runtime.published_events,
+            "stats",
+            "stats_authoritative",
+        )
+        if authored_stats is not None:
+            stats = _snapshot_payload(authored_stats, source="backend_authored_event", available=True)
+        authored_xg = _latest_authored_mapping(runtime.published_events, "xg", "xg_authoritative")
+        if authored_xg is not None:
+            xg = _snapshot_payload(authored_xg, source="backend_authored_event", available=True)
+        authored_momentum = _latest_authored_mapping(
+            runtime.published_events,
+            "momentum",
+            "momentum_authoritative",
+        )
+        momentum_payload = {
+            "indicator": momentum,
+            "source": "backend_live_match_hub_derived",
+            "available": False,
+            "derived_available": bool(runtime.published_events),
+            "recent_event_count": len(recent_events),
+        }
+        if authored_momentum is not None:
+            momentum_payload = _snapshot_payload(authored_momentum, source="backend_authored_event", available=True)
+            momentum_candidate = str(
+                momentum_payload.get("indicator")
+                or momentum_payload.get("side")
+                or momentum_payload.get("leader")
+                or ""
+            ).strip()
+            if momentum_candidate:
+                momentum = momentum_candidate
+                momentum_payload["indicator"] = momentum
+        authored_overlay = None
+        for event in reversed(runtime.published_events):
+            if event.overlay_readiness is not None:
+                authored_overlay = event.overlay_readiness
+                break
+        authored_inspector = _latest_authored_mapping(
+            runtime.published_events,
+            "inspector_state",
+            "inspector_authoritative",
+        )
+        authored_intelligence = _latest_authored_mapping(
+            runtime.published_events,
+            "intelligence_state",
+            "intelligence_authoritative",
+        )
+        commentary_event_count = sum(
+            1
+            for event in runtime.published_events
+            if bool(str(event.commentary or event.metadata.get("description") or "").strip())
+        )
+        if runtime.published_events and not bool(stats.get("available")):
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_stats",
+                    field="stats",
+                    severity="degraded",
+                    message="The live event feed has not delivered authoritative stats.",
+                ),
+            )
+        if runtime.published_events and not bool(xg.get("available")):
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_xg",
+                    field="xg",
+                    severity="degraded",
+                    message="The live event feed has not delivered authoritative xG values.",
+                ),
+            )
+        if runtime.published_events and not bool(momentum_payload.get("available")):
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_momentum",
+                    field="momentum",
+                    severity="degraded",
+                    message="The live event feed has not delivered authoritative momentum.",
+                ),
+            )
+        if runtime.published_events and authored_overlay is None:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_overlay_readiness",
+                    field="overlay_readiness",
+                    severity="degraded",
+                    message="The live event feed has not delivered overlay readiness.",
+                ),
+            )
+        if runtime.published_events and authored_inspector is None:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_inspector_state",
+                    field="inspector_state",
+                    severity="degraded",
+                    message="The live event feed has not delivered inspector state.",
+                ),
+            )
+        if runtime.published_events and authored_intelligence is None:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_intelligence_state",
+                    field="intelligence_state",
+                    severity="degraded",
+                    message="The live event feed has not delivered intelligence state.",
+                ),
+            )
+        if runtime.published_events and commentary_event_count == 0:
+            _append_issue_once(
+                missing_data,
+                _data_issue(
+                    "missing_authoritative_commentary",
+                    field="commentary",
+                    severity="degraded",
+                    message="The live event feed has not delivered authored commentary events.",
+                ),
+            )
+        data_status = _contract_status(missing_data)
         win_probability = _build_win_probability(
             minute=current_minute,
             home_score=score.home,
@@ -919,6 +1486,8 @@ class LiveMatchHub:
             score=score,
             possession_estimate=LiveMatchPossessionEstimateView(home=home_possession, away=away_possession),
             current_minute=current_minute,
+            clock_label=clock_label,
+            phase=phase,
             momentum_indicator=momentum,
             win_probability=win_probability,
             market_pulse=_build_market_pulse(
@@ -929,6 +1498,60 @@ class LiveMatchHub:
             dramatic_event=dramatic_event,
             status="live" if runtime.live else "completed",
             read_only=runtime.read_only,
+            score_authoritative=score_authoritative,
+            clock_authoritative=clock_authoritative,
+            minute_authoritative=bool(runtime.published_events),
+            phase_authoritative=phase_authoritative,
+            events_authoritative=bool(runtime.published_events),
+            timeline_event_count=len(runtime.published_events),
+            commentary_event_count=commentary_event_count,
+            stats=stats,
+            xg=xg,
+            momentum=momentum_payload,
+            overlay_readiness=(
+                authored_overlay.model_copy(
+                    update={
+                        "status": authored_overlay.status or data_status,
+                        "blockers": list(authored_overlay.blockers)
+                        or [issue.code for issue in missing_data if issue.severity == "blocked"],
+                    }
+                )
+                if authored_overlay is not None
+                else _overlay_readiness(
+                    status=data_status,
+                    score_authoritative=score_authoritative,
+                    clock_authoritative=clock_authoritative,
+                    timeline_event_count=len(runtime.published_events),
+                    commentary_event_count=commentary_event_count,
+                    stats_available=bool(stats.get("available")),
+                    pitch_2d_ready=runtime.viewer_state is not None,
+                    issues=missing_data,
+                )
+            ),
+            inspector_state=(
+                authored_inspector
+                if authored_inspector is not None
+                else {
+                    "status": "degraded" if runtime.published_events else "syncing",
+                    "source": "backend_live_match_hub",
+                    "event_count": len(runtime.published_events),
+                    "latest_event_id": runtime.published_events[-1].event_id if runtime.published_events else None,
+                }
+            ),
+            intelligence_state=(
+                authored_intelligence
+                if authored_intelligence is not None
+                else {
+                    "status": "ready" if bool(xg.get("available")) else "degraded",
+                    "source": "backend_live_match_hub",
+                    "xg_available": bool(xg.get("available")),
+                    "momentum_available": bool(momentum_payload.get("available")),
+                }
+            ),
+            data_status=data_status,
+            missing_data=missing_data,
+            degraded=_issues_degraded(missing_data),
+            blocked=_issues_blocked(missing_data),
         )
 
     def _require_live_match(self, match_id: str) -> _LiveMatchRuntime:
@@ -973,6 +1596,10 @@ class LiveMatchHub:
             snapshot=runtime.last_snapshot,
             crowd_state=crowd_state,
             spectator_sync=_runtime_spectator_sync(runtime),
+            data_status=runtime.last_snapshot.data_status,
+            missing_data=list(runtime.last_snapshot.missing_data),
+            degraded=runtime.last_snapshot.degraded,
+            blocked=runtime.last_snapshot.blocked,
         )
 
     def _cache_snapshot(self, runtime: _LiveMatchRuntime) -> None:
@@ -1021,6 +1648,28 @@ class LiveMatchHub:
                 "commentary": commentary,
                 "description": commentary,
                 "metadata": event.metadata,
+                "stats": event.stats,
+                "xg": event.xg,
+                "momentum": event.momentum,
+                "overlay_readiness": (
+                    event.overlay_readiness.model_dump(mode="json") if event.overlay_readiness is not None else None
+                ),
+                "inspector_state": event.inspector_state,
+                "intelligence_state": event.intelligence_state,
+                "score_authoritative": event.score_authoritative,
+                "clock_authoritative": event.clock_authoritative,
+                "minute_authoritative": event.minute_authoritative,
+                "commentary_authoritative": event.commentary_authoritative,
+                "stats_authoritative": event.stats_authoritative,
+                "xg_authoritative": event.xg_authoritative,
+                "momentum_authoritative": event.momentum_authoritative,
+                "overlay_authoritative": event.overlay_authoritative,
+                "inspector_authoritative": event.inspector_authoritative,
+                "intelligence_authoritative": event.intelligence_authoritative,
+                "data_status": event.data_status,
+                "missing_data": [issue.model_dump(mode="json") for issue in event.missing_data],
+                "degraded": event.degraded,
+                "blocked": event.blocked,
             }
             self.event_publisher.publish(
                 DomainEvent(
@@ -1139,7 +1788,8 @@ def _live_experience_layer(
     team_side: str | None,
     max_latency_ms: int,
     checkpoint_interval_seconds: int,
-    generated_commentary: GeneratedCommentary | None,
+    commentary_line: str | None,
+    commentary_metadata: dict[str, object],
 ) -> MatchExperienceLayerView:
     pressure = _pressure_value(raw_event.metadata.get("pressure_level"))
     speed = _clamp_float(float(meta.get("ball_speed", 0.0) or 0.0) / 36.0, 0.0, 1.0)
@@ -1183,34 +1833,47 @@ def _live_experience_layer(
         scoring_side=team_side,
     )
 
-    commentary_line = generated_commentary.line if generated_commentary is not None else raw_event.commentary
-    commentary_tone = (
-        generated_commentary.tone if generated_commentary is not None else "hype" if top_moment else "tactical"
-    )
-    commentary_commentator = (
-        generated_commentary.commentator if generated_commentary is not None else "lead" if top_moment else "analyst"
-    )
-    commentary_intensity = (
-        generated_commentary.intensity
-        if generated_commentary is not None
-        else round(
-            _clamp_float(((int(meta.get("importance", 1) or 1) - 1) / 4.0) + (0.25 if top_moment else 0.0), 0.18, 1.0),
-            3,
+    commentary_cue = None
+    if commentary_line is not None:
+        commentary_tone = _text_value(commentary_metadata.get("tone")) or "tactical"
+        commentary_commentator = _text_value(commentary_metadata.get("commentator")) or "lead"
+        commentary_intensity = _clamp_float(
+            _float_value(commentary_metadata.get("intensity"), default=0.0),
+            0.0,
+            1.0,
         )
-    )
-    commentary_audio_channel = (
-        generated_commentary.audio_channel
-        if generated_commentary is not None
-        else "headline" if top_moment else "match_bed"
-    )
-    speaker_role = "lead" if commentary_commentator in {"lead", "main", "play_by_play"} else "analyst"
-    voice_profile = "play_by_play" if speaker_role == "lead" else "analyst"
-    speech_rate = round(_clamp_float(0.92 + (commentary_intensity * 0.38), 0.85, 1.3), 3)
-    interrupt_priority = (
-        95
-        if raw_event_type in {"goal", "penalty_goal", "penalty_scored"}
-        else 82 if raw_event_type in {"red_card", "card"} else 68 if top_moment else 36
-    )
+        commentary_audio_channel = _text_value(commentary_metadata.get("audio_channel")) or "main"
+        speaker_role = _text_value(commentary_metadata.get("speaker_role")) or (
+            "lead" if commentary_commentator in {"lead", "main", "play_by_play"} else "analyst"
+        )
+        voice_profile = _text_value(commentary_metadata.get("voice_profile"))
+        speech_rate = _clamp_float(_float_value(commentary_metadata.get("speech_rate"), default=1.0), 0.5, 2.0)
+        interrupt_priority = int(
+            _clamp_float(_float_value(commentary_metadata.get("interrupt_priority"), default=0.0), 0.0, 100.0)
+        )
+        stem_routing = _string_list_value(commentary_metadata.get("stem_routing")) or ["commentary"]
+        commentary_cue = MatchCommentaryCueView(
+            line=commentary_line,
+            tone=commentary_tone,
+            commentator=commentary_commentator,
+            speaker_role=speaker_role,
+            language=_text_value(commentary_metadata.get("language")) or "en",
+            intensity=commentary_intensity,
+            tts_ready=True,
+            banter_layer=bool(commentary_metadata.get("banter_layer", False)),
+            audio_channel=commentary_audio_channel,
+            voice_profile=voice_profile,
+            voice_id=_text_value(commentary_metadata.get("voice_id")),
+            accent=_text_value(commentary_metadata.get("accent")),
+            energy_level=_clamp_float(
+                _float_value(commentary_metadata.get("energy_level"), default=commentary_intensity),
+                0.0,
+                1.0,
+            ),
+            speech_rate=speech_rate,
+            interrupt_priority=interrupt_priority,
+            stem_routing=stem_routing,
+        )
 
     return MatchExperienceLayerView(
         motion=MatchMotionPredictionView(
@@ -1228,24 +1891,7 @@ def _live_experience_layer(
             fatigue_load=round(_float_value(raw_event.metadata.get("fatigue_pressure"), default=0.0), 3),
             role_encoding="featured_actor" if raw_event.primary_player is not None else None,
         ),
-        commentary=MatchCommentaryCueView(
-            line=commentary_line,
-            tone=commentary_tone,
-            commentator=commentary_commentator,
-            speaker_role=speaker_role,
-            language="en",
-            intensity=commentary_intensity,
-            tts_ready=bool(str(commentary_line).strip()),
-            banter_layer=raw_event.secondary_player is not None and top_moment,
-            audio_channel=commentary_audio_channel,
-            voice_profile=voice_profile,
-            voice_id=f"gtex-{voice_profile}",
-            accent=stadium_profile.region_personality,
-            energy_level=commentary_intensity,
-            speech_rate=speech_rate,
-            interrupt_priority=interrupt_priority,
-            stem_routing=["commentary"] if not top_moment else ["commentary", "stadium_fx"],
-        ),
+        commentary=commentary_cue,
         crowd=MatchCrowdStateView(
             profile=profile,
             home_intensity=float(crowd_state["home_intensity"]),
@@ -1305,6 +1951,25 @@ def _runtime_spectator_sync(runtime: _LiveMatchRuntime) -> MatchSpectatorSyncVie
         pause_replay_enabled=runtime.pause_replay_enabled,
         reactions_enabled=runtime.reactions_enabled,
     )
+
+
+def _text_value(value: object | None) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _dict_value(value: object | None) -> dict[str, object]:
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
+def _string_list_value(value: object | None) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [text for item in value if (text := _text_value(item)) is not None]
 
 
 def _clamp_float(value: float, minimum: float, maximum: float) -> float:

@@ -367,7 +367,11 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
     return placedBid;
   }
 
-  Future<double?> submitBid(String playerId, double amountInMillions) async {
+  Future<double?> submitBid(
+    String playerId,
+    double amountInMillions, {
+    required String securityPin,
+  }) async {
     if (!_usesLiveListings || !_shouldEnableLiveSync()) {
       return placeBid(playerId, amountInMillions);
     }
@@ -379,6 +383,13 @@ class TransferMarketNotifier extends Notifier<TransferMarketState> {
       math.max(amountInMillions, minimumBidFor(playerId)),
     );
     try {
+      await _api().post(
+        '/api/v2/auth/pin/verify',
+        body: <String, Object?>{
+          'pin': securityPin,
+          'action_type': 'transfer_market.bid',
+        },
+      );
       final Object? payload = await _api().post(
         '/api/transfer-market/listings/${listing.id}/bids',
         body: <String, Object?>{'amount': placedBid},

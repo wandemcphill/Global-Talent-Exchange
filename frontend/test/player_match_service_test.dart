@@ -3,7 +3,7 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_exchange_models.dart';
 import 'package:gte_frontend/data/gte_mock_api.dart';
-import 'package:gte_frontend/data/player_match_service.dart';
+import 'package:gte_frontend/features/match_center/data/player_match_service.dart';
 import 'package:gte_frontend/domain/match/match_weight_presets.dart';
 
 void main() {
@@ -88,16 +88,15 @@ void main() {
   });
 
   test('filters parse from api-shaped json payload', () {
-    final GteScoutMatchFilters filters = GteScoutMatchFilters.fromJson(
-      <String, dynamic>{
-        'position': 'ST',
-        'min_age': 18,
-        'max_age': 27,
-        'country': 'Nigeria',
-        'preferred_foot': 'Right',
-        'min_height': 1.75,
-      },
-    );
+    final GteScoutMatchFilters filters =
+        GteScoutMatchFilters.fromJson(<String, dynamic>{
+          'position': 'ST',
+          'min_age': 18,
+          'max_age': 27,
+          'country': 'Nigeria',
+          'preferred_foot': 'Right',
+          'min_height': 1.75,
+        });
 
     expect(filters.position, 'ST');
     expect(filters.minAge, 18);
@@ -106,125 +105,130 @@ void main() {
     expect(filters.preferredFoot, 'Right');
     expect(filters.minHeightMeters, 1.75);
     expect(
-        filters.summaryLabels(),
-        containsAll(<String>[
-          'ST',
-          '18-27',
-          'Nigeria',
-          'Right foot',
-          '1.75m+',
-        ]));
+      filters.summaryLabels(),
+      containsAll(<String>['ST', '18-27', 'Nigeria', 'Right foot', '1.75m+']),
+    );
   });
 
-  test('custom weights can favor ready-now free agents over younger targets',
-      () async {
-    final GtePlayerMatchService service = GtePlayerMatchService(
-      latency: Duration.zero,
-    );
+  test(
+    'custom weights can favor ready-now free agents over younger targets',
+    () async {
+      final GtePlayerMatchService service = GtePlayerMatchService(
+        latency: Duration.zero,
+      );
 
-    final List<GteMarketPlayerListItem> players = <GteMarketPlayerListItem>[
-      const GteMarketPlayerListItem(
-        playerId: 'ready-now',
-        playerName: 'Ready Now',
-        position: 'ST',
-        nationality: 'Nigeria',
-        currentClubName: 'Free Agent',
-        age: 30,
-        currentValueCredits: 900,
-        movementPct: 0.04,
-        trendScore: 7.3,
-        marketInterestScore: 79,
-        averageRating: 7.1,
-      ),
-      const GteMarketPlayerListItem(
-        playerId: 'younger-fit',
-        playerName: 'Younger Fit',
-        position: 'ST',
-        nationality: 'Nigeria',
-        currentClubName: 'Abuja City',
-        age: 23,
-        currentValueCredits: 880,
-        movementPct: 0.03,
-        trendScore: 7.0,
-        marketInterestScore: 75,
-        averageRating: 7.2,
-      ),
-    ];
-
-    final List<GtePlayerMatchResult> defaultMatches = await service.getMatches(
-      players: players,
-      filters: const GteScoutMatchFilters.defaultBrief(),
-      limit: 2,
-    );
-    final List<GtePlayerMatchResult> readyNowMatches = await service.getMatches(
-      players: players,
-      filters: const GteScoutMatchFilters.defaultBrief(),
-      weights: MatchWeightPresets.readyNow(),
-      limit: 2,
-    );
-
-    expect(defaultMatches.first.player.playerId, 'younger-fit');
-    expect(readyNowMatches.first.player.playerId, 'ready-now');
-  });
-
-  test('match service sends normalized weights in the backend payload',
-      () async {
-    final _RecordingMatchTransport transport = _RecordingMatchTransport();
-    final GteExchangeApiClient client = GteExchangeApiClient(
-      config: const GteRepositoryConfig(
-        baseUrl: 'https://example.test',
-        mode: GteBackendMode.live,
-      ),
-      transport: transport,
-      repository: GteMockApi(),
-    );
-    final GtePlayerMatchService service = GtePlayerMatchService(
-      api: client,
-      latency: Duration.zero,
-    );
-
-    final List<GtePlayerMatchResult> matches = await service.getMatches(
-      players: const <GteMarketPlayerListItem>[
-        GteMarketPlayerListItem(
-          playerId: 'local-fallback',
-          playerName: 'Local Fallback',
+      final List<GteMarketPlayerListItem> players = <GteMarketPlayerListItem>[
+        const GteMarketPlayerListItem(
+          playerId: 'ready-now',
+          playerName: 'Ready Now',
           position: 'ST',
           nationality: 'Nigeria',
           currentClubName: 'Free Agent',
-          age: 24,
+          age: 30,
           currentValueCredits: 900,
           movementPct: 0.04,
-          trendScore: 7.2,
-          marketInterestScore: 80,
-          averageRating: 7.0,
+          trendScore: 7.3,
+          marketInterestScore: 79,
+          averageRating: 7.1,
         ),
-      ],
-      filters: const GteScoutMatchFilters.defaultBrief(),
-      weights: MatchWeightPresets.readyNow(),
-      limit: 3,
-    );
+        const GteMarketPlayerListItem(
+          playerId: 'younger-fit',
+          playerName: 'Younger Fit',
+          position: 'ST',
+          nationality: 'Nigeria',
+          currentClubName: 'Abuja City',
+          age: 23,
+          currentValueCredits: 880,
+          movementPct: 0.03,
+          trendScore: 7.0,
+          marketInterestScore: 75,
+          averageRating: 7.2,
+        ),
+      ];
 
-    expect(transport.lastRequest, isNotNull);
-    expect(transport.lastRequest!.uri.path, '/api/v2/players/match');
+      final List<GtePlayerMatchResult> defaultMatches = await service
+          .getMatches(
+            players: players,
+            filters: const GteScoutMatchFilters.defaultBrief(),
+            limit: 2,
+          );
+      final List<GtePlayerMatchResult> readyNowMatches = await service
+          .getMatches(
+            players: players,
+            filters: const GteScoutMatchFilters.defaultBrief(),
+            weights: MatchWeightPresets.readyNow(),
+            limit: 2,
+          );
 
-    final Map<String, Object?> body =
-        Map<String, Object?>.from(transport.lastRequest!.body! as Map);
-    final Map<String, Object?> brief =
-        Map<String, Object?>.from(body['brief']! as Map);
-    final Map<String, Object?> pagination =
-        Map<String, Object?>.from(body['pagination']! as Map);
-    final Map<String, Object?> weights =
-        Map<String, Object?>.from(body['weights']! as Map);
+      expect(defaultMatches.first.player.playerId, 'younger-fit');
+      expect(readyNowMatches.first.player.playerId, 'ready-now');
+    },
+  );
 
-    expect(brief['positions'], <String>['ST']);
-    expect(
-      Map<String, Object?>.from(brief['age']! as Map),
-      <String, Object?>{'min': 18, 'max': 27},
-    );
-    expect(pagination['limit'], 3);
-    expect(weights['availability'], closeTo(0.2, 0.0001));
-    expect(matches.single.player.playerName, 'Remote Target');
-  });
+  test(
+    'match service sends normalized weights in the backend payload',
+    () async {
+      final _RecordingMatchTransport transport = _RecordingMatchTransport();
+      final GteExchangeApiClient client = GteExchangeApiClient(
+        config: const GteRepositoryConfig(
+          baseUrl: 'https://example.test',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        repository: GteMockApi(),
+      );
+      final GtePlayerMatchService service = GtePlayerMatchService(
+        api: client,
+        latency: Duration.zero,
+      );
+
+      final List<GtePlayerMatchResult> matches = await service.getMatches(
+        players: const <GteMarketPlayerListItem>[
+          GteMarketPlayerListItem(
+            playerId: 'local-fallback',
+            playerName: 'Local Fallback',
+            position: 'ST',
+            nationality: 'Nigeria',
+            currentClubName: 'Free Agent',
+            age: 24,
+            currentValueCredits: 900,
+            movementPct: 0.04,
+            trendScore: 7.2,
+            marketInterestScore: 80,
+            averageRating: 7.0,
+          ),
+        ],
+        filters: const GteScoutMatchFilters.defaultBrief(),
+        weights: MatchWeightPresets.readyNow(),
+        limit: 3,
+      );
+
+      expect(transport.lastRequest, isNotNull);
+      expect(transport.lastRequest!.uri.path, '/api/v2/players/match');
+
+      final Map<String, Object?> body = Map<String, Object?>.from(
+        transport.lastRequest!.body! as Map,
+      );
+      final Map<String, Object?> brief = Map<String, Object?>.from(
+        body['brief']! as Map,
+      );
+      final Map<String, Object?> pagination = Map<String, Object?>.from(
+        body['pagination']! as Map,
+      );
+      final Map<String, Object?> weights = Map<String, Object?>.from(
+        body['weights']! as Map,
+      );
+
+      expect(brief['positions'], <String>['ST']);
+      expect(Map<String, Object?>.from(brief['age']! as Map), <String, Object?>{
+        'min': 18,
+        'max': 27,
+      });
+      expect(pagination['limit'], 3);
+      expect(weights['availability'], closeTo(0.2, 0.0001));
+      expect(matches.single.player.playerName, 'Remote Target');
+    },
+  );
 }
 
 class _RecordingMatchTransport implements GteTransport {
@@ -313,4 +317,3 @@ class _RecordingMatchTransport implements GteTransport {
     );
   }
 }
-

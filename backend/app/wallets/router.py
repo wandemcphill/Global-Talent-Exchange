@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.admin_finance.service import AdminFinanceService
-from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
+from app.auth.dependencies import (
+    get_current_admin,
+    get_current_user,
+    get_current_wallet_user,
+    get_session,
+    require_sensitive_action_pin,
+)
 from app.admin_godmode.service import AdminGodModeService, DEFAULT_PAYMENT_RAILS
 from app.economy.governor_service import EconomyGovernorService
 from app.models.user import User
@@ -63,7 +69,7 @@ from app.wallets.funding_service import (
     WalletFundingService,
 )
 from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
-from app.wallets.service import LedgerError, WalletService
+from app.wallets.service import BALANCE_UNAVAILABLE_MESSAGE, LedgerError, WalletBalanceUnavailableError, WalletService
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
 from app.wallets.providers.registry import get_live_provider_adapter
 from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest
@@ -115,6 +121,26 @@ def _build_wallet_service(request: Request | None) -> WalletService:
     return WalletService()
 
 
+def _wallet_lock_reason_payloads(summary) -> list[dict[str, object]]:
+    payloads: list[dict[str, object]] = []
+    for reason in summary.lock_reasons:
+        if hasattr(reason, "to_dict"):
+            payloads.append(reason.to_dict())
+            continue
+        label = str(reason)
+        payloads.append(
+            {
+                "code": "wallet_hold",
+                "label": label,
+                "amount": Decimal("0.0000"),
+                "currency": summary.currency.value,
+                "source": "wallet",
+                "message": label,
+            }
+        )
+    return payloads
+
+
 def _build_treasury_service(request: Request | None) -> TreasuryService:
     if request is not None:
         return TreasuryService(
@@ -147,6 +173,26 @@ def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
     if value is None:
         return Decimal("0.0000")
     return Decimal(str(value)).quantize(Decimal("0.0001"))
+
+
+def _balance_unavailable_http_error(exc: WalletBalanceUnavailableError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=str(exc) or BALANCE_UNAVAILABLE_MESSAGE,
+    )
+
+
+def _require_financial_summary_available(summary):
+    for field_name in (
+        "available_balance",
+        "reserved_balance",
+        "total_balance",
+        "locked_balance",
+        "pending_withdrawal_balance",
+    ):
+        if getattr(summary, field_name, None) is None:
+            raise WalletBalanceUnavailableError(BALANCE_UNAVAILABLE_MESSAGE)
+    return summary
 
 
 def _require_payment_rails_permission(request: Request, actor: User) -> None:
@@ -531,6 +577,9 @@ def _require_gateway_deposit(
     user: User,
     provider_key: str | None = None,
 ) -> tuple[TreasurySettings, str, str]:
+    normalized_provider_key = provider_key.strip().lower() if provider_key is not None else None
+    if normalized_provider_key is not None and normalized_provider_key not in SUPPORTED_TOP_UP_PROVIDER_KEYS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown payment provider.")
     treasury = _build_treasury_service(request)
     settings = treasury.ensure_settings(session)
     policy = _build_withdrawal_policy_snapshot(request)
@@ -545,17 +594,16 @@ def _require_gateway_deposit(
         request=request,
         settings=settings,
         policy=policy,
-        provider_key=provider_key,
+        provider_key=normalized_provider_key,
     ):
-        if provider_key is not None:
-            label = provider_key.strip()
+        if normalized_provider_key is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"{label} deposits are disabled by the active treasury or payment-rail policy.",
+                detail="Requested KoraPay deposits are disabled by the active treasury or payment-rail policy.",
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Automatic gateway deposits are disabled. Admin has selected manual bank transfer as the active funding rail.",
+            detail="KoraPay deposits are disabled. Admin has selected manual bank transfer as the active funding rail.",
         )
     processor_mode = "automatic_gateway"
     payout_channel = "gateway"
@@ -692,10 +740,18 @@ def get_wallet_summary(
     request: Request = None,
 ) -> WalletSummaryView:
     service = _build_wallet_service(request)
-    summary = service.get_wallet_summary(session, current_user, currency=currency)
+    try:
+        summary = _require_financial_summary_available(
+            service.get_wallet_summary(session, current_user, currency=currency)
+        )
+    except WalletBalanceUnavailableError as exc:
+        raise _balance_unavailable_http_error(exc) from exc
     return WalletSummaryView(
         available_balance=summary.available_balance,
         reserved_balance=summary.reserved_balance,
+        locked_balance=summary.locked_balance,
+        pending_withdrawal_balance=summary.pending_withdrawal_balance,
+        lock_reasons=_wallet_lock_reason_payloads(summary),
         total_balance=summary.total_balance,
         currency=summary.currency,
     )
@@ -723,7 +779,7 @@ def quote_wallet_conversion(
 def create_wallet_conversion(
     payload: WalletConversionRequest,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_wallet_user),
+    current_user: User = Depends(require_sensitive_action_pin("wallet.withdrawal.create")),
     request: Request = None,
 ) -> WalletConversionView:
     governor = EconomyGovernorService(
@@ -765,7 +821,10 @@ def get_wallet_adaptive_overview(
 ) -> WalletAdaptiveOverviewView:
     service = _build_wallet_service(request)
     funding_service = _build_wallet_funding_service(request)
-    overview = service.get_adaptive_overview(session, current_user)
+    try:
+        overview = service.get_adaptive_overview(session, current_user)
+    except WalletBalanceUnavailableError as exc:
+        raise _balance_unavailable_http_error(exc) from exc
     policy = _build_withdrawal_policy_snapshot(request)
     treasury = _build_treasury_service(request)
     settings = treasury.ensure_settings(session)
@@ -787,8 +846,10 @@ def get_wallet_adaptive_overview(
     overview.update(policy)
     overview["country_code"] = compliance_policy.country_code
     gateway_deposits_enabled = _gateway_deposit_enabled(request=request, settings=settings, policy=policy)
+    manual_deposits_enabled = _manual_deposit_enabled(request=request, settings=settings, policy=policy)
     overview["payment_provider_status"] = funding_service.payment_provider_status(
         gateway_enabled=gateway_deposits_enabled and compliance_policy.deposits_enabled,
+        manual_enabled=manual_deposits_enabled and compliance_policy.deposits_enabled,
         enabled_providers=_enabled_gateway_deposit_providers(request),
     )
     insights = list(overview.get("insights") or [])
@@ -798,7 +859,7 @@ def get_wallet_adaptive_overview(
             "value": (
                 "Hybrid"
                 if deposit_mode == "hybrid"
-                else ("Bank transfer" if deposit_mode == "bank_transfer" else "Automatic gateway")
+                else ("Manual bank transfer" if deposit_mode == "bank_transfer" else "KoraPay checkout")
             ),
             "tone": "info",
         }
@@ -806,7 +867,7 @@ def get_wallet_adaptive_overview(
     insights.append(
         {
             "label": "Withdrawal rail",
-            "value": "Bank transfer" if payout_mode == "bank_transfer" else "Automatic gateway",
+            "value": "Manual bank transfer" if payout_mode == "bank_transfer" else "KoraPay checkout",
             "tone": "info",
         }
     )
@@ -866,7 +927,12 @@ def get_wallet_overview(
         if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
         else _selected_payout_mode(policy)
     )
-    summary = wallet_service.get_wallet_summary(session, current_user, currency=LedgerUnit.COIN)
+    try:
+        summary = _require_financial_summary_available(
+            wallet_service.get_wallet_summary(session, current_user, currency=LedgerUnit.COIN)
+        )
+    except WalletBalanceUnavailableError as exc:
+        raise _balance_unavailable_http_error(exc) from exc
     account = wallet_service.get_user_account(session, current_user, summary.currency)
     total_inflow = session.scalar(
         select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(
@@ -916,6 +982,10 @@ def get_wallet_overview(
     )
     return WalletOverviewView(
         available_balance=summary.available_balance,
+        reserved_balance=summary.reserved_balance,
+        locked_balance=summary.locked_balance,
+        pending_withdrawal_balance=summary.pending_withdrawal_balance,
+        lock_reasons=_wallet_lock_reason_payloads(summary),
         pending_deposits=Decimal(pending_deposits or 0),
         pending_withdrawals=Decimal(pending_withdrawals or 0),
         total_inflow=Decimal(total_inflow or 0),
@@ -930,6 +1000,8 @@ def get_wallet_overview(
         withdrawal_mode=withdrawal_mode,
         payment_provider_status=funding_service.payment_provider_status(
             gateway_enabled=_gateway_deposit_enabled(request=request, settings=settings, policy=policy)
+            and compliance_policy.deposits_enabled,
+            manual_enabled=_manual_deposit_enabled(request=request, settings=settings, policy=policy)
             and compliance_policy.deposits_enabled,
             enabled_providers=_enabled_gateway_deposit_providers(request),
         ),
@@ -1231,7 +1303,14 @@ def get_withdrawal_eligibility(
     request: Request = None,
 ) -> WithdrawalEligibilityView:
     service = _build_treasury_service(request)
-    eligibility = service.get_withdrawal_eligibility(session, current_user)
+    wallet_service = _build_wallet_service(request)
+    try:
+        summary = _require_financial_summary_available(
+            wallet_service.get_wallet_summary(session, current_user, currency=LedgerUnit.COIN)
+        )
+        eligibility = service.get_withdrawal_eligibility(session, current_user, summary=summary)
+    except WalletBalanceUnavailableError as exc:
+        raise _balance_unavailable_http_error(exc) from exc
     return WithdrawalEligibilityView(
         available_balance=eligibility.available_balance,
         withdrawable_now=eligibility.withdrawable_now,
@@ -1332,12 +1411,12 @@ def create_withdrawal_request(
     return _build_withdrawal_view(withdrawal, payout_request, wallet_service)
 
 
-@wallet_router.post("/providers/{provider_key}/webhook")
+@wallet_router.post("/providers/korapay/webhook")
 async def handle_provider_webhook(
-    provider_key: str,
     request: Request,
     session: Session = Depends(get_session),
 ) -> dict[str, object]:
+    provider_key = "korapay"
     try:
         adapter = get_live_provider_adapter(provider_key)
     except KeyError as exc:
@@ -1372,6 +1451,15 @@ async def handle_provider_webhook(
             else (str(order.status) if order else None)
         ),
     }
+
+
+@wallet_router.post("/providers/{provider_key}/webhook")
+async def reject_unknown_provider_webhook(provider_key: str) -> dict[str, object]:
+    try:
+        get_live_provider_adapter(provider_key)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown payment provider.")
 
 
 @admin_router.get("/purchase-orders", response_model=PurchaseOrderPageView)

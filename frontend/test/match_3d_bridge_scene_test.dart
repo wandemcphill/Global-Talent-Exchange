@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
-import 'package:gte_frontend/models/match_3d_scene_graph.dart';
-import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
-import 'package:gte_frontend/services/match_3d_bridge.dart';
-import 'package:gte_frontend/services/match_viewer_mapper.dart';
-import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
+import 'package:gte_frontend/features/3d/models/match_3d_scene_graph.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
+import 'package:gte_frontend/features/3d/services/match_3d_bridge.dart';
+import 'package:gte_frontend/features/3d/widgets/match_3d/gtex_3d_scene.dart';
+
+import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   test(
@@ -18,7 +18,8 @@ void main() {
       final CompetitionSummary competition = _buildCompetition(
         id: 'match-3d-bridge-scene-goal',
       );
-      final MatchViewState viewState = await _loadFallbackState(competition);
+      final MatchViewState viewState =
+          await _loadBackendAuthoredQuarantineState(competition);
       final MatchEvent goalEvent = viewState.events.firstWhere(
         (MatchEvent event) => event.type == MatchViewerEventType.goal,
       );
@@ -56,11 +57,13 @@ void main() {
     },
   );
 
-  test('bridge sync serializes scene graph and active event payload', () async {
+  test('bridge sync is a no-op while legacy runtime is quarantined', () async {
     final CompetitionSummary competition = _buildCompetition(
       id: 'match-3d-bridge-sync',
     );
-    final MatchViewState viewState = await _loadFallbackState(competition);
+    final MatchViewState viewState = await _loadBackendAuthoredQuarantineState(
+      competition,
+    );
     final MatchEvent activeEvent = viewState.events.first;
     final Match3dSceneGraph sceneGraph = Gtex3dScene.describeGraph(
       viewState: viewState,
@@ -72,22 +75,7 @@ void main() {
 
     await bridge.syncFrame(sceneGraph: sceneGraph, activeEvent: activeEvent);
 
-    expect(backend.sentEvents, hasLength(1));
-    final Map<String, dynamic> payload = backend.sentEvents.single;
-    expect(payload['type'], 'SCENE_SYNC');
-    expect(payload['matchEvent'], isA<Map<String, dynamic>>());
-    expect((payload['camera'] as Map<String, dynamic>)['mode'], isNotEmpty);
-    expect(payload['experience'], isA<Map<String, dynamic>>());
-    expect(payload['homeShape'], isA<Map<String, dynamic>>());
-    expect(payload['awayShape'], isA<Map<String, dynamic>>());
-    expect(payload['activeEventContext'], isA<Map<String, dynamic>>());
-    expect(
-      ((payload['experience'] as Map<String, dynamic>)['motionPredictions']
-              as List<dynamic>)
-          .length,
-      22,
-    );
-    expect((payload['entities'] as List<dynamic>).length, greaterThan(25));
+    expect(backend.sentEvents, isEmpty);
 
     await backend.dispose();
   });
@@ -125,16 +113,10 @@ CompetitionSummary _buildCompetition({required String id}) {
   );
 }
 
-Future<MatchViewState> _loadFallbackState(CompetitionSummary competition) {
-  final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
-    competition,
-  );
-  return MatchViewerMapper.load(
-    competition: competition,
-    matchKey: competition.id,
-    fallbackSnapshot: snapshot,
-    preferFallback: true,
-  );
+Future<MatchViewState> _loadBackendAuthoredQuarantineState(
+  CompetitionSummary competition,
+) async {
+  return buildBackendAuthored3dQuarantineViewState();
 }
 
 class _FakeMatch3dBridgeBackend implements Match3dBridgeBackend {

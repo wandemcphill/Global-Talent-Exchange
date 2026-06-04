@@ -77,4 +77,3 @@ Map<String, Object?> _storyJson(String id) => <String, Object?>{
   'created_at': '2026-03-12T08:00:00Z',
   'metadata_json': const <String, Object?>{},
 };
-

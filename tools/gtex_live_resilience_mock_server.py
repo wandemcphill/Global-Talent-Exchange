@@ -280,7 +280,7 @@ async def get_live_match(match_id: str, authorization: str | None = Header(defau
     return JSONResponse(payload)
 
 
-@app.post("/match/{match_id}/unity-access/refresh")
+@app.post("/match/{match_id}/match-center/refresh")
 async def refresh_live_access(match_id: str, authorization: str | None = Header(default=None)) -> JSONResponse:
     if match_id not in {RESILIENCE_MATCH_ID, TERMINAL_MATCH_ID}:
         raise HTTPException(status_code=404, detail="not_found")
@@ -300,13 +300,13 @@ async def refresh_live_access(match_id: str, authorization: str | None = Header(
             "expires_in": 300,
             "refresh_expires_in": 3600,
             "live_path": f"/match/{match_id}/live",
-            "websocket_path": f"/api/v1/ws/match/{match_id}?format=unity",
-            "refresh_path": f"/match/{match_id}/unity-access/refresh",
+            "websocket_path": f"/api/matches/{match_id}/stream",
+            "refresh_path": f"/match/{match_id}/match-center/refresh",
         }
     )
 
 
-@app.websocket("/api/v1/ws/match/{match_id}")
+@app.websocket("/api/matches/{match_id}/stream")
 async def websocket_match_stream(websocket: WebSocket, match_id: str) -> None:
     if match_id not in {RESILIENCE_MATCH_ID, TERMINAL_MATCH_ID}:
         await websocket.close(code=4404, reason="not_found")
@@ -327,10 +327,9 @@ async def websocket_match_stream(websocket: WebSocket, match_id: str) -> None:
     STATE.websocket_connections += 1
     connection_number = STATE.websocket_connections
     LOGGER.info(
-        "resilience websocket connect #%s token=%s format=%s",
+        "resilience websocket connect #%s token=%s",
         connection_number,
         STATE.current_access_token,
-        websocket.query_params.get("format"),
     )
 
     try:

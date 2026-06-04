@@ -12,18 +12,16 @@ import websockets
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
-DEFAULT_UNITY_CONFIG = PROJECT_ROOT / "Gtex_Test_Migration" / "Assets" / "Resources" / "GTEX" / "match-config.json"
-DEFAULT_BOOTSTRAP_PATH = PROJECT_ROOT / "Gtex_Test_Migration" / "tmp" / "gtex-live-bootstrap.json"
-DEFAULT_WINDOWS_BUILD_ROOT = PROJECT_ROOT / "Gtex_Test_Migration" / "Builds"
-DEFAULT_WINDOWS_PLAYER_NAME = "GTEXMatch.exe"
-DEFAULT_USER_EMAIL = "unity-live@gtex.local"
-DEFAULT_USER_PASSWORD = "UnityLivePass123!"  # pragma: allowlist secret
-DEFAULT_USER_FULL_NAME = "GTEX Unity Live"
+DEFAULT_RUNTIME_CONFIG = PROJECT_ROOT / "tmp" / "gtex-match-center-config.json"
+DEFAULT_BOOTSTRAP_PATH = PROJECT_ROOT / "tmp" / "gtex-match-center-bootstrap.json"
+DEFAULT_USER_EMAIL = "match-center@gtex.local"
+DEFAULT_USER_PASSWORD = "MatchCenterPass123!"  # pragma: allowlist secret
+DEFAULT_USER_FULL_NAME = "GTEX Match Center"
 DEFAULT_USER_PHONE = "08000000000"
 DEFAULT_USER_REGION = "NG"
-DEFAULT_USER_USERNAME = "unitylive"
-AUTH_LOGIN_PATHS: Final[tuple[str, ...]] = ("/api/auth/login", "/auth/login", "/api/v1/auth/login")
-AUTH_REGISTER_PATHS: Final[tuple[str, ...]] = ("/api/auth/register", "/auth/register", "/api/v1/auth/register")
+DEFAULT_USER_USERNAME = "matchcenter"
+AUTH_LOGIN_PATHS: Final[tuple[str, ...]] = ("/api/auth/login", "/auth/login", "/api/v2/auth/login")
+AUTH_REGISTER_PATHS: Final[tuple[str, ...]] = ("/api/auth/register", "/auth/register", "/api/v2/auth/register")
 LOCAL_PROFILE: Final[str] = "local"
 STAGING_PROFILE: Final[str] = "staging"
 PRODUCTION_PROFILE: Final[str] = "production"
@@ -31,7 +29,7 @@ PROFILE_CHOICES: Final[tuple[str, str, str]] = (LOCAL_PROFILE, STAGING_PROFILE, 
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Provision a real backend-driven GTEX live match for Unity.")
+    parser = argparse.ArgumentParser(description="Verify a real backend-driven GTEX live match center session.")
     parser.add_argument(
         "--profile",
         choices=PROFILE_CHOICES,
@@ -40,30 +38,30 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--base-url", default="", help="Backend base URL.")
     parser.add_argument(
-        "--unity-config",
-        default=str(DEFAULT_UNITY_CONFIG),
-        help="Path to Unity match-config.json.",
+        "--runtime-config",
+        default=str(DEFAULT_RUNTIME_CONFIG),
+        help="Path to an optional match center verification config JSON.",
     )
     parser.add_argument(
         "--bootstrap-path",
         default=str(DEFAULT_BOOTSTRAP_PATH),
-        help="Path to the runtime bootstrap file read by Unity at startup.",
+        help="Path to the match center verification bootstrap JSON.",
     )
     parser.add_argument(
         "--bootstrap-ttl-seconds",
         type=int,
         default=900,
-        help="How long the runtime bootstrap file remains valid before Unity ignores it.",
+        help="How long the verification bootstrap file remains valid.",
     )
     parser.add_argument(
         "--keep-bootstrap-file",
         action="store_true",
-        help="Keep the bootstrap file after Unity loads it. Local uses this by default; non-local deletes it after a successful load unless this is set.",
+        help="Keep the bootstrap file after verification. Local uses this by default.",
     )
     parser.add_argument(
         "--match-id",
         default="",
-        help="Explicit match id to provision for Unity live playback.",
+        help="Explicit match id to verify through the 2D match center.",
     )
     parser.add_argument("--tick-count", type=int, default=1, help="How many infinite-league matches to generate.")
     parser.add_argument(
@@ -74,7 +72,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--user-access-token",
         default="",
-        help="Existing backend bearer token for issuing Unity live access.",
+        help="Existing backend bearer token for protected match center checks.",
     )
     parser.add_argument("--user-email", default="", help="Backend user email for provisioning.")
     parser.add_argument("--user-password", default="", help="Backend user password for provisioning.")
@@ -90,22 +88,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pay-to-view",
         action="store_true",
-        help="Allow the backend to pay a viewing fee if the selected match requires it.",
+        help="Deprecated compatibility flag; match center verification never purchases viewing access.",
     )
     parser.add_argument(
         "--skip-websocket-verify",
         action="store_true",
-        help="Skip Unity websocket bridge verification.",
+        help="Skip match realtime websocket verification.",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Do not write the Unity config file.",
+        help="Do not write verification config/bootstrap files.",
     )
     parser.add_argument(
         "--persist-access-token",
         action="store_true",
-        help="Also include the short-lived Unity access token in the runtime bootstrap file.",
+        help="Deprecated compatibility flag; no short-lived runtime access token is written.",
     )
     return parser.parse_args()
 
@@ -314,47 +312,45 @@ def resolve_match_selection(client: httpx.Client, args: argparse.Namespace) -> d
     return selection
 
 
-def issue_unity_access(
+def fetch_match_viewer_session(
     client: httpx.Client,
     *,
     match_id: str,
     user_access_token: str,
-    pay_to_view: bool,
 ) -> dict[str, Any]:
-    response = client.post(
-        f"/api/matches/{match_id}/unity-access",
-        params={"pay_to_view": "true" if pay_to_view else "false"},
+    response = client.get(
+        f"/api/match-viewer/{match_id}/session",
         headers={"Authorization": f"Bearer {user_access_token}"},
     )
     if response.status_code == 404:
         raise RuntimeError(
-            "The target backend does not expose the Unity live access route "
-            f"'/api/matches/{match_id}/unity-access'. This deployment is behind the GTEX workspace backend. "
-            "Deploy the current backend to the target environment or use the local backend flow instead."
+            "The target backend does not expose the canonical match viewer session route "
+            f"'/api/match-viewer/{match_id}/session'. Deploy the current backend to the target environment "
+            "or use the local backend flow instead."
         )
     response.raise_for_status()
     payload = response.json()
     if str(payload.get("match_id") or "").strip() != match_id:
-        raise RuntimeError("Unity access endpoint returned an unexpected match_id.")
-    if not str(payload.get("access_token") or "").strip():
-        raise RuntimeError("Unity access endpoint did not return an access token.")
+        raise RuntimeError("Match viewer session returned an unexpected match_id.")
+    if not payload.get("frames"):
+        raise RuntimeError("Match viewer session did not include backend-authored frames.")
     return payload
 
 
-def fetch_live_payload(
+def fetch_match_viewer_state(
     client: httpx.Client,
     *,
     match_id: str,
-    unity_access_token: str,
+    user_access_token: str,
 ) -> dict[str, Any]:
     response = client.get(
-        f"/match/{match_id}/live",
-        headers={"Authorization": f"Bearer {unity_access_token}"},
+        f"/api/match-viewer/{match_id}",
+        headers={"Authorization": f"Bearer {user_access_token}"},
     )
     response.raise_for_status()
     live_payload = response.json()
-    if live_payload.get("matchId") != match_id:
-        raise RuntimeError("Unity live bridge returned an unexpected matchId.")
+    if live_payload.get("match_id") != match_id:
+        raise RuntimeError("Match viewer state returned an unexpected match_id.")
     return live_payload
 
 
@@ -364,10 +360,10 @@ def build_websocket_url(base_url: str, match_id: str) -> str:
         websocket_url = "wss://" + websocket_url[len("https://") :]
     elif websocket_url.startswith("http://"):
         websocket_url = "ws://" + websocket_url[len("http://") :]
-    return websocket_url.rstrip("/") + f"/api/v1/ws/match/{match_id}?format=unity"
+    return websocket_url.rstrip("/") + f"/api/matches/{match_id}/stream"
 
 
-async def verify_websocket(base_url: str, match_id: str, unity_access_token: str) -> dict[str, Any]:
+async def verify_websocket(base_url: str, match_id: str, user_access_token: str) -> dict[str, Any]:
     websocket_url = build_websocket_url(base_url, match_id)
 
     async with websockets.connect(
@@ -375,81 +371,42 @@ async def verify_websocket(base_url: str, match_id: str, unity_access_token: str
         open_timeout=30,
         close_timeout=10,
         max_size=None,
-        additional_headers={"Authorization": f"Bearer {unity_access_token}"},
+        additional_headers={"Authorization": f"Bearer {user_access_token}"},
     ) as websocket:
-        first_payload = json.loads(await websocket.recv())
-        updated_payload = None
-        for _ in range(16):
-            payload = json.loads(await websocket.recv())
-            if (
-                payload.get("frameId") != first_payload.get("frameId")
-                or payload.get("clockMinute") != first_payload.get("clockMinute")
-                or payload.get("activeEventId") != first_payload.get("activeEventId")
-            ):
-                updated_payload = payload
-                break
-
-        if updated_payload is None:
-            raise RuntimeError("Unity websocket bridge did not emit an updated payload.")
+        ack_payload = json.loads(await websocket.recv())
+        if ack_payload.get("type") != "subscription_ack":
+            raise RuntimeError("Match realtime stream did not acknowledge the subscription.")
+        await websocket.send(json.dumps({"type": "ping"}))
+        pong_payload = json.loads(await websocket.recv())
+        if pong_payload.get("type") != "pong":
+            raise RuntimeError("Match realtime stream did not respond to ping.")
 
         return {
-            "first_frame_id": first_payload.get("frameId"),
-            "second_frame_id": updated_payload.get("frameId"),
-            "first_clock_minute": first_payload.get("clockMinute"),
-            "second_clock_minute": updated_payload.get("clockMinute"),
-            "status": updated_payload.get("status"),
+            "ack_topics": ack_payload.get("data", {}).get("topics"),
+            "pong": True,
             "websocket_url": websocket_url,
         }
 
 
-def write_unity_config(
+def write_runtime_config(
     config_path: Path,
     *,
     dry_run: bool,
 ) -> dict[str, Any]:
     if not config_path.exists():
-        raise FileNotFoundError(f"Unity match config was not found: {config_path}")
+        return {"enabled": True, "runtimeMode": "match_center", "autoStartOnBoot": False}
 
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     payload["enabled"] = True
-    payload["autoStartOnBoot"] = True
-    payload["runtimeMode"] = "live"
+    payload["autoStartOnBoot"] = False
+    payload["runtimeMode"] = "match_center"
     payload["environment"] = "local"
     payload["matchId"] = ""
-    payload["liveAccessToken"] = ""
-    payload["liveRefreshToken"] = ""
 
     if not dry_run:
         config_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
     return payload
-
-
-def resolve_bootstrap_write_paths(primary_bootstrap_path: Path) -> list[Path]:
-    candidate_paths: list[Path] = []
-    seen: set[str] = set()
-
-    def add_candidate(path: Path) -> None:
-        normalized = str(path)
-        if normalized in seen:
-            return
-
-        seen.add(normalized)
-        candidate_paths.append(path)
-
-    add_candidate(primary_bootstrap_path)
-
-    if not DEFAULT_WINDOWS_BUILD_ROOT.exists():
-        return candidate_paths
-
-    player_executables = sorted(
-        DEFAULT_WINDOWS_BUILD_ROOT.rglob(DEFAULT_WINDOWS_PLAYER_NAME),
-        key=lambda path: str(path).lower(),
-    )
-    for executable_path in player_executables:
-        add_candidate(executable_path.parent / "tmp" / primary_bootstrap_path.name)
-
-    return candidate_paths
 
 
 def write_bootstrap_file(
@@ -458,9 +415,6 @@ def write_bootstrap_file(
     profile: str,
     base_url: str,
     match_id: str,
-    unity_access_token: str,
-    unity_refresh_token: str,
-    persist_access_token: bool,
     bootstrap_ttl_seconds: int,
     consume_on_load: bool,
     dry_run: bool,
@@ -472,8 +426,12 @@ def write_bootstrap_file(
         "environment": "custom",
         "matchId": match_id,
         "baseUrl": base_url,
-        "liveAccessToken": unity_access_token if persist_access_token else "",
-        "liveRefreshToken": unity_refresh_token,
+        "matchViewerSessionPath": f"/api/match-viewer/{match_id}/session",
+        "matchViewerStatePath": f"/api/match-viewer/{match_id}",
+        "matchSpectatePath": f"/api/matches/{match_id}/spectate",
+        "matchWebsocketPath": f"/api/matches/{match_id}/stream",
+        "realtimeGatewayPath": f"/api/matches/{match_id}/spectate",
+        "realtimeWebsocketPath": f"/api/matches/{match_id}/stream",
         "issuedAtUtc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "bootstrapTtlSeconds": ttl_seconds,
         "consumeOnLoad": bool(consume_on_load),
@@ -493,9 +451,9 @@ def main() -> None:
     base_url = normalize_base_url(args.base_url, profile=args.profile)
     user_identity = resolve_user_identity(args)
     allow_register = should_allow_register(args)
-    config_path = Path(args.unity_config).resolve()
+    config_path = Path(args.runtime_config).resolve()
     bootstrap_path = Path(args.bootstrap_path).resolve()
-    bootstrap_paths = resolve_bootstrap_write_paths(bootstrap_path)
+    bootstrap_paths = [bootstrap_path]
     bootstrap_ttl_seconds = max(60, int(args.bootstrap_ttl_seconds))
     consume_bootstrap_on_load = not (args.keep_bootstrap_file or args.profile == LOCAL_PROFILE)
     try:
@@ -513,18 +471,15 @@ def main() -> None:
             )
             selection = resolve_match_selection(client, args)
             match_id = selection["match_id"]
-            unity_access = issue_unity_access(
+            viewer_session = fetch_match_viewer_session(
                 client,
                 match_id=match_id,
                 user_access_token=user_access_token,
-                pay_to_view=args.pay_to_view,
             )
-            unity_access_token = str(unity_access["access_token"]).strip()
-            unity_refresh_token = str(unity_access["refresh_token"]).strip()
-            live_payload = fetch_live_payload(
+            live_payload = fetch_match_viewer_state(
                 client,
                 match_id=match_id,
-                unity_access_token=unity_access_token,
+                user_access_token=user_access_token,
             )
     except httpx.ConnectError as exception:
         raise RuntimeError(build_backend_unreachable_message(base_url, args.profile)) from exception
@@ -532,11 +487,11 @@ def main() -> None:
     websocket_result = None
     if not args.skip_websocket_verify:
         try:
-            websocket_result = asyncio.run(verify_websocket(base_url, match_id, unity_access_token))
+            websocket_result = asyncio.run(verify_websocket(base_url, match_id, user_access_token))
         except (httpx.ConnectError, OSError) as exception:
             raise RuntimeError(build_backend_unreachable_message(base_url, args.profile)) from exception
 
-    config_payload = write_unity_config(
+    config_payload = write_runtime_config(
         config_path,
         dry_run=args.dry_run,
     )
@@ -545,9 +500,6 @@ def main() -> None:
         profile=args.profile,
         base_url=base_url,
         match_id=match_id,
-        unity_access_token=unity_access_token,
-        unity_refresh_token=unity_refresh_token,
-        persist_access_token=args.persist_access_token,
         bootstrap_ttl_seconds=bootstrap_ttl_seconds,
         consume_on_load=consume_bootstrap_on_load,
         dry_run=args.dry_run,
@@ -558,7 +510,7 @@ def main() -> None:
         "match_id": match_id,
         "match_selection_mode": selection.get("selection_mode"),
         "base_url": base_url,
-        "unity_config": str(config_path),
+        "runtime_config": str(config_path),
         "bootstrap_path": str(bootstrap_path),
         "bootstrap_paths": [str(path) for path in bootstrap_paths],
         "bootstrap_mirror_count": max(0, len(bootstrap_paths) - 1),
@@ -572,27 +524,23 @@ def main() -> None:
         ),
         "bootstrap_ttl_seconds": bootstrap_ttl_seconds,
         "bootstrap_consume_on_load": consume_bootstrap_on_load,
-        "spectator_session_id": unity_access.get("spectator_session_id"),
-        "unity_access_expires_in": unity_access.get("expires_in"),
-        "unity_refresh_expires_in": unity_access.get("refresh_expires_in"),
-        "http_frame_id": live_payload.get("frameId"),
-        "http_clock_minute": live_payload.get("clockMinute"),
-        "http_status": live_payload.get("status"),
-        "http_live_url": f"{base_url}/match/{match_id}/live",
+        "session_frame_count": len(viewer_session.get("frames") or []),
+        "session_event_count": len(viewer_session.get("events") or []),
+        "score_reveal_locked": viewer_session.get("score_reveal_locked"),
+        "timeline_proof_status": (viewer_session.get("timeline_proof") or {}).get("status"),
+        "http_frame_count": len(live_payload.get("frames") or []),
+        "http_event_count": len(live_payload.get("events") or []),
+        "match_viewer_state_url": f"{base_url}/api/match-viewer/{match_id}",
         "websocket_url": build_websocket_url(base_url, match_id),
         "websocket": websocket_result,
         "runtime_mode": config_payload.get("runtimeMode"),
         "auto_start_on_boot": config_payload.get("autoStartOnBoot"),
         "enabled": config_payload.get("enabled"),
-        "unity_bootstrap_mode": (
-            "bootstrap_access_and_refresh" if args.persist_access_token else "bootstrap_refresh_only"
-        ),
+        "bootstrap_mode": "match_center_session",
         "config_match_id_present": bool(str(config_payload.get("matchId") or "").strip()),
-        "config_has_live_access_token": bool(config_payload.get("liveAccessToken")),
-        "config_has_live_refresh_token": bool(config_payload.get("liveRefreshToken")),
         "bootstrap_match_id_present": bool(str(bootstrap_payload.get("matchId") or "").strip()),
-        "bootstrap_has_live_access_token": bool(bootstrap_payload.get("liveAccessToken")),
-        "bootstrap_has_live_refresh_token": bool(bootstrap_payload.get("liveRefreshToken")),
+        "bootstrap_has_match_viewer_session_path": bool(bootstrap_payload.get("matchViewerSessionPath")),
+        "bootstrap_has_realtime_websocket_path": bool(bootstrap_payload.get("realtimeWebsocketPath")),
     }
     print(json.dumps(summary, indent=2))
 

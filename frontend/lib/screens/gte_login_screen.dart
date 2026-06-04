@@ -1,19 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_policy_compliance_center_screen.dart';
 
 import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
+import '../shared/auth/biometric_unlock_service.dart';
+import '../shared/models/auth_session.dart';
 import 'creators/creator_access_request_screen.dart';
+import 'gte_recovery_screen.dart';
 import 'gte_signup_screen.dart';
-import 'wallet/gte_policy_compliance_center_screen.dart';
 import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
 import '../widgets/gtex_branding.dart';
 
 class GteLoginScreen extends StatefulWidget {
-  const GteLoginScreen({super.key, required this.controller});
+  const GteLoginScreen({
+    super.key,
+    required this.controller,
+    this.biometricUnlockController,
+  });
 
   final GteExchangeController controller;
+  final TrustedDeviceBiometricUnlockController? biometricUnlockController;
 
   @override
   State<GteLoginScreen> createState() => _GteLoginScreenState();
@@ -22,12 +30,16 @@ class GteLoginScreen extends StatefulWidget {
 class _GteLoginScreenState extends State<GteLoginScreen> {
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
+  bool _canUseBiometricUnlock = false;
+  bool _isBiometricUnlocking = false;
+  String? _biometricError;
 
   @override
   void initState() {
     super.initState();
     _emailController = TextEditingController();
     _passwordController = TextEditingController();
+    _refreshBiometricOffer();
   }
 
   @override
@@ -117,7 +129,7 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                     const SizedBox(height: 8),
                                     Text(
                                       requiresPolicyAction
-                                          ? 'Complete the required policy acceptances to unlock deposits, withdrawals, and player-market actions.'
+                                          ? 'Complete the required policy acceptances to restore eligible account actions.'
                                           : hasRestrictedAccess
                                           ? 'This session is active, but some account actions are limited for this region or review state.'
                                           : 'All required policies are accepted. Account actions are ready.',
@@ -140,8 +152,8 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                         _SignalPill(
                                           label:
                                               compliance.canDeposit
-                                                  ? 'Add funds enabled'
-                                                  : 'Add funds limited',
+                                                  ? 'Account actions enabled'
+                                                  : 'Account actions limited',
                                         ),
                                         _SignalPill(
                                           label:
@@ -205,7 +217,7 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'GTEX is a football world, not a trading terminal. The app brings club-building, player discovery, competitions, and live match moments into one clear flow.',
+                              'GTEX brings club management, player discovery, competitions, creator access, and verified market workflows into one account. Guest access only shows confirmed public context.',
                               style: Theme.of(context).textTheme.bodyLarge,
                             ),
                             const SizedBox(height: 22),
@@ -233,16 +245,17 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                     children: <Widget>[
                                       _OpeningMoveChip(
                                         label:
-                                            '1. Sign in and return to your club',
+                                            '1. Create account and choose a role',
                                         accent: GteShellTheme.accent,
                                       ),
                                       _OpeningMoveChip(
-                                        label: '2. Scout the live player board',
+                                        label:
+                                            '2. Sign in and return to your club',
                                         accent: GteShellTheme.accentArena,
                                       ),
                                       _OpeningMoveChip(
                                         label:
-                                            '3. Check matchday and world stories',
+                                            '3. Check matchday and player context',
                                         accent: GteShellTheme.accentCapital,
                                       ),
                                     ],
@@ -252,9 +265,9 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                             ),
                             const SizedBox(height: 22),
                             const GtexSignalStrip(
-                              title: 'One football world, three clear lanes',
+                              title: 'One football product, role-gated tools',
                               subtitle:
-                                  'Scouting, matchday, and funds each have a distinct role, but they work as one product.',
+                                  'Club, creator, and verified trader workflows open according to account role and compliance state.',
                               tiles: <Widget>[
                                 GtexSignalTile(
                                   label: 'Club',
@@ -266,18 +279,18 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                 ),
                                 GtexSignalTile(
                                   label: 'Matchday',
-                                  value: 'LIVE STORY',
+                                  value: 'LIVE STATUS',
                                   caption:
                                       'Fixtures, highlights, and bracket energy.',
                                   icon: Icons.stadium_outlined,
                                   color: GteShellTheme.accentArena,
                                 ),
                                 GtexSignalTile(
-                                  label: 'Funds',
-                                  value: 'READY BALANCE',
+                                  label: 'Account',
+                                  value: 'REVIEWED ACCESS',
                                   caption:
-                                      'Balance, moves, and protected account tools.',
-                                  icon: Icons.account_balance_wallet_outlined,
+                                      'Policy checks and role limits keep tools clear.',
+                                  icon: Icons.verified_user_outlined,
                                   color: GteShellTheme.accentCapital,
                                 ),
                               ],
@@ -308,7 +321,7 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                   _BulletLine(
                                     icon: Icons.admin_panel_settings_outlined,
                                     text:
-                                        'If your role allows it, creator and admin tools appear automatically.',
+                                        'If your role allows it, creator, trader, and admin tools appear automatically.',
                                   ),
                                 ],
                               ),
@@ -339,7 +352,7 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          'One sign-in for players, managers, creators, and admins. The app reveals only what this account can use.',
+                                          'One sign-in for football users, creators, verified traders, and admins. The app reveals only what this account can use.',
                                           style:
                                               Theme.of(
                                                 context,
@@ -376,6 +389,11 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                               if (widget.controller.isSigningIn) ...<Widget>[
                                 const SizedBox(height: 16),
                                 const LinearProgressIndicator(),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Checking your account and eligible GTEX tools...',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
                               ],
                               if (widget.controller.authError !=
                                   null) ...<Widget>[
@@ -416,7 +434,34 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                 ),
                               ],
                               const SizedBox(height: 18),
-                              const SizedBox(height: 20),
+                              if (_canUseBiometricUnlock) ...<Widget>[
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed:
+                                        widget.controller.isSigningIn ||
+                                                _isBiometricUnlocking
+                                            ? null
+                                            : _unlockWithBiometrics,
+                                    icon: const Icon(Icons.fingerprint),
+                                    label: Text(
+                                      _isBiometricUnlocking
+                                          ? 'Unlocking...'
+                                          : 'Unlock trusted device',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              if (_biometricError != null) ...<Widget>[
+                                Text(
+                                  _biometricError!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
                               SizedBox(
                                 width: double.infinity,
                                 child: FilledButton.icon(
@@ -427,8 +472,8 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                   icon: const Icon(Icons.login),
                                   label: Text(
                                     widget.controller.isSigningIn
-                                        ? 'Opening the gate...'
-                                        : 'Enter GTEX now',
+                                        ? 'Signing in...'
+                                        : 'Sign in to GTEX',
                                   ),
                                 ),
                               ),
@@ -451,7 +496,27 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                                             ),
                                           );
                                         },
-                                child: const Text('Create a new account'),
+                                child: const Text('Create account'),
+                              ),
+                              TextButton(
+                                onPressed:
+                                    widget.controller.isSigningIn
+                                        ? null
+                                        : () async {
+                                          await Navigator.of(
+                                            context,
+                                          ).push<void>(
+                                            MaterialPageRoute<void>(
+                                              builder:
+                                                  (BuildContext context) =>
+                                                      GteRecoveryScreen(
+                                                        controller:
+                                                            widget.controller,
+                                                      ),
+                                            ),
+                                          );
+                                        },
+                                child: const Text('Recover account'),
                               ),
                               TextButton(
                                 onPressed:
@@ -486,12 +551,15 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
                             ],
                           );
                         }
-                        return Row(
-                          children: <Widget>[
-                            Expanded(flex: 6, child: story),
-                            const SizedBox(width: 20),
-                            Expanded(flex: 4, child: authCard),
-                          ],
+                        return SingleChildScrollView(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Expanded(flex: 6, child: story),
+                              const SizedBox(width: 20),
+                              Expanded(flex: 4, child: authCard),
+                            ],
+                          ),
                         );
                       },
                     );
@@ -514,7 +582,140 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
       return;
     }
     if (widget.controller.isAuthenticated) {
+      await _offerBiometricEnrollmentIfAvailable();
+    }
+    await _refreshBiometricOffer();
+    if (!mounted) {
+      return;
+    }
+    if (widget.controller.isAuthenticated) {
       Navigator.of(context).pop(true);
+    }
+  }
+
+  Future<void> _offerBiometricEnrollmentIfAvailable() async {
+    final TrustedDeviceBiometricUnlockController? controller =
+        widget.biometricUnlockController;
+    if (controller == null) {
+      return;
+    }
+    bool canEnroll = false;
+    try {
+      canEnroll = await controller.canOfferBiometricEnrollment();
+    } catch (_) {
+      canEnroll = false;
+    }
+    if (!canEnroll || !mounted) {
+      return;
+    }
+    final bool enable =
+        await showDialog<bool>(
+          context: context,
+          builder:
+              (BuildContext context) => AlertDialog(
+                title: const Text('Enable biometric unlock?'),
+                content: const Text(
+                  'Use Face ID or fingerprint unlock on this trusted device.',
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Not now'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    icon: const Icon(Icons.fingerprint),
+                    label: const Text('Enable'),
+                  ),
+                ],
+              ),
+        ) ??
+        false;
+    if (!enable) {
+      return;
+    }
+    bool enrolled = false;
+    try {
+      enrolled = await controller.enableBiometricUnlockForCurrentSession(
+        reason: 'Enable biometric unlock for your GTEX trusted device',
+      );
+    } catch (_) {
+      enrolled = false;
+    }
+    if (!enrolled && mounted) {
+      setState(() {
+        _biometricError = 'Biometric setup was not completed.';
+      });
+    }
+  }
+
+  Future<void> _refreshBiometricOffer() async {
+    final TrustedDeviceBiometricUnlockController? controller =
+        widget.biometricUnlockController;
+    if (controller == null) {
+      return;
+    }
+    bool available = false;
+    try {
+      available = await controller.canOfferBiometricUnlock();
+    } catch (_) {
+      available = false;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _canUseBiometricUnlock = available;
+    });
+  }
+
+  Future<void> _unlockWithBiometrics() async {
+    final TrustedDeviceBiometricUnlockController? biometricController =
+        widget.biometricUnlockController;
+    if (biometricController == null) {
+      return;
+    }
+    setState(() {
+      _isBiometricUnlocking = true;
+      _biometricError = null;
+    });
+    try {
+      final AuthSession? session = await biometricController
+          .unlockPersistedSession(reason: 'Unlock your GTEX trusted device');
+      if (!mounted) {
+        return;
+      }
+      if (session == null) {
+        setState(() {
+          _biometricError = 'Biometric unlock was not completed.';
+        });
+        return;
+      }
+      widget.controller.syncSession(
+        GteAuthSession.fromJson(
+          session.rawJson.isNotEmpty ? session.rawJson : session.toJson(),
+        ),
+      );
+      await widget.controller.refreshAccount();
+      if (!mounted) {
+        return;
+      }
+      if (widget.controller.isAuthenticated) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _biometricError = 'Biometric unlock is unavailable on this device.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isBiometricUnlocking = false;
+        });
+      }
     }
   }
 }

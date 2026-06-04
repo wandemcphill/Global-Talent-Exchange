@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
-import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/features/compete/providers/competition_controller.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/app_routes/gte_feature_route_support.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/build_a_son/build_a_son.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_screen.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/presentation/era_history_screen.dart';
@@ -18,26 +19,27 @@ import 'package:gte_frontend/features/club_identity/reputation/presentation/repu
 import 'package:gte_frontend/features/club_identity/trophies/presentation/honors_timeline_screen.dart';
 import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_cabinet_screen.dart';
 import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_leaderboard_screen.dart';
-import 'package:gte_frontend/features/club_sale_market/club_sale_market.dart';
-import 'package:gte_frontend/features/creator_league_admin/creator_league_admin.dart';
-import 'package:gte_frontend/features/creator_share_market/creator_share_market.dart';
-import 'package:gte_frontend/features/creator_stadium_monetization/creator_stadium_monetization.dart';
-import 'package:gte_frontend/features/fan_prediction/fan_prediction.dart';
+import 'package:gte_frontend/features/capital/liquidity/club_sale_market/club_sale_market.dart';
+import 'package:gte_frontend/features/capital/settlement/creator_league_admin/creator_league_admin.dart';
+import 'package:gte_frontend/features/capital/liquidity/creator_share_market/creator_share_market.dart';
+import 'package:gte_frontend/features/capital/settlement/creator_stadium_monetization/creator_stadium_monetization.dart';
+import 'package:gte_frontend/features/match_center/fan_prediction/fan_prediction.dart';
 import 'package:gte_frontend/features/football_world_simulation/football_world_simulation.dart';
 import 'package:gte_frontend/features/gift_economy_admin/gift_economy_admin.dart';
 import 'package:gte_frontend/features/jackpot/presentation/gtex_jackpot_route_screen.dart';
-import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
-import 'package:gte_frontend/features/match/replay_archive_route_screen.dart';
+import 'package:gte_frontend/features/match_center/gte_live_match_hub_route_screen.dart';
+import 'package:gte_frontend/features/match_center/match_viewer_route_screen.dart';
+import 'package:gte_frontend/features/match_center/replay_archive_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/player_card_marketplace/player_card_marketplace.dart';
 import 'package:gte_frontend/features/regens/regens_screen.dart';
-import 'package:gte_frontend/features/streamer_tournament_engine/streamer_tournament_engine.dart';
+import 'package:gte_frontend/features/compete/streamer_tournament_engine.dart';
 import 'package:gte_frontend/features/transfer_news_calendar/presentation/transfer_news_calendar_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_create_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_detail_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_discovery_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_join_screen.dart';
-import 'package:gte_frontend/screens/competitions/competition_share_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_create_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_detail_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_discovery_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_join_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_share_screen.dart';
 import 'package:gte_frontend/widgets/gte_route_integrity_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
@@ -266,6 +268,15 @@ class GteAppRouteRegistry {
         clubName: route.clubName,
       );
     }
+    if (route is LiveMatchHubRouteData) {
+      return GteLiveMatchHubRouteScreen(
+        dependencies: liveDependencies,
+        clubName: liveDependencies.currentClubName ?? 'GTEX Matchday',
+      );
+    }
+    if (route is LiveMatchViewerRouteData) {
+      return MatchViewerRouteScreen(matchKey: route.matchKey);
+    }
     if (route is StreamerTournamentsListRouteData) {
       return _launchComingSoonScreen('Streamer tournaments');
     }
@@ -308,6 +319,13 @@ class GteAppRouteRegistry {
     }
     if (route is RegenUniverseRouteData) {
       return const RegensScreen();
+    }
+    if (route is RegenBuildASonRouteData) {
+      return BuildASonScreen(
+        onCompleted: (_) async {
+          await liveDependencies.onRegenCreationSettled?.call();
+        },
+      );
     }
     if (route is NewsDeskRouteData) {
       return TransferNewsCalendarScreen(

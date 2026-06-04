@@ -448,6 +448,36 @@
         "response_model": "AdminFinanceControlTowerView"
       },
       {
+        "method": "POST",
+        "path": "/api/admin/finance/exports",
+        "handler": "request_admin_export",
+        "response_model": "AdminExportStatusView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/finance/exports/{export_id}",
+        "handler": "get_admin_export_status",
+        "response_model": "AdminExportStatusView"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/admin/finance/locks/{resource_type}/{resource_id}",
+        "handler": "release_admin_resource_lock",
+        "response_model": "AdminLockStateView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/finance/locks/{resource_type}/{resource_id}",
+        "handler": "get_admin_resource_lock",
+        "response_model": "AdminLockStateView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/locks/{resource_type}/{resource_id}",
+        "handler": "acquire_admin_resource_lock",
+        "response_model": "AdminLockStateView"
+      },
+      {
         "method": "GET",
         "path": "/api/admin/finance/manual-price-overrides",
         "handler": "list_manual_price_overrides",
@@ -482,6 +512,84 @@
         "path": "/api/admin/finance/match-kill-switches/{match_id}",
         "handler": "clear_match_kill_switch",
         "response_model": "MatchKillSwitchView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/finance/payment-queue",
+        "handler": "get_admin_payment_queue",
+        "response_model": "PaymentQueueView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/approve",
+        "handler": "approve_admin_payment_queue_bid",
+        "response_model": "PaymentQueueActionResultView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/counter",
+        "handler": "counter_admin_payment_queue_bid",
+        "response_model": "PaymentQueueActionResultView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/reject",
+        "handler": "reject_admin_payment_queue_bid",
+        "response_model": "PaymentQueueActionResultView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/bulk-actions",
+        "handler": "request_admin_payment_queue_bulk_action",
+        "response_model": "AdminBulkActionStatusView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/admin/finance/payment-queue/bulk-actions/{bulk_action_id}",
+        "handler": "get_admin_payment_queue_bulk_action_status",
+        "response_model": "AdminBulkActionStatusView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/deposits/{deposit_id}/approve",
+        "handler": "approve_admin_payment_queue_deposit",
+        "response_model": "PaymentQueueActionResultView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/deposits/{deposit_id}/reinstate",
+        "handler": "reinstate_admin_payment_queue_deposit",
+        "response_model": "PaymentQueueActionResultView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/deposits/{deposit_id}/reject",
+        "handler": "reject_admin_payment_queue_deposit",
+        "response_model": "PaymentQueueActionResultView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/deposits/{deposit_id}/review",
+        "handler": "review_admin_payment_queue_deposit",
+        "response_model": "PaymentQueueActionResultView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/withdrawals/{withdrawal_id}/approve",
+        "handler": "approve_admin_payment_queue_withdrawal",
+        "response_model": "PaymentQueueActionResultView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/withdrawals/{withdrawal_id}/reinstate",
+        "handler": "reinstate_admin_payment_queue_withdrawal",
+        "response_model": "PaymentQueueActionResultView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/admin/finance/payment-queue/withdrawals/{withdrawal_id}/reject",
+        "handler": "reject_admin_payment_queue_withdrawal",
+        "response_model": "PaymentQueueActionResultView"
       },
       {
         "method": "GET",
@@ -1041,81 +1149,93 @@
     "auth": [
       {
         "method": "POST",
-        "path": "/api/auth/change-password",
+        "path": "/api/v2/auth/change-password",
         "handler": "change_current_user_password",
         "response_model": "CurrentUserResponse"
       },
       {
         "method": "POST",
-        "path": "/api/auth/logout",
-        "handler": "logout_user",
-        "response_model": "ActionStatusResponse"
-      },
-      {
-        "method": "GET",
-        "path": "/api/auth/me",
-        "handler": "read_current_user_profile",
-        "response_model": "CurrentUserResponse"
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/auth/me",
-        "handler": "update_current_user_profile",
-        "response_model": "CurrentUserResponse"
-      },
-      {
-        "method": "POST",
-        "path": "/api/auth/refresh",
-        "handler": "refresh_auth_session",
-        "response_model": "TokenResponse"
-      },
-      {
-        "method": "GET",
-        "path": "/api/session/bootstrap",
-        "handler": "get_session_bootstrap",
-        "response_model": "SessionBootstrapResponse"
-      },
-      {
-        "method": "POST",
-        "path": "/auth/confirm-email",
+        "path": "/api/v2/auth/confirm-email",
         "handler": "confirm_email",
         "response_model": "ActionStatusResponse"
       },
       {
         "method": "POST",
-        "path": "/auth/login",
+        "path": "/api/v2/auth/login",
         "handler": "login_user",
         "response_model": "TokenResponse"
       },
       {
         "method": "POST",
-        "path": "/auth/logout",
+        "path": "/api/v2/auth/logout",
         "handler": "logout_user",
         "response_model": "ActionStatusResponse"
       },
       {
+        "method": "GET",
+        "path": "/api/v2/auth/me",
+        "handler": "read_current_user_profile",
+        "response_model": "CurrentUserResponse"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v2/auth/me",
+        "handler": "update_current_user_profile",
+        "response_model": "CurrentUserResponse"
+      },
+      {
         "method": "POST",
-        "path": "/auth/recovery/request",
+        "path": "/api/v2/auth/pin/verify",
+        "handler": "verify_sensitive_action_pin",
+        "response_model": "ActionStatusResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/auth/recovery/challenge",
+        "handler": "request_recovery_challenge",
+        "response_model": "AccountRecoveryChallengeResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/auth/recovery/request",
         "handler": "request_account_recovery",
         "response_model": "ActionStatusResponse"
       },
       {
         "method": "POST",
-        "path": "/auth/recovery/reset",
+        "path": "/api/v2/auth/recovery/reset",
         "handler": "reset_account_with_recovery",
         "response_model": "ActionStatusResponse"
       },
       {
         "method": "POST",
-        "path": "/auth/refresh",
+        "path": "/api/v2/auth/recovery/reset-with-questions",
+        "handler": "reset_account_with_recovery_questions",
+        "response_model": "ActionStatusResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/auth/refresh",
         "handler": "refresh_auth_session",
         "response_model": "TokenResponse"
       },
       {
         "method": "POST",
-        "path": "/auth/register",
-        "handler": "register_user",
+        "path": "/api/v2/auth/signup/organization",
+        "handler": "signup_organization_frictionless",
         "response_model": "TokenResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/auth/signup/player",
+        "handler": "signup_player_frictionless",
+        "response_model": "TokenResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/session/bootstrap",
+        "handler": "get_session_bootstrap",
+        "response_model": "SessionBootstrapResponse"
       }
     ],
     "awards": [
@@ -1818,6 +1938,60 @@
         "path": "/api/sponsors",
         "handler": "get_sponsors",
         "response_model": "list[SponsorView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/clubs/{club_id}/formation",
+        "handler": "get_canonical_formation",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/clubs/{club_id}/formation/active",
+        "handler": "get_active_formation",
+        "response_model": null
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/v2/clubs/{club_id}/formation/draft",
+        "handler": "save_canonical_formation_draft",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/clubs/{club_id}/formation/publish",
+        "handler": "publish_canonical_formation",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/clubs/{club_id}/formations",
+        "handler": "list_formation_history",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/clubs/{club_id}/formations/draft",
+        "handler": "save_formation_draft",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/clubs/{club_id}/formations/{formation_id}/publish",
+        "handler": "publish_formation",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/clubs/{club_id}/formations/{source_formation_id}/restore",
+        "handler": "restore_formation_draft",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/formations/{formation_id}",
+        "handler": "get_formation_detail",
+        "response_model": null
       },
       {
         "method": "GET",
@@ -4488,18 +4662,6 @@
         "response_model": null
       },
       {
-        "method": "POST",
-        "path": "/api/match/{match_id}/unity-access",
-        "handler": "issue_unity_live_access",
-        "response_model": "UnityLiveAccessView"
-      },
-      {
-        "method": "POST",
-        "path": "/api/match/{match_id}/unity-access/refresh",
-        "handler": "refresh_unity_live_access",
-        "response_model": "UnityLiveAccessView"
-      },
-      {
         "method": "GET",
         "path": "/api/matches/live/active",
         "handler": "list_active_live_matches",
@@ -4554,18 +4716,6 @@
         "response_model": null
       },
       {
-        "method": "POST",
-        "path": "/api/matches/{match_id}/unity-access",
-        "handler": "issue_unity_live_access",
-        "response_model": "UnityLiveAccessView"
-      },
-      {
-        "method": "POST",
-        "path": "/api/matches/{match_id}/unity-access/refresh",
-        "handler": "refresh_unity_live_access",
-        "response_model": "UnityLiveAccessView"
-      },
-      {
         "method": "GET",
         "path": "/api/season-pass",
         "handler": "get_season_pass",
@@ -4606,18 +4756,6 @@
         "path": "/match/{match_id}/live",
         "handler": "read_match_live_bridge",
         "response_model": null
-      },
-      {
-        "method": "POST",
-        "path": "/match/{match_id}/unity-access",
-        "handler": "issue_unity_live_access",
-        "response_model": "UnityLiveAccessView"
-      },
-      {
-        "method": "POST",
-        "path": "/match/{match_id}/unity-access/refresh",
-        "handler": "refresh_unity_live_access",
-        "response_model": "UnityLiveAccessView"
       },
       {
         "method": "GET",
@@ -4666,18 +4804,6 @@
         "path": "/matches/{match_id}/stream",
         "handler": "stream_match",
         "response_model": null
-      },
-      {
-        "method": "POST",
-        "path": "/matches/{match_id}/unity-access",
-        "handler": "issue_unity_live_access",
-        "response_model": "UnityLiveAccessView"
-      },
-      {
-        "method": "POST",
-        "path": "/matches/{match_id}/unity-access/refresh",
-        "handler": "refresh_unity_live_access",
-        "response_model": "UnityLiveAccessView"
       }
     ],
     "manager": [
@@ -5292,12 +5418,6 @@
         "path": "/api/match-viewer/{match_key}",
         "handler": "read_match_viewer_timeline",
         "response_model": "MatchViewStateView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/match-viewer/{match_key}/illusion",
-        "handler": "read_match_viewer_illusion_payload",
-        "response_model": "MatchViewerIllusionPayloadView"
       },
       {
         "method": "GET",
@@ -6172,38 +6292,32 @@
         "response_model": "OwnershipGroupView"
       }
     ],
+    "payment": [
+      {
+        "method": "POST",
+        "path": "/api/v2/integrations/payments/korapay/webhook",
+        "handler": "handle_korapay_webhook",
+        "response_model": "AdminFinanceWebhookResultView"
+      }
+    ],
     "payments": [
       {
         "method": "GET",
-        "path": "/integrations/payments/methods",
+        "path": "/api/v2/integrations/payments/methods",
         "handler": "list_payment_methods",
         "response_model": "list[PaymentMethodView]"
       },
       {
         "method": "POST",
-        "path": "/integrations/payments/orders",
+        "path": "/api/v2/integrations/payments/orders",
         "handler": "create_payment_order",
         "response_model": "PaymentOrderView"
       },
       {
         "method": "POST",
-        "path": "/integrations/payments/quote",
+        "path": "/api/v2/integrations/payments/quote",
         "handler": "quote_payment",
         "response_model": "PaymentQuoteView"
-      }
-    ],
-    "paystack": [
-      {
-        "method": "POST",
-        "path": "/integrations/payments/korapay/webhook",
-        "handler": "handle_korapay_webhook",
-        "response_model": "AdminFinanceWebhookResultView"
-      },
-      {
-        "method": "POST",
-        "path": "/integrations/payments/paystack/webhook",
-        "handler": "handle_paystack_webhook",
-        "response_model": "AdminFinanceWebhookResultView"
       }
     ],
     "platform": [
@@ -7105,18 +7219,6 @@
     "realtime": [
       {
         "method": "GET",
-        "path": "/realtime/matches/{match_id}/gateway",
-        "handler": "get_match_gateway",
-        "response_model": "MatchGatewayView"
-      },
-      {
-        "method": "WEBSOCKET",
-        "path": "/realtime/matches/{match_id}/stream",
-        "handler": "stream_match_updates",
-        "response_model": null
-      },
-      {
-        "method": "GET",
         "path": "/realtime/status",
         "handler": "get_realtime_status",
         "response_model": "RealtimeStatusView"
@@ -7509,6 +7611,18 @@
       },
       {
         "method": "POST",
+        "path": "/api/regens/creation-orders/{order_id}/cancel",
+        "handler": "cancel_creation_order",
+        "response_model": "RegenCreationOrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/regens/creation-orders/{order_id}/cancel",
+        "handler": "cancel_creation_order",
+        "response_model": "RegenCreationOrderView"
+      },
+      {
+        "method": "POST",
         "path": "/api/regens/creation-orders/{order_id}/generate-after-payment",
         "handler": "generate_after_payment",
         "response_model": "RegenCreationOrderView"
@@ -7578,6 +7692,18 @@
         "path": "/api/regens/request-son/options",
         "handler": "request_son_options",
         "response_model": "RequestSonOptionsView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/regens/request-son/preview",
+        "handler": "preview_request_son",
+        "response_model": "RequestSonPreviewView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/regens/request-son/preview",
+        "handler": "preview_request_son",
+        "response_model": "RequestSonPreviewView"
       },
       {
         "method": "GET",
@@ -8043,6 +8169,12 @@
       },
       {
         "method": "POST",
+        "path": "/api/admin/transfers/windows/{window_id}/bids/{bid_id}/review-actions",
+        "handler": "record_admin_transfer_bid_review_action",
+        "response_model": "AdminTransferBidReviewActionResponse"
+      },
+      {
+        "method": "POST",
         "path": "/api/clubs",
         "handler": "create_club",
         "response_model": "ClubProfileView"
@@ -8133,6 +8265,12 @@
       },
       {
         "method": "GET",
+        "path": "/api/clubs/{club_id}/dashboard",
+        "handler": "get_canonical_club_dashboard",
+        "response_model": null
+      },
+      {
+        "method": "GET",
         "path": "/api/clubs/{club_id}/finances",
         "handler": "get_club_finances",
         "response_model": "ClubFinanceOverviewResponse"
@@ -8178,6 +8316,12 @@
         "path": "/api/clubs/{club_id}/purchases",
         "handler": "list_purchases",
         "response_model": "ClubPurchasesView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/rankings",
+        "handler": "get_canonical_club_rankings",
+        "response_model": null
       },
       {
         "method": "GET",
@@ -8328,6 +8472,60 @@
         "path": "/api/clubs/{club_id}/sponsorships/contracts/{contract_id}",
         "handler": "update_sponsorship_contract",
         "response_model": "ClubSponsorshipContractView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad",
+        "handler": "get_canonical_squad_roster",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad/availability",
+        "handler": "get_canonical_squad_availability",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad/chemistry",
+        "handler": "get_canonical_squad_chemistry",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad/contracts",
+        "handler": "get_canonical_squad_contracts",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad/injuries",
+        "handler": "get_canonical_squad_injuries",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad/readiness",
+        "handler": "get_canonical_squad_readiness",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad/scouting",
+        "handler": "get_canonical_squad_scouting",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad/selection-ready",
+        "handler": "get_canonical_selection_ready_players",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/staff",
+        "handler": "get_canonical_club_staff",
+        "response_model": null
       },
       {
         "method": "GET",
@@ -8775,8 +8973,20 @@
       },
       {
         "method": "POST",
+        "path": "/api/transfers/windows/{window_id}/bids/{bid_id}/counter",
+        "handler": "counter_transfer_bid",
+        "response_model": "TransferBidView"
+      },
+      {
+        "method": "POST",
         "path": "/api/transfers/windows/{window_id}/bids/{bid_id}/reject",
         "handler": "reject_transfer_bid",
+        "response_model": "TransferBidView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfers/windows/{window_id}/bids/{bid_id}/withdraw",
+        "handler": "withdraw_transfer_bid",
         "response_model": "TransferBidView"
       },
       {
@@ -9214,7 +9424,111 @@
         "response_model": "TournamentView"
       }
     ],
+    "trader": [
+      {
+        "method": "GET",
+        "path": "/api/trader/markets",
+        "handler": "list_markets",
+        "response_model": "list[TraderMarketView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/trader/orders",
+        "handler": "place_order",
+        "response_model": "TraderOrderView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/trader/overview",
+        "handler": "trader_overview",
+        "response_model": "TraderOverviewView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/trader/p2p",
+        "handler": "create_p2p_offer",
+        "response_model": "TraderP2POfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/trader/procurements",
+        "handler": "create_procurement",
+        "response_model": "TraderProcurementView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/trader/procurements/quote",
+        "handler": "quote_procurement",
+        "response_model": "TraderProcurementQuoteView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/trader/security/totp/setup",
+        "handler": "setup_totp",
+        "response_model": "TotpSetupView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/trader/watchlist",
+        "handler": "list_watchlist",
+        "response_model": "list[TraderWatchlistView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/trader/watchlist",
+        "handler": "add_watchlist",
+        "response_model": "TraderWatchlistView"
+      }
+    ],
     "transfer": [
+      {
+        "method": "GET",
+        "path": "/api/transfer-market/activity",
+        "handler": "list_market_activity",
+        "response_model": "list[TransferActivityDTO]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-market/admin/listings/{listing_id}/bids/{bid_id}/reservation/release",
+        "handler": "admin_release_transfer_market_bid_reservation",
+        "response_model": "TransferListingView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-market/basket",
+        "handler": "get_market_basket",
+        "response_model": "MarketBasketDTO"
+      },
+      {
+        "method": "POST",
+        "path": "/api/transfer-market/basket",
+        "handler": "add_market_basket_item",
+        "response_model": "MarketBasketDTO"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/transfer-market/basket/{player_id}",
+        "handler": "remove_market_basket_item",
+        "response_model": "MarketBasketDTO"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-market/bid/{bid_id}",
+        "handler": "get_market_bid",
+        "response_model": "MarketBidDTO"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-market/bids",
+        "handler": "list_market_bids",
+        "response_model": "list[MarketBidDTO]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-market/checkout",
+        "handler": "get_market_checkout_readiness",
+        "response_model": "MarketCheckoutReadinessDTO"
+      },
       {
         "method": "PUT",
         "path": "/api/transfer-market/clubs/{club_id}/team-dynamics",
@@ -9232,6 +9546,18 @@
         "path": "/api/transfer-market/coaches/{club_id}/profile",
         "handler": "upsert_transfer_market_coach_profile",
         "response_model": "CoachProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-market/filters/meta",
+        "handler": "get_market_filter_meta",
+        "response_model": "MarketFilterMetaDTO"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-market/history",
+        "handler": "list_market_history",
+        "response_model": "list[TransferActivityDTO]"
       },
       {
         "method": "POST",
@@ -9286,6 +9612,18 @@
         "path": "/api/transfer-market/listings/{listing_id}/stream",
         "handler": "stream_transfer_market_listing",
         "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-market/players",
+        "handler": "list_market_players",
+        "response_model": "MarketPlayerPageDTO"
+      },
+      {
+        "method": "GET",
+        "path": "/api/transfer-market/players/{player_id}",
+        "handler": "get_market_player",
+        "response_model": "MarketPlayerDTO"
       },
       {
         "method": "PUT",
@@ -10059,14 +10397,26 @@
       },
       {
         "method": "POST",
-        "path": "/api/wallets/providers/{provider_key}/webhook",
+        "path": "/api/wallets/providers/korapay/webhook",
+        "handler": "handle_provider_webhook",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/providers/korapay/webhook",
         "handler": "handle_provider_webhook",
         "response_model": null
       },
       {
         "method": "POST",
         "path": "/api/wallets/providers/{provider_key}/webhook",
-        "handler": "handle_provider_webhook",
+        "handler": "reject_unknown_provider_webhook",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/wallets/providers/{provider_key}/webhook",
+        "handler": "reject_unknown_provider_webhook",
         "response_model": null
       },
       {

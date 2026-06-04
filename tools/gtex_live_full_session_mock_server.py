@@ -932,7 +932,7 @@ async def get_live_match(match_id: str, authorization: str | None = Header(defau
     return JSONResponse(payload)
 
 
-@app.post("/match/{match_id}/unity-access/refresh")
+@app.post("/match/{match_id}/match-center/refresh")
 async def refresh_live_access(match_id: str) -> JSONResponse:
     if match_id != MATCH_ID:
         raise HTTPException(status_code=404, detail="not_found")
@@ -947,13 +947,13 @@ async def refresh_live_access(match_id: str) -> JSONResponse:
             "expires_in": 300,
             "refresh_expires_in": 3600,
             "live_path": f"/match/{match_id}/live",
-            "websocket_path": f"/api/v1/ws/match/{match_id}?format=unity",
-            "refresh_path": f"/match/{match_id}/unity-access/refresh",
+            "websocket_path": f"/api/matches/{match_id}/stream",
+            "refresh_path": f"/match/{match_id}/match-center/refresh",
         }
     )
 
 
-@app.websocket("/api/v1/ws/match/{match_id}")
+@app.websocket("/api/matches/{match_id}/stream")
 async def websocket_match_stream(websocket: WebSocket, match_id: str) -> None:
     if match_id != MATCH_ID:
         await websocket.close(code=4404, reason="not_found")
@@ -966,10 +966,9 @@ async def websocket_match_stream(websocket: WebSocket, match_id: str) -> None:
     STATE.websocket_connections += 1
     await websocket.accept()
     LOGGER.info(
-        "full-session websocket connect #%s match=%s format=%s",
+        "full-session websocket connect #%s match=%s",
         STATE.websocket_connections,
         match_id,
-        websocket.query_params.get("format"),
     )
 
     try:

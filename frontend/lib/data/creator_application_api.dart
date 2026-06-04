@@ -51,7 +51,7 @@ class CreatorApplicationApi {
       return _fixtureState.verification;
     }
     final Map<String, dynamic> payload = await client.getMap(
-      '/api/auth/me',
+      '/api/v2/auth/me',
       auth: true,
     );
     return CreatorContactVerificationStatus.fromCurrentUserJson(payload);

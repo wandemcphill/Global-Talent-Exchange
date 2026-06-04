@@ -4,7 +4,6 @@ import '../../data/regen_creation_api.dart';
 import '../../data/regen_universe_api.dart';
 import '../../models/regen_creation_models.dart';
 import '../../models/regen_universe_models.dart';
-import '../models/competition.dart';
 import '../models/federation.dart';
 import '../models/player.dart';
 import 'auth_provider.dart';
@@ -15,16 +14,31 @@ class RegenUniverseHubData {
     required this.awards,
     required this.nationalRegens,
     required this.scoutingFeed,
+    required this.bloodlines,
     required this.tracking,
     required this.creationOrders,
+    this.degradedFeeds = const <String>[],
   });
 
   final List<RegenRisingStar> risingStars;
   final List<RegenAwardResult> awards;
   final List<NationalRegenSeed> nationalRegens;
   final List<RegenScoutingFeedItem> scoutingFeed;
+  final List<RegenBloodlineChain> bloodlines;
   final RegenGenerationTracking tracking;
   final List<RegenCreationOrder> creationOrders;
+  final List<String> degradedFeeds;
+
+  bool get hasDegradedFeeds => degradedFeeds.isNotEmpty;
+
+  String get degradedFeedsSummary {
+    if (degradedFeeds.isEmpty) {
+      return '';
+    }
+    return 'Some Regen World feeds are syncing or blocked: '
+        '${degradedFeeds.join(', ')}. Published backend data is shown; '
+        'missing sections stay unavailable until those feeds recover.';
+  }
 
   List<RegenCreationOrder> get requestedSonOrders => creationOrders
       .where((RegenCreationOrder order) => order.requestType == 'son')
@@ -40,6 +54,16 @@ class _RegenLoadResult<T> {
 
   final T? value;
   final Object? error;
+}
+
+void _addDegradedFeed<T>(
+  List<String> feeds,
+  String label,
+  _RegenLoadResult<T> result,
+) {
+  if (result.error != null) {
+    feeds.add(label);
+  }
 }
 
 Future<_RegenLoadResult<T>> _safeRegenLoad<T>(Future<T> future) async {
@@ -93,6 +117,9 @@ regenUniverseHubProvider = FutureProvider<RegenUniverseHubData>((
     _safeRegenLoad<List<RegenScoutingFeedItem>>(
       universeApi.listScoutingFeed(limit: 8),
     ),
+    _safeRegenLoad<List<RegenBloodlineChain>>(
+      universeApi.listBloodlines(limit: 8),
+    ),
     _safeRegenLoad<RegenGenerationTracking>(universeApi.fetchTracking()),
     authenticated
         ? _safeRegenLoad<RegenCreationOrderList>(
@@ -113,34 +140,48 @@ regenUniverseHubProvider = FutureProvider<RegenUniverseHubData>((
   final _RegenLoadResult<List<RegenScoutingFeedItem>> scoutingFeedResult =
       payload[3] as _RegenLoadResult<List<RegenScoutingFeedItem>>;
   final _RegenLoadResult<RegenGenerationTracking> trackingResult =
-      payload[4] as _RegenLoadResult<RegenGenerationTracking>;
+      payload[5] as _RegenLoadResult<RegenGenerationTracking>;
+  final _RegenLoadResult<List<RegenBloodlineChain>> bloodlinesResult =
+      payload[4] as _RegenLoadResult<List<RegenBloodlineChain>>;
   final _RegenLoadResult<RegenCreationOrderList> creationOrdersResult =
-      payload[5] as _RegenLoadResult<RegenCreationOrderList>;
+      payload[6] as _RegenLoadResult<RegenCreationOrderList>;
 
   final bool hasAnyData =
       risingStarsResult.value != null ||
       awardsResult.value != null ||
       nationalRegensResult.value != null ||
       scoutingFeedResult.value != null ||
+      bloodlinesResult.value != null ||
       trackingResult.value != null ||
       creationOrdersResult.value != null;
   if (!hasAnyData) {
     throw trackingResult.error ??
         risingStarsResult.error ??
         scoutingFeedResult.error ??
+        bloodlinesResult.error ??
         awardsResult.error ??
         nationalRegensResult.error ??
         creationOrdersResult.error ??
         StateError('Unable to load the regen universe.');
   }
+  final List<String> degradedFeeds = <String>[];
+  _addDegradedFeed(degradedFeeds, 'Rising stars', risingStarsResult);
+  _addDegradedFeed(degradedFeeds, 'Awards', awardsResult);
+  _addDegradedFeed(degradedFeeds, 'National pools', nationalRegensResult);
+  _addDegradedFeed(degradedFeeds, 'Scouting feed', scoutingFeedResult);
+  _addDegradedFeed(degradedFeeds, 'Bloodlines', bloodlinesResult);
+  _addDegradedFeed(degradedFeeds, 'Generation tracking', trackingResult);
+  _addDegradedFeed(degradedFeeds, 'Creation orders', creationOrdersResult);
   return RegenUniverseHubData(
     risingStars: risingStarsResult.value ?? const <RegenRisingStar>[],
     awards: awardsResult.value ?? const <RegenAwardResult>[],
     nationalRegens: nationalRegensResult.value ?? const <NationalRegenSeed>[],
     scoutingFeed: scoutingFeedResult.value ?? const <RegenScoutingFeedItem>[],
+    bloodlines: bloodlinesResult.value ?? const <RegenBloodlineChain>[],
     tracking: trackingResult.value ?? _emptyRegenTracking,
     creationOrders:
         creationOrdersResult.value?.items ?? const <RegenCreationOrder>[],
+    degradedFeeds: degradedFeeds,
   );
 });
 
@@ -171,9 +212,6 @@ final Provider<List<Player>> regenProvider = Provider<List<Player>>((Ref ref) {
       )
       .toList(growable: false);
 });
-
-final Provider<List<Competition>> competitionsProvider =
-    Provider<List<Competition>>((Ref ref) => const <Competition>[]);
 
 final Provider<List<String>> historyProvider = Provider<List<String>>((
   Ref ref,

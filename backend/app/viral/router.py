@@ -89,7 +89,7 @@ def ensure_clip_event_ingestion_service(request: Request) -> ClipEventKafkaProdu
             return service
         settings = getattr(request.app.state, "settings", None) or get_settings()
         service = ClipEventKafkaProducer(settings=settings)
-        service.start()
+        # enqueue_many() starts Kafka lazily after payload validation.
         request.app.state.clip_event_ingestion_service = service
         return service
 
@@ -130,7 +130,7 @@ def startup(app, _context) -> None:
     settings = getattr(app.state, "settings", None)
     if getattr(app.state, "clip_event_ingestion_service", None) is None and settings is not None:
         service = ClipEventKafkaProducer(settings=settings)
-        service.start()
+        # Avoid blocking module startup on Kafka broker discovery.
         app.state.clip_event_ingestion_service = service
     ensure_viral_dispatch_runtime(app)
     bind_viral_ranking_scheduler(app, _context)

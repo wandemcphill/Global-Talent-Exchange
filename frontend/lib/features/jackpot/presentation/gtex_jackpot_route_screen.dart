@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/features/capital/wallet/data/capital_wallet_api.dart';
+import 'package:gte_frontend/features/capital/wallet/data/capital_wallet_availability.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_metric_chip.dart';
@@ -42,7 +44,7 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
   _JackpotState? _state;
   _JackpotRuntime? _adminRuntime;
   List<_JackpotHistoryItem> _history = const <_JackpotHistoryItem>[];
-  double? _walletBalance;
+  CapitalWalletAvailability? _walletAvailability;
   String? _error;
   bool _loading = true;
   bool _submittingContribution = false;
@@ -77,6 +79,9 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      if (_isAuthenticated) {
+        _walletAvailability = null;
+      }
     });
     try {
       final Map<String, Object?> payload = await _loadPayload();
@@ -86,10 +91,10 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
       final List<_JackpotHistoryItem> history = _listFrom(payload['history'])
           .map((Object? item) => _JackpotHistoryItem.fromJson(_mapFrom(item)))
           .toList(growable: false);
-      final double? walletBalance =
+      final CapitalWalletAvailability? walletAvailability =
           payload['wallet'] == null
               ? null
-              : _walletBalanceFrom(payload['wallet']);
+              : _walletAvailabilityFrom(payload['wallet']);
       final _JackpotRuntime? adminRuntime =
           payload['admin'] == null
               ? null
@@ -100,7 +105,7 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
       setState(() {
         _state = state;
         _history = history;
-        _walletBalance = walletBalance;
+        _walletAvailability = walletAvailability;
         _adminRuntime = adminRuntime;
         _loading = false;
       });
@@ -121,40 +126,29 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
 
   Future<Map<String, Object?>> _loadPayload() async {
     final GteAuthedApi api = widget.dependencies.createAuthedApi();
-    return api.withFallback<Map<String, Object?>>(
-      () async {
-        final List<Future<Object?>> calls = <Future<Object?>>[
-          api.getMap('/jackpot/state', auth: false),
-          api.getList(
-            '/jackpot/history',
-            auth: false,
-            query: const <String, Object?>{'limit': 8},
-          ),
-        ];
-        if (_isAuthenticated) {
-          calls.add(
-            api.getMap(
-              '/api/wallets/summary',
-              auth: true,
-              query: const <String, Object?>{'currency': 'coin'},
-            ),
-          );
-        }
-        if (_isAdmin) {
-          calls.add(api.getMap('/admin/jackpot/runtime', auth: true));
-        }
-        final List<Object?> results = await Future.wait<Object?>(calls);
-        int index = 0;
-        return <String, Object?>{
-          'state': results[index++],
-          'history': results[index++],
-          'wallet': _isAuthenticated ? results[index++] : null,
-          'admin': _isAdmin ? results[index++] : null,
-        };
-      },
-      () async =>
-          _fixturePayload(authenticated: _isAuthenticated, admin: _isAdmin),
-    );
+    final CapitalWalletApi walletApi = capitalWalletApiForClient(api);
+    final List<Future<Object?>> calls = <Future<Object?>>[
+      api.getMap('/jackpot/state', auth: false),
+      api.getList(
+        '/jackpot/history',
+        auth: false,
+        query: const <String, Object?>{'limit': 8},
+      ),
+    ];
+    if (_isAuthenticated) {
+      calls.add(walletApi.fetchAvailability());
+    }
+    if (_isAdmin) {
+      calls.add(api.getMap('/admin/jackpot/runtime', auth: true));
+    }
+    final List<Object?> results = await Future.wait<Object?>(calls);
+    int index = 0;
+    return <String, Object?>{
+      'state': results[index++],
+      'history': results[index++],
+      'wallet': _isAuthenticated ? results[index++] : null,
+      'admin': _isAdmin ? results[index++] : null,
+    };
   }
 
   void _hydrateAdminFields(_JackpotRuntime runtime) {
@@ -185,28 +179,41 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
       await _openLogin();
       return;
     }
+    final CapitalWalletAvailability? walletAvailability = _walletAvailability;
+    if (walletAvailability == null) {
+      AppFeedback.showError(
+        context,
+        'Wallet availability is still syncing. Try again after refresh.',
+      );
+      return;
+    }
+    if (!walletAvailability.coversCoinAmount(amount)) {
+      AppFeedback.showError(
+        context,
+        walletAvailability.blockedReason ??
+            'Wallet does not have enough available GTEX Coin for this contribution.',
+      );
+      return;
+    }
     setState(() {
       _submittingContribution = true;
     });
     try {
       final GteAuthedApi api = widget.dependencies.createAuthedApi();
-      await api.withFallback<Object?>(
-        () => api.post(
-          '/jackpot/contribute',
-          auth: true,
-          body: <String, Object?>{
-            'source_type': 'platform_activity',
-            'source_id': 'jackpot-ui-${DateTime.now().millisecondsSinceEpoch}',
-            'entry_fee': _decimalString(amount),
-            'contribution_amount': _decimalString(amount),
-            'eligibility_score': '1.0000',
-            'metadata': <String, Object?>{
-              'source': 'gtex_jackpot_route_screen',
-              'manual': true,
-            },
+      await api.post(
+        '/jackpot/contribute',
+        auth: true,
+        body: <String, Object?>{
+          'source_type': 'platform_activity',
+          'source_id': 'jackpot-ui-${DateTime.now().millisecondsSinceEpoch}',
+          'entry_fee': _decimalString(amount),
+          'contribution_amount': _decimalString(amount),
+          'eligibility_score': '1.0000',
+          'metadata': <String, Object?>{
+            'source': 'gtex_jackpot_route_screen',
+            'manual': true,
           },
-        ),
-        () async => <String, Object?>{'status': 'ok'},
+        },
       );
       if (!mounted) {
         return;
@@ -269,43 +276,18 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
     });
     try {
       final GteAuthedApi api = widget.dependencies.createAuthedApi();
-      await api.withFallback<Object?>(
-        () => api.post(
-          '/admin/jackpot/runtime',
-          auth: true,
-          body: <String, Object?>{
-            'threshold_amount': _decimalString(threshold),
-            'probability_limit': _decimalString(probabilityLimit),
-            'probability_cap': _decimalString(probabilityCap),
-            'failsafe_hours': failsafeHours,
-            'contribution_rate': _decimalString(contributionRate),
-            'distribution_mode': _distributionMode,
-            'top_split_percent': _decimalString(topSplitPercent),
-            'min_activity_score': _decimalString(minActivityScore),
-          },
-        ),
-        () async => <String, Object?>{
-          'round_id': _adminRuntime?.roundId ?? 'fixture-round',
-          'round_number': _adminRuntime?.roundNumber ?? 12,
-          'status': 'open',
-          'balance': _decimalString(_state?.balance ?? 2450.5),
+      await api.post(
+        '/admin/jackpot/runtime',
+        auth: true,
+        body: <String, Object?>{
           'threshold_amount': _decimalString(threshold),
           'probability_limit': _decimalString(probabilityLimit),
           'probability_cap': _decimalString(probabilityCap),
+          'failsafe_hours': failsafeHours,
           'contribution_rate': _decimalString(contributionRate),
-          'participant_count': _state?.participantCount ?? 184,
-          'failsafe_at':
-              DateTime.now()
-                  .toUtc()
-                  .add(Duration(hours: failsafeHours))
-                  .toIso8601String(),
           'distribution_mode': _distributionMode,
-          'last_winner_user_id': _state?.lastWinnerUserId,
-          'last_trigger_mode': _state?.lastTriggerMode,
           'top_split_percent': _decimalString(topSplitPercent),
           'min_activity_score': _decimalString(minActivityScore),
-          'failsafe_hours': failsafeHours,
-          'settings_source': 'runtime',
         },
       );
       if (!mounted) {
@@ -333,20 +315,10 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
     });
     try {
       final GteAuthedApi api = widget.dependencies.createAuthedApi();
-      final Object? payload = await api.withFallback<Object?>(
-        () => api.post(
-          '/admin/jackpot/trigger',
-          auth: true,
-          body: const <String, Object?>{},
-        ),
-        () async => <String, Object?>{
-          'detail':
-              'Manual jackpot trigger processed for round ${_state?.roundNumber ?? 12}.',
-          'triggered_round_id': _state?.roundId ?? 'fixture-round',
-          'triggered_round_number': _state?.roundNumber ?? 12,
-          'next_round_id': 'fixture-round-next',
-          'next_round_number': (_state?.roundNumber ?? 12) + 1,
-        },
+      final Object? payload = await api.post(
+        '/admin/jackpot/trigger',
+        auth: true,
+        body: const <String, Object?>{},
       );
       if (!mounted) {
         return;
@@ -572,31 +544,50 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 10),
-          Text(
-            'Wallet available: ${gteFormatCredits(_walletBalance ?? 0)}. Direct contributions use the exact GTEX Coin amount you enter and settle immediately into the live jackpot pool.',
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _contributionAmountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Contribution amount (GTEX Coin)',
-              hintText: '50',
+          if (_walletAvailability == null) ...<Widget>[
+            const GteStatePanel(
+              title: 'Wallet availability syncing',
+              message:
+                  'Capital wallet availability has not arrived yet. Contributions stay blocked until the backend confirms available GTEX Coin.',
+              icon: Icons.sync_problem_outlined,
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Current round threshold: ${gteFormatCredits(state.thresholdAmount)}. Contribution rate remains visible for system-driven activity, but direct wallet contributions are now explicit.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: _submittingContribution ? null : _submitContribution,
-            icon: const Icon(Icons.account_balance_wallet_outlined),
-            label: Text(
-              _submittingContribution ? 'Submitting...' : 'Contribute now',
+          ] else if (!_walletAvailability!.isAvailable) ...<Widget>[
+            GteStatePanel(
+              title: 'Wallet contribution blocked',
+              message:
+                  _walletAvailability!.blockedReason ??
+                  'Capital reports this wallet as unavailable for direct jackpot contributions.',
+              icon: Icons.lock_outline,
             ),
-          ),
+          ] else ...<Widget>[
+            Text(
+              'Wallet available: ${gteFormatCredits(_walletAvailability!.availableBalanceCoin)}. Direct contributions use the exact GTEX Coin amount you enter and settle immediately into the live jackpot pool.',
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _contributionAmountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Contribution amount (GTEX Coin)',
+                hintText: '50',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Current round threshold: ${gteFormatCredits(state.thresholdAmount)}. Contribution rate remains visible for system-driven activity, but direct wallet contributions are now explicit.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _submittingContribution ? null : _submitContribution,
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: Text(
+                _submittingContribution ? 'Submitting...' : 'Contribute now',
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1016,66 +1007,6 @@ class _JackpotPayout {
   final double payoutAmount;
 }
 
-Map<String, Object?> _fixturePayload({
-  required bool authenticated,
-  required bool admin,
-}) {
-  final Map<String, Object?> state = <String, Object?>{
-    'round_id': 'fixture-round-12',
-    'round_number': 12,
-    'status': 'open',
-    'balance': '2450.5000',
-    'threshold_amount': '5000.0000',
-    'probability_limit': '10000.0000',
-    'probability_cap': '0.3500',
-    'contribution_rate': '0.1000',
-    'participant_count': 184,
-    'failsafe_at': DateTime.utc(2026, 4, 6, 12).toIso8601String(),
-    'distribution_mode': 'single_winner',
-    'last_winner_user_id': 'user-41',
-    'last_trigger_mode': 'threshold',
-  };
-  return <String, Object?>{
-    'state': state,
-    'history': <Map<String, Object?>>[
-      <String, Object?>{
-        'round_number': 11,
-        'status': 'settled',
-        'trigger_mode': 'threshold',
-        'current_balance': '3800.0000',
-        'winning_user_id': 'user-41',
-        'triggered_at': DateTime.utc(2026, 4, 5, 8, 30).toIso8601String(),
-        'payouts': <Map<String, Object?>>[
-          <String, Object?>{
-            'user_id': 'user-41',
-            'rank': 1,
-            'payout_amount': '3800.0000',
-          },
-        ],
-      },
-    ],
-    'wallet':
-        authenticated
-            ? <String, Object?>{
-              'available_balance': 1200,
-              'reserved_balance': 0,
-              'total_balance': 1200,
-              'currency': 'coin',
-            }
-            : null,
-    'admin':
-        admin
-            ? <String, Object?>{
-              ...state,
-              'top_split_percent': '0.1000',
-              'min_activity_score': '1.0000',
-              'failsafe_hours': 6,
-              'settings_source': 'runtime',
-            }
-            : null,
-  };
-}
-
 Map<String, Object?> _mapFrom(Object? value) {
   if (value is Map<String, Object?>) {
     return value;
@@ -1156,15 +1087,15 @@ DateTime? _dateTimeFrom(Map<String, Object?> json, List<String> keys) {
   return DateTime.tryParse(value)?.toUtc();
 }
 
-double? _walletBalanceFrom(Object? value) {
+CapitalWalletAvailability? _walletAvailabilityFrom(Object? value) {
+  if (value is CapitalWalletAvailability) {
+    return value;
+  }
   final Map<String, Object?> json = _mapFrom(value);
   if (json.isEmpty) {
     return null;
   }
-  return _doubleFrom(json, const <String>[
-    'available_balance',
-    'availableBalance',
-  ]);
+  return CapitalWalletAvailability.fromJson(json);
 }
 
 double? _parsePositiveDouble(String raw) {

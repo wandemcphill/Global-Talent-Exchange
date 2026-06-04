@@ -70,10 +70,13 @@ def test_league_round_and_fixture_generation(client, competition_admin_headers, 
     )
     assert launch.status_code == 200
 
-    rounds = client.get(f"/api/competitions/{competition_id}/rounds").json()
-    fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()
+    bracket = client.get(f"/api/competitions/{competition_id}/rounds").json()
+    fixtures_payload = client.get(f"/api/competitions/{competition_id}/fixtures").json()
+    fixtures = fixtures_payload["items"]
 
-    assert len(rounds) == 3
+    assert bracket["status"] == "empty"
+    assert bracket["state"]["reason"] == "competition_has_no_bracket"
+    assert fixtures_payload["status"] == "synced"
     assert len(fixtures) == 6
     assert {match["stage"] for match in fixtures} == {"league"}
 
@@ -91,7 +94,10 @@ def test_standings_update_after_match_completion(client, competition_admin_heade
     )
     assert launch.status_code == 200
 
-    fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()
+    fixtures_payload = client.get(f"/api/competitions/{competition_id}/fixtures").json()
+    fixtures = fixtures_payload["items"]
+    assert fixtures_payload["score_status"] == "pending_results"
+    assert fixtures_payload["authoritative_scores"] is False
     assert len(fixtures) == 1
     match = fixtures[0]
 
@@ -107,7 +113,9 @@ def test_standings_update_after_match_completion(client, competition_admin_heade
     )
     assert result.status_code == 200
 
-    standings = client.get(f"/api/competitions/{competition_id}/standings").json()
+    standings_payload = client.get(f"/api/competitions/{competition_id}/standings").json()
+    standings = standings_payload["items"]
+    assert standings_payload["status"] == "synced"
     assert len(standings) == 2
     leader = standings[0]
     assert leader["points"] == 3
@@ -128,7 +136,7 @@ def test_cup_playoff_progression_and_settlement(client, competition_admin_header
     ).json()
     assert launched["status"] == "live"
 
-    fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()
+    fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()["items"]
     assert len(fixtures) == 2
     for match in fixtures:
         result = client.post(
@@ -140,7 +148,7 @@ def test_cup_playoff_progression_and_settlement(client, competition_admin_header
     advanced = client.post(f"/api/competitions/{competition_id}/advance", json={"force": False}).json()
     assert advanced["status"] in {"live", "completed"}
 
-    fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()
+    fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()["items"]
     final_matches = [match for match in fixtures if match["round_number"] == 2]
     assert len(final_matches) == 1
 

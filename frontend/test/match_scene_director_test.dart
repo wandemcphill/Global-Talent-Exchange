@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gte_frontend/features/match/presentation/match_scene_director.dart';
-import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/presentation/match_scene_director.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 

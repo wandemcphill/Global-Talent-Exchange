@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
-import 'package:gte_frontend/screens/match/gtex_match_3d_screen.dart';
-import 'package:gte_frontend/services/match_3d_monetization_service.dart';
-import 'package:gte_frontend/services/match_viewer_mapper.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/presentation/gtex_match_runtime_blocked_screen.dart';
+import 'package:gte_frontend/features/3d/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
-import 'package:gte_frontend/widgets/match_3d/entities/pitch_entity.dart';
-import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
+import 'package:gte_frontend/features/3d/widgets/match_3d/entities/pitch_entity.dart';
+import 'package:gte_frontend/features/3d/widgets/match_3d/gtex_3d_scene.dart';
+
+import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   testWidgets('3D match screen is blocked for the 2D launch', (
@@ -18,18 +18,13 @@ void main() {
     final CompetitionSummary competition = _buildCompetition(
       id: 'match-3d-viewer-test',
     );
-    final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
-      competition,
-    );
 
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
-        home: GtexMatch3dScreen(
+        home: GtexMatchRuntimeBlockedScreen(
           competition: competition,
           matchKey: competition.id,
-          fallbackSnapshot: snapshot,
-          preferFallback: true,
           entitlement: const Match3dUserEntitlement.proManager(),
         ),
       ),
@@ -38,9 +33,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 64));
 
-    expect(find.text('Coming soon'), findsWidgets);
-    expect(find.text('Route blocked'), findsOneWidget);
-    expect(find.textContaining('2D match viewer'), findsWidgets);
+    expect(find.text('Route blocked'), findsWidgets);
+    expect(
+      find.textContaining('backend-authoritative 2D tactical viewer'),
+      findsWidgets,
+    );
     expect(find.byType(Gtex3dScene), findsNothing);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -53,15 +50,8 @@ void main() {
     final CompetitionSummary competition = _buildCompetition(
       id: 'match-3d-scene-test',
     );
-    final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
-      competition,
-    );
-    final MatchViewState viewState = await MatchViewerMapper.load(
-      competition: competition,
-      matchKey: competition.id,
-      fallbackSnapshot: snapshot,
-      preferFallback: true,
-    );
+    final MatchViewState viewState =
+        buildBackendAuthored3dQuarantineViewState();
 
     final Gtex3dSceneSnapshot scene = Gtex3dScene.describeScene(
       viewState: viewState,

@@ -590,12 +590,14 @@ class HostedCompetitionService:
         )
         return list(self.session.scalars(stmt).all())
 
-    def finance_snapshot(self, competition_id: str) -> dict[str, Decimal | int | str]:
+    def finance_snapshot(self, competition_id: str) -> dict[str, object]:
         competition = self.get_competition(competition_id)
         if competition is None:
             raise HostedCompetitionError("Hosted competition was not found.")
         participants = self.participants_for_competition(competition_id)
         escrow_balance = self._available_escrow_balance(competition)
+        standings = self.standings_for_competition(competition_id)
+        settlements = self.settlements_for_competition(competition_id)
         settled_prizes = self._normalize_amount(
             self.session.scalar(
                 select(func.coalesce(func.sum(HostedCompetitionSettlement.net_amount), 0)).where(
@@ -614,6 +616,7 @@ class HostedCompetitionService:
             )
             or 0
         )
+        status_value = competition.status.value if hasattr(competition.status, "value") else str(competition.status)
         return {
             "currency": "fan_coin",
             "participant_count": len(participants),
@@ -624,7 +627,96 @@ class HostedCompetitionService:
             "escrow_balance": escrow_balance,
             "settled_prizes": settled_prizes,
             "settled_platform_fee": platform_fee_settled,
-            "status": competition.status.value if hasattr(competition.status, "value") else str(competition.status),
+            "status": status_value,
+            "settlement_readiness": self._settlement_readiness_snapshot(
+                competition=competition,
+                participant_count=len(participants),
+                standings_count=len(standings),
+                settlement_count=len(settlements),
+                escrow_balance=escrow_balance,
+                status_value=status_value,
+            ),
+        }
+
+    def _settlement_readiness_snapshot(
+        self,
+        *,
+        competition: UserHostedCompetition,
+        participant_count: int,
+        standings_count: int,
+        settlement_count: int,
+        escrow_balance: Decimal,
+        status_value: str,
+    ) -> dict[str, object]:
+        projected_reward_pool = self._normalize_amount(competition.reward_pool_fancoin)
+        blockers: list[str] = []
+        warnings: list[str] = []
+        missing_data: list[dict[str, str]] = []
+
+        if status_value in {HostedCompetitionStatus.DRAFT.value, HostedCompetitionStatus.OPEN.value}:
+            warnings.append("Competition is not live yet; settlement readiness is pending launch.")
+            state = "pending"
+        elif status_value == HostedCompetitionStatus.LOCKED.value:
+            warnings.append("Competition entries are locked; standings are still waiting for launch.")
+            state = "syncing"
+        elif status_value == HostedCompetitionStatus.CANCELLED.value:
+            blockers.append("Cancelled hosted competitions are not eligible for settlement.")
+            state = "blocked"
+        elif status_value == HostedCompetitionStatus.COMPLETED.value:
+            if settlement_count == 0:
+                blockers.append("Competition is complete but no hosted settlement records exist.")
+                missing_data.append(
+                    {
+                        "source": "hosted_competition_settlements",
+                        "reason": "No settlement records are attached to the completed hosted competition.",
+                    }
+                )
+                state = "blocked"
+            else:
+                state = "confirmed"
+        else:
+            state = "ready"
+
+        if status_value == HostedCompetitionStatus.LIVE.value:
+            if participant_count == 0:
+                blockers.append("No participants are attached to the hosted competition.")
+                missing_data.append(
+                    {
+                        "source": "hosted_competition_participants",
+                        "reason": "No participant rows are available for settlement calculation.",
+                    }
+                )
+            if standings_count == 0:
+                blockers.append("No standings exist for the live hosted competition.")
+                missing_data.append(
+                    {
+                        "source": "hosted_competition_standings",
+                        "reason": "Standings must be initialized before settlement can be prepared.",
+                    }
+                )
+            if escrow_balance < projected_reward_pool:
+                blockers.append("Escrow balance is below the projected hosted reward pool.")
+                missing_data.append(
+                    {
+                        "source": "hosted_competition_escrow",
+                        "reason": "Escrow balance does not cover the projected reward pool.",
+                    }
+                )
+            state = "blocked" if blockers else "ready"
+
+        ready = state in {"ready", "confirmed"}
+        return {
+            "state": state,
+            "status": state,
+            "ready": ready,
+            "source": "hosted_competition_engine",
+            "participant_count": participant_count,
+            "standings_count": standings_count,
+            "settlement_count": settlement_count,
+            "escrow_balance": escrow_balance,
+            "blockers": blockers,
+            "warnings": warnings,
+            "missing_data": missing_data,
         }
 
     def join_competition(

@@ -79,7 +79,7 @@ class GteNoClubOnboardingView extends StatelessWidget {
           chipLabel: 'Open matchday hub',
           title: 'Play matchday lanes',
           detail:
-              'Enter the routed 2D viewer, broadcast view, and Flutter 3D lane even before you own a club.',
+              'Enter the routed 2D viewer and broadcast matchday desk even before you own a club.',
           icon: Icons.sports_soccer_outlined,
           accent: GteShellTheme.accentArena,
           actionLabel: 'Open matchday',

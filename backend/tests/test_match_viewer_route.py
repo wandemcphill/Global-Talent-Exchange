@@ -28,6 +28,9 @@ from backend.tests.test_match_timeline_service import _build_archive_record
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 
 
+_LEGACY_VIEWER_LABELS = ("premium", "3d", "production", "monetization")
+
+
 def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
     app = FastAPI()
     app.include_router(match_viewer_router)
@@ -78,6 +81,34 @@ def _insert_match(session_factory: sessionmaker[Session], match_id: str, metadat
             )
         )
         session.commit()
+
+
+def _legacy_label_hits(value: object) -> list[str]:
+    hits: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized_key = str(key).lower()
+            if any(label in normalized_key for label in _LEGACY_VIEWER_LABELS):
+                hits.append(str(key))
+            hits.extend(_legacy_label_hits(item))
+    elif isinstance(value, list):
+        for item in value:
+            hits.extend(_legacy_label_hits(item))
+    elif isinstance(value, str):
+        normalized_value = value.lower()
+        value_labels = tuple(label for label in _LEGACY_VIEWER_LABELS if label != "3d")
+        if any(label in normalized_value for label in value_labels):
+            hits.append(value)
+    return hits
+
+
+def test_match_viewer_illusion_route_is_not_mounted() -> None:
+    app, _ = _build_app()
+
+    with TestClient(app) as client:
+        response = client.get("/api/match-viewer/example-match/illusion")
+
+    assert response.status_code == 404
 
 
 def test_match_viewer_route_scales_stored_payload_by_mode() -> None:
@@ -188,6 +219,20 @@ def test_match_viewer_route_exposes_match_gift_target_metadata() -> None:
         metadata_json={
             "match_viewer": base_view.model_dump(mode="json"),
             "creator_name": "Studio Kai",
+            "gift_catalog": [
+                {
+                    "key": "fire",
+                    "display_name": "Fire",
+                    "tier": "standard",
+                    "fancoin_price": 2,
+                }
+            ],
+            "gift_session": {
+                "status": "ready",
+                "active": True,
+                "can_send": True,
+                "session_id": "gift-session-1",
+            },
         },
     )
 
@@ -195,10 +240,17 @@ def test_match_viewer_route_exposes_match_gift_target_metadata() -> None:
         response = client.get(f"/api/match-viewer/{replay_payload.match_id}")
 
     assert response.status_code == 200
-    monetization = response.json()["monetization"]
-    assert monetization["metadata"]["gift_recipient_user_id"] == "host-user-1"
-    assert monetization["metadata"]["gift_recipient_label"] == "Studio Kai"
-    assert monetization["metadata"]["gift_source_scope"] == "user_hosted"
+    payload = response.json()
+    assert "monetization" not in payload
+    gifting = payload["engagement"]["gifting"]
+    assert gifting["status"] == "ready"
+    assert gifting["target"]["recipient_user_id"] == "host-user-1"
+    assert gifting["target"]["recipient_label"] == "Studio Kai"
+    assert gifting["target"]["source_scope"] == "user_hosted"
+    assert gifting["catalog"]["status"] == "ready"
+    assert gifting["catalog"]["items"][0]["key"] == "fire"
+    assert gifting["session"]["status"] == "ready"
+    assert gifting["session"]["session_id"] == "gift-session-1"
 
 
 def test_match_viewer_route_scales_archive_fallback_by_mode() -> None:
@@ -276,11 +328,62 @@ def test_match_viewer_route_adds_presentation_package_from_replay_payload() -> N
     assert package["context"]["competition_name"] == "GTEX Premier League"
     assert package["context"]["standings"][0]["team_name"] == base_view.home_team.team_name
     assert package["reactions"]
+    assert timeline_payload["engagement"]["commentary"]["status"] == "ready"
+    assert timeline_payload["engagement"]["commentary"]["lines"]
+    assert timeline_payload["engagement"]["reactions"]["status"] == "ready"
+    assert timeline_payload["engagement"]["reactions"]["cards"]
 
     assert session.status_code == 200
     session_payload = session.json()
     assert session_payload["presentation_package"]["home"]["formation"]
     assert session_payload["presentation_package"]["context"]["venue_name"] == "National Stadium"
+    assert session_payload["engagement"]["event_source"]["backend_authored"] is True
+
+
+def test_match_viewer_route_marks_missing_incident_event_source_as_degraded() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=32))
+    base_view = MatchTimelineService().build_from_replay_payload(replay_payload)
+    stored_view = base_view.model_dump(mode="json")
+    stored_view["events"] = [
+        event
+        for event in stored_view["events"]
+        if event["event_type"] in {"kickoff", "halftime", "fulltime"}
+    ]
+    _insert_match(
+        session_factory,
+        replay_payload.match_id,
+        metadata_json={"match_viewer": stored_view},
+    )
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/match-viewer/{replay_payload.match_id}")
+
+    assert response.status_code == 200
+    engagement = response.json()["engagement"]
+    assert engagement["event_source"]["status"] == "degraded"
+    assert engagement["event_source"]["degraded_reason"] == "incident_event_source_missing"
+    assert engagement["commentary"]["status"] == "empty"
+    assert engagement["commentary"]["lines"] == []
+
+
+def test_match_viewer_contract_uses_neutral_engagement_labels() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=34))
+    base_view = MatchTimelineService().build_from_replay_payload(replay_payload)
+    _insert_match(
+        session_factory,
+        replay_payload.match_id,
+        metadata_json={"match_viewer": base_view.model_dump(mode="json")},
+    )
+
+    with TestClient(app) as client:
+        response = client.get(f"/api/match-viewer/{replay_payload.match_id}/session")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "engagement" in payload
+    assert _legacy_label_hits(payload) == []
 
 
 def test_match_viewer_route_builds_live_hub_fallback_when_no_stored_metadata_exists() -> None:

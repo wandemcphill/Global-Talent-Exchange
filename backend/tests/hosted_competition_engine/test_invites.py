@@ -104,6 +104,13 @@ def test_private_hosted_competition_requires_invite_and_accepts_invited_user() -
         app.dependency_overrides[get_current_user] = override_current_user
 
         with TestClient(app) as client:
+            finance_response = client.get(f"/hosted-competitions/{competition.id}/finance")
+            assert finance_response.status_code == 200, finance_response.text
+            settlement_readiness = finance_response.json()["settlement_readiness"]
+            assert settlement_readiness["state"] == "pending"
+            assert settlement_readiness["ready"] is False
+            assert settlement_readiness["source"] == "hosted_competition_engine"
+
             blocked_join = client.post(f"/hosted-competitions/{competition.id}/join")
             assert blocked_join.status_code == 400, blocked_join.text
             assert "invite is required" in blocked_join.json()["detail"].lower()
@@ -135,6 +142,82 @@ def test_private_hosted_competition_requires_invite_and_accepts_invited_user() -
             assert accepted["participant"]["user_id"] == guest.id
             assert accepted["invite"]["status"] == "accepted"
             assert accepted["current_participants"] == 1
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_hosted_finance_marks_live_settlement_readiness_blocked_without_standings_or_escrow() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    session = SessionLocal()
+    try:
+        host = _create_user(session, user_id="host-finance")
+        template = CompetitionTemplate(
+            template_key="finance-cup",
+            title="Finance Cup",
+            description="Hosted cup finance readiness",
+            competition_type="user_hosted_cup",
+            team_type="club",
+            age_grade="senior",
+            cup_or_league="cup",
+            participants=2,
+            viewing_mode="broadcast",
+            gift_rules={},
+            seeding_method="random",
+            is_user_hostable=True,
+            entry_fee_fancoin=Decimal("10.0000"),
+            reward_pool_fancoin=Decimal("15.0000"),
+            platform_fee_bps=0,
+            metadata_json={},
+            active=True,
+        )
+        session.add(template)
+        session.flush()
+        competition = UserHostedCompetition(
+            template_id=template.id,
+            host_user_id=host.id,
+            title="Finance Fast Cup",
+            slug="finance-fast-cup",
+            description="Live finance readiness cup",
+            status=HostedCompetitionStatus.LIVE,
+            visibility="public",
+            max_participants=2,
+            entry_fee_fancoin=Decimal("10.0000"),
+            reward_pool_fancoin=Decimal("15.0000"),
+            platform_fee_amount=Decimal("0.0000"),
+            metadata_json={},
+        )
+        session.add(competition)
+        session.commit()
+
+        app = FastAPI()
+        app.include_router(hosted_router)
+
+        def override_session():
+            yield session
+
+        app.dependency_overrides[get_session] = override_session
+
+        with TestClient(app) as client:
+            finance_response = client.get(f"/hosted-competitions/{competition.id}/finance")
+            assert finance_response.status_code == 200, finance_response.text
+            readiness = finance_response.json()["settlement_readiness"]
+            assert readiness["state"] == "blocked"
+            assert readiness["ready"] is False
+            assert readiness["participant_count"] == 0
+            assert readiness["standings_count"] == 0
+            assert readiness["blockers"]
+            assert {item["source"] for item in readiness["missing_data"]} == {
+                "hosted_competition_participants",
+                "hosted_competition_standings",
+                "hosted_competition_escrow",
+            }
     finally:
         session.close()
         engine.dispose()

@@ -1,28 +1,42 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 import hmac
-from hashlib import sha256, sha512
+from io import StringIO
+from hashlib import sha256
 import json
 import logging
 import os
+from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.economy.governor_service import EconomyGovernorService
 from app.models.competition_reward_pool import CompetitionRewardPool
+from app.models.creator_monetization import CreatorRevenueSettlement
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.economy_daily_stat import EconomyDailyStat
+from app.models.event_backbone import EventOutbox
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.player_cards import PlayerCardMomentum
-from app.models.risk_ops import SystemEvent, SystemEventSeverity
+from app.models.reward_settlement import RewardSettlement
+from app.models.risk_ops import (
+    AmlCase,
+    FraudCase,
+    RiskAction,
+    RiskSignal,
+    SystemEvent,
+    SystemEventSeverity,
+)
 from app.models.treasury import (
     DepositRequest,
     DepositStatus,
     KycProfile,
+    TreasuryAuditEvent,
     TreasuryWithdrawalRequest,
     TreasuryWithdrawalStatus,
 )
@@ -41,16 +55,69 @@ from app.services.payment_gateway_service import PaymentGatewayService
 from app.treasury.service import TreasuryService
 from app.wallets.providers.base import ProviderEventType
 from app.wallets.providers.korapay import KoraPayProviderAdapter
-from app.wallets.providers.paystack import PaystackProviderAdapter
 from app.wallets.rail_service import WalletRailService
 from app.wallets.service import WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 logger = logging.getLogger(__name__)
+CANONICAL_CASH_RAIL_METHODS: dict[str, str] = {
+    "bank_transfer_manual": "Manual bank transfer",
+    "korapay": "KoraPay",
+}
+PAYMENT_QUEUE_PENDING_DEPOSIT_STATUSES = (
+    DepositStatus.PAYMENT_SUBMITTED,
+    DepositStatus.UNDER_REVIEW,
+    DepositStatus.DISPUTED,
+)
+PAYMENT_QUEUE_APPROVED_DEPOSIT_STATUSES = (DepositStatus.CONFIRMED,)
+PAYMENT_QUEUE_REJECTED_DEPOSIT_STATUSES = (DepositStatus.REJECTED,)
+PAYMENT_QUEUE_TABS = ("pending", "approved", "rejected", "bids")
+PAYMENT_QUEUE_BID_ACTION_REASONS = {
+    "approve": "admin_payment_queue_approve_requested",
+    "reject": "admin_payment_queue_reject_requested",
+    "counter": "admin_payment_queue_counter_requested",
+}
+PAYMENT_QUEUE_ACTION_LABELS = {
+    "review": "Mark under review",
+    "approve": "Approve",
+    "reject": "Reject",
+    "reinstate": "Reinstate",
+    "counter": "Counter",
+}
+ADMIN_EXPORT_EVENT_REQUESTED = "admin.export.requested"
+ADMIN_EXPORT_EVENT_READY = "admin.export.ready"
+ADMIN_EXPORT_EVENT_BLOCKED = "admin.export.blocked"
+ADMIN_BULK_ACTION_EVENT_REQUESTED = "admin.bulk_action.requested"
+ADMIN_BULK_ACTION_EVENT_COMPLETED = "admin.bulk_action.completed"
+ADMIN_EXPORT_BLOCKED_REASON = (
+    "Admin finance export artifact generation is not configured; no finance export download was generated."
+)
+ADMIN_EXPORT_DOWNLOAD_BASE = "/api/v2/admin/finance/exports"
+ADMIN_EXPORT_TYPES = {
+    "treasury",
+    "payment_proofs",
+    "withdrawals",
+    "settlements",
+    "fraud",
+    "audit_logs",
+    "payment_queue",
+}
+ADMIN_BULK_RESOURCE_TYPES = {
+    "deposit": "deposit_request",
+    "payment_proof": "deposit_request",
+    "withdrawal": "treasury_withdrawal",
+}
+ADMIN_EXPORT_GENERATOR_BLOCKED_REASONS: dict[str, str] = {}
+ADMIN_EXPORT_DEFAULT_LIMIT = 500
+ADMIN_EXPORT_MAX_LIMIT = 1000
 
 
 def _zero() -> Decimal:
     return Decimal("0.0000")
+
+
+class AdminExportBlockedError(ValueError):
+    pass
 
 
 @dataclass(slots=True)
@@ -221,26 +288,6 @@ class AdminFinanceService:
             "projections": points,
         }
 
-    def handle_paystack_webhook(
-        self,
-        payload: dict[str, object],
-        *,
-        raw_body: bytes | None = None,
-        headers: dict[str, str] | None = None,
-    ) -> dict[str, object]:
-        signature_verified = self.verify_provider_webhook(
-            provider_key="paystack",
-            payload=payload,
-            raw_body=raw_body,
-            headers=headers,
-        )
-        adapter = PaystackProviderAdapter()
-        event = adapter.parse_webhook(payload, headers=None)
-        if event is None:
-            return {"status": "ignored", "provider": "paystack", "signature_verified": signature_verified}
-
-        return self._handle_provider_event(event=event, provider="paystack", signature_verified=signature_verified)
-
     def handle_korapay_webhook(
         self,
         payload: dict[str, object],
@@ -271,11 +318,9 @@ class AdminFinanceService:
     ) -> bool:
         normalized_provider = provider_key.strip().lower()
         normalized_headers = {str(key).lower(): str(value).strip() for key, value in (headers or {}).items()}
-        if normalized_provider == "paystack":
-            return self._verify_paystack_webhook(raw_body=raw_body, headers=normalized_headers)
         if normalized_provider == "korapay":
             return self._verify_korapay_webhook(payload=payload, headers=normalized_headers)
-        return False
+        raise ValueError("Unsupported payment webhook provider.")
 
     def wallet_protection_summary(
         self,
@@ -323,7 +368,7 @@ class AdminFinanceService:
             "pending_withdrawals": self._count_pending_withdrawals(),
             "active_wallet_transaction_lock_count": len(active_wallet_transaction_locks or []),
             "payment_signature_verification_enabled": any(
-                bool(self._provider_secret(provider)) for provider in ("paystack", "korapay")
+                bool(self._provider_secret(provider)) for provider in ("korapay",)
             ),
             "active_wallet_transaction_locks": list(active_wallet_transaction_locks or []),
             "duplicate_deposit_candidates": duplicate_candidates,
@@ -459,8 +504,1962 @@ class AdminFinanceService:
             "issues": issues[:issue_limit],
         }
 
+    def get_admin_payment_queue(
+        self,
+        *,
+        actor: User | None = None,
+        tab: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, object]:
+        normalized_tab = self._normalize_payment_queue_tab(tab)
+        sections = {
+            "pending": self._deposit_queue_section(
+                key="pending",
+                label="Pending",
+                statuses=PAYMENT_QUEUE_PENDING_DEPOSIT_STATUSES,
+                include_items=normalized_tab in {None, "pending"},
+                q=q,
+                limit=limit,
+                offset=offset,
+                actor=actor,
+            ),
+            "approved": self._deposit_queue_section(
+                key="approved",
+                label="Approved",
+                statuses=PAYMENT_QUEUE_APPROVED_DEPOSIT_STATUSES,
+                include_items=normalized_tab in {None, "approved"},
+                q=q,
+                limit=limit,
+                offset=offset,
+                actor=actor,
+            ),
+            "rejected": self._deposit_queue_section(
+                key="rejected",
+                label="Rejected",
+                statuses=PAYMENT_QUEUE_REJECTED_DEPOSIT_STATUSES,
+                include_items=normalized_tab in {None, "rejected"},
+                q=q,
+                limit=limit,
+                offset=offset,
+                actor=actor,
+            ),
+            "bids": self._transfer_bid_queue_section(
+                include_items=normalized_tab in {None, "bids"},
+                q=q,
+                limit=limit,
+                offset=offset,
+            ),
+        }
+        return {
+            "generated_at": datetime.now(timezone.utc),
+            "tabs": [
+                {
+                    "key": key,
+                    "label": sections[key]["label"],
+                    "total": sections[key]["total"],
+                    "action_state": sections[key].get("action_state", "enabled"),
+                }
+                for key in PAYMENT_QUEUE_TABS
+            ],
+            "sections": sections,
+            **sections,
+        }
+
+    def review_payment_queue_deposit(
+        self,
+        *,
+        actor: User,
+        deposit_id: str,
+        admin_notes: str,
+    ) -> dict[str, object]:
+        deposit = self.treasury_service.mark_deposit_under_review(
+            self.session,
+            actor=actor,
+            deposit_request_id=deposit_id,
+            admin_notes=admin_notes,
+        )
+        return self._payment_queue_action_result(
+            action="review",
+            item_type="deposit",
+            item=self._serialize_deposit_queue_item(deposit, "pending", actor=actor),
+            business_state_changed=True,
+            wallet_state_changed=False,
+        )
+
+    def approve_payment_queue_deposit(
+        self,
+        *,
+        actor: User,
+        deposit_id: str,
+        admin_notes: str,
+    ) -> dict[str, object]:
+        deposit = self.treasury_service.confirm_deposit(
+            self.session,
+            actor=actor,
+            deposit_request_id=deposit_id,
+            admin_notes=admin_notes,
+        )
+        return self._payment_queue_action_result(
+            action="approve",
+            item_type="deposit",
+            item=self._serialize_deposit_queue_item(deposit, "approved", actor=actor),
+            business_state_changed=True,
+            wallet_state_changed=True,
+        )
+
+    def reject_payment_queue_deposit(
+        self,
+        *,
+        actor: User,
+        deposit_id: str,
+        admin_notes: str,
+    ) -> dict[str, object]:
+        deposit = self.treasury_service.reject_deposit(
+            self.session,
+            actor=actor,
+            deposit_request_id=deposit_id,
+            admin_notes=admin_notes,
+        )
+        return self._payment_queue_action_result(
+            action="reject",
+            item_type="deposit",
+            item=self._serialize_deposit_queue_item(deposit, "rejected", actor=actor),
+            business_state_changed=True,
+            wallet_state_changed=False,
+        )
+
+    def reinstate_payment_queue_deposit(
+        self,
+        *,
+        actor: User,
+        deposit_id: str,
+        admin_notes: str,
+    ) -> dict[str, object]:
+        deposit = self.treasury_service.mark_deposit_under_review(
+            self.session,
+            actor=actor,
+            deposit_request_id=deposit_id,
+            admin_notes=admin_notes,
+        )
+        return self._payment_queue_action_result(
+            action="reinstate",
+            item_type="deposit",
+            item=self._serialize_deposit_queue_item(deposit, "pending", actor=actor),
+            business_state_changed=True,
+            wallet_state_changed=False,
+        )
+
+    def approve_payment_queue_withdrawal(
+        self,
+        *,
+        actor: User,
+        withdrawal_id: str,
+        admin_notes: str,
+    ) -> dict[str, object]:
+        return self._review_payment_queue_withdrawal(
+            actor=actor,
+            withdrawal_id=withdrawal_id,
+            action="approve",
+            next_status=TreasuryWithdrawalStatus.APPROVED,
+            admin_notes=admin_notes,
+        )
+
+    def reject_payment_queue_withdrawal(
+        self,
+        *,
+        actor: User,
+        withdrawal_id: str,
+        admin_notes: str,
+    ) -> dict[str, object]:
+        return self._review_payment_queue_withdrawal(
+            actor=actor,
+            withdrawal_id=withdrawal_id,
+            action="reject",
+            next_status=TreasuryWithdrawalStatus.REJECTED,
+            admin_notes=admin_notes,
+        )
+
+    def reinstate_payment_queue_withdrawal(
+        self,
+        *,
+        actor: User,
+        withdrawal_id: str,
+        admin_notes: str,
+    ) -> dict[str, object]:
+        withdrawal = self.session.get(TreasuryWithdrawalRequest, withdrawal_id)
+        if withdrawal is None:
+            raise ValueError("Withdrawal request was not found.")
+        if withdrawal.status in {
+            TreasuryWithdrawalStatus.REJECTED,
+            TreasuryWithdrawalStatus.CANCELLED,
+            TreasuryWithdrawalStatus.PAID,
+        }:
+            raise ValueError("Rejected, cancelled, or paid withdrawals cannot be reinstated after funds move.")
+        return self._review_payment_queue_withdrawal(
+            actor=actor,
+            withdrawal_id=withdrawal_id,
+            action="reinstate",
+            next_status=TreasuryWithdrawalStatus.PENDING_REVIEW,
+            admin_notes=admin_notes,
+        )
+
+    def record_payment_queue_bid_action(
+        self,
+        *,
+        actor: User,
+        window_id: str,
+        bid_id: str,
+        action: str,
+        admin_notes: str,
+    ) -> dict[str, object]:
+        normalized_action = action.strip().lower()
+        if normalized_action not in PAYMENT_QUEUE_BID_ACTION_REASONS:
+            raise ValueError("Bid action must be approve, reject, or counter.")
+
+        from app.schemas.player_lifecycle import AdminTransferBidReviewActionRequest
+        from app.services.player_lifecycle_service import (
+            PlayerLifecycleNotFoundError,
+            PlayerLifecycleService,
+            PlayerLifecycleValidationError,
+        )
+
+        try:
+            response = PlayerLifecycleService(self.session).record_admin_transfer_bid_review_action(
+                window_id,
+                bid_id,
+                AdminTransferBidReviewActionRequest(
+                    action="escalate",
+                    reason=PAYMENT_QUEUE_BID_ACTION_REASONS[normalized_action],
+                    notes=admin_notes,
+                    escalation_state=f"{normalized_action}_requested",
+                ),
+                actor=actor,
+            )
+        except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+            raise ValueError(str(exc)) from exc
+
+        payload = response.model_dump(mode="json")
+        payload.update(
+            {
+                "action": normalized_action,
+                "item_type": "transfer_bid",
+                "audit_reference": f"transfer-bid:{bid_id}",
+                "blocked_reason": (
+                    "Transfer bid business mutations stay outside the admin payment queue; "
+                    "this endpoint records the operator request for audit review only."
+                ),
+            }
+        )
+        return payload
+
+    def acquire_admin_lock(
+        self,
+        *,
+        actor: User,
+        resource_type: str,
+        resource_id: str,
+        ttl_seconds: int = 600,
+    ) -> dict[str, object]:
+        return self.treasury_service.acquire_admin_lock(
+            self.session,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            ttl_seconds=ttl_seconds,
+        )
+
+    def release_admin_lock(
+        self,
+        *,
+        actor: User,
+        resource_type: str,
+        resource_id: str,
+    ) -> dict[str, object]:
+        return self.treasury_service.release_admin_lock(
+            self.session,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+
+    def get_admin_lock_state(
+        self,
+        *,
+        actor: User | None,
+        resource_type: str,
+        resource_id: str,
+    ) -> dict[str, object]:
+        return self.treasury_service.get_admin_lock_state(
+            self.session,
+            actor=actor,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+
+    def request_admin_export(
+        self,
+        *,
+        actor: User,
+        export_type: str,
+        export_format: str,
+        filters: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        normalized_type = export_type.strip().lower()
+        normalized_format = export_format.strip().lower()
+        if normalized_type not in ADMIN_EXPORT_TYPES:
+            raise ValueError("Export type is not supported by the admin finance export queue.")
+        if normalized_format not in {"csv", "json"}:
+            raise ValueError("Export format must be csv or json.")
+        requested_at = datetime.now(timezone.utc)
+        export_id = f"EXPORT-{requested_at.strftime('%Y%m%d')}-{uuid4().hex[:8].upper()}"
+        payload = {
+            "export_id": export_id,
+            "status": "queued",
+            "export_type": normalized_type,
+            "format": normalized_format,
+            "filters": self._normalize_export_filters(filters or {}),
+            "requested_at": requested_at.isoformat(),
+            "completed_at": None,
+            "download_url": None,
+            "blocked_reason": None,
+            "occurred_at": requested_at.isoformat(),
+        }
+        payload = self._json_export_payload(payload)
+        audit = self.treasury_service._audit(
+            self.session,
+            actor=actor,
+            event_type=ADMIN_EXPORT_EVENT_REQUESTED,
+            resource_type="admin_export",
+            resource_id=export_id,
+            summary=f"Queued admin export {export_id}.",
+            payload=payload,
+        )
+        payload["audit_reference"] = audit.id
+        payload["requested_audit_reference"] = audit.id
+        payload["audit"] = self._audit_event_payload(audit)
+        return self.complete_admin_export(actor=actor, export_id=export_id)
+
+    def complete_admin_export(
+        self,
+        *,
+        actor: User,
+        export_id: str,
+    ) -> dict[str, object]:
+        current = self.get_admin_export_status(export_id=export_id)
+        if current["status"] in {"ready", "blocked"}:
+            return current
+        completed_at = datetime.now(timezone.utc)
+        persisted_current = {
+            key: value for key, value in current.items() if key not in {"artifact", "audit", "audit_reference"}
+        }
+        try:
+            artifact = self._build_admin_export_artifact(
+                export_id=export_id,
+                export_type=str(persisted_current.get("export_type") or ""),
+                export_format=str(persisted_current.get("format") or "csv"),
+                filters=dict(persisted_current.get("filters") or {}),
+                generated_at=completed_at,
+            )
+            payload = {
+                **persisted_current,
+                "status": "ready",
+                "completed_at": completed_at.isoformat(),
+                "download_url": f"{ADMIN_EXPORT_DOWNLOAD_BASE}/{export_id}/download",
+                "blocked_reason": None,
+                "artifact": artifact,
+                "occurred_at": completed_at.isoformat(),
+            }
+            event_type = ADMIN_EXPORT_EVENT_READY
+            summary = f"Prepared admin export {export_id}."
+        except AdminExportBlockedError as exc:
+            payload = {
+                **persisted_current,
+                "status": "blocked",
+                "completed_at": completed_at.isoformat(),
+                "download_url": None,
+                "blocked_reason": str(exc) or ADMIN_EXPORT_BLOCKED_REASON,
+                "blocked_at": completed_at.isoformat(),
+                "occurred_at": completed_at.isoformat(),
+            }
+            event_type = ADMIN_EXPORT_EVENT_BLOCKED
+            summary = f"Blocked admin export {export_id}: {payload['blocked_reason']}"
+        payload = self._json_export_payload(payload)
+        audit = self.treasury_service._audit(
+            self.session,
+            actor=actor,
+            event_type=event_type,
+            resource_type="admin_export",
+            resource_id=export_id,
+            summary=summary[:255],
+            payload=payload,
+        )
+        payload["audit_reference"] = audit.id
+        payload["audit"] = self._audit_event_payload(audit)
+        self._publish_admin_export_outbox_event(
+            event_type=event_type,
+            export_id=export_id,
+            audit=audit,
+            payload=payload,
+        )
+        return self._admin_export_status_from_payload(export_id=export_id, event=audit, payload=payload)
+
+    def get_admin_export_status(self, *, export_id: str) -> dict[str, object]:
+        event = self._latest_control_event(
+            resource_type="admin_export",
+            resource_id=export_id,
+            event_types=(ADMIN_EXPORT_EVENT_BLOCKED, ADMIN_EXPORT_EVENT_READY, ADMIN_EXPORT_EVENT_REQUESTED),
+        )
+        if event is None:
+            raise ValueError("Export request was not found.")
+        payload = dict(event.payload or {})
+        payload["audit_reference"] = event.id
+        payload["audit"] = self._audit_event_payload(event)
+        return self._admin_export_status_from_payload(export_id=export_id, event=event, payload=payload)
+
+    def get_admin_export_artifact(self, *, export_id: str) -> dict[str, object]:
+        event = self._latest_control_event(
+            resource_type="admin_export",
+            resource_id=export_id,
+            event_types=(ADMIN_EXPORT_EVENT_READY,),
+        )
+        if event is None:
+            raise ValueError("Export artifact was not found.")
+        payload = dict(event.payload or {})
+        if str(payload.get("status") or "") != "ready":
+            raise ValueError("Export artifact is not ready.")
+        artifact = dict(payload.get("artifact") or {})
+        content = artifact.get("content")
+        if not isinstance(content, str):
+            raise ValueError("Export artifact content is missing.")
+        return artifact
+
+    def _admin_export_status_from_payload(
+        self,
+        *,
+        export_id: str,
+        event: TreasuryAuditEvent,
+        payload: dict[str, object],
+    ) -> dict[str, object]:
+        artifact_payload = dict(payload.get("artifact") or {})
+        artifact = None
+        if artifact_payload:
+            artifact = {key: value for key, value in artifact_payload.items() if key not in {"content"}}
+        return {
+            "export_id": str(payload.get("export_id") or export_id),
+            "status": str(payload.get("status") or "queued"),
+            "export_type": str(payload.get("export_type") or "unknown"),
+            "format": str(payload.get("format") or "csv"),
+            "filters": dict(payload.get("filters") or {}),
+            "requested_at": payload.get("requested_at") or event.created_at,
+            "completed_at": payload.get("completed_at"),
+            "download_url": payload.get("download_url"),
+            "blocked_reason": payload.get("blocked_reason"),
+            "audit_reference": event.id,
+            "requested_audit_reference": payload.get("requested_audit_reference") or event.id,
+            "audit": payload["audit"],
+            "artifact": artifact,
+        }
+
+    def _build_admin_export_artifact(
+        self,
+        *,
+        export_id: str,
+        export_type: str,
+        export_format: str,
+        filters: dict[str, object],
+        generated_at: datetime,
+    ) -> dict[str, object]:
+        rows, fieldnames = self._admin_export_rows(export_type=export_type, filters=filters)
+        filename = f"{export_id.lower()}-{export_type}.{export_format}"
+        if export_format == "json":
+            content = json.dumps(
+                {
+                    "export_id": export_id,
+                    "export_type": export_type,
+                    "generated_at": generated_at.isoformat(),
+                    "filters": filters,
+                    "row_count": len(rows),
+                    "rows": rows,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            content_type = "application/json"
+        else:
+            content = self._render_csv_export(rows=rows, fieldnames=fieldnames)
+            content_type = "text/csv"
+        return {
+            "filename": filename,
+            "content_type": content_type,
+            "encoding": "utf-8",
+            "size_bytes": len(content.encode("utf-8")),
+            "row_count": len(rows),
+            "fieldnames": fieldnames,
+            "content": content,
+        }
+
+    def _admin_export_rows(
+        self,
+        *,
+        export_type: str,
+        filters: dict[str, object],
+    ) -> tuple[list[dict[str, object]], list[str]]:
+        if export_type in ADMIN_EXPORT_GENERATOR_BLOCKED_REASONS:
+            raise AdminExportBlockedError(ADMIN_EXPORT_GENERATOR_BLOCKED_REASONS[export_type])
+        if export_type == "settlements":
+            return self._settlement_export_rows(filters)
+        if export_type == "fraud":
+            return self._fraud_export_rows(filters)
+        if export_type == "withdrawals":
+            return self._withdrawal_export_rows(filters)
+        if export_type == "payment_proofs":
+            return self._payment_proof_export_rows(filters)
+        if export_type == "payment_queue":
+            return self._payment_queue_export_rows(filters)
+        if export_type == "treasury":
+            return self._treasury_export_rows(filters)
+        if export_type == "audit_logs":
+            return self._audit_log_export_rows(filters)
+        raise AdminExportBlockedError(ADMIN_EXPORT_BLOCKED_REASON)
+
+    def _withdrawal_export_rows(self, filters: dict[str, object]) -> tuple[list[dict[str, object]], list[str]]:
+        fieldnames = [
+            "id",
+            "reference",
+            "status",
+            "user_id",
+            "user_email",
+            "amount_coin",
+            "amount_fiat",
+            "fee_amount",
+            "net_amount",
+            "currency_code",
+            "source_scope",
+            "processor_mode",
+            "payout_channel",
+            "created_at",
+            "reviewed_at",
+            "approved_at",
+            "processed_at",
+            "paid_at",
+            "rejected_at",
+            "admin_notes",
+        ]
+        query = select(TreasuryWithdrawalRequest, User).join(User, TreasuryWithdrawalRequest.user_id == User.id)
+        status_filter = str(filters.get("status") or "").strip().lower()
+        if status_filter:
+            query = query.where(TreasuryWithdrawalRequest.status == status_filter)
+        rows = self.session.execute(
+            query.order_by(TreasuryWithdrawalRequest.created_at.desc()).limit(self._export_limit(filters))
+        ).all()
+        return [
+            self._export_row(
+                {
+                    "id": withdrawal.id,
+                    "reference": withdrawal.reference,
+                    "status": self._enum_value(withdrawal.status),
+                    "user_id": withdrawal.user_id,
+                    "user_email": user.email,
+                    "amount_coin": withdrawal.amount_coin,
+                    "amount_fiat": withdrawal.amount_fiat,
+                    "fee_amount": withdrawal.fee_amount,
+                    "net_amount": withdrawal.net_amount,
+                    "currency_code": withdrawal.currency_code,
+                    "source_scope": withdrawal.source_scope,
+                    "processor_mode": withdrawal.processor_mode,
+                    "payout_channel": withdrawal.payout_channel,
+                    "created_at": withdrawal.created_at,
+                    "reviewed_at": withdrawal.reviewed_at,
+                    "approved_at": withdrawal.approved_at,
+                    "processed_at": withdrawal.processed_at,
+                    "paid_at": withdrawal.paid_at,
+                    "rejected_at": withdrawal.rejected_at,
+                    "admin_notes": withdrawal.admin_notes,
+                },
+                fieldnames,
+            )
+            for withdrawal, user in rows
+        ], fieldnames
+
+    def _payment_proof_export_rows(self, filters: dict[str, object]) -> tuple[list[dict[str, object]], list[str]]:
+        fieldnames = [
+            "id",
+            "reference",
+            "status",
+            "user_id",
+            "user_email",
+            "amount_fiat",
+            "amount_coin",
+            "currency_code",
+            "payer_name",
+            "sender_bank",
+            "transfer_reference",
+            "proof_attachment_id",
+            "created_at",
+            "submitted_at",
+            "reviewed_at",
+            "confirmed_at",
+            "rejected_at",
+            "admin_notes",
+        ]
+        query = select(DepositRequest, User).join(User, DepositRequest.user_id == User.id)
+        status_filter = str(filters.get("status") or "").strip().lower()
+        if status_filter:
+            query = query.where(DepositRequest.status == status_filter)
+        if filters.get("with_proof_only") is not False:
+            query = query.where(DepositRequest.proof_attachment_id.is_not(None))
+        rows = self.session.execute(
+            query.order_by(DepositRequest.created_at.desc()).limit(self._export_limit(filters))
+        ).all()
+        return [
+            self._export_row(
+                {
+                    "id": deposit.id,
+                    "reference": deposit.reference,
+                    "status": self._enum_value(deposit.status),
+                    "user_id": deposit.user_id,
+                    "user_email": user.email,
+                    "amount_fiat": deposit.amount_fiat,
+                    "amount_coin": deposit.amount_coin,
+                    "currency_code": deposit.currency_code,
+                    "payer_name": deposit.payer_name,
+                    "sender_bank": deposit.sender_bank,
+                    "transfer_reference": deposit.transfer_reference,
+                    "proof_attachment_id": deposit.proof_attachment_id,
+                    "created_at": deposit.created_at,
+                    "submitted_at": deposit.submitted_at,
+                    "reviewed_at": deposit.reviewed_at,
+                    "confirmed_at": deposit.confirmed_at,
+                    "rejected_at": deposit.rejected_at,
+                    "admin_notes": deposit.admin_notes,
+                },
+                fieldnames,
+            )
+            for deposit, user in rows
+        ], fieldnames
+
+    def _payment_queue_export_rows(self, filters: dict[str, object]) -> tuple[list[dict[str, object]], list[str]]:
+        fieldnames = [
+            "item_type",
+            "id",
+            "reference",
+            "status",
+            "queue",
+            "user_id",
+            "user_email",
+            "amount_fiat",
+            "amount_coin",
+            "currency_code",
+            "created_at",
+            "submitted_at",
+            "reviewed_at",
+            "completed_at",
+            "admin_notes",
+        ]
+        limit = self._export_limit(filters)
+        status_filter = str(filters.get("status") or "").strip().lower()
+        rows: list[dict[str, object]] = []
+
+        deposit_query = select(DepositRequest, User).join(User, DepositRequest.user_id == User.id)
+        if status_filter:
+            deposit_query = deposit_query.where(DepositRequest.status == status_filter)
+        for deposit, user in self.session.execute(
+            deposit_query.order_by(DepositRequest.created_at.desc()).limit(limit)
+        ).all():
+            rows.append(
+                self._export_row(
+                    {
+                        "item_type": "deposit",
+                        "id": deposit.id,
+                        "reference": deposit.reference,
+                        "status": self._enum_value(deposit.status),
+                        "queue": self._deposit_export_queue(deposit.status),
+                        "user_id": deposit.user_id,
+                        "user_email": user.email,
+                        "amount_fiat": deposit.amount_fiat,
+                        "amount_coin": deposit.amount_coin,
+                        "currency_code": deposit.currency_code,
+                        "created_at": deposit.created_at,
+                        "submitted_at": deposit.submitted_at,
+                        "reviewed_at": deposit.reviewed_at,
+                        "completed_at": deposit.confirmed_at or deposit.rejected_at,
+                        "admin_notes": deposit.admin_notes,
+                    },
+                    fieldnames,
+                )
+            )
+
+        withdrawal_query = select(TreasuryWithdrawalRequest, User).join(
+            User, TreasuryWithdrawalRequest.user_id == User.id
+        )
+        if status_filter:
+            withdrawal_query = withdrawal_query.where(TreasuryWithdrawalRequest.status == status_filter)
+        for withdrawal, user in self.session.execute(
+            withdrawal_query.order_by(TreasuryWithdrawalRequest.created_at.desc()).limit(limit)
+        ).all():
+            rows.append(
+                self._export_row(
+                    {
+                        "item_type": "withdrawal",
+                        "id": withdrawal.id,
+                        "reference": withdrawal.reference,
+                        "status": self._enum_value(withdrawal.status),
+                        "queue": self._withdrawal_export_queue(withdrawal.status),
+                        "user_id": withdrawal.user_id,
+                        "user_email": user.email,
+                        "amount_fiat": withdrawal.amount_fiat,
+                        "amount_coin": withdrawal.amount_coin,
+                        "currency_code": withdrawal.currency_code,
+                        "created_at": withdrawal.created_at,
+                        "submitted_at": None,
+                        "reviewed_at": withdrawal.reviewed_at,
+                        "completed_at": withdrawal.paid_at or withdrawal.rejected_at or withdrawal.cancelled_at,
+                        "admin_notes": withdrawal.admin_notes,
+                    },
+                    fieldnames,
+                )
+            )
+        rows.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+        return rows[:limit], fieldnames
+
+    def _treasury_export_rows(self, filters: dict[str, object]) -> tuple[list[dict[str, object]], list[str]]:
+        del filters
+        fieldnames = [
+            "generated_at",
+            "pending_payment_events",
+            "settled_purchase_orders_missing_ledger",
+            "settled_payment_events_missing_ledger",
+            "confirmed_deposits_missing_ledger",
+            "duplicate_provider_references",
+            "pending_purchase_orders",
+            "pending_withdrawals",
+            "pending_kyc",
+            "liquidity_status",
+        ]
+        reconciliation = self.payment_reconciliation_summary(issue_limit=1)
+        row = {
+            **reconciliation,
+            "pending_purchase_orders": self._count_pending_purchase_orders(),
+            "pending_withdrawals": self._count_pending_withdrawals(),
+            "pending_kyc": self._count_pending_kyc(),
+            "liquidity_status": self._liquidity_status(),
+        }
+        return [self._export_row(row, fieldnames)], fieldnames
+
+    def _settlement_export_rows(self, filters: dict[str, object]) -> tuple[list[dict[str, object]], list[str]]:
+        fieldnames = [
+            "source",
+            "id",
+            "status",
+            "user_id",
+            "user_email",
+            "competition_key",
+            "competition_id",
+            "match_id",
+            "season_id",
+            "reward_source",
+            "title",
+            "gross_amount",
+            "platform_fee_amount",
+            "net_amount",
+            "ledger_unit",
+            "ledger_transaction_id",
+            "settled_by_user_id",
+            "home_club_id",
+            "away_club_id",
+            "total_revenue_coin",
+            "total_creator_share_coin",
+            "home_creator_share_coin",
+            "away_creator_share_coin",
+            "total_platform_share_coin",
+            "reviewed_by_user_id",
+            "reviewed_at",
+            "review_note",
+            "settled_at",
+            "note",
+            "created_at",
+            "updated_at",
+        ]
+        rows: list[dict[str, object]] = []
+        query = select(RewardSettlement, User).join(User, RewardSettlement.user_id == User.id)
+        status_filter = str(filters.get("status") or "").strip().lower()
+        if status_filter:
+            query = query.where(RewardSettlement.status == status_filter)
+        competition_key = str(filters.get("competition_key") or "").strip()
+        if competition_key:
+            query = query.where(RewardSettlement.competition_key == competition_key)
+        reward_source = str(filters.get("reward_source") or "").strip()
+        if reward_source:
+            query = query.where(RewardSettlement.reward_source == reward_source)
+        reward_rows = self.session.execute(
+            query.order_by(RewardSettlement.created_at.desc()).limit(self._export_limit(filters))
+        ).all()
+        for settlement, user in reward_rows:
+            rows.append(
+                self._export_row(
+                    {
+                        "source": "reward_settlement",
+                        "id": settlement.id,
+                        "status": self._enum_value(settlement.status),
+                        "user_id": settlement.user_id,
+                        "user_email": user.email,
+                        "competition_key": settlement.competition_key,
+                        "reward_source": settlement.reward_source,
+                        "title": settlement.title,
+                        "gross_amount": settlement.gross_amount,
+                        "platform_fee_amount": settlement.platform_fee_amount,
+                        "net_amount": settlement.net_amount,
+                        "ledger_unit": settlement.ledger_unit,
+                        "ledger_transaction_id": settlement.ledger_transaction_id,
+                        "settled_by_user_id": settlement.settled_by_user_id,
+                        "note": settlement.note,
+                        "created_at": settlement.created_at,
+                        "updated_at": settlement.updated_at,
+                    },
+                    fieldnames,
+                )
+            )
+
+        creator_query = select(CreatorRevenueSettlement)
+        review_status_filter = (
+            str(filters.get("review_status") or filters.get("creator_review_status") or "").strip().lower()
+        )
+        if review_status_filter:
+            creator_query = creator_query.where(CreatorRevenueSettlement.review_status == review_status_filter)
+        competition_id = str(filters.get("competition_id") or "").strip()
+        if competition_id:
+            creator_query = creator_query.where(CreatorRevenueSettlement.competition_id == competition_id)
+        match_id = str(filters.get("match_id") or "").strip()
+        if match_id:
+            creator_query = creator_query.where(CreatorRevenueSettlement.match_id == match_id)
+        season_id = str(filters.get("season_id") or "").strip()
+        if season_id:
+            creator_query = creator_query.where(CreatorRevenueSettlement.season_id == season_id)
+        club_id = str(filters.get("club_id") or "").strip()
+        if club_id:
+            creator_query = creator_query.where(
+                (CreatorRevenueSettlement.home_club_id == club_id) | (CreatorRevenueSettlement.away_club_id == club_id)
+            )
+        creator_rows = self.session.scalars(
+            creator_query.order_by(
+                CreatorRevenueSettlement.settled_at.desc().nullslast(),
+                CreatorRevenueSettlement.updated_at.desc(),
+                CreatorRevenueSettlement.created_at.desc(),
+            ).limit(self._export_limit(filters))
+        ).all()
+        for settlement in creator_rows:
+            rows.append(
+                self._export_row(
+                    {
+                        "source": "creator_revenue_settlement",
+                        "id": settlement.id,
+                        "status": settlement.review_status,
+                        "competition_id": settlement.competition_id,
+                        "match_id": settlement.match_id,
+                        "season_id": settlement.season_id,
+                        "title": f"Creator revenue settlement {settlement.match_id}",
+                        "gross_amount": settlement.total_revenue_coin,
+                        "platform_fee_amount": settlement.total_platform_share_coin,
+                        "net_amount": settlement.total_creator_share_coin,
+                        "ledger_unit": LedgerUnit.COIN,
+                        "home_club_id": settlement.home_club_id,
+                        "away_club_id": settlement.away_club_id,
+                        "total_revenue_coin": settlement.total_revenue_coin,
+                        "total_creator_share_coin": settlement.total_creator_share_coin,
+                        "home_creator_share_coin": settlement.home_creator_share_coin,
+                        "away_creator_share_coin": settlement.away_creator_share_coin,
+                        "total_platform_share_coin": settlement.total_platform_share_coin,
+                        "reviewed_by_user_id": settlement.reviewed_by_user_id,
+                        "reviewed_at": settlement.reviewed_at,
+                        "review_note": settlement.review_note,
+                        "settled_at": settlement.settled_at,
+                        "note": settlement.review_note,
+                        "created_at": settlement.created_at,
+                        "updated_at": settlement.updated_at,
+                    },
+                    fieldnames,
+                )
+            )
+        return rows, fieldnames
+
+    def _fraud_export_rows(self, filters: dict[str, object]) -> tuple[list[dict[str, object]], list[str]]:
+        fieldnames = [
+            "source",
+            "id",
+            "case_key",
+            "type",
+            "status",
+            "severity",
+            "user_id",
+            "user_email",
+            "title",
+            "description",
+            "confidence_score",
+            "amount_signal",
+            "subject_type",
+            "subject_id",
+            "action_type",
+            "signal_type",
+            "signal_value",
+            "metadata_json",
+            "created_at",
+            "updated_at",
+        ]
+        limit = self._export_limit(filters)
+        status_filter = str(filters.get("status") or "").strip().lower()
+        severity_filter = str(filters.get("severity") or "").strip().lower()
+        rows: list[dict[str, object]] = []
+
+        fraud_query = select(FraudCase, User).outerjoin(User, FraudCase.user_id == User.id)
+        if status_filter:
+            fraud_query = fraud_query.where(FraudCase.status == status_filter)
+        if severity_filter:
+            fraud_query = fraud_query.where(FraudCase.severity == severity_filter)
+        for case, user in self.session.execute(fraud_query.order_by(FraudCase.created_at.desc()).limit(limit)).all():
+            rows.append(
+                self._export_row(
+                    {
+                        "source": "fraud_case",
+                        "id": case.id,
+                        "case_key": case.case_key,
+                        "type": case.fraud_type,
+                        "status": case.status,
+                        "severity": case.severity,
+                        "user_id": case.user_id,
+                        "user_email": None if user is None else user.email,
+                        "title": case.title,
+                        "description": case.description,
+                        "confidence_score": case.confidence_score,
+                        "metadata_json": case.metadata_json,
+                        "created_at": case.created_at,
+                        "updated_at": case.updated_at,
+                    },
+                    fieldnames,
+                )
+            )
+
+        aml_query = select(AmlCase, User).outerjoin(User, AmlCase.user_id == User.id)
+        if status_filter:
+            aml_query = aml_query.where(AmlCase.status == status_filter)
+        if severity_filter:
+            aml_query = aml_query.where(AmlCase.severity == severity_filter)
+        for case, user in self.session.execute(aml_query.order_by(AmlCase.created_at.desc()).limit(limit)).all():
+            rows.append(
+                self._export_row(
+                    {
+                        "source": "aml_case",
+                        "id": case.id,
+                        "case_key": case.case_key,
+                        "type": case.trigger_source,
+                        "status": case.status,
+                        "severity": case.severity,
+                        "user_id": case.user_id,
+                        "user_email": None if user is None else user.email,
+                        "title": case.title,
+                        "description": case.description,
+                        "amount_signal": case.amount_signal,
+                        "metadata_json": case.metadata_json,
+                        "created_at": case.created_at,
+                        "updated_at": case.updated_at,
+                    },
+                    fieldnames,
+                )
+            )
+
+        action_query = select(RiskAction, User).join(User, RiskAction.user_id == User.id)
+        if status_filter:
+            action_query = action_query.where(RiskAction.status == status_filter)
+        for action, user in self.session.execute(
+            action_query.order_by(RiskAction.created_at.desc()).limit(limit)
+        ).all():
+            rows.append(
+                self._export_row(
+                    {
+                        "source": "risk_action",
+                        "id": action.id,
+                        "case_key": action.source_rule_key,
+                        "type": action.action_type,
+                        "status": action.status,
+                        "user_id": action.user_id,
+                        "user_email": user.email,
+                        "title": action.reason,
+                        "action_type": action.action_type,
+                        "metadata_json": action.metadata_json,
+                        "created_at": action.created_at,
+                        "updated_at": action.updated_at,
+                    },
+                    fieldnames,
+                )
+            )
+
+        signal_query = select(RiskSignal, User).outerjoin(User, RiskSignal.user_id == User.id)
+        for signal, user in self.session.execute(
+            signal_query.order_by(RiskSignal.created_at.desc()).limit(limit)
+        ).all():
+            rows.append(
+                self._export_row(
+                    {
+                        "source": "risk_signal",
+                        "id": signal.id,
+                        "case_key": signal.signal_key,
+                        "type": signal.source,
+                        "status": "recorded",
+                        "user_id": signal.user_id,
+                        "user_email": None if user is None else user.email,
+                        "confidence_score": signal.confidence_score,
+                        "signal_type": signal.signal_type,
+                        "signal_value": signal.signal_value or signal.device_id or signal.ip_address,
+                        "metadata_json": signal.metadata_json,
+                        "created_at": signal.created_at,
+                        "updated_at": signal.updated_at,
+                    },
+                    fieldnames,
+                )
+            )
+
+        event_query = select(SystemEvent).where(
+            or_(
+                SystemEvent.event_type.ilike("%fraud%"),
+                SystemEvent.event_type.ilike("%aml%"),
+                SystemEvent.event_type.ilike("%dispute%"),
+                SystemEvent.subject_type.in_(["fraud_case", "aml_case", "deposit_request", "treasury_withdrawal"]),
+            )
+        )
+        if severity_filter:
+            event_query = event_query.where(SystemEvent.severity == severity_filter)
+        for event in self.session.scalars(event_query.order_by(SystemEvent.created_at.desc()).limit(limit)).all():
+            rows.append(
+                self._export_row(
+                    {
+                        "source": "system_event",
+                        "id": event.id,
+                        "case_key": event.event_key,
+                        "type": event.event_type,
+                        "status": "recorded",
+                        "severity": event.severity,
+                        "user_id": event.created_by_user_id,
+                        "title": event.title,
+                        "description": event.body,
+                        "subject_type": event.subject_type,
+                        "subject_id": event.subject_id,
+                        "metadata_json": event.metadata_json,
+                        "created_at": event.created_at,
+                        "updated_at": event.updated_at,
+                    },
+                    fieldnames,
+                )
+            )
+
+        deposit_query = (
+            select(DepositRequest, User)
+            .join(User, DepositRequest.user_id == User.id)
+            .where(DepositRequest.status == DepositStatus.DISPUTED)
+        )
+        for deposit, user in self.session.execute(
+            deposit_query.order_by(DepositRequest.created_at.desc()).limit(limit)
+        ).all():
+            rows.append(
+                self._export_row(
+                    {
+                        "source": "deposit_dispute",
+                        "id": deposit.id,
+                        "case_key": deposit.reference,
+                        "type": "deposit_dispute",
+                        "status": deposit.status,
+                        "severity": "high",
+                        "user_id": deposit.user_id,
+                        "user_email": user.email,
+                        "title": "Disputed deposit",
+                        "description": deposit.admin_notes,
+                        "subject_type": "deposit_request",
+                        "subject_id": deposit.id,
+                        "metadata_json": {
+                            "amount_fiat": self._export_value(deposit.amount_fiat),
+                            "amount_coin": self._export_value(deposit.amount_coin),
+                            "transfer_reference": deposit.transfer_reference,
+                        },
+                        "created_at": deposit.created_at,
+                        "updated_at": deposit.updated_at,
+                    },
+                    fieldnames,
+                )
+            )
+
+        withdrawal_query = (
+            select(TreasuryWithdrawalRequest, User)
+            .join(User, TreasuryWithdrawalRequest.user_id == User.id)
+            .where(TreasuryWithdrawalRequest.status == TreasuryWithdrawalStatus.DISPUTED)
+        )
+        for withdrawal, user in self.session.execute(
+            withdrawal_query.order_by(TreasuryWithdrawalRequest.created_at.desc()).limit(limit)
+        ).all():
+            rows.append(
+                self._export_row(
+                    {
+                        "source": "withdrawal_dispute",
+                        "id": withdrawal.id,
+                        "case_key": withdrawal.reference,
+                        "type": "withdrawal_dispute",
+                        "status": withdrawal.status,
+                        "severity": "critical",
+                        "user_id": withdrawal.user_id,
+                        "user_email": user.email,
+                        "title": "Disputed withdrawal",
+                        "description": withdrawal.admin_notes,
+                        "subject_type": "treasury_withdrawal",
+                        "subject_id": withdrawal.id,
+                        "metadata_json": {
+                            "amount_fiat": self._export_value(withdrawal.amount_fiat),
+                            "amount_coin": self._export_value(withdrawal.amount_coin),
+                            "net_amount": self._export_value(withdrawal.net_amount),
+                        },
+                        "created_at": withdrawal.created_at,
+                        "updated_at": withdrawal.updated_at,
+                    },
+                    fieldnames,
+                )
+            )
+
+        rows.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
+        return rows[:limit], fieldnames
+
+    def _audit_log_export_rows(self, filters: dict[str, object]) -> tuple[list[dict[str, object]], list[str]]:
+        fieldnames = [
+            "id",
+            "event_type",
+            "actor_user_id",
+            "actor_email",
+            "resource_type",
+            "resource_id",
+            "summary",
+            "created_at",
+        ]
+        query = select(TreasuryAuditEvent)
+        event_type = str(filters.get("event_type") or "").strip()
+        resource_type = str(filters.get("resource_type") or "").strip()
+        if event_type:
+            query = query.where(TreasuryAuditEvent.event_type == event_type)
+        if resource_type:
+            query = query.where(TreasuryAuditEvent.resource_type == resource_type)
+        events = self.session.scalars(
+            query.order_by(TreasuryAuditEvent.created_at.desc()).limit(self._export_limit(filters))
+        ).all()
+        return [
+            self._export_row(
+                {
+                    "id": event.id,
+                    "event_type": event.event_type,
+                    "actor_user_id": event.actor_user_id,
+                    "actor_email": event.actor_email,
+                    "resource_type": event.resource_type,
+                    "resource_id": event.resource_id,
+                    "summary": event.summary,
+                    "created_at": event.created_at,
+                },
+                fieldnames,
+            )
+            for event in events
+        ], fieldnames
+
+    @staticmethod
+    def _normalize_export_filters(filters: dict[str, object]) -> dict[str, object]:
+        normalized = {str(key): AdminFinanceService._export_value(value) for key, value in dict(filters).items()}
+        raw_limit = normalized.get("limit", ADMIN_EXPORT_DEFAULT_LIMIT)
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            limit = ADMIN_EXPORT_DEFAULT_LIMIT
+        normalized["limit"] = max(1, min(ADMIN_EXPORT_MAX_LIMIT, limit))
+        return normalized
+
+    def _publish_admin_export_outbox_event(
+        self,
+        *,
+        event_type: str,
+        export_id: str,
+        audit: TreasuryAuditEvent,
+        payload: dict[str, object],
+    ) -> EventOutbox:
+        event_payload = {key: value for key, value in payload.items() if key != "artifact"}
+        artifact_payload = payload.get("artifact")
+        if isinstance(artifact_payload, dict):
+            event_payload["artifact"] = {key: value for key, value in artifact_payload.items() if key != "content"}
+        outbox_event = EventOutbox(
+            event_id=str(uuid4()),
+            event_type=event_type,
+            aggregate_type="admin_export",
+            aggregate_id=export_id,
+            partition_key=export_id,
+            producer="admin_finance",
+            occurred_at=audit.created_at,
+            payload_json=self._json_export_payload(event_payload),
+            headers_json={
+                "audit_reference": audit.id,
+                "treasury_audit_event_id": audit.id,
+            },
+        )
+        self.session.add(outbox_event)
+        self.session.flush()
+        return outbox_event
+
+    @staticmethod
+    def _json_export_payload(payload: dict[str, object]) -> dict[str, object]:
+        return {str(key): AdminFinanceService._export_value(value) for key, value in payload.items()}
+
+    @staticmethod
+    def _export_limit(filters: dict[str, object]) -> int:
+        try:
+            return max(1, min(ADMIN_EXPORT_MAX_LIMIT, int(filters.get("limit") or ADMIN_EXPORT_DEFAULT_LIMIT)))
+        except (TypeError, ValueError):
+            return ADMIN_EXPORT_DEFAULT_LIMIT
+
+    @staticmethod
+    def _export_row(values: dict[str, object], fieldnames: list[str]) -> dict[str, object]:
+        return {field: AdminFinanceService._export_value(values.get(field)) for field in fieldnames}
+
+    @staticmethod
+    def _export_value(value: object) -> object:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        if isinstance(value, Decimal):
+            return str(value)
+        if hasattr(value, "value"):
+            return str(value.value)
+        if isinstance(value, dict):
+            return {str(key): AdminFinanceService._export_value(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [AdminFinanceService._export_value(item) for item in value]
+        return value
+
+    @staticmethod
+    def _render_csv_export(*, rows: list[dict[str, object]], fieldnames: list[str]) -> str:
+        buffer = StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: AdminFinanceService._csv_export_value(row.get(field)) for field in fieldnames})
+        return buffer.getvalue()
+
+    @staticmethod
+    def _csv_export_value(value: object) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, (dict, list, tuple)):
+            return json.dumps(AdminFinanceService._export_value(value), ensure_ascii=False, sort_keys=True)
+        return str(value)
+
+    @staticmethod
+    def _deposit_export_queue(status_value: object) -> str:
+        status_text = AdminFinanceService._enum_value(status_value)
+        if status_text in {status.value for status in PAYMENT_QUEUE_APPROVED_DEPOSIT_STATUSES}:
+            return "approved"
+        if status_text in {status.value for status in PAYMENT_QUEUE_REJECTED_DEPOSIT_STATUSES}:
+            return "rejected"
+        return "pending"
+
+    @staticmethod
+    def _withdrawal_export_queue(status_value: object) -> str:
+        status_text = AdminFinanceService._enum_value(status_value)
+        if status_text == TreasuryWithdrawalStatus.APPROVED.value:
+            return "approved"
+        if status_text == TreasuryWithdrawalStatus.REJECTED.value:
+            return "rejected"
+        return "pending"
+
+    def request_admin_bulk_action(
+        self,
+        *,
+        actor: User,
+        item_type: str,
+        action: str,
+        item_ids: list[str],
+        admin_notes: str,
+    ) -> dict[str, object]:
+        normalized_item_type = item_type.strip().lower()
+        normalized_action = action.strip().lower()
+        resource_type = ADMIN_BULK_RESOURCE_TYPES.get(normalized_item_type)
+        if resource_type is None:
+            raise ValueError("Bulk action item type is not supported by admin finance.")
+        if normalized_action not in PAYMENT_QUEUE_ACTION_LABELS:
+            raise ValueError("Bulk action must be review, approve, reject, reinstate, or counter.")
+        requested_at = datetime.now(timezone.utc)
+        unique_item_ids = list(dict.fromkeys(str(item_id).strip() for item_id in item_ids if str(item_id).strip()))
+        if not unique_item_ids:
+            raise ValueError("At least one item_id is required.")
+        blocked_ids = [
+            item_id
+            for item_id in unique_item_ids
+            if self.treasury_service.get_admin_lock_state(
+                self.session,
+                actor=actor,
+                resource_type=resource_type,
+                resource_id=item_id,
+            )["state"]
+            == "locked_by_other"
+        ]
+        queued_ids = [item_id for item_id in unique_item_ids if item_id not in set(blocked_ids)]
+        bulk_action_id = f"BULK-{requested_at.strftime('%Y%m%d')}-{uuid4().hex[:8].upper()}"
+        status = "queued" if queued_ids else "blocked"
+        blocked_reason = None
+        if blocked_ids:
+            blocked_reason = "Some items are locked by another admin and were excluded from this bulk action."
+        payload = {
+            "bulk_action_id": bulk_action_id,
+            "status": status,
+            "item_type": normalized_item_type,
+            "action": normalized_action,
+            "item_ids": queued_ids,
+            "blocked_item_ids": blocked_ids,
+            "queued_count": len(queued_ids),
+            "blocked_count": len(blocked_ids),
+            "admin_notes": admin_notes,
+            "requested_at": requested_at.isoformat(),
+            "completed_at": None,
+            "blocked_reason": blocked_reason,
+            "occurred_at": requested_at.isoformat(),
+        }
+        audit = self.treasury_service._audit(
+            self.session,
+            actor=actor,
+            event_type=ADMIN_BULK_ACTION_EVENT_REQUESTED,
+            resource_type="admin_bulk_action",
+            resource_id=bulk_action_id,
+            summary=f"Queued admin bulk action {bulk_action_id}.",
+            payload=payload,
+        )
+        payload["audit_reference"] = audit.id
+        payload["audit"] = self._audit_event_payload(audit)
+        return payload
+
+    def get_admin_bulk_action_status(self, *, bulk_action_id: str) -> dict[str, object]:
+        event = self._latest_control_event(
+            resource_type="admin_bulk_action",
+            resource_id=bulk_action_id,
+            event_types=(ADMIN_BULK_ACTION_EVENT_COMPLETED, ADMIN_BULK_ACTION_EVENT_REQUESTED),
+        )
+        if event is None:
+            raise ValueError("Bulk action request was not found.")
+        payload = dict(event.payload or {})
+        payload["audit_reference"] = event.id
+        payload["audit"] = self._audit_event_payload(event)
+        return {
+            "bulk_action_id": str(payload.get("bulk_action_id") or bulk_action_id),
+            "status": str(payload.get("status") or "queued"),
+            "item_type": str(payload.get("item_type") or "unknown"),
+            "action": str(payload.get("action") or "unknown"),
+            "item_ids": list(payload.get("item_ids") or []),
+            "queued_count": int(payload.get("queued_count") or 0),
+            "blocked_count": int(payload.get("blocked_count") or 0),
+            "requested_at": payload.get("requested_at") or event.created_at,
+            "completed_at": payload.get("completed_at"),
+            "audit_reference": event.id,
+            "audit": payload["audit"],
+            "blocked_reason": payload.get("blocked_reason"),
+        }
+
     def governor_snapshot(self) -> dict[str, object]:
         return EconomyGovernorService(self.session).snapshot()
+
+    def _normalize_payment_queue_tab(self, tab: str | None) -> str | None:
+        if tab is None or not tab.strip():
+            return None
+        normalized = tab.strip().lower()
+        if normalized not in PAYMENT_QUEUE_TABS:
+            raise ValueError("Payment queue tab must be pending, approved, rejected, or bids.")
+        return normalized
+
+    def _deposit_queue_section(
+        self,
+        *,
+        key: str,
+        label: str,
+        statuses: tuple[DepositStatus, ...],
+        include_items: bool,
+        q: str | None,
+        limit: int,
+        offset: int,
+        actor: User | None,
+    ) -> dict[str, object]:
+        query = (
+            select(DepositRequest, User)
+            .join(User, DepositRequest.user_id == User.id)
+            .where(DepositRequest.status.in_(statuses))
+        )
+        if q and q.strip():
+            like = f"%{q.strip().lower()}%"
+            query = query.where(
+                or_(
+                    func.lower(DepositRequest.reference).ilike(like),
+                    func.lower(DepositRequest.payer_name).ilike(like),
+                    func.lower(DepositRequest.sender_bank).ilike(like),
+                    func.lower(DepositRequest.transfer_reference).ilike(like),
+                    func.lower(User.email).ilike(like),
+                    func.lower(User.full_name).ilike(like),
+                    func.lower(User.phone_number).ilike(like),
+                )
+            )
+        total = int(self.session.scalar(select(func.count()).select_from(query.subquery())) or 0)
+        rows = []
+        if include_items:
+            rows = self.session.execute(
+                query.order_by(DepositRequest.created_at.desc()).limit(limit).offset(offset)
+            ).all()
+        return {
+            "key": key,
+            "label": label,
+            "item_type": "deposit",
+            "statuses": [status.value for status in statuses],
+            "items": [
+                self._serialize_deposit_queue_item(deposit, key, user=user, actor=actor) for deposit, user in rows
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "action_state": "enabled",
+        }
+
+    def _transfer_bid_queue_section(
+        self,
+        *,
+        include_items: bool,
+        q: str | None,
+        limit: int,
+        offset: int,
+    ) -> dict[str, object]:
+        from app.services.player_lifecycle_service import PlayerLifecycleService
+
+        queue = PlayerLifecycleService(self.session).list_admin_transfer_bid_reviews(
+            q=q,
+            limit=limit,
+            offset=offset if include_items else 0,
+        )
+        items = [self._serialize_transfer_bid_queue_item(item) for item in queue.items] if include_items else []
+        return {
+            "key": "bids",
+            "label": "Bids",
+            "item_type": "transfer_bid",
+            "statuses": [],
+            "items": items,
+            "total": queue.total,
+            "limit": limit,
+            "offset": offset,
+            "action_state": "audit_only",
+            "blocked_reason": (
+                "Transfer bid approve, reject, and counter requests are audit-only in the admin payment queue."
+            ),
+        }
+
+    def _serialize_deposit_queue_item(
+        self,
+        deposit: DepositRequest,
+        queue_key: str,
+        *,
+        user: User | None = None,
+        actor: User | None = None,
+    ) -> dict[str, object]:
+        user = user or self.session.get(User, deposit.user_id)
+        available_actions: tuple[str, ...]
+        if queue_key == "pending":
+            available_actions = (
+                ("review",) if deposit.status == DepositStatus.DISPUTED else ("review", "approve", "reject")
+            )
+        elif queue_key == "rejected":
+            available_actions = ("reinstate",)
+        else:
+            available_actions = tuple()
+        admin_user = self.session.get(User, deposit.admin_user_id) if deposit.admin_user_id else None
+        action_endpoints = self._deposit_action_endpoints(deposit.id, available_actions)
+        audit = self._queue_audit(
+            resource_type="deposit_request",
+            resource_id=deposit.id,
+            reference=f"deposit:{deposit.id}",
+        )
+        lock_state = self.treasury_service.get_admin_lock_state(
+            self.session,
+            actor=actor,
+            resource_type="deposit_request",
+            resource_id=deposit.id,
+        )
+        timestamps = self._deposit_timestamps(deposit)
+        return {
+            "id": deposit.id,
+            "type": "deposit",
+            "queue": queue_key,
+            "reference": deposit.reference,
+            "status": self._enum_value(deposit.status),
+            "amount_fiat": self._amount(deposit.amount_fiat),
+            "amount_coin": self._amount(deposit.amount_coin),
+            "currency_code": deposit.currency_code,
+            "payer_name": deposit.payer_name,
+            "sender_bank": deposit.sender_bank,
+            "transfer_reference": deposit.transfer_reference,
+            "proof_attachment_id": deposit.proof_attachment_id,
+            "created_at": deposit.created_at,
+            "submitted_at": deposit.submitted_at,
+            "reviewed_at": deposit.reviewed_at,
+            "confirmed_at": deposit.confirmed_at,
+            "rejected_at": deposit.rejected_at,
+            "admin_notes": deposit.admin_notes,
+            "user_id": deposit.user_id,
+            "user_email": user.email if user is not None else "",
+            "user_full_name": user.full_name if user is not None else None,
+            "user_phone_number": user.phone_number if user is not None else None,
+            "audit_reference": f"deposit:{deposit.id}",
+            "severity": self._deposit_queue_severity(deposit),
+            "timestamps": timestamps,
+            "actor": self._queue_actor_payload(user=user, admin_user=admin_user),
+            "escalation": self._deposit_escalation(deposit, available_actions),
+            "audit": audit,
+            "lock_state": lock_state,
+            "action_state": lock_state.get("action_state", "enabled"),
+            "blocked_reason": lock_state.get("blocked_reason"),
+            "notes": {
+                "admin": deposit.admin_notes,
+                "user": None,
+            },
+            "proof_attachment_ids": [deposit.proof_attachment_id] if deposit.proof_attachment_id else [],
+            "available_actions": available_actions,
+            "action_endpoints": action_endpoints,
+            "action_controls": self._queue_action_controls(
+                item_type="deposit",
+                action_endpoints=action_endpoints,
+                business_state_actions=available_actions,
+                wallet_state_actions=("approve",),
+                lock_state=lock_state,
+            ),
+        }
+
+    @staticmethod
+    def _deposit_action_endpoints(deposit_id: str, actions: tuple[str, ...]) -> dict[str, str]:
+        return {action: f"/api/v2/admin/finance/payment-queue/deposits/{deposit_id}/{action}" for action in actions}
+
+    @staticmethod
+    def _withdrawal_action_endpoints(withdrawal_id: str, actions: tuple[str, ...]) -> dict[str, str]:
+        return {
+            action: f"/api/v2/admin/finance/payment-queue/withdrawals/{withdrawal_id}/{action}" for action in actions
+        }
+
+    @staticmethod
+    def _bid_action_endpoints(window_id: str, bid_id: str) -> dict[str, str]:
+        return {
+            action: f"/api/v2/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/{action}"
+            for action in PAYMENT_QUEUE_BID_ACTION_REASONS
+        }
+
+    def _serialize_transfer_bid_queue_item(self, bid: object) -> dict[str, object]:
+        payload = bid.model_dump(mode="json") if hasattr(bid, "model_dump") else dict(bid)
+        bid_id = str(payload.get("id") or "")
+        window_id = str(payload.get("window_id") or "")
+        action_endpoints = self._bid_action_endpoints(window_id, bid_id)
+        audit_reference = str(payload.get("audit_reference") or f"transfer-bid:{bid_id}")
+        audit_trail = list(payload.get("audit_trail") or [])
+        last_audit_event = audit_trail[0] if audit_trail else None
+        payload.update(
+            {
+                "type": "transfer_bid",
+                "queue": "bids",
+                "audit_reference": audit_reference,
+                "available_actions": tuple(PAYMENT_QUEUE_BID_ACTION_REASONS),
+                "action_endpoints": action_endpoints,
+                "action_controls": self._queue_action_controls(
+                    item_type="transfer_bid",
+                    action_endpoints=action_endpoints,
+                    business_state_actions=tuple(),
+                    wallet_state_actions=tuple(),
+                ),
+                "business_action_state": "audit_only",
+                "timestamps": {
+                    "created_at": payload.get("created_at"),
+                    "updated_at": payload.get("updated_at"),
+                    "submitted_at": payload.get("updated_at"),
+                },
+                "actor": {
+                    "user": None,
+                    "admin": None,
+                },
+                "escalation": {
+                    "state": payload.get("escalation_state") or "read_only",
+                    "requires_action": True,
+                    "is_escalated": payload.get("severity") in {"high", "critical"},
+                },
+                "audit": {
+                    "reference": audit_reference,
+                    "resource_type": "transfer_bid",
+                    "resource_id": bid_id,
+                    "event_count": len(audit_trail),
+                    "last_event_type": None if last_audit_event is None else last_audit_event.get("event_type"),
+                    "last_event_at": None if last_audit_event is None else last_audit_event.get("updated_at"),
+                    "last_actor_email": None,
+                    "trail": audit_trail,
+                },
+                "notes": {
+                    "admin": None,
+                    "user": payload.get("notes"),
+                },
+            }
+        )
+        return payload
+
+    def _review_payment_queue_withdrawal(
+        self,
+        *,
+        actor: User,
+        withdrawal_id: str,
+        action: str,
+        next_status: TreasuryWithdrawalStatus,
+        admin_notes: str,
+    ) -> dict[str, object]:
+        withdrawal = self.treasury_service.review_withdrawal_status(
+            self.session,
+            actor=actor,
+            withdrawal_id=withdrawal_id,
+            status=next_status,
+            admin_notes=admin_notes,
+        )
+        return self._payment_queue_action_result(
+            action=action,
+            item_type="withdrawal",
+            item=self._serialize_withdrawal_queue_item(withdrawal, actor=actor),
+            business_state_changed=True,
+            wallet_state_changed=next_status == TreasuryWithdrawalStatus.REJECTED,
+        )
+
+    def _serialize_withdrawal_queue_item(
+        self,
+        withdrawal: TreasuryWithdrawalRequest,
+        *,
+        actor: User | None = None,
+    ) -> dict[str, object]:
+        user = self.session.get(User, withdrawal.user_id)
+        admin_user = self.session.get(User, withdrawal.admin_user_id) if withdrawal.admin_user_id else None
+        if withdrawal.status == TreasuryWithdrawalStatus.PENDING_REVIEW:
+            queue_key = "pending"
+        elif withdrawal.status == TreasuryWithdrawalStatus.APPROVED:
+            queue_key = "approved"
+        elif withdrawal.status == TreasuryWithdrawalStatus.REJECTED:
+            queue_key = "rejected"
+        else:
+            queue_key = "pending"
+        available_actions = {
+            "pending": ("approve", "reject"),
+            "approved": ("reinstate", "reject"),
+            "rejected": tuple(),
+        }.get(queue_key, tuple())
+        action_endpoints = self._withdrawal_action_endpoints(withdrawal.id, available_actions)
+        audit = self._queue_audit(
+            resource_type="treasury_withdrawal",
+            resource_id=withdrawal.id,
+            reference=f"withdrawal:{withdrawal.id}",
+        )
+        lock_state = self.treasury_service.get_admin_lock_state(
+            self.session,
+            actor=actor,
+            resource_type="treasury_withdrawal",
+            resource_id=withdrawal.id,
+        )
+        return {
+            "id": withdrawal.id,
+            "type": "withdrawal",
+            "queue": queue_key,
+            "reference": withdrawal.reference,
+            "status": self._enum_value(withdrawal.status),
+            "amount_coin": self._amount(withdrawal.amount_coin),
+            "amount_fiat": self._amount(withdrawal.amount_fiat),
+            "fee_amount": self._amount(withdrawal.fee_amount),
+            "total_debit": self._amount(withdrawal.total_debit),
+            "net_amount": self._amount(withdrawal.net_amount),
+            "source_scope": withdrawal.source_scope,
+            "processor_mode": withdrawal.processor_mode,
+            "payout_channel": withdrawal.payout_channel,
+            "currency_code": withdrawal.currency_code,
+            "bank_name": withdrawal.bank_name,
+            "bank_account_number": withdrawal.bank_account_number,
+            "bank_account_name": withdrawal.bank_account_name,
+            "created_at": withdrawal.created_at,
+            "reviewed_at": withdrawal.reviewed_at,
+            "approved_at": withdrawal.approved_at,
+            "processed_at": withdrawal.processed_at,
+            "paid_at": withdrawal.paid_at,
+            "rejected_at": withdrawal.rejected_at,
+            "cancelled_at": withdrawal.cancelled_at,
+            "admin_notes": withdrawal.admin_notes,
+            "user_id": withdrawal.user_id,
+            "user_email": user.email if user is not None else "",
+            "user_full_name": user.full_name if user is not None else None,
+            "user_phone_number": user.phone_number if user is not None else None,
+            "audit_reference": f"withdrawal:{withdrawal.id}",
+            "severity": self._withdrawal_queue_severity(withdrawal),
+            "timestamps": self._withdrawal_timestamps(withdrawal),
+            "actor": self._queue_actor_payload(user=user, admin_user=admin_user),
+            "escalation": self._withdrawal_escalation(withdrawal, available_actions),
+            "audit": audit,
+            "lock_state": lock_state,
+            "action_state": lock_state.get("action_state", "enabled"),
+            "blocked_reason": lock_state.get("blocked_reason"),
+            "notes": {
+                "admin": withdrawal.admin_notes,
+                "user": withdrawal.notes,
+            },
+            "available_actions": available_actions,
+            "action_endpoints": action_endpoints,
+            "action_controls": self._queue_action_controls(
+                item_type="withdrawal",
+                action_endpoints=action_endpoints,
+                business_state_actions=available_actions,
+                wallet_state_actions=("reject",),
+                lock_state=lock_state,
+            ),
+        }
+
+    def _queue_audit(
+        self, *, resource_type: str, resource_id: str, reference: str, limit: int = 8
+    ) -> dict[str, object]:
+        events = self.session.scalars(
+            select(TreasuryAuditEvent)
+            .where(
+                TreasuryAuditEvent.resource_type == resource_type,
+                TreasuryAuditEvent.resource_id == resource_id,
+            )
+            .order_by(TreasuryAuditEvent.created_at.desc(), TreasuryAuditEvent.id.desc())
+            .limit(limit)
+        ).all()
+        last_event = events[0] if events else None
+        return {
+            "reference": reference,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
+            "event_count": len(events),
+            "last_event_type": None if last_event is None else last_event.event_type,
+            "last_event_at": None if last_event is None else last_event.created_at,
+            "last_actor_email": None if last_event is None else last_event.actor_email,
+            "trail": [
+                {
+                    "id": event.id,
+                    "event_type": event.event_type,
+                    "actor_user_id": event.actor_user_id,
+                    "actor_email": event.actor_email,
+                    "summary": event.summary,
+                    "payload": event.payload,
+                    "created_at": event.created_at,
+                }
+                for event in events
+            ],
+        }
+
+    def _latest_control_event(
+        self,
+        *,
+        resource_type: str,
+        resource_id: str,
+        event_types: tuple[str, ...],
+    ) -> TreasuryAuditEvent | None:
+        events = self.session.scalars(
+            select(TreasuryAuditEvent)
+            .where(
+                TreasuryAuditEvent.resource_type == resource_type,
+                TreasuryAuditEvent.resource_id == resource_id,
+                TreasuryAuditEvent.event_type.in_(list(event_types)),
+            )
+            .order_by(TreasuryAuditEvent.created_at.desc())
+            .limit(20)
+        ).all()
+        if not events:
+            return None
+        return sorted(
+            events,
+            key=lambda event: (
+                self._parse_control_datetime((event.payload or {}).get("occurred_at"))
+                or event.created_at
+                or datetime.min.replace(tzinfo=timezone.utc)
+            ),
+            reverse=True,
+        )[0]
+
+    @staticmethod
+    def _parse_control_datetime(value: object) -> datetime | None:
+        if isinstance(value, datetime):
+            parsed = value
+        elif isinstance(value, str) and value.strip():
+            try:
+                parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+            except ValueError:
+                return None
+        else:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+
+    @staticmethod
+    def _audit_event_payload(event: TreasuryAuditEvent) -> dict[str, object]:
+        return {
+            "id": event.id,
+            "event_type": event.event_type,
+            "actor_user_id": event.actor_user_id,
+            "actor_email": event.actor_email,
+            "resource_type": event.resource_type,
+            "resource_id": event.resource_id,
+            "summary": event.summary,
+            "created_at": event.created_at,
+        }
+
+    @staticmethod
+    def _queue_action_controls(
+        *,
+        item_type: str,
+        action_endpoints: dict[str, str],
+        business_state_actions: tuple[str, ...],
+        wallet_state_actions: tuple[str, ...],
+        lock_state: dict[str, object] | None = None,
+    ) -> dict[str, dict[str, object]]:
+        blocked_reason = None if lock_state is None else lock_state.get("blocked_reason")
+        is_blocked = (None if lock_state is None else lock_state.get("state")) == "locked_by_other"
+        return {
+            action: {
+                "label": PAYMENT_QUEUE_ACTION_LABELS.get(action, action.replace("_", " ").title()),
+                "method": "POST",
+                "endpoint": endpoint,
+                "item_type": item_type,
+                "enabled": not is_blocked,
+                "action_state": "blocked" if is_blocked else "enabled",
+                "disabled_reason": blocked_reason if is_blocked else None,
+                "requires_admin_notes": True,
+                "auditable": True,
+                "business_state_changes": action in business_state_actions,
+                "wallet_state_changes": action in wallet_state_actions,
+            }
+            for action, endpoint in action_endpoints.items()
+        }
+
+    @staticmethod
+    def _queue_actor_payload(*, user: User | None, admin_user: User | None) -> dict[str, object]:
+        return {
+            "user": AdminFinanceService._queue_actor_identity(user),
+            "admin": AdminFinanceService._queue_actor_identity(admin_user),
+        }
+
+    @staticmethod
+    def _queue_actor_identity(user: User | None) -> dict[str, object] | None:
+        if user is None:
+            return None
+        role = getattr(user, "role", None)
+        return {
+            "id": user.id,
+            "email": user.email,
+            "full_name": getattr(user, "full_name", None),
+            "phone_number": getattr(user, "phone_number", None),
+            "role": role.value if hasattr(role, "value") else role,
+        }
+
+    @staticmethod
+    def _deposit_timestamps(deposit: DepositRequest) -> dict[str, object]:
+        return {
+            "created_at": deposit.created_at,
+            "updated_at": getattr(deposit, "updated_at", None),
+            "submitted_at": deposit.submitted_at,
+            "reviewed_at": deposit.reviewed_at,
+            "confirmed_at": deposit.confirmed_at,
+            "rejected_at": deposit.rejected_at,
+            "expires_at": deposit.expires_at,
+        }
+
+    @staticmethod
+    def _withdrawal_timestamps(withdrawal: TreasuryWithdrawalRequest) -> dict[str, object]:
+        return {
+            "created_at": withdrawal.created_at,
+            "updated_at": getattr(withdrawal, "updated_at", None),
+            "reviewed_at": withdrawal.reviewed_at,
+            "approved_at": withdrawal.approved_at,
+            "processed_at": withdrawal.processed_at,
+            "paid_at": withdrawal.paid_at,
+            "rejected_at": withdrawal.rejected_at,
+            "cancelled_at": withdrawal.cancelled_at,
+        }
+
+    @staticmethod
+    def _deposit_queue_severity(deposit: DepositRequest) -> str:
+        status = deposit.status.value if hasattr(deposit.status, "value") else str(deposit.status)
+        if status == DepositStatus.DISPUTED.value:
+            return "high"
+        if status in {DepositStatus.PAYMENT_SUBMITTED.value, DepositStatus.UNDER_REVIEW.value}:
+            return "medium"
+        return "low"
+
+    @staticmethod
+    def _withdrawal_queue_severity(withdrawal: TreasuryWithdrawalRequest) -> str:
+        status = withdrawal.status.value if hasattr(withdrawal.status, "value") else str(withdrawal.status)
+        if status == TreasuryWithdrawalStatus.DISPUTED.value:
+            return "critical"
+        if status in {TreasuryWithdrawalStatus.APPROVED.value, TreasuryWithdrawalStatus.PROCESSING.value}:
+            return "high"
+        if status == TreasuryWithdrawalStatus.PENDING_REVIEW.value:
+            return "medium"
+        return "low"
+
+    def _deposit_escalation(self, deposit: DepositRequest, available_actions: tuple[str, ...]) -> dict[str, object]:
+        status = self._enum_value(deposit.status)
+        state_by_status = {
+            DepositStatus.PAYMENT_SUBMITTED.value: "awaiting_admin_review",
+            DepositStatus.UNDER_REVIEW.value: "under_review",
+            DepositStatus.DISPUTED.value: "disputed",
+            DepositStatus.CONFIRMED.value: "approved",
+            DepositStatus.REJECTED.value: "rejected",
+        }
+        severity = self._deposit_queue_severity(deposit)
+        return {
+            "state": state_by_status.get(status, "read_only"),
+            "requires_action": bool(available_actions),
+            "is_escalated": severity in {"high", "critical"},
+        }
+
+    def _withdrawal_escalation(
+        self, withdrawal: TreasuryWithdrawalRequest, available_actions: tuple[str, ...]
+    ) -> dict[str, object]:
+        status = self._enum_value(withdrawal.status)
+        state_by_status = {
+            TreasuryWithdrawalStatus.PENDING_REVIEW.value: "awaiting_admin_review",
+            TreasuryWithdrawalStatus.APPROVED.value: "approved_for_processing",
+            TreasuryWithdrawalStatus.PROCESSING.value: "processing",
+            TreasuryWithdrawalStatus.DISPUTED.value: "disputed",
+            TreasuryWithdrawalStatus.REJECTED.value: "rejected",
+            TreasuryWithdrawalStatus.PAID.value: "paid",
+            TreasuryWithdrawalStatus.CANCELLED.value: "cancelled",
+        }
+        severity = self._withdrawal_queue_severity(withdrawal)
+        return {
+            "state": state_by_status.get(status, "read_only"),
+            "requires_action": bool(available_actions),
+            "is_escalated": severity in {"high", "critical"},
+        }
+
+    @staticmethod
+    def _payment_queue_action_result(
+        *,
+        action: str,
+        item_type: str,
+        item: dict[str, object],
+        business_state_changed: bool,
+        wallet_state_changed: bool,
+    ) -> dict[str, object]:
+        return {
+            "action": action,
+            "item_type": item_type,
+            "action_state": "completed",
+            "business_state_changed": business_state_changed,
+            "wallet_state_changed": wallet_state_changed,
+            "audit_reference": item.get("audit_reference"),
+            "audit": item.get("audit"),
+            "notes": item.get("notes"),
+            "item": item,
+        }
+
+    @staticmethod
+    def _enum_value(value: object) -> str:
+        return str(value.value if hasattr(value, "value") else value)
 
     def _handle_provider_event(
         self,
@@ -499,27 +2498,6 @@ class AdminFinanceService:
             "reference": event.provider_reference,
             "signature_verified": signature_verified,
         }
-
-    def _verify_paystack_webhook(self, *, raw_body: bytes | None, headers: dict[str, str]) -> bool:
-        secret = self._provider_secret("paystack")
-        if not secret:
-            if self._signature_optional("paystack"):
-                logger.warning(
-                    "Paystack webhook received without GTE_PAYSTACK_WEBHOOK_SECRET. "
-                    "Continuing without signature verification because "
-                    "GTE_PAYSTACK_WEBHOOK_SIGNATURE_OPTIONAL=true."
-                )
-                return False
-            raise ValueError("Paystack webhook cannot be verified: GTE_PAYSTACK_WEBHOOK_SECRET is not configured.")
-        signature = headers.get("x-paystack-signature")
-        if not signature:
-            raise ValueError("Paystack webhook signature header (x-paystack-signature) is missing.")
-        if raw_body is None:
-            raise ValueError("Paystack webhook raw body is missing.")
-        expected = hmac.new(secret.encode("utf-8"), raw_body, sha512).hexdigest()
-        if not hmac.compare_digest(expected, signature):
-            raise ValueError("Paystack webhook signature is invalid.")
-        return True
 
     def _verify_korapay_webhook(self, *, payload: dict[str, object], headers: dict[str, str]) -> bool:
         secret = self._provider_secret("korapay")
@@ -800,14 +2778,8 @@ class AdminFinanceService:
 
     def _cash_rail_summary(self) -> dict[str, object]:
         settings = self.treasury_service.ensure_settings(self.session)
-        methods: list[str] = []
-        if self.settings is not None:
-            methods = [
-                method.display_name
-                for method in PaymentGatewayService(session=self.session, settings=self.settings).list_methods()
-            ]
         return {
-            "payment_methods": methods,
+            "payment_methods": self._canonical_cash_rail_payment_methods(),
             "deposit_mode": (
                 settings.deposit_mode.value if hasattr(settings.deposit_mode, "value") else str(settings.deposit_mode)
             ),
@@ -827,6 +2799,19 @@ class AdminFinanceService:
             "automatic_withdrawals_enabled": getattr(settings.withdrawal_mode, "value", str(settings.withdrawal_mode))
             in {"automatic", "hybrid"},
         }
+
+    def _canonical_cash_rail_payment_methods(self) -> list[str]:
+        if self.settings is None:
+            return []
+        seen_method_keys = {
+            str(method.method_key).strip().lower()
+            for method in PaymentGatewayService(session=self.session, settings=self.settings).list_methods()
+        }
+        return [
+            display_name
+            for method_key, display_name in CANONICAL_CASH_RAIL_METHODS.items()
+            if method_key in seen_method_keys
+        ]
 
     def _count_pending_purchase_orders(self) -> int:
         count = self.session.scalar(

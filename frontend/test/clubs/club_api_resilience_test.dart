@@ -18,17 +18,13 @@ void main() {
         mode: GteBackendMode.fixture,
       ),
       transport: _UnexpectedTransport(),
-      reputationRepository: FixtureReputationRepository(
-        latency: Duration.zero,
-      ),
+      reputationRepository: FixtureReputationRepository(latency: Duration.zero),
       dynastyRepository: _FailingDynastyRepository(),
       trophyRepository: StubTrophyCabinetRepository(
         scenario: TrophyRepositoryScenario.error,
         latency: Duration.zero,
       ),
-      identityRepository: MockClubIdentityRepository(
-        latency: Duration.zero,
-      ),
+      identityRepository: MockClubIdentityRepository(latency: Duration.zero),
     );
 
     final ClubDashboardData data = await api.fetchDashboard(

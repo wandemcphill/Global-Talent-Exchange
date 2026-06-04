@@ -6,8 +6,9 @@ import 'package:gte_frontend/screens/referrals/share_code_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('share code screen exposes copy and channel actions',
-      (WidgetTester tester) async {
+  testWidgets('share code screen exposes copy and channel actions', (
+    WidgetTester tester,
+  ) async {
     final ReferralController controller = ReferralController(
       api: ReferralApi.fixture(),
     );

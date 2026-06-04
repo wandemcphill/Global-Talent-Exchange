@@ -7,18 +7,17 @@ import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/hosted_competition_api.dart';
-import 'package:gte_frontend/features/competitions/live_competitions_hub_screen.dart';
-import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
+import 'package:gte_frontend/features/compete/presentation/live_competitions_hub_screen.dart';
+import 'package:gte_frontend/features/compete/providers/live_competitions_provider.dart';
 import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/federations/live_federations_provider.dart';
-import 'package:gte_frontend/features/match/live_match_overview_provider.dart';
-import 'package:gte_frontend/features/match/live_match_viewer_route_support.dart';
-import 'package:gte_frontend/features/match/match_3d_route_screen.dart';
+import 'package:gte_frontend/features/match_center/live_match_overview_provider.dart';
+import 'package:gte_frontend/features/match_center/live_match_viewer_route_support.dart';
 import 'package:gte_frontend/features/national_teams/live_national_teams_provider.dart';
 import 'package:gte_frontend/features/national_teams/national_teams_screen.dart';
 import 'package:gte_frontend/features/profile/live_profile_provider.dart';
-import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
-import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart';
+import 'package:gte_frontend/features/compete/domain/streamer_tournament_engine_models.dart';
+import 'package:gte_frontend/features/compete/repositories/streamer_tournament_engine_repository.dart';
 import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
 import 'package:gte_frontend/features/transfer_center/live_transfer_center_provider.dart';
 import 'package:gte_frontend/features/transfer_center/transfer_center_screen.dart';
@@ -27,7 +26,7 @@ import 'package:gte_frontend/features/world/live_world_provider.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/hosted_competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 import 'package:gte_frontend/models/national_team_models.dart';
 import 'package:gte_frontend/models/regen_universe_models.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
@@ -558,7 +557,7 @@ void main() {
 
       await tester.tap(find.widgetWithText(FilledButton, 'Open Match'));
       await _pumpViewerRoute(tester);
-      expect(find.byKey(const Key('match-pitch-2d-canvas')), findsOneWidget);
+      expect(find.byKey(const Key('match-center-pitch-shell')), findsOneWidget);
       expect(find.text('Viewer contract unavailable'), findsNothing);
       expect(find.text('Route blocked'), findsNothing);
 
@@ -717,6 +716,7 @@ AuthSession _clubSession() {
     refreshToken: 'refresh-token-1',
     sessionId: 'session-1',
     role: 'user',
+    // Adversarial fixture: legacy entitlement must not promote 3D in production.
     permissions: <String>['match_3d_premium'],
     clubId: 'ibadan-lions',
     clubName: 'Ibadan Lions FC',
@@ -730,10 +730,7 @@ AuthSession _hostSession() {
     refreshToken: 'host-refresh-token-1',
     sessionId: 'host-session-1',
     role: 'admin',
-    permissions: <String>[
-      'match_3d_premium',
-      adminPermissionManageCompetitions,
-    ],
+    permissions: <String>[adminPermissionManageCompetitions],
     clubId: 'ibadan-lions',
     clubName: 'Ibadan Lions FC',
   );
@@ -2418,6 +2415,7 @@ class _FakeTransferCenterApi extends TransferCenterApi {
     required String listingId,
     required String clubId,
     required double amount,
+    required String securityPin,
   }) async {
     bidRequests += 1;
   }

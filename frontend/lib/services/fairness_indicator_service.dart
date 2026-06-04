@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 
 class FairnessBadgeState {
   const FairnessBadgeState({

@@ -10,11 +10,11 @@ import uvicorn
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
-DEFAULT_DATABASE_PATH = BACKEND_ROOT / "storage" / "gtex_live_unity.db"
+DEFAULT_DATABASE_PATH = BACKEND_ROOT / "storage" / "gtex_live_match_center.db"
 DEFAULT_CONFIG_DIR = BACKEND_ROOT / "config"
 DEFAULT_MEDIA_ROOT = BACKEND_ROOT / "storage"
-DEFAULT_AUTH_SECRET = "gtex-local-unity-auth-secret-2026"  # pragma: allowlist secret
-DEFAULT_MEDIA_SIGNING_SECRET = "gtex-local-unity-media-secret-2026"  # pragma: allowlist secret
+DEFAULT_AUTH_SECRET = "gtex-local-match-center-auth-secret-2026"  # pragma: allowlist secret
+DEFAULT_MEDIA_SIGNING_SECRET = "gtex-local-match-center-media-secret-2026"  # pragma: allowlist secret
 LOCAL_PROFILE: Final[str] = "local"
 STAGING_PROFILE: Final[str] = "staging"
 PRODUCTION_PROFILE: Final[str] = "production"
@@ -23,7 +23,7 @@ PROFILE_CHOICES: Final[tuple[str, str, str]] = (LOCAL_PROFILE, STAGING_PROFILE, 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the GTEX backend for Unity live playback with explicit profile handling."
+        description="Run the GTEX backend for canonical 2D match center verification with explicit profile handling."
     )
     parser.add_argument(
         "--profile",
@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--database-path",
         default="",
-        help="Path to the dedicated SQLite database for local Unity live runs.",
+        help="Path to the dedicated SQLite database for local match center runs.",
     )
     parser.add_argument(
         "--database-url",

@@ -256,6 +256,26 @@ CreatorProfile _buildProfileFromSummary(
 }) {
   final Map<String, dynamic> profileJson =
       summary['profile'] as Map<String, dynamic>? ?? <String, dynamic>{};
+  final String creatorId = _requiredString(
+    profileJson,
+    'creator_id',
+    'creator profile creator_id',
+  );
+  final String userId = _requiredString(
+    profileJson,
+    'user_id',
+    'creator profile user_id',
+  );
+  final String displayName = _requiredString(
+    profileJson,
+    'display_name',
+    'creator profile display_name',
+  );
+  final String handle = _requiredString(
+    profileJson,
+    'handle',
+    'creator profile handle',
+  );
   final List<CreatorCompetition> competitions = competitionsPayload
       .map(_creatorCompetitionFromJson)
       .toList(growable: false);
@@ -298,21 +318,23 @@ CreatorProfile _buildProfileFromSummary(
   );
 
   return CreatorProfile(
-    creatorId: profileJson['creator_id']?.toString() ?? 'creator',
-    userId: profileJson['user_id']?.toString() ?? 'user',
-    displayName: profileJson['display_name']?.toString() ?? 'Creator',
-    handle: profileJson['handle']?.toString() ?? 'creator',
-    shareCode: profileJson['default_share_code']?.toString() ?? 'CREATOR',
-    tier: profileJson['tier']?.toString() ?? 'standard',
-    status: profileJson['status']?.toString() ?? 'active',
+    creatorId: creatorId,
+    userId: userId,
+    displayName: displayName,
+    handle: handle,
+    shareCode: _optionalString(profileJson['default_share_code']),
+    tier: _optionalString(profileJson['tier']),
+    status: _optionalString(profileJson['status']),
     revenueSharePercent:
         (profileJson['revenue_share_percent'] as num?)?.toDouble(),
-    headline: 'Creator tier ${profileJson['tier']?.toString() ?? 'standard'}',
+    headline:
+        profileJson['tier'] == null
+            ? 'Creator profile synced'
+            : 'Creator tier ${profileJson['tier']}',
     bio:
-        'Creator profile status ${profileJson['status']?.toString() ?? 'active'} with ${competitions.length} hosted competitions.',
+        'Creator profile status ${_optionalString(profileJson['status']).isEmpty ? 'waiting on backend status' : profileJson['status']} with ${competitions.length} hosted competitions.',
     communityTag: 'Creator community',
-    profileLink:
-        '${_normalizedBase(baseUrl)}/community/creator/${profileJson['handle']?.toString() ?? 'creator'}',
+    profileLink: '${_normalizedBase(baseUrl)}/community/creator/$handle',
     stats: stats,
     growthSummary: growthSummary,
     rewardSummary: rewardSummary,
@@ -325,6 +347,26 @@ CreatorProfile _buildProfileFromPublic(
   Map<String, dynamic> payload, {
   required String baseUrl,
 }) {
+  final String creatorId = _requiredString(
+    payload,
+    'creator_id',
+    'public creator profile creator_id',
+  );
+  final String userId = _requiredString(
+    payload,
+    'user_id',
+    'public creator profile user_id',
+  );
+  final String displayName = _requiredString(
+    payload,
+    'display_name',
+    'public creator profile display_name',
+  );
+  final String handle = _requiredString(
+    payload,
+    'handle',
+    'public creator profile handle',
+  );
   final CreatorFinanceSummary finance = CreatorFinanceSummary(
     currency: 'credits',
     totalGiftIncome: 0,
@@ -347,21 +389,26 @@ CreatorProfile _buildProfileFromPublic(
     attributedSignups: 0,
     qualifiedJoins: 0,
     insights: const <String>[],
+    hasCompleteBackendPayload: false,
+    hasWalletPayload: false,
+    hasClipEarningsPayload: false,
   );
   return CreatorProfile(
-    creatorId: payload['creator_id']?.toString() ?? 'creator',
-    userId: payload['user_id']?.toString() ?? 'user',
-    displayName: payload['display_name']?.toString() ?? 'Creator',
-    handle: payload['handle']?.toString() ?? 'creator',
-    shareCode: payload['default_share_code']?.toString() ?? 'CREATOR',
-    tier: payload['tier']?.toString() ?? 'standard',
-    status: payload['status']?.toString() ?? 'active',
+    creatorId: creatorId,
+    userId: userId,
+    displayName: displayName,
+    handle: handle,
+    shareCode: _optionalString(payload['default_share_code']),
+    tier: _optionalString(payload['tier']),
+    status: _optionalString(payload['status']),
     revenueSharePercent: (payload['revenue_share_percent'] as num?)?.toDouble(),
-    headline: 'Creator tier ${payload['tier']?.toString() ?? 'standard'}',
-    bio: 'Creator profile preview.',
+    headline:
+        payload['tier'] == null
+            ? 'Creator public profile'
+            : 'Creator tier ${payload['tier']}',
+    bio: 'Creator profile loaded from public backend record.',
     communityTag: 'Creator community',
-    profileLink:
-        '${_normalizedBase(baseUrl)}/community/creator/${payload['handle']?.toString() ?? 'creator'}',
+    profileLink: '${_normalizedBase(baseUrl)}/community/creator/$handle',
     stats: const CreatorStats(
       communityInvites: 0,
       qualifiedReferrals: 0,
@@ -389,17 +436,30 @@ CreatorProfile _buildProfileFromPublic(
 CreatorCompetition _creatorCompetitionFromJson(Object? value) {
   final Map<String, dynamic> json =
       value as Map<String, dynamic>? ?? <String, dynamic>{};
+  final String competitionId = _requiredString(
+    json,
+    'competition_id',
+    'creator competition competition_id',
+  );
+  final String title = _requiredString(
+    json,
+    'title',
+    'creator competition title',
+  );
   final int activeParticipants =
       (json['active_participants'] as num?)?.toInt() ?? 0;
   final int attributedSignups =
       (json['attributed_signups'] as num?)?.toInt() ?? 0;
   final int qualifiedJoins = (json['qualified_joins'] as num?)?.toInt() ?? 0;
+  final String linkedShareCode = _optionalString(json['linked_share_code']);
   return CreatorCompetition(
-    competitionId: json['competition_id']?.toString() ?? 'competition',
-    title: json['title']?.toString() ?? 'Creator competition',
+    competitionId: competitionId,
+    title: title,
     seasonLabel: 'Active participants: $activeParticipants',
     inviteWindow:
-        'Share code ${json['linked_share_code']?.toString() ?? 'CREATOR'}',
+        linkedShareCode.isEmpty
+            ? 'Share code awaiting backend'
+            : 'Share code $linkedShareCode',
     inviteAttributionLabel: '$attributedSignups signups attributed',
     participationLabel: '$activeParticipants participants active',
     rewardLabel: '$qualifiedJoins qualified joins',
@@ -410,6 +470,25 @@ CreatorCompetition _creatorCompetitionFromJson(Object? value) {
 CreatorFinanceSummary _creatorFinanceFromJson(Object? value) {
   final Map<String, dynamic> json =
       value as Map<String, dynamic>? ?? <String, dynamic>{};
+  final bool hasWalletPayload = _hasAnyKey(json, const <String>[
+    'wallet_balance',
+    'wallet_available_balance',
+    'wallet_currency',
+  ]);
+  final bool hasClipEarningsPayload = _hasAnyKey(json, const <String>[
+    'total_clip_income',
+    'total_clip_views',
+    'monetized_clips',
+    'viral_clip_count',
+  ]);
+  final bool hasCompleteBackendPayload = _hasAllKeys(json, const <String>[
+    'currency',
+    'total_gift_income',
+    'total_reward_income',
+    'pending_withdrawals',
+    'wallet_balance',
+    'wallet_available_balance',
+  ]);
   return CreatorFinanceSummary(
     currency: json['currency']?.toString() ?? 'credits',
     totalGiftIncome: _doubleValue(json['total_gift_income']),
@@ -434,6 +513,9 @@ CreatorFinanceSummary _creatorFinanceFromJson(Object? value) {
     attributedSignups: _intValue(json['attributed_signups']),
     qualifiedJoins: _intValue(json['qualified_joins']),
     insights: _stringListValue(json['insights']),
+    hasCompleteBackendPayload: hasCompleteBackendPayload,
+    hasWalletPayload: hasWalletPayload,
+    hasClipEarningsPayload: hasClipEarningsPayload,
   );
 }
 
@@ -499,7 +581,44 @@ CreatorFinanceSummary _mergeCreatorFinanceWithClipEarnings(
     attributedSignups: finance.attributedSignups,
     qualifiedJoins: finance.qualifiedJoins,
     insights: mergedInsights,
+    hasCompleteBackendPayload: finance.hasCompleteBackendPayload,
+    hasWalletPayload:
+        finance.hasWalletPayload ||
+        _hasAnyKey(json, const <String>[
+          'wallet_balance_credit',
+          'wallet_available_credit',
+          'wallet_currency',
+        ]),
+    hasClipEarningsPayload:
+        finance.hasClipEarningsPayload ||
+        _hasAnyKey(json, const <String>[
+          'total_creator_payout_credit',
+          'total_views',
+          'monetized_clip_count',
+          'viral_clip_count',
+        ]),
   );
+}
+
+String _requiredString(Map<String, dynamic> json, String key, String label) {
+  final String value = _optionalString(json[key]);
+  if (value.isEmpty) {
+    throw GteApiException(
+      type: GteApiErrorType.parsing,
+      message: 'Missing required $label.',
+    );
+  }
+  return value;
+}
+
+String _optionalString(Object? value) => value?.toString().trim() ?? '';
+
+bool _hasAnyKey(Map<String, dynamic> json, List<String> keys) {
+  return keys.any(json.containsKey);
+}
+
+bool _hasAllKeys(Map<String, dynamic> json, List<String> keys) {
+  return keys.every(json.containsKey);
 }
 
 double _doubleValue(Object? value, {double fallback = 0}) {

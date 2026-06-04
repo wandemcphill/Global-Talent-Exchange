@@ -27,7 +27,7 @@ ledger_entry_reason = sa.Enum(
     name="ledger_entry_reason",
     native_enum=False,
 )
-payment_provider = sa.Enum("monnify", "flutterwave", "paystack", name="payment_provider", native_enum=False)
+payment_provider = sa.Enum("korapay", name="payment_provider", native_enum=False)
 payment_status = sa.Enum("pending", "verified", "failed", "reversed", name="payment_status", native_enum=False)
 payout_status = sa.Enum(
     "requested",

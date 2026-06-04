@@ -39,16 +39,16 @@ def _find_motion_window():
             if moving_player_id is not None or ball_moved:
                 return view_state, previous_frame, next_frame, moving_player_id, ball_moved
 
-    raise AssertionError("No live motion window was found across the sampled replay seeds.")
+    raise AssertionError("No live motion window was found across the replay seeds.")
 
 
-def test_sample_viewer_frame_interpolates_live_motion_between_timeline_frames() -> None:
+def test_interpolated_viewer_frame_interpolates_live_motion_between_timeline_frames() -> None:
     view_state, previous_frame, next_frame, moving_player_id, ball_moved = _find_motion_window()
     sample_time_seconds = round((previous_frame.time_seconds + next_frame.time_seconds) / 2.0, 2)
 
     sampled_frame = _sample_viewer_frame(view_state, sample_time_seconds)
 
-    assert sampled_frame.frame_id.endswith(f":sample:{int(round(sample_time_seconds * 100))}")
+    assert sampled_frame.frame_id.endswith(f":interpolated:{int(round(sample_time_seconds * 100))}")
     assert sampled_frame.time_seconds == sample_time_seconds
     assert previous_frame.clock_minute <= sampled_frame.clock_minute <= next_frame.clock_minute
     assert sampled_frame.frame_id not in {previous_frame.frame_id, next_frame.frame_id}

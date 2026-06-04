@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/data/match/match_simulation_engine.dart';
-import 'package:gte_frontend/data/match/match_simulation_models.dart';
-import 'package:gte_frontend/data/match/match_value_engine.dart';
-import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/data/match/match_simulation_engine.dart';
+import 'package:gte_frontend/features/match_center/data/match/match_simulation_models.dart';
+import 'package:gte_frontend/features/match_center/data/match/match_value_engine.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 import 'package:gte_frontend/services/fairness_indicator_service.dart';
 
 void main() {
@@ -79,13 +79,17 @@ void main() {
       ),
     );
 
-    final MatchSimulationResult first =
-        const MatchSimulationEngine().simulate(request);
-    final MatchSimulationResult second =
-        const MatchSimulationEngine().simulate(request);
+    final MatchSimulationResult first = const MatchSimulationEngine().simulate(
+      request,
+    );
+    final MatchSimulationResult second = const MatchSimulationEngine().simulate(
+      request,
+    );
 
-    expect(first.homeStats.possessionPct,
-        greaterThan(first.awayStats.possessionPct));
+    expect(
+      first.homeStats.possessionPct,
+      greaterThan(first.awayStats.possessionPct),
+    );
     expect(first.homeStats.possessionPct, second.homeStats.possessionPct);
     expect(first.homeScore, second.homeScore);
     expect(first.awayScore, second.awayScore);
@@ -93,8 +97,10 @@ void main() {
     expect(first.viewState.frames, isNotEmpty);
     expect(first.playerPerformances.first.nextValueCredits, greaterThan(0));
     expect(first.homeStats.averageStaminaPct, lessThan(100));
-    expect(first.homeStats.recoveries + first.awayStats.recoveries,
-        greaterThan(0));
+    expect(
+      first.homeStats.recoveries + first.awayStats.recoveries,
+      greaterThan(0),
+    );
     expect(
       first.viewState.frames.any(
         (frame) => frame.players.any(
@@ -115,64 +121,74 @@ void main() {
   });
 
   test('value engine applies match-performance multipliers and decay', () {
-    final MatchSimulationPlayer attacker =
-        _player('attacker', 'Hat Trick', 'ST', 84, age: 20);
-    final MatchSimulationPlayer defender =
-        _player('defender', 'Clean Sheet', 'CB', 79, age: 24);
+    final MatchSimulationPlayer attacker = _player(
+      'attacker',
+      'Hat Trick',
+      'ST',
+      84,
+      age: 20,
+    );
+    final MatchSimulationPlayer defender = _player(
+      'defender',
+      'Clean Sheet',
+      'CB',
+      79,
+      age: 24,
+    );
 
     final List<MatchSimulationPlayerPerformance> updated =
         const MatchValueEngine().apply(
-      performances: <MatchSimulationPlayerPerformance>[
-        MatchSimulationPlayerPerformance(
-          player: attacker,
-          teamId: 'home',
-          teamName: 'Atlas City',
-          rating: 8.8,
-          goals: 3,
-          assists: 1,
-          keyPasses: 2,
-          shots: 5,
-          shotsOnTarget: 4,
-          saves: 0,
-          turnoversWon: 1,
-          mistakes: 0,
-          cleanSheet: false,
-          isMvp: false,
-          formTag: MatchFormTag.steady,
-          previousValueCredits: attacker.baseValueCredits,
-          nextValueCredits: attacker.baseValueCredits,
-          valueDeltaPct: 0,
-        ),
-        MatchSimulationPlayerPerformance(
-          player: defender,
-          teamId: 'away',
-          teamName: 'Northbridge',
-          rating: 7.4,
-          goals: 0,
-          assists: 0,
-          keyPasses: 0,
-          shots: 0,
-          shotsOnTarget: 0,
-          saves: 0,
-          turnoversWon: 4,
-          mistakes: 0,
-          cleanSheet: true,
-          isMvp: false,
-          formTag: MatchFormTag.steady,
-          previousValueCredits: defender.baseValueCredits,
-          nextValueCredits: defender.baseValueCredits,
-          valueDeltaPct: 0,
-        ),
-      ],
-      importance: MatchSimulationImportance.finalMatch,
-    );
+          performances: <MatchSimulationPlayerPerformance>[
+            MatchSimulationPlayerPerformance(
+              player: attacker,
+              teamId: 'home',
+              teamName: 'Atlas City',
+              rating: 8.8,
+              goals: 3,
+              assists: 1,
+              keyPasses: 2,
+              shots: 5,
+              shotsOnTarget: 4,
+              saves: 0,
+              turnoversWon: 1,
+              mistakes: 0,
+              cleanSheet: false,
+              isMvp: false,
+              formTag: MatchFormTag.steady,
+              previousValueCredits: attacker.baseValueCredits,
+              nextValueCredits: attacker.baseValueCredits,
+              valueDeltaPct: 0,
+            ),
+            MatchSimulationPlayerPerformance(
+              player: defender,
+              teamId: 'away',
+              teamName: 'Northbridge',
+              rating: 7.4,
+              goals: 0,
+              assists: 0,
+              keyPasses: 0,
+              shots: 0,
+              shotsOnTarget: 0,
+              saves: 0,
+              turnoversWon: 4,
+              mistakes: 0,
+              cleanSheet: true,
+              isMvp: false,
+              formTag: MatchFormTag.steady,
+              previousValueCredits: defender.baseValueCredits,
+              nextValueCredits: defender.baseValueCredits,
+              valueDeltaPct: 0,
+            ),
+          ],
+          importance: MatchSimulationImportance.finalMatch,
+        );
 
     final MatchSimulationPlayerPerformance boostedAttacker = updated.firstWhere(
-        (MatchSimulationPlayerPerformance item) =>
-            item.player.id == attacker.id);
+      (MatchSimulationPlayerPerformance item) => item.player.id == attacker.id,
+    );
     final MatchSimulationPlayerPerformance boostedDefender = updated.firstWhere(
-        (MatchSimulationPlayerPerformance item) =>
-            item.player.id == defender.id);
+      (MatchSimulationPlayerPerformance item) => item.player.id == defender.id,
+    );
 
     expect(boostedAttacker.isMvp, isTrue);
     expect(boostedAttacker.valueDeltaPct, greaterThan(0.20));
@@ -254,10 +270,12 @@ void main() {
       ),
     );
 
-    final MatchSimulationResult result =
-        const MatchSimulationEngine().simulate(request);
-    final FairnessBadgeState badge =
-        FairnessIndicatorService.build(result.viewState);
+    final MatchSimulationResult result = const MatchSimulationEngine().simulate(
+      request,
+    );
+    final FairnessBadgeState badge = FairnessIndicatorService.build(
+      result.viewState,
+    );
 
     expect(badge.status, MatchVerificationStatus.unverified);
     expect(badge.label, 'Preview Mode');
@@ -280,20 +298,23 @@ MatchSimulationPlayer _player(
     overall: overall,
     age: age,
     baseValueCredits: (overall * 18).toDouble(),
-    finishing: normalized == 'ST' || normalized == 'RW' || normalized == 'LW'
-        ? overall + 6
-        : normalized == 'GK'
+    finishing:
+        normalized == 'ST' || normalized == 'RW' || normalized == 'LW'
+            ? overall + 6
+            : normalized == 'GK'
             ? 35
             : overall - 4,
     creativity:
         normalized == 'CM' || normalized == 'DM' ? overall + 5 : overall,
-    defending: normalized == 'CB' || normalized == 'RB' || normalized == 'LB'
-        ? overall + 6
-        : overall - 6,
+    defending:
+        normalized == 'CB' || normalized == 'RB' || normalized == 'LB'
+            ? overall + 6
+            : overall - 6,
     goalkeeping: normalized == 'GK' ? overall + 8 : 35,
     pace: normalized == 'RW' || normalized == 'LW' ? overall + 7 : overall,
-    workRate: normalized == 'DM' || normalized == 'CM' || normalized == 'CB'
-        ? overall + 5
-        : overall,
+    workRate:
+        normalized == 'DM' || normalized == 'CM' || normalized == 'CB'
+            ? overall + 5
+            : overall,
   );
 }

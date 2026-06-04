@@ -39,6 +39,17 @@ class RegenCreationApi {
     return RegenCreationOrderList.fromJson(payload);
   }
 
+  Future<RequestSonPreview> previewRequestSon(
+    RequestSonPreviewDraft draft,
+  ) async {
+    final Object? payload = await client.post(
+      '/regens/request-son/preview',
+      body: draft.toJson(),
+      auth: true,
+    );
+    return RequestSonPreview.fromJson(payload);
+  }
+
   Future<RegenCreationOrder> fetchCreationOrder(String orderId) async {
     final Map<String, dynamic> payload = await client.getMap(
       '/regens/creation-orders/$orderId',
@@ -61,6 +72,14 @@ class RegenCreationApi {
   Future<RegenCreationOrder> payWithWallet(String orderId) async {
     final Object? payload = await client.post(
       '/regens/creation-orders/$orderId/pay-with-wallet',
+      auth: true,
+    );
+    return RegenCreationOrder.fromJson(payload);
+  }
+
+  Future<RegenCreationOrder> cancelCreationOrder(String orderId) async {
+    final Object? payload = await client.post(
+      '/regens/creation-orders/$orderId/cancel',
       auth: true,
     );
     return RegenCreationOrder.fromJson(payload);

@@ -8,95 +8,103 @@ import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_respons
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_types.dart';
 
 void main() {
-  test('fetchDynastyProfile enriches legacy payloads with history-backed data',
-      () async {
-    final _RecordingTransport transport = _RecordingTransport(
-      <GteTransportResponse>[
-        GteTransportResponse(statusCode: 200, body: _legacyProfilePayload()),
-        GteTransportResponse(statusCode: 200, body: _historyPayload()),
-        GteTransportResponse(
-          statusCode: 404,
-          body: <String, Object?>{'detail': 'not found'},
+  test(
+    'fetchDynastyProfile enriches legacy payloads with history-backed data',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport(
+        <GteTransportResponse>[
+          GteTransportResponse(statusCode: 200, body: _legacyProfilePayload()),
+          GteTransportResponse(statusCode: 200, body: _historyPayload()),
+          GteTransportResponse(
+            statusCode: 404,
+            body: <String, Object?>{'detail': 'not found'},
+          ),
+        ],
+      );
+      final DynastyApiRepository repository = DynastyApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.live,
         ),
-      ],
-    );
-    final DynastyApiRepository repository = DynastyApiRepository(
-      config: const GteRepositoryConfig(
-        baseUrl: 'http://127.0.0.1:8000',
-        mode: GteBackendMode.live,
-      ),
-      transport: transport,
-      fixtures: DynastyFixtureRepository(),
-    );
+        transport: transport,
+        fixtures: DynastyFixtureRepository(),
+      );
 
-    final DynastyProfileDto profile =
-        await repository.fetchDynastyProfile('atlas-fc');
+      final DynastyProfileDto profile = await repository.fetchDynastyProfile(
+        'atlas-fc',
+      );
 
-    expect(
-      transport.requests.map((GteTransportRequest request) => request.uri.path),
-      <String>[
-        '/api/v2/clubs/atlas-fc/dynasty',
-        '/api/v2/clubs/atlas-fc/dynasty/history',
-        '/api/v2/clubs/atlas-fc/eras',
-      ],
-    );
-    expect(profile.clubId, 'atlas-fc');
-    expect(profile.clubName, 'Atlas FC');
-    expect(profile.dynastyScore, 78);
-    expect(profile.currentEraLabel, DynastyEraType.dominantEra);
-    expect(profile.activeStreaks.topFour, 4);
-    expect(profile.activeStreaks.trophySeasons, 3);
-    expect(
-        profile.lastFourSeasonSummary.map((season) => season.seasonId),
+      expect(
+        transport.requests.map(
+          (GteTransportRequest request) => request.uri.path,
+        ),
         <String>[
-          '2019',
-          '2020',
-          '2021',
-          '2022',
-        ]);
-    expect(
-        profile.eras.map((DynastyEraDto era) => era.eraLabel), <DynastyEraType>[
-      DynastyEraType.emergingPower,
-      DynastyEraType.dominantEra,
-    ]);
-  });
+          '/api/v2/clubs/atlas-fc/dynasty',
+          '/api/v2/clubs/atlas-fc/dynasty/history',
+          '/api/v2/clubs/atlas-fc/eras',
+        ],
+      );
+      expect(profile.clubId, 'atlas-fc');
+      expect(profile.clubName, 'Atlas FC');
+      expect(profile.dynastyScore, 78);
+      expect(profile.currentEraLabel, DynastyEraType.dominantEra);
+      expect(profile.activeStreaks.topFour, 4);
+      expect(profile.activeStreaks.trophySeasons, 3);
+      expect(
+        profile.lastFourSeasonSummary.map((season) => season.seasonId),
+        <String>['2019', '2020', '2021', '2022'],
+      );
+      expect(
+        profile.eras.map((DynastyEraDto era) => era.eraLabel),
+        <DynastyEraType>[
+          DynastyEraType.emergingPower,
+          DynastyEraType.dominantEra,
+        ],
+      );
+    },
+  );
 
-  test('fetchDynastyHistory normalizes timeline ordering and derives eras',
-      () async {
-    final _RecordingTransport transport = _RecordingTransport(
-      <GteTransportResponse>[
-        GteTransportResponse(statusCode: 200, body: _historyPayload()),
-      ],
-    );
-    final DynastyApiRepository repository = DynastyApiRepository(
-      config: const GteRepositoryConfig(
-        baseUrl: 'http://127.0.0.1:8000',
-        mode: GteBackendMode.live,
-      ),
-      transport: transport,
-      fixtures: DynastyFixtureRepository(),
-    );
+  test(
+    'fetchDynastyHistory normalizes timeline ordering and derives eras',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport(
+        <GteTransportResponse>[
+          GteTransportResponse(statusCode: 200, body: _historyPayload()),
+        ],
+      );
+      final DynastyApiRepository repository = DynastyApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.live,
+        ),
+        transport: transport,
+        fixtures: DynastyFixtureRepository(),
+      );
 
-    final DynastyHistoryDto history =
-        await repository.fetchDynastyHistory('atlas-fc');
+      final DynastyHistoryDto history = await repository.fetchDynastyHistory(
+        'atlas-fc',
+      );
 
-    expect(
-      history.dynastyTimeline.map(
-          (DynastySnapshotDto snapshot) => snapshot.metrics.windowEndSeasonId),
-      <String>['2020', '2021', '2022'],
-    );
-    expect(
-      history.events.map((DynastyEventDto event) => event.seasonId),
-      <String>['2020', '2021', '2022'],
-    );
-    expect(history.eras.length, 2);
-    expect(history.eras.first.startSeasonId, '2020');
-    expect(history.eras.last.endSeasonId, '2022');
-  });
+      expect(
+        history.dynastyTimeline.map(
+          (DynastySnapshotDto snapshot) => snapshot.metrics.windowEndSeasonId,
+        ),
+        <String>['2020', '2021', '2022'],
+      );
+      expect(
+        history.events.map((DynastyEventDto event) => event.seasonId),
+        <String>['2020', '2021', '2022'],
+      );
+      expect(history.eras.length, 2);
+      expect(history.eras.first.startSeasonId, '2020');
+      expect(history.eras.last.endSeasonId, '2022');
+    },
+  );
 
   test('applyEraOverride prefers explicit eras over history-derived eras', () {
-    final DynastyHistoryDto history =
-        dynastyResponseMapper.mapHistory(_historyPayload());
+    final DynastyHistoryDto history = dynastyResponseMapper.mapHistory(
+      _historyPayload(),
+    );
     final List<DynastyEraDto> explicitEras = <DynastyEraDto>[
       const DynastyEraDto(
         eraLabel: DynastyEraType.globalDynasty,
@@ -111,57 +119,55 @@ void main() {
       ),
     ];
 
-    final DynastyHistoryDto resolvedHistory =
-        dynastyResponseMapper.applyEraOverride(
-      history,
-      explicitEras: explicitEras,
-    );
+    final DynastyHistoryDto resolvedHistory = dynastyResponseMapper
+        .applyEraOverride(history, explicitEras: explicitEras);
 
     expect(resolvedHistory.eras.length, 1);
     expect(resolvedHistory.eras.single.eraLabel, DynastyEraType.globalDynasty);
-    expect(
-      resolvedHistory.eras.single.reasons,
-      <String>['Explicit era override'],
-    );
+    expect(resolvedHistory.eras.single.reasons, <String>[
+      'Explicit era override',
+    ]);
   });
 
-  test('fetchEras applies safe defaults when optional fields are missing',
-      () async {
-    final _RecordingTransport transport = _RecordingTransport(
-      <GteTransportResponse>[
-        GteTransportResponse(
-          statusCode: 200,
-          body: <String, Object?>{
-            'eras': <Object?>[
-              <String, Object?>{
-                'era_label': 'Dominant Era',
-                'dynasty_status': 'active',
-                'start_season_id': '2021',
-                'peak_score': 78,
-                'active': true,
-                'reasons': <Object?>['Won the league', null, '  '],
-              },
-            ],
-          },
+  test(
+    'fetchEras applies safe defaults when optional fields are missing',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport(
+        <GteTransportResponse>[
+          GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'eras': <Object?>[
+                <String, Object?>{
+                  'era_label': 'Dominant Era',
+                  'dynasty_status': 'active',
+                  'start_season_id': '2021',
+                  'peak_score': 78,
+                  'active': true,
+                  'reasons': <Object?>['Won the league', null, '  '],
+                },
+              ],
+            },
+          ),
+        ],
+      );
+      final DynastyApiRepository repository = DynastyApiRepository(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
+          mode: GteBackendMode.live,
         ),
-      ],
-    );
-    final DynastyApiRepository repository = DynastyApiRepository(
-      config: const GteRepositoryConfig(
-        baseUrl: 'http://127.0.0.1:8000',
-        mode: GteBackendMode.live,
-      ),
-      transport: transport,
-      fixtures: DynastyFixtureRepository(),
-    );
+        transport: transport,
+        fixtures: DynastyFixtureRepository(),
+      );
 
-    final List<DynastyEraDto> eras = await repository.fetchEras('atlas-fc');
+      final List<DynastyEraDto> eras = await repository.fetchEras('atlas-fc');
 
-    expect(eras.single.startSeasonLabel, '2021');
-    expect(eras.single.endSeasonId, '2021');
-    expect(eras.single.endSeasonLabel, '2021');
-    expect(eras.single.reasons, <String>['Won the league']);
-  });
+      expect(eras.single.startSeasonLabel, '2021');
+      expect(eras.single.endSeasonId, '2021');
+      expect(eras.single.endSeasonLabel, '2021');
+      expect(eras.single.reasons, <String>['Won the league']);
+    },
+  );
 
   test('fetchDynastyLeaderboard maps rows without region metadata', () async {
     final _RecordingTransport transport = _RecordingTransport(
@@ -418,27 +424,40 @@ Map<String, Object?> _snapshotPayload({
       'window_end_season_id': seasonId,
       'window_end_season_label': seasonLabel,
       'seasons': seasons,
-      'league_titles': seasons
-          .where(
-              (Map<String, Object?> season) => season['league_title'] == true)
-          .length,
+      'league_titles':
+          seasons
+              .where(
+                (Map<String, Object?> season) => season['league_title'] == true,
+              )
+              .length,
       'champions_league_titles': 0,
-      'world_super_cup_titles': seasons
-          .where((Map<String, Object?> season) =>
-              season['world_super_cup_winner'] == true)
-          .length,
-      'top_four_finishes': seasons
-          .where((Map<String, Object?> season) =>
-              season['top_four_finish'] == true)
-          .length,
-      'elite_finishes': seasons
-          .where(
-              (Map<String, Object?> season) => season['elite_finish'] == true)
-          .length,
-      'world_super_cup_qualifications': seasons
-          .where((Map<String, Object?> season) =>
-              season['world_super_cup_qualified'] == true)
-          .length,
+      'world_super_cup_titles':
+          seasons
+              .where(
+                (Map<String, Object?> season) =>
+                    season['world_super_cup_winner'] == true,
+              )
+              .length,
+      'top_four_finishes':
+          seasons
+              .where(
+                (Map<String, Object?> season) =>
+                    season['top_four_finish'] == true,
+              )
+              .length,
+      'elite_finishes':
+          seasons
+              .where(
+                (Map<String, Object?> season) => season['elite_finish'] == true,
+              )
+              .length,
+      'world_super_cup_qualifications':
+          seasons
+              .where(
+                (Map<String, Object?> season) =>
+                    season['world_super_cup_qualified'] == true,
+              )
+              .length,
       'trophy_density': seasons.fold<int>(
         0,
         (int sum, Map<String, Object?> season) =>
@@ -449,28 +468,35 @@ Map<String, Object?> _snapshotPayload({
         (int sum, Map<String, Object?> season) =>
             sum + (season['reputation_gain'] as int? ?? 0),
       ),
-      'recent_two_top_four_finishes': seasons
+      'recent_two_top_four_finishes':
+          seasons
+              .skip(seasons.length > 2 ? seasons.length - 2 : 0)
+              .where(
+                (Map<String, Object?> season) =>
+                    season['top_four_finish'] == true,
+              )
+              .length,
+      'recent_two_trophy_density': seasons
           .skip(seasons.length > 2 ? seasons.length - 2 : 0)
-          .where((Map<String, Object?> season) =>
-              season['top_four_finish'] == true)
-          .length,
-      'recent_two_trophy_density':
-          seasons.skip(seasons.length > 2 ? seasons.length - 2 : 0).fold<int>(
-                0,
-                (int sum, Map<String, Object?> season) =>
-                    sum + (season['trophy_count'] as int? ?? 0),
-              ),
-      'recent_two_reputation_gain':
-          seasons.skip(seasons.length > 2 ? seasons.length - 2 : 0).fold<int>(
-                0,
-                (int sum, Map<String, Object?> season) =>
-                    sum + (season['reputation_gain'] as int? ?? 0),
-              ),
-      'recent_two_league_titles': seasons
+          .fold<int>(
+            0,
+            (int sum, Map<String, Object?> season) =>
+                sum + (season['trophy_count'] as int? ?? 0),
+          ),
+      'recent_two_reputation_gain': seasons
           .skip(seasons.length > 2 ? seasons.length - 2 : 0)
-          .where(
-              (Map<String, Object?> season) => season['league_title'] == true)
-          .length,
+          .fold<int>(
+            0,
+            (int sum, Map<String, Object?> season) =>
+                sum + (season['reputation_gain'] as int? ?? 0),
+          ),
+      'recent_two_league_titles':
+          seasons
+              .skip(seasons.length > 2 ? seasons.length - 2 : 0)
+              .where(
+                (Map<String, Object?> season) => season['league_title'] == true,
+              )
+              .length,
     },
   };
 }
@@ -503,4 +529,3 @@ Map<String, Object?> _seasonPayload({
     'elite_finish': leagueFinish != null && leagueFinish <= 2,
   };
 }
-

@@ -79,7 +79,7 @@ Primary shipped-runtime and shared primitive files affected by this pass:
 - `frontend/lib/features/match/live_match_viewer_route_support.dart`
 - `frontend/lib/features/match/match_live_subscription.dart`
 - `frontend/lib/features/match/match_viewer_route_screen.dart`
-- `frontend/lib/features/match/match_3d_route_screen.dart`
+- `frontend/lib/features/match_center/legacy_match_runtime_blocked_screen.dart`
 - `frontend/lib/features/match/match_spectate_screen.dart`
 - `frontend/lib/features/match/match_screen.dart`
 - `frontend/lib/features/profile/profile_admin_screen.dart`

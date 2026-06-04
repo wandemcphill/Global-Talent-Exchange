@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/controllers/platform/gtex_platform_experience_controller.dart';
-import 'package:gte_frontend/models/match/gtex_match_render_mode.dart';
-import 'package:gte_frontend/models/match/gtex_match_view_type.dart';
+import 'package:gte_frontend/features/match_center/models/match/gtex_match_render_mode.dart';
+import 'package:gte_frontend/features/match_center/models/match/gtex_match_view_type.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 import 'package:gte_frontend/models/platform/gtex_platform_experience.dart';
-import 'package:gte_frontend/screens/match/gtex_match_broadcast_screen.dart';
+import 'package:gte_frontend/features/match_center/presentation/gtex_match_broadcast_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
-import 'package:gte_frontend/widgets/match/broadcast/gtex_event_overlay.dart';
-import 'package:gte_frontend/widgets/match/broadcast/gtex_hidden_controls_overlay.dart';
-import 'package:gte_frontend/widgets/match/broadcast/gtex_mode_selector_button.dart';
-import 'package:gte_frontend/widgets/match/broadcast/gtex_tv_mode_shell.dart';
-import 'package:gte_frontend/widgets/match/broadcast/gtex_web_mode_sidebar.dart';
-import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
-import 'package:gte_frontend/widgets/match/pseudo3d/gtex_pseudo3d_match_canvas.dart';
+import 'package:gte_frontend/features/match_center/widgets/broadcast/gtex_event_overlay.dart';
+import 'package:gte_frontend/features/match_center/widgets/broadcast/gtex_hidden_controls_overlay.dart';
+import 'package:gte_frontend/features/match_center/widgets/broadcast/gtex_mode_selector_button.dart';
+import 'package:gte_frontend/features/match_center/widgets/broadcast/gtex_tv_mode_shell.dart';
+import 'package:gte_frontend/features/match_center/widgets/broadcast/gtex_web_mode_sidebar.dart';
+import 'package:gte_frontend/features/match_center/widgets/pitch_2d_widget.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 
@@ -28,9 +30,8 @@ void main() {
           viewType: GtexMatchViewType.twoD,
           isPremiumUser: false,
           spectatorMode: true,
-          auto3DEnabled: false,
           competitionLabel: 'GTEX Cup',
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async => _liveSegmentViewState(),
         ),
       ),
     );
@@ -59,9 +60,8 @@ void main() {
           viewType: GtexMatchViewType.twoD,
           isPremiumUser: false,
           spectatorMode: true,
-          auto3DEnabled: false,
           competitionLabel: 'GTEX Cup',
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async => _liveSegmentViewState(),
         ),
       ),
     );
@@ -83,7 +83,7 @@ void main() {
     expect(visibleOpacity.opacity, 1);
   });
 
-  testWidgets('event overlay appears during playback', (
+  testWidgets('event overlay appears from a backend-authored active frame', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -94,24 +94,42 @@ void main() {
           viewType: GtexMatchViewType.twoD,
           isPremiumUser: false,
           spectatorMode: true,
-          auto3DEnabled: false,
           competitionLabel: 'GTEX Cup',
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async => _backendAuthoredChanceViewState(),
         ),
       ),
     );
 
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 32));
-    await tester.pump(const Duration(milliseconds: 2500));
 
-    expect(
-      find.descendant(
-        of: find.byType(GtexEventOverlay),
-        matching: find.text('Chance'),
+    expect(_eventOverlayText('Chance'), findsOneWidget);
+  });
+
+  testWidgets('event overlay is not synthesized from event timing alone', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        child: GtexMatchBroadcastScreen(
+          matchId: 'broadcast-screen',
+          initialMode: GtexMatchRenderMode.quick,
+          viewType: GtexMatchViewType.twoD,
+          isPremiumUser: false,
+          spectatorMode: true,
+          competitionLabel: 'GTEX Cup',
+          viewStateLoader:
+              () async => _withoutBackendAuthoredOverlayViewState(),
+        ),
       ),
-      findsOneWidget,
     );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(_eventOverlayText('Chance'), findsNothing);
+    expect(_eventOverlayText('Goal'), findsNothing);
   });
 
   testWidgets('broadcast screen exposes gifting controls for spectators', (
@@ -125,9 +143,8 @@ void main() {
           viewType: GtexMatchViewType.twoD,
           isPremiumUser: false,
           spectatorMode: true,
-          auto3DEnabled: false,
           competitionLabel: 'GTEX Cup',
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async => _liveSegmentViewState(),
         ),
       ),
     );
@@ -153,9 +170,8 @@ void main() {
           viewType: GtexMatchViewType.twoD,
           isPremiumUser: false,
           spectatorMode: true,
-          auto3DEnabled: false,
           competitionLabel: 'GTEX Cup',
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async => _liveSegmentViewState(),
         ),
       ),
     );
@@ -170,7 +186,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('pseudo-3D broadcast screen loads without crashing', (
+  testWidgets('alternate view requests stay on the 2D broadcast canvas', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -178,36 +194,11 @@ void main() {
         child: GtexMatchBroadcastScreen(
           matchId: 'broadcast-screen',
           initialMode: GtexMatchRenderMode.quick,
-          viewType: GtexMatchViewType.pseudo3D,
+          viewType: gtexMatchViewTypeFromString('3d'),
           isPremiumUser: true,
           spectatorMode: true,
-          auto3DEnabled: true,
           competitionLabel: 'GTEX Cup',
-          viewStateLoader: () async => buildBroadcastTestViewState(),
-        ),
-      ),
-    );
-
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 32));
-
-    expect(find.byType(GtexPseudo3DMatchCanvas), findsOneWidget);
-  });
-
-  testWidgets('broadcast falls back to 2D when pseudo-3D is unavailable', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      _host(
-        child: GtexMatchBroadcastScreen(
-          matchId: 'broadcast-screen',
-          initialMode: GtexMatchRenderMode.quick,
-          viewType: GtexMatchViewType.pseudo3D,
-          isPremiumUser: false,
-          spectatorMode: true,
-          auto3DEnabled: false,
-          competitionLabel: 'GTEX Cup',
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async => _liveSegmentViewState(),
         ),
       ),
     );
@@ -216,12 +207,38 @@ void main() {
     await tester.pump(const Duration(milliseconds: 32));
 
     expect(find.byType(Pitch2dWidget), findsOneWidget);
-    expect(find.byType(GtexPseudo3DMatchCanvas), findsNothing);
-    expect(find.byTooltip('Broadcast+ locked'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('twoD-canvas')), findsOneWidget);
+  });
+
+  testWidgets('broadcast remains 2D when alternate view is unavailable', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        child: GtexMatchBroadcastScreen(
+          matchId: 'broadcast-screen',
+          initialMode: GtexMatchRenderMode.quick,
+          viewType: gtexMatchViewTypeFromString('3d'),
+          isPremiumUser: false,
+          spectatorMode: true,
+          competitionLabel: 'GTEX Cup',
+          viewStateLoader: () async => _liveSegmentViewState(),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+
+    expect(find.byType(Pitch2dWidget), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('twoD-canvas')), findsOneWidget);
+    expect(find.byTooltip('Broadcast+ locked'), findsNothing);
+    expect(find.byTooltip('Switch to Broadcast+'), findsNothing);
+    expect(find.byTooltip('Switch to 2D'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('broadcast switches cleanly between 2D and pseudo-3D views', (
+  testWidgets('legacy Broadcast+ controls stay hidden on the 2D canvas', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(360, 780));
@@ -235,9 +252,8 @@ void main() {
           viewType: GtexMatchViewType.twoD,
           isPremiumUser: true,
           spectatorMode: true,
-          auto3DEnabled: false,
           competitionLabel: 'GTEX Cup',
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async => _liveSegmentViewState(),
         ),
       ),
     );
@@ -246,68 +262,55 @@ void main() {
     await tester.pump(const Duration(milliseconds: 32));
 
     expect(find.byType(Pitch2dWidget), findsOneWidget);
-    expect(find.byType(GtexPseudo3DMatchCanvas), findsNothing);
-
-    await tester.tap(find.byTooltip('Switch to Broadcast+'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 260));
-
-    expect(find.byType(GtexPseudo3DMatchCanvas), findsOneWidget);
-    expect(find.byType(Pitch2dWidget), findsNothing);
-
-    await tester.tap(find.byTooltip('Switch to 2D'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 260));
-
-    expect(find.byType(Pitch2dWidget), findsOneWidget);
-    expect(find.byType(GtexPseudo3DMatchCanvas), findsNothing);
+    expect(find.byKey(const ValueKey<String>('twoD-canvas')), findsOneWidget);
+    expect(find.byTooltip('Broadcast+ locked'), findsNothing);
+    expect(find.byTooltip('Switch to Broadcast+'), findsNothing);
+    expect(find.byTooltip('Switch to 2D'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('broadcast playback pauses while the app is backgrounded', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      _host(
-        child: GtexMatchBroadcastScreen(
-          matchId: 'broadcast-screen',
-          initialMode: GtexMatchRenderMode.quick,
-          viewType: GtexMatchViewType.twoD,
-          isPremiumUser: false,
-          spectatorMode: true,
-          auto3DEnabled: false,
-          competitionLabel: 'GTEX Cup',
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+  testWidgets(
+    'paused and backgrounded lifecycle does not advance match truth',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        _host(
+          child: GtexMatchBroadcastScreen(
+            matchId: 'broadcast-screen',
+            initialMode: GtexMatchRenderMode.quick,
+            viewType: GtexMatchViewType.twoD,
+            isPremiumUser: false,
+            spectatorMode: true,
+            competitionLabel: 'GTEX Cup',
+            viewStateLoader: () async => _backendHeldBeforeChanceViewState(),
+          ),
         ),
-      ),
-    );
+      );
 
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 32));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 32));
 
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    await tester.pump(const Duration(milliseconds: 2600));
+      expect(_eventOverlayText('Chance'), findsNothing);
 
-    expect(
-      find.descendant(
-        of: find.byType(GtexEventOverlay),
-        matching: find.text('Chance'),
-      ),
-      findsNothing,
-    );
+      await tester.tap(find.byType(Scaffold));
+      await tester.pump(const Duration(milliseconds: 220));
+      await tester.tap(find.text('Sync'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
 
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 2600));
+      expect(_eventOverlayText('Chance'), findsNothing);
 
-    expect(
-      find.descendant(
-        of: find.byType(GtexEventOverlay),
-        matching: find.text('Chance'),
-      ),
-      findsOneWidget,
-    );
-  });
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(_eventOverlayText('Chance'), findsNothing);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(_eventOverlayText('Chance'), findsNothing);
+    },
+  );
 
   testWidgets('broadcast route can be popped and reopened cleanly', (
     WidgetTester tester,
@@ -330,10 +333,9 @@ void main() {
                               viewType: GtexMatchViewType.twoD,
                               isPremiumUser: false,
                               spectatorMode: true,
-                              auto3DEnabled: false,
                               competitionLabel: 'GTEX Cup',
                               viewStateLoader:
-                                  () async => buildBroadcastTestViewState(),
+                                  () async => _backendAuthoredChanceViewState(),
                             ),
                       ),
                     );
@@ -348,44 +350,18 @@ void main() {
     );
 
     await tester.tap(find.text('Open broadcast'));
-    await tester.pump(const Duration(milliseconds: 350));
-    await _pumpUntilVisible(
-      tester,
-      find.descendant(
-        of: find.byType(GtexEventOverlay),
-        matching: find.text('Chance'),
-      ),
-    );
+    await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byType(GtexEventOverlay),
-        matching: find.text('Chance'),
-      ),
-      findsOneWidget,
-    );
+    expect(_eventOverlayText('Chance'), findsOneWidget);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Open broadcast'), findsOneWidget);
 
     await tester.tap(find.text('Open broadcast'));
-    await tester.pump(const Duration(milliseconds: 350));
-    await _pumpUntilVisible(
-      tester,
-      find.descendant(
-        of: find.byType(GtexEventOverlay),
-        matching: find.text('Chance'),
-      ),
-    );
+    await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byType(GtexEventOverlay),
-        matching: find.text('Chance'),
-      ),
-      findsOneWidget,
-    );
+    expect(_eventOverlayText('Chance'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -415,11 +391,10 @@ void main() {
           viewType: GtexMatchViewType.twoD,
           isPremiumUser: false,
           spectatorMode: true,
-          auto3DEnabled: false,
           competitionLabel: 'GTEX Cup',
           platformMode: GtexPlatformMode.tv,
           platformController: platformController,
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async => _liveSegmentViewState(),
         ),
       ),
     );
@@ -457,11 +432,10 @@ void main() {
           viewType: GtexMatchViewType.twoD,
           isPremiumUser: false,
           spectatorMode: true,
-          auto3DEnabled: false,
           competitionLabel: 'GTEX Cup',
           platformMode: GtexPlatformMode.web,
           platformController: platformController,
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async => _liveSegmentViewState(),
         ),
       ),
     );
@@ -479,18 +453,82 @@ Widget _host({required Widget child}) {
   return MaterialApp(theme: GteShellTheme.build(), home: child);
 }
 
-Future<void> _pumpUntilVisible(
-  WidgetTester tester,
-  Finder finder, {
-  Duration step = const Duration(milliseconds: 100),
-  Duration timeout = const Duration(seconds: 4),
-}) async {
-  final int attempts = timeout.inMilliseconds ~/ step.inMilliseconds;
-  for (int index = 0; index < attempts; index += 1) {
-    if (finder.evaluate().isNotEmpty) {
-      return;
-    }
-    await tester.pump(step);
-  }
-  expect(finder, findsOneWidget);
+Finder _eventOverlayText(String text) {
+  return find.descendant(
+    of: find.byType(GtexEventOverlay),
+    matching: find.text(text),
+  );
+}
+
+MatchViewState _backendAuthoredChanceViewState() {
+  final MatchViewState viewState = _liveSegmentViewState();
+  return viewState.copyWith(
+    frames: viewState.frames
+        .map((MatchTimelineFrame frame) {
+          if (frame.id != 'f1') {
+            return frame;
+          }
+          return frame.copyWith(eventBanner: 'Chance');
+        })
+        .toList(growable: false),
+  );
+}
+
+MatchViewState _withoutBackendAuthoredOverlayViewState() {
+  final MatchViewState viewState = buildBroadcastTestViewState();
+  return viewState.copyWith(
+    segmentEndSeconds: 3,
+    frames: viewState.frames
+        .map((MatchTimelineFrame frame) {
+          return frame.copyWith(
+            eventBanner: null,
+            overlayText: null,
+            homeScore: 0,
+            awayScore: 0,
+            injectedEvents: const <MatchTimelineInjection>[],
+          );
+        })
+        .toList(growable: false),
+  );
+}
+
+MatchViewState _liveSegmentViewState() {
+  return buildBroadcastTestViewState().copyWith(segmentEndSeconds: 1);
+}
+
+MatchViewState _backendHeldBeforeChanceViewState() {
+  final MatchViewState viewState = buildBroadcastTestViewState();
+  final MatchEvent futureChance = viewState
+      .eventById('attack-home')!
+      .copyWith(timeSeconds: 2);
+  final List<MatchEvent> events = viewState.events
+      .map((MatchEvent event) {
+        return event.id == futureChance.id ? futureChance : event;
+      })
+      .toList(growable: false);
+  final MatchTimelineFrame heldFrame = viewState.firstFrame.copyWith(
+    id: 'backend-held-before-chance',
+    timeSeconds: 1,
+    clockMinute: 1,
+    phase: MatchViewerPhase.openPlay,
+    activeEventId: null,
+    eventBanner: null,
+    overlayText: null,
+    injectedEvents: const <MatchTimelineInjection>[],
+  );
+  final MatchTimelineFrame futureChanceFrame = viewState.frames[1].copyWith(
+    id: 'backend-future-chance',
+    timeSeconds: 2,
+    activeEventId: futureChance.id,
+  );
+
+  return viewState.copyWith(
+    events: events,
+    segmentEndSeconds: 1,
+    frames: <MatchTimelineFrame>[
+      heldFrame,
+      futureChanceFrame,
+      viewState.lastFrame,
+    ],
+  );
 }

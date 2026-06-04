@@ -22,13 +22,13 @@ from app.regen_universe.service import RegenUniverseService
 from app.services.player_agency_service import PlayerAgencyService
 from app.wallets.service import WalletService
 from backend.tests.support.secrets import TEST_PASSWORD
-from backend.tests.support.signup_payloads import user_signup_payload
+from backend.tests.support.signup_payloads import player_signup_payload
 
 
 def _register_user(client, *, suffix: str) -> dict[str, object]:
     response = client.post(
-        "/auth/signup/user",
-        json=user_signup_payload(
+        "/auth/signup/player",
+        json=player_signup_payload(
             email=f"{suffix}@example.com",
             username=suffix.replace("-", "_"),
             password=TEST_PASSWORD,
@@ -125,7 +125,12 @@ def _create_player(
         market_value_eur=market_value,
         is_tradable=True,
         is_real_player=is_real_player,
-        dna_profile={"gsi": gsi, "regen_type": "real" if is_real_player else "club"},
+        dna_profile={
+            "gsi": gsi,
+            "generation": 1,
+            "regen_type": "real" if is_real_player else "club",
+            "traits": ["line breaker", "press resistant", "late runner"],
+        },
     )
     session.add(player)
     session.flush()
@@ -550,6 +555,7 @@ def test_regen_universe_end_to_end(client, app_session_factory, bootstrap_admin_
         headers=user["headers"],
         json={
             "parent_player_id": parent_player_id,
+            "selected_traits": ["line breaker", "press resistant", "late runner"],
             "requested_name": "Afolabi Adeyemi",
             "requested_country_code": "NG",
             "requested_position": "ST",

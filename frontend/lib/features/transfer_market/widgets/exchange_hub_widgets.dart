@@ -9,7 +9,7 @@ import '../../../core/utils/app_formatters.dart';
 import '../../../core/widgets/app_press_scale.dart';
 import '../../../core/widgets/gtex_surface_card.dart';
 import '../../../core/widgets/player_card.dart';
-import '../../../shared/providers/exchange_hub_provider.dart';
+import 'package:gte_frontend/features/capital/trader/providers/exchange_hub_provider.dart';
 import '../../../shared/widgets/metric_pill.dart';
 import '../../../widgets/player_card_avatar.dart';
 
@@ -109,16 +109,16 @@ class ExchangeWalletDashboardCard extends StatelessWidget {
                       children: <Widget>[
                         MetricPill(
                           label: 'This week spend',
-                          value: AppFormatters.naira(state.weeklySpendNaira),
+                          value: 'Backend required',
                           highlight: true,
                         ),
                         MetricPill(
                           label: 'Matches watched',
-                          value: '${state.matchesWatched}',
+                          value: 'Backend required',
                         ),
                         MetricPill(
                           label: 'Trades made',
-                          value: '${state.tradesMade}',
+                          value: 'Backend required',
                         ),
                       ],
                     ),
@@ -192,20 +192,13 @@ class ExchangeActivityPanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: spacingLG),
-              _TreasuryLine(label: 'Tier', value: state.kycTier.label),
-              _TreasuryLine(
-                label: 'Daily limit',
-                value: AppFormatters.naira(state.kycTier.dailyLimitNaira),
-              ),
+              _TreasuryLine(label: 'Tier', value: 'Backend required'),
+              _TreasuryLine(label: 'Daily limit', value: 'Backend required'),
               _TreasuryLine(
                 label: 'Remaining today',
-                value: AppFormatters.naira(state.remainingWithdrawalLimitNaira),
+                value: 'Backend required',
               ),
-              _TreasuryLine(
-                label: 'Primary bank',
-                value:
-                    '${state.selectedBank?.bankName ?? 'Not set'} • ${state.selectedBank?.accountNumber ?? '--'}',
-              ),
+              _TreasuryLine(label: 'Primary bank', value: 'Backend required'),
             ],
           ),
         );
@@ -373,13 +366,13 @@ class ComplianceRail extends StatelessWidget {
                 children: <Widget>[
                   _InfoBadge(
                     label: 'Basic',
-                    value: AppFormatters.naira(50000),
+                    value: 'Backend required',
                     caption: 'Daily payout limit',
                     color: AppColors.primary,
                   ),
                   _InfoBadge(
                     label: 'Verified',
-                    value: AppFormatters.naira(500000),
+                    value: 'Backend required',
                     caption: 'Daily payout limit',
                     color: AppColors.gold,
                   ),
@@ -431,11 +424,8 @@ class ComplianceRail extends StatelessWidget {
                 note: 'Avoid early entry while the model is still maturing.',
               ),
               const SizedBox(height: spacingLG),
-              _TreasuryLine(label: 'Active tier', value: state.kycTier.label),
-              _TreasuryLine(
-                label: 'Current limit',
-                value: AppFormatters.naira(state.kycTier.dailyLimitNaira),
-              ),
+              _TreasuryLine(label: 'Active tier', value: 'Backend required'),
+              _TreasuryLine(label: 'Current limit', value: 'Backend required'),
             ],
           ),
         ),
@@ -766,14 +756,14 @@ class _BalanceDeck extends StatelessWidget {
         const SizedBox(height: spacingSM),
         Text(
           key: const Key('wallet-balance-text'),
-          AppFormatters.gtex(state.walletBalanceGtex),
+          'Backend wallet required',
           style: Theme.of(
             context,
           ).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: spacingXS),
         Text(
-          AppFormatters.naira(state.walletBalanceGtex * state.nairaPerGtex),
+          'Wallet balances and compliance must come from capital services.',
           style: Theme.of(
             context,
           ).textTheme.titleLarge?.copyWith(color: AppColors.gold),
@@ -791,7 +781,7 @@ class _BalanceDeck extends StatelessWidget {
               Expanded(
                 child: _BalanceStat(
                   label: 'GTex',
-                  value: AppFormatters.gtex(state.walletBalanceGtex),
+                  value: 'Backend required',
                   accent: AppColors.primary,
                 ),
               ),
@@ -799,7 +789,7 @@ class _BalanceDeck extends StatelessWidget {
               Expanded(
                 child: _BalanceStat(
                   label: 'Matchday spend',
-                  value: AppFormatters.fanCoin(state.fanCoinBalance),
+                  value: 'Backend required',
                   accent: AppColors.gold,
                 ),
               ),
@@ -839,7 +829,7 @@ class _WalletActions extends StatelessWidget {
           buttonKey: const Key('wallet-action-deposit'),
           icon: Icons.arrow_downward_rounded,
           label: 'Deposit',
-          caption: 'Paystack, KoraPay, or manual bank transfer.',
+          caption: 'KoraPay or manual bank transfer.',
           accent: AppColors.primary,
           onTap: onDeposit,
         ),
@@ -882,8 +872,13 @@ class DepositFlowSheet extends StatefulWidget {
 }
 
 class _DepositFlowSheetState extends State<DepositFlowSheet> {
+  static const List<PaymentMethod> _canonicalPaymentMethods = <PaymentMethod>[
+    PaymentMethod.korapay,
+    PaymentMethod.bankTransfer,
+  ];
+
   final TextEditingController _amountController = TextEditingController();
-  PaymentMethod _selectedMethod = PaymentMethod.paystack;
+  PaymentMethod _selectedMethod = PaymentMethod.korapay;
   bool _receiptAttached = false;
 
   @override
@@ -902,13 +897,14 @@ class _DepositFlowSheetState extends State<DepositFlowSheet> {
         children: <Widget>[
           _SheetStepLabel(index: 1, title: 'Choose method'),
           const SizedBox(height: spacingMD),
-          for (final PaymentMethod method in PaymentMethod.values) ...<Widget>[
+          for (final PaymentMethod method
+              in _canonicalPaymentMethods) ...<Widget>[
             _MethodTile(
               method: method,
               selected: method == _selectedMethod,
               onTap: () => setState(() => _selectedMethod = method),
             ),
-            if (method != PaymentMethod.values.last)
+            if (method != _canonicalPaymentMethods.last)
               const SizedBox(height: spacingSM),
           ],
           const SizedBox(height: spacingLG),
@@ -919,7 +915,7 @@ class _DepositFlowSheetState extends State<DepositFlowSheet> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(
               labelText: 'Amount in NGN',
-              prefixText: '₦',
+              prefixText: 'â‚¦',
             ),
           ),
           const SizedBox(height: spacingLG),
@@ -1010,7 +1006,6 @@ class _WithdrawalFlowSheetState extends State<WithdrawalFlowSheet> {
   Widget build(BuildContext context) {
     final double amountGtex =
         double.tryParse(_amountController.text.trim()) ?? 0;
-    final int payoutNaira = (amountGtex * widget.state.nairaPerGtex).round();
     return _SheetFrame(
       title: 'Withdrawal',
       child: Column(
@@ -1036,7 +1031,7 @@ class _WithdrawalFlowSheetState extends State<WithdrawalFlowSheet> {
               ),
             ),
             child: Text(
-              'You will receive ${AppFormatters.naira(payoutNaira)}',
+              'Withdrawal quote pending backend wallet availability.',
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
@@ -1048,7 +1043,7 @@ class _WithdrawalFlowSheetState extends State<WithdrawalFlowSheet> {
                   (WalletBankAccount account) => DropdownMenuItem<String>(
                     value: account.id,
                     child: Text(
-                      '${account.bankName} • ${account.accountNumber}',
+                      '${account.bankName} â€¢ ${account.accountNumber}',
                     ),
                   ),
                 )
@@ -1068,21 +1063,11 @@ class _WithdrawalFlowSheetState extends State<WithdrawalFlowSheet> {
             children: <Widget>[
               MetricPill(
                 label: 'Tier',
-                value: widget.state.kycTier.label,
+                value: 'Backend required',
                 highlight: true,
               ),
-              MetricPill(
-                label: 'Limit',
-                value: AppFormatters.naira(
-                  widget.state.kycTier.dailyLimitNaira,
-                ),
-              ),
-              MetricPill(
-                label: 'Remaining',
-                value: AppFormatters.naira(
-                  widget.state.remainingWithdrawalLimitNaira,
-                ),
-              ),
+              MetricPill(label: 'Limit', value: 'Backend required'),
+              MetricPill(label: 'Remaining', value: 'Backend required'),
             ],
           ),
           const SizedBox(height: spacingLG),
@@ -1147,7 +1132,7 @@ class _ConvertFlowSheetState extends State<ConvertFlowSheet> {
           ),
           const SizedBox(height: spacingSM),
           Text(
-            '${AppFormatters.gtex(safeValue)} reserved | $fanCoin spend points',
+            '${AppFormatters.gtex(safeValue)} selected | $fanCoin spend points',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: spacingLG),
@@ -1190,14 +1175,10 @@ class _PlayerTradeSheetState extends State<PlayerTradeSheet> {
   @override
   Widget build(BuildContext context) {
     final PlayerShareListing player = widget.player;
-    final int maxBuy = math.min(
-      player.sharesAvailable,
-      widget.state.walletBalanceGtex ~/ player.priceGtex,
-    );
+    const int maxBuy = 0;
     final int maxSell = player.userShares;
     final int maxShares = math.max(1, _selling ? maxSell : maxBuy);
     final int selectedShares = _shares.clamp(1, maxShares).round();
-    final double orderValue = player.priceGtex * selectedShares;
     final bool canTrade = _selling ? maxSell > 0 : maxBuy > 0;
 
     return _SheetFrame(
@@ -1221,7 +1202,7 @@ class _PlayerTradeSheetState extends State<PlayerTradeSheet> {
                     ),
                     const SizedBox(height: spacingXS),
                     Text(
-                      '${player.club} • ${player.position} • ${player.country}',
+                      '${player.club} â€¢ ${player.position} â€¢ ${player.country}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -1345,7 +1326,7 @@ class _PlayerTradeSheetState extends State<PlayerTradeSheet> {
                     : null,
           ),
           Text(
-            '$selectedShares share${selectedShares == 1 ? '' : 's'} • ${AppFormatters.gtex(orderValue)}',
+            '$selectedShares share${selectedShares == 1 ? '' : 's'} • Backend quote required',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: spacingLG),
@@ -1353,7 +1334,7 @@ class _PlayerTradeSheetState extends State<PlayerTradeSheet> {
             Text(
               _selling
                   ? 'You do not own shares in this player yet.'
-                  : 'Deposit more GTex before buying this player.',
+                  : 'Backend wallet availability is required before buying this player.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
@@ -1825,7 +1806,7 @@ class _TrendBadge extends StatelessWidget {
         border: Border.all(color: accent.withValues(alpha: 0.28)),
       ),
       child: Text(
-        '${positive ? '↑' : '↓'} ${AppFormatters.percent(trendPercent)}',
+        '${positive ? 'â†‘' : 'â†“'} ${AppFormatters.percent(trendPercent)}',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
           color: accent,
           fontWeight: FontWeight.w700,
@@ -2027,7 +2008,7 @@ class _InstantFlowCard extends StatelessWidget {
           ),
           const SizedBox(height: spacingSM),
           Text(
-            'Show “Processing…” while the gateway confirms settlement and pushes GTex back into the wallet.',
+            'Show â€œProcessingâ€¦â€ while the gateway confirms settlement and pushes GTex back into the wallet.',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),

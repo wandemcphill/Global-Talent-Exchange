@@ -136,7 +136,7 @@ def mounted_app_client(mounted_app):
         yield client
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def mounted_app_contract_snapshot(mounted_app_runtime):
     config = _load_config_module()
     settings = config.load_settings()
@@ -152,8 +152,10 @@ def mounted_app_contract_snapshot(mounted_app_runtime):
             application.state.metrics.refresh_from_database = lambda: None
             application.state.container.metrics.refresh_from_database = lambda: None
 
+            openapi = application.openapi()
             yield {
-                "openapi_paths": set(application.openapi()["paths"]),
+                "openapi": openapi,
+                "openapi_paths": set(openapi["paths"]),
                 "registered_modules": set(application.state.domain_modules),
             }
     finally:

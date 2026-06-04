@@ -30,6 +30,7 @@ from app.models.creator_marketplace import (
 from app.models.event_backbone import EventOutbox
 from app.models.creator_profile import CreatorProfile
 from app.models.notification_record import NotificationRecord
+from app.models.risk_ops import AuditLog
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerAccount, LedgerBalanceProjection, LedgerEntry, LedgerTransaction, LedgerUnit
 from app.viral.trust import InMemoryTrustStateStore, TrustFactorBreakdown, TrustScoreService, TrustState
@@ -53,6 +54,7 @@ def _build_session_factory() -> sessionmaker[Session]:
             LedgerTransaction.__table__,
             LedgerEntry.__table__,
             LedgerBalanceProjection.__table__,
+            AuditLog.__table__,
             CreatorMarketplaceCampaign.__table__,
             CreatorMarketplaceOffer.__table__,
             CreatorMarketplaceParticipation.__table__,
@@ -160,10 +162,7 @@ def test_creator_marketplace_service_settles_payouts_and_updates_reputation() ->
         assert participation["performance_metrics"]["engagement"] == 120
         assert participation["performance_metrics"]["conversions"] == 12
         assert participation["clips_submitted"][0]["is_sponsored"] is True
-        assert (
-            participation["clips_submitted"][0]["ads_engine"]["placement_type"]
-            == "sponsored_highlight"
-        )
+        assert participation["clips_submitted"][0]["ads_engine"]["placement_type"] == "sponsored_highlight"
         assert Decimal(str(participation["gross_payout"])) == Decimal("80.0000")
         assert Decimal(str(participation["payout_earned"])) == Decimal("72.0000")
         assert Decimal(str(participation["platform_fee_amount"])) == Decimal("8.0000")
@@ -179,9 +178,7 @@ def test_creator_marketplace_service_settles_payouts_and_updates_reputation() ->
         assert performance["totals"]["sponsored_clips_injected"] == 1
         assert Decimal(str(performance["totals"]["payout_earned"])) == Decimal("72.0000")
 
-        notifications = session.scalars(
-            select(NotificationRecord).order_by(NotificationRecord.created_at.asc())
-        ).all()
+        notifications = session.scalars(select(NotificationRecord).order_by(NotificationRecord.created_at.asc())).all()
         template_keys = {item.template_key for item in notifications}
         assert "creator_marketplace.campaign_match" in template_keys
         assert "creator_marketplace.offer_accepted" in template_keys
@@ -193,7 +190,9 @@ def test_creator_marketplace_zeroes_payouts_for_low_trust_creators() -> None:
     session_factory = _build_session_factory()
     with session_factory() as session:
         brand = _make_user(user_id="brand-low-trust", username="brand-low-trust", display_name="Peak Cola")
-        creator_user = _make_user(user_id="creator-user-low-trust", username="creator-low-trust", display_name="Ada Plays")
+        creator_user = _make_user(
+            user_id="creator-user-low-trust", username="creator-low-trust", display_name="Ada Plays"
+        )
         creator_profile = _make_creator_profile(creator_id="creator-low-trust", user=creator_user)
         session.add_all([brand, creator_user, creator_profile])
         session.commit()

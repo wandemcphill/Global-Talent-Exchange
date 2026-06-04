@@ -5,7 +5,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 
 ## Shared Source of Truth
 
-- Shared Flutter client files with API calls discovered: **100**
+- Shared Flutter client files with API calls discovered: **112**
 - Web and mobile therefore inherit the same endpoint usage and the same stale/legacy risks.
 
 ## Divergence Risks
@@ -38,26 +38,18 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/club_ops_api.dart -> /api/clubs/$clubId/sponsorships/contracts/$contractId`
 - `frontend/lib/data/club_ops_api.dart -> /api/clubs/$clubId/youth-pipeline`
 - `frontend/lib/data/club_ops_api.dart -> http://127.0.0.1:8000`
-- `frontend/lib/data/community_api.dart -> /api/community/creator-clubs/$clubId/fan-state`
-- `frontend/lib/data/community_api.dart -> /api/community/creator-clubs/$clubId/follow`
-- `frontend/lib/data/community_api.dart -> /api/community/digest`
-- `frontend/lib/data/community_api.dart -> /api/community/live-threads`
-- `frontend/lib/data/community_api.dart -> /api/community/live-threads/$threadId`
-- `frontend/lib/data/community_api.dart -> /api/community/live-threads/$threadId/messages`
-- `frontend/lib/data/community_api.dart -> /api/community/private-messages/threads`
-- `frontend/lib/data/community_api.dart -> /api/community/private-messages/threads/$threadId`
-- `frontend/lib/data/community_api.dart -> /api/community/private-messages/threads/$threadId/messages`
-- `frontend/lib/data/community_api.dart -> /api/community/watchlist`
-- `frontend/lib/data/community_api.dart -> /api/community/watchlist/$competitionKey`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/creator-clubs/$clubId/fan-state`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/creator-clubs/$clubId/follow`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/digest`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/live-threads`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/live-threads/$threadId`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/live-threads/$threadId/messages`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/private-messages/threads`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/private-messages/threads/$threadId`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/private-messages/threads/$threadId/messages`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/watchlist`
+- `frontend/lib/data/community_api.dart -> /api/v2/community/watchlist/$competitionKey`
 - `frontend/lib/data/community_api.dart -> http://127.0.0.1:8000`
-- `frontend/lib/data/competition_api.dart -> /api/competitions`
-- `frontend/lib/data/competition_api.dart -> /api/competitions/$competitionId`
-- `frontend/lib/data/competition_api.dart -> /api/competitions/$competitionId/financials`
-- `frontend/lib/data/competition_api.dart -> /api/competitions/$competitionId/invites`
-- `frontend/lib/data/competition_api.dart -> /api/competitions/$competitionId/join`
-- `frontend/lib/data/competition_api.dart -> /api/competitions/$competitionId/publish`
-- `frontend/lib/data/competition_api.dart -> /api/competitions/join`
-- `frontend/lib/data/competition_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/creator_api.dart -> /api/creators/$creatorId`
 - `frontend/lib/data/creator_api.dart -> /api/creators/me/competitions`
 - `frontend/lib/data/creator_api.dart -> /api/creators/me/copilot/analyze`
@@ -66,11 +58,11 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/creator_api.dart -> /api/media-engine/me/clip-earnings`
 - `frontend/lib/data/creator_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/creator_api.dart -> https://community.gte.local`
-- `frontend/lib/data/creator_application_api.dart -> /api/auth/me`
 - `frontend/lib/data/creator_application_api.dart -> /api/creator/application`
 - `frontend/lib/data/creator_application_api.dart -> /api/creator/apply`
 - `frontend/lib/data/creator_application_api.dart -> /api/creator/verify-email`
 - `frontend/lib/data/creator_application_api.dart -> /api/creator/verify-phone`
+- `frontend/lib/data/creator_application_api.dart -> /api/v2/auth/me`
 - `frontend/lib/data/creator_application_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/discovery_api.dart -> /api/admin/discovery/featured-rails`
 - `frontend/lib/data/discovery_api.dart -> /api/discovery/home`
@@ -78,7 +70,6 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/discovery_api.dart -> /api/discovery/saved-searches/$searchId`
 - `frontend/lib/data/discovery_api.dart -> /api/discovery/search`
 - `frontend/lib/data/discovery_api.dart -> http://127.0.0.1:8000`
-- `frontend/lib/data/dispute_engine_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/governance_api.dart -> /api/admin/governance/proposals/$proposalId/status`
 - `frontend/lib/data/governance_api.dart -> /api/governance/me/overview`
 - `frontend/lib/data/governance_api.dart -> /api/governance/proposals`
@@ -102,20 +93,6 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/gte_exchange_api_client.dart -> /tts/live?voice=default`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /ws/spectate/$matchKey`
 - `frontend/lib/data/gte_exchange_api_client.dart -> http://127.0.0.1:8000`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/admin/hosted-competitions`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/admin/hosted-competitions/$competitionId/finalize`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/admin/hosted-competitions/seed`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/finance`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/invites`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/invites/accept`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/join`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/launch`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/standings`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions/mine`
-- `frontend/lib/data/hosted_competition_api.dart -> /api/hosted-competitions/templates`
-- `frontend/lib/data/hosted_competition_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/moderation_api.dart -> /api/admin/moderation/reports`
 - `frontend/lib/data/moderation_api.dart -> /api/admin/moderation/reports/$reportId/assign`
 - `frontend/lib/data/moderation_api.dart -> /api/admin/moderation/reports/$reportId/resolve`
@@ -144,6 +121,32 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/story_feed_api.dart -> /api/story-feed`
 - `frontend/lib/data/story_feed_api.dart -> /api/story-feed/digest`
 - `frontend/lib/data/story_feed_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/capital/disputes/data/dispute_engine_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/history`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/inquiries`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/inquiries/$inquiryId/respond`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/listing`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/listing/cancel`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/offers`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/offers/$offerId/accept`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/offers/$offerId/counter`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/offers/$offerId/reject`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/transfer`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/valuation`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/sale-market/listings`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/me/clubs/sale-market/listings`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> /api/me/clubs/sale-market/offers`
+- `frontend/lib/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/capital/trader/data/trader_api.dart -> /api/v2/trader/markets`
+- `frontend/lib/features/capital/trader/data/trader_api.dart -> /api/v2/trader/orders`
+- `frontend/lib/features/capital/trader/data/trader_api.dart -> /api/v2/trader/overview`
+- `frontend/lib/features/capital/trader/data/trader_api.dart -> /api/v2/trader/p2p`
+- `frontend/lib/features/capital/trader/data/trader_api.dart -> /api/v2/trader/procurements`
+- `frontend/lib/features/capital/trader/data/trader_api.dart -> /api/v2/trader/procurements/quote`
+- `frontend/lib/features/capital/trader/data/trader_api.dart -> /api/v2/trader/security/totp/setup`
+- `frontend/lib/features/capital/trader/data/trader_api.dart -> /api/v2/trader/watchlist`
+- `frontend/lib/features/capital/trader/data/trader_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_hub/presentation/club_hub_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/dynasty/presentation/club_dynasty_overview_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart -> http://127.0.0.1:8000`
@@ -151,6 +154,30 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/features/club_identity/dynasty/presentation/era_history_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/jerseys/presentation/club_identity_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/reputation/presentation/reputation_screen.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/compete/presentation/screens/competition_discovery_screen.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/compete/repositories/competition_api.dart -> /api/competitions`
+- `frontend/lib/features/compete/repositories/competition_api.dart -> /api/competitions/$competitionId`
+- `frontend/lib/features/compete/repositories/competition_api.dart -> /api/competitions/$competitionId/financials`
+- `frontend/lib/features/compete/repositories/competition_api.dart -> /api/competitions/$competitionId/invites`
+- `frontend/lib/features/compete/repositories/competition_api.dart -> /api/competitions/$competitionId/join`
+- `frontend/lib/features/compete/repositories/competition_api.dart -> /api/competitions/$competitionId/publish`
+- `frontend/lib/features/compete/repositories/competition_api.dart -> /api/competitions/$competitionId/rounds`
+- `frontend/lib/features/compete/repositories/competition_api.dart -> /api/competitions/join`
+- `frontend/lib/features/compete/repositories/competition_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/admin/hosted-competitions`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/admin/hosted-competitions/$competitionId/finalize`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/admin/hosted-competitions/seed`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/finance`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/invites`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/invites/accept`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/join`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/launch`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions/$competitionId/standings`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions/mine`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> /api/hosted-competitions/templates`
+- `frontend/lib/features/compete/repositories/hosted_competition_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/admin/academy_analytics_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/admin/club_finance_analytics_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/admin/club_ops_admin_screen.dart -> http://127.0.0.1:8000`
@@ -175,4 +202,3 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/screens/clubs/scouting_prospect_detail_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/clubs/scouting_prospects_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/screens/clubs/youth_pipeline_screen.dart -> http://127.0.0.1:8000`
-- `frontend/lib/screens/competitions/competition_discovery_screen.dart -> http://127.0.0.1:8000`

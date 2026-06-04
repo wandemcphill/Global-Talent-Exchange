@@ -109,6 +109,20 @@ class RegenUniverseApi {
     }, () async => fixtures.awards(limit: limit));
   }
 
+  Future<List<RegenBloodlineChain>> listBloodlines({int limit = 8}) {
+    return client.withFallback<List<RegenBloodlineChain>>(() async {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/regen-universe/bloodlines',
+        query: <String, Object?>{'limit': limit},
+        auth: false,
+      );
+      final List<Object?> items = GteJson.list(
+        payload['entries'] ?? const <Object?>[],
+      );
+      return items.map(RegenBloodlineChain.fromJson).toList(growable: false);
+    }, () async => fixtures.bloodlines(limit: limit));
+  }
+
   Future<RegenGenerationTracking> fetchTracking() {
     return client.withFallback<RegenGenerationTracking>(() async {
       final Map<String, dynamic> payload = await client.getMap(
@@ -126,17 +140,20 @@ class _RegenUniverseFixtures {
     required List<RegenScoutingFeedItem> feed,
     required List<NationalRegenSeed> nationalRegens,
     required List<RegenAwardResult> awards,
+    required List<RegenBloodlineChain> bloodlines,
     required RegenGenerationTracking tracking,
   }) : _risingStars = risingStars,
        _feed = feed,
        _nationalRegens = nationalRegens,
        _awards = awards,
+       _bloodlines = bloodlines,
        _tracking = tracking;
 
   final List<RegenRisingStar> _risingStars;
   final List<RegenScoutingFeedItem> _feed;
   final List<NationalRegenSeed> _nationalRegens;
   final List<RegenAwardResult> _awards;
+  final List<RegenBloodlineChain> _bloodlines;
   final RegenGenerationTracking _tracking;
 
   static _RegenUniverseFixtures seed() {
@@ -345,6 +362,7 @@ class _RegenUniverseFixtures {
           ],
         ),
       ],
+      bloodlines: const <RegenBloodlineChain>[],
       tracking: const RegenGenerationTracking(
         totalSeededPlayers: 248,
         seedTypes: <RegenGenerationTrackingEntry>[
@@ -417,6 +435,9 @@ class _RegenUniverseFixtures {
 
   Future<List<RegenAwardResult>> awards({required int limit}) async =>
       _awards.take(limit).toList(growable: false);
+
+  Future<List<RegenBloodlineChain>> bloodlines({required int limit}) async =>
+      _bloodlines.take(limit).toList(growable: false);
 
   Future<RegenGenerationTracking> tracking() async => _tracking;
 }

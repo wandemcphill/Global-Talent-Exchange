@@ -42,6 +42,7 @@ AMOUNT_QUANTUM = Decimal("0.0001")
 COIN_TO_CREDIT_RATE = Decimal("100.0000")
 DEFAULT_BALANCE_CACHE_TTL_SECONDS = 300
 DEFAULT_WALLET_SUMMARY_CACHE_TTL_SECONDS = 60
+BALANCE_UNAVAILABLE_MESSAGE = "Balance data unavailable — sync in progress."
 TRADE_BUY_SOURCE_TAGS = frozenset(
     {
         LedgerSourceTag.PLAYER_CARD_PURCHASE,
@@ -56,6 +57,8 @@ TRADE_SELL_SOURCE_TAGS = frozenset(
         LedgerSourceTag.CLUB_SALE_SALE,
     }
 )
+WALLET_RESERVATION_METADATA_KEY = "wallet_reservation"
+TRANSFER_BID_RESERVATION_KIND = "transfer_bid"
 
 
 class LedgerError(ValueError):
@@ -63,6 +66,10 @@ class LedgerError(ValueError):
 
 
 class InsufficientBalanceError(LedgerError):
+    pass
+
+
+class WalletBalanceUnavailableError(LedgerError):
     pass
 
 
@@ -78,12 +85,62 @@ class LedgerPosting:
     transaction_type: LedgerTransactionType | None = None
 
 
+class WalletLockReason(str):
+    code: str
+    label: str
+    amount: Decimal
+    currency: LedgerUnit
+    source: str
+    reference: str | None
+
+    def __new__(
+        cls,
+        *,
+        code: str,
+        label: str,
+        amount: Decimal,
+        currency: LedgerUnit,
+        source: str = "wallet",
+        reference: str | None = None,
+    ) -> WalletLockReason:
+        normalized_amount = Decimal(amount).quantize(AMOUNT_QUANTUM)
+        value = f"{label}: {normalized_amount} {currency.value}"
+        instance = str.__new__(cls, value)
+        instance.code = code
+        instance.label = label
+        instance.amount = normalized_amount
+        instance.currency = currency
+        instance.source = source
+        instance.reference = reference
+        return instance
+
+    @property
+    def message(self) -> str:
+        return str(self)
+
+    def to_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "code": self.code,
+            "label": self.label,
+            "amount": self.amount,
+            "currency": self.currency.value,
+            "source": self.source,
+            "message": self.message,
+        }
+        if self.reference is not None:
+            payload["reference"] = self.reference
+        return payload
+
+
 @dataclass(frozen=True, slots=True)
 class WalletSummary:
     available_balance: Decimal
     reserved_balance: Decimal
     total_balance: Decimal
     currency: LedgerUnit
+    locked_balance: Decimal = Decimal("0.0000")
+    pending_withdrawal_balance: Decimal = Decimal("0.0000")
+    lock_reasons: tuple[WalletLockReason, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,7 +246,7 @@ class WalletService:
             return None
         balance = payload.get("balance")
         if balance is None:
-            return None
+            raise WalletBalanceUnavailableError(BALANCE_UNAVAILABLE_MESSAGE)
         return self._normalize_amount(balance)
 
     def _write_cached_balance(
@@ -237,18 +294,72 @@ class WalletService:
         payload = self.hot_cache.get_wallet_summary(user_id=user_id, currency=currency.value)
         if payload is None:
             return None
+        for field_name in ("balance", "locked", "total"):
+            if field_name not in payload or payload[field_name] is None:
+                raise WalletBalanceUnavailableError(BALANCE_UNAVAILABLE_MESSAGE)
+        pending_withdrawal_value = payload.get(
+            "pending_withdrawal_balance", payload.get("pending_withdrawals", "0.0000")
+        )
+        if pending_withdrawal_value is None:
+            raise WalletBalanceUnavailableError(BALANCE_UNAVAILABLE_MESSAGE)
         try:
             available_balance = self._normalize_amount(payload.get("balance"))
             reserved_balance = self._normalize_amount(payload.get("locked"))
             total_balance = self._normalize_amount(payload.get("total"))
+            pending_withdrawal_balance = self._normalize_amount(pending_withdrawal_value)
         except (TypeError, ValueError):
+            return None
+        cached_lock_reasons = payload.get("lock_reasons")
+        if reserved_balance > Decimal("0.0000") and cached_lock_reasons is None:
+            return None
+        lock_reasons = self._coerce_cached_lock_reasons(cached_lock_reasons, currency=currency)
+        if reserved_balance > Decimal("0.0000") and lock_reasons is None:
             return None
         return WalletSummary(
             available_balance=available_balance,
             reserved_balance=reserved_balance,
             total_balance=total_balance,
             currency=currency,
+            locked_balance=reserved_balance,
+            pending_withdrawal_balance=pending_withdrawal_balance,
+            lock_reasons=lock_reasons or (),
         )
+
+    def _coerce_cached_lock_reasons(
+        self, value: object, *, currency: LedgerUnit
+    ) -> tuple[WalletLockReason, ...] | None:
+        if value is None:
+            return ()
+        if not isinstance(value, list):
+            return None
+        reasons: list[WalletLockReason] = []
+        for item in value:
+            if not isinstance(item, dict):
+                return None
+            try:
+                amount = self._normalize_amount(item.get("amount", "0.0000"))
+            except (TypeError, ValueError):
+                return None
+            label = str(item.get("label") or item.get("message") or "").strip()
+            code = str(item.get("code") or "").strip()
+            if not label or not code:
+                return None
+            item_currency = str(item.get("currency") or currency.value)
+            try:
+                resolved_currency = LedgerUnit(item_currency)
+            except ValueError:
+                resolved_currency = currency
+            reasons.append(
+                WalletLockReason(
+                    code=code,
+                    label=label,
+                    amount=amount,
+                    currency=resolved_currency,
+                    source=str(item.get("source") or "wallet").strip() or "wallet",
+                    reference=str(item["reference"]).strip() if item.get("reference") is not None else None,
+                )
+            )
+        return tuple(reasons)
 
     def _write_cached_wallet_summary(
         self,
@@ -257,18 +368,25 @@ class WalletService:
         currency: LedgerUnit,
         available_balance: Decimal,
         reserved_balance: Decimal,
+        pending_withdrawal_balance: Decimal | None = None,
+        lock_reasons: tuple[WalletLockReason, ...] | list[WalletLockReason] | None = None,
     ) -> None:
         total_balance = self._normalize_amount(available_balance + reserved_balance)
+        payload = {
+            "user_id": user_id,
+            "currency": currency.value,
+            "balance": str(available_balance),
+            "locked": str(reserved_balance),
+            "total": str(total_balance),
+        }
+        if pending_withdrawal_balance is not None:
+            payload["pending_withdrawal_balance"] = str(self._normalize_amount(pending_withdrawal_balance))
+        if lock_reasons is not None:
+            payload["lock_reasons"] = [item.to_dict() for item in lock_reasons]
         self.hot_cache.set_wallet_summary(
             user_id=user_id,
             currency=currency.value,
-            payload={
-                "user_id": user_id,
-                "currency": currency.value,
-                "balance": str(available_balance),
-                "locked": str(reserved_balance),
-                "total": str(total_balance),
-            },
+            payload=payload,
             ttl_seconds=self.wallet_summary_cache_ttl_seconds,
         )
 
@@ -280,6 +398,8 @@ class WalletService:
         currency: LedgerUnit,
         available_balance: Decimal,
         reserved_balance: Decimal,
+        pending_withdrawal_balance: Decimal | None = None,
+        lock_reasons: tuple[WalletLockReason, ...] | list[WalletLockReason] | None = None,
         defer_until_commit: bool = False,
     ) -> None:
         if defer_until_commit or self._session_has_pending_state(session):
@@ -287,11 +407,19 @@ class WalletService:
                 session,
                 callback=lambda resolved_user_id=user_id, resolved_currency=currency, resolved_available=str(
                     available_balance
-                ), resolved_reserved=str(reserved_balance): self._write_cached_wallet_summary(
+                ), resolved_reserved=str(reserved_balance), resolved_pending=(
+                    str(pending_withdrawal_balance) if pending_withdrawal_balance is not None else None
+                ), resolved_lock_reasons=(
+                    tuple(lock_reasons) if lock_reasons is not None else None
+                ): self._write_cached_wallet_summary(
                     user_id=resolved_user_id,
                     currency=resolved_currency,
                     available_balance=self._normalize_amount(resolved_available),
                     reserved_balance=self._normalize_amount(resolved_reserved),
+                    pending_withdrawal_balance=(
+                        self._normalize_amount(resolved_pending) if resolved_pending is not None else None
+                    ),
+                    lock_reasons=resolved_lock_reasons,
                 ),
             )
             return
@@ -300,6 +428,8 @@ class WalletService:
             currency=currency,
             available_balance=available_balance,
             reserved_balance=reserved_balance,
+            pending_withdrawal_balance=pending_withdrawal_balance,
+            lock_reasons=lock_reasons,
         )
 
     def _prime_impacted_wallet_summary_caches(
@@ -1136,6 +1266,56 @@ class WalletService:
                 return {"raw_notes": raw}
         return {"raw_notes": raw}
 
+    def _transfer_bid_reservation_metadata(
+        self,
+        *,
+        action: str,
+        transfer_bid_id: str,
+        amount: Decimal,
+        unit: LedgerUnit,
+        player_id: str | None = None,
+        buying_club_id: str | None = None,
+        selling_club_id: str | None = None,
+        release_reason: str | None = None,
+        reserved_amount: Decimal | None = None,
+        available_amount: Decimal | None = None,
+        settlement_account_id: str | None = None,
+        extra_metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        metadata = dict(extra_metadata or {})
+        reservation: dict[str, Any] = {
+            "kind": TRANSFER_BID_RESERVATION_KIND,
+            "key": self._transfer_bid_reservation_key(transfer_bid_id),
+            "transfer_bid_id": transfer_bid_id,
+            "action": self._normalize_reservation_token(action),
+            "amount": str(self._normalize_amount(amount)),
+            "unit": unit.value,
+            "lock_reason": "Transfer bid reservations",
+        }
+        optional_values = {
+            "player_id": player_id,
+            "buying_club_id": buying_club_id,
+            "selling_club_id": selling_club_id,
+            "release_reason": release_reason,
+            "reserved_amount": str(self._normalize_amount(reserved_amount)) if reserved_amount is not None else None,
+            "available_amount": str(self._normalize_amount(available_amount)) if available_amount is not None else None,
+            "settlement_account_id": settlement_account_id,
+        }
+        for key, value in optional_values.items():
+            if value is not None:
+                reservation[key] = value
+        metadata[WALLET_RESERVATION_METADATA_KEY] = reservation
+        return metadata
+
+    @staticmethod
+    def _transfer_bid_reservation_key(transfer_bid_id: str) -> str:
+        return f"transfer_bid:{transfer_bid_id.strip()}"
+
+    @staticmethod
+    def _normalize_reservation_token(value: str | None) -> str:
+        candidate = (value or "unspecified").strip().lower().replace(" ", "_").replace("-", "_")
+        return candidate or "unspecified"
+
     def _infer_transaction_type(
         self,
         *,
@@ -1234,6 +1414,9 @@ class WalletService:
         return {
             "available_balance": summary.available_balance,
             "reserved_balance": summary.reserved_balance,
+            "locked_balance": summary.locked_balance,
+            "pending_withdrawal_balance": summary.pending_withdrawal_balance,
+            "lock_reasons": [reason.to_dict() for reason in summary.lock_reasons],
             "total_balance": summary.total_balance,
             "currency": summary.currency,
             "withdrawable_balance": summary.available_balance,
@@ -1544,11 +1727,21 @@ class WalletService:
         available_account = self.get_user_account(session, user, currency)
         reserved_balance = self._get_user_account_balance_by_kind(session, user, currency, LedgerAccountKind.ESCROW)
         available_balance = self.get_balance(session, available_account)
+        pending_withdrawal_balance = self._pending_withdrawal_balance(session, user=user, currency=currency)
+        lock_reasons = self._wallet_lock_reasons(
+            session,
+            user=user,
+            currency=currency,
+            reserved_balance=reserved_balance,
+        )
         summary = WalletSummary(
             available_balance=available_balance,
             reserved_balance=reserved_balance,
             total_balance=self._normalize_amount(available_balance + reserved_balance),
             currency=currency,
+            locked_balance=reserved_balance,
+            pending_withdrawal_balance=pending_withdrawal_balance,
+            lock_reasons=lock_reasons,
         )
         self._prime_wallet_summary_cache(
             session,
@@ -1556,8 +1749,163 @@ class WalletService:
             currency=currency,
             available_balance=summary.available_balance,
             reserved_balance=summary.reserved_balance,
+            pending_withdrawal_balance=summary.pending_withdrawal_balance,
+            lock_reasons=summary.lock_reasons,
         )
         return summary
+
+    def _pending_withdrawal_balance(self, session: Session, *, user: User, currency: LedgerUnit) -> Decimal:
+        pending_statuses = (
+            PayoutStatus.REQUESTED,
+            PayoutStatus.REVIEWING,
+            PayoutStatus.HELD,
+            PayoutStatus.PROCESSING,
+        )
+        amount = session.scalar(
+            select(func.coalesce(func.sum(PayoutRequest.amount), 0)).where(
+                PayoutRequest.user_id == user.id,
+                PayoutRequest.unit == currency,
+                PayoutRequest.status.in_(pending_statuses),
+            )
+        )
+        return self._normalize_amount(amount or Decimal("0.0000"))
+
+    def _wallet_lock_reasons(
+        self,
+        session: Session,
+        *,
+        user: User,
+        currency: LedgerUnit,
+        reserved_balance: Decimal,
+    ) -> tuple[WalletLockReason, ...]:
+        normalized_reserved = self._normalize_amount(reserved_balance)
+        if normalized_reserved <= Decimal("0.0000"):
+            return ()
+
+        escrow_account = session.scalar(
+            select(LedgerAccount).where(
+                LedgerAccount.owner_user_id == user.id,
+                LedgerAccount.unit == currency,
+                LedgerAccount.kind == LedgerAccountKind.ESCROW,
+            )
+        )
+        if escrow_account is None:
+            return (
+                self._format_lock_reason(
+                    code="escrow_commitment",
+                    label="Escrow commitments",
+                    amount=normalized_reserved,
+                    currency=currency,
+                    source="escrow",
+                ),
+            )
+
+        bucket_amounts: dict[str, Decimal] = defaultdict(lambda: Decimal("0.0000"))
+        bucket_details: dict[str, tuple[str, str, str, str | None]] = {}
+        rows = session.execute(
+            select(
+                LedgerEntry.amount,
+                LedgerEntry.reason,
+                LedgerEntry.reference,
+                LedgerTransaction.metadata_json,
+            )
+            .join(LedgerTransaction, LedgerTransaction.id == LedgerEntry.transaction_id)
+            .where(LedgerEntry.account_id == escrow_account.id)
+            .order_by(LedgerEntry.created_at.asc(), LedgerEntry.id.asc())
+        ).all()
+        for amount, reason, reference, metadata in rows:
+            bucket = self._wallet_lock_bucket(
+                metadata if isinstance(metadata, dict) else {},
+                reference=reference,
+                reason=reason,
+            )
+            if bucket is None:
+                continue
+            bucket_key, code, label, source, reference = bucket
+            bucket_amounts[bucket_key] += self._normalize_amount(amount)
+            bucket_details.setdefault(bucket_key, (code, label, source, reference))
+
+        reasons: list[WalletLockReason] = []
+        remaining_reserved = normalized_reserved
+        for bucket_key in sorted(bucket_amounts):
+            amount = min(self._normalize_amount(bucket_amounts[bucket_key]), remaining_reserved)
+            if amount <= Decimal("0.0000"):
+                continue
+            code, label, source, reference = bucket_details[bucket_key]
+            reasons.append(
+                self._format_lock_reason(
+                    code=code,
+                    label=label,
+                    amount=amount,
+                    currency=currency,
+                    source=source,
+                    reference=reference,
+                )
+            )
+            remaining_reserved = self._normalize_amount(remaining_reserved - amount)
+            if remaining_reserved <= Decimal("0.0000"):
+                break
+
+        if remaining_reserved > Decimal("0.0000"):
+            reasons.append(
+                self._format_lock_reason(
+                    code="escrow_commitment",
+                    label="Escrow commitments",
+                    amount=remaining_reserved,
+                    currency=currency,
+                    source="escrow",
+                )
+            )
+        return tuple(reasons)
+
+    def _wallet_lock_bucket(
+        self,
+        metadata: dict[str, Any],
+        *,
+        reference: str | None,
+        reason: LedgerEntryReason,
+    ) -> tuple[str, str, str, str, str | None] | None:
+        reservation = metadata.get(WALLET_RESERVATION_METADATA_KEY)
+        if isinstance(reservation, dict):
+            kind = str(reservation.get("kind") or "wallet").strip().lower() or "wallet"
+            key = str(
+                reservation.get("key")
+                or reservation.get("reservation_id")
+                or reservation.get("transfer_bid_id")
+                or reference
+                or kind
+            )
+            label = str(reservation.get("lock_reason") or "").strip()
+            if not label:
+                label = "Transfer bid reservations" if kind == TRANSFER_BID_RESERVATION_KIND else "Wallet reservations"
+            code = "transfer_bid_reservation" if kind == TRANSFER_BID_RESERVATION_KIND else f"{kind}_reservation"
+            return f"{code}:{key}", code, label, kind, key
+
+        if isinstance(metadata.get("withdrawal"), dict) or (reference or "").startswith("payout-"):
+            return "withdrawal_hold:payout", "withdrawal_hold", "Withdrawal holds", "withdrawal", reference
+        reason_value = reason.value if hasattr(reason, "value") else str(reason)
+        if reason_value == LedgerEntryReason.WITHDRAWAL_HOLD.value:
+            return "wallet_hold:ledger", "wallet_hold", "Wallet holds", "wallet", reference
+        return None
+
+    def _format_lock_reason(
+        self,
+        *,
+        code: str,
+        label: str,
+        amount: Decimal,
+        currency: LedgerUnit,
+        source: str,
+        reference: str | None = None,
+    ) -> WalletLockReason:
+        return WalletLockReason(
+            code=code,
+            label=label,
+            amount=self._normalize_amount(amount),
+            currency=currency,
+            source=source,
+            reference=reference,
+        )
 
     def build_portfolio_snapshot(self, session: Session, user: User) -> PortfolioSnapshot:
         from app.portfolio.service import PortfolioService
@@ -1622,6 +1970,8 @@ class WalletService:
         description: str,
         unit: LedgerUnit = LedgerUnit.COIN,
         source_tag: LedgerSourceTag | None = None,
+        idempotency_key: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> list[LedgerEntry]:
         reserved_amount = self._normalize_amount(amount)
         if reserved_amount <= Decimal("0.0000"):
@@ -1640,6 +1990,8 @@ class WalletService:
             reference=reference,
             description=description,
             actor=user,
+            idempotency_key=idempotency_key,
+            metadata=metadata,
         )
 
     def release_reserved_funds(
@@ -1652,6 +2004,8 @@ class WalletService:
         description: str,
         unit: LedgerUnit = LedgerUnit.COIN,
         source_tag: LedgerSourceTag | None = None,
+        idempotency_key: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> list[LedgerEntry]:
         released_amount = self._normalize_amount(amount)
         if released_amount <= Decimal("0.0000"):
@@ -1670,6 +2024,8 @@ class WalletService:
             reference=reference,
             description=description,
             actor=user,
+            idempotency_key=idempotency_key,
+            metadata=metadata,
         )
 
     def settle_reserved_funds(
@@ -1767,6 +2123,343 @@ class WalletService:
             external_reference=external_reference,
             actor=user,
         )
+
+    def reserve_transfer_bid_funds(
+        self,
+        session: Session,
+        *,
+        user: User,
+        transfer_bid_id: str,
+        amount: Decimal,
+        reference: str | None = None,
+        description: str | None = None,
+        unit: LedgerUnit = LedgerUnit.COIN,
+        player_id: str | None = None,
+        buying_club_id: str | None = None,
+        selling_club_id: str | None = None,
+        source_tag: LedgerSourceTag | None = None,
+        actor: User | None = None,
+        idempotency_key: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> list[LedgerEntry]:
+        reserved_amount = self._normalize_amount(amount)
+        if reserved_amount <= Decimal("0.0000"):
+            return []
+
+        available_account = self.get_user_account(session, user, unit)
+        escrow_account = self.get_user_escrow_account(session, user, unit)
+        resolved_reference = reference or f"transfer-bid:{transfer_bid_id}:reserve"
+        reservation_metadata = self._transfer_bid_reservation_metadata(
+            action="reserve",
+            transfer_bid_id=transfer_bid_id,
+            amount=reserved_amount,
+            unit=unit,
+            player_id=player_id,
+            buying_club_id=buying_club_id,
+            selling_club_id=selling_club_id,
+            extra_metadata=metadata,
+        )
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(
+                    account=available_account,
+                    amount=-reserved_amount,
+                    source_tag=source_tag,
+                    transaction_type=LedgerTransactionType.TRADE_BUY,
+                ),
+                LedgerPosting(
+                    account=escrow_account,
+                    amount=reserved_amount,
+                    source_tag=source_tag,
+                    transaction_type=LedgerTransactionType.TRADE_BUY,
+                ),
+            ],
+            reason=LedgerEntryReason.WITHDRAWAL_HOLD,
+            source_tag=source_tag,
+            reference=resolved_reference,
+            description=description or f"Reserved transfer bid funds for {transfer_bid_id}",
+            external_reference=resolved_reference,
+            actor=actor or user,
+            idempotency_key=idempotency_key or f"transfer-bid:{transfer_bid_id}:reserve",
+            metadata=reservation_metadata,
+        )
+
+    def reserve_transfer_bid_reservation(self, *args: Any, **kwargs: Any) -> list[LedgerEntry]:
+        return self.reserve_transfer_bid_funds(*args, **kwargs)
+
+    def release_transfer_bid_reservation(
+        self,
+        session: Session,
+        *,
+        user: User,
+        transfer_bid_id: str,
+        amount: Decimal | None = None,
+        release_reason: str = "released",
+        reference: str | None = None,
+        description: str | None = None,
+        unit: LedgerUnit = LedgerUnit.COIN,
+        player_id: str | None = None,
+        buying_club_id: str | None = None,
+        selling_club_id: str | None = None,
+        source_tag: LedgerSourceTag | None = None,
+        actor: User | None = None,
+        idempotency_key: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> list[LedgerEntry]:
+        active_reserved = self.get_transfer_bid_reserved_amount(
+            session,
+            user=user,
+            transfer_bid_id=transfer_bid_id,
+            unit=unit,
+        )
+        requested_amount = active_reserved if amount is None else self._normalize_amount(amount)
+        released_amount = min(requested_amount, active_reserved)
+        if released_amount <= Decimal("0.0000"):
+            return []
+
+        available_account = self.get_user_account(session, user, unit)
+        escrow_account = self.get_user_escrow_account(session, user, unit)
+        normalized_reason = self._normalize_reservation_token(release_reason)
+        resolved_reference = reference or f"transfer-bid:{transfer_bid_id}:release:{normalized_reason}"
+        reservation_metadata = self._transfer_bid_reservation_metadata(
+            action="release",
+            transfer_bid_id=transfer_bid_id,
+            amount=released_amount,
+            unit=unit,
+            player_id=player_id,
+            buying_club_id=buying_club_id,
+            selling_club_id=selling_club_id,
+            release_reason=normalized_reason,
+            extra_metadata=metadata,
+        )
+        return self.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(
+                    account=escrow_account,
+                    amount=-released_amount,
+                    source_tag=source_tag,
+                    transaction_type=LedgerTransactionType.TRADE_BUY,
+                ),
+                LedgerPosting(
+                    account=available_account,
+                    amount=released_amount,
+                    source_tag=source_tag,
+                    transaction_type=LedgerTransactionType.TRADE_BUY,
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=source_tag,
+            reference=resolved_reference,
+            description=description or f"Released transfer bid funds for {transfer_bid_id}",
+            external_reference=resolved_reference,
+            actor=actor or user,
+            idempotency_key=idempotency_key or f"transfer-bid:{transfer_bid_id}:release:{normalized_reason}",
+            metadata=reservation_metadata,
+        )
+
+    def release_transfer_bid_funds(self, *args: Any, **kwargs: Any) -> list[LedgerEntry]:
+        return self.release_transfer_bid_reservation(*args, **kwargs)
+
+    def settle_transfer_bid_reservation(
+        self,
+        session: Session,
+        *,
+        user: User,
+        transfer_bid_id: str,
+        amount: Decimal,
+        reference: str | None = None,
+        description: str | None = None,
+        external_reference: str | None = None,
+        unit: LedgerUnit = LedgerUnit.COIN,
+        seller_user: User | None = None,
+        settlement_account: LedgerAccount | None = None,
+        player_id: str | None = None,
+        buying_club_id: str | None = None,
+        selling_club_id: str | None = None,
+        source_tag: LedgerSourceTag | None = None,
+        actor: User | None = None,
+        idempotency_key: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        require_full_reservation: bool = False,
+    ) -> list[LedgerEntry]:
+        settled_amount = self._normalize_amount(amount)
+        if settled_amount <= Decimal("0.0000"):
+            return []
+
+        active_reserved = self.get_transfer_bid_reserved_amount(
+            session,
+            user=user,
+            transfer_bid_id=transfer_bid_id,
+            unit=unit,
+        )
+        if require_full_reservation and active_reserved < settled_amount:
+            raise InsufficientBalanceError(
+                "Transfer bid settlement requires the full amount to be held in escrow."
+            )
+        reserved_settlement = min(settled_amount, active_reserved)
+        available_settlement = self._normalize_amount(settled_amount - reserved_settlement)
+        postings: list[LedgerPosting] = []
+        if reserved_settlement > Decimal("0.0000"):
+            escrow_account = self.get_user_escrow_account(session, user, unit)
+            postings.append(
+                LedgerPosting(
+                    account=escrow_account,
+                    amount=-reserved_settlement,
+                    source_tag=source_tag,
+                    transaction_type=LedgerTransactionType.TRADE_BUY,
+                )
+            )
+        if available_settlement > Decimal("0.0000"):
+            available_account = self.get_user_account(session, user, unit)
+            postings.append(
+                LedgerPosting(
+                    account=available_account,
+                    amount=-available_settlement,
+                    source_tag=source_tag,
+                    transaction_type=LedgerTransactionType.TRADE_BUY,
+                )
+            )
+
+        destination_account = settlement_account
+        if destination_account is None and seller_user is not None:
+            destination_account = self.get_user_account(session, seller_user, unit)
+        if destination_account is None:
+            destination_account = self.ensure_market_liquidity_account(session, unit)
+        postings.append(
+            LedgerPosting(
+                account=destination_account,
+                amount=settled_amount,
+                source_tag=source_tag,
+                transaction_type=(
+                    LedgerTransactionType.TRADE_SELL
+                    if destination_account.kind == LedgerAccountKind.USER and destination_account.owner_user_id != user.id
+                    else LedgerTransactionType.TRADE_BUY
+                ),
+            )
+        )
+
+        resolved_reference = reference or f"transfer-bid:{transfer_bid_id}:settle"
+        reservation_metadata = self._transfer_bid_reservation_metadata(
+            action="settle",
+            transfer_bid_id=transfer_bid_id,
+            amount=settled_amount,
+            unit=unit,
+            player_id=player_id,
+            buying_club_id=buying_club_id,
+            selling_club_id=selling_club_id,
+            reserved_amount=reserved_settlement,
+            available_amount=available_settlement,
+            settlement_account_id=destination_account.id,
+            extra_metadata=metadata,
+        )
+        return self.append_transaction(
+            session,
+            postings=postings,
+            reason=self.trade_settlement_reason,
+            source_tag=source_tag,
+            reference=resolved_reference,
+            description=description or f"Settled transfer bid funds for {transfer_bid_id}",
+            external_reference=external_reference or resolved_reference,
+            actor=actor or user,
+            idempotency_key=idempotency_key or f"transfer-bid:{transfer_bid_id}:settle",
+            metadata=reservation_metadata,
+        )
+
+    def settle_transfer_bid_funds(self, *args: Any, **kwargs: Any) -> list[LedgerEntry]:
+        return self.settle_transfer_bid_reservation(*args, **kwargs)
+
+    def replace_transfer_bid_reservation(
+        self,
+        session: Session,
+        *,
+        user: User,
+        transfer_bid_id: str,
+        replacement_amount: Decimal | None = None,
+        unit: LedgerUnit = LedgerUnit.COIN,
+        release_reason: str = "counter_replaced",
+        **kwargs: Any,
+    ) -> list[LedgerEntry]:
+        entries: list[LedgerEntry] = []
+        shared_kwargs = dict(kwargs)
+        shared_kwargs.pop("idempotency_key", None)
+        raw_amount = replacement_amount if replacement_amount is not None else shared_kwargs.pop("amount", None)
+        if raw_amount is None:
+            raise LedgerError("Replacement transfer bid reservation amount is required.")
+        shared_kwargs.pop("amount", None)
+        entries.extend(
+            self.release_transfer_bid_reservation(
+                session,
+                user=user,
+                transfer_bid_id=transfer_bid_id,
+                unit=unit,
+                release_reason=release_reason,
+                **shared_kwargs,
+            )
+        )
+        entries.extend(
+            self.reserve_transfer_bid_funds(
+                session,
+                user=user,
+                transfer_bid_id=transfer_bid_id,
+                amount=raw_amount,
+                unit=unit,
+                idempotency_key=f"transfer-bid:{transfer_bid_id}:reserve:{self._normalize_amount(raw_amount)}",
+                **shared_kwargs,
+            )
+        )
+        return entries
+
+    def get_transfer_bid_reserved_amount(
+        self,
+        session: Session,
+        *,
+        user: User,
+        transfer_bid_id: str,
+        unit: LedgerUnit = LedgerUnit.COIN,
+    ) -> Decimal:
+        return self.get_wallet_reservation_balance(
+            session,
+            user=user,
+            reservation_kind=TRANSFER_BID_RESERVATION_KIND,
+            reservation_key=self._transfer_bid_reservation_key(transfer_bid_id),
+            unit=unit,
+        )
+
+    def get_wallet_reservation_balance(
+        self,
+        session: Session,
+        *,
+        user: User,
+        reservation_kind: str,
+        reservation_key: str,
+        unit: LedgerUnit = LedgerUnit.COIN,
+    ) -> Decimal:
+        escrow_account = session.scalar(
+            select(LedgerAccount).where(LedgerAccount.code == self._user_escrow_account_code(user.id, unit))
+        )
+        if escrow_account is None:
+            return Decimal("0.0000")
+        rows = session.execute(
+            select(LedgerEntry.amount, LedgerTransaction.metadata_json)
+            .join(LedgerTransaction, LedgerTransaction.id == LedgerEntry.transaction_id)
+            .where(LedgerEntry.account_id == escrow_account.id)
+        ).all()
+        normalized_kind = reservation_kind.strip().lower()
+        normalized_key = reservation_key.strip()
+        balance = Decimal("0.0000")
+        for amount, metadata in rows:
+            reservation = (metadata or {}).get(WALLET_RESERVATION_METADATA_KEY) if isinstance(metadata, dict) else None
+            if not isinstance(reservation, dict):
+                continue
+            kind = str(reservation.get("kind") or "").strip().lower()
+            key = str(reservation.get("key") or reservation.get("reservation_id") or "").strip()
+            if kind == normalized_kind and key == normalized_key:
+                balance += self._normalize_amount(amount)
+        if balance < Decimal("0.0000"):
+            return Decimal("0.0000")
+        return self._normalize_amount(balance)
 
     def reserve_position_units(
         self,

@@ -112,6 +112,20 @@ class HostedCompetitionSettlementView(BaseModel):
     updated_at: datetime
 
 
+class HostedCompetitionSettlementReadinessView(BaseModel):
+    state: str
+    status: str
+    ready: bool
+    source: str = "hosted_competition_engine"
+    participant_count: int
+    standings_count: int
+    settlement_count: int
+    escrow_balance: Decimal
+    blockers: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    missing_data: list[dict[str, str]] = Field(default_factory=list)
+
+
 class HostedCompetitionFinanceView(BaseModel):
     currency: str
     participant_count: int
@@ -123,6 +137,7 @@ class HostedCompetitionFinanceView(BaseModel):
     settled_prizes: Decimal
     settled_platform_fee: Decimal
     status: str
+    settlement_readiness: HostedCompetitionSettlementReadinessView
 
 
 class HostedCompetitionCreateRequest(BaseModel):

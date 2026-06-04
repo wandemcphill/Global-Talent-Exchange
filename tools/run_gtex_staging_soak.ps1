@@ -28,8 +28,8 @@ $ErrorActionPreference = 'Stop'
 
 $root = 'C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE'
 $captureScript = Join-Path $root 'tools\capture_gtex_player_session.ps1'
-$unityConfigPath = Join-Path $root 'Gtex_Test_Migration\Assets\Resources\GTEX\match-config.json'
-$bootstrapPath = Join-Path $root 'Gtex_Test_Migration\tmp\gtex-live-bootstrap.json'
+$runtimeConfigPath = Join-Path $root 'tmp\gtex_match_center_config.json'
+$bootstrapPath = Join-Path $root 'tmp\gtex-match-center-bootstrap.json'
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
     $OutputDir = Join-Path $root ("tmp\gtex_{0}_soak" -f $Profile)
@@ -85,7 +85,7 @@ $provisionArgs = @(
     'tools\provision_gtex_live_match.py',
     '--profile', $Profile,
     '--base-url', $BaseUrl,
-    '--unity-config', $unityConfigPath,
+    '--runtime-config', $runtimeConfigPath,
     '--bootstrap-path', $bootstrapPath,
     '--keep-bootstrap-file',
     '--persist-access-token'
@@ -101,11 +101,15 @@ else {
     throw 'Staging soak requires either -UserAccessToken or both -UserEmail and -UserPassword.'
 }
 
+if ($AllowMatchGeneration.IsPresent) {
+    throw 'Staging/production soak does not allow -AllowMatchGeneration. Use -MatchId for an existing backend-authored live match.'
+}
+
 if (-not [string]::IsNullOrWhiteSpace($MatchId)) {
     $provisionArgs += @('--match-id', $MatchId)
 }
-elseif ($AllowMatchGeneration.IsPresent) {
-    $provisionArgs += '--allow-match-generation'
+else {
+    throw 'Staging/production soak requires -MatchId for an existing backend-authored live match. Generated/local match truth is not allowed.'
 }
 
 if ($PayToView.IsPresent) {

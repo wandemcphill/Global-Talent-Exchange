@@ -23,7 +23,9 @@ class CreatorApplicationSubmitRequest(CommonSchema):
     def validate_requested_handle(cls, value: str) -> str:
         candidate = value.strip().lower()
         if any(character not in _HANDLE_CHARS for character in candidate):
-            raise ValueError("Creator handles may only include lowercase letters, numbers, dots, hyphens, and underscores.")
+            raise ValueError(
+                "Creator handles may only include lowercase letters, numbers, dots, hyphens, and underscores."
+            )
         return candidate
 
     @field_validator("platform")

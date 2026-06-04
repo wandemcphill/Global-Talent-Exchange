@@ -28,8 +28,10 @@ class AppRoutes {
   static const String streamerEngine = '/competitions/streamer/engine';
   static const String matchesViewer = '/matches/viewer/:matchKey';
   static const String matchesBroadcast = '/matches/broadcast/:matchKey';
-  static const String matchesThreeD = '/matches/3d/:matchKey';
-  static const String matchesNativeThreeD = '/matches/native-3d';
+  static const String legacyMatchRuntime =
+      '/internal/dev/match-runtime/:matchKey';
+  static const String legacyBlockedMatchRuntime =
+      '/internal/dev/blocked-match-runtime';
   static const String matchesSpectate = '/matches/spectate';
   static const String matchesSimulate = '/matches/simulate';
 
@@ -39,8 +41,8 @@ class AppRoutes {
   static String matchesBroadcastLocation(String matchKey) =>
       '/matches/broadcast/$matchKey';
 
-  static String matchesThreeDLocation(String matchKey) =>
-      '/matches/3d/$matchKey';
+  static String legacyMatchRuntimeLocation(String matchKey) =>
+      '/internal/dev/match-runtime/$matchKey';
 
   static String transferCenterDetailLocation(String listingId) =>
       '/market/transfers/$listingId';
@@ -152,7 +154,8 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: 'Market',
     location: AppRoutes.market,
     state: AppRouteSurfaceState.live,
-    summary: 'Buy, bid, sign, and list players from the live player market desk.',
+    summary:
+        'Buy, bid, sign, and list players from the live player market desk.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -248,7 +251,8 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     label: 'Arena',
     location: AppRoutes.competitions,
     state: AppRouteSurfaceState.live,
-    summary: 'Create, join, manage, and review football competitions from one arena desk.',
+    summary:
+        'Create, join, manage, and review football competitions from one arena desk.',
     primaryNav: true,
     quickAction: true,
   ),
@@ -284,41 +288,42 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.matchesViewer,
     state: AppRouteSurfaceState.hidden,
     summary:
-        'Deep 2D viewer route that opens the qualified live viewer session or a truthful fallback when the session feed is unavailable.',
+        'Deep 2D viewer route that opens a qualified live viewer session or stays blocked when backend match truth is unavailable.',
   ),
   AppRouteSurface(
     label: 'Coming soon',
     location: AppRoutes.matchesBroadcast,
-    state: AppRouteSurfaceState.placeholder,
+    state: AppRouteSurfaceState.hidden,
     summary:
-        'Coming soon for launch. 2D match viewing is the active matchday route.',
+        'Deprecated match package route hidden from launch navigation; use the canonical 2D match viewer.',
   ),
   AppRouteSurface(
     label: 'Coming soon',
-    location: AppRoutes.matchesThreeD,
-    state: AppRouteSurfaceState.placeholder,
+    location: AppRoutes.legacyMatchRuntime,
+    state: AppRouteSurfaceState.hidden,
     summary:
-        'Coming soon for launch. 3D match viewing is blocked in the active shell.',
+        'Deprecated match rendering route quarantined behind internal builds.',
   ),
   AppRouteSurface(
     label: 'Coming soon',
-    location: AppRoutes.matchesNativeThreeD,
-    state: AppRouteSurfaceState.placeholder,
+    location: AppRoutes.legacyBlockedMatchRuntime,
+    state: AppRouteSurfaceState.hidden,
     summary:
-        'Coming soon for launch. Advanced match viewing is blocked in the active shell.',
+        'Deprecated match rendering route quarantined behind internal builds.',
   ),
   AppRouteSurface(
-    label: 'Spectate',
+    label: 'Coming soon',
     location: AppRoutes.matchesSpectate,
-    state: AppRouteSurfaceState.placeholder,
-    summary: 'Coming soon for launch. Use fixtures and the 2D viewer instead.',
+    state: AppRouteSurfaceState.hidden,
+    summary:
+        'Deprecated match spectate route hidden from launch navigation; use the canonical 2D match viewer.',
   ),
   AppRouteSurface(
-    label: 'Simulation',
+    label: 'Coming soon',
     location: AppRoutes.matchesSimulate,
-    state: AppRouteSurfaceState.placeholder,
+    state: AppRouteSurfaceState.hidden,
     summary:
-        'Coming soon for launch. Local simulation tools are blocked in the active shell.',
+        'Deprecated local match tooling route hidden from launch navigation; backend-authored 2D match truth is required.',
   ),
 ];
 

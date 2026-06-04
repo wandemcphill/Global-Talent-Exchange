@@ -148,7 +148,15 @@ class TransferCenterApi {
     required String listingId,
     required String clubId,
     required double amount,
+    required String securityPin,
   }) async {
+    await client.post(
+      '/api/v2/auth/pin/verify',
+      body: <String, Object?>{
+        'pin': securityPin,
+        'action_type': 'transfer_market.bid',
+      },
+    );
     await client.post(
       '/api/transfer-market/listings/$listingId/bids',
       body: <String, Object?>{

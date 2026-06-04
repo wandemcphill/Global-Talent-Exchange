@@ -9,6 +9,8 @@ from pydantic import Field
 from app.common.schemas.base import CommonSchema
 
 TransferListingStatus = Literal["open", "closed", "sold"]
+MarketBidStatus = Literal["pending", "counter", "accepted", "rejected", "withdrawn"]
+SquadAvailabilityStatus = Literal["available", "injured", "suspended", "away", "unfit"]
 TransferNegotiationStatus = Literal[
     "awaiting_contract_offer",
     "player_delayed",
@@ -21,6 +23,21 @@ TransferNegotiationStatus = Literal[
 CoachOpinionStance = Literal["approve", "neutral", "reject"]
 AgentResponseCode = Literal["accept", "counter_offer", "stall", "reject"]
 
+MARKET_BID_STATUSES: tuple[MarketBidStatus, ...] = (
+    "pending",
+    "counter",
+    "accepted",
+    "rejected",
+    "withdrawn",
+)
+SQUAD_AVAILABILITY_STATUSES: tuple[SquadAvailabilityStatus, ...] = (
+    "available",
+    "injured",
+    "suspended",
+    "away",
+    "unfit",
+)
+
 
 class TransferMarketPlayerView(CommonSchema):
     id: str
@@ -31,6 +48,135 @@ class TransferMarketPlayerView(CommonSchema):
     current_competition_id: str | None = None
 
 
+class MarketClubRefDTO(CommonSchema):
+    id: str
+    name: str | None = None
+
+
+class MarketPlayerDTO(CommonSchema):
+    id: str
+    name: str
+    age: int | None = Field(default=None, ge=0)
+    position: str | None = None
+    club: MarketClubRefDTO | None = None
+    nationality: str | None = None
+    value: Decimal | None = Field(default=None, ge=0)
+    availability: SquadAvailabilityStatus = "available"
+    contract_end: date | None = None
+    stats: dict[str, Any] = Field(default_factory=dict)
+    listing_id: str | None = None
+    listing_status: TransferListingStatus | None = None
+    base_price: Decimal | None = Field(default=None, ge=0)
+    current_highest_bid: Decimal | None = Field(default=None, ge=0)
+    bid_count: int = Field(default=0, ge=0)
+    checkout_eligible: bool = False
+    blocked_reason: str | None = None
+
+
+class MarketPlayerPageDTO(CommonSchema):
+    items: list[MarketPlayerDTO] = Field(default_factory=list)
+    total: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1)
+    has_next: bool = False
+    pagination_mode: Literal["page"] = "page"
+
+
+class MarketBidEventDTO(CommonSchema):
+    id: str
+    type: str
+    timestamp: datetime
+    message: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MarketBidDTO(CommonSchema):
+    id: str
+    player_id: str
+    listing_id: str | None = None
+    from_club: MarketClubRefDTO | None = None
+    to_club: MarketClubRefDTO | None = None
+    amount: Decimal = Field(ge=0)
+    status: MarketBidStatus
+    created_at: datetime
+    expires_at: datetime | None = None
+    events: list[MarketBidEventDTO] = Field(default_factory=list)
+    wallet_reservation_status: str | None = None
+    wallet_reserved_amount: Decimal | None = Field(default=None, ge=0)
+    wallet_reservation_reference: str | None = None
+
+
+class MarketBasketItemDTO(CommonSchema):
+    player_id: str
+    added_at: datetime
+    checkout_eligible: bool
+    blocked_reason: str | None = None
+    listing_id: str | None = None
+    player: MarketPlayerDTO | None = None
+
+
+class MarketBasketDTO(CommonSchema):
+    items: list[MarketBasketItemDTO] = Field(default_factory=list)
+    count: int = Field(ge=0)
+
+
+class MarketCheckoutReadinessDTO(CommonSchema):
+    ready: bool
+    blocked_reasons: list[str] = Field(default_factory=list)
+    items: list[MarketBasketItemDTO] = Field(default_factory=list)
+
+
+class MarketCheckoutSubmitRequest(CommonSchema):
+    idempotency_key: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=500)
+
+
+class MarketCheckoutSubmissionDTO(CommonSchema):
+    ready: bool
+    audit_ref: str
+    blocked_reasons: list[str] = Field(default_factory=list)
+    items: list[MarketBasketItemDTO] = Field(default_factory=list)
+
+
+class MarketBidWithdrawRequest(CommonSchema):
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class TransferActivityDTO(CommonSchema):
+    id: str
+    type: str
+    from_club: MarketClubRefDTO | None = None
+    to_club: MarketClubRefDTO | None = None
+    player: MarketPlayerDTO | None = None
+    amount: Decimal | None = Field(default=None, ge=0)
+    timestamp: datetime
+    status: str
+    bid_id: str | None = None
+    listing_id: str | None = None
+
+
+class MarketValueBracketDTO(CommonSchema):
+    label: str
+    min_value: Decimal | None = Field(default=None, ge=0)
+    max_value: Decimal | None = Field(default=None, ge=0)
+
+
+class MarketFilterMetaDTO(CommonSchema):
+    positions: list[str] = Field(default_factory=list)
+    nationalities: list[str] = Field(default_factory=list)
+    age_range: dict[str, int | None] = Field(default_factory=dict)
+    value_brackets: list[MarketValueBracketDTO] = Field(default_factory=list)
+    availability_types: list[SquadAvailabilityStatus] = Field(default_factory=list)
+    bid_statuses: list[MarketBidStatus] = Field(default_factory=list)
+    pagination_mode: Literal["page"] = "page"
+    default_page_size: int = Field(default=20, ge=1)
+    max_page_size: int = Field(default=100, ge=1)
+
+
+class MarketBasketAddRequest(CommonSchema):
+    player_id: str = Field(min_length=1, max_length=36)
+
+
 class TransferBidderView(CommonSchema):
     bid_id: str
     club_id: str
@@ -38,6 +184,9 @@ class TransferBidderView(CommonSchema):
     amount: Decimal
     timestamp: datetime
     is_highest: bool = False
+    wallet_reservation_status: str | None = None
+    wallet_reserved_amount: Decimal | None = None
+    wallet_reservation_reference: str | None = None
 
 
 class PlayerDecisionView(CommonSchema):
@@ -254,4 +403,9 @@ class WatchlistEntryCreateRequest(CommonSchema):
 
 
 class TransferMarketJobRunRequest(CommonSchema):
+    reference_at: datetime | None = None
+
+
+class TransferMarketReservationReleaseRequest(CommonSchema):
+    reason: str = Field(min_length=3, max_length=240)
     reference_at: datetime | None = None

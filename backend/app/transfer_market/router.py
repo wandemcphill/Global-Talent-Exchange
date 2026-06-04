@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService
-from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_session, require_sensitive_action_pin
 from app.models.access_control import OrganizationRole, OrganizationType
 from app.models.club_profile import ClubProfile
 from app.models.user import User
@@ -18,15 +18,27 @@ from app.transfer_market.schemas import (
     CoachProfileUpsertRequest,
     CoachProfileView,
     ContractOfferRequest,
+    MarketBasketAddRequest,
+    MarketBasketDTO,
+    MarketBidDTO,
+    MarketBidWithdrawRequest,
+    MarketCheckoutReadinessDTO,
+    MarketCheckoutSubmitRequest,
+    MarketCheckoutSubmissionDTO,
+    MarketFilterMetaDTO,
+    MarketPlayerDTO,
+    MarketPlayerPageDTO,
     MarketWatchlistEntryView,
     PlayerDecisionProfileUpsertRequest,
     PlayerDecisionProfileView,
     TeamDynamicsUpsertRequest,
+    TransferActivityDTO,
     TransferBidPlaceRequest,
     TransferListingCreateRequest,
     TransferListingView,
     TransferMarketJobRunRequest,
     TransferMarketJobRunView,
+    TransferMarketReservationReleaseRequest,
     TransferNegotiationView,
     WatchlistEntryCreateRequest,
 )
@@ -122,6 +134,227 @@ def _resolve_transfer_market_actor_club(
     )
 
 
+@router.get("/api/transfer-market/players", response_model=MarketPlayerPageDTO)
+def list_market_players(
+    q: str | None = Query(default=None),
+    position: str | None = Query(default=None),
+    nationality: str | None = Query(default=None),
+    availability: str | None = Query(default=None),
+    value_bracket: str | None = Query(default=None),
+    min_age: int | None = Query(default=None, ge=0),
+    max_age: int | None = Query(default=None, ge=0),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    status_filter: str | None = Query(default=None, alias="status"),
+    service: TransferMarketService = Depends(_service),
+) -> MarketPlayerPageDTO:
+    return service.list_market_players(
+        q=q,
+        position=position,
+        nationality=nationality,
+        availability=availability,
+        value_bracket=value_bracket,
+        min_age=min_age,
+        max_age=max_age,
+        page=page,
+        page_size=page_size,
+        status=status_filter,
+    )
+
+
+@router.get("/api/transfer-market/players/{player_id}", response_model=MarketPlayerDTO)
+def get_market_player(player_id: str, service: TransferMarketService = Depends(_service)) -> MarketPlayerDTO:
+    try:
+        return service.get_market_player_detail(player_id)
+    except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.get("/api/transfer-market/filters/meta", response_model=MarketFilterMetaDTO)
+def get_market_filter_meta(service: TransferMarketService = Depends(_service)) -> MarketFilterMetaDTO:
+    return service.get_market_filter_meta()
+
+
+@router.get("/api/transfer-market/bids", response_model=list[MarketBidDTO])
+def list_market_bids(
+    request: Request,
+    club_id: str | None = Query(default=None, alias="clubId"),
+    status_filter: str | None = Query(default=None, alias="status"),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> list[MarketBidDTO]:
+    try:
+        resolved_club = _resolve_transfer_market_actor_club(
+            request=request,
+            session=service.session,
+            current_user=current_user,
+            requested_club_id=club_id,
+        )
+        return service.list_market_bids(
+            actor=current_user,
+            club_id=resolved_club.id,
+            status_filter=status_filter,
+        )
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.get("/api/transfer-market/bid/{bid_id}", response_model=MarketBidDTO)
+def get_market_bid(
+    bid_id: str,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> MarketBidDTO:
+    try:
+        return service.get_market_bid(bid_id, actor=current_user)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post("/api/transfer-market/bid/{bid_id}/withdraw", response_model=MarketBidDTO)
+def withdraw_market_bid(
+    bid_id: str,
+    payload: MarketBidWithdrawRequest,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> MarketBidDTO:
+    try:
+        return service.withdraw_market_bid(
+            bid_id,
+            actor=current_user,
+            reason=payload.reason,
+        )
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.get("/api/transfer-market/basket", response_model=MarketBasketDTO)
+def get_market_basket(
+    request: Request,
+    club_id: str | None = Query(default=None, alias="clubId"),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> MarketBasketDTO:
+    try:
+        resolved_club = _resolve_transfer_market_actor_club(
+            request=request,
+            session=service.session,
+            current_user=current_user,
+            requested_club_id=club_id,
+        )
+        return service.list_market_basket(actor=current_user, club_id=resolved_club.id)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post("/api/transfer-market/basket", response_model=MarketBasketDTO, status_code=status.HTTP_201_CREATED)
+def add_market_basket_item(
+    request: Request,
+    payload: MarketBasketAddRequest,
+    club_id: str | None = Query(default=None, alias="clubId"),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> MarketBasketDTO:
+    try:
+        resolved_club = _resolve_transfer_market_actor_club(
+            request=request,
+            session=service.session,
+            current_user=current_user,
+            requested_club_id=club_id,
+        )
+        return service.add_market_basket_item(
+            actor=current_user,
+            club_id=resolved_club.id,
+            player_id=payload.player_id,
+        )
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.delete("/api/transfer-market/basket/{player_id}", response_model=MarketBasketDTO)
+def remove_market_basket_item(
+    request: Request,
+    player_id: str,
+    club_id: str | None = Query(default=None, alias="clubId"),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> MarketBasketDTO:
+    try:
+        resolved_club = _resolve_transfer_market_actor_club(
+            request=request,
+            session=service.session,
+            current_user=current_user,
+            requested_club_id=club_id,
+        )
+        return service.remove_market_basket_item(
+            actor=current_user,
+            club_id=resolved_club.id,
+            player_id=player_id,
+        )
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.get("/api/transfer-market/checkout", response_model=MarketCheckoutReadinessDTO)
+def get_market_checkout_readiness(
+    request: Request,
+    club_id: str | None = Query(default=None, alias="clubId"),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> MarketCheckoutReadinessDTO:
+    try:
+        resolved_club = _resolve_transfer_market_actor_club(
+            request=request,
+            session=service.session,
+            current_user=current_user,
+            requested_club_id=club_id,
+        )
+        return service.get_market_checkout_readiness(actor=current_user, club_id=resolved_club.id)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post("/api/transfer-market/checkout", response_model=MarketCheckoutSubmissionDTO)
+def submit_market_checkout(
+    request: Request,
+    payload: MarketCheckoutSubmitRequest,
+    club_id: str | None = Query(default=None, alias="clubId"),
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> MarketCheckoutSubmissionDTO:
+    try:
+        resolved_club = _resolve_transfer_market_actor_club(
+            request=request,
+            session=service.session,
+            current_user=current_user,
+            requested_club_id=club_id,
+        )
+        return service.submit_market_checkout(
+            actor=current_user,
+            club_id=resolved_club.id,
+            idempotency_key=payload.idempotency_key,
+            notes=payload.notes,
+        )
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.get("/api/transfer-market/activity", response_model=list[TransferActivityDTO])
+def list_market_activity(
+    limit: int = Query(default=50, ge=1, le=100),
+    service: TransferMarketService = Depends(_service),
+) -> list[TransferActivityDTO]:
+    return service.list_market_activity(limit=limit)
+
+
+@router.get("/api/transfer-market/history", response_model=list[TransferActivityDTO])
+def list_market_history(
+    limit: int = Query(default=50, ge=1, le=100),
+    service: TransferMarketService = Depends(_service),
+) -> list[TransferActivityDTO]:
+    return service.list_market_history(limit=limit)
+
+
 @router.get("/api/transfer-market/listings", response_model=list[TransferListingView])
 def list_transfer_market_listings(
     status_filter: str | None = Query(default=None, alias="status"),
@@ -136,7 +369,7 @@ def list_transfer_market_listings(
 def create_transfer_market_listing(
     payload: TransferListingCreateRequest,
     service: TransferMarketService = Depends(_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_sensitive_action_pin("transfer_market.bid", get_current_user)),
 ) -> TransferListingView:
     try:
         return service.create_listing(payload, actor=current_user, selling_club_id=payload.selling_club_id)
@@ -157,7 +390,7 @@ def place_transfer_market_bid(
     listing_id: str,
     payload: TransferBidPlaceRequest,
     service: TransferMarketService = Depends(_service),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_sensitive_action_pin("transfer_market.bid", get_current_user)),
 ) -> TransferListingView:
     try:
         return service.place_bid(
@@ -293,6 +526,29 @@ def run_transfer_market_jobs(
 ) -> TransferMarketJobRunView:
     try:
         return service.run_background_jobs(actor=current_user, reference_at=payload.reference_at)
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
+
+
+@router.post(
+    "/api/transfer-market/admin/listings/{listing_id}/bids/{bid_id}/reservation/release",
+    response_model=TransferListingView,
+)
+def admin_release_transfer_market_bid_reservation(
+    listing_id: str,
+    bid_id: str,
+    payload: TransferMarketReservationReleaseRequest,
+    service: TransferMarketService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> TransferListingView:
+    try:
+        return service.admin_release_listing_bid_reservation(
+            listing_id,
+            bid_id,
+            actor=current_user,
+            reason=payload.reason,
+            reference_at=payload.reference_at,
+        )
     except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
         _raise_transfer_market_error(exc)
 

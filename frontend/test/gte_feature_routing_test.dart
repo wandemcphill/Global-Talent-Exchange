@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/features/compete/providers/competition_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
@@ -12,8 +12,8 @@ import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_hub/presentation/club_hub_screen.dart';
-import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen.dart';
-import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
+import 'package:gte_frontend/features/compete/presentation/gte_compete_bracket_screen.dart';
+import 'package:gte_frontend/features/compete/domain/competition_hub_destination.dart';
 import 'package:gte_frontend/features/home_dashboard/home_dashboard_screen.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
@@ -27,6 +27,8 @@ void main() {
     final List<GteAppRouteData> routes = <GteAppRouteData>[
       const StreamerTournamentsListRouteData(),
       const StreamerTournamentDetailRouteData(tournamentId: 'showcase-cup'),
+      const LiveMatchHubRouteData(),
+      const LiveMatchViewerRouteData(matchKey: 'live-match-001'),
       const FanPredictionMatchRouteData(matchId: 'match-1'),
       const PlayerCardsBrowseRouteData(),
       const PlayerCardDetailRouteData(playerId: 'player-9'),
@@ -272,7 +274,7 @@ void main() {
   );
 
   testWidgets(
-    'authenticated no-club session reaches shared onboarding in Home and opens club market',
+    'authenticated shell Home shows role-aware operating board without legacy blocked copy',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1600, 2200);
       tester.view.devicePixelRatio = 1.0;
@@ -304,8 +306,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(HomeDashboardScreen), findsOneWidget);
-      expect(find.text('CLUB SETUP'), findsOneWidget);
-      expect(find.text('This account has no club yet'), findsOneWidget);
+      expect(find.text('Route unavailable'), findsNothing);
       expect(find.text('No canonical club is selected'), findsNothing);
       expect(find.text('Create or join a club to unlock Home'), findsNothing);
       expect(
@@ -316,24 +317,6 @@ void main() {
         find.widgetWithText(FilledButton, 'Join Club unavailable'),
         findsNothing,
       );
-
-      final Finder browseClubMarketButton =
-          find.widgetWithText(FilledButton, 'Browse club market').first;
-      expect(
-        tester.widget<FilledButton>(browseClubMarketButton).onPressed,
-        isNotNull,
-      );
-
-      await _scrollUntilVisible(
-        tester,
-        browseClubMarketButton,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(browseClubMarketButton);
-      await _pumpUntilText(tester, 'Refresh market');
-
-      expect(find.text('Refresh market'), findsOneWidget);
-      expect(find.text('Open club market'), findsWidgets);
     },
   );
 
@@ -456,6 +439,11 @@ void main() {
         isNotNull,
       );
 
+      await _scrollUntilVisible(
+        tester,
+        exploreCompetitionsButton,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.tap(exploreCompetitionsButton);
       await tester.pumpAndSettle();
 
@@ -620,48 +608,35 @@ void main() {
     },
   );
 
-  testWidgets('arena quick links expose launch routes and hide streamer engine', (
-    WidgetTester tester,
-  ) async {
-    final CompetitionController controller = CompetitionController(
-      api: CompetitionApi.fixture(),
-      currentUserId: 'user-1',
-      currentUserName: 'Tester',
-    );
-    await controller.bootstrap();
+  testWidgets(
+    'compete route mounts bracket surface and hides streamer engine',
+    (WidgetTester tester) async {
+      final CompetitionController controller = CompetitionController(
+        api: CompetitionApi.fixture(),
+        currentUserId: 'user-1',
+        currentUserName: 'Tester',
+      );
+      await controller.bootstrap();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: GteCompetitionsHubScreen(
-          controller: controller,
-          currentDestination: CompetitionHubDestination.overview,
-          onDestinationChanged: (_) {},
-          navigationDependencies: _dependencies(),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: GteCompeteBracketScreen(
+            controller: controller,
+            currentDestination: CompetitionHubDestination.overview,
+            onDestinationChanged: (_) {},
+            navigationDependencies: _dependencies(),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _scrollUntilVisible(
-      tester,
-      find.text('Competition routes'),
-      scrollable: find.byType(ListView).first,
-    );
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Competition routes'), findsWidgets);
-    final Finder fanPredictionsButton = find.widgetWithText(
-      FilledButton,
-      'Fan predictions (live match only)',
-    );
-    expect(tester.widget<FilledButton>(fanPredictionsButton).onPressed, isNull);
-    expect(
-      find.text(
-        'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Streamer tournaments'), findsNothing);
-    expect(find.text('Streamer tournament engine'), findsNothing);
-  });
+      expect(find.byType(GteCompeteBracketScreen), findsOneWidget);
+      expect(find.text('Compete bracket center'), findsOneWidget);
+      expect(find.text('Refresh brackets'), findsOneWidget);
+      expect(find.text('Streamer tournaments'), findsNothing);
+      expect(find.text('Streamer tournament engine'), findsNothing);
+    },
+  );
 
   testWidgets('club hub quick links open world context routes', (
     WidgetTester tester,
@@ -774,6 +749,9 @@ Map<String, String> _pathParametersFor(GteAppRouteData route) {
   }
   if (route is FanPredictionMatchRouteData) {
     return <String, String>{'matchId': route.matchId};
+  }
+  if (route is LiveMatchViewerRouteData) {
+    return <String, String>{'matchKey': route.matchKey};
   }
   if (route is PlayerCardDetailRouteData) {
     return <String, String>{'playerId': route.playerId};

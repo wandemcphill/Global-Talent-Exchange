@@ -266,7 +266,9 @@ namespace FStudio.GTEX.Engine
                     ? nameof(GtexMatchRuntime)
                     : runtimeMode == GtexRuntimeMode.LocalSimulation
                         ? "GtexSimRuntimeHost"
-                        : nameof(GtexVisualMatchDirector),
+                        : runtimeMode == GtexRuntimeMode.IllusionRuntime
+                            ? "GtexIllusionRuntimeHost"
+                            : nameof(GtexVisualMatchDirector),
                 LastMessage = "Legacy bootstrap fallback engaged.",
                 UpdatedAtUtc = DateTime.UtcNow,
                 LastCommand = new GtexEngineCommand(
@@ -289,6 +291,13 @@ namespace FStudio.GTEX.Engine
                 return started;
             }
 
+            if (runtimeMode == GtexRuntimeMode.IllusionRuntime)
+            {
+                var started = FStudio.GTEX.Illusion.GtexIllusionRuntimeHost.TryAutoStart(resolvedConfig, allowLocalSimulationInBatchMode);
+                Shared.clockSource.UpdateSnapshot(0f, started, started ? GtexMatchPhase.FirstHalf : GtexMatchPhase.Failed);
+                return started;
+            }
+
             var liveStarted = GtexMatchRuntime.TryAutoStart(resolvedConfig);
             Shared.clockSource.UpdateSnapshot(0f, liveStarted, liveStarted ? GtexMatchPhase.Bootstrap : GtexMatchPhase.Failed);
             return liveStarted;
@@ -302,6 +311,8 @@ namespace FStudio.GTEX.Engine
                     return simulationExecutor;
                 case GtexRuntimeMode.OriginalVisualRuntime:
                     return originalVisualRuntimeExecutor;
+                case GtexRuntimeMode.IllusionRuntime:
+                    return new FStudio.GTEX.Illusion.GtexIllusionRuntimeExecutor();
                 case GtexRuntimeMode.LivePlayback:
                 default:
                     return liveExecutor;
@@ -316,6 +327,8 @@ namespace FStudio.GTEX.Engine
                     return GtexEngineCommandType.StartLocalSimulation;
                 case GtexRuntimeMode.OriginalVisualRuntime:
                     return GtexEngineCommandType.StartOriginalVisualRuntime;
+                case GtexRuntimeMode.IllusionRuntime:
+                    return GtexEngineCommandType.StartIllusionRuntime;
                 case GtexRuntimeMode.LivePlayback:
                 default:
                     return GtexEngineCommandType.StartLivePlayback;
@@ -324,8 +337,13 @@ namespace FStudio.GTEX.Engine
 
         private static GtexMatchPhase ResolveStartedPhase(GtexRuntimeMode runtimeMode)
         {
-            return runtimeMode == GtexRuntimeMode.LocalSimulation
-                ? GtexMatchPhase.Kickoff
+            if (runtimeMode == GtexRuntimeMode.LocalSimulation)
+            {
+                return GtexMatchPhase.Kickoff;
+            }
+
+            return runtimeMode == GtexRuntimeMode.IllusionRuntime
+                ? GtexMatchPhase.FirstHalf
                 : GtexMatchPhase.Bootstrap;
         }
 

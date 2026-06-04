@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../features/app_routes/gte_route_data.dart';
+import '../../features/build_a_son/build_a_son.dart';
 import '../../models/regen_creation_models.dart';
 import '../../models/regen_universe_models.dart';
 import '../../shared/models/data_source_status.dart';
@@ -36,7 +39,16 @@ class RegensScreen extends ConsumerWidget {
           data:
               (RegenUniverseHubData data) => Column(
                 children: <Widget>[
-                  _Hero(data: data, authenticated: authenticated),
+                  _Hero(
+                    data: data,
+                    authenticated: authenticated,
+                    onOpenBuildASon:
+                        authenticated ? () => _openBuildASon(context) : null,
+                  ),
+                  const SizedBox(height: spacingMD),
+                  _RegenWorldDiscoveryPanel(data: data),
+                  const SizedBox(height: spacingMD),
+                  _BloodlinesPanel(bloodlines: data.bloodlines),
                   const SizedBox(height: spacingMD),
                   _AwardsPanel(awards: data.awards),
                   const SizedBox(height: spacingMD),
@@ -80,10 +92,15 @@ class RegensScreen extends ConsumerWidget {
 }
 
 class _Hero extends StatelessWidget {
-  const _Hero({required this.data, required this.authenticated});
+  const _Hero({
+    required this.data,
+    required this.authenticated,
+    this.onOpenBuildASon,
+  });
 
   final RegenUniverseHubData data;
   final bool authenticated;
+  final VoidCallback? onOpenBuildASon;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +134,928 @@ class _Hero extends StatelessWidget {
           tone: GtexSurfaceTone.success,
         ),
       ],
+      actions: <Widget>[
+        FilledButton.icon(
+          onPressed: onOpenBuildASon,
+          icon: const Icon(Icons.family_restroom_rounded),
+          label: const Text('Build-a-Son'),
+        ),
+        OutlinedButton.icon(
+          onPressed: null,
+          icon: const Icon(Icons.account_tree_rounded),
+          label: const Text('Lineage map'),
+        ),
+      ],
+    );
+  }
+}
+
+void _openBuildASon(BuildContext context) {
+  final String location = const RegenBuildASonRouteData().toUri().toString();
+  if (GoRouter.maybeOf(context) != null) {
+    context.push(location);
+    return;
+  }
+  Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/world/regens/build-a-son'),
+      builder: (BuildContext context) => const BuildASonScreen(),
+    ),
+  );
+}
+
+enum _GenerationFilter { all, gen1, gen2, gen3 }
+
+enum _RegenSort { potential, value, newest }
+
+class _RegenWorldDiscoveryPanel extends StatefulWidget {
+  const _RegenWorldDiscoveryPanel({required this.data});
+
+  final RegenUniverseHubData data;
+
+  @override
+  State<_RegenWorldDiscoveryPanel> createState() =>
+      _RegenWorldDiscoveryPanelState();
+}
+
+class _RegenWorldDiscoveryPanelState extends State<_RegenWorldDiscoveryPanel> {
+  final TextEditingController _searchController = TextEditingController();
+  _GenerationFilter _generationFilter = _GenerationFilter.all;
+  String _positionFilter = 'all';
+  String _nationalityFilter = 'all';
+  String _rarityFilter = 'all';
+  _RegenSort _sort = _RegenSort.potential;
+  String? _selectedId;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController
+      ..removeListener(_onSearchChanged)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<_RegenWorldEntry> entries = _buildRegenWorldEntries(widget.data);
+    final List<String> positions = <String>{
+      for (final _RegenWorldEntry entry in entries)
+        if (entry.position.trim().isNotEmpty) entry.position,
+    }.toList(growable: false)..sort();
+    final List<String> nationalities = <String>{
+      for (final _RegenWorldEntry entry in entries)
+        if (entry.nationality.trim().isNotEmpty) entry.nationality,
+    }.toList(growable: false)..sort();
+    final List<String> rarities = <String>{
+      for (final _RegenWorldEntry entry in entries)
+        if ((entry.rarityTier ?? '').trim().isNotEmpty)
+          entry.rarityTier!.trim(),
+    }.toList(growable: false)..sort();
+    final List<_RegenWorldEntry> filtered = _filteredEntries(entries);
+    final int eliteCount =
+        entries.where((_RegenWorldEntry entry) => entry.potential >= 80).length;
+    final int gen3Count =
+        entries
+            .where((_RegenWorldEntry entry) => entry.generationNumber == 3)
+            .length;
+    final int syncPendingCount =
+        entries
+            .where((_RegenWorldEntry entry) => !entry.hasBackendTruth)
+            .length;
+
+    return GtexSectionPanel(
+      title: 'Regen World',
+      subtitle:
+          'Discovery, lineage, traits, DNA, value, rarity, and nationality from backend regen feeds only.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Wrap(
+            spacing: spacingSM,
+            runSpacing: spacingSM,
+            children: <Widget>[
+              _MetricChip(
+                label: 'Discovered',
+                value: '${entries.length}',
+                tone: GtexSurfaceTone.live,
+              ),
+              _MetricChip(
+                label: 'Elite POT 80+',
+                value: '$eliteCount',
+                tone: GtexSurfaceTone.warning,
+              ),
+              _MetricChip(
+                label: 'GEN-3 rare',
+                value: '$gen3Count',
+                tone: GtexSurfaceTone.info,
+              ),
+              _MetricChip(
+                label: 'Sync pending',
+                value: '$syncPendingCount',
+                tone:
+                    syncPendingCount == 0
+                        ? GtexSurfaceTone.success
+                        : GtexSurfaceTone.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: spacingMD),
+          TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search_rounded),
+              labelText: 'Search regens',
+              hintText: 'Search regens by name, trait, or position...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: spacingSM),
+          Wrap(
+            spacing: spacingSM,
+            runSpacing: spacingSM,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              for (final _GenerationFilter filter in _GenerationFilter.values)
+                ChoiceChip(
+                  label: Text(_generationLabel(filter)),
+                  selected: _generationFilter == filter,
+                  onSelected:
+                      (_) => setState(() {
+                        _generationFilter = filter;
+                      }),
+                ),
+              DropdownButton<String>(
+                value:
+                    positions.contains(_positionFilter)
+                        ? _positionFilter
+                        : 'all',
+                items: <DropdownMenuItem<String>>[
+                  const DropdownMenuItem<String>(
+                    value: 'all',
+                    child: Text('All Positions'),
+                  ),
+                  for (final String position in positions)
+                    DropdownMenuItem<String>(
+                      value: position,
+                      child: Text(position),
+                    ),
+                ],
+                onChanged:
+                    (String? value) => setState(() {
+                      _positionFilter = value ?? 'all';
+                    }),
+              ),
+              DropdownButton<String>(
+                value:
+                    nationalities.contains(_nationalityFilter)
+                        ? _nationalityFilter
+                        : 'all',
+                items: <DropdownMenuItem<String>>[
+                  const DropdownMenuItem<String>(
+                    value: 'all',
+                    child: Text('All Nationalities'),
+                  ),
+                  for (final String nationality in nationalities)
+                    DropdownMenuItem<String>(
+                      value: nationality,
+                      child: Text(nationality),
+                    ),
+                ],
+                onChanged:
+                    (String? value) => setState(() {
+                      _nationalityFilter = value ?? 'all';
+                    }),
+              ),
+              DropdownButton<String>(
+                value: rarities.contains(_rarityFilter) ? _rarityFilter : 'all',
+                items: <DropdownMenuItem<String>>[
+                  const DropdownMenuItem<String>(
+                    value: 'all',
+                    child: Text('All Rarities'),
+                  ),
+                  for (final String rarity in rarities)
+                    DropdownMenuItem<String>(
+                      value: rarity,
+                      child: Text(rarity),
+                    ),
+                ],
+                onChanged:
+                    (String? value) => setState(() {
+                      _rarityFilter = value ?? 'all';
+                    }),
+              ),
+              DropdownButton<_RegenSort>(
+                value: _sort,
+                items: const <DropdownMenuItem<_RegenSort>>[
+                  DropdownMenuItem<_RegenSort>(
+                    value: _RegenSort.potential,
+                    child: Text('Sort: Potential'),
+                  ),
+                  DropdownMenuItem<_RegenSort>(
+                    value: _RegenSort.value,
+                    child: Text('Sort: Value'),
+                  ),
+                  DropdownMenuItem<_RegenSort>(
+                    value: _RegenSort.newest,
+                    child: Text('Sort: Newest'),
+                  ),
+                ],
+                onChanged:
+                    (_RegenSort? value) => setState(() {
+                      _sort = value ?? _RegenSort.potential;
+                    }),
+              ),
+            ],
+          ),
+          const SizedBox(height: spacingMD),
+          if (filtered.isEmpty)
+            GteStatePanel(
+              eyebrow: 'REGEN WORLD',
+              title: 'No Regens Found',
+              message:
+                  'No backend regen records match the current filters. Clear filters to inspect the full synced pool.',
+              icon: Icons.search_off_rounded,
+              actionLabel: 'Show all',
+              onAction: _clearFilters,
+            )
+          else
+            Column(
+              children: filtered
+                  .map(
+                    (_RegenWorldEntry entry) => Padding(
+                      padding: const EdgeInsets.only(bottom: spacingSM),
+                      child: _RegenWorldEntryCard(
+                        entry: entry,
+                        selected: _selectedId == entry.id,
+                        onToggle:
+                            () => setState(() {
+                              _selectedId =
+                                  _selectedId == entry.id ? null : entry.id;
+                            }),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          const SizedBox(height: spacingSM),
+          const Text(
+            'GEN-1 regens are first generation. GEN-2 and GEN-3 records inherit compounded traits only when the backend publishes lineage truth.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<_RegenWorldEntry> _filteredEntries(List<_RegenWorldEntry> entries) {
+    final String query = _searchController.text.trim().toLowerCase();
+    final List<_RegenWorldEntry> filtered = entries
+        .where((_RegenWorldEntry entry) {
+          if (_generationFilter != _GenerationFilter.all &&
+              entry.generationNumber != _generationNumber(_generationFilter)) {
+            return false;
+          }
+          if (_positionFilter != 'all' && entry.position != _positionFilter) {
+            return false;
+          }
+          if (_nationalityFilter != 'all' &&
+              entry.nationality != _nationalityFilter) {
+            return false;
+          }
+          if (_rarityFilter != 'all' && entry.rarityTier != _rarityFilter) {
+            return false;
+          }
+          if (query.isEmpty) {
+            return true;
+          }
+          return entry.searchableValues.any(
+            (String value) => value.toLowerCase().contains(query),
+          );
+        })
+        .toList(growable: false);
+    switch (_sort) {
+      case _RegenSort.potential:
+        filtered.sort(
+          (_RegenWorldEntry left, _RegenWorldEntry right) =>
+              right.potential.compareTo(left.potential),
+        );
+        break;
+      case _RegenSort.value:
+        filtered.sort(
+          (_RegenWorldEntry left, _RegenWorldEntry right) =>
+              (right.projectedValueCoin ?? -1).compareTo(
+                left.projectedValueCoin ?? -1,
+              ),
+        );
+        break;
+      case _RegenSort.newest:
+        filtered.sort(
+          (_RegenWorldEntry left, _RegenWorldEntry right) =>
+              right.createdAt.compareTo(left.createdAt),
+        );
+        break;
+    }
+    return filtered;
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _searchController.clear();
+      _generationFilter = _GenerationFilter.all;
+      _positionFilter = 'all';
+      _nationalityFilter = 'all';
+      _rarityFilter = 'all';
+      _sort = _RegenSort.potential;
+    });
+  }
+}
+
+class _RegenWorldEntryCard extends StatelessWidget {
+  const _RegenWorldEntryCard({
+    required this.entry,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  final _RegenWorldEntry entry;
+  final bool selected;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final String positionLabel =
+        entry.position.trim().isEmpty ? 'Position pending' : entry.position;
+    final String nationalityLabel =
+        entry.nationality.trim().isEmpty
+            ? 'Nationality pending'
+            : entry.nationality;
+    final String truthMessage =
+        entry.hasBackendTruth
+            ? 'Backend truth complete'
+            : 'Missing backend truth: ${entry.missingFields.join(', ')}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onToggle,
+          child: GtexListTile(
+            title: '${entry.name} / ${entry.generationLabel ?? 'GEN pending'}',
+            subtitle:
+                '$positionLabel / $nationalityLabel / ${entry.originStory ?? 'Origin story not published'}\n'
+                'POT ${entry.potential} / ${entry.projectedValueLabel} / ${entry.rarityTier ?? 'Rarity not published'}\n'
+                '${entry.syncStateLabel} / $truthMessage',
+            leadingIcon:
+                entry.hasBackendTruth
+                    ? Icons.auto_awesome_rounded
+                    : Icons.sync_problem_rounded,
+            tone: entry.surfaceTone,
+            trailing: SizedBox(
+              width: 280,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (entry.dnaProfile == null)
+                    const Text('DNA not published')
+                  else
+                    _DnaIntegritySegments(profile: entry.dnaProfile!),
+                  const SizedBox(height: spacingXS),
+                  _BadgeWrap(
+                    labels: <String>[
+                      if (!entry.hasBackendTruth) entry.syncStateLabel,
+                      ...entry.traits.take(3),
+                      if (entry.traits.length > 3)
+                        '+${entry.traits.length - 3}',
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (selected) _RegenWorldDetail(entry: entry),
+      ],
+    );
+  }
+}
+
+class _RegenWorldDetail extends StatelessWidget {
+  const _RegenWorldDetail({required this.entry});
+
+  final _RegenWorldEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: spacingSM),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text('Backend Sync', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: spacingXS),
+          Text(
+            entry.hasBackendTruth
+                ? 'Backend truth complete.'
+                : '${entry.syncStateLabel}: missing ${entry.missingFields.join(', ')}.',
+          ),
+          const SizedBox(height: spacingSM),
+          Text('DNA Breakdown', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: spacingXS),
+          if (entry.dnaProfile == null)
+            const Text('DNA not published by backend.')
+          else
+            for (final String code in regenDnaStatCodes)
+              _DnaBar(label: code, value: entry.dnaProfile!.valueFor(code)),
+          const SizedBox(height: spacingSM),
+          Text('Traits', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: spacingXS),
+          _BadgeWrap(labels: entry.traits),
+          const SizedBox(height: spacingSM),
+          Text('Lineage Tree', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: spacingXS),
+          Text(
+            entry.lineage.isEmpty
+                ? 'Lineage not published by backend.'
+                : entry.lineage.join(' -> '),
+          ),
+          const SizedBox(height: spacingSM),
+          Text('Origin Story', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: spacingXS),
+          Text(entry.originStory ?? 'Origin story not published by backend.'),
+        ],
+      ),
+    );
+  }
+}
+
+class _DnaIntegritySegments extends StatelessWidget {
+  const _DnaIntegritySegments({required this.profile});
+
+  final RegenDnaProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final int average =
+        regenDnaStatCodes
+            .map(profile.valueFor)
+            .fold<int>(0, (int sum, int value) => sum + value) ~/
+        regenDnaStatCodes.length;
+    final int filled = (average.clamp(0, 99) / 10).ceil().clamp(1, 10);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: <Widget>[
+        for (int index = 0; index < 10; index += 1)
+          Container(
+            width: 12,
+            height: 6,
+            margin: const EdgeInsets.only(left: 3),
+            decoration: BoxDecoration(
+              color:
+                  index < filled
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).dividerColor.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _DnaBar extends StatelessWidget {
+  const _DnaBar({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: spacingXS),
+      child: Row(
+        children: <Widget>[
+          SizedBox(width: 38, child: Text(label)),
+          Expanded(
+            child: LinearProgressIndicator(
+              value: value.clamp(0, 99) / 99,
+              minHeight: 7,
+            ),
+          ),
+          const SizedBox(width: spacingSM),
+          SizedBox(
+            width: 32,
+            child: Text('$value', textAlign: TextAlign.right),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RegenWorldEntry {
+  const _RegenWorldEntry({
+    required this.id,
+    required this.name,
+    required this.position,
+    required this.nationality,
+    required this.potential,
+    required this.currentRating,
+    required this.source,
+    required this.createdAt,
+    this.generationNumber,
+    this.generationLabel,
+    this.rarityTier,
+    this.originStory,
+    this.projectedValueCoin,
+    this.traits = const <String>[],
+    this.lineage = const <String>[],
+    this.dnaProfile,
+  });
+
+  final String id;
+  final String name;
+  final String position;
+  final String nationality;
+  final int potential;
+  final int currentRating;
+  final String source;
+  final DateTime createdAt;
+  final int? generationNumber;
+  final String? generationLabel;
+  final String? rarityTier;
+  final String? originStory;
+  final int? projectedValueCoin;
+  final List<String> traits;
+  final List<String> lineage;
+  final RegenDnaProfile? dnaProfile;
+
+  bool get hasBackendTruth => missingFields.isEmpty;
+
+  bool get hasBlockedBackendTruth => coreMissingFields.isNotEmpty;
+
+  String get syncStateLabel {
+    if (hasBackendTruth) {
+      return 'Backend truth complete';
+    }
+    return hasBlockedBackendTruth
+        ? 'Backend truth blocked'
+        : 'Backend sync pending';
+  }
+
+  GtexSurfaceTone get surfaceTone {
+    if (hasBackendTruth) {
+      return GtexSurfaceTone.live;
+    }
+    return hasBlockedBackendTruth
+        ? GtexSurfaceTone.danger
+        : GtexSurfaceTone.warning;
+  }
+
+  String get projectedValueLabel =>
+      projectedValueCoin == null
+          ? 'Value pending'
+          : _formatCoin(projectedValueCoin!);
+
+  List<String> get missingFields => <String>[
+    if ((generationNumber ?? 0) <= 0 && (generationLabel ?? '').trim().isEmpty)
+      'generation',
+    if (position.trim().isEmpty) 'position',
+    if (potential <= 0) 'potential',
+    if (currentRating <= 0) 'current rating',
+    if (traits.isEmpty) 'traits',
+    if (lineage.isEmpty) 'lineage',
+    if (dnaProfile == null) 'DNA',
+    if ((originStory ?? '').trim().isEmpty) 'origin story',
+    if (projectedValueCoin == null) 'projected value',
+    if ((rarityTier ?? '').trim().isEmpty) 'rarity',
+    if (nationality.trim().isEmpty) 'nationality',
+  ];
+
+  List<String> get coreMissingFields => <String>[
+    if (position.trim().isEmpty) 'position',
+    if (potential <= 0) 'potential',
+    if (currentRating <= 0) 'current rating',
+    if (nationality.trim().isEmpty) 'nationality',
+  ];
+
+  Iterable<String> get searchableValues sync* {
+    yield name;
+    yield position;
+    yield nationality;
+    yield source;
+    if (generationLabel != null) {
+      yield generationLabel!;
+    }
+    if (generationNumber != null) {
+      yield 'GEN-$generationNumber';
+      yield generationNumber.toString();
+    }
+    if (rarityTier != null) {
+      yield rarityTier!;
+    }
+    if (originStory != null) {
+      yield originStory!;
+    }
+    yield projectedValueLabel;
+    if (projectedValueCoin != null) {
+      yield projectedValueCoin.toString();
+    }
+    yield* traits;
+    yield* lineage;
+    final RegenDnaProfile? profile = dnaProfile;
+    if (profile != null) {
+      for (final String code in regenDnaStatCodes) {
+        final int value = profile.valueFor(code);
+        yield code;
+        yield '$code $value';
+        yield value.toString();
+      }
+    }
+  }
+
+  _RegenWorldEntry copyWith({
+    int? generationNumber,
+    String? generationLabel,
+    String? originStory,
+    List<String>? lineage,
+  }) {
+    final int? resolvedGenerationNumber =
+        generationNumber ?? this.generationNumber;
+    return _RegenWorldEntry(
+      id: id,
+      name: name,
+      position: position,
+      nationality: nationality,
+      potential: potential,
+      currentRating: currentRating,
+      source: source,
+      createdAt: createdAt,
+      generationNumber: resolvedGenerationNumber,
+      generationLabel:
+          generationLabel ??
+          this.generationLabel ??
+          (resolvedGenerationNumber == null
+              ? null
+              : 'GEN-$resolvedGenerationNumber'),
+      rarityTier: rarityTier,
+      originStory: originStory ?? this.originStory,
+      projectedValueCoin: projectedValueCoin,
+      traits: traits,
+      lineage: lineage ?? this.lineage,
+      dnaProfile: dnaProfile,
+    );
+  }
+}
+
+List<_RegenWorldEntry> _buildRegenWorldEntries(RegenUniverseHubData data) {
+  final Map<String, _RegenWorldEntry> entries = <String, _RegenWorldEntry>{};
+  for (final NationalRegenSeed seed in data.nationalRegens) {
+    entries[seed.id] = _withBloodline(
+      _entryFromNationalSeed(seed),
+      data.bloodlines,
+    );
+  }
+  for (final RegenRisingStar star in data.risingStars) {
+    entries.putIfAbsent(
+      star.playerId,
+      () => _withBloodline(_entryFromRisingStar(star), data.bloodlines),
+    );
+  }
+  for (final RegenCreationOrder order in data.generatedRequestedSons) {
+    final RegenCreationGeneratedPlayer? player = order.generatedPlayer;
+    if (player != null) {
+      entries[player.playerId] = _withBloodline(
+        _entryFromGeneratedSon(order, player),
+        data.bloodlines,
+      );
+    }
+  }
+  return entries.values.toList(growable: false);
+}
+
+_RegenWorldEntry _withBloodline(
+  _RegenWorldEntry entry,
+  List<RegenBloodlineChain> bloodlines,
+) {
+  if (entry.lineage.isNotEmpty && (entry.originStory ?? '').trim().isNotEmpty) {
+    return entry;
+  }
+  for (final RegenBloodlineChain chain in bloodlines) {
+    final bool matches = chain.entries.any((RegenBloodlinePlayer player) {
+      return player.playerId == entry.id ||
+          player.regenId == entry.id ||
+          player.displayName.toLowerCase() == entry.name.toLowerCase();
+    });
+    if (!matches) {
+      continue;
+    }
+    final int generationNumber = chain.entries
+        .map((RegenBloodlinePlayer player) => player.generationIndex)
+        .fold<int>(1, (int max, int value) => value > max ? value : max);
+    return entry.copyWith(
+      lineage:
+          entry.lineage.isEmpty
+              ? chain.entries
+                  .map((RegenBloodlinePlayer player) => player.displayName)
+                  .toList(growable: false)
+              : entry.lineage,
+      originStory:
+          (entry.originStory ?? '').trim().isEmpty
+              ? chain.originLabel
+              : entry.originStory,
+      generationNumber: entry.generationNumber ?? generationNumber,
+    );
+  }
+  return entry;
+}
+
+_RegenWorldEntry _entryFromNationalSeed(NationalRegenSeed seed) {
+  final RegenWorldDetails details = RegenWorldDetails.fromNationalSeed(seed);
+  return _RegenWorldEntry(
+    id: seed.id,
+    name: seed.displayName,
+    position: seed.primaryPosition,
+    nationality: seed.countryName,
+    potential: seed.potentialRating,
+    currentRating: seed.currentRating,
+    source: seed.seedType,
+    createdAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    generationNumber: seed.generationIndex > 0 ? seed.generationIndex : null,
+    generationLabel: details.generationLabel,
+    rarityTier: details.rarityLabel,
+    originStory: details.originStory,
+    projectedValueCoin: details.projectedValueCoin,
+    traits: details.traits,
+    lineage: details.lineage,
+    dnaProfile: _dnaProfileFromValues(details.dna),
+  );
+}
+
+_RegenWorldEntry _entryFromRisingStar(RegenRisingStar star) {
+  final RegenUniversePlayer player = star.player;
+  final RegenWorldDetails? details = star.details;
+  final RegenDnaProfile? detailsDnaProfile =
+      details == null ? null : _dnaProfileFromValues(details.dna);
+  final List<String> detailsTraits = details?.traits ?? const <String>[];
+  final List<String> detailsLineage = details?.lineage ?? const <String>[];
+  final int? detailsGenerationNumber = _generationNumberFromLabel(
+    details?.generationLabel,
+  );
+  return _RegenWorldEntry(
+    id: star.playerId,
+    name: player.name,
+    position: player.position,
+    nationality: player.nationality,
+    potential: player.potential,
+    currentRating: player.currentRating,
+    source: player.sourceType,
+    createdAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    generationNumber: detailsGenerationNumber ?? player.generationNumber,
+    generationLabel: details?.generationLabel ?? player.generationLabel,
+    rarityTier: details?.rarityLabel ?? player.rarityTier,
+    originStory:
+        details?.originStory ?? details?.originLabel ?? player.originStory,
+    projectedValueCoin:
+        details?.projectedValueCoin ??
+        player.projectedValueCoin ??
+        star.marketValueCoin,
+    traits: detailsTraits.isNotEmpty ? detailsTraits : player.traits,
+    lineage: detailsLineage.isNotEmpty ? detailsLineage : player.lineage,
+    dnaProfile: detailsDnaProfile ?? player.dnaProfile,
+  );
+}
+
+_RegenWorldEntry _entryFromGeneratedSon(
+  RegenCreationOrder order,
+  RegenCreationGeneratedPlayer player,
+) {
+  return _RegenWorldEntry(
+    id: player.playerId,
+    name: player.fullName,
+    position: player.position,
+    nationality: player.countryName ?? player.countryCode ?? '',
+    potential: player.potentialRating,
+    currentRating: player.currentRating,
+    source: 'requested_son',
+    createdAt: order.generatedAt ?? order.updatedAt,
+    generationNumber: player.generationNumber,
+    generationLabel: player.generationLabel,
+    rarityTier: player.rarityTier,
+    originStory: player.originStory,
+    projectedValueCoin: player.projectedValueCoin,
+    traits: player.traits,
+    lineage: player.lineage,
+    dnaProfile: player.dnaProfile,
+  );
+}
+
+String _generationLabel(_GenerationFilter filter) {
+  return switch (filter) {
+    _GenerationFilter.all => 'All Generations',
+    _GenerationFilter.gen1 => 'GEN-1',
+    _GenerationFilter.gen2 => 'GEN-2',
+    _GenerationFilter.gen3 => 'GEN-3',
+  };
+}
+
+int? _generationNumber(_GenerationFilter filter) {
+  return switch (filter) {
+    _GenerationFilter.all => null,
+    _GenerationFilter.gen1 => 1,
+    _GenerationFilter.gen2 => 2,
+    _GenerationFilter.gen3 => 3,
+  };
+}
+
+RegenDnaProfile? _dnaProfileFromValues(Map<String, double> values) {
+  if (values.isEmpty) {
+    return null;
+  }
+  int valueForCode(String code) {
+    final double? value =
+        values[code] ??
+        values[code.toLowerCase()] ??
+        values[code.toUpperCase()];
+    return value == null ? 0 : value.round().clamp(0, 99);
+  }
+
+  return RegenDnaProfile(
+    ratings: <String, int>{
+      for (final String code in regenDnaStatCodes) code: valueForCode(code),
+    },
+  );
+}
+
+int? _generationNumberFromLabel(String? label) {
+  if (label == null) {
+    return null;
+  }
+  final RegExpMatch? match = RegExp(
+    r'GEN-?(\d+)',
+  ).firstMatch(label.toUpperCase());
+  return match == null ? null : int.tryParse(match.group(1) ?? '');
+}
+
+String _formatCoin(int value) {
+  if (value >= 1000000) {
+    return 'GTC ${(value / 1000000).toStringAsFixed(1)}M';
+  }
+  if (value >= 1000) {
+    return 'GTC ${(value / 1000).toStringAsFixed(0)}K';
+  }
+  return 'GTC $value';
+}
+
+class _BloodlinesPanel extends StatelessWidget {
+  const _BloodlinesPanel({required this.bloodlines});
+
+  final List<RegenBloodlineChain> bloodlines;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexSectionPanel(
+      title: 'Lineage',
+      subtitle: 'Backend bloodline chains and generation order.',
+      child:
+          bloodlines.isEmpty
+              ? const _EmptyState(
+                message: 'No backend bloodline chains are published yet.',
+              )
+              : Column(
+                children: bloodlines
+                    .map(
+                      (RegenBloodlineChain chain) => Padding(
+                        padding: const EdgeInsets.only(bottom: spacingSM),
+                        child: GtexListTile(
+                          title: chain.originLabel,
+                          subtitle: chain.entries
+                              .map(
+                                (RegenBloodlinePlayer player) =>
+                                    'GEN-${player.generationIndex} ${player.displayName} | ${player.primaryPosition} | ${player.currentRating}/${player.potential}',
+                              )
+                              .join('\n'),
+                          leadingIcon: Icons.account_tree_rounded,
+                          tone: GtexSurfaceTone.info,
+                          trailing: _MetricChip(
+                            label: 'Drift',
+                            value: chain.driftScore.toStringAsFixed(2),
+                            tone: GtexSurfaceTone.info,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
     );
   }
 }
@@ -455,6 +1394,10 @@ class _BadgeWrap extends StatelessWidget {
         return GtexSurfaceTone.warning;
       case 'Club Regen':
         return GtexSurfaceTone.live;
+      case 'Backend sync pending':
+        return GtexSurfaceTone.warning;
+      case 'Backend truth blocked':
+        return GtexSurfaceTone.danger;
       default:
         return GtexSurfaceTone.neutral;
     }

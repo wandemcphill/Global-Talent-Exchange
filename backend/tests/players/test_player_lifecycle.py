@@ -60,8 +60,10 @@ from app.schemas.player_lifecycle import (
     RegenSpecialTrainingRequest,
     RegenTransferListingRequest,
     TransferBidAcceptRequest,
+    TransferBidCounterRequest,
     TransferBidCreateRequest,
     TransferBidRejectRequest,
+    TransferBidWithdrawRequest,
 )
 from app.segments.player_lifecycle.segment_player_lifecycle import router
 from app.services.player_agency_service import PlayerAgencyService
@@ -626,6 +628,7 @@ def test_transfer_window_open_closed_validation(
         opens_on=date(2026, 6, 1),
         closes_on=date(2026, 8, 31),
     )
+    fund_wallet(lifecycle_session, user_id="user-owner", coin=Decimal("2000000.0000"))
 
     with pytest.raises(PlayerLifecycleValidationError, match="closed"):
         lifecycle_service.create_bid(
@@ -686,6 +689,10 @@ def test_transfer_bid_flow_completes_contract_move(
             ends_on=date(2026, 12, 31),
         ),
     )
+    fund_wallet(lifecycle_session, user_id="user-owner", coin=Decimal("5000000.0000"))
+    owner = lifecycle_session.get(User, "user-owner")
+    assert owner is not None
+    wallet_service = WalletService()
     bid = lifecycle_service.create_bid(
         window.id,
         TransferBidCreateRequest(
@@ -783,6 +790,20 @@ def test_future_transfer_acceptance_keeps_current_contract_active_until_move_dat
     lifecycle_session: Session,
 ) -> None:
     context = seed_base_context(lifecycle_session)
+    seller_owner = User(
+        id="user-selling-owner",
+        email="selling-owner@example.com",
+        username="selling-owner",
+        display_name="Selling Owner",
+        password_hash="x",
+        role=UserRole.USER,
+        kyc_status=KycStatus.FULLY_VERIFIED,
+    )
+    selling_club = lifecycle_session.get(ClubProfile, context["club_profile_id"])
+    assert selling_club is not None
+    selling_club.owner_user_id = seller_owner.id
+    lifecycle_session.add(seller_owner)
+    lifecycle_session.commit()
     window = add_window(
         lifecycle_session,
         window_id="window-future-transfer",
@@ -799,6 +820,10 @@ def test_future_transfer_acceptance_keeps_current_contract_active_until_move_dat
             ends_on=date(2026, 6, 30),
         ),
     )
+    fund_wallet(lifecycle_session, user_id="user-owner", coin=Decimal("5000000.0000"))
+    owner = lifecycle_session.get(User, "user-owner")
+    assert owner is not None
+    wallet_service = WalletService()
     bid = lifecycle_service.create_bid(
         window.id,
         TransferBidCreateRequest(
@@ -808,6 +833,14 @@ def test_future_transfer_acceptance_keeps_current_contract_active_until_move_dat
             wage_offer_amount=Decimal("95000.00"),
         ),
         submitted_on=date(2026, 3, 12),
+    )
+    assert (
+        wallet_service.get_transfer_bid_reserved_amount(
+            lifecycle_session,
+            user=owner,
+            transfer_bid_id=bid.id,
+        )
+        == Decimal("4500000.0000")
     )
 
     accepted = lifecycle_service.accept_bid(
@@ -824,8 +857,20 @@ def test_future_transfer_acceptance_keeps_current_contract_active_until_move_dat
     lifecycle_session.refresh(old_contract)
 
     summary_before_move = lifecycle_service.get_career_summary(context["player_id"], on_date=date(2026, 3, 12))
+    wallet_before_move = wallet_service.get_wallet_summary(lifecycle_session, owner, currency=LedgerUnit.COIN)
 
     assert accepted.status == "accepted"
+    assert (
+        wallet_service.get_transfer_bid_reserved_amount(
+            lifecycle_session,
+            user=owner,
+            transfer_bid_id=bid.id,
+        )
+        == Decimal("4500000.0000")
+    )
+    assert wallet_before_move.available_balance == Decimal("500000.0000")
+    assert wallet_before_move.reserved_balance == Decimal("4500000.0000")
+    assert wallet_before_move.locked_balance == Decimal("4500000.0000")
     assert old_contract.status == ContractStatus.ACTIVE.value
     assert old_contract.ends_on == date(2026, 6, 30)
     assert summary_before_move.current_club_id == context["club_profile_id"]
@@ -847,6 +892,25 @@ def test_future_transfer_acceptance_keeps_current_contract_active_until_move_dat
     assert summary_after_move.contract_summary.active_contract.club_id == context["buyer_profile_id"]
     assert lifecycle_session.get(Player, context["player_id"]).current_club_profile_id == context["buyer_profile_id"]
     assert lifecycle_service.list_player_transfer_bids(context["player_id"])[0].status == "completed"
+    assert (
+        wallet_service.get_transfer_bid_reserved_amount(
+            lifecycle_session,
+            user=owner,
+            transfer_bid_id=bid.id,
+        )
+        == Decimal("0.0000")
+    )
+    wallet_after_move = wallet_service.get_wallet_summary(lifecycle_session, owner, currency=LedgerUnit.COIN)
+    assert wallet_after_move.available_balance == Decimal("500000.0000")
+    assert wallet_after_move.reserved_balance == Decimal("0.0000")
+    assert wallet_after_move.lock_reasons == ()
+    seller_wallet_after_move = wallet_service.get_wallet_summary(
+        lifecycle_session,
+        seller_owner,
+        currency=LedgerUnit.COIN,
+    )
+    assert seller_wallet_after_move.available_balance == Decimal("4500000.0000")
+    assert seller_wallet_after_move.reserved_balance == Decimal("0.0000")
 
 
 def test_lifecycle_write_operations_validate_club_references(
@@ -928,6 +992,7 @@ def test_reject_transfer_bid_leaves_player_state_unchanged(
             ends_on=date(2026, 12, 31),
         ),
     )
+    fund_wallet(lifecycle_session, user_id="user-owner", coin=Decimal("4000000.0000"))
     bid = lifecycle_service.create_bid(
         window.id,
         TransferBidCreateRequest(
@@ -939,13 +1004,194 @@ def test_reject_transfer_bid_leaves_player_state_unchanged(
     )
 
     rejected = lifecycle_service.reject_bid(window.id, bid.id, TransferBidRejectRequest(reason="No fit"))
+    owner = lifecycle_session.get(User, "user-owner")
+    assert owner is not None
+    wallet_service = WalletService()
 
     assert rejected.status == "rejected"
+    assert (
+        wallet_service.get_transfer_bid_reserved_amount(
+            lifecycle_session,
+            user=owner,
+            transfer_bid_id=bid.id,
+        )
+        == Decimal("0.0000")
+    )
+    assert wallet_service.get_wallet_summary(
+        lifecycle_session,
+        owner,
+        currency=LedgerUnit.COIN,
+    ).reserved_balance == Decimal("0.0000")
     assert lifecycle_session.get(Player, context["player_id"]).current_club_profile_id == context["club_profile_id"]
     assert (
         lifecycle_service.get_contract_summary(context["player_id"], on_date=date(2026, 3, 12)).active_contract.club_id
         == context["club_profile_id"]
     )
+
+
+def test_counter_transfer_bid_replaces_reservation_without_double_locking(
+    lifecycle_service: PlayerLifecycleService,
+    lifecycle_session: Session,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    window = add_window(
+        lifecycle_session,
+        window_id="window-counter-transfer",
+        opens_on=date(2026, 3, 1),
+        closes_on=date(2026, 3, 31),
+    )
+    lifecycle_service.create_contract(
+        context["player_id"],
+        ContractCreateRequest(
+            club_id=context["club_profile_id"],
+            wage_amount=Decimal("80000.00"),
+            signed_on=date(2025, 7, 1),
+            starts_on=date(2025, 7, 1),
+            ends_on=date(2026, 12, 31),
+        ),
+    )
+    fund_wallet(lifecycle_session, user_id="user-owner", coin=Decimal("5000000.0000"))
+    owner = lifecycle_session.get(User, "user-owner")
+    assert owner is not None
+    wallet_service = WalletService()
+    original = lifecycle_service.create_bid(
+        window.id,
+        TransferBidCreateRequest(
+            player_id=context["player_id"],
+            buying_club_id=context["buyer_profile_id"],
+            bid_amount=Decimal("3500000.00"),
+            wage_offer_amount=Decimal("90000.00"),
+        ),
+        submitted_on=date(2026, 3, 12),
+    )
+
+    assert (
+        wallet_service.get_transfer_bid_reserved_amount(
+            lifecycle_session,
+            user=owner,
+            transfer_bid_id=original.id,
+        )
+        == Decimal("3500000.0000")
+    )
+
+    replacement = lifecycle_service.counter_bid(
+        window.id,
+        original.id,
+        TransferBidCounterRequest(
+            bid_amount=Decimal("4200000.00"),
+            wage_offer_amount=Decimal("100000.00"),
+            notes="Counter at market value",
+        ),
+        reference_on=date(2026, 3, 13),
+        idempotency_key="counter-transfer-bid-1",
+    )
+    lifecycle_session.refresh(original)
+
+    assert original.status == "counter"
+    assert replacement.status == "submitted"
+    assert replacement.bid_amount == Decimal("4200000.00")
+    assert (original.structured_terms_json or {})["counter_replaced_by_bid_id"] == replacement.id
+    assert (replacement.structured_terms_json or {})["counter_source_bid_id"] == original.id
+    assert (
+        wallet_service.get_transfer_bid_reserved_amount(
+            lifecycle_session,
+            user=owner,
+            transfer_bid_id=original.id,
+        )
+        == Decimal("0.0000")
+    )
+    assert (
+        wallet_service.get_transfer_bid_reserved_amount(
+            lifecycle_session,
+            user=owner,
+            transfer_bid_id=replacement.id,
+        )
+        == Decimal("4200000.0000")
+    )
+    summary = wallet_service.get_wallet_summary(lifecycle_session, owner, currency=LedgerUnit.COIN)
+    assert summary.available_balance == Decimal("800000.0000")
+    assert summary.reserved_balance == Decimal("4200000.0000")
+    assert summary.locked_balance == Decimal("4200000.0000")
+
+    idempotent = lifecycle_service.counter_bid(
+        window.id,
+        original.id,
+        TransferBidCounterRequest(
+            bid_amount=Decimal("4200000.00"),
+            wage_offer_amount=Decimal("100000.00"),
+            notes="Counter at market value",
+        ),
+        reference_on=date(2026, 3, 13),
+        idempotency_key="counter-transfer-bid-1",
+    )
+
+    assert idempotent.id == replacement.id
+    assert len(lifecycle_service.list_player_transfer_bids(context["player_id"])) == 2
+
+
+def test_withdraw_transfer_bid_releases_reservation_idempotently(
+    lifecycle_service: PlayerLifecycleService,
+    lifecycle_session: Session,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    window = add_window(
+        lifecycle_session,
+        window_id="window-withdraw-transfer",
+        opens_on=date(2026, 3, 1),
+        closes_on=date(2026, 3, 31),
+    )
+    lifecycle_service.create_contract(
+        context["player_id"],
+        ContractCreateRequest(
+            club_id=context["club_profile_id"],
+            wage_amount=Decimal("80000.00"),
+            signed_on=date(2025, 7, 1),
+            starts_on=date(2025, 7, 1),
+            ends_on=date(2026, 12, 31),
+        ),
+    )
+    fund_wallet(lifecycle_session, user_id="user-owner", coin=Decimal("3000000.0000"))
+    owner = lifecycle_session.get(User, "user-owner")
+    assert owner is not None
+    wallet_service = WalletService()
+    bid = lifecycle_service.create_bid(
+        window.id,
+        TransferBidCreateRequest(
+            player_id=context["player_id"],
+            buying_club_id=context["buyer_profile_id"],
+            bid_amount=Decimal("2000000.00"),
+        ),
+        submitted_on=date(2026, 3, 12),
+    )
+
+    withdrawn = lifecycle_service.withdraw_bid(
+        window.id,
+        bid.id,
+        TransferBidWithdrawRequest(reason="Owner withdrew before review"),
+        idempotency_key="withdraw-transfer-bid-1",
+    )
+    repeat = lifecycle_service.withdraw_bid(
+        window.id,
+        bid.id,
+        TransferBidWithdrawRequest(reason="Owner withdrew before review"),
+        idempotency_key="withdraw-transfer-bid-1",
+    )
+
+    assert withdrawn.status == "withdrawn"
+    assert repeat.id == bid.id
+    assert repeat.status == "withdrawn"
+    assert (
+        wallet_service.get_transfer_bid_reserved_amount(
+            lifecycle_session,
+            user=owner,
+            transfer_bid_id=bid.id,
+        )
+        == Decimal("0.0000")
+    )
+    summary = wallet_service.get_wallet_summary(lifecycle_session, owner, currency=LedgerUnit.COIN)
+    assert summary.available_balance == Decimal("3000000.0000")
+    assert summary.reserved_balance == Decimal("0.0000")
+    assert summary.lock_reasons == ()
 
 
 def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
@@ -969,6 +1215,7 @@ def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
             ends_on=date(2026, 12, 31),
         ),
     )
+    fund_wallet(lifecycle_session, user_id="user-owner", coin=Decimal("5000000.0000"))
     bid = lifecycle_service.create_bid(
         window.id,
         TransferBidCreateRequest(
@@ -1702,6 +1949,7 @@ def test_major_regen_transfer_creates_headline_and_announcement_records(
             ends_on=date(2027, 6, 30),
         ),
     )
+    fund_wallet(lifecycle_session, user_id="user-owner", coin=Decimal("500.0000"))
     bid = lifecycle_service.create_bid(
         window.id,
         TransferBidCreateRequest(

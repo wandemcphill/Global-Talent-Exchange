@@ -10,8 +10,9 @@ import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../screens/gte_login_screen.dart';
 import '../router/app_router.dart';
-import '../services/match_3d_monetization_service.dart';
 import '../services/reliability/reliable_event_queue.dart';
+import '../shared/auth/auth_identity_store.dart';
+import '../shared/auth/biometric_unlock_service.dart';
 import '../shared/models/auth_session.dart';
 import '../shared/providers/auth_provider.dart';
 import '../theme/gte_theme_controller.dart';
@@ -25,12 +26,14 @@ class GteFrontendApp extends StatefulWidget {
     this.controller,
     this.config,
     this.themeController,
-    this.initialPath = '/app/home',
+    this.authSessionStore,
+    this.initialPath = '/app/world',
   });
 
   final GteExchangeController? controller;
   final GteAppConfig? config;
   final GteThemeController? themeController;
+  final AuthSessionStore? authSessionStore;
   final String initialPath;
 
   @override
@@ -41,6 +44,8 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   late final GteAppConfig _config;
   late final GteExchangeController _controller;
   late final bool _ownsController;
+  late final AuthSessionStore _authSessionStore;
+  late final TrustedDeviceBiometricUnlockController _biometricUnlockController;
   late final GteThemeController _themeController;
   late final bool _ownsThemeController;
   late final GoRouter _router;
@@ -57,6 +62,11 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
     _config = widget.config ?? GteAppConfig.fromRuntimeEnvironment();
     final GteBackendMode activeBackendMode = _config.activeShellBackendMode;
     _ownsController = widget.controller == null;
+    _authSessionStore = widget.authSessionStore ?? SecureAuthSessionStore();
+    _biometricUnlockController = TrustedDeviceBiometricUnlockController(
+      sessionStore: _authSessionStore,
+      biometricUnlockService: LocalBiometricUnlockService(),
+    );
     _ownsThemeController = widget.themeController == null;
     _controller =
         widget.controller ??
@@ -64,6 +74,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
           api: GteExchangeApiClient.standard(
             baseUrl: _config.apiBaseUrl,
             mode: activeBackendMode,
+            authSessionStore: _authSessionStore,
           ),
         );
     gteReliableEventQueue.configure(
@@ -170,8 +181,10 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
         final bool? signedIn = await Navigator.of(context).push<bool>(
           MaterialPageRoute<bool>(
             builder:
-                (BuildContext context) =>
-                    GteLoginScreen(controller: _controller),
+                (BuildContext context) => GteLoginScreen(
+                  controller: _controller,
+                  biometricUnlockController: _biometricUnlockController,
+                ),
           ),
         );
         return signedIn == true;
@@ -187,13 +200,6 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
           () => GteSessionIdentity.fromExchangeController(_controller).clubName,
       accessTokenProvider: () => _controller.accessToken,
       isAuthenticatedProvider: () => _controller.isAuthenticated,
-      match3dEntitlementProvider:
-          () => Match3dUserEntitlement(
-            isPremiumUser: _hasMatch3dPremiumAccess(_controller.session),
-            availableCoins: _controller.walletSummary?.availableBalance ?? 0,
-            premiumCameraAccess: _controller.isAuthenticated,
-            fastReplayAccess: _controller.isAuthenticated,
-          ),
     );
   }
 
@@ -247,19 +253,6 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       return (container: _ownedProviderContainer!, owned: true);
     }
   }
-}
-
-bool _hasMatch3dPremiumAccess(GteAuthSession? session) {
-  if (session == null) {
-    return false;
-  }
-  final Set<String> permissions =
-      session.permissions
-          .map((String value) => value.trim().toLowerCase())
-          .where((String value) => value.isNotEmpty)
-          .toSet();
-  return permissions.contains('match_3d_premium') ||
-      permissions.contains('match_3d_access');
 }
 
 AuthSession? _authSessionFromGteSession(GteAuthSession? session) {

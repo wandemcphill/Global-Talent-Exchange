@@ -395,8 +395,8 @@ class AdDecisionEngine:
     def _live_banner_message(self, brand: str) -> str:
         if brand.lower() in {"betking", "fanduel"}:
             return f"{brand} Live Odds"
-        if brand.lower() == "flutterwave":
-            return "Flutterwave Fast Payouts"
+        if brand.lower() == "korapay":
+            return "KoraPay Matchday Rails"
         return f"{brand} Match Pulse"
 
     def _pick_brand(self, brands: list[str], *, seed: str, avoid: set[str] | None = None) -> str:

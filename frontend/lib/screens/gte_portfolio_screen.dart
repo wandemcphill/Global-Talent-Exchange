@@ -1,4 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/features/capital/disputes/presentation/gte_support_dispute_screens.dart';
+import 'package:gte_frontend/features/capital/wallet/data/capital_wallet_display_snapshot.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_deposit_history_screen.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_funding_flow_screen.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_wallet_overview_screen.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_withdrawal_flow_screen.dart';
+import 'package:gte_frontend/features/capital/wallet/widgets/gte_wallet_summary_card.dart';
 
 import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
@@ -10,14 +17,8 @@ import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_sync_status_card.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
-import '../widgets/gte_wallet_summary_card.dart';
 import '../widgets/gtex_branding.dart';
 import 'notifications/gte_notifications_screen.dart';
-import 'support/gte_support_dispute_screens.dart';
-import 'wallet/gte_deposit_history_screen.dart';
-import 'wallet/gte_funding_flow_screen.dart';
-import 'wallet/gte_wallet_overview_screen.dart';
-import 'wallet/gte_withdrawal_flow_screen.dart';
 
 class GtePortfolioScreen extends StatelessWidget {
   const GtePortfolioScreen({
@@ -101,7 +102,7 @@ class GtePortfolioScreen extends StatelessWidget {
                   _CapitalSignalRow(
                     leftLabel: 'Balance',
                     leftValue:
-                        controller.walletSummary == null ? 'SYNCING' : 'READY',
+                        controller.walletDisplay == null ? 'SYNCING' : 'READY',
                     rightLabel: 'Pending moves',
                     rightValue:
                         controller.openOrders.isEmpty ? 'QUIET' : 'ACTIVE',
@@ -121,10 +122,10 @@ class GtePortfolioScreen extends StatelessWidget {
             GtexLiveTickerBar(
               accentColor: GteShellTheme.accentCapital,
               items: <String>[
-                if (controller.walletSummary == null)
+                if (controller.walletDisplay == null)
                   'Capital desk is calibrating live balances and exposure',
-                if (controller.walletSummary != null)
-                  'Wallet balance is ${gteFormatCredits(controller.walletSummary!.totalBalance)} and ready for deployment',
+                if (controller.walletDisplay != null)
+                  'Wallet balance is ${gteFormatCredits(controller.walletDisplay!.totalBalance)} and ready for deployment',
                 if (controller.openOrders.isNotEmpty)
                   '${controller.openOrders.length} pending capital moves are still working through the market',
                 if (controller.recentOrders.isNotEmpty)
@@ -132,7 +133,7 @@ class GtePortfolioScreen extends StatelessWidget {
               ],
             ),
             if (controller.portfolioError != null &&
-                (controller.walletSummary != null ||
+                (controller.walletDisplay != null ||
                     controller.portfolio != null ||
                     controller.portfolioSummary != null)) ...<Widget>[
               const SizedBox(height: 20),
@@ -169,11 +170,11 @@ class GtePortfolioScreen extends StatelessWidget {
                       : onOpenLogin,
             ),
             const SizedBox(height: 20),
-            if (controller.walletSummary != null) ...<Widget>[
-              GteWalletSummaryCard(summary: controller.walletSummary!),
+            if (controller.walletDisplay != null) ...<Widget>[
+              GteWalletSummaryCard(summary: controller.walletDisplay!),
               const SizedBox(height: 20),
               _CapitalBreakdownCard(
-                walletSummary: controller.walletSummary!,
+                walletSnapshot: controller.walletDisplay!,
                 portfolioSummary: controller.portfolioSummary,
                 openOrderCount: controller.openOrders.length,
               ),
@@ -249,10 +250,6 @@ class _PortfolioSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double deployedRatio =
-        summary.totalEquity <= 0
-            ? 0
-            : (summary.totalMarketValue / summary.totalEquity).clamp(0, 1);
     final Color plColor =
         summary.unrealizedPlTotal >= 0
             ? GteShellTheme.positive
@@ -299,17 +296,17 @@ class _PortfolioSummaryCard extends StatelessWidget {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(999),
                         child: LinearProgressIndicator(
-                          value: deployedRatio,
+                          value: null,
                           minHeight: 10,
                           backgroundColor: Colors.white.withValues(alpha: 0.06),
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            GteShellTheme.accentCapital,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white.withValues(alpha: 0.24),
                           ),
                         ),
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Capital deployed into active positions: ${(deployedRatio * 100).toStringAsFixed(0)}%',
+                        'Deployment ratio is syncing from backend.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -403,10 +400,6 @@ class _HoldingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double totalValue = portfolio.holdings.fold<double>(
-      0,
-      (double sum, GtePortfolioHolding holding) => sum + holding.marketValue,
-    );
     return GteSurfacePanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,10 +412,6 @@ class _HoldingsCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           ...portfolio.holdings.map((GtePortfolioHolding holding) {
-            final double share =
-                totalValue <= 0
-                    ? 0
-                    : (holding.marketValue / totalValue).clamp(0, 1);
             final Color tone =
                 holding.unrealizedPl >= 0
                     ? GteShellTheme.positive
@@ -484,12 +473,7 @@ class _HoldingsCard extends StatelessWidget {
                             margin: EdgeInsets.only(right: index == 3 ? 0 : 6),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(999),
-                              color:
-                                  index < ((share * 4).ceil().clamp(1, 4))
-                                      ? tone.withValues(
-                                        alpha: 0.9 - (index * 0.14),
-                                      )
-                                      : Colors.white.withValues(alpha: 0.08),
+                              color: Colors.white.withValues(alpha: 0.08),
                             ),
                           ),
                         ),
@@ -499,15 +483,17 @@ class _HoldingsCard extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(999),
                       child: LinearProgressIndicator(
-                        value: share,
+                        value: null,
                         minHeight: 8,
                         backgroundColor: Colors.white.withValues(alpha: 0.06),
-                        valueColor: AlwaysStoppedAnimation<Color>(tone),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.white.withValues(alpha: 0.24),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Allocation weight ${(share * 100).toStringAsFixed(0)}% of marked holdings.',
+                      'Allocation weight is syncing from backend.',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: 12),
@@ -699,32 +685,17 @@ class _OrdersPanelState extends State<_OrdersPanel> {
 
 class _CapitalBreakdownCard extends StatelessWidget {
   const _CapitalBreakdownCard({
-    required this.walletSummary,
+    required this.walletSnapshot,
     required this.portfolioSummary,
     required this.openOrderCount,
   });
 
-  final GteWalletSummary walletSummary;
+  final CapitalWalletDisplaySnapshot walletSnapshot;
   final GtePortfolioSummary? portfolioSummary;
   final int openOrderCount;
 
   @override
   Widget build(BuildContext context) {
-    final double totalAccountValue =
-        (portfolioSummary?.totalEquity ?? 0) > 0
-            ? portfolioSummary!.totalEquity
-            : walletSummary.totalBalance;
-    final double reserveRatio =
-        totalAccountValue <= 0
-            ? 0
-            : (walletSummary.reservedBalance / totalAccountValue).clamp(0, 1);
-    final double exposureRatio =
-        totalAccountValue <= 0 || portfolioSummary == null
-            ? 0
-            : (portfolioSummary!.totalMarketValue / totalAccountValue).clamp(
-              0,
-              1,
-            );
     return GteSurfacePanel(
       accentColor: GteShellTheme.accentCapital,
       child: Column(
@@ -742,39 +713,41 @@ class _CapitalBreakdownCard extends StatelessWidget {
           const SizedBox(height: 16),
           _CapitalLane(
             label: 'Available cash',
-            value: gteFormatCredits(walletSummary.availableBalance),
-            ratio:
-                totalAccountValue <= 0
-                    ? 0
-                    : (walletSummary.availableBalance / totalAccountValue)
-                        .clamp(0, 1),
+            value: gteFormatCredits(walletSnapshot.availableBalance),
+            ratio: null,
             tone: GteShellTheme.accentCapital,
             note:
-                walletSummary.availableBalance > 0
+                walletSnapshot.availableBalance > 0
                     ? 'Ready for new orders.'
                     : 'No free cash currently available.',
+            ratioFallback: 'Capital ratio is syncing from backend.',
           ),
           const SizedBox(height: 12),
           _CapitalLane(
             label: 'Reserved by open orders',
-            value: gteFormatCredits(walletSummary.reservedBalance),
-            ratio: reserveRatio,
+            value: gteFormatCredits(walletSnapshot.reservedBalance),
+            ratio: null,
             tone: GteShellTheme.accentWarm,
             note:
                 openOrderCount > 0
                     ? '$openOrderCount working orders are holding this cash.'
                     : 'No active reserve holds right now.',
+            ratioFallback: 'Reserve ratio is syncing from backend.',
           ),
           const SizedBox(height: 12),
           _CapitalLane(
             label: 'Invested exposure',
             value: gteFormatCredits(portfolioSummary?.totalMarketValue ?? 0),
-            ratio: exposureRatio,
+            ratio: null,
             tone: GteShellTheme.accent,
             note:
                 portfolioSummary == null
                     ? 'Portfolio exposure is still syncing.'
                     : 'Marked value of current holdings.',
+            ratioFallback:
+                portfolioSummary == null
+                    ? 'Exposure ratio is blocked until portfolio sync completes.'
+                    : 'Exposure ratio is syncing from backend.',
           ),
         ],
       ),
@@ -789,13 +762,15 @@ class _CapitalLane extends StatelessWidget {
     required this.ratio,
     required this.tone,
     required this.note,
+    required this.ratioFallback,
   });
 
   final String label;
   final String value;
-  final double ratio;
+  final double? ratio;
   final Color tone;
   final String note;
+  final String ratioFallback;
 
   @override
   Widget build(BuildContext context) {
@@ -832,11 +807,20 @@ class _CapitalLane extends StatelessWidget {
               value: ratio,
               minHeight: 8,
               backgroundColor: Colors.white.withValues(alpha: 0.06),
-              valueColor: AlwaysStoppedAnimation<Color>(tone),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                ratio == null ? Colors.white.withValues(alpha: 0.24) : tone,
+              ),
             ),
           ),
           const SizedBox(height: 8),
-          Text(note, style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            ratio == null ? ratioFallback : note,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (ratio == null) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(note, style: Theme.of(context).textTheme.bodySmall),
+          ],
         ],
       ),
     );

@@ -52,10 +52,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Player market'), findsOneWidget);
-    expect(
-      find.textContaining('Search player, club'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Search player, club'), findsOneWidget);
   });
 }
 

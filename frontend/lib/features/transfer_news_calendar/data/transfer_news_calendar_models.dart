@@ -1,5 +1,15 @@
 import '../../shared/data/gte_feature_support.dart';
 
+bool isActionableTransferBidStatus(String status) {
+  switch (status.trim().toLowerCase()) {
+    case 'submitted':
+    case 'pending':
+      return true;
+    default:
+      return false;
+  }
+}
+
 class FootballEventsAdminQuery {
   const FootballEventsAdminQuery({
     this.approvalStatus,
@@ -14,38 +24,33 @@ class FootballEventsAdminQuery {
   final int limit;
 
   Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'approval_status': approvalStatus,
-        'player_id': playerId,
-        'event_type': eventType,
-        'limit': limit,
-      });
+    'approval_status': approvalStatus,
+    'player_id': playerId,
+    'event_type': eventType,
+    'limit': limit,
+  });
 }
 
 class FootballEventRulesQuery {
-  const FootballEventRulesQuery({
-    this.eventType,
-    this.activeOnly = false,
-  });
+  const FootballEventRulesQuery({this.eventType, this.activeOnly = false});
 
   final String? eventType;
   final bool activeOnly;
 
   Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'event_type': eventType,
-        'active_only': activeOnly,
-      });
+    'event_type': eventType,
+    'active_only': activeOnly,
+  });
 }
 
 class CalendarSeasonsQuery {
-  const CalendarSeasonsQuery({
-    this.activeOnly = false,
-  });
+  const CalendarSeasonsQuery({this.activeOnly = false});
 
   final bool activeOnly;
 
   Map<String, Object?> toQuery() => <String, Object?>{
-        'active_only': activeOnly,
-      };
+    'active_only': activeOnly,
+  };
 }
 
 class CalendarEventsQuery {
@@ -68,26 +73,23 @@ class CalendarEventsQuery {
   final String? status;
 
   Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'active_only': activeOnly,
-        'as_of': dateQueryValue(asOf),
-        'source_type': sourceType,
-        'source_id': sourceId,
-        'family': family,
-        'visibility': visibility,
-        'status': status,
-      });
+    'active_only': activeOnly,
+    'as_of': dateQueryValue(asOf),
+    'source_type': sourceType,
+    'source_id': sourceId,
+    'family': family,
+    'visibility': visibility,
+    'status': status,
+  });
 }
 
 class PauseStatusQuery {
-  const PauseStatusQuery({
-    this.asOf,
-  });
+  const PauseStatusQuery({this.asOf});
 
   final DateTime? asOf;
 
-  Map<String, Object?> toQuery() => compactQuery(<String, Object?>{
-        'as_of': dateQueryValue(asOf),
-      });
+  Map<String, Object?> toQuery() =>
+      compactQuery(<String, Object?>{'as_of': dateQueryValue(asOf)});
 }
 
 class RealWorldFootballEventCreateRequest {
@@ -124,22 +126,22 @@ class RealWorldFootballEventCreateRequest {
   final JsonMap rawPayload;
 
   JsonMap toJson() => <String, Object?>{
-        'event_type': eventType,
-        'player_id': playerId,
-        'occurred_at': occurredAt.toUtc().toIso8601String(),
-        'source_type': sourceType,
-        'source_label': sourceLabel,
-        if (externalEventId != null) 'external_event_id': externalEventId,
-        if (title != null) 'title': title,
-        if (summary != null) 'summary': summary,
-        'severity': severity,
-        if (currentClubId != null) 'current_club_id': currentClubId,
-        if (competitionId != null) 'competition_id': competitionId,
-        if (requiresAdminReview != null)
-          'requires_admin_review': requiresAdminReview,
-        'metadata': metadata,
-        'raw_payload': rawPayload,
-      };
+    'event_type': eventType,
+    'player_id': playerId,
+    'occurred_at': occurredAt.toUtc().toIso8601String(),
+    'source_type': sourceType,
+    'source_label': sourceLabel,
+    if (externalEventId != null) 'external_event_id': externalEventId,
+    if (title != null) 'title': title,
+    if (summary != null) 'summary': summary,
+    'severity': severity,
+    if (currentClubId != null) 'current_club_id': currentClubId,
+    if (competitionId != null) 'competition_id': competitionId,
+    if (requiresAdminReview != null)
+      'requires_admin_review': requiresAdminReview,
+    'metadata': metadata,
+    'raw_payload': rawPayload,
+  };
 }
 
 class EventFeedIngestionRequestModel {
@@ -154,39 +156,32 @@ class EventFeedIngestionRequestModel {
   final List<RealWorldFootballEventCreateRequest> events;
 
   JsonMap toJson() => <String, Object?>{
-        'source_label': sourceLabel,
-        'source_type': sourceType,
-        'events': events
-            .map((RealWorldFootballEventCreateRequest item) => item.toJson())
-            .toList(growable: false),
-      };
+    'source_label': sourceLabel,
+    'source_type': sourceType,
+    'events': events
+        .map((RealWorldFootballEventCreateRequest item) => item.toJson())
+        .toList(growable: false),
+  };
 }
 
 class EventReviewRequest {
-  const EventReviewRequest({
-    required this.approve,
-    this.notes,
-  });
+  const EventReviewRequest({required this.approve, this.notes});
 
   final bool approve;
   final String? notes;
 
   JsonMap toJson() => <String, Object?>{
-        'approve': approve,
-        if (notes != null) 'notes': notes,
-      };
+    'approve': approve,
+    if (notes != null) 'notes': notes,
+  };
 }
 
 class EventSeverityOverrideRequest {
-  const EventSeverityOverrideRequest({
-    this.severity,
-  });
+  const EventSeverityOverrideRequest({this.severity});
 
   final double? severity;
 
-  JsonMap toJson() => compactQuery(<String, Object?>{
-        'severity': severity,
-      });
+  JsonMap toJson() => compactQuery(<String, Object?>{'severity': severity});
 }
 
 class EventCategoryToggleRequest {
@@ -199,9 +194,9 @@ class EventCategoryToggleRequest {
   final bool isEnabled;
 
   JsonMap toJson() => <String, Object?>{
-        'event_type': eventType,
-        'is_enabled': isEnabled,
-      };
+    'event_type': eventType,
+    'is_enabled': isEnabled,
+  };
 }
 
 class EventEffectRuleUpsertRequest {
@@ -236,32 +231,29 @@ class EventEffectRuleUpsertRequest {
   final JsonMap config;
 
   JsonMap toJson() => <String, Object?>{
-        'event_type': eventType,
-        'effect_type': effectType,
-        'effect_code': effectCode,
-        'label': label,
-        'is_enabled': isEnabled,
-        'approval_required': approvalRequired,
-        'base_magnitude': baseMagnitude,
-        'duration_hours': durationHours,
-        'priority': priority,
-        'gameplay_enabled': gameplayEnabled,
-        'market_enabled': marketEnabled,
-        'recommendation_enabled': recommendationEnabled,
-        'config': config,
-      };
+    'event_type': eventType,
+    'effect_type': effectType,
+    'effect_code': effectCode,
+    'label': label,
+    'is_enabled': isEnabled,
+    'approval_required': approvalRequired,
+    'base_magnitude': baseMagnitude,
+    'duration_hours': durationHours,
+    'priority': priority,
+    'gameplay_enabled': gameplayEnabled,
+    'market_enabled': marketEnabled,
+    'recommendation_enabled': recommendationEnabled,
+    'config': config,
+  };
 }
 
 class ExpireEffectsRequest {
-  const ExpireEffectsRequest({
-    this.asOf,
-  });
+  const ExpireEffectsRequest({this.asOf});
 
   final DateTime? asOf;
 
-  JsonMap toJson() => compactQuery(<String, Object?>{
-        'as_of': asOf?.toUtc().toIso8601String(),
-      });
+  JsonMap toJson() =>
+      compactQuery(<String, Object?>{'as_of': asOf?.toUtc().toIso8601String()});
 }
 
 class CalendarSeasonCreateRequest {
@@ -282,13 +274,13 @@ class CalendarSeasonCreateRequest {
   final JsonMap metadata;
 
   JsonMap toJson() => <String, Object?>{
-        'season_key': seasonKey,
-        'title': title,
-        'starts_on': dateQueryValue(startsOn),
-        'ends_on': dateQueryValue(endsOn),
-        'status': status,
-        'metadata_json': metadata,
-      };
+    'season_key': seasonKey,
+    'title': title,
+    'starts_on': dateQueryValue(startsOn),
+    'ends_on': dateQueryValue(endsOn),
+    'status': status,
+    'metadata_json': metadata,
+  };
 }
 
 class CalendarEventCreateRequest {
@@ -327,22 +319,22 @@ class CalendarEventCreateRequest {
   final JsonMap metadata;
 
   JsonMap toJson() => <String, Object?>{
-        if (seasonId != null) 'season_id': seasonId,
-        'event_key': eventKey,
-        'title': title,
-        if (description != null) 'description': description,
-        'source_type': sourceType,
-        if (sourceId != null) 'source_id': sourceId,
-        'family': family,
-        'age_band': ageBand,
-        'starts_on': dateQueryValue(startsOn),
-        'ends_on': dateQueryValue(endsOn),
-        'exclusive_windows': exclusiveWindows,
-        'pause_other_gtx_competitions': pauseOtherGtxCompetitions,
-        'visibility': visibility,
-        'status': status,
-        'metadata_json': metadata,
-      };
+    if (seasonId != null) 'season_id': seasonId,
+    'event_key': eventKey,
+    'title': title,
+    if (description != null) 'description': description,
+    'source_type': sourceType,
+    if (sourceId != null) 'source_id': sourceId,
+    'family': family,
+    'age_band': ageBand,
+    'starts_on': dateQueryValue(startsOn),
+    'ends_on': dateQueryValue(endsOn),
+    'exclusive_windows': exclusiveWindows,
+    'pause_other_gtx_competitions': pauseOtherGtxCompetitions,
+    'visibility': visibility,
+    'status': status,
+    'metadata_json': metadata,
+  };
 }
 
 class HostedCompetitionLaunchRequest {
@@ -357,10 +349,10 @@ class HostedCompetitionLaunchRequest {
   final String preferredFamily;
 
   JsonMap toJson() => <String, Object?>{
-        if (startsOn != null) 'starts_on': dateQueryValue(startsOn),
-        if (overrideTitle != null) 'override_title': overrideTitle,
-        'preferred_family': preferredFamily,
-      };
+    if (startsOn != null) 'starts_on': dateQueryValue(startsOn),
+    if (overrideTitle != null) 'override_title': overrideTitle,
+    'preferred_family': preferredFamily,
+  };
 }
 
 class NationalCompetitionLaunchRequest {
@@ -377,11 +369,11 @@ class NationalCompetitionLaunchRequest {
   final bool? pauseOtherGtxCompetitions;
 
   JsonMap toJson() => compactQuery(<String, Object?>{
-        'starts_on': dateQueryValue(startsOn),
-        'override_title': overrideTitle,
-        'exclusive_windows': exclusiveWindows,
-        'pause_other_gtx_competitions': pauseOtherGtxCompetitions,
-      });
+    'starts_on': dateQueryValue(startsOn),
+    'override_title': overrideTitle,
+    'exclusive_windows': exclusiveWindows,
+    'pause_other_gtx_competitions': pauseOtherGtxCompetitions,
+  });
 }
 
 class PlayerRealWorldImpact {
@@ -398,14 +390,10 @@ class PlayerRealWorldImpact {
   String get playerId => stringValue(raw['player_id']);
   List<JsonMap> get activeFlags =>
       jsonMapList(raw['active_flags'], label: 'active event flags');
-  List<JsonMap> get activeFormModifiers => jsonMapList(
-        raw['active_form_modifiers'],
-        label: 'active form modifiers',
-      );
-  List<JsonMap> get activeDemandSignals => jsonMapList(
-        raw['active_demand_signals'],
-        label: 'active demand signals',
-      );
+  List<JsonMap> get activeFormModifiers =>
+      jsonMapList(raw['active_form_modifiers'], label: 'active form modifiers');
+  List<JsonMap> get activeDemandSignals =>
+      jsonMapList(raw['active_demand_signals'], label: 'active demand signals');
   List<String> get activeFlagCodes => stringListValue(raw['active_flag_codes']);
   List<String> get affectedCardIds => stringListValue(raw['affected_card_ids']);
   double get recommendationPriorityDelta =>
@@ -440,16 +428,19 @@ class RealWorldFootballEvent {
   String get title => stringValue(raw['title']);
   String? get summary => stringOrNullValue(raw['summary']);
   double get severity => numberValue(raw['severity']);
-  double? get effectSeverityOverride => raw['effect_severity_override'] == null
-      ? null
-      : numberValue(raw['effect_severity_override']);
+  double? get effectSeverityOverride =>
+      raw['effect_severity_override'] == null
+          ? null
+          : numberValue(raw['effect_severity_override']);
   DateTime? get occurredAt => dateTimeValue(raw['occurred_at']);
   String? get reviewNotes => stringOrNullValue(raw['review_notes']);
   DateTime? get effectsAppliedAt => dateTimeValue(raw['effects_applied_at']);
   JsonMap get metadata =>
       jsonMap(raw['metadata_json'], fallback: const <String, Object?>{});
-  JsonMap get normalizedPayload => jsonMap(raw['normalized_payload_json'],
-      fallback: const <String, Object?>{});
+  JsonMap get normalizedPayload => jsonMap(
+    raw['normalized_payload_json'],
+    fallback: const <String, Object?>{},
+  );
   String? get storyFeedItemId => stringOrNullValue(raw['story_feed_item_id']);
   String? get calendarEventId => stringOrNullValue(raw['calendar_event_id']);
   List<String> get affectedCardIds => stringListValue(raw['affected_card_ids']);
@@ -613,20 +604,20 @@ class CalendarDashboard {
   }
 
   List<CalendarSeasonViewModel> get seasons => parseList(
-        raw['seasons'],
-        CalendarSeasonViewModel.fromJson,
-        label: 'calendar seasons',
-      );
+    raw['seasons'],
+    CalendarSeasonViewModel.fromJson,
+    label: 'calendar seasons',
+  );
   List<CalendarEventViewModel> get activeEvents => parseList(
-        raw['active_events'],
-        CalendarEventViewModel.fromJson,
-        label: 'calendar active events',
-      );
+    raw['active_events'],
+    CalendarEventViewModel.fromJson,
+    label: 'calendar active events',
+  );
   PauseStatusViewModel get activePauseStatus =>
       PauseStatusViewModel.fromJson(raw['active_pause_status']);
   List<CompetitionLifecycleRunViewModel> get recentLifecycleRuns => parseList(
-        raw['recent_lifecycle_runs'],
-        CompetitionLifecycleRunViewModel.fromJson,
-        label: 'calendar lifecycle runs',
-      );
+    raw['recent_lifecycle_runs'],
+    CompetitionLifecycleRunViewModel.fromJson,
+    label: 'calendar lifecycle runs',
+  );
 }

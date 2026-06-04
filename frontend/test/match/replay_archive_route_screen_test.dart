@@ -5,7 +5,7 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/features/app_routes/gte_app_route_registry.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
-import 'package:gte_frontend/features/match/replay_archive_route_screen.dart';
+import 'package:gte_frontend/features/match_center/replay_archive_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 
@@ -154,6 +154,12 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(
+      find.text('No public replay archive entries are available right now.'),
+      findsOneWidget,
+    );
+    expect(find.text('GTEX Super Cup'), findsNothing);
+    expect(find.text('Abuja City'), findsNothing);
     expect(find.text('Matchday hub'), findsNothing);
   });
 }
@@ -178,4 +184,3 @@ class _RecordingTransport implements GteTransport {
     );
   }
 }
-

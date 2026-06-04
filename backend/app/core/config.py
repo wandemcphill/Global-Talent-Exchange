@@ -115,8 +115,6 @@ class SettingsSource(BaseModel):
     )
     auth_secret: str | None = Field(default=None, validation_alias="GTE_AUTH_SECRET")
     media_signing_secret: str | None = Field(default=None, validation_alias="GTE_MEDIA_SIGNING_SECRET")
-    crypto_deposit_enabled: bool = Field(default=False, validation_alias="GTE_CRYPTO_DEPOSIT_ENABLED")
-    crypto_provider_key: str = Field(default="crypto_fiat", validation_alias="GTE_CRYPTO_PROVIDER_KEY")
     run_migration_check: bool = Field(default=True, validation_alias="GTE_RUN_MIGRATION_CHECK")
     run_startup_seeding: bool = Field(
         default=True,
@@ -775,8 +773,6 @@ class Settings:
     broadcast_max_pending_messages: int
     auth_secret: str
     media_signing_secret: str
-    crypto_deposit_enabled: bool
-    crypto_provider_key: str
     run_migration_check: bool
     run_startup_seeding: bool
     bootstrap_admin_enabled: bool
@@ -2047,8 +2043,6 @@ def load_settings(
         broadcast_max_pending_messages=source.broadcast_max_pending_messages,
         auth_secret=auth_secret,
         media_signing_secret=media_signing_secret,
-        crypto_deposit_enabled=source.crypto_deposit_enabled,
-        crypto_provider_key=source.crypto_provider_key,
         run_migration_check=source.run_migration_check,
         run_startup_seeding=source.run_startup_seeding,
         bootstrap_admin_enabled=source.bootstrap_admin_enabled,

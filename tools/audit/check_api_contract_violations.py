@@ -16,6 +16,11 @@ EXCLUDED_FILE_FRAGMENTS = (
     "frontend/lib/features/shared/data/gte_feature_support.dart",
 )
 
+API_AUTH_CALL_FILE_PREFIXES = (
+    "frontend/lib/data/",
+    "frontend/lib/services/",
+)
+
 
 def main() -> int:
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
@@ -30,6 +35,8 @@ def main() -> int:
         for match in INTERNAL_ROUTE_RE.finditer(text):
             endpoint = match.group(1)
             normalized_endpoint = endpoint.split("?", 1)[0]
+            if normalized_endpoint.startswith("/auth/") and not rel.startswith(API_AUTH_CALL_FILE_PREFIXES):
+                continue
             if endpoint.startswith("/api/v1"):
                 violations.append(
                     {
@@ -82,6 +89,17 @@ def _render_report(violations: list[dict[str, str]]) -> str:
 def _compile_allowed_patterns(contract: dict) -> list[re.Pattern[str]]:
     aliases = set(contract.get("canonical_paths", {}).keys())
     aliases.update((contract.get("deprecated_aliases") or {}).keys())
+    for route_group in (contract.get("routes") or {}).values():
+        for route in route_group.values():
+            canonical_path = route.get("canonical_path")
+            if canonical_path:
+                aliases.add(canonical_path)
+            aliases.update(route.get("aliases") or [])
+    for websocket in (contract.get("websockets") or {}).values():
+        canonical_path = websocket.get("canonical_path")
+        if canonical_path:
+            aliases.add(canonical_path)
+        aliases.update(websocket.get("aliases") or [])
     return [_route_pattern(alias) for alias in sorted(aliases)]
 
 

@@ -16,7 +16,7 @@ from app.integrations.payments.schemas import (
 )
 
 
-router = APIRouter(prefix="/integrations/payments", tags=["payments"])
+router = APIRouter(prefix="/api/v2/integrations/payments", tags=["payments"])
 
 
 def _service(request: Request, session: Session) -> PaymentGatewayService:

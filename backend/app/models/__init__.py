@@ -23,6 +23,7 @@ from app.models.access_control import (
 )
 from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
 from app.models.auth_session import AuthSession
+from app.models.auth_trust import LoginAttempt, RecoveryQuestion, SecurityEvent, TrustedDevice
 from app.models.agent_marketplace import (
     AgentAskingType,
     AgentMarketplaceListing,
@@ -73,7 +74,9 @@ from app.models.club_ownership import (
 )
 from app.models.club_identity_theme import ClubIdentityTheme
 from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_formation import ClubFormation, ClubFormationAuditEvent
 from app.models.club_profile import ClubProfile
+from app.models.club_squad_source import ClubSquadPlayerSourceRecord
 from app.models.club_sale import (
     ClubSaleAuditEvent,
     ClubSaleInquiry,
@@ -692,6 +695,11 @@ __all__ = [
     "AccessAuditLog",
     "AuthEmailToken",
     "AuthEmailTokenPurpose",
+    "AuthSession",
+    "LoginAttempt",
+    "RecoveryQuestion",
+    "SecurityEvent",
+    "TrustedDevice",
     "AdminCalendarRule",
     "AdminFeatureFlag",
     "AdminRewardRule",
@@ -720,6 +728,8 @@ __all__ = [
     "ClubFinanceAccount",
     "ClubFinanceLedgerEntry",
     "ClubFacility",
+    "ClubFormation",
+    "ClubFormationAuditEvent",
     "ClubStadium",
     "ClubToken",
     "ClubHolding",
@@ -732,6 +742,7 @@ __all__ = [
     "ClubIdentityTheme",
     "ClubJerseyDesign",
     "ClubProfile",
+    "ClubSquadPlayerSourceRecord",
     "ClubSaleAuditEvent",
     "ClubSaleInquiry",
     "ClubSaleInquiryStatus",

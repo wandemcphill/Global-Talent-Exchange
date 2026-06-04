@@ -3,11 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+import hashlib
+import json
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.access_control.service import AccessControlService
 from app.common.enums.contract_status import ContractStatus
 from app.common.enums.injury_severity import InjurySeverity
 from app.common.enums.transfer_bid_status import TransferBidStatus
@@ -46,13 +49,20 @@ from app.models.regen import (
     TransferHeadlineMediaRecord,
 )
 from app.models.transfer_bid import TransferBid
+from app.models.transfer_market import TransferListingBid
 from app.models.transfer_window import TransferWindow
+from app.models.access_control import OrganizationRole
 from app.models.user import User
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntry, LedgerSourceTag, LedgerUnit
 from app.club_identity.models.reputation import ClubReputationProfile
 from app.club_finance.service import ClubFinanceError, ClubFinanceService
 from app.ownership_groups.service import OwnershipGroupService
 from app.schemas.player_lifecycle import (
+    AdminTransferBidAuditEventView,
+    AdminTransferBidReviewActionRequest,
+    AdminTransferBidReviewActionResponse,
+    AdminTransferBidReviewQueueView,
+    AdminTransferBidReviewView,
     AvailabilityBadgeView,
     BigClubApproachRequest,
     CareerEntryView,
@@ -89,8 +99,10 @@ from app.schemas.player_lifecycle import (
     TeamDynamicsEffectView,
     TransferHeadlineView,
     TransferBidAcceptRequest,
+    TransferBidCounterRequest,
     TransferBidCreateRequest,
     TransferBidRejectRequest,
+    TransferBidWithdrawRequest,
     TransferBidView,
     TransferSummaryView,
     TransferWindowEligibilityView,
@@ -118,7 +130,7 @@ from app.services.regen_transfer_addon import (
 )
 from app.services.player_agency_service import PlayerAgencyService
 from app.story_feed_engine.service import StoryFeedService
-from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.wallets.service import InsufficientBalanceError, WalletService
 
 CONTRACT_EXPIRING_SOON_DAYS = 90
 DEFAULT_INJURY_RECOVERY_DAYS: dict[InjurySeverity, int] = {
@@ -168,8 +180,12 @@ INJURY_RECOVERED_EVENT_TYPE = "injury_recovered"
 CONTRACT_CREATED_EVENT_TYPE = "contract_created"
 CONTRACT_RENEWED_EVENT_TYPE = "contract_renewed"
 CONTRACT_TERMINATED_EVENT_TYPE = "contract_terminated"
+TRANSFER_BID_SUBMITTED_EVENT_TYPE = "transfer_bid_submitted"
 TRANSFER_BID_ACCEPTED_EVENT_TYPE = "transfer_bid_accepted"
 TRANSFER_BID_REJECTED_EVENT_TYPE = "transfer_bid_rejected"
+TRANSFER_BID_WITHDRAWN_EVENT_TYPE = "transfer_bid_withdrawn"
+TRANSFER_BID_COUNTERED_EVENT_TYPE = "transfer_bid_countered"
+ADMIN_TRANSFER_BID_REVIEW_EVENT_TYPE = "admin_transfer_bid_review_action"
 REGEN_FREE_AGENCY_EVENT_TYPE = "regen_free_agency_entered"
 REGEN_RETIREMENT_EVENT_TYPE = "regen_retired"
 REGEN_TRANSFER_LIST_EVENT_TYPE = "regen_transfer_listed"
@@ -178,6 +194,13 @@ REGEN_PLAYING_TIME_REQUEST_EVENT_TYPE = "regen_playing_time_request"
 REGEN_CONTRACT_DISSATISFACTION_EVENT_TYPE = "regen_contract_dissatisfaction"
 REGEN_BIG_CLUB_APPROACH_EVENT_TYPE = "regen_big_club_approach"
 REGEN_PRESSURE_RESOLUTION_EVENT_TYPE = "regen_pressure_resolution"
+ACTIVE_TRANSFER_BID_STATUSES = frozenset(
+    {
+        TransferBidStatus.PENDING.value,
+        TransferBidStatus.SUBMITTED.value,
+    }
+)
+TRANSFER_BID_CLUB_ROLES = frozenset({OrganizationRole.CLUB})
 
 
 class PlayerLifecycleError(Exception):
@@ -190,6 +213,14 @@ class PlayerLifecycleNotFoundError(PlayerLifecycleError):
 
 class PlayerLifecycleValidationError(PlayerLifecycleError):
     """Raised when lifecycle rules reject a request."""
+
+
+class PlayerLifecycleConflictError(PlayerLifecycleError):
+    """Raised when a lifecycle mutation conflicts with a previous request."""
+
+
+class PlayerLifecyclePermissionError(PlayerLifecycleError):
+    """Raised when an actor cannot mutate a lifecycle resource."""
 
 
 @dataclass(slots=True)
@@ -212,6 +243,32 @@ class PlayerLifecycleService:
 
     def _agency_service(self) -> PlayerAgencyService:
         return PlayerAgencyService(self.session)
+
+    def _access_control(self) -> AccessControlService:
+        return AccessControlService(self.session)
+
+    def _require_transfer_bid_club_actor(
+        self,
+        actor: User | None,
+        club_id: str | None,
+        *,
+        forbidden_detail: str,
+    ) -> ClubProfile:
+        if actor is None:
+            raise PlayerLifecyclePermissionError(forbidden_detail)
+        if not club_id:
+            raise PlayerLifecyclePermissionError(forbidden_detail)
+        try:
+            return self._access_control().require_club_access(
+                user=actor,
+                club_id=club_id,
+                allowed_roles=set(TRANSFER_BID_CLUB_ROLES),
+                forbidden_detail=forbidden_detail,
+            )
+        except LookupError as exc:
+            raise PlayerLifecycleNotFoundError(str(exc)) from exc
+        except PermissionError as exc:
+            raise PlayerLifecyclePermissionError(str(exc)) from exc
 
     def get_career(self, player_id: str) -> list[PlayerCareerEntry]:
         statement = (
@@ -256,7 +313,9 @@ class PlayerLifecycleService:
         statement = select(PlayerLifecycleEvent).where(PlayerLifecycleEvent.player_id == player_id)
         if event_types:
             statement = statement.where(PlayerLifecycleEvent.event_type.in_(event_types))
-        statement = statement.order_by(PlayerLifecycleEvent.occurred_on.desc(), PlayerLifecycleEvent.created_at.desc()).limit(limit)
+        statement = statement.order_by(
+            PlayerLifecycleEvent.occurred_on.desc(), PlayerLifecycleEvent.created_at.desc()
+        ).limit(limit)
         return list(self.session.scalars(statement))
 
     def list_transfer_windows(
@@ -294,6 +353,573 @@ class PlayerLifecycleService:
         )
         return list(self.session.scalars(statement))
 
+    def list_admin_transfer_bid_reviews(
+        self,
+        *,
+        status_filter: str | None = None,
+        window_id: str | None = None,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> AdminTransferBidReviewQueueView:
+        statement = select(TransferBid)
+        if status_filter and status_filter.strip():
+            normalized_status = status_filter.strip().lower()
+            try:
+                normalized_status = TransferBidStatus(normalized_status).value
+            except ValueError:
+                return AdminTransferBidReviewQueueView(
+                    items=tuple(),
+                    total=0,
+                    limit=limit,
+                    offset=offset,
+                )
+            statement = statement.where(TransferBid.status == normalized_status)
+        if window_id and window_id.strip():
+            statement = statement.where(TransferBid.window_id == window_id.strip())
+        if q and q.strip():
+            like = f"%{q.strip().lower()}%"
+            statement = statement.where(
+                or_(
+                    func.lower(TransferBid.id).ilike(like),
+                    func.lower(TransferBid.window_id).ilike(like),
+                    func.lower(TransferBid.player_id).ilike(like),
+                    func.lower(TransferBid.selling_club_id).ilike(like),
+                    func.lower(TransferBid.buying_club_id).ilike(like),
+                    func.lower(TransferBid.notes).ilike(like),
+                )
+            )
+        total = int(self.session.scalar(select(func.count()).select_from(statement.subquery())) or 0)
+        rows = self.session.scalars(
+            statement.order_by(TransferBid.updated_at.desc(), TransferBid.created_at.desc()).limit(limit).offset(offset)
+        ).all()
+        return AdminTransferBidReviewQueueView(
+            items=tuple(self.to_admin_transfer_bid_review_view(item) for item in rows),
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    def record_admin_transfer_bid_review_action(
+        self,
+        window_id: str,
+        bid_id: str,
+        payload: AdminTransferBidReviewActionRequest,
+        *,
+        actor: User,
+        reference_on: date | None = None,
+    ) -> AdminTransferBidReviewActionResponse:
+        bid = self._require_bid(window_id, bid_id)
+        occurred_on = reference_on or date.today()
+        actor_role = getattr(actor.role, "value", actor.role)
+        bid_view = self.to_transfer_bid_view(bid)
+        reservation = self._transfer_bid_wallet_reservation_for_view(bid)
+        reserved_amount_source = reservation.get("actual_reserved_gtex_coin", reservation.get("amount_gtex_coin"))
+        reserved_amount = (
+            self._normalize_wallet_amount(reserved_amount_source)
+            if reserved_amount_source is not None
+            else None
+        )
+        escalation_state = payload.escalation_state or self._admin_transfer_bid_escalation_state(bid_view)
+        event = self._record_event(
+            player_id=bid.player_id,
+            club_id=bid.buying_club_id or bid.selling_club_id,
+            event_type=ADMIN_TRANSFER_BID_REVIEW_EVENT_TYPE,
+            event_status=payload.action,
+            occurred_on=occurred_on,
+            effective_from=None,
+            effective_to=None,
+            related_entity_type="transfer_bid",
+            related_entity_id=bid.id,
+            summary=f"Admin transfer bid review {payload.action} recorded",
+            details={
+                "action": payload.action,
+                "reason": payload.reason,
+                "escalation_state": escalation_state,
+                "reviewer_user_id": actor.id,
+                "actor_user_id": actor.id,
+                "actor_role": str(actor_role),
+                "bid_status": bid.status,
+                "window_id": bid.window_id,
+                "player_id": bid.player_id,
+                "selling_club_id": bid.selling_club_id,
+                "buying_club_id": bid.buying_club_id,
+                "wallet_reservation_status": reservation.get("status"),
+                "wallet_reserved_amount": (
+                    self._serialize_decimal(reserved_amount)
+                    if reserved_amount is not None
+                    else None
+                ),
+                "wallet_reservation_reference": reservation.get("reference"),
+                "wallet_reservation": reservation,
+                "business_state_changed": False,
+                "wallet_state_changed": False,
+                "review_scope": "audit_only",
+            },
+            notes=payload.notes,
+        )
+        self.session.commit()
+        self.session.refresh(event)
+        self.session.refresh(bid)
+        return AdminTransferBidReviewActionResponse(
+            review=self.to_admin_transfer_bid_review_view(bid),
+            audit_event=self._to_admin_transfer_bid_audit_event_view(event),
+            business_state_changed=False,
+            wallet_state_changed=False,
+        )
+
+    @staticmethod
+    def _transfer_bid_reservation_reference(bid_id: str) -> str:
+        return f"transfer-bid:{bid_id}:fee"
+
+    @staticmethod
+    def _normalize_wallet_amount(value: Decimal | int | float | str | None) -> Decimal:
+        if value is None:
+            return Decimal("0.0000")
+        return Decimal(str(value)).quantize(Decimal("0.0001"))
+
+    @staticmethod
+    def _normalize_idempotency_key(value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        return cleaned[:120] if cleaned else None
+
+    @staticmethod
+    def _transfer_bid_idempotency_terms(bid: TransferBid) -> dict[str, object]:
+        return dict((bid.structured_terms_json or {}).get("idempotency_keys") or {})
+
+    @staticmethod
+    def _transfer_bid_idempotency_record(bid: TransferBid, action: str) -> dict[str, object]:
+        raw_record = PlayerLifecycleService._transfer_bid_idempotency_terms(bid).get(action)
+        if isinstance(raw_record, dict):
+            return dict(raw_record)
+        if raw_record is not None:
+            return {"key": str(raw_record)}
+        return {}
+
+    def _transfer_bid_idempotency_matches(self, bid: TransferBid, action: str, key: str | None) -> bool:
+        normalized_key = self._normalize_idempotency_key(key)
+        if normalized_key is None:
+            return False
+        return self._transfer_bid_idempotency_record(bid, action).get("key") == normalized_key
+
+    @staticmethod
+    def _transfer_bid_payload_fingerprint(
+        action: str,
+        *,
+        window_id: str,
+        bid_id: str | None = None,
+        payload: object | None = None,
+    ) -> str:
+        payload_value: object
+        if payload is None:
+            payload_value = None
+        elif hasattr(payload, "model_dump"):
+            payload_value = payload.model_dump(mode="json")
+        else:
+            payload_value = payload
+        encoded = json.dumps(
+            {
+                "action": action,
+                "window_id": window_id,
+                "bid_id": bid_id,
+                "payload": payload_value,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def _assert_transfer_bid_idempotency_fingerprint(
+        self,
+        bid: TransferBid,
+        action: str,
+        *,
+        key: str | None,
+        fingerprint: str,
+    ) -> None:
+        if not self._transfer_bid_idempotency_matches(bid, action, key):
+            return
+        stored_fingerprint = self._transfer_bid_idempotency_record(bid, action).get("fingerprint")
+        if stored_fingerprint is not None and stored_fingerprint != fingerprint:
+            raise PlayerLifecycleConflictError(
+                f"Idempotency key already used for a different transfer bid {action} request"
+            )
+
+    def _set_transfer_bid_idempotency_key(
+        self,
+        bid: TransferBid,
+        action: str,
+        key: str | None,
+        *,
+        fingerprint: str | None = None,
+        result_bid_id: str | None = None,
+    ) -> None:
+        normalized_key = self._normalize_idempotency_key(key)
+        if normalized_key is None:
+            return
+        terms = dict(bid.structured_terms_json or {})
+        idempotency_keys = dict(terms.get("idempotency_keys") or {})
+        record: dict[str, object] = {"key": normalized_key}
+        if fingerprint is not None:
+            record["fingerprint"] = fingerprint
+        if result_bid_id is not None:
+            record["result_bid_id"] = result_bid_id
+        idempotency_keys[action] = record
+        terms["idempotency_keys"] = idempotency_keys
+        bid.structured_terms_json = terms
+
+    def _find_transfer_bid_by_idempotency_key(
+        self,
+        window_id: str,
+        *,
+        action: str,
+        key: str | None,
+    ) -> TransferBid | None:
+        normalized_key = self._normalize_idempotency_key(key)
+        if normalized_key is None:
+            return None
+        bids = self.session.scalars(select(TransferBid).where(TransferBid.window_id == window_id)).all()
+        for bid in bids:
+            if self._transfer_bid_idempotency_record(bid, action).get("key") == normalized_key:
+                return bid
+        return None
+
+    def _transfer_bid_wallet_reservation_terms(self, bid: TransferBid) -> dict[str, object]:
+        return dict((bid.structured_terms_json or {}).get("wallet_reservation") or {})
+
+    def _transfer_bid_wallet_ledger_id(self, bid: TransferBid) -> str:
+        reservation = self._transfer_bid_wallet_reservation_terms(bid)
+        candidate = (
+            reservation.get("ledger_transfer_bid_id")
+            or reservation.get("transfer_market_bid_id")
+            or bid.id
+        )
+        return str(candidate or bid.id)
+
+    def _set_transfer_bid_wallet_reservation(self, bid: TransferBid, updates: dict[str, object]) -> None:
+        terms = dict(bid.structured_terms_json or {})
+        reservation = dict(terms.get("wallet_reservation") or {})
+        reservation.update(updates)
+        terms["wallet_reservation"] = reservation
+        bid.structured_terms_json = terms
+
+    def _sync_transfer_market_listing_bid_reservation(
+        self,
+        bid: TransferBid,
+        updates: dict[str, object],
+    ) -> None:
+        reservation = self._transfer_bid_wallet_reservation_terms(bid)
+        listing_bid_id = str(reservation.get("transfer_market_bid_id") or "").strip()
+        if not listing_bid_id:
+            return
+        listing_bid = self.session.get(TransferListingBid, listing_bid_id)
+        if listing_bid is None:
+            return
+        metadata = dict(listing_bid.metadata_json or {})
+        listing_reservation = dict(metadata.get("wallet_reservation") or {})
+        synced_updates = dict(updates)
+        if "released_on" in synced_updates and "released_at" not in synced_updates:
+            synced_updates["released_at"] = synced_updates["released_on"]
+        if "settled_on" in synced_updates and "settled_at" not in synced_updates:
+            synced_updates["settled_at"] = synced_updates["settled_on"]
+        listing_reservation.update(synced_updates)
+        listing_reservation["lifecycle_transfer_bid_id"] = bid.id
+        metadata["wallet_reservation"] = listing_reservation
+        listing_bid.metadata_json = metadata
+
+    def _transfer_bid_reservation_amount(
+        self,
+        bid: TransferBid,
+        offer: RegenContractOffer | None = None,
+    ) -> Decimal:
+        reservation = self._transfer_bid_wallet_reservation_terms(bid)
+        reserved_amount = reservation.get("amount_gtex_coin")
+        if reserved_amount is not None:
+            return self._normalize_wallet_amount(reserved_amount)
+        if offer is not None:
+            return self._normalize_wallet_amount(offer.training_fee_gtex_coin)
+        return self._normalize_wallet_amount(bid.bid_amount)
+
+    def _transfer_bid_buyer_owner(self, bid: TransferBid) -> User:
+        if bid.buying_club_id is None:
+            raise PlayerLifecycleValidationError("Transfer bid is missing a buying club")
+        buying_club = self._require_club_profile(bid.buying_club_id)
+        return self._require_user(buying_club.owner_user_id)
+
+    def _transfer_bid_seller_owner(self, bid: TransferBid) -> User | None:
+        selling_club = self._get_club_profile(bid.selling_club_id)
+        if selling_club is None or not selling_club.owner_user_id:
+            return None
+        return self._require_user(selling_club.owner_user_id)
+
+    def _existing_wallet_available_balance(self, user: User, unit: LedgerUnit) -> Decimal:
+        with self.session.no_autoflush:
+            account = self.session.scalar(
+                select(LedgerAccount).where(
+                    LedgerAccount.owner_user_id == user.id,
+                    LedgerAccount.unit == unit,
+                    LedgerAccount.kind == LedgerAccountKind.USER,
+                )
+            )
+            if account is None:
+                return Decimal("0.0000")
+            balance = self.session.scalar(
+                select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(LedgerEntry.account_id == account.id)
+            )
+        return self._normalize_wallet_amount(balance)
+
+    def _active_releasable_transfer_bid_reservation_amount(
+        self,
+        *,
+        owner: User,
+        window_id: str,
+        player_id: str,
+        buying_club_id: str | None,
+    ) -> Decimal:
+        if buying_club_id is None:
+            return Decimal("0.0000")
+        wallet_service = WalletService()
+        with self.session.no_autoflush:
+            active_bids = self.session.scalars(
+                select(TransferBid).where(
+                    TransferBid.window_id == window_id,
+                    TransferBid.player_id == player_id,
+                    TransferBid.buying_club_id == buying_club_id,
+                    TransferBid.status.in_(tuple(ACTIVE_TRANSFER_BID_STATUSES)),
+                )
+            ).all()
+            reserved_amount = sum(
+                (
+                    wallet_service.get_transfer_bid_reserved_amount(
+                        self.session,
+                        user=owner,
+                        transfer_bid_id=self._transfer_bid_wallet_ledger_id(active_bid),
+                        unit=LedgerUnit.COIN,
+                    )
+                    for active_bid in active_bids
+                ),
+                Decimal("0.0000"),
+            )
+        return self._normalize_wallet_amount(reserved_amount)
+
+    def _assert_transfer_bid_reservation_capacity(
+        self,
+        *,
+        owner: User,
+        window_id: str,
+        player_id: str,
+        buying_club_id: str | None,
+        amount: Decimal,
+    ) -> None:
+        reserved_amount = self._normalize_wallet_amount(amount)
+        if reserved_amount <= Decimal("0.0000"):
+            return
+        available_amount = self._existing_wallet_available_balance(owner, LedgerUnit.COIN)
+        releasable_amount = self._active_releasable_transfer_bid_reservation_amount(
+            owner=owner,
+            window_id=window_id,
+            player_id=player_id,
+            buying_club_id=buying_club_id,
+        )
+        if self._normalize_wallet_amount(available_amount + releasable_amount) < reserved_amount:
+            raise PlayerLifecycleValidationError(
+                "Buying club owner does not have enough GTex Coin to reserve this transfer bid"
+            )
+
+    def _reserve_transfer_bid_funds(
+        self,
+        bid: TransferBid,
+        *,
+        amount: Decimal,
+        reserved_on: date,
+    ) -> None:
+        reserved_amount = self._normalize_wallet_amount(amount)
+        if reserved_amount <= Decimal("0.0000"):
+            return
+        reservation = self._transfer_bid_wallet_reservation_terms(bid)
+        if reservation.get("status") == "reserved":
+            return
+        owner = self._transfer_bid_buyer_owner(bid)
+        reference = self._transfer_bid_reservation_reference(bid.id)
+        try:
+            WalletService().reserve_transfer_bid_funds(
+                self.session,
+                user=owner,
+                transfer_bid_id=bid.id,
+                amount=reserved_amount,
+                reference=reference,
+                description=f"Reserved GTex Coin for transfer bid {bid.id}",
+                unit=LedgerUnit.COIN,
+                player_id=bid.player_id,
+                buying_club_id=bid.buying_club_id,
+                selling_club_id=bid.selling_club_id,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            )
+        except InsufficientBalanceError as exc:
+            raise PlayerLifecycleValidationError(
+                "Buying club owner does not have enough GTex Coin to reserve this transfer bid"
+            ) from exc
+        self._set_transfer_bid_wallet_reservation(
+            bid,
+            {
+                "status": "reserved",
+                "amount_gtex_coin": str(reserved_amount),
+                "currency": LedgerUnit.COIN.value,
+                "reference": reference,
+                "reserved_on": reserved_on.isoformat(),
+                "owner_user_id": owner.id,
+            },
+        )
+
+    def _release_transfer_bid_reservation(
+        self,
+        bid: TransferBid,
+        *,
+        released_on: date,
+        reason: str,
+        replacement_bid_id: str | None = None,
+    ) -> None:
+        reservation = self._transfer_bid_wallet_reservation_terms(bid)
+        if reservation.get("status") != "reserved":
+            return
+        amount = self._transfer_bid_reservation_amount(bid)
+        if amount <= Decimal("0.0000"):
+            return
+        owner = self._transfer_bid_buyer_owner(bid)
+        ledger_transfer_bid_id = self._transfer_bid_wallet_ledger_id(bid)
+        reference = str(reservation.get("reference") or self._transfer_bid_reservation_reference(ledger_transfer_bid_id))
+        try:
+            WalletService().release_transfer_bid_reservation(
+                self.session,
+                user=owner,
+                transfer_bid_id=ledger_transfer_bid_id,
+                amount=amount,
+                release_reason=reason,
+                reference=reference,
+                description=f"Released GTex Coin reservation for transfer bid {bid.id}",
+                unit=LedgerUnit.COIN,
+                player_id=bid.player_id,
+                buying_club_id=bid.buying_club_id,
+                selling_club_id=bid.selling_club_id,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            )
+        except InsufficientBalanceError as exc:
+            raise PlayerLifecycleValidationError("Transfer bid wallet reservation could not be released") from exc
+        updates: dict[str, object] = {
+            "status": "released",
+            "released_on": released_on.isoformat(),
+            "release_reason": reason,
+        }
+        if replacement_bid_id is not None:
+            updates["replacement_bid_id"] = replacement_bid_id
+        self._set_transfer_bid_wallet_reservation(bid, updates)
+        self._sync_transfer_market_listing_bid_reservation(bid, updates)
+
+    def _settle_transfer_bid_reservation(
+        self,
+        bid: TransferBid,
+        *,
+        settled_on: date,
+        offer: RegenContractOffer | None = None,
+    ) -> None:
+        amount = self._transfer_bid_reservation_amount(bid, offer)
+        if amount <= Decimal("0.0000"):
+            return
+        reservation = self._transfer_bid_wallet_reservation_terms(bid)
+        if reservation.get("status") == "settled":
+            return
+        owner = self._transfer_bid_buyer_owner(bid)
+        ledger_transfer_bid_id = self._transfer_bid_wallet_ledger_id(bid)
+        reference = str(reservation.get("reference") or self._transfer_bid_reservation_reference(ledger_transfer_bid_id))
+        wallet_service = WalletService()
+        try:
+            wallet_service.settle_transfer_bid_reservation(
+                self.session,
+                user=owner,
+                transfer_bid_id=ledger_transfer_bid_id,
+                amount=amount,
+                reference=reference,
+                description=f"Settled GTex Coin for transfer bid {bid.id}",
+                external_reference=bid.id,
+                unit=LedgerUnit.COIN,
+                seller_user=self._transfer_bid_seller_owner(bid),
+                player_id=bid.player_id,
+                buying_club_id=bid.buying_club_id,
+                selling_club_id=bid.selling_club_id,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                require_full_reservation=reservation.get("status") == "reserved",
+            )
+        except InsufficientBalanceError as exc:
+            raise PlayerLifecycleValidationError(
+                "Buying club owner does not have enough GTex Coin to settle this transfer bid"
+            ) from exc
+
+        seller_owner = self._transfer_bid_seller_owner(bid)
+        updates = {
+            "status": "settled",
+            "settled_on": settled_on.isoformat(),
+            "settlement_amount_gtex_coin": str(amount),
+            "seller_owner_user_id": seller_owner.id if seller_owner is not None else None,
+        }
+        self._set_transfer_bid_wallet_reservation(bid, updates)
+        self._sync_transfer_market_listing_bid_reservation(bid, updates)
+
+    def _counter_replace_active_bids(self, bid: TransferBid, *, countered_on: date) -> None:
+        replaced_bids = self.session.scalars(
+            select(TransferBid).where(
+                TransferBid.window_id == bid.window_id,
+                TransferBid.player_id == bid.player_id,
+                TransferBid.buying_club_id == bid.buying_club_id,
+                TransferBid.id != bid.id,
+                TransferBid.status.in_(tuple(ACTIVE_TRANSFER_BID_STATUSES)),
+            )
+        ).all()
+        for replaced_bid in replaced_bids:
+            terms = dict(replaced_bid.structured_terms_json or {})
+            terms["counter_replaced_by_bid_id"] = bid.id
+            terms["countered_on"] = countered_on.isoformat()
+            replaced_bid.status = TransferBidStatus.COUNTER.value
+            replaced_bid.structured_terms_json = terms
+            self._release_transfer_bid_reservation(
+                replaced_bid,
+                released_on=countered_on,
+                reason="counter_replaced",
+                replacement_bid_id=bid.id,
+            )
+            offer = self._get_contract_offer_by_bid_id(replaced_bid.id)
+            if offer is not None:
+                offer.status = TransferBidStatus.COUNTER.value
+                offer.metadata_json = {
+                    **dict(offer.metadata_json or {}),
+                    "counter_replaced_by_bid_id": bid.id,
+                    "countered_on": countered_on.isoformat(),
+                }
+                self._sync_offer_visibility_counts(offer.regen_id)
+            player = self._require_player(replaced_bid.player_id)
+            self._record_event(
+                player_id=player.id,
+                club_id=replaced_bid.selling_club_id or replaced_bid.buying_club_id,
+                event_type=TRANSFER_BID_COUNTERED_EVENT_TYPE,
+                event_status=TransferBidStatus.COUNTER.value,
+                occurred_on=countered_on,
+                effective_from=None,
+                effective_to=None,
+                related_entity_type="transfer_bid",
+                related_entity_id=replaced_bid.id,
+                summary=f"{player.full_name} transfer bid replaced by counter",
+                details={
+                    "replacement_bid_id": bid.id,
+                    "buying_club_id": replaced_bid.buying_club_id,
+                    "bid_amount": self._serialize_decimal(replaced_bid.bid_amount),
+                },
+                notes=replaced_bid.notes,
+            )
+        if replaced_bids:
+            self.session.flush()
+
     def list_club_squad_status(
         self,
         club_id: str,
@@ -305,7 +931,8 @@ class PlayerLifecycleService:
         active_contracts = [
             contract
             for contract in self.get_club_contracts(club_id)
-            if self._resolve_contract_status(contract, reference_on=reference_on) in {ContractStatus.ACTIVE, ContractStatus.EXPIRING}
+            if self._resolve_contract_status(contract, reference_on=reference_on)
+            in {ContractStatus.ACTIVE, ContractStatus.EXPIRING}
         ]
         if not active_contracts:
             return ()
@@ -327,7 +954,9 @@ class PlayerLifecycleService:
                 reason = f"injured until {(self._resolve_unavailable_until(active_injury) or reference_on).isoformat()}"
             elif active_suspension is not None:
                 available = False
-                reason = f"suspended until {(active_suspension.effective_to or active_suspension.occurred_on).isoformat()}"
+                reason = (
+                    f"suspended until {(active_suspension.effective_to or active_suspension.occurred_on).isoformat()}"
+                )
             else:
                 available = True
                 reason = None
@@ -399,10 +1028,29 @@ class PlayerLifecycleService:
                     },
                     notes=bid.notes,
                 )
-            contract.status = self._resolve_new_contract_status(contract.starts_on, contract.ends_on, reference_on=reference_on).value
+            contract.status = self._resolve_new_contract_status(
+                contract.starts_on, contract.ends_on, reference_on=reference_on
+            ).value
             bid.status = TransferBidStatus.COMPLETED.value
             terms.setdefault("completed_on", reference_on.isoformat())
             bid.structured_terms_json = terms
+            offer = self._get_contract_offer_by_bid_id(bid.id)
+            regen = self._get_regen_profile(bid.player_id)
+            if offer is not None and regen is not None:
+                offer.status = bid.status
+                offer.metadata_json = {
+                    **dict(offer.metadata_json or {}),
+                    "activated_on": reference_on.isoformat(),
+                }
+                self._settle_regen_contract_offer(
+                    bid=bid,
+                    offer=offer,
+                    new_contract=contract,
+                    acceptance_on=reference_on,
+                )
+                self._sync_offer_visibility_counts(regen.id)
+            else:
+                self._settle_transfer_bid_reservation(bid, settled_on=reference_on, offer=offer)
             self._sync_player_active_club_affiliation(bid.player_id, reference_on=reference_on)
             activated += 1
         if activated:
@@ -438,7 +1086,9 @@ class PlayerLifecycleService:
 
         current_contract = self._select_current_contract(contracts, reference_on=reference_on)
         managed_club = self._get_club_profile(
-            current_contract.club_id if current_contract is not None and current_contract.club_id else player.current_club_profile_id
+            current_contract.club_id
+            if current_contract is not None and current_contract.club_id
+            else player.current_club_profile_id
         )
         seasonal_progression = self._build_season_progression(player, career_entries)
 
@@ -450,9 +1100,15 @@ class PlayerLifecycleService:
                 if current_contract is not None and current_contract.club_id
                 else player.current_club_profile_id or player.current_club_id
             ),
-            current_club_name=managed_club.club_name if managed_club is not None else (player.current_club.name if player.current_club is not None else None),
+            current_club_name=(
+                managed_club.club_name
+                if managed_club is not None
+                else (player.current_club.name if player.current_club is not None else None)
+            ),
             current_competition_id=player.current_competition_id,
-            current_competition_name=player.current_competition.name if player.current_competition is not None else None,
+            current_competition_name=(
+                player.current_competition.name if player.current_competition is not None else None
+            ),
             totals=self._build_career_totals(player, career_entries, progression=seasonal_progression),
             seasonal_progression=seasonal_progression,
             injury_summary=self._build_injury_summary(injuries, reference_on=reference_on),
@@ -504,15 +1160,11 @@ class PlayerLifecycleService:
         available = active_injury is None and active_suspension is None
         if active_suspension is not None:
             status_reason = (
-                f"Suspended until {suspended_until.isoformat()}"
-                if suspended_until is not None
-                else "Suspended"
+                f"Suspended until {suspended_until.isoformat()}" if suspended_until is not None else "Suspended"
             )
         elif active_injury is not None:
             status_reason = (
-                f"Injured until {unavailable_until.isoformat()}"
-                if unavailable_until is not None
-                else "Injured"
+                f"Injured until {unavailable_until.isoformat()}" if unavailable_until is not None else "Injured"
             )
         else:
             status_reason = None
@@ -577,7 +1229,11 @@ class PlayerLifecycleService:
             eligible=eligible,
             reason=reason,
             last_bid_status=TransferBidStatus(last_bid.status) if last_bid is not None else None,
-            outside_window_exempt=bool((last_bid.structured_terms_json or {}).get("outside_window_exempt")) if last_bid is not None else False,
+            outside_window_exempt=(
+                bool((last_bid.structured_terms_json or {}).get("outside_window_exempt"))
+                if last_bid is not None
+                else False
+            ),
         )
 
     def get_player_overview(
@@ -604,10 +1260,7 @@ class PlayerLifecycleService:
             contract_badge=self._build_contract_badge(career_summary.contract_summary),
             transfer_status=transfer_status,
             regen_summary=regen_summary,
-            recent_events=tuple(
-                self.to_event_view(event)
-                for event in self.list_events(player_id, limit=event_limit)
-            ),
+            recent_events=tuple(self.to_event_view(event) for event in self.list_events(player_id, limit=event_limit)),
         )
 
     def get_player_lifecycle_snapshot(
@@ -665,12 +1318,22 @@ class PlayerLifecycleService:
         projected_ceiling = int((regen.potential_range_json or {}).get("maximum", regen.current_gsi))
         current_ceiling = int((regen.current_ability_range_json or {}).get("maximum", regen.current_gsi))
         training_state = self._regen_training_state(regen)
-        club_id_for_caps = contract_summary.active_contract.club_id if contract_summary and contract_summary.active_contract else player.current_club_profile_id
-        pressure_state = self._ensure_pressure_state(player, regen, reference_on=reference_on, contract_summary=contract_summary)
+        club_id_for_caps = (
+            contract_summary.active_contract.club_id
+            if contract_summary and contract_summary.active_contract
+            else player.current_club_profile_id
+        )
+        pressure_state = self._ensure_pressure_state(
+            player, regen, reference_on=reference_on, contract_summary=contract_summary
+        )
         offer_market = self._ensure_offer_visibility_state(
             regen,
             reference_on=reference_on,
-            current_salary=contract_summary.active_contract.wage_amount if contract_summary and contract_summary.active_contract else Decimal("0.0000"),
+            current_salary=(
+                contract_summary.active_contract.wage_amount
+                if contract_summary and contract_summary.active_contract
+                else Decimal("0.0000")
+            ),
         )
         dynamics = self._sync_team_dynamics_effect(player, regen, pressure_state, reference_on=reference_on)
         self.session.commit()
@@ -694,7 +1357,11 @@ class PlayerLifecycleService:
                 current_ceiling=current_ceiling,
                 major_used_count=int(training_state.get("major_used_count", 0)),
                 minor_used_count=int(training_state.get("minor_used_count", 0)),
-                cooldown_until=date.fromisoformat(training_state["cooldown_until"]) if training_state.get("cooldown_until") else None,
+                cooldown_until=(
+                    date.fromisoformat(training_state["cooldown_until"])
+                    if training_state.get("cooldown_until")
+                    else None
+                ),
                 club_season_slots_used=self._count_regen_special_training_for_club(
                     club_id_for_caps,
                     season_label=self._season_label(reference_on),
@@ -732,7 +1399,11 @@ class PlayerLifecycleService:
         visibility = self._ensure_offer_visibility_state(
             regen,
             reference_on=reference_on,
-            current_salary=contract_summary.active_contract.wage_amount if contract_summary and contract_summary.active_contract else Decimal("0.0000"),
+            current_salary=(
+                contract_summary.active_contract.wage_amount
+                if contract_summary and contract_summary.active_contract
+                else Decimal("0.0000")
+            ),
         )
         self.session.commit()
         return self._to_regen_offer_market_view(visibility)
@@ -762,13 +1433,21 @@ class PlayerLifecycleService:
         visibility = self._ensure_offer_visibility_state(
             regen,
             reference_on=effective_date,
-            current_salary=contract_summary.active_contract.wage_amount if contract_summary and contract_summary.active_contract else Decimal("0.0000"),
+            current_salary=(
+                contract_summary.active_contract.wage_amount
+                if contract_summary and contract_summary.active_contract
+                else Decimal("0.0000")
+            ),
         )
         if payload.offered_salary_fancoin_per_year < visibility.minimum_salary_fancoin_per_year:
             raise PlayerLifecycleValidationError("Salary offer is below the regen minimum for the current market")
         wallet_service = WalletService()
-        fancoin_balance = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.CREDIT).available_balance
-        gtex_balance = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.COIN).available_balance
+        fancoin_balance = wallet_service.get_wallet_summary(
+            self.session, owner, currency=LedgerUnit.CREDIT
+        ).available_balance
+        gtex_balance = wallet_service.get_wallet_summary(
+            self.session, owner, currency=LedgerUnit.COIN
+        ).available_balance
         conversion = quote_conversion(
             required_fancoin=payload.offered_salary_fancoin_per_year * payload.contract_years,
             current_fancoin_balance=fancoin_balance,
@@ -825,11 +1504,17 @@ class PlayerLifecycleService:
         approaching_context = self._regen_club_context(approaching_club.id, regen)
         if approaching_club.id == current_club_id:
             raise PlayerLifecycleValidationError("A club cannot unsettle its own contracted regen")
-        if float(approaching_context["prestige"]) <= float(current_context["prestige"]) and float(approaching_context["trophy_score"]) <= float(current_context["trophy_score"]):
+        if float(approaching_context["prestige"]) <= float(current_context["prestige"]) and float(
+            approaching_context["trophy_score"]
+        ) <= float(current_context["trophy_score"]):
             raise PlayerLifecycleValidationError("Only materially bigger clubs can trigger an unsettling approach")
-        current_reputation = self.session.scalar(select(ClubReputationProfile).where(ClubReputationProfile.club_id == current_club_id))
+        current_reputation = self.session.scalar(
+            select(ClubReputationProfile).where(ClubReputationProfile.club_id == current_club_id)
+        )
         traits = self._resolve_regen_traits(regen)
-        tenure_months = self._months_between((current_contract.starts_on if current_contract is not None else regen.generated_at.date()), effective_date)
+        tenure_months = self._months_between(
+            (current_contract.starts_on if current_contract is not None else regen.generated_at.date()), effective_date
+        )
         approach = evaluate_big_club_approach(
             BigClubApproachInputs(
                 approaching_prestige=float(approaching_context["prestige"]),
@@ -841,12 +1526,15 @@ class PlayerLifecycleService:
                 loyalty=traits["loyalty"],
                 hometown_resistance=float(current_context["hometown_score"]),
                 rising_club_resistance=75.0 if getattr(current_reputation, "prestige_tier", "") == "Rising" else 10.0,
-                already_considering_move=pressure.current_state in {"attracted_by_bigger_club", "considering_transfer", "transfer_requested", "unsettled"},
+                already_considering_move=pressure.current_state
+                in {"attracted_by_bigger_club", "considering_transfer", "transfer_requested", "unsettled"},
             )
         )
         pressure.ambition_pressure = min(100.0, pressure.ambition_pressure + approach.ambition_pressure_delta)
         pressure.transfer_desire = min(100.0, pressure.transfer_desire + approach.transfer_desire_delta)
-        pressure.prestige_dissatisfaction = min(100.0, pressure.prestige_dissatisfaction + approach.prestige_dissatisfaction_delta)
+        pressure.prestige_dissatisfaction = min(
+            100.0, pressure.prestige_dissatisfaction + approach.prestige_dissatisfaction_delta
+        )
         pressure.title_frustration = min(100.0, pressure.title_frustration + approach.title_frustration_delta)
         pressure.pressure_score = min(100.0, max(pressure.pressure_score, approach.effect_score))
         pressure.current_state = approach.resulting_state
@@ -866,8 +1554,12 @@ class PlayerLifecycleService:
                 regen_id=regen.id,
                 current_club_id=current_club_id,
                 approaching_club_id=approaching_club.id,
-                prestige_gap_score=max(0.0, float(approaching_context["prestige"]) - float(current_context["prestige"])),
-                trophy_gap_score=max(0.0, float(approaching_context["trophy_score"]) - float(current_context["trophy_score"])),
+                prestige_gap_score=max(
+                    0.0, float(approaching_context["prestige"]) - float(current_context["prestige"])
+                ),
+                trophy_gap_score=max(
+                    0.0, float(approaching_context["trophy_score"]) - float(current_context["trophy_score"])
+                ),
                 resistance_score=approach.resistance_score,
                 contract_tenure_months=tenure_months,
                 effect_score=approach.effect_score,
@@ -921,8 +1613,14 @@ class PlayerLifecycleService:
         player = self._require_player(player_id)
         regen = self._require_regen_profile(player_id)
         contract_summary = self.get_contract_summary(player_id, on_date=effective_date)
-        pressure = self._ensure_pressure_state(player, regen, reference_on=effective_date, contract_summary=contract_summary)
-        current_salary = contract_summary.active_contract.wage_amount if contract_summary and contract_summary.active_contract else Decimal("0.0000")
+        pressure = self._ensure_pressure_state(
+            player, regen, reference_on=effective_date, contract_summary=contract_summary
+        )
+        current_salary = (
+            contract_summary.active_contract.wage_amount
+            if contract_summary and contract_summary.active_contract
+            else Decimal("0.0000")
+        )
         resolution = resolution_for_event(
             payload.resolution_type,
             salary_raise_pct=payload.salary_raise_pct,
@@ -935,17 +1633,27 @@ class PlayerLifecycleService:
             min(100.0, pressure.ambition_pressure + (resolution.transfer_desire_delta * 0.65)),
         )
         pressure.transfer_desire = max(0.0, min(100.0, pressure.transfer_desire + resolution.transfer_desire_delta))
-        pressure.prestige_dissatisfaction = max(0.0, min(100.0, pressure.prestige_dissatisfaction + resolution.prestige_dissatisfaction_delta))
-        pressure.title_frustration = max(0.0, min(100.0, pressure.title_frustration + resolution.title_frustration_delta))
+        pressure.prestige_dissatisfaction = max(
+            0.0, min(100.0, pressure.prestige_dissatisfaction + resolution.prestige_dissatisfaction_delta)
+        )
+        pressure.title_frustration = max(
+            0.0, min(100.0, pressure.title_frustration + resolution.title_frustration_delta)
+        )
         metadata = dict(pressure.metadata_json or {})
         metadata["relief_score"] = float(metadata.get("relief_score", 0.0)) + resolution.relief_score_delta
-        metadata["unresolved_bonus"] = max(0.0, float(metadata.get("unresolved_bonus", 0.0)) + resolution.unresolved_bonus_delta)
+        metadata["unresolved_bonus"] = max(
+            0.0, float(metadata.get("unresolved_bonus", 0.0)) + resolution.unresolved_bonus_delta
+        )
         if resolution.relief_score_delta >= 10.0:
             metadata["manual_transfer_request"] = False
         pressure.metadata_json = metadata
         if payload.resolution_type == "salary_improved" and payload.salary_raise_pct > 0:
-            improved_salary = current_salary * (Decimal("1.0") + (Decimal(str(payload.salary_raise_pct)) / Decimal("100")))
-            pressure.salary_expectation_fancoin_per_year = max(current_salary, min(pressure.salary_expectation_fancoin_per_year, improved_salary))
+            improved_salary = current_salary * (
+                Decimal("1.0") + (Decimal(str(payload.salary_raise_pct)) / Decimal("100"))
+            )
+            pressure.salary_expectation_fancoin_per_year = max(
+                current_salary, min(pressure.salary_expectation_fancoin_per_year, improved_salary)
+            )
         if resolution.unresolved_bonus_delta < 0:
             pressure.last_resolved_at = datetime.combine(effective_date, datetime.min.time())
         if resolution.relief_score_delta >= 10.0:
@@ -993,9 +1701,7 @@ class PlayerLifecycleService:
         listed_before = bool(state.get("transfer_listed", False))
         state["transfer_listed"] = payload.listed
         state["agency_message"] = (
-            "Requested to be transfer listed."
-            if payload.listed
-            else "Transfer-list request withdrawn."
+            "Requested to be transfer listed." if payload.listed else "Transfer-list request withdrawn."
         )
         self._set_regen_career_state(regen, state)
         pressure = self._ensure_pressure_state(
@@ -1062,16 +1768,22 @@ class PlayerLifecycleService:
         floor_delta = 3 if payload.package_type == "major" else 1
         potential["maximum"] = min(85, maximum_key + delta)
         potential["minimum"] = min(potential["maximum"], minimum_key + floor_delta)
-        current_ability["maximum"] = min(int(potential["maximum"]), int(current_ability.get("maximum", regen.current_gsi)) + 1)
+        current_ability["maximum"] = min(
+            int(potential["maximum"]), int(current_ability.get("maximum", regen.current_gsi)) + 1
+        )
         regen.potential_range_json = potential
         regen.current_ability_range_json = current_ability
-        regen.current_gsi = min(int(potential["maximum"]), regen.current_gsi + (2 if payload.package_type == "major" else 1))
+        regen.current_gsi = min(
+            int(potential["maximum"]), regen.current_gsi + (2 if payload.package_type == "major" else 1)
+        )
         if payload.package_type == "major":
             training_state["major_used_count"] = int(training_state.get("major_used_count", 0)) + 1
         else:
             training_state["minor_used_count"] = int(training_state.get("minor_used_count", 0)) + 1
         training_state["last_trained_on"] = effective_date.isoformat()
-        training_state["cooldown_until"] = (effective_date + timedelta(days=REGEN_SPECIAL_TRAINING_COOLDOWN_DAYS)).isoformat()
+        training_state["cooldown_until"] = (
+            effective_date + timedelta(days=REGEN_SPECIAL_TRAINING_COOLDOWN_DAYS)
+        ).isoformat()
         training_state["last_package_type"] = payload.package_type
         training_state["season_label"] = self._season_label(effective_date)
         self._set_regen_training_state(regen, training_state)
@@ -1119,7 +1831,7 @@ class PlayerLifecycleService:
         submitted_bids = [
             bid
             for bid in self.list_window_bids(window_id)
-            if bid.player_id == player_id and bid.status == TransferBidStatus.SUBMITTED.value
+            if bid.player_id == player_id and bid.status in ACTIVE_TRANSFER_BID_STATUSES
         ]
         if not submitted_bids:
             return ()
@@ -1139,7 +1851,11 @@ class PlayerLifecycleService:
                 player_id,
                 TransferDecisionRequest(
                     destination_club_id=bid.buying_club_id or regen.generated_for_club_id,
-                    offered_wage_amount=(offer.offered_salary_fancoin_per_year if offer is not None else (bid.wage_offer_amount or Decimal("0.0000"))),
+                    offered_wage_amount=(
+                        offer.offered_salary_fancoin_per_year
+                        if offer is not None
+                        else (bid.wage_offer_amount or Decimal("0.0000"))
+                    ),
                     contract_years=(offer.contract_years if offer is not None else 3),
                     expected_role="starter",
                     requested_on=effective_date,
@@ -1350,7 +2066,10 @@ class PlayerLifecycleService:
         contract = PlayerContract(
             player_id=player_id,
             club_id=payload.club_id,
-            status=(payload.status or self._resolve_new_contract_status(payload.starts_on, payload.ends_on, reference_on=reference_date)).value,
+            status=(
+                payload.status
+                or self._resolve_new_contract_status(payload.starts_on, payload.ends_on, reference_on=reference_date)
+            ).value,
             wage_amount=payload.wage_amount,
             bonus_terms=payload.bonus_terms,
             release_clause_amount=payload.release_clause_amount,
@@ -1392,7 +2111,9 @@ class PlayerLifecycleService:
             state["previous_club_id"] = payload.club_id
             state["agency_message"] = "Committed to a FanCoin contract."
             self._set_regen_career_state(regen, state)
-            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            agency_state = self.session.scalar(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
+            )
             if agency_state is not None:
                 agency_state.current_club_id = payload.club_id
                 agency_state.transfer_request_status = "no_action"
@@ -1458,14 +2179,20 @@ class PlayerLifecycleService:
         )
         regen = self._get_regen_profile(player_id)
         if regen is not None:
-            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            agency_state = self.session.scalar(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
+            )
             if agency_state is not None:
                 agency_state.current_club_id = contract.club_id
                 agency_state.contract_stance = "stable"
                 agency_state.morale = max(60.0, agency_state.morale)
                 agency_state.happiness = max(62.0, agency_state.happiness)
                 agency_state.wage_satisfaction = max(agency_state.wage_satisfaction, 60.0)
-                agency_state.transfer_request_status = "no_action" if agency_state.transfer_request_status == "private_unrest" else agency_state.transfer_request_status
+                agency_state.transfer_request_status = (
+                    "no_action"
+                    if agency_state.transfer_request_status == "private_unrest"
+                    else agency_state.transfer_request_status
+                )
         self.session.commit()
         self.session.refresh(contract)
         return contract
@@ -1476,12 +2203,47 @@ class PlayerLifecycleService:
         payload: TransferBidCreateRequest,
         *,
         submitted_on: date | None = None,
+        actor: User | None = None,
+        idempotency_key: str | None = None,
+        reserve_wallet: bool = True,
     ) -> TransferBid:
+        fingerprint = self._transfer_bid_payload_fingerprint(
+            "create",
+            window_id=window_id,
+            payload=payload,
+        )
+        existing_idempotent_bid = self._find_transfer_bid_by_idempotency_key(
+            window_id,
+            action="create",
+            key=idempotency_key,
+        )
+        if existing_idempotent_bid is not None:
+            self._assert_transfer_bid_idempotency_fingerprint(
+                existing_idempotent_bid,
+                "create",
+                key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if actor is not None:
+                self._require_transfer_bid_club_actor(
+                    actor,
+                    existing_idempotent_bid.buying_club_id,
+                    forbidden_detail="transfer_bid_buying_club_access_required",
+                )
+            return existing_idempotent_bid
+
         player = self._require_player(payload.player_id)
         regen = self._get_regen_profile(payload.player_id)
         if payload.buying_club_id is None:
             raise PlayerLifecycleValidationError("Transfer bids require a buying club")
-        self._require_club_profile(payload.buying_club_id)
+        if actor is not None:
+            self._require_transfer_bid_club_actor(
+                actor,
+                payload.buying_club_id,
+                forbidden_detail="transfer_bid_buying_club_access_required",
+            )
+        buying_club = self._require_club_profile(payload.buying_club_id)
+        buyer_owner = self._require_user(buying_club.owner_user_id)
         try:
             ClubFinanceService(self.session).assert_transfer_allowed_for_club(club_id=payload.buying_club_id)
         except ClubFinanceError as exc:
@@ -1498,7 +2260,9 @@ class PlayerLifecycleService:
             exemption_reason=payload.exemption_reason,
         )
 
-        active_contract = self._select_current_contract(self.get_contracts(payload.player_id), reference_on=reference_on)
+        active_contract = self._select_current_contract(
+            self.get_contracts(payload.player_id), reference_on=reference_on
+        )
         selling_club_id = payload.selling_club_id
         current_contract_summary = self.get_contract_summary(payload.player_id, on_date=reference_on)
         is_regen_free_agent_offer = regen is not None and active_contract is None
@@ -1558,7 +2322,11 @@ class PlayerLifecycleService:
                     destination_club_id=payload.buying_club_id,
                     offered_wage_amount=offered_salary or Decimal("0.0000"),
                     contract_years=payload.contract_years or 3,
-                    expected_role="starter" if payload.wage_offer_amount and payload.wage_offer_amount > Decimal("0") else "rotation",
+                    expected_role=(
+                        "starter"
+                        if payload.wage_offer_amount and payload.wage_offer_amount > Decimal("0")
+                        else "rotation"
+                    ),
                     transfer_denied_recently=False,
                     requested_on=reference_on,
                 ),
@@ -1598,7 +2366,9 @@ class PlayerLifecycleService:
             bid_amount=proposed_bid_amount,
         )
         if ownership_validation["blocked"]:
-            raise PlayerLifecycleValidationError(ownership_validation["reason"] or "Ownership-group transfer validation failed")
+            raise PlayerLifecycleValidationError(
+                ownership_validation["reason"] or "Ownership-group transfer validation failed"
+            )
         structured_terms["ownership_group_validation"] = {
             "group_id": ownership_validation.get("group_id"),
             "fair_value": self._serialize_decimal(ownership_validation.get("fair_value")),
@@ -1606,6 +2376,14 @@ class PlayerLifecycleService:
             "max_allowed": self._serialize_decimal(ownership_validation.get("max_allowed")),
             "recent_internal_transfer_count": ownership_validation.get("recent_internal_transfer_count", 0),
         }
+        if reserve_wallet:
+            self._assert_transfer_bid_reservation_capacity(
+                owner=buyer_owner,
+                window_id=window_id,
+                player_id=player.id,
+                buying_club_id=payload.buying_club_id,
+                amount=proposed_bid_amount,
+            )
 
         bid = TransferBid(
             window_id=window_id,
@@ -1619,14 +2397,32 @@ class PlayerLifecycleService:
             notes=payload.notes,
             structured_terms_json=structured_terms,
         )
+        self._set_transfer_bid_idempotency_key(bid, "create", idempotency_key, fingerprint=fingerprint)
         self.session.add(bid)
         self.session.flush()
-        if offer_market is not None and regen is not None and payload.buying_club_id is not None and offered_salary is not None and payload.contract_years is not None:
+        try:
+            self._counter_replace_active_bids(bid, countered_on=reference_on)
+            if reserve_wallet:
+                self._reserve_transfer_bid_funds(bid, amount=proposed_bid_amount, reserved_on=reference_on)
+        except PlayerLifecycleValidationError:
+            self.session.rollback()
+            raise
+        if (
+            offer_market is not None
+            and regen is not None
+            and payload.buying_club_id is not None
+            and offered_salary is not None
+            and payload.contract_years is not None
+        ):
             club = self._require_club_profile(payload.buying_club_id)
             owner = self._require_user(club.owner_user_id)
             wallet_service = WalletService()
-            fancoin_balance = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.CREDIT).available_balance
-            gtex_balance = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.COIN).available_balance
+            fancoin_balance = wallet_service.get_wallet_summary(
+                self.session, owner, currency=LedgerUnit.CREDIT
+            ).available_balance
+            gtex_balance = wallet_service.get_wallet_summary(
+                self.session, owner, currency=LedgerUnit.COIN
+            ).available_balance
             conversion = quote_conversion(
                 required_fancoin=offered_salary * payload.contract_years,
                 current_fancoin_balance=fancoin_balance,
@@ -1685,6 +2481,29 @@ class PlayerLifecycleService:
             refreshed_contract_terms["conversion_quote_id"] = quote.id
             refreshed_terms["contract_offer"] = refreshed_contract_terms
             bid.structured_terms_json = refreshed_terms
+        self._record_event(
+            player_id=payload.player_id,
+            club_id=payload.buying_club_id,
+            event_type=TRANSFER_BID_SUBMITTED_EVENT_TYPE,
+            event_status=TransferBidStatus.SUBMITTED.value,
+            occurred_on=reference_on,
+            effective_from=reference_on,
+            effective_to=None,
+            related_entity_type="transfer_bid",
+            related_entity_id=bid.id,
+            summary=f"Transfer bid submitted for {proposed_bid_amount} GTex Coin",
+            details={
+                "transfer_bid_id": bid.id,
+                "window_id": window_id,
+                "selling_club_id": selling_club_id,
+                "buying_club_id": payload.buying_club_id,
+                "bid_amount": self._serialize_decimal(proposed_bid_amount),
+                "wallet_reservation": dict(
+                    (bid.structured_terms_json or {}).get("wallet_reservation") or {}
+                ),
+            },
+            notes=payload.notes,
+        )
         self.session.commit()
         self.session.refresh(bid)
         return bid
@@ -1696,9 +2515,37 @@ class PlayerLifecycleService:
         payload: TransferBidAcceptRequest,
         *,
         reference_on: date | None = None,
+        actor: User | None = None,
+        idempotency_key: str | None = None,
     ) -> TransferBid:
-        bid = self._require_bid(window_id, bid_id)
-        if bid.status != TransferBidStatus.SUBMITTED.value:
+        fingerprint = self._transfer_bid_payload_fingerprint(
+            "accept",
+            window_id=window_id,
+            bid_id=bid_id,
+            payload=payload,
+        )
+        bid = self._require_bid(window_id, bid_id, for_update=True)
+        if self._transfer_bid_idempotency_matches(bid, "accept", idempotency_key):
+            self._assert_transfer_bid_idempotency_fingerprint(
+                bid,
+                "accept",
+                key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if actor is not None:
+                self._require_transfer_bid_club_actor(
+                    actor,
+                    bid.selling_club_id or bid.buying_club_id,
+                    forbidden_detail="transfer_bid_selling_club_access_required",
+                )
+            return bid
+        if actor is not None:
+            self._require_transfer_bid_club_actor(
+                actor,
+                bid.selling_club_id or bid.buying_club_id,
+                forbidden_detail="transfer_bid_selling_club_access_required",
+            )
+        if bid.status not in ACTIVE_TRANSFER_BID_STATUSES:
             raise PlayerLifecycleValidationError("Only submitted transfer bids can be accepted")
         if bid.buying_club_id is None:
             raise PlayerLifecycleValidationError("Transfer bid is missing a buying club")
@@ -1719,7 +2566,9 @@ class PlayerLifecycleService:
             exemption_reason=(bid.structured_terms_json or {}).get("exemption_reason"),
         )
 
-        current_contract = self._select_primary_contract(self.get_contracts(bid.player_id), reference_on=contract_starts_on)
+        current_contract = self._select_primary_contract(
+            self.get_contracts(bid.player_id), reference_on=contract_starts_on
+        )
         ownership_validation = OwnershipGroupService(self.session).validate_transfer(
             player_id=player.id,
             selling_club_id=bid.selling_club_id,
@@ -1727,10 +2576,14 @@ class PlayerLifecycleService:
             bid_amount=offer.training_fee_gtex_coin if offer is not None else bid.bid_amount,
         )
         if ownership_validation["blocked"]:
-            raise PlayerLifecycleValidationError(ownership_validation["reason"] or "Ownership-group transfer validation failed")
+            raise PlayerLifecycleValidationError(
+                ownership_validation["reason"] or "Ownership-group transfer validation failed"
+            )
         if current_contract is not None:
             if bid.selling_club_id is not None and current_contract.club_id != bid.selling_club_id:
-                raise PlayerLifecycleValidationError("Transfer bid selling club no longer matches the player's contract")
+                raise PlayerLifecycleValidationError(
+                    "Transfer bid selling club no longer matches the player's contract"
+                )
             if current_contract.club_id == bid.buying_club_id:
                 raise PlayerLifecycleValidationError("Player is already contracted to the buying club")
             if current_contract.starts_on <= contract_starts_on and current_contract.ends_on >= contract_starts_on:
@@ -1772,11 +2625,7 @@ class PlayerLifecycleService:
             wage_amount=(
                 payload.wage_amount
                 if payload.wage_amount is not None
-                else (
-                    offer.offered_salary_fancoin_per_year
-                    if offer is not None
-                    else (bid.wage_offer_amount or 0)
-                )
+                else (offer.offered_salary_fancoin_per_year if offer is not None else (bid.wage_offer_amount or 0))
             ),
             bonus_terms=payload.bonus_terms,
             release_clause_amount=payload.release_clause_amount,
@@ -1797,10 +2646,21 @@ class PlayerLifecycleService:
                 "contract_ends_on": payload.contract_ends_on.isoformat(),
             }
         )
+        normalized_idempotency_key = self._normalize_idempotency_key(idempotency_key)
+        if normalized_idempotency_key is not None:
+            idempotency_keys = dict(terms.get("idempotency_keys") or {})
+            idempotency_keys["accept"] = {
+                "key": normalized_idempotency_key,
+                "fingerprint": fingerprint,
+                "result_bid_id": bid.id,
+            }
+            terms["idempotency_keys"] = idempotency_keys
         if contract_starts_on <= acceptance_on:
             bid.status = TransferBidStatus.COMPLETED.value
             terms["completed_on"] = acceptance_on.isoformat()
-            self._sync_player_active_club_affiliation(player.id, reference_on=acceptance_on, preferred_profile_id=bid.buying_club_id)
+            self._sync_player_active_club_affiliation(
+                player.id, reference_on=acceptance_on, preferred_profile_id=bid.buying_club_id
+            )
         else:
             bid.status = TransferBidStatus.ACCEPTED.value
             self._sync_player_active_club_affiliation(player.id, reference_on=acceptance_on)
@@ -1813,14 +2673,17 @@ class PlayerLifecycleService:
                 "accepted_on": acceptance_on.isoformat(),
                 "contract_id": new_contract.id,
             }
-            self._settle_regen_contract_offer(
-                bid=bid,
-                offer=offer,
-                new_contract=new_contract,
-                acceptance_on=acceptance_on,
-            )
-            self._reject_competing_regen_bids(window_id=window_id, player_id=player.id, accepted_bid_id=bid.id)
+            if contract_starts_on <= acceptance_on:
+                self._settle_regen_contract_offer(
+                    bid=bid,
+                    offer=offer,
+                    new_contract=new_contract,
+                    acceptance_on=acceptance_on,
+                )
             self._sync_offer_visibility_counts(regen.id)
+        elif contract_starts_on <= acceptance_on:
+            self._settle_transfer_bid_reservation(bid, settled_on=acceptance_on, offer=offer)
+        self._reject_competing_transfer_bids(window_id=window_id, player_id=player.id, accepted_bid_id=bid.id)
 
         self._record_event(
             player_id=player.id,
@@ -1888,7 +2751,9 @@ class PlayerLifecycleService:
                 effect.performance_penalty = 0.0
                 effect.influences_younger_players = False
                 effect.unresolved_since = None
-            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            agency_state = self.session.scalar(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
+            )
             if agency_state is not None:
                 agency_state.current_club_id = new_contract.club_id
                 agency_state.transfer_appetite = min(18.0, agency_state.transfer_appetite)
@@ -1918,7 +2783,11 @@ class PlayerLifecycleService:
                 "contract_id": new_contract.id,
             },
         )
-        if ownership_validation.get("group_id") is not None and bid.selling_club_id is not None and bid.buying_club_id is not None:
+        if (
+            ownership_validation.get("group_id") is not None
+            and bid.selling_club_id is not None
+            and bid.buying_club_id is not None
+        ):
             OwnershipGroupService(self.session).record_internal_transfer(
                 group_id=ownership_validation["group_id"],
                 source_club_id=bid.selling_club_id,
@@ -1935,16 +2804,56 @@ class PlayerLifecycleService:
         window_id: str,
         bid_id: str,
         payload: TransferBidRejectRequest,
+        *,
+        actor: User | None = None,
+        idempotency_key: str | None = None,
     ) -> TransferBid:
-        bid = self._require_bid(window_id, bid_id)
-        if bid.status != TransferBidStatus.SUBMITTED.value:
+        fingerprint = self._transfer_bid_payload_fingerprint(
+            "reject",
+            window_id=window_id,
+            bid_id=bid_id,
+            payload=payload,
+        )
+        bid = self._require_bid(window_id, bid_id, for_update=True)
+        if self._transfer_bid_idempotency_matches(bid, "reject", idempotency_key):
+            self._assert_transfer_bid_idempotency_fingerprint(
+                bid,
+                "reject",
+                key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if actor is not None:
+                self._require_transfer_bid_club_actor(
+                    actor,
+                    bid.selling_club_id or bid.buying_club_id,
+                    forbidden_detail="transfer_bid_selling_club_access_required",
+                )
+            return bid
+        if actor is not None:
+            self._require_transfer_bid_club_actor(
+                actor,
+                bid.selling_club_id or bid.buying_club_id,
+                forbidden_detail="transfer_bid_selling_club_access_required",
+            )
+        if bid.status not in ACTIVE_TRANSFER_BID_STATUSES:
             raise PlayerLifecycleValidationError("Only submitted transfer bids can be rejected")
         player = self._require_player(bid.player_id)
+        rejected_on = date.today()
         terms = dict(bid.structured_terms_json or {})
         if payload.reason:
             terms["rejection_reason"] = payload.reason
+        normalized_idempotency_key = self._normalize_idempotency_key(idempotency_key)
+        if normalized_idempotency_key is not None:
+            idempotency_keys = dict(terms.get("idempotency_keys") or {})
+            idempotency_keys["reject"] = {
+                "key": normalized_idempotency_key,
+                "fingerprint": fingerprint,
+                "result_bid_id": bid.id,
+            }
+            terms["idempotency_keys"] = idempotency_keys
         bid.status = TransferBidStatus.REJECTED.value
         bid.structured_terms_json = terms
+        self._release_transfer_bid_reservation(bid, released_on=rejected_on, reason="rejected")
         offer = self._get_contract_offer_by_bid_id(bid.id)
         if offer is not None:
             offer.status = TransferBidStatus.REJECTED.value
@@ -1955,10 +2864,14 @@ class PlayerLifecycleService:
             self._sync_offer_visibility_counts(offer.regen_id)
         regen = self._get_regen_profile(bid.player_id)
         preview = dict((terms or {}).get("player_agency_preview") or {})
-        if regen is not None and preview.get("decision_code") in {"eager_to_join", "open_to_join", "requests_transfer_if_blocked"}:
+        if regen is not None and preview.get("decision_code") in {
+            "eager_to_join",
+            "open_to_join",
+            "requests_transfer_if_blocked",
+        }:
             self._agency_service().record_blocked_move(
                 bid.player_id,
-                reference_on=date.today(),
+                reference_on=rejected_on,
                 reason=payload.reason or "bid_rejected",
             )
         self._record_event(
@@ -1966,12 +2879,199 @@ class PlayerLifecycleService:
             club_id=bid.selling_club_id or bid.buying_club_id,
             event_type=TRANSFER_BID_REJECTED_EVENT_TYPE,
             event_status=TransferBidStatus.REJECTED.value,
-            occurred_on=date.today(),
+            occurred_on=rejected_on,
             effective_from=None,
             effective_to=None,
             related_entity_type="transfer_bid",
             related_entity_id=bid.id,
             summary=f"{player.full_name} transfer rejected",
+            details={
+                "selling_club_id": bid.selling_club_id,
+                "buying_club_id": bid.buying_club_id,
+                "bid_amount": self._serialize_decimal(bid.bid_amount),
+            },
+            notes=payload.reason or bid.notes,
+        )
+        self.session.commit()
+        self.session.refresh(bid)
+        return bid
+
+    def counter_bid(
+        self,
+        window_id: str,
+        bid_id: str,
+        payload: TransferBidCounterRequest,
+        *,
+        reference_on: date | None = None,
+        actor: User | None = None,
+        idempotency_key: str | None = None,
+    ) -> TransferBid:
+        fingerprint = self._transfer_bid_payload_fingerprint(
+            "counter",
+            window_id=window_id,
+            bid_id=bid_id,
+            payload=payload,
+        )
+        original = self._require_bid(window_id, bid_id, for_update=True)
+        original_terms = dict(original.structured_terms_json or {})
+        if self._transfer_bid_idempotency_matches(original, "counter", idempotency_key):
+            self._assert_transfer_bid_idempotency_fingerprint(
+                original,
+                "counter",
+                key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if actor is not None:
+                self._require_transfer_bid_club_actor(
+                    actor,
+                    original.selling_club_id or original.buying_club_id,
+                    forbidden_detail="transfer_bid_selling_club_access_required",
+                )
+            replacement_bid_id = original_terms.get("idempotent_counter_bid_id") or original_terms.get(
+                "counter_replaced_by_bid_id"
+            )
+            if replacement_bid_id:
+                return self._require_bid(window_id, str(replacement_bid_id))
+            return original
+        if actor is not None:
+            self._require_transfer_bid_club_actor(
+                actor,
+                original.selling_club_id or original.buying_club_id,
+                forbidden_detail="transfer_bid_selling_club_access_required",
+            )
+        if original.status not in ACTIVE_TRANSFER_BID_STATUSES:
+            raise PlayerLifecycleValidationError("Only submitted transfer bids can be countered")
+        contract_offer_terms = dict(original_terms.get("contract_offer") or {})
+        requested_on = reference_on or date.today()
+        replacement = self.create_bid(
+            window_id,
+            TransferBidCreateRequest(
+                player_id=original.player_id,
+                selling_club_id=original.selling_club_id,
+                buying_club_id=original.buying_club_id,
+                bid_amount=payload.bid_amount if payload.bid_amount is not None else original.bid_amount,
+                wage_offer_amount=(
+                    payload.wage_offer_amount if payload.wage_offer_amount is not None else original.wage_offer_amount
+                ),
+                contract_years=(
+                    payload.contract_years
+                    if payload.contract_years is not None
+                    else contract_offer_terms.get("contract_years")
+                ),
+                sell_on_clause_pct=(
+                    payload.sell_on_clause_pct
+                    if payload.sell_on_clause_pct is not None
+                    else original.sell_on_clause_pct
+                ),
+                notes=payload.notes or original.notes,
+                allow_outside_window=bool(original_terms.get("outside_window_exempt")),
+                exemption_reason=original_terms.get("exemption_reason"),
+            ),
+            submitted_on=requested_on,
+        )
+        terms = dict(replacement.structured_terms_json or {})
+        terms["counter_source_bid_id"] = original.id
+        terms["countered_on"] = requested_on.isoformat()
+        normalized_idempotency_key = self._normalize_idempotency_key(idempotency_key)
+        if normalized_idempotency_key is not None:
+            idempotency_keys = dict(terms.get("idempotency_keys") or {})
+            idempotency_keys["counter"] = {
+                "key": normalized_idempotency_key,
+                "fingerprint": fingerprint,
+                "result_bid_id": replacement.id,
+            }
+            terms["idempotency_keys"] = idempotency_keys
+        replacement.structured_terms_json = terms
+        refreshed_original = self._require_bid(window_id, bid_id)
+        refreshed_original_terms = dict(refreshed_original.structured_terms_json or {})
+        if normalized_idempotency_key is not None:
+            idempotency_keys = dict(refreshed_original_terms.get("idempotency_keys") or {})
+            idempotency_keys["counter"] = {
+                "key": normalized_idempotency_key,
+                "fingerprint": fingerprint,
+                "result_bid_id": replacement.id,
+            }
+            refreshed_original_terms["idempotency_keys"] = idempotency_keys
+            refreshed_original_terms["idempotent_counter_bid_id"] = replacement.id
+            refreshed_original.structured_terms_json = refreshed_original_terms
+        self.session.commit()
+        self.session.refresh(replacement)
+        return replacement
+
+    def withdraw_bid(
+        self,
+        window_id: str,
+        bid_id: str,
+        payload: TransferBidWithdrawRequest,
+        *,
+        actor: User | None = None,
+        idempotency_key: str | None = None,
+    ) -> TransferBid:
+        fingerprint = self._transfer_bid_payload_fingerprint(
+            "withdraw",
+            window_id=window_id,
+            bid_id=bid_id,
+            payload=payload,
+        )
+        bid = self._require_bid(window_id, bid_id, for_update=True)
+        if self._transfer_bid_idempotency_matches(bid, "withdraw", idempotency_key):
+            self._assert_transfer_bid_idempotency_fingerprint(
+                bid,
+                "withdraw",
+                key=idempotency_key,
+                fingerprint=fingerprint,
+            )
+            if actor is not None:
+                self._require_transfer_bid_club_actor(
+                    actor,
+                    bid.buying_club_id,
+                    forbidden_detail="transfer_bid_buying_club_access_required",
+                )
+            return bid
+        if actor is not None:
+            self._require_transfer_bid_club_actor(
+                actor,
+                bid.buying_club_id,
+                forbidden_detail="transfer_bid_buying_club_access_required",
+            )
+        if bid.status not in ACTIVE_TRANSFER_BID_STATUSES:
+            raise PlayerLifecycleValidationError("Only submitted transfer bids can be withdrawn")
+        player = self._require_player(bid.player_id)
+        withdrawn_on = date.today()
+        terms = dict(bid.structured_terms_json or {})
+        if payload.reason:
+            terms["withdrawal_reason"] = payload.reason
+        normalized_idempotency_key = self._normalize_idempotency_key(idempotency_key)
+        if normalized_idempotency_key is not None:
+            idempotency_keys = dict(terms.get("idempotency_keys") or {})
+            idempotency_keys["withdraw"] = {
+                "key": normalized_idempotency_key,
+                "fingerprint": fingerprint,
+                "result_bid_id": bid.id,
+            }
+            terms["idempotency_keys"] = idempotency_keys
+        bid.status = TransferBidStatus.WITHDRAWN.value
+        bid.structured_terms_json = terms
+        self._release_transfer_bid_reservation(bid, released_on=withdrawn_on, reason="withdrawn")
+        offer = self._get_contract_offer_by_bid_id(bid.id)
+        if offer is not None:
+            offer.status = TransferBidStatus.WITHDRAWN.value
+            offer.metadata_json = {
+                **dict(offer.metadata_json or {}),
+                "withdrawal_reason": payload.reason or "",
+            }
+            self._sync_offer_visibility_counts(offer.regen_id)
+        self._record_event(
+            player_id=player.id,
+            club_id=bid.selling_club_id or bid.buying_club_id,
+            event_type=TRANSFER_BID_WITHDRAWN_EVENT_TYPE,
+            event_status=TransferBidStatus.WITHDRAWN.value,
+            occurred_on=withdrawn_on,
+            effective_from=None,
+            effective_to=None,
+            related_entity_type="transfer_bid",
+            related_entity_id=bid.id,
+            summary=f"{player.full_name} transfer withdrawn",
             details={
                 "selling_club_id": bid.selling_club_id,
                 "buying_club_id": bid.buying_club_id,
@@ -2154,9 +3254,16 @@ class PlayerLifecycleService:
     def to_transfer_bid_view(self, bid: TransferBid) -> TransferBidView:
         offer = self._get_contract_offer_by_bid_id(bid.id)
         structured_terms = self._transfer_bid_terms_for_view(bid, offer)
+        reservation = self._transfer_bid_wallet_reservation_for_view(bid)
+        if reservation:
+            structured_terms = {
+                **structured_terms,
+                "wallet_reservation": reservation,
+            }
         wage_offer_amount = bid.wage_offer_amount
-        if offer is not None and bid.status == TransferBidStatus.SUBMITTED.value:
+        if offer is not None and bid.status in ACTIVE_TRANSFER_BID_STATUSES:
             wage_offer_amount = None
+        reserved_amount = reservation.get("actual_reserved_gtex_coin", reservation.get("amount_gtex_coin"))
         return TransferBidView.model_validate(
             {
                 "id": bid.id,
@@ -2168,9 +3275,139 @@ class PlayerLifecycleService:
                 "bid_amount": bid.bid_amount,
                 "wage_offer_amount": wage_offer_amount,
                 "sell_on_clause_pct": bid.sell_on_clause_pct,
+                "wallet_reservation_status": reservation.get("status"),
+                "wallet_reserved_amount": (
+                    self._normalize_wallet_amount(reserved_amount)
+                    if reserved_amount is not None
+                    else None
+                ),
+                "wallet_reservation_reference": reservation.get("reference"),
                 "structured_terms_json": structured_terms,
                 "notes": bid.notes,
                 "updated_at": bid.updated_at,
+            }
+        )
+
+    def to_admin_transfer_bid_review_view(self, bid: TransferBid) -> AdminTransferBidReviewView:
+        bid_view = self.to_transfer_bid_view(bid)
+        window = self.session.get(TransferWindow, bid.window_id)
+        return AdminTransferBidReviewView.model_validate(
+            {
+                **bid_view.model_dump(),
+                "window_label": window.label if window is not None else None,
+                "severity": self._admin_transfer_bid_severity(bid_view),
+                "escalation_state": self._admin_transfer_bid_escalation_state(bid_view),
+                "audit_reference": f"transfer-bid:{bid.id}",
+                "audit_trail": tuple(self._list_transfer_bid_audit_events(bid)),
+                "action_state": "audit_only",
+                "available_actions": ("acknowledge", "escalate", "note"),
+                "blocked_reason": (
+                    "Admin transfer bid review actions only record audit events; "
+                    "canonical bid decisions and wallet settlement remain blocked here."
+                ),
+            }
+        )
+
+    def _admin_transfer_bid_severity(self, bid: TransferBidView) -> str:
+        status = bid.status.value if isinstance(bid.status, TransferBidStatus) else str(bid.status)
+        reservation_status = (bid.wallet_reservation_status or "").strip().lower()
+        if status in ACTIVE_TRANSFER_BID_STATUSES and reservation_status not in {"reserved", "active"}:
+            return "critical"
+        if status in ACTIVE_TRANSFER_BID_STATUSES:
+            return "medium"
+        if status in {TransferBidStatus.ACCEPTED.value, TransferBidStatus.COUNTER.value}:
+            return "high"
+        return "low"
+
+    def _admin_transfer_bid_escalation_state(self, bid: TransferBidView) -> str:
+        status = bid.status.value if isinstance(bid.status, TransferBidStatus) else str(bid.status)
+        reservation_status = (bid.wallet_reservation_status or "").strip().lower()
+        if status in ACTIVE_TRANSFER_BID_STATUSES and reservation_status not in {"reserved", "active"}:
+            return "reservation_review_required"
+        if status in ACTIVE_TRANSFER_BID_STATUSES:
+            return "monitor"
+        if status == TransferBidStatus.COUNTER.value:
+            return "counter_pending"
+        if status in {
+            TransferBidStatus.REJECTED.value,
+            TransferBidStatus.WITHDRAWN.value,
+            TransferBidStatus.COMPLETED.value,
+        }:
+            return "closed"
+        return "read_only"
+
+    def _list_transfer_bid_audit_events(
+        self, bid: TransferBid, *, limit: int = 8
+    ) -> tuple[AdminTransferBidAuditEventView, ...]:
+        statement = (
+            select(PlayerLifecycleEvent)
+            .where(
+                PlayerLifecycleEvent.player_id == bid.player_id,
+                PlayerLifecycleEvent.related_entity_id == bid.id,
+            )
+            .order_by(PlayerLifecycleEvent.occurred_on.desc(), PlayerLifecycleEvent.created_at.desc())
+            .limit(limit)
+        )
+        return tuple(
+            self._to_admin_transfer_bid_audit_event_view(event)
+            for event in self.session.scalars(statement)
+        )
+
+    def _transfer_bid_wallet_reservation_for_view(self, bid: TransferBid) -> dict[str, object]:
+        reservation = self._transfer_bid_wallet_reservation_terms(bid)
+        if bid.status not in ACTIVE_TRANSFER_BID_STATUSES or bid.buying_club_id is None:
+            return reservation
+
+        target_amount = self._transfer_bid_reservation_amount(bid)
+        if target_amount <= Decimal("0.0000"):
+            return {
+                **reservation,
+                "status": reservation.get("status") or "not_required",
+                "amount_gtex_coin": str(target_amount),
+                "actual_reserved_gtex_coin": str(Decimal("0.0000")),
+                "currency": LedgerUnit.COIN.value,
+                "reference": reservation.get("reference") or self._transfer_bid_reservation_reference(bid.id),
+            }
+
+        try:
+            owner = self._transfer_bid_buyer_owner(bid)
+            actual_reserved = WalletService().get_transfer_bid_reserved_amount(
+                self.session,
+                user=owner,
+                transfer_bid_id=self._transfer_bid_wallet_ledger_id(bid),
+                unit=LedgerUnit.COIN,
+            )
+        except PlayerLifecycleError:
+            return reservation
+
+        if actual_reserved >= target_amount:
+            status = "reserved"
+        elif actual_reserved > Decimal("0.0000"):
+            status = "partially_reserved"
+        else:
+            status = "missing"
+        return {
+            **reservation,
+            "status": status,
+            "amount_gtex_coin": str(target_amount),
+            "actual_reserved_gtex_coin": str(actual_reserved),
+            "currency": LedgerUnit.COIN.value,
+            "reference": reservation.get("reference") or self._transfer_bid_reservation_reference(bid.id),
+        }
+
+    def _to_admin_transfer_bid_audit_event_view(
+        self,
+        event: PlayerLifecycleEvent,
+    ) -> AdminTransferBidAuditEventView:
+        return AdminTransferBidAuditEventView.model_validate(
+            {
+                "id": event.id,
+                "event_type": event.event_type,
+                "event_status": event.event_status,
+                "occurred_on": event.occurred_on,
+                "summary": event.summary,
+                "details_json": event.details_json or {},
+                "updated_at": event.updated_at,
             }
         )
 
@@ -2259,8 +3496,18 @@ class PlayerLifecycleService:
             raise PlayerLifecycleNotFoundError(f"Injury case {injury_id} was not found for player {player_id}")
         return injury
 
-    def _require_bid(self, window_id: str, bid_id: str) -> TransferBid:
-        bid = self.session.get(TransferBid, bid_id)
+    def _supports_row_locks(self) -> bool:
+        bind = self.session.get_bind()
+        return bind is not None and bind.dialect.name not in {"sqlite"}
+
+    def _require_bid(self, window_id: str, bid_id: str, *, for_update: bool = False) -> TransferBid:
+        if for_update:
+            statement = select(TransferBid).where(TransferBid.id == bid_id)
+            if self._supports_row_locks():
+                statement = statement.with_for_update()
+            bid = self.session.scalar(statement)
+        else:
+            bid = self.session.get(TransferBid, bid_id)
         if bid is None or bid.window_id != window_id:
             raise PlayerLifecycleNotFoundError(f"Transfer bid {bid_id} was not found in window {window_id}")
         return bid
@@ -2286,10 +3533,14 @@ class PlayerLifecycleService:
         return regen
 
     def _get_regen_origin(self, regen_profile_id: str) -> RegenOriginMetadata | None:
-        return self.session.scalar(select(RegenOriginMetadata).where(RegenOriginMetadata.regen_profile_id == regen_profile_id))
+        return self.session.scalar(
+            select(RegenOriginMetadata).where(RegenOriginMetadata.regen_profile_id == regen_profile_id)
+        )
 
     def _get_regen_personality(self, regen_profile_id: str) -> RegenPersonalityProfile | None:
-        return self.session.scalar(select(RegenPersonalityProfile).where(RegenPersonalityProfile.regen_profile_id == regen_profile_id))
+        return self.session.scalar(
+            select(RegenPersonalityProfile).where(RegenPersonalityProfile.regen_profile_id == regen_profile_id)
+        )
 
     def _regen_career_state(self, regen: RegenProfile) -> dict[str, Any]:
         metadata = dict(regen.metadata_json or {})
@@ -2316,10 +3567,14 @@ class PlayerLifecycleService:
         return user
 
     def _get_pressure_state(self, regen_profile_id: str) -> RegenTransferPressureState | None:
-        return self.session.scalar(select(RegenTransferPressureState).where(RegenTransferPressureState.regen_id == regen_profile_id))
+        return self.session.scalar(
+            select(RegenTransferPressureState).where(RegenTransferPressureState.regen_id == regen_profile_id)
+        )
 
     def _get_offer_visibility_state(self, regen_profile_id: str) -> RegenOfferVisibilityState | None:
-        return self.session.scalar(select(RegenOfferVisibilityState).where(RegenOfferVisibilityState.regen_id == regen_profile_id))
+        return self.session.scalar(
+            select(RegenOfferVisibilityState).where(RegenOfferVisibilityState.regen_id == regen_profile_id)
+        )
 
     def _get_team_dynamics_effect(self, regen_profile_id: str, club_id: str | None) -> RegenTeamDynamicsEffect | None:
         if club_id is None:
@@ -2334,8 +3589,10 @@ class PlayerLifecycleService:
         )
 
     def _count_visible_contract_offers(self, regen_profile_id: str) -> int:
-        offers = self.session.scalars(select(RegenContractOffer).where(RegenContractOffer.regen_id == regen_profile_id)).all()
-        return sum(1 for offer in offers if offer.status not in {"rejected", "withdrawn", "expired"})
+        offers = self.session.scalars(
+            select(RegenContractOffer).where(RegenContractOffer.regen_id == regen_profile_id)
+        ).all()
+        return sum(1 for offer in offers if offer.status in ACTIVE_TRANSFER_BID_STATUSES)
 
     def _get_contract_offer_by_bid_id(self, bid_id: str) -> RegenContractOffer | None:
         return self.session.scalar(
@@ -2348,13 +3605,15 @@ class PlayerLifecycleService:
         visibility = self._get_offer_visibility_state(regen_profile_id)
         if visibility is None:
             return None
-        offers = self.session.scalars(select(RegenContractOffer).where(RegenContractOffer.regen_id == regen_profile_id)).all()
-        visible_count = sum(1 for offer in offers if offer.status not in {"rejected", "withdrawn", "expired"})
+        offers = self.session.scalars(
+            select(RegenContractOffer).where(RegenContractOffer.regen_id == regen_profile_id)
+        ).all()
+        visible_count = sum(1 for offer in offers if offer.status in ACTIVE_TRANSFER_BID_STATUSES)
         visibility.visible_offer_count = visible_count
         if visible_count > 0:
             visibility.last_offer_received_at = utcnow()
         for offer in offers:
-            if offer.status not in {"rejected", "withdrawn", "expired"}:
+            if offer.status in ACTIVE_TRANSFER_BID_STATUSES:
                 offer.current_offer_count_visible = visible_count
         self.session.flush()
         return visibility
@@ -2377,7 +3636,7 @@ class PlayerLifecycleService:
                 "salary_offer_hidden": True,
             }
         )
-        if bid.status == TransferBidStatus.SUBMITTED.value:
+        if bid.status in ACTIVE_TRANSFER_BID_STATUSES:
             contract_offer_terms.pop("offered_salary_fancoin_per_year", None)
         else:
             contract_offer_terms["offered_salary_fancoin_per_year"] = str(offer.offered_salary_fancoin_per_year)
@@ -2488,7 +3747,9 @@ class PlayerLifecycleService:
         previous_salary_expectation = _decimal_or_zero(pressure.salary_expectation_fancoin_per_year)
         current_contract = contract_summary.active_contract if contract_summary is not None else None
         current_salary = current_contract.wage_amount if current_contract is not None else Decimal("0.0000")
-        visibility = self._ensure_offer_visibility_state(regen, reference_on=reference_on, current_salary=current_salary)
+        visibility = self._ensure_offer_visibility_state(
+            regen, reference_on=reference_on, current_salary=current_salary
+        )
         current_club_id = current_contract.club_id if current_contract is not None else player.current_club_profile_id
         current_club_context = self._regen_club_context(current_club_id, regen)
         pressure.current_club_id = current_club_id
@@ -2499,9 +3760,7 @@ class PlayerLifecycleService:
             "transfer_request": "transfer_requested",
             "public_unhappy_state": "unsettled",
         }.get(agency_state.transfer_request_status, "content")
-        baseline_ambition_pressure = clamp(
-            max(0.0, agency_personality.ambition - agency_state.club_project_belief)
-        )
+        baseline_ambition_pressure = clamp(max(0.0, agency_personality.ambition - agency_state.club_project_belief))
         baseline_transfer_desire = _float_or_zero(agency_state.transfer_appetite)
         baseline_prestige_dissatisfaction = clamp(
             max(0.0, agency_personality.ambition - agency_state.club_project_belief)
@@ -2555,9 +3814,7 @@ class PlayerLifecycleService:
         )
         if pressure_resolved:
             pressure.current_state = (
-                previous_state
-                if _pressure_rank(previous_state) >= _pressure_rank(baseline_state)
-                else baseline_state
+                previous_state if _pressure_rank(previous_state) >= _pressure_rank(baseline_state) else baseline_state
             )
         else:
             pressure.current_state = (
@@ -2603,16 +3860,12 @@ class PlayerLifecycleService:
             pressure.current_state = previous_state
             pressure.active_transfer_request = previous_active_transfer_request or pressure.active_transfer_request
             pressure.refuses_new_contract = previous_refuses_new_contract or pressure.refuses_new_contract
-            pressure.end_of_contract_pressure = (
-                previous_end_of_contract_pressure or pressure.end_of_contract_pressure
-            )
+            pressure.end_of_contract_pressure = previous_end_of_contract_pressure or pressure.end_of_contract_pressure
             pressure.pressure_score = max(previous_pressure_score, pressure.pressure_score)
         if pressure.active_transfer_request:
             pressure.last_resolved_at = None
         if pressure.active_transfer_request and pressure.unresolved_since is None:
-            pressure.unresolved_since = previous_unresolved_since or datetime.combine(
-                reference_on, datetime.min.time()
-            )
+            pressure.unresolved_since = previous_unresolved_since or datetime.combine(reference_on, datetime.min.time())
         if not pressure.active_transfer_request and pressure.current_state in {"content", "monitoring_situation"}:
             pressure.last_resolved_at = datetime.combine(reference_on, datetime.min.time())
         pressure.metadata_json = {
@@ -2698,7 +3951,9 @@ class PlayerLifecycleService:
             influences_younger_players=effect.influences_younger_players,
         )
 
-    def _to_regen_offer_market_view(self, visibility: RegenOfferVisibilityState | None) -> RegenContractOfferMarketView | None:
+    def _to_regen_offer_market_view(
+        self, visibility: RegenOfferVisibilityState | None
+    ) -> RegenContractOfferMarketView | None:
         if visibility is None:
             return None
         return RegenContractOfferMarketView(
@@ -2721,7 +3976,10 @@ class PlayerLifecycleService:
             gtex_required_for_conversion=quote.source_amount_required,
             conversion_premium_bps=quote.premium_bps,
             can_cover_shortfall=quote.can_cover_shortfall,
-            premium_note=str((quote.metadata_json or {}).get("premium_note") or "Direct Fan Coin purchase remains cheaper than GTex Coin auto-conversion."),
+            premium_note=str(
+                (quote.metadata_json or {}).get("premium_note")
+                or "Direct Fan Coin purchase remains cheaper than GTex Coin auto-conversion."
+            ),
             fee_currency=GTEX_CURRENCY_BRANDING,
             salary_currency=FANCOIN_CURRENCY_BRANDING,
         )
@@ -2757,7 +4015,7 @@ class PlayerLifecycleService:
             .order_by(TransferHeadlineMediaRecord.created_at.desc())
         )
 
-    def _reject_competing_regen_bids(
+    def _reject_competing_transfer_bids(
         self,
         *,
         window_id: str,
@@ -2769,7 +4027,7 @@ class PlayerLifecycleService:
                 TransferBid.window_id == window_id,
                 TransferBid.player_id == player_id,
                 TransferBid.id != accepted_bid_id,
-                TransferBid.status == TransferBidStatus.SUBMITTED.value,
+                TransferBid.status.in_(tuple(ACTIVE_TRANSFER_BID_STATUSES)),
             )
         ).all()
         for competing_bid in competing_bids:
@@ -2777,6 +4035,11 @@ class PlayerLifecycleService:
             terms["auto_rejected_reason"] = "player_signed_elsewhere"
             competing_bid.status = TransferBidStatus.REJECTED.value
             competing_bid.structured_terms_json = terms
+            self._release_transfer_bid_reservation(
+                competing_bid,
+                released_on=date.today(),
+                reason="player_signed_elsewhere",
+            )
             competing_offer = self._get_contract_offer_by_bid_id(competing_bid.id)
             if competing_offer is not None:
                 competing_offer.status = TransferBidStatus.REJECTED.value
@@ -2807,8 +4070,15 @@ class PlayerLifecycleService:
             current_fancoin_balance=fancoin_summary.available_balance,
             current_gtex_balance=gtex_summary.available_balance,
         )
-        total_gtex_required = offer.training_fee_gtex_coin + conversion.gtex_required_for_conversion
-        if gtex_summary.available_balance < total_gtex_required:
+        reservation = self._transfer_bid_wallet_reservation_terms(bid)
+        training_fee_reserved = (
+            reservation.get("status") == "reserved"
+            and self._transfer_bid_reservation_amount(bid, offer) >= offer.training_fee_gtex_coin
+        )
+        available_gtex_required = conversion.gtex_required_for_conversion
+        if not training_fee_reserved:
+            available_gtex_required += offer.training_fee_gtex_coin
+        if gtex_summary.available_balance < available_gtex_required:
             raise PlayerLifecycleValidationError(
                 "Buying club owner does not have enough GTex Coin for the training fee and required Fan Coin auto-conversion"
             )
@@ -2841,7 +4111,9 @@ class PlayerLifecycleService:
             currency=LedgerUnit.CREDIT,
         ).available_balance
         if refreshed_fancoin_balance < salary_package:
-            raise PlayerLifecycleValidationError("Buying club owner does not have enough Fan Coin for the salary package")
+            raise PlayerLifecycleValidationError(
+                "Buying club owner does not have enough Fan Coin for the salary package"
+            )
 
         free_agent_terms = dict((bid.structured_terms_json or {}).get("free_agent_capture_split") or {})
         previous_club_id = bid.selling_club_id or free_agent_terms.get("previous_club_id")
@@ -2850,53 +4122,50 @@ class PlayerLifecycleService:
             previous_club = self._get_club_profile(previous_club_id)
             if previous_club is not None and previous_club.owner_user_id:
                 previous_owner = self._require_user(previous_club.owner_user_id)
-        platform_share = offer.training_fee_gtex_coin
         previous_share = Decimal("0.0000")
         if previous_owner is not None:
             previous_share = (
-                offer.training_fee_gtex_coin
-                * Decimal(str(REGEN_FREE_AGENT_PREVIOUS_CLUB_SHARE_PCT))
-                / Decimal("100")
+                offer.training_fee_gtex_coin * Decimal(str(REGEN_FREE_AGENT_PREVIOUS_CLUB_SHARE_PCT)) / Decimal("100")
             ).quantize(Decimal("0.0001"))
-            platform_share = offer.training_fee_gtex_coin - previous_share
-        payer_account = wallet_service.get_user_account(self.session, owner, LedgerUnit.COIN)
-        platform_coin_account = wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
-        postings = [
-            LedgerPosting(
-                account=payer_account,
-                amount=-offer.training_fee_gtex_coin,
-                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-            ),
-            LedgerPosting(
-                account=platform_coin_account,
-                amount=platform_share,
-                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-            ),
-        ]
-        if previous_share > 0 and previous_owner is not None:
-            postings.append(
-                LedgerPosting(
-                    account=wallet_service.get_user_account(self.session, previous_owner, LedgerUnit.COIN),
-                    amount=previous_share,
-                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-                )
-            )
-        else:
-            postings[1] = LedgerPosting(
-                account=platform_coin_account,
-                amount=offer.training_fee_gtex_coin,
-                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-            )
-        wallet_service.append_transaction(
+        reference = str(reservation.get("reference") or self._transfer_bid_reservation_reference(bid.id))
+        settlement_description = f"Training fee settlement for regen {offer.regen_id}"
+        wallet_service.settle_transfer_bid_reservation(
             self.session,
-            postings=postings,
-            reason=LedgerEntryReason.TRADE_SETTLEMENT,
-            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-            reference=f"regen-offer:{offer.id}:training-fee",
-            description=f"Training fee settlement for regen {offer.regen_id}",
+            user=owner,
+            transfer_bid_id=bid.id,
+            amount=offer.training_fee_gtex_coin,
+            reference=reference,
+            description=settlement_description,
             external_reference=offer.id,
-            actor=owner,
+            unit=LedgerUnit.COIN,
+            player_id=bid.player_id,
+            buying_club_id=bid.buying_club_id,
+            selling_club_id=bid.selling_club_id,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            require_full_reservation=training_fee_reserved,
         )
+        if previous_share > 0 and previous_owner is not None:
+            wallet_service.credit_trade_proceeds(
+                self.session,
+                user=previous_owner,
+                amount=previous_share,
+                reference=reference,
+                description=f"Previous club share for regen {offer.regen_id}",
+                external_reference=offer.id,
+                unit=LedgerUnit.COIN,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            )
+        updates = {
+            "status": "settled",
+            "amount_gtex_coin": str(offer.training_fee_gtex_coin),
+            "currency": LedgerUnit.COIN.value,
+            "reference": reference,
+            "settled_on": acceptance_on.isoformat(),
+            "settlement_amount_gtex_coin": str(offer.training_fee_gtex_coin),
+            "seller_owner_user_id": previous_owner.id if previous_owner is not None else None,
+        }
+        self._set_transfer_bid_wallet_reservation(bid, updates)
+        self._sync_transfer_market_listing_bid_reservation(bid, updates)
         wallet_service.settle_available_funds(
             self.session,
             user=owner,
@@ -3102,15 +4371,31 @@ class PlayerLifecycleService:
         decision_traits = dict(metadata.get("decision_traits") or {})
         personality = self._get_regen_personality(regen.id)
         resolved = {
-            "ambition": int(decision_traits.get("ambition", getattr(personality, "ambition", 50) if personality is not None else 50)),
-            "loyalty": int(decision_traits.get("loyalty", getattr(personality, "loyalty", 50) if personality is not None else 50)),
-            "professionalism": int(decision_traits.get("professionalism", getattr(personality, "work_rate", 50) if personality is not None else 50)),
+            "ambition": int(
+                decision_traits.get("ambition", getattr(personality, "ambition", 50) if personality is not None else 50)
+            ),
+            "loyalty": int(
+                decision_traits.get("loyalty", getattr(personality, "loyalty", 50) if personality is not None else 50)
+            ),
+            "professionalism": int(
+                decision_traits.get(
+                    "professionalism", getattr(personality, "work_rate", 50) if personality is not None else 50
+                )
+            ),
             "greed": int(decision_traits.get("greed", 50)),
-            "patience": int(decision_traits.get("patience", getattr(personality, "resilience", 50) if personality is not None else 50)),
+            "patience": int(
+                decision_traits.get(
+                    "patience", getattr(personality, "resilience", 50) if personality is not None else 50
+                )
+            ),
             "hometown_affinity": int(decision_traits.get("hometown_affinity", 50)),
             "trophy_hunger": int(decision_traits.get("trophy_hunger", 50)),
             "media_appetite": int(decision_traits.get("media_appetite", 50)),
-            "temperament": int(decision_traits.get("temperament", getattr(personality, "temperament", 50) if personality is not None else 50)),
+            "temperament": int(
+                decision_traits.get(
+                    "temperament", getattr(personality, "temperament", 50) if personality is not None else 50
+                )
+            ),
             "adaptability": int(decision_traits.get("adaptability", 50)),
         }
         return {key: max(0, min(100, value)) for key, value in resolved.items()}
@@ -3127,7 +4412,13 @@ class PlayerLifecycleService:
         del bids
         state = self._regen_career_state(regen)
         traits = self._resolve_regen_traits(regen)
-        _agency_player, _agency_regen, _agency_personality, agency_state, transfer_request = self._agency_service().sync(
+        (
+            _agency_player,
+            _agency_regen,
+            _agency_personality,
+            agency_state,
+            transfer_request,
+        ) = self._agency_service().sync(
             player.id,
             reference_on=reference_on,
         )
@@ -3145,7 +4436,9 @@ class PlayerLifecycleService:
             state["previous_club_id"] = contract_summary.active_contract.club_id
         elif not state.get("previous_club_id"):
             last_contract = self._select_primary_contract(self.get_contracts(player.id), reference_on=reference_on)
-            state["previous_club_id"] = last_contract.club_id if last_contract is not None else regen.generated_for_club_id
+            state["previous_club_id"] = (
+                last_contract.club_id if last_contract is not None else regen.generated_for_club_id
+            )
         free_agent = not retired and (contract_summary is None or contract_summary.active_contract is None)
         state["free_agent"] = free_agent
         if free_agent and not state.get("free_agent_since"):
@@ -3171,10 +4464,10 @@ class PlayerLifecycleService:
                 (pressure.active_transfer_request if pressure is not None else False)
                 or (
                     pressure is not None
-                    and pressure.current_state in {"attracted_by_bigger_club", "considering_transfer", "transfer_requested", "unsettled"}
+                    and pressure.current_state
+                    in {"attracted_by_bigger_club", "considering_transfer", "transfer_requested", "unsettled"}
                 )
-                or
-                (playing_time_ratio < 0.45 and traits["ambition"] >= 68 and traits["patience"] <= 58)
+                or (playing_time_ratio < 0.45 and traits["ambition"] >= 68 and traits["patience"] <= 58)
                 or (
                     contract_summary is not None
                     and contract_summary.expiring_soon
@@ -3250,7 +4543,11 @@ class PlayerLifecycleService:
                 state["agency_message"] = "Publicly unhappy and pushing for a move."
             elif agency_state.transfer_request_status == "agent_warning":
                 state["agency_message"] = "Agent has warned the club about growing unrest."
-            elif pressure is not None and state.get("transfer_listed") and bool((pressure.metadata_json or {}).get("manual_transfer_request")):
+            elif (
+                pressure is not None
+                and state.get("transfer_listed")
+                and bool((pressure.metadata_json or {}).get("manual_transfer_request"))
+            ):
                 state["agency_message"] = "Requested to be transfer listed."
             elif pressure is not None and pressure.current_state == "unsettled":
                 state["agency_message"] = "Unsettled after interest from a bigger club."
@@ -3273,7 +4570,11 @@ class PlayerLifecycleService:
                     summary=f"{player.full_name} wants more playing time",
                     details={"playing_time_ratio": round(playing_time_ratio, 2)},
                 )
-            elif contract_summary is not None and contract_summary.expiring_soon and (traits["greed"] >= 65 or traits["ambition"] >= 70):
+            elif (
+                contract_summary is not None
+                and contract_summary.expiring_soon
+                and (traits["greed"] >= 65 or traits["ambition"] >= 70)
+            ):
                 state["agency_message"] = "Wants an improved contract offer."
                 self._record_regen_agency_event(
                     player_id=player.id,
@@ -3393,7 +4694,9 @@ class PlayerLifecycleService:
     ) -> None:
         projected_ceiling = int((regen.potential_range_json or {}).get("maximum", regen.current_gsi))
         if projected_ceiling > 75:
-            raise PlayerLifecycleValidationError("Only regens with projected future potential of 75 or lower are eligible")
+            raise PlayerLifecycleValidationError(
+                "Only regens with projected future potential of 75 or lower are eligible"
+            )
         state = self._regen_career_state(regen)
         if bool(state.get("retired", False)):
             raise PlayerLifecycleValidationError("Retired regens cannot receive special training")
@@ -3401,15 +4704,29 @@ class PlayerLifecycleService:
         cooldown_until = training_state.get("cooldown_until")
         if cooldown_until and reference_on < date.fromisoformat(cooldown_until):
             raise PlayerLifecycleValidationError("Special training is on cooldown for this regen")
-        if payload.package_type == "major" and int(training_state.get("major_used_count", 0)) >= REGEN_SPECIAL_TRAINING_MAJOR_MAX:
+        if (
+            payload.package_type == "major"
+            and int(training_state.get("major_used_count", 0)) >= REGEN_SPECIAL_TRAINING_MAJOR_MAX
+        ):
             raise PlayerLifecycleValidationError("A regen can only receive one major special training package")
-        if payload.package_type == "minor" and int(training_state.get("minor_used_count", 0)) >= REGEN_SPECIAL_TRAINING_MINOR_MAX:
+        if (
+            payload.package_type == "minor"
+            and int(training_state.get("minor_used_count", 0)) >= REGEN_SPECIAL_TRAINING_MINOR_MAX
+        ):
             raise PlayerLifecycleValidationError("A regen can only receive two minor special training packages")
         club_id = payload.club_id or player.current_club_profile_id
         season_label = self._season_label(reference_on)
-        if self._count_regen_special_training_for_club(club_id, season_label=season_label) >= REGEN_SPECIAL_TRAINING_SEASON_CAP:
+        if (
+            self._count_regen_special_training_for_club(club_id, season_label=season_label)
+            >= REGEN_SPECIAL_TRAINING_SEASON_CAP
+        ):
             raise PlayerLifecycleValidationError("Club special-training season cap reached")
-        if self._count_regen_special_training_for_club(club_id, season_label=season_label, active_only=True, reference_on=reference_on) >= REGEN_SPECIAL_TRAINING_CONCURRENT_CAP:
+        if (
+            self._count_regen_special_training_for_club(
+                club_id, season_label=season_label, active_only=True, reference_on=reference_on
+            )
+            >= REGEN_SPECIAL_TRAINING_CONCURRENT_CAP
+        ):
             raise PlayerLifecycleValidationError("Club concurrent special-training cap reached")
 
     def _count_regen_special_training_for_club(
@@ -3431,7 +4748,12 @@ class PlayerLifecycleService:
             details = event.details_json or {}
             if details.get("season_label") not in {None, season_label}:
                 continue
-            if active_only and reference_on is not None and event.effective_to is not None and event.effective_to < reference_on:
+            if (
+                active_only
+                and reference_on is not None
+                and event.effective_to is not None
+                and event.effective_to < reference_on
+            ):
                 continue
             count += 1
         return count
@@ -3460,7 +4782,14 @@ class PlayerLifecycleService:
             ),
         )
         development_score = float(
-            (((facility.training_level if facility is not None else 1) + (facility.academy_level if facility is not None else 1)) / 2) * 20
+            (
+                (
+                    (facility.training_level if facility is not None else 1)
+                    + (facility.academy_level if facility is not None else 1)
+                )
+                / 2
+            )
+            * 20
         )
         hometown_score = 0.0
         cross_border = False
@@ -3468,7 +4797,9 @@ class PlayerLifecycleService:
             cross_border = bool(profile.country_code and profile.country_code != origin.country_code)
             if profile.city_name and origin.city_name and profile.city_name.lower() == origin.city_name.lower():
                 hometown_score = 100.0
-            elif profile.region_name and origin.region_name and profile.region_name.lower() == origin.region_name.lower():
+            elif (
+                profile.region_name and origin.region_name and profile.region_name.lower() == origin.region_name.lower()
+            ):
                 hometown_score = 80.0
             elif profile.country_code and profile.country_code == origin.country_code:
                 hometown_score = 45.0
@@ -3643,7 +4974,8 @@ class PlayerLifecycleService:
         current = [
             contract
             for contract in contracts
-            if self._resolve_contract_status(contract, reference_on=reference_on) in {ContractStatus.ACTIVE, ContractStatus.EXPIRING}
+            if self._resolve_contract_status(contract, reference_on=reference_on)
+            in {ContractStatus.ACTIVE, ContractStatus.EXPIRING}
         ]
         if not current:
             return None
@@ -3699,9 +5031,7 @@ class PlayerLifecycleService:
         if self._resolve_window_status(window, reference_on=reference_on) is TransferWindowStatus.OPEN:
             return
         if not allow_outside_window:
-            raise PlayerLifecycleValidationError(
-                f"Transfer window {window.id} is closed on {reference_on.isoformat()}"
-            )
+            raise PlayerLifecycleValidationError(f"Transfer window {window.id} is closed on {reference_on.isoformat()}")
         if not exemption_reason:
             raise PlayerLifecycleValidationError("Outside-window transfers require an exemption reason")
 
@@ -3765,18 +5095,29 @@ class PlayerLifecycleService:
             club_ids.update({item.club_id for item in player.match_stats if item.club_id})
             competition_ids.update({item.competition_id for item in player.match_stats if item.competition_id})
 
-        season_lookup = {
-            season.id: season
-            for season in self.session.scalars(select(Season).where(Season.id.in_(season_ids)))
-        } if season_ids else {}
-        club_lookup = {
-            club.id: club.name
-            for club in self.session.scalars(select(IngestionClub).where(IngestionClub.id.in_(club_ids)))
-        } if club_ids else {}
-        competition_lookup = {
-            competition.id: competition.name
-            for competition in self.session.scalars(select(IngestionCompetition).where(IngestionCompetition.id.in_(competition_ids)))
-        } if competition_ids else {}
+        season_lookup = (
+            {season.id: season for season in self.session.scalars(select(Season).where(Season.id.in_(season_ids)))}
+            if season_ids
+            else {}
+        )
+        club_lookup = (
+            {
+                club.id: club.name
+                for club in self.session.scalars(select(IngestionClub).where(IngestionClub.id.in_(club_ids)))
+            }
+            if club_ids
+            else {}
+        )
+        competition_lookup = (
+            {
+                competition.id: competition.name
+                for competition in self.session.scalars(
+                    select(IngestionCompetition).where(IngestionCompetition.id.in_(competition_ids))
+                )
+            }
+            if competition_ids
+            else {}
+        )
 
         rows: dict[tuple[str, str | None, str | None], dict[str, Any]] = {}
 
@@ -3818,7 +5159,9 @@ class PlayerLifecycleService:
                     row["average_rating"] = item.average_rating
         elif player.match_stats:
             for item in player.match_stats:
-                season_label = season_lookup.get(item.season_id).label if item.season_id in season_lookup else "match-log"
+                season_label = (
+                    season_lookup.get(item.season_id).label if item.season_id in season_lookup else "match-log"
+                )
                 row = ensure_row(season_label=season_label, competition_id=item.competition_id, club_id=item.club_id)
                 row["appearances"] += item.appearances or 0
                 row["starts"] += item.starts or 0
@@ -3841,17 +5184,16 @@ class PlayerLifecycleService:
 
         ordered_rows = sorted(
             rows.values(),
-            key=lambda row: (row["_season_sort"], row["season_label"], row["competition_name"] or "", row["club_name"] or ""),
+            key=lambda row: (
+                row["_season_sort"],
+                row["season_label"],
+                row["competition_name"] or "",
+                row["club_name"] or "",
+            ),
             reverse=True,
         )
         return tuple(
-            SeasonProgressionView.model_validate(
-                {
-                    key: value
-                    for key, value in row.items()
-                    if not key.startswith("_")
-                }
-            )
+            SeasonProgressionView.model_validate({key: value for key, value in row.items() if not key.startswith("_")})
             for row in ordered_rows
         )
 
@@ -3884,9 +5226,7 @@ class PlayerLifecycleService:
 
     def _build_transfer_summary(self, bids: list[TransferBid]) -> TransferSummaryView:
         accepted_or_completed = [
-            bid
-            for bid in bids
-            if bid.status in {TransferBidStatus.ACCEPTED.value, TransferBidStatus.COMPLETED.value}
+            bid for bid in bids if bid.status in {TransferBidStatus.ACCEPTED.value, TransferBidStatus.COMPLETED.value}
         ]
         completed = [bid for bid in bids if bid.status == TransferBidStatus.COMPLETED.value]
         latest_transfer = max(accepted_or_completed, key=self._transfer_sort_key, default=None)
@@ -3972,7 +5312,11 @@ class PlayerLifecycleService:
         territory_code: str | None,
     ) -> TransferWindow | None:
         resolved_territory = territory_code or self._infer_territory_code(player)
-        windows = self.list_transfer_windows(territory_code=resolved_territory) if resolved_territory else self.list_transfer_windows()
+        windows = (
+            self.list_transfer_windows(territory_code=resolved_territory)
+            if resolved_territory
+            else self.list_transfer_windows()
+        )
         if not windows:
             return None
         active = [

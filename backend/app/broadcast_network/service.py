@@ -21,6 +21,7 @@ from app.broadcast_network.schemas import (
 )
 from app.core.cache import CacheBackend, JsonCacheNamespace, NullCacheBackend
 from app.infinite_league.service import ensure_infinite_league_runtime
+from app.live_matches.generated_stream_policy import generated_live_match_streams_enabled
 from app.live_matches.schemas import LiveMatchSpeedModeView, SpectatorSessionView
 from app.live_matches.service import ensure_live_match_hub
 from app.live_ops.service import LiveOpsService
@@ -53,10 +54,11 @@ def _merge_session_access(base: dict[str, Any], overlay: dict[str, Any] | None) 
     merged = dict(base)
     if overlay is None:
         return merged
-    premium_features = dict(merged.get("premium_features") or {})
-    premium_features.update(dict(overlay.get("premium_features") or {}))
-    if premium_features:
-        merged["premium_features"] = premium_features
+    engagement_features = _engagement_features(merged)
+    engagement_features.update(_engagement_features(overlay))
+    if engagement_features:
+        merged["engagement_features"] = engagement_features
+        merged.pop("premium_features", None)
     channel_context = dict(merged.get("channel_context") or {})
     channel_context.update(dict(overlay.get("channel_context") or {}))
     if channel_context:
@@ -77,6 +79,17 @@ def _merge_session_access(base: dict[str, Any], overlay: dict[str, Any] | None) 
         if key in overlay and overlay.get(key) is not None:
             merged[key] = overlay[key]
     return merged
+
+
+def _engagement_features(payload: dict[str, Any] | None) -> dict[str, bool]:
+    if payload is None:
+        return {}
+    features: dict[str, bool] = {}
+    for key in ("engagement_features", "premium_features"):
+        raw = payload.get(key)
+        if isinstance(raw, dict):
+            features.update({str(name): bool(value) for name, value in raw.items()})
+    return features
 
 
 class BroadcastNetworkError(ValueError):
@@ -312,7 +325,7 @@ class BroadcastNetworkRuntime:
                 channel_id="ai",
                 name="AI Channel",
                 channel_type="ai",
-                description="24/7 AI-generated fixtures and replay loops.",
+                description="Internal simulation coverage is unavailable until authorized backend streams are mounted.",
                 candidates=ai_candidates,
                 viewer_count=viewer_counts.get("ai", 0),
             ),
@@ -461,6 +474,8 @@ class BroadcastNetworkRuntime:
         return candidates
 
     def _ai_candidates(self) -> list[_ProgramCandidate]:
+        if not generated_live_match_streams_enabled():
+            return []
         runtime = ensure_infinite_league_runtime(self.app)
         hub = ensure_live_match_hub(self.app)
         candidates: list[_ProgramCandidate] = []
@@ -487,7 +502,7 @@ class BroadcastNetworkRuntime:
                 ),
                 momentum=state.snapshot.momentum_indicator if state is not None else "balanced",
                 focus_target="final_third" if goals > 0 else "midfield",
-                focus_reason="ai_highlight_loop" if goals > 0 else "ai_schedule_fill",
+                focus_reason="backend_stream_highlight" if goals > 0 else "backend_stream_fill",
                 score=0.0,
                 is_live=True,
                 watch_route=f"/matches/broadcast/{match.match_id}",
@@ -519,10 +534,10 @@ class BroadcastNetworkRuntime:
         current_program = (
             self._program_slot(
                 channel_id=channel_id, candidate=selected[0], start_at=now - timedelta(seconds=45), offset_minutes=10
+                )
+                if selected
+                else self._empty_slot(channel_id=channel_id, generated_at=now)
             )
-            if selected
-            else self._fallback_slot(channel_id=channel_id, generated_at=now)
-        )
         upcoming_programs = [
             self._program_slot(
                 channel_id=channel_id,
@@ -570,21 +585,21 @@ class BroadcastNetworkRuntime:
             metadata=dict(candidate.metadata),
         )
 
-    def _fallback_slot(self, *, channel_id: str, generated_at: datetime) -> BroadcastProgramSlotView:
+    def _empty_slot(self, *, channel_id: str, generated_at: datetime) -> BroadcastProgramSlotView:
         return BroadcastProgramSlotView(
-            slot_id=f"{channel_id}:replay-loop",
+            slot_id=f"{channel_id}:pending",
             channel_id=channel_id,
             match_id=None,
-            title="GTEX Replay Loop",
-            subtitle="Switching to replay coverage while the next live window is prepared.",
-            program_type="replay_loop",
+            title="Coverage Pending",
+            subtitle="No authoritative live match source is currently mounted for this channel.",
+            program_type="pending",
             start_at=generated_at,
             end_at=generated_at + timedelta(minutes=15),
             score=0.0,
             is_live=False,
             watch_route=None,
             replay_route=None,
-            metadata={"fallback_mode": "replay"},
+            metadata={"state": "empty", "missing_data": ["authoritative_live_match_source"]},
         )
 
     def _director_focus_for_program(
@@ -616,8 +631,8 @@ class BroadcastNetworkRuntime:
         access_payload = {
             "access_source": "infinite_league" if channel_type == "ai" else "broadcast_network",
             "viewing_fee_coin": 0,
-            "premium_features": {
-                "generated_commentary": True,
+            "engagement_features": {
+                "commentary": True,
                 "instant_replay": True,
                 "dual_commentary": True,
             },
@@ -664,7 +679,7 @@ class BroadcastNetworkRuntime:
             access_source=access_payload.get("access_source"),
             rights_owner_id=access_payload.get("rights_owner_id"),
             viewing_fee_coin=access_payload.get("viewing_fee_coin") or 0,
-            premium_features=dict(access_payload.get("premium_features") or {}),
+            engagement_features=_engagement_features(access_payload),
             sponsored_overlays=list(access_payload.get("sponsored_overlays") or []),
             stadium_ads=list(access_payload.get("stadium_ads") or []),
             channel_context=dict(access_payload.get("channel_context") or {}),
@@ -749,6 +764,8 @@ class BroadcastNetworkRuntime:
         return {str(channel_id): int(count) for channel_id, count in rows}
 
     def _bootstrap_infinite_league_stream(self, hub, match_id: str) -> bool:
+        if not generated_live_match_streams_enabled():
+            return False
         existing_state = hub.get_state(match_id)
         if existing_state is not None and existing_state.is_live:
             return True

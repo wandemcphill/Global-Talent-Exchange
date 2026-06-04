@@ -35,13 +35,7 @@ LEGACY_API_VERSION_PREFIX = "/api/v1"
 API_VERSION_HEADER_NAME = "X-API-Version"
 API_VERSION_HEADER_VALUE = "2"
 API_CONTRACT_PATH = Path(__file__).resolve().parents[3] / "shared" / "api_contract.json"
-PUBLIC_NON_CANONICAL_API_PATHS = frozenset(
-    {
-        "/auth/signup/user",
-        "/auth/signup/creator",
-        "/auth/signup/trader",
-    }
-)
+PUBLIC_NON_CANONICAL_API_PATHS = frozenset()
 _ALIAS_EXCLUDED_PREFIXES = (
     "/docs",
     "/openapi.json",
@@ -301,7 +295,8 @@ class ApiContractGuardMiddleware(BaseHTTPMiddleware):
                 )
             return await call_next(request)
 
-        if path != canonical_path and path not in PUBLIC_NON_CANONICAL_API_PATHS:
+        is_concrete_canonical_path = _path_pattern(canonical_path).fullmatch(path) is not None
+        if path != canonical_path and not is_concrete_canonical_path and path not in PUBLIC_NON_CANONICAL_API_PATHS:
             _log_rejected_request(request, route=path, reason="non_canonical_alias")
             return _error_response(
                 status.HTTP_410_GONE,

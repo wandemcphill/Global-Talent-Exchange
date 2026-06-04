@@ -53,6 +53,10 @@ class GteRequestGate {
   int begin() => ++_requestId;
 
   bool isActive(int requestId) => requestId == _requestId;
+
+  void cancel() {
+    _requestId += 1;
+  }
 }
 
 abstract class GteTokenStore {
@@ -158,13 +162,21 @@ class GteRepositoryConfig {
 abstract class GteApiRepository {
   Future<GteAuthSession> login(GteAuthLoginRequest request);
 
-  Future<GteAuthSession> register(GteAuthRegisterRequest request);
+  Future<GteAuthSession> signupPlayer(
+    GtePlayerFrictionlessSignupRequest request,
+  );
 
-  Future<GteAuthSession> signupUser(GteUserSignupRequest request);
+  Future<GteAuthSession> signupOrganization(
+    GteOrganizationFrictionlessSignupRequest request,
+  );
 
-  Future<GteAuthSession> signupCreator(GteCreatorSignupRequest request);
+  Future<GteRecoveryChallenge> requestRecoveryChallenge(String email);
 
-  Future<GteAuthSession> signupTrader(GteTraderSignupRequest request);
+  Future<void> resetPasswordWithRecoveryQuestions(
+    GteRecoveryQuestionResetRequest request,
+  );
+
+  Future<void> verifyPin(GtePinVerificationRequest request);
 
   Future<GteCurrentUser> fetchCurrentUser();
 
@@ -417,20 +429,41 @@ class GteModeAwareApiRepository implements GteApiRepository {
     required this.fixtures,
     GteTokenStore? tokenStore,
     AuthSessionStore? authSessionStore,
+    DeviceIdentityStore? deviceIdentityStore,
+    TrustedDeviceTokenStore? trustedDeviceTokenStore,
   }) : tokenStore = tokenStore ?? GteMemoryTokenStore(),
-       _authSessionStore = authSessionStore;
+       _authSessionStore = authSessionStore,
+       _deviceIdentityStore =
+           deviceIdentityStore ?? MemoryDeviceIdentityStore(),
+       _trustedDeviceTokenStore =
+           trustedDeviceTokenStore ?? MemoryTrustedDeviceTokenStore();
 
   final GteRepositoryConfig config;
   final GteTransport transport;
   final GteApiRepository fixtures;
   final GteTokenStore tokenStore;
   final AuthSessionStore? _authSessionStore;
+  final DeviceIdentityStore _deviceIdentityStore;
+  final TrustedDeviceTokenStore _trustedDeviceTokenStore;
 
   @override
   Future<GteAuthSession> login(GteAuthLoginRequest request) async {
+    final GteAuthLoginRequest resolvedRequest =
+        request.device == null
+            ? GteAuthLoginRequest(
+              email: request.email,
+              password: request.password,
+              device: await _buildDeviceRequest(),
+            )
+            : request;
     final GteAuthSession session = await _withFallback<GteAuthSession>(
       () async => GteAuthSession.fromJson(
-        await _request('POST', '/auth/login', body: request.toJson()),
+        await _request(
+          'POST',
+          '/api/v2/auth/login',
+          body: resolvedRequest.toJson(),
+          additionalHeaders: await _publicAuthHeaders(),
+        ),
       ),
       () => fixtures.login(request),
       allowFixtureFallback: false,
@@ -443,19 +476,34 @@ class GteModeAwareApiRepository implements GteApiRepository {
   }
 
   @override
-  Future<GteAuthSession> register(GteAuthRegisterRequest request) async {
-    throw UnsupportedError(
-      'Generic signup was removed. Use /auth/signup/user, /auth/signup/creator, or /auth/signup/trader.',
-    );
-  }
-
-  @override
-  Future<GteAuthSession> signupUser(GteUserSignupRequest request) async {
+  Future<GteAuthSession> signupPlayer(
+    GtePlayerFrictionlessSignupRequest request,
+  ) async {
+    final GtePlayerFrictionlessSignupRequest resolvedRequest =
+        request.device == null
+            ? GtePlayerFrictionlessSignupRequest(
+              fullName: request.fullName,
+              email: request.email,
+              password: request.password,
+              country: request.country,
+              preferredPosition: request.preferredPosition,
+              dateOfBirth: request.dateOfBirth,
+              pin: request.pin,
+              recoveryQuestions: request.recoveryQuestions,
+              phoneNumber: request.phoneNumber,
+              device: await _buildDeviceRequest(),
+            )
+            : request;
     final GteAuthSession session = await _withFallback<GteAuthSession>(
       () async => GteAuthSession.fromJson(
-        await _request('POST', '/auth/signup/user', body: request.toJson()),
+        await _request(
+          'POST',
+          '/api/v2/auth/signup/player',
+          body: resolvedRequest.toJson(),
+          additionalHeaders: await _publicAuthHeaders(),
+        ),
       ),
-      () => fixtures.signupUser(request),
+      () => fixtures.signupPlayer(resolvedRequest),
       allowFixtureFallback: false,
     );
     return _persistAuthSession(
@@ -466,12 +514,34 @@ class GteModeAwareApiRepository implements GteApiRepository {
   }
 
   @override
-  Future<GteAuthSession> signupCreator(GteCreatorSignupRequest request) async {
+  Future<GteAuthSession> signupOrganization(
+    GteOrganizationFrictionlessSignupRequest request,
+  ) async {
+    final GteOrganizationFrictionlessSignupRequest resolvedRequest =
+        request.device == null
+            ? GteOrganizationFrictionlessSignupRequest(
+              organizationName: request.organizationName,
+              contactName: request.contactName,
+              email: request.email,
+              password: request.password,
+              organizationType: request.organizationType,
+              country: request.country,
+              pin: request.pin,
+              recoveryQuestions: request.recoveryQuestions,
+              phoneNumber: request.phoneNumber,
+              device: await _buildDeviceRequest(),
+            )
+            : request;
     final GteAuthSession session = await _withFallback<GteAuthSession>(
       () async => GteAuthSession.fromJson(
-        await _request('POST', '/auth/signup/creator', body: request.toJson()),
+        await _request(
+          'POST',
+          '/api/v2/auth/signup/organization',
+          body: resolvedRequest.toJson(),
+          additionalHeaders: await _publicAuthHeaders(),
+        ),
       ),
-      () => fixtures.signupCreator(request),
+      () => fixtures.signupOrganization(resolvedRequest),
       allowFixtureFallback: false,
     );
     return _persistAuthSession(
@@ -482,18 +552,52 @@ class GteModeAwareApiRepository implements GteApiRepository {
   }
 
   @override
-  Future<GteAuthSession> signupTrader(GteTraderSignupRequest request) async {
-    final GteAuthSession session = await _withFallback<GteAuthSession>(
-      () async => GteAuthSession.fromJson(
-        await _request('POST', '/auth/signup/trader', body: request.toJson()),
+  Future<GteRecoveryChallenge> requestRecoveryChallenge(String email) {
+    return _withFallback<GteRecoveryChallenge>(
+      () async => GteRecoveryChallenge.fromJson(
+        await _request(
+          'POST',
+          '/api/v2/auth/recovery/challenge',
+          body: <String, Object?>{'email': email},
+          additionalHeaders: await _publicAuthHeaders(),
+        ),
       ),
-      () => fixtures.signupTrader(request),
+      () => fixtures.requestRecoveryChallenge(email),
       allowFixtureFallback: false,
     );
-    return _persistAuthSession(
-      session,
-      bootstrap:
-          config.mode != GteBackendMode.fixture && _authSessionStore != null,
+  }
+
+  @override
+  Future<void> resetPasswordWithRecoveryQuestions(
+    GteRecoveryQuestionResetRequest request,
+  ) async {
+    await _withFallback<void>(
+      () async {
+        await _request(
+          'POST',
+          '/api/v2/auth/recovery/reset-with-questions',
+          body: request.toJson(),
+          additionalHeaders: await _publicAuthHeaders(),
+        );
+      },
+      () => fixtures.resetPasswordWithRecoveryQuestions(request),
+      allowFixtureFallback: false,
+    );
+  }
+
+  @override
+  Future<void> verifyPin(GtePinVerificationRequest request) async {
+    await _withFallback<void>(
+      () async {
+        await _request(
+          'POST',
+          '/api/v2/auth/pin/verify',
+          body: request.toJson(),
+          requiresAuth: true,
+        );
+      },
+      () => fixtures.verifyPin(request),
+      allowFixtureFallback: false,
     );
   }
 
@@ -501,7 +605,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
   Future<GteCurrentUser> fetchCurrentUser() {
     return _withFallback<GteCurrentUser>(
       () async => GteCurrentUser.fromJson(
-        await _request('GET', '/api/auth/me', requiresAuth: true),
+        await _request('GET', '/api/v2/auth/me', requiresAuth: true),
       ),
       fixtures.fetchCurrentUser,
       allowFixtureFallback: false,
@@ -511,7 +615,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
   @override
   Future<void> logout() async {
     try {
-      await _request('POST', '/auth/logout', requiresAuth: true);
+      await _request('POST', '/api/v2/auth/logout', requiresAuth: true);
     } catch (_) {
       // Clear local state even if the remote logout cannot complete.
     }
@@ -532,18 +636,26 @@ class GteModeAwareApiRepository implements GteApiRepository {
       'permissions': session.permissions,
       'user': session.user.rawJson,
       if (session.landingRoute != null) 'landing_route': session.landingRoute,
+      if (session.trustedDeviceToken != null)
+        'trusted_device_token': session.trustedDeviceToken,
+      if (session.trustedDeviceId != null)
+        'trusted_device_id': session.trustedDeviceId,
+      'device_trusted': session.deviceTrusted,
+      'biometric_enabled': session.biometricEnabled,
     });
     await _writePersistedSession(persisted);
+    await _writeTrustedDeviceTokenFromSession(persisted);
     if (!bootstrap) {
       return GteAuthSession.fromJson(persisted.rawJson);
     }
     final Map<String, Object?> bootstrapPayload = await requestJson(
       'GET',
-      '/api/session/bootstrap',
+      '/api/v2/session/bootstrap',
       requiresAuth: true,
     );
     persisted = persisted.mergeProfile(bootstrapPayload);
     await _writePersistedSession(persisted);
+    await _writeTrustedDeviceTokenFromSession(persisted);
     return GteAuthSession.fromJson(persisted.rawJson);
   }
 
@@ -1891,6 +2003,12 @@ class GteModeAwareApiRepository implements GteApiRepository {
     }
   }
 
+  Future<Map<String, String>> _publicAuthHeaders() async {
+    final Map<String, String> headers = <String, String>{};
+    await _applyDeviceHeaders(headers);
+    return headers;
+  }
+
   Future<AuthSession?> _readPersistedSession() async {
     return _authSessionStore?.readSession();
   }
@@ -1898,6 +2016,44 @@ class GteModeAwareApiRepository implements GteApiRepository {
   Future<void> _writePersistedSession(AuthSession session) async {
     await tokenStore.writeToken(session.accessToken);
     await _authSessionStore?.writeSession(session);
+  }
+
+  Future<void> _writeTrustedDeviceTokenFromSession(AuthSession session) async {
+    final String token = session.trustedDeviceToken?.trim() ?? '';
+    if (token.isNotEmpty) {
+      await _trustedDeviceTokenStore.writeTrustedDeviceToken(token);
+    }
+  }
+
+  Future<String> _ensureDeviceId() {
+    return ensureDeviceId(_deviceIdentityStore);
+  }
+
+  Future<GteAuthDeviceRequest> _buildDeviceRequest({
+    bool biometricEnabled = false,
+  }) async {
+    final String deviceId = await _ensureDeviceId();
+    final String trustedDeviceToken =
+        (await _trustedDeviceTokenStore.readTrustedDeviceToken() ?? '').trim();
+    return GteAuthDeviceRequest(
+      deviceId: deviceId,
+      installId: deviceId,
+      os: 'flutter',
+      deviceModel: 'gtex-mobile',
+      trustedDeviceToken:
+          trustedDeviceToken.isEmpty ? null : trustedDeviceToken,
+      biometricEnabled: biometricEnabled,
+    );
+  }
+
+  Future<void> _applyDeviceHeaders(Map<String, String> headers) async {
+    final String deviceId = await _ensureDeviceId();
+    headers['X-Device-Id'] = deviceId;
+    final String token =
+        (await _trustedDeviceTokenStore.readTrustedDeviceToken() ?? '').trim();
+    if (token.isNotEmpty) {
+      headers['X-Trusted-Device-Token'] = token;
+    }
   }
 
   Future<bool> _attemptTokenRefresh() async {
@@ -1908,15 +2064,21 @@ class GteModeAwareApiRepository implements GteApiRepository {
     final Map<String, String> headers = <String, String>{
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      'X-Device-Id': 'app-client',
     };
+    await _applyDeviceHeaders(headers);
+    final GteAuthDeviceRequest device = await _buildDeviceRequest(
+      biometricEnabled: session.biometricEnabled,
+    );
     try {
       final GteTransportResponse response = await transport.send(
         GteTransportRequest(
           method: 'POST',
-          uri: config.uriFor('/auth/refresh'),
+          uri: config.uriFor('/api/v2/auth/refresh'),
           headers: gteVersionedApiHeaders(headers),
-          body: <String, Object?>{'refresh_token': session.refreshToken},
+          body: <String, Object?>{
+            'refresh_token': session.refreshToken,
+            'device': device.toJson(),
+          },
         ),
       );
       if (response.statusCode >= 400) {
@@ -1940,9 +2102,11 @@ class GteModeAwareApiRepository implements GteApiRepository {
     Object? body,
     bool requiresAuth = false,
     bool allowRefresh = true,
+    Map<String, String> additionalHeaders = const <String, String>{},
   }) async {
     final Map<String, String> headers = <String, String>{
       'Accept': 'application/json',
+      ...additionalHeaders,
     };
     if (requiresAuth) {
       final AuthSession? persistedSession = await _readPersistedSession();
@@ -1959,7 +2123,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
       if (userId.isNotEmpty && sessionId.isNotEmpty) {
         headers['X-User-Id'] = userId;
         headers['X-Session-Id'] = sessionId;
-        headers['X-Device-Id'] = 'app-client';
+        await _applyDeviceHeaders(headers);
       }
     }
     if (body != null) {
@@ -1986,6 +2150,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
           body: body,
           requiresAuth: requiresAuth,
           allowRefresh: false,
+          additionalHeaders: additionalHeaders,
         );
       }
       if (response.statusCode >= 400) {

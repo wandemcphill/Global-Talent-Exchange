@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../competitions/live_competitions_provider.dart';
+import '../compete/providers/live_competitions_provider.dart';
 import '../profile/live_profile_provider.dart';
 import '../tasks/live_tasks_provider.dart';
 import '../transfer_market/live_market_provider.dart';

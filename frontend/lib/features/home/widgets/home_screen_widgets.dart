@@ -13,7 +13,6 @@ import '../../../core/widgets/gtex_surface_card.dart';
 import '../../../core/widgets/stat_bar.dart';
 import '../../../shared/models/club.dart';
 import '../../../shared/models/daily_task.dart';
-import '../../../shared/models/live_match.dart';
 import '../../../shared/widgets/metric_pill.dart';
 
 enum HomeCardKind { primary, gold }
@@ -402,86 +401,6 @@ class QuickActionsGrid extends StatelessWidget {
                   .toList(),
         );
       },
-    );
-  }
-}
-
-class LiveMatchesCarousel extends StatelessWidget {
-  const LiveMatchesCarousel({super.key, required this.matches});
-
-  final List<LiveMatch> matches;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 304,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
-        itemCount: matches.length,
-        separatorBuilder: (_, _) => const SizedBox(width: spacingMD),
-        itemBuilder: (BuildContext context, int index) {
-          final LiveMatch match = matches[index];
-          return SizedBox(
-            width: 320,
-            child: AppHoverLift(
-              child: GtexSurfaceCard(
-                glowColor: index == 0 ? AppColors.primary : null,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            '${match.homeClub} vs ${match.awayClub}',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                        ),
-                        MetricPill(
-                          label: 'Live',
-                          value: '${match.minute}\'',
-                          highlight: true,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: spacingMD),
-                    Text(
-                      '${match.homeScore} - ${match.awayScore}',
-                      style: Theme.of(context).textTheme.headlineLarge
-                          ?.copyWith(color: AppColors.gold),
-                    ),
-                    const SizedBox(height: spacingSM),
-                    Text(
-                      match.venue,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: spacingMD),
-                    Text(
-                      match.headline,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
-                    Row(
-                      children: <Widget>[
-                        Expanded(child: StatBar(match.momentum)),
-                        const SizedBox(width: spacingSM),
-                        Text(
-                          'Momentum',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }

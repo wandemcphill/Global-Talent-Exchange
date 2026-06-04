@@ -1,0 +1,73 @@
+{
+  "payment_rails": [
+    {
+      "deposits_enabled": true,
+      "is_live": true,
+      "maintenance_message": "Manual bank-transfer desk is enabled.",
+      "provider": "bank_transfer_manual",
+      "withdrawals_enabled": true
+    },
+    {
+      "deposits_enabled": true,
+      "is_live": true,
+      "maintenance_message": null,
+      "provider": "korapay",
+      "withdrawals_enabled": true
+    }
+  ],
+  "roles": {
+    "assignments": [],
+    "available_roles": {
+      "competition_ops_admin": [
+        "manage_competitions",
+        "view_audit_log"
+      ],
+      "finance_admin": [
+        "manage_commissions",
+        "manage_payment_rails",
+        "manage_withdrawals",
+        "manage_treasury_withdrawals",
+        "view_audit_log"
+      ],
+      "god_mode": [
+        "manage_admin_roles",
+        "manage_commissions",
+        "manage_payment_rails",
+        "manage_withdrawals",
+        "manage_treasury_withdrawals",
+        "manage_liquidity_desk",
+        "view_audit_log",
+        "pause_payments",
+        "view_integrity_controls"
+      ],
+      "market_ops_admin": [
+        "manage_liquidity_desk",
+        "view_audit_log",
+        "view_integrity_controls"
+      ],
+      "regen_ops_admin": [
+        "manage_regen_universe",
+        "manage_national_regens",
+        "manage_regen_awards",
+        "manage_regen_generation",
+        "view_audit_log"
+      ],
+      "scoped_admin": [],
+      "support_admin": [
+        "manage_withdrawals",
+        "view_audit_log"
+      ]
+    },
+    "default_admin_role": "scoped_admin"
+  },
+  "runtime_metadata": {
+    "legacy_file_reconciled_at": null
+  },
+  "withdrawal_controls": {
+    "deposits_via_bank_transfer": false,
+    "egame_withdrawals_enabled": true,
+    "payouts_via_bank_transfer": false,
+    "processor_mode": "automatic_gateway",
+    "trade_withdrawals_enabled": true
+  }
+}

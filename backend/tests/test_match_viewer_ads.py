@@ -11,6 +11,7 @@ from app.highlights.service import HighlightGenerationService
 from app.match_engine.api.router import router as match_engine_router
 from app.match_engine.services.highlight_manifest import MatchHighlightManifestBuilder
 from app.models.base import Base
+from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.routes.match_viewer import router as match_viewer_router
 from app.schemas.match_viewer import MatchViewerEventType
@@ -34,7 +35,7 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(engine, tables=[CompetitionMatch.__table__])
+    Base.metadata.create_all(engine, tables=[UserCompetition.__table__, CompetitionMatch.__table__])
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
 
     def override_session():
@@ -60,6 +61,16 @@ def _insert_match(
     metadata_json: dict[str, object],
 ) -> None:
     with session_factory() as session:
+        session.add(
+            UserCompetition(
+                id="competition-1",
+                host_user_id="host-user-1",
+                name="Creator Match Night",
+                format="league",
+                currency="coin",
+                metadata_json={},
+            )
+        )
         session.add(
             CompetitionMatch(
                 id=match_id,
@@ -96,7 +107,7 @@ def test_select_ad_prefers_goal_sponsorship_before_rewarded_offer() -> None:
 
     assert placement is not None
     assert placement["type"] == MatchAdPlacementType.SPONSORED_HIGHLIGHT.value
-    assert placement["brand"] in {"MTN", "BetKing", "Flutterwave"}
+    assert placement["brand"] in {"MTN", "BetKing", "KoraPay"}
     assert "powered by" in placement["message"].lower()
 
 

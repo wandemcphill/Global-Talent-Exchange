@@ -41,10 +41,7 @@ class SecureAuthSessionStore implements AuthSessionStore {
       await _storage.delete(key: storageKey);
       return;
     }
-    await _storage.write(
-      key: storageKey,
-      value: jsonEncode(session.toJson()),
-    );
+    await _storage.write(key: storageKey, value: jsonEncode(session.toJson()));
   }
 }
 
@@ -64,6 +61,53 @@ abstract class DeviceIdentityStore {
   Future<String?> readDeviceId();
 
   Future<void> writeDeviceId(String? deviceId);
+}
+
+abstract class TrustedDeviceTokenStore {
+  Future<String?> readTrustedDeviceToken();
+
+  Future<void> writeTrustedDeviceToken(String? token);
+}
+
+class SecureTrustedDeviceTokenStore implements TrustedDeviceTokenStore {
+  SecureTrustedDeviceTokenStore({
+    FlutterSecureStorage? storage,
+    this.storageKey = _defaultTrustedDeviceTokenStorageKey,
+  }) : _storage = storage ?? const FlutterSecureStorage();
+
+  static const String _defaultTrustedDeviceTokenStorageKey =
+      'gtex_trusted_device_token';
+
+  final FlutterSecureStorage _storage;
+  final String storageKey;
+
+  @override
+  Future<String?> readTrustedDeviceToken() async {
+    final String value = (await _storage.read(key: storageKey) ?? '').trim();
+    return value.isEmpty ? null : value;
+  }
+
+  @override
+  Future<void> writeTrustedDeviceToken(String? token) async {
+    final String resolved = token?.trim() ?? '';
+    if (resolved.isEmpty) {
+      await _storage.delete(key: storageKey);
+      return;
+    }
+    await _storage.write(key: storageKey, value: resolved);
+  }
+}
+
+class MemoryTrustedDeviceTokenStore implements TrustedDeviceTokenStore {
+  String? _token;
+
+  @override
+  Future<String?> readTrustedDeviceToken() async => _token;
+
+  @override
+  Future<void> writeTrustedDeviceToken(String? token) async {
+    _token = token;
+  }
 }
 
 class SecureDeviceIdentityStore implements DeviceIdentityStore {
@@ -130,7 +174,10 @@ math.Random _createUuidRandom() {
 }
 
 String generateIdentityUuid() {
-  final List<int> bytes = List<int>.generate(16, (_) => _uuidRandom.nextInt(256));
+  final List<int> bytes = List<int>.generate(
+    16,
+    (_) => _uuidRandom.nextInt(256),
+  );
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   final String hex =

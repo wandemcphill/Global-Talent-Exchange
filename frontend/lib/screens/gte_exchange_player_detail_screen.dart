@@ -402,11 +402,11 @@ class _GteExchangePlayerDetailScreenState
                   snapshot.ticker.referencePrice ?? value.currentValueCredits,
                 ),
               ),
-              if (widget.controller.walletSummary != null)
+              if (widget.controller.walletDisplay != null)
                 GteMetricChip(
                   label: 'GTEX Coin',
                   value: gteFormatCredits(
-                    widget.controller.walletSummary!.availableBalance,
+                    widget.controller.walletDisplay!.availableBalance,
                   ),
                 ),
               if (holding != null)

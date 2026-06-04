@@ -1,17 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
-import 'package:gte_frontend/features/club_sale_market/data/club_sale_market_models.dart';
-import 'package:gte_frontend/features/club_sale_market/data/club_sale_market_repository.dart';
-import 'package:gte_frontend/features/club_sale_market/presentation/club_sale_market_controller.dart';
+import 'package:gte_frontend/features/capital/liquidity/club_sale_market/data/club_sale_market_models.dart';
+import 'package:gte_frontend/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart';
+import 'package:gte_frontend/features/capital/liquidity/club_sale_market/presentation/club_sale_market_controller.dart';
 
 void main() {
   test('fixture mode loads owner offers and sale history', () async {
     final ClubSaleMarketController controller =
         ClubSaleMarketController.standard(
-      baseUrl: 'http://127.0.0.1:8000',
-      backendMode: GteBackendMode.fixture,
-      accessToken: 'token-123',
-    );
+          baseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+          accessToken: 'token-123',
+        );
 
     await controller.loadPublicSnapshot('royal-lagos-fc');
     await controller.loadOwnerWorkspace('royal-lagos-fc');

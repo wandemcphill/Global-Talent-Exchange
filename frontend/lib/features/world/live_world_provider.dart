@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/gte_authed_api.dart';
-import '../../features/competitions/live_competitions_provider.dart';
+import '../../features/compete/providers/live_competitions_provider.dart';
 import '../../features/shared/data/gte_feature_support.dart';
 import '../../shared/models/auth_session.dart';
 import '../../shared/providers/auth_provider.dart';

@@ -290,4 +290,3 @@ Map<String, Object?> _standingJson(String id, String competitionId) =>
       'created_at': '2026-03-10T12:00:00Z',
       'updated_at': '2026-03-10T12:00:00Z',
     };
-

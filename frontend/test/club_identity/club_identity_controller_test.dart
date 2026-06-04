@@ -9,11 +9,9 @@ import 'package:gte_frontend/features/club_identity/jerseys/presentation/club_id
 
 void main() {
   test('save identity success clears unsaved changes', () async {
-    final _StubRepository repository =
-        _StubRepository(ClubIdentityDefaults.generate(
-      clubId: 'atlas-fc',
-      clubName: 'Atlas FC',
-    ));
+    final _StubRepository repository = _StubRepository(
+      ClubIdentityDefaults.generate(clubId: 'atlas-fc', clubName: 'Atlas FC'),
+    );
     final ClubIdentityController controller = ClubIdentityController(
       clubId: 'atlas-fc',
       repository: repository,
@@ -34,22 +32,16 @@ void main() {
   });
 
   test('optimistic save rolls back on failure', () async {
-    final _StubRepository repository =
-        _StubRepository(ClubIdentityDefaults.generate(
-      clubId: 'atlas-fc',
-      clubName: 'Atlas FC',
-    ))
-          ..failPatch = true;
+    final _StubRepository repository = _StubRepository(
+      ClubIdentityDefaults.generate(clubId: 'atlas-fc', clubName: 'Atlas FC'),
+    )..failPatch = true;
     final ClubIdentityController controller = ClubIdentityController(
       clubId: 'atlas-fc',
       repository: repository,
     );
 
     await controller.load();
-    controller.updateJerseyVariant(
-      JerseyType.home,
-      primaryColor: '#FFFFFF',
-    );
+    controller.updateJerseyVariant(JerseyType.home, primaryColor: '#FFFFFF');
 
     expect(controller.hasUnsavedChanges, isTrue);
 
@@ -98,14 +90,18 @@ class _StubRepository extends ClubIdentityRepository {
       clubName: patch['club_name'] as String? ?? _identity.clubName,
       shortClubCode:
           patch['short_club_code'] as String? ?? _identity.shortClubCode,
-      colorPalette: patch['color_palette'] is Map<String, dynamic>
-          ? ColorPaletteProfileDto.fromJson(
-              patch['color_palette'] as Map<String, dynamic>)
-          : _identity.colorPalette,
-      badgeProfile: patch['badge_profile'] is Map<String, dynamic>
-          ? BadgeProfileDto.fromJson(
-              patch['badge_profile'] as Map<String, dynamic>)
-          : _identity.badgeProfile,
+      colorPalette:
+          patch['color_palette'] is Map<String, dynamic>
+              ? ColorPaletteProfileDto.fromJson(
+                patch['color_palette'] as Map<String, dynamic>,
+              )
+              : _identity.colorPalette,
+      badgeProfile:
+          patch['badge_profile'] is Map<String, dynamic>
+              ? BadgeProfileDto.fromJson(
+                patch['badge_profile'] as Map<String, dynamic>,
+              )
+              : _identity.badgeProfile,
     );
     return _identity;
   }
@@ -116,9 +112,7 @@ class _StubRepository extends ClubIdentityRepository {
     required Map<String, dynamic> patch,
   }) async {
     patchJerseysCalls += 1;
-    _identity = _identity.copyWith(
-      jerseySet: JerseySetDto.fromJson(patch),
-    );
+    _identity = _identity.copyWith(jerseySet: JerseySetDto.fromJson(patch));
     return _identity.jerseySet;
   }
 }

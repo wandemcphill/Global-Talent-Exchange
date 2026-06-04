@@ -328,6 +328,10 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     admin_user: Mapped["User | None"] = relationship("User", foreign_keys=[admin_user_id])
 
+    @property
+    def total_debit(self) -> Decimal:
+        return Decimal(self.net_amount or 0) + Decimal(self.fee_amount or 0)
+
 
 class TreasuryAuditEvent(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "treasury_audit_events"

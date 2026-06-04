@@ -66,13 +66,6 @@ def test_payment_rails_drop_stale_non_live_defaults(tmp_path: Path) -> None:
                         "maintenance_message": "Manual rail is available.",
                     },
                     {
-                        "provider": "paystack",
-                        "deposits_enabled": True,
-                        "withdrawals_enabled": True,
-                        "is_live": True,
-                        "maintenance_message": None,
-                    },
-                    {
                         "provider": "korapay",
                         "deposits_enabled": True,
                         "withdrawals_enabled": True,
@@ -80,14 +73,14 @@ def test_payment_rails_drop_stale_non_live_defaults(tmp_path: Path) -> None:
                         "maintenance_message": None,
                     },
                     {
-                        "provider": "flutterwave",
+                        "provider": "legacy_processor_a",
                         "deposits_enabled": True,
                         "withdrawals_enabled": True,
                         "is_live": True,
                         "maintenance_message": None,
                     },
                     {
-                        "provider": "monnify",
+                        "provider": "legacy_processor_b",
                         "deposits_enabled": True,
                         "withdrawals_enabled": True,
                         "is_live": True,
@@ -105,8 +98,8 @@ def test_payment_rails_drop_stale_non_live_defaults(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     rails = response.json()["rails"]
-    assert [rail["provider"] for rail in rails] == ["bank_transfer_manual", "paystack", "korapay"]
-    assert {rail["provider"] for rail in rails} == {"bank_transfer_manual", "paystack", "korapay"}
+    assert [rail["provider"] for rail in rails] == ["bank_transfer_manual", "korapay"]
+    assert {rail["provider"] for rail in rails} == {"bank_transfer_manual", "korapay"}
 
 
 def test_payment_rail_update_rejects_unsupported_provider(tmp_path: Path) -> None:
@@ -116,7 +109,7 @@ def test_payment_rail_update_rejects_unsupported_provider(tmp_path: Path) -> Non
             json={
                 "rails": [
                     {
-                        "provider": "flutterwave",
+                        "provider": "retired_processor",
                         "deposits_enabled": True,
                         "withdrawals_enabled": True,
                         "is_live": True,
@@ -128,4 +121,4 @@ def test_payment_rail_update_rejects_unsupported_provider(tmp_path: Path) -> Non
         )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Unsupported payment rail provider 'flutterwave'."
+    assert response.json()["detail"] == "Unsupported payment rail provider 'retired_processor'."

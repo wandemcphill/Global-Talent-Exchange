@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/club_controller.dart';
+import 'package:gte_frontend/controllers/club_ops_controller.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/club_hub/formation/formation_editor_panel.dart';
 import 'package:gte_frontend/features/club_hub/widgets/club_hub_components.dart';
 import 'package:gte_frontend/features/club_hub/widgets/club_hub_header_card.dart';
+import 'package:gte_frontend/features/club_hub/widgets/squad_readiness_panel.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_profile_dto.dart';
 import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_types.dart';
 import 'package:gte_frontend/features/club_identity/jerseys/widgets/identity_color_utils.dart';
@@ -11,6 +14,7 @@ import 'package:gte_frontend/features/club_identity/reputation/data/reputation_m
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_item_dto.dart';
 import 'package:gte_frontend/features/club_navigation/club_navigation.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/features/shell/shell.dart' as shell;
 import 'package:gte_frontend/models/club_catalog_models.dart';
 import 'package:gte_frontend/models/club_models.dart';
 import 'package:gte_frontend/widgets/clubs/featured_trophy_card.dart';
@@ -36,6 +40,7 @@ class ClubHubContent extends StatelessWidget {
     required this.onOpenPurchaseHistory,
     this.onOpenLogin,
     this.navigationDependencies,
+    this.operationsController,
   });
 
   final ClubController controller;
@@ -52,14 +57,16 @@ class ClubHubContent extends StatelessWidget {
   final VoidCallback onOpenEraHistory;
   final VoidCallback onOpenPurchaseHistory;
   final GteNavigationDependencies? navigationDependencies;
+  final ClubOpsController? operationsController;
 
   @override
   Widget build(BuildContext context) {
     final bool canOpenOwnerOffers =
         isAuthenticated && navigationDependencies?.currentClubId == data.clubId;
-    final String ownerOffersMessage = !isAuthenticated
-        ? 'Sign in as the club owner to open club offers.'
-        : 'Switch to this club before opening club offers.';
+    final String ownerOffersMessage =
+        !isAuthenticated
+            ? 'Sign in as the club owner to open club offers.'
+            : 'Switch to this club before opening club offers.';
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
@@ -129,49 +136,59 @@ class ClubHubContent extends StatelessWidget {
           currentLeagueLabel: _currentLeagueLabel(data),
         ),
         const SizedBox(height: 18),
-        ClubQuickActionRow(
-          selectedTab: selectedTab,
-          onSelected: onTabSelected,
+        _ClubOperatingReadinessPanel(
+          data: data,
+          controller: controller,
+          navigationDependencies: navigationDependencies,
         ),
         const SizedBox(height: 18),
-        ClubTopTabs(
-          selectedTab: selectedTab,
-          onSelected: onTabSelected,
+        ClubHqOperationsPanel(
+          data: data,
+          operationsController: operationsController,
+          onRefresh: operationsController?.refreshClubData,
         ),
+        const SizedBox(height: 18),
+        ClubQuickActionRow(selectedTab: selectedTab, onSelected: onTabSelected),
+        const SizedBox(height: 18),
+        ClubTopTabs(selectedTab: selectedTab, onSelected: onTabSelected),
         if (navigationDependencies != null) ...<Widget>[
           const SizedBox(height: 18),
           _ClubRoutePanel(
-            onOpenCreatorStadium: () => _openFeatureRoute(
-              context,
-              CreatorStadiumClubRouteData(
-                clubId: data.clubId,
-                clubName: data.clubName,
-              ),
-            ),
-            onOpenClubSaleDetail: () => _openFeatureRoute(
-              context,
-              ClubSaleMarketDetailRouteData(
-                clubId: data.clubId,
-                clubName: data.clubName,
-              ),
-            ),
-            onOpenOwnerOffers: canOpenOwnerOffers
-                ? () => _openFeatureRoute(
+            onOpenCreatorStadium:
+                () => _openFeatureRoute(
+                  context,
+                  CreatorStadiumClubRouteData(
+                    clubId: data.clubId,
+                    clubName: data.clubName,
+                  ),
+                ),
+            onOpenClubSaleDetail:
+                () => _openFeatureRoute(
+                  context,
+                  ClubSaleMarketDetailRouteData(
+                    clubId: data.clubId,
+                    clubName: data.clubName,
+                  ),
+                ),
+            onOpenOwnerOffers:
+                canOpenOwnerOffers
+                    ? () => _openFeatureRoute(
                       context,
                       ClubSaleMarketOwnerOffersRouteData(
                         clubId: data.clubId,
                         clubName: data.clubName,
                       ),
                     )
-                : null,
+                    : null,
             ownerOffersMessage: ownerOffersMessage,
-            onOpenWorldContext: () => _openFeatureRoute(
-              context,
-              WorldClubContextRouteData(
-                clubId: data.clubId,
-                clubName: data.clubName,
-              ),
-            ),
+            onOpenWorldContext:
+                () => _openFeatureRoute(
+                  context,
+                  WorldClubContextRouteData(
+                    clubId: data.clubId,
+                    clubName: data.clubName,
+                  ),
+                ),
           ),
         ],
         const SizedBox(height: 18),
@@ -204,10 +221,7 @@ class ClubHubContent extends StatelessWidget {
     }
   }
 
-  Future<void> _openFeatureRoute(
-    BuildContext context,
-    GteAppRouteData route,
-  ) {
+  Future<void> _openFeatureRoute(BuildContext context, GteAppRouteData route) {
     final GteNavigationDependencies? dependencies = navigationDependencies;
     if (dependencies == null) {
       return Future<void>.value();
@@ -270,6 +284,14 @@ class ClubHubContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
+        SquadReadinessPanel(
+          snapshot: SquadReadinessSnapshot.fromDashboard(
+            data,
+            isSyncing: controller.isLoading,
+            errorMessage: controller.errorMessage,
+          ),
+        ),
+        const SizedBox(height: 18),
         GteSurfacePanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -285,7 +307,8 @@ class ClubHubContent extends StatelessWidget {
               ),
               ClubHubMetricRow(
                 label: 'Matchday spotlight',
-                value: spotlightHonor?.topPerformerName ??
+                value:
+                    spotlightHonor?.topPerformerName ??
                     spotlightHonor?.captainName ??
                     'Collective discipline',
               ),
@@ -305,107 +328,11 @@ class ClubHubContent extends StatelessWidget {
   }
 
   Widget _buildTacticsTab(BuildContext context) {
-    final TacticsBlueprint blueprint = _buildTacticsBlueprint(data);
-
-    return Column(
+    return FormationEditorPanel(
       key: const ValueKey<String>('club-tab-tactics'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        GteSurfacePanel(
-          emphasized: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Tactical board',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'The club shell frames how the team should look on the ball, without fragmenting the badge into admin surfaces.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: blueprint.tags
-                    .map((String tag) => ClubHubPill(label: tag))
-                    .toList(growable: false),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
-        Wrap(
-          spacing: 14,
-          runSpacing: 14,
-          children: <Widget>[
-            ClubHubStatCard(
-              label: 'Shape',
-              value: blueprint.shape,
-              detail: blueprint.shapeDetail,
-              icon: Icons.grid_view_outlined,
-            ),
-            ClubHubStatCard(
-              label: 'Press',
-              value: blueprint.pressLine,
-              detail: blueprint.pressDetail,
-              icon: Icons.bolt_outlined,
-            ),
-            ClubHubStatCard(
-              label: 'Tempo',
-              value: blueprint.tempo,
-              detail: blueprint.tempoDetail,
-              icon: Icons.speed_outlined,
-            ),
-            ClubHubStatCard(
-              label: 'Width',
-              value: blueprint.width,
-              detail: blueprint.widthDetail,
-              icon: Icons.swap_horiz_outlined,
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        GteSurfacePanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Tactical notes',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              ...blueprint.notes.map(
-                (String note) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const Padding(
-                        padding: EdgeInsets.only(top: 2),
-                        child: Icon(
-                          Icons.subdirectory_arrow_right_outlined,
-                          size: 16,
-                          color: GteShellTheme.accent,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          note,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+      clubId: data.clubId,
+      clubName: data.clubName,
+      navigationDependencies: navigationDependencies,
     );
   }
 
@@ -531,28 +458,33 @@ class ClubHubContent extends StatelessWidget {
             ClubHubStatCard(
               label: 'Current score',
               value: '${data.reputation.profile.currentScore}',
-              detail: progress.pointsToNextTier == null
-                  ? 'Top prestige tier already secured.'
-                  : '${progress.pointsToNextTier} points to ${progress.nextTier!.label}.',
+              detail:
+                  progress.pointsToNextTier == null
+                      ? 'Top prestige tier already secured.'
+                      : '${progress.pointsToNextTier} points to ${progress.nextTier!.label}.',
               icon: Icons.insights_outlined,
             ),
             ClubHubStatCard(
               label: 'Regional rank',
-              value: data.reputation.regionalRank == null
-                  ? '--'
-                  : '#${data.reputation.regionalRank!.rank}',
-              detail: data.reputation.regionalRank?.regionLabel ??
+              value:
+                  data.reputation.regionalRank == null
+                      ? '--'
+                      : '#${data.reputation.regionalRank!.rank}',
+              detail:
+                  data.reputation.regionalRank?.regionLabel ??
                   'Regional leaderboard not published yet.',
               icon: Icons.public_outlined,
             ),
             ClubHubStatCard(
               label: 'Global rank',
-              value: data.reputation.globalRank == null
-                  ? '--'
-                  : '#${data.reputation.globalRank!.rank}',
-              detail: data.reputation.globalRank == null
-                  ? 'Global board not available yet.'
-                  : '${data.reputation.globalRank!.currentScore} prestige score.',
+              value:
+                  data.reputation.globalRank == null
+                      ? '--'
+                      : '#${data.reputation.globalRank!.rank}',
+              detail:
+                  data.reputation.globalRank == null
+                      ? 'Global board not available yet.'
+                      : '${data.reputation.globalRank!.currentScore} prestige score.',
               icon: Icons.language_outlined,
             ),
           ],
@@ -588,9 +520,10 @@ class ClubHubContent extends StatelessWidget {
                         '${event.seasonLabel} | ${event.category.label} | ${event.description}',
                     value:
                         '${event.delta >= 0 ? '+' : ''}${event.delta.toString()}',
-                    valueColor: event.delta >= 0
-                        ? GteShellTheme.positive
-                        : GteShellTheme.negative,
+                    valueColor:
+                        event.delta >= 0
+                            ? GteShellTheme.positive
+                            : GteShellTheme.negative,
                   ),
                 ),
               ),
@@ -623,10 +556,7 @@ class ClubHubContent extends StatelessWidget {
       key: const ValueKey<String>('club-tab-trophies'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        FeaturedTrophyCard(
-          trophy: featured,
-          onTap: onOpenTrophies,
-        ),
+        FeaturedTrophyCard(trophy: featured, onTap: onOpenTrophies),
         const SizedBox(height: 18),
         Wrap(
           spacing: 14,
@@ -679,7 +609,9 @@ class ClubHubContent extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              ...trophyCabinet.summaryOutputs.take(3).map(
+              ...trophyCabinet.summaryOutputs
+                  .take(3)
+                  .map(
                     (String summary) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Row(
@@ -804,7 +736,9 @@ class ClubHubContent extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              ...profile.reasons.take(3).map(
+              ...profile.reasons
+                  .take(3)
+                  .map(
                     (String reason) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Row(
@@ -990,7 +924,9 @@ class ClubHubContent extends StatelessWidget {
     ClubDashboardData value,
   ) {
     final List<ClubHistoryEntry> entries = <ClubHistoryEntry>[
-      ...value.reputation.recentEvents.take(3).map(
+      ...value.reputation.recentEvents
+          .take(3)
+          .map(
             (ReputationEventDto event) => ClubHistoryEntry(
               title: event.title,
               subtitle: '${event.category.label} | ${event.description}',
@@ -999,7 +935,9 @@ class ClubHubContent extends StatelessWidget {
               icon: event.category.icon,
             ),
           ),
-      ...value.trophyCabinet.recentHonors.take(3).map(
+      ...value.trophyCabinet.recentHonors
+          .take(3)
+          .map(
             (TrophyItemDto honor) => ClubHistoryEntry(
               title: honor.trophyName,
               subtitle:
@@ -1009,13 +947,16 @@ class ClubHubContent extends StatelessWidget {
               icon: Icons.emoji_events_outlined,
             ),
           ),
-      ...controller.purchaseHistory.take(2).map(
+      ...controller.purchaseHistory
+          .take(2)
+          .map(
             (ClubPurchaseRecord record) => ClubHistoryEntry(
               title: record.itemTitle,
               subtitle: '${record.category} | ${record.statusLabel}',
               when: record.purchasedAt,
-              whenLabel: MaterialLocalizations.of(context)
-                  .formatShortDate(record.purchasedAt),
+              whenLabel: MaterialLocalizations.of(
+                context,
+              ).formatShortDate(record.purchasedAt),
               icon: Icons.receipt_long_outlined,
             ),
           ),
@@ -1026,69 +967,233 @@ class ClubHubContent extends StatelessWidget {
     });
     return entries;
   }
+}
 
-  TacticsBlueprint _buildTacticsBlueprint(ClubDashboardData value) {
-    final PrestigeTier tier = value.reputation.profile.currentPrestigeTier;
-    if (value.dynastyProfile.activeDynastyFlag) {
-      return const TacticsBlueprint(
-        shape: '4-2-3-1',
-        shapeDetail:
-            'Keeps the badge balanced while still pressing for control.',
-        pressLine: 'Front-foot press',
-        pressDetail: 'The club sets traps high and squeezes exits immediately.',
-        tempo: 'Quick circulation',
-        tempoDetail:
-            'Possession moves fast enough to pin elite opponents back.',
-        width: 'Wide overloads',
-        widthDetail: 'Full width creates isolation for top-end finishers.',
-        tags: <String>['Era protection', 'Control', 'Pressure'],
-        notes: <String>[
-          'The current legacy profile supports proactive football rather than reactive block defending.',
-          'Major honors and prestige allow the club to set tempo instead of waiting on moments.',
-          'The tactical shell is built to scale into deeper editing later without changing navigation.',
+class _ClubOperatingReadinessPanel extends StatelessWidget {
+  const _ClubOperatingReadinessPanel({
+    required this.data,
+    required this.controller,
+    required this.navigationDependencies,
+  });
+
+  final ClubDashboardData data;
+  final ClubController controller;
+  final GteNavigationDependencies? navigationDependencies;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<_ClubReadinessSignal> signals = <_ClubReadinessSignal>[
+      _ClubReadinessSignal(
+        title: 'Squad readiness',
+        value: data.playerCount == null ? 'UNKNOWN' : '${data.playerCount}',
+        state:
+            data.playerCount == null
+                ? shell.GtexSurfaceState.degraded
+                : data.playerCount! > 0
+                ? shell.GtexSurfaceState.confirmed
+                : shell.GtexSurfaceState.empty,
+        message:
+            data.playerCount == null
+                ? 'The dashboard did not return registered player count.'
+                : data.playerCount! > 0
+                ? 'Registered player count is confirmed by the club payload.'
+                : 'The club payload returned no registered players.',
+        icon: Icons.groups_outlined,
+      ),
+      _ClubReadinessSignal(
+        title: 'Scouting',
+        value:
+            data.reputation.recentEvents.isEmpty
+                ? 'EMPTY'
+                : '${data.reputation.recentEvents.length}',
+        state:
+            data.reputation.recentEvents.isEmpty
+                ? shell.GtexSurfaceState.empty
+                : shell.GtexSurfaceState.confirmed,
+        message:
+            data.reputation.recentEvents.isEmpty
+                ? 'No scouting or reputation events are present in this snapshot.'
+                : 'Recent reputation events are available for scouting review.',
+        icon: Icons.manage_search_outlined,
+      ),
+      _ClubReadinessSignal(
+        title: 'Finance',
+        value:
+            controller.purchaseHistory.isEmpty
+                ? 'PENDING'
+                : '${controller.purchaseHistory.length}',
+        state:
+            controller.purchaseHistory.isEmpty
+                ? shell.GtexSurfaceState.pending
+                : shell.GtexSurfaceState.confirmed,
+        message:
+            controller.purchaseHistory.isEmpty
+                ? 'No club finance payload is mounted here yet; the hub will not invent cashflow.'
+                : 'Purchase history is available as the current commerce signal.',
+        icon: Icons.account_balance_wallet_outlined,
+      ),
+      _ClubReadinessSignal(
+        title: 'Academy',
+        value: '${data.trophyCabinet.academyHonorsCount}',
+        state:
+            data.trophyCabinet.academyHonorsCount > 0
+                ? shell.GtexSurfaceState.confirmed
+                : shell.GtexSurfaceState.empty,
+        message:
+            data.trophyCabinet.academyHonorsCount > 0
+                ? 'Academy honors are confirmed in the trophy cabinet payload.'
+                : 'No academy honors are present in this club payload.',
+        icon: Icons.school_outlined,
+      ),
+      _ClubReadinessSignal(
+        title: 'Sponsorships',
+        value: data.catalog.any(_isSponsorshipCatalogItem) ? 'FOUND' : 'EMPTY',
+        state:
+            data.catalog.any(_isSponsorshipCatalogItem)
+                ? shell.GtexSurfaceState.confirmed
+                : shell.GtexSurfaceState.empty,
+        message:
+            data.catalog.any(_isSponsorshipCatalogItem)
+                ? 'Sponsorship catalog entries are available in the club payload.'
+                : 'No sponsorship block is present in this club payload.',
+        icon: Icons.handshake_outlined,
+      ),
+    ];
+
+    return GteSurfacePanel(
+      key: const Key('club-operating-readiness-panel'),
+      accentColor: GteShellTheme.accentClub,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Club operating board',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'The HQ exposes readiness, blockers, and missing backend lanes before the club expands into deeper operating screens.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final bool compact = constraints.maxWidth < 760;
+              final double width =
+                  compact
+                      ? constraints.maxWidth
+                      : (constraints.maxWidth - 24) / 3;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: signals
+                    .map<Widget>(
+                      (_ClubReadinessSignal signal) => SizedBox(
+                        width: width,
+                        child: _ClubReadinessTile(signal: signal),
+                      ),
+                    )
+                    .followedBy(<Widget>[
+                      SizedBox(
+                        width: width,
+                        child: FormationHealthSignal(
+                          clubId: data.clubId,
+                          navigationDependencies: navigationDependencies,
+                        ),
+                      ),
+                    ])
+                    .toList(growable: false),
+              );
+            },
+          ),
         ],
-      );
-    }
-    if (tier.index >= PrestigeTier.elite.index) {
-      return const TacticsBlueprint(
-        shape: '4-3-3',
-        shapeDetail:
-            'A flexible triangle through midfield keeps the game vertical.',
-        pressLine: 'Counter press',
-        pressDetail:
-            'The first five seconds after turnovers are the main trigger.',
-        tempo: 'Balanced vertical',
-        tempoDetail: 'The club can settle but still attacks space early.',
-        width: 'Touchline discipline',
-        widthDetail:
-            'Wingers stay honest to stretch the line before cutting in.',
-        tags: <String>['Progression', 'Balance', 'Transition'],
-        notes: <String>[
-          'Prestige has reached the point where the club can dictate stretches of the game.',
-          'The shape protects central buildup while keeping enough width for identity-driven football.',
-          'This surface gives the club tab a home for future tactical adjustments.',
-        ],
-      );
-    }
-    return const TacticsBlueprint(
-      shape: '4-4-2',
-      shapeDetail:
-          'A stable frame while the club compounds reputation and depth.',
-      pressLine: 'Mid-block',
-      pressDetail:
-          'The team waits for clear triggers instead of chasing chaos.',
-      tempo: 'Measured build',
-      tempoDetail:
-          'Circulation is patient enough to avoid exposing the back line.',
-      width: 'Compact first',
-      widthDetail: 'The block protects central lanes before expanding outward.',
-      tags: <String>['Structure', 'Growth', 'Discipline'],
-      notes: <String>[
-        'The shell emphasizes clarity and repeatable roles while the club stack matures.',
-        'Identity and reputation cues are visible here even before a dedicated tactics editor lands.',
-        'This layout keeps tactical ownership inside the club hub rather than scattering it across routes.',
-      ],
+      ),
     );
+  }
+
+  static bool _isSponsorshipCatalogItem(ClubCatalogItem item) {
+    final String category = item.category.toLowerCase();
+    final String title = item.title.toLowerCase();
+    return category.contains('sponsor') || title.contains('sponsor');
+  }
+}
+
+class _ClubReadinessSignal {
+  const _ClubReadinessSignal({
+    required this.title,
+    required this.value,
+    required this.state,
+    required this.message,
+    required this.icon,
+  });
+
+  final String title;
+  final String value;
+  final shell.GtexSurfaceState state;
+  final String message;
+  final IconData icon;
+}
+
+class _ClubReadinessTile extends StatelessWidget {
+  const _ClubReadinessTile({required this.signal});
+
+  final _ClubReadinessSignal signal;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = _colorFor(signal.state);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(signal.icon, color: color, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                signal.state.name.toUpperCase(),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(signal.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(signal.value, style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text(signal.message, style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
+    );
+  }
+
+  Color _colorFor(shell.GtexSurfaceState state) {
+    switch (state) {
+      case shell.GtexSurfaceState.confirmed:
+      case shell.GtexSurfaceState.data:
+        return GteShellTheme.positive;
+      case shell.GtexSurfaceState.blocked:
+      case shell.GtexSurfaceState.error:
+        return GteShellTheme.negative;
+      case shell.GtexSurfaceState.pending:
+      case shell.GtexSurfaceState.degraded:
+        return GteShellTheme.warning;
+      case shell.GtexSurfaceState.loading:
+      case shell.GtexSurfaceState.syncing:
+      case shell.GtexSurfaceState.reconnecting:
+        return GteShellTheme.accentClub;
+      case shell.GtexSurfaceState.empty:
+        return GteShellTheme.textMuted;
+    }
   }
 }
 
@@ -1253,32 +1358,6 @@ class _QuickActionButton extends StatelessWidget {
       label: Text(label),
     );
   }
-}
-
-class TacticsBlueprint {
-  const TacticsBlueprint({
-    required this.shape,
-    required this.shapeDetail,
-    required this.pressLine,
-    required this.pressDetail,
-    required this.tempo,
-    required this.tempoDetail,
-    required this.width,
-    required this.widthDetail,
-    required this.tags,
-    required this.notes,
-  });
-
-  final String shape;
-  final String shapeDetail;
-  final String pressLine;
-  final String pressDetail;
-  final String tempo;
-  final String tempoDetail;
-  final String width;
-  final String widthDetail;
-  final List<String> tags;
-  final List<String> notes;
 }
 
 class ClubHistoryEntry {

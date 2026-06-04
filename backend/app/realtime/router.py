@@ -45,7 +45,12 @@ def get_wallet_gateway(
     )
 
 
-@realtime_router.get("/matches/{match_id}/gateway", response_model=MatchGatewayView)
+@realtime_router.get(
+    "/matches/{match_id}/gateway",
+    response_model=MatchGatewayView,
+    include_in_schema=False,
+    deprecated=True,
+)
 def get_match_gateway(
     match_id: str,
     request: Request,
@@ -54,7 +59,7 @@ def get_match_gateway(
     snapshot = _build_match_gateway_snapshot(request.app, match_id)
     return MatchGatewayView(
         channel=snapshot.channel,
-        websocket_path=f"/realtime/matches/{match_id}/stream",
+        websocket_path=f"/api/matches/{match_id}/stream",
         snapshot=snapshot,
     )
 
@@ -85,8 +90,8 @@ async def stream_wallet_updates(websocket: WebSocket) -> None:
     await _run_realtime_stream(websocket, user_id=user_id, topics=("wallet",))
 
 
-@realtime_router.websocket("/matches/{match_id}/stream")
-async def stream_match_updates(websocket: WebSocket, match_id: str) -> None:
+@realtime_router.websocket("/matches/{match_id}/stream", name="legacy_match_realtime_stream")
+async def stream_legacy_match_updates(websocket: WebSocket, match_id: str) -> None:
     user_id, token_provided = _resolve_websocket_user_id(websocket)
     if token_provided and user_id is None:
         await websocket.close(code=4401)

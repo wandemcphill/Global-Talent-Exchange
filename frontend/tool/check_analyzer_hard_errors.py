@@ -12,7 +12,16 @@ SEVERITY_PATTERN = re.compile(r"^\s*(error|warning|info)\s+[-•]\s+", re.IGNORE
 SUCCESS_MARKERS = ("No issues found!", "issues found.")
 
 
+def clean_flutter_test_build_state() -> None:
+    for relative_path in (
+        Path("build") / "unit_test_assets",
+        Path("build") / "native_assets",
+    ):
+        shutil.rmtree(ROOT / relative_path, ignore_errors=True)
+
+
 def main() -> int:
+    clean_flutter_test_build_state()
     flutter_executable = shutil.which("flutter") or shutil.which("flutter.bat")
     command: list[str] | str
     shell = False

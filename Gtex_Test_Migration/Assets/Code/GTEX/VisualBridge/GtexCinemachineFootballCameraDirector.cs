@@ -1,7 +1,6 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using Unity.Cinemachine;
-using Unity.Cinemachine.TargetTracking;
 using UnityEngine;
 
 namespace FStudio.GTEX.VisualBridge
@@ -34,9 +33,9 @@ namespace FStudio.GTEX.VisualBridge
         private readonly float[] nearestPlayerDistances = new float[10];
 
         private Camera outputCamera;
-        private CinemachineBrain brain;
-        private CinemachineCamera footballCamera;
-        private CinemachineTargetGroup targetGroup;
+        private Behaviour brain;
+        private Behaviour footballCamera;
+        private Component targetGroup;
         private Transform runtimeRoot;
         private Transform groupMarkerRoot;
         private Transform focusAnchor;
@@ -51,6 +50,14 @@ namespace FStudio.GTEX.VisualBridge
         private bool hasWorldPassTarget;
         private Func<Transform> ballResolver;
         private Func<Vector3?> attackingGoalResolver;
+        private bool missingCinemachineLogged;
+        private static Type cachedBrainType;
+        private static Type cachedCameraType;
+        private static Type cachedTargetGroupType;
+        private static Type cachedFollowType;
+        private static Type cachedRotationComposerType;
+        private static Type cachedGroupFramingType;
+        private static bool cinemachineTypesResolved;
 
         public bool HasBoundCamera => outputCamera != null && brain != null && footballCamera != null && targetGroup != null;
 
@@ -184,21 +191,19 @@ namespace FStudio.GTEX.VisualBridge
 
         private void EnsureRig()
         {
-            if (outputCamera == null)
+            if (outputCamera == null || !TryResolveCinemachineRuntime())
             {
                 return;
             }
 
-            brain = outputCamera.GetComponent<CinemachineBrain>();
+            brain = GetOptionalComponent(outputCamera.gameObject, cachedBrainType) as Behaviour;
             if (brain == null)
             {
-                brain = outputCamera.gameObject.AddComponent<CinemachineBrain>();
+                brain = AddOptionalComponent(outputCamera.gameObject, cachedBrainType) as Behaviour;
             }
 
             brain.enabled = true;
-            brain.ShowDebugText = false;
-            brain.UpdateMethod = CinemachineBrain.UpdateMethods.LateUpdate;
-            brain.BlendUpdateMethod = CinemachineBrain.BrainUpdateMethods.LateUpdate;
+            SetOptionalMember(brain, "ShowDebugText", false);
 
             if (runtimeRoot == null)
             {
@@ -212,20 +217,16 @@ namespace FStudio.GTEX.VisualBridge
                 var groupObject = new GameObject("GTEX_CinemachineTargetGroup");
                 groupObject.transform.SetParent(runtimeRoot, false);
                 groupMarkerRoot = groupObject.transform;
-                targetGroup = groupObject.AddComponent<CinemachineTargetGroup>();
+                targetGroup = AddOptionalComponent(groupObject, cachedTargetGroupType);
             }
             else if (targetGroup == null)
             {
-                targetGroup = groupMarkerRoot.GetComponent<CinemachineTargetGroup>();
+                targetGroup = GetOptionalComponent(groupMarkerRoot.gameObject, cachedTargetGroupType);
                 if (targetGroup == null)
                 {
-                    targetGroup = groupMarkerRoot.gameObject.AddComponent<CinemachineTargetGroup>();
+                    targetGroup = AddOptionalComponent(groupMarkerRoot.gameObject, cachedTargetGroupType);
                 }
             }
-
-            targetGroup.PositionMode = CinemachineTargetGroup.PositionModes.GroupAverage;
-            targetGroup.RotationMode = CinemachineTargetGroup.RotationModes.Manual;
-            targetGroup.UpdateMethod = CinemachineTargetGroup.UpdateMethods.LateUpdate;
 
             focusAnchor = EnsureMarker(focusAnchor, "GTEX_CinemachineFocusAnchor");
             worldPassTargetMarker = EnsureMarker(worldPassTargetMarker, "GTEX_CinemachineWorldPassTarget");
@@ -237,15 +238,13 @@ namespace FStudio.GTEX.VisualBridge
                 cameraObject.transform.SetParent(runtimeRoot, false);
                 cameraObject.transform.position = outputCamera.transform.position;
                 cameraObject.transform.rotation = outputCamera.transform.rotation;
-                footballCamera = cameraObject.AddComponent<CinemachineCamera>();
-                footballCamera.Priority = 100;
+                footballCamera = AddOptionalComponent(cameraObject, cachedCameraType) as Behaviour;
+                SetOptionalMember(footballCamera, "Priority", 100);
             }
 
-            ConfigureLens();
             ConfigurePipeline();
-
-            footballCamera.Follow = focusAnchor;
-            footballCamera.LookAt = targetGroup.transform;
+            SetOptionalMember(footballCamera, "Follow", focusAnchor);
+            SetOptionalMember(footballCamera, "LookAt", groupMarkerRoot);
             footballCamera.enabled = true;
         }
 
@@ -261,21 +260,6 @@ namespace FStudio.GTEX.VisualBridge
             return markerObject.transform;
         }
 
-        private void ConfigureLens()
-        {
-            if (footballCamera == null || outputCamera == null)
-            {
-                return;
-            }
-
-            var lens = footballCamera.Lens;
-            lens.FieldOfView = 34f;
-            lens.NearClipPlane = outputCamera.nearClipPlane;
-            lens.FarClipPlane = outputCamera.farClipPlane;
-            lens.Dutch = 0f;
-            footballCamera.Lens = lens;
-        }
-
         private void ConfigurePipeline()
         {
             if (footballCamera == null)
@@ -283,51 +267,44 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            var positionComposer = footballCamera.GetComponent<CinemachinePositionComposer>();
+            var positionComposer = GetOptionalComponent(footballCamera.gameObject, ResolveType("Unity.Cinemachine.CinemachinePositionComposer"));
             if (positionComposer != null)
             {
-                positionComposer.enabled = false;
+                if (positionComposer is Behaviour positionComposerBehaviour)
+                {
+                    positionComposerBehaviour.enabled = false;
+                }
             }
 
-            var follow = footballCamera.GetComponent<CinemachineFollow>();
+            var follow = GetOptionalComponent(footballCamera.gameObject, cachedFollowType);
             if (follow == null)
             {
-                follow = footballCamera.gameObject.AddComponent<CinemachineFollow>();
+                follow = AddOptionalComponent(footballCamera.gameObject, cachedFollowType);
             }
 
-            var trackerSettings = follow.TrackerSettings;
-            trackerSettings.BindingMode = BindingMode.WorldSpace;
-            trackerSettings.PositionDamping = bodyDamping;
-            trackerSettings.AngularDampingMode = AngularDampingMode.Quaternion;
-            trackerSettings.RotationDamping = Vector3.zero;
-            trackerSettings.QuaternionDamping = 0f;
-            follow.TrackerSettings = trackerSettings;
-            follow.FollowOffset = midfieldFollowOffset;
+            SetOptionalMember(follow, "FollowOffset", midfieldFollowOffset);
 
-            var rotationComposer = footballCamera.GetComponent<CinemachineRotationComposer>();
+            var rotationComposer = GetOptionalComponent(footballCamera.gameObject, cachedRotationComposerType);
             if (rotationComposer == null)
             {
-                rotationComposer = footballCamera.gameObject.AddComponent<CinemachineRotationComposer>();
+                rotationComposer = AddOptionalComponent(footballCamera.gameObject, cachedRotationComposerType);
             }
 
-            rotationComposer.TargetOffset = new Vector3(0f, 1.15f, 0f);
-            rotationComposer.Damping = aimDamping;
-            rotationComposer.CenterOnActivate = true;
+            SetOptionalMember(rotationComposer, "TargetOffset", new Vector3(0f, 1.15f, 0f));
+            SetOptionalMember(rotationComposer, "Damping", aimDamping);
+            SetOptionalMember(rotationComposer, "CenterOnActivate", true);
 
-            var groupFraming = footballCamera.GetComponent<CinemachineGroupFraming>();
+            var groupFraming = GetOptionalComponent(footballCamera.gameObject, cachedGroupFramingType);
             if (groupFraming == null)
             {
-                groupFraming = footballCamera.gameObject.AddComponent<CinemachineGroupFraming>();
+                groupFraming = AddOptionalComponent(footballCamera.gameObject, cachedGroupFramingType);
             }
 
-            groupFraming.FramingMode = CinemachineGroupFraming.FramingModes.HorizontalAndVertical;
-            groupFraming.FramingSize = framingSize;
-            groupFraming.CenterOffset = new Vector2(0f, 0.02f);
-            groupFraming.Damping = 0.2f;
-            groupFraming.SizeAdjustment = CinemachineGroupFraming.SizeAdjustmentModes.ZoomOnly;
-            groupFraming.LateralAdjustment = CinemachineGroupFraming.LateralAdjustmentModes.ChangePosition;
-            groupFraming.DollyRange = new Vector2(0f, 0f);
-            groupFraming.FovRange = new Vector2(32f, 48f);
+            SetOptionalMember(groupFraming, "FramingSize", framingSize);
+            SetOptionalMember(groupFraming, "CenterOffset", new Vector2(0f, 0.02f));
+            SetOptionalMember(groupFraming, "Damping", 0.2f);
+            SetOptionalMember(groupFraming, "DollyRange", new Vector2(0f, 0f));
+            SetOptionalMember(groupFraming, "FovRange", new Vector2(32f, 48f));
         }
 
         private void RebindBallIfNeeded()
@@ -370,10 +347,10 @@ namespace FStudio.GTEX.VisualBridge
                 focusAnchor.position = Vector3.Lerp(focusAnchor.position, focus, Time.deltaTime * 7f);
             }
 
-            var follow = footballCamera != null ? footballCamera.GetComponent<CinemachineFollow>() : null;
+            var follow = footballCamera != null ? GetOptionalComponent(footballCamera.gameObject, cachedFollowType) : null;
             if (follow != null)
             {
-                follow.FollowOffset = ResolveFollowOffset(focus);
+                SetOptionalMember(follow, "FollowOffset", ResolveFollowOffset(focus));
             }
         }
 
@@ -385,7 +362,7 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             groupMemberIds.Clear();
-            targetGroup.Targets.Clear();
+            ClearTargetGroupMembers();
 
             var focusOrigin = ResolveFocusOrigin();
             AddGroupTarget(ball, ballWeight, 0.38f);
@@ -415,7 +392,7 @@ namespace FStudio.GTEX.VisualBridge
                 }
             }
 
-            _ = targetGroup.IsEmpty;
+            _ = GetOptionalMember(targetGroup, "IsEmpty");
         }
 
         private Vector3 ResolveBroadcastFocus()
@@ -644,7 +621,7 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            targetGroup.AddMember(target, weight, radius);
+            InvokeOptionalMethod(targetGroup, "AddMember", target, weight, radius);
         }
 
         private Vector3 ResolveFollowOffset(Vector3 focus)
@@ -686,6 +663,188 @@ namespace FStudio.GTEX.VisualBridge
                 !float.IsInfinity(value.x) &&
                 !float.IsInfinity(value.y) &&
                 !float.IsInfinity(value.z);
+        }
+
+        private static void EnsureCinemachineTypesResolved()
+        {
+            if (cinemachineTypesResolved)
+            {
+                return;
+            }
+
+            cinemachineTypesResolved = true;
+            cachedBrainType = ResolveType("Unity.Cinemachine.CinemachineBrain");
+            cachedCameraType = ResolveType("Unity.Cinemachine.CinemachineCamera");
+            cachedTargetGroupType = ResolveType("Unity.Cinemachine.CinemachineTargetGroup");
+            cachedFollowType = ResolveType("Unity.Cinemachine.CinemachineFollow");
+            cachedRotationComposerType = ResolveType("Unity.Cinemachine.CinemachineRotationComposer");
+            cachedGroupFramingType = ResolveType("Unity.Cinemachine.CinemachineGroupFraming");
+        }
+
+        private bool TryResolveCinemachineRuntime()
+        {
+            EnsureCinemachineTypesResolved();
+            var resolved =
+                cachedBrainType != null &&
+                cachedCameraType != null &&
+                cachedTargetGroupType != null;
+            if (!resolved && !missingCinemachineLogged)
+            {
+                missingCinemachineLogged = true;
+                Debug.LogWarning("[GTEX Camera] Cinemachine package types were not resolved. Director will stay inactive.");
+            }
+
+            return resolved;
+        }
+
+        private static Type ResolveType(string fullName)
+        {
+            if (string.IsNullOrWhiteSpace(fullName))
+            {
+                return null;
+            }
+
+            var direct = Type.GetType(fullName, false);
+            if (direct != null)
+            {
+                return direct;
+            }
+
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (var index = 0; index < assemblies.Length; index += 1)
+            {
+                var type = assemblies[index].GetType(fullName, false);
+                if (type != null)
+                {
+                    return type;
+                }
+            }
+
+            return null;
+        }
+
+        private static Component GetOptionalComponent(GameObject target, Type componentType)
+        {
+            return target != null && componentType != null ? target.GetComponent(componentType) : null;
+        }
+
+        private static Component AddOptionalComponent(GameObject target, Type componentType)
+        {
+            return target != null && componentType != null ? target.AddComponent(componentType) : null;
+        }
+
+        private static object GetOptionalMember(object target, string memberName)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(memberName))
+            {
+                return null;
+            }
+
+            var targetType = target.GetType();
+            var property = targetType.GetProperty(memberName);
+            if (property != null && property.CanRead)
+            {
+                return property.GetValue(target, null);
+            }
+
+            var field = targetType.GetField(memberName);
+            return field != null ? field.GetValue(target) : null;
+        }
+
+        private static void SetOptionalMember(object target, string memberName, object value)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(memberName))
+            {
+                return;
+            }
+
+            var targetType = target.GetType();
+            var property = targetType.GetProperty(memberName);
+            if (property != null && property.CanWrite && value != null && property.PropertyType.IsAssignableFrom(value.GetType()))
+            {
+                property.SetValue(target, value, null);
+                return;
+            }
+
+            if (property != null && property.CanWrite && value == null)
+            {
+                property.SetValue(target, null, null);
+                return;
+            }
+
+            var field = targetType.GetField(memberName);
+            if (field != null && value != null && field.FieldType.IsAssignableFrom(value.GetType()))
+            {
+                field.SetValue(target, value);
+                return;
+            }
+
+            if (field != null && value == null)
+            {
+                field.SetValue(target, null);
+            }
+        }
+
+        private static void InvokeOptionalMethod(object target, string methodName, params object[] args)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(methodName))
+            {
+                return;
+            }
+
+            var methods = target.GetType().GetMethods();
+            for (var index = 0; index < methods.Length; index += 1)
+            {
+                var method = methods[index];
+                if (!string.Equals(method.Name, methodName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var parameters = method.GetParameters();
+                if (parameters.Length != (args != null ? args.Length : 0))
+                {
+                    continue;
+                }
+
+                var compatible = true;
+                for (var parameterIndex = 0; parameterIndex < parameters.Length; parameterIndex += 1)
+                {
+                    var argument = args[parameterIndex];
+                    if (argument == null)
+                    {
+                        continue;
+                    }
+
+                    if (!parameters[parameterIndex].ParameterType.IsAssignableFrom(argument.GetType()))
+                    {
+                        compatible = false;
+                        break;
+                    }
+                }
+
+                if (!compatible)
+                {
+                    continue;
+                }
+
+                method.Invoke(target, args);
+                return;
+            }
+        }
+
+        private void ClearTargetGroupMembers()
+        {
+            if (targetGroup == null)
+            {
+                return;
+            }
+
+            var targetsValue = GetOptionalMember(targetGroup, "Targets");
+            if (targetsValue is IList targetsList)
+            {
+                targetsList.Clear();
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gte_frontend/data/dispute_engine_api.dart';
+import 'package:gte_frontend/features/capital/disputes/data/dispute_engine_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 
 void main() {
@@ -129,4 +129,3 @@ Map<String, Object?> _messageJson(String id, String disputeId) =>
       'attachment_id': null,
       'created_at': '2026-04-18T10:00:00Z',
     };
-

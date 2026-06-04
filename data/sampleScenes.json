@@ -1,0 +1,538 @@
+{
+  "matchId": "gtex-777",
+  "seed": 777,
+  "homeTeam": "Kano Pillars",
+  "awayTeam": "Enyimba FC",
+  "scenes": [
+    {
+      "minute": 0,
+      "type": "COMMENTARY_SCENE",
+      "duration": 0.8,
+      "commentary": "Kano Pillars kick off against Enyimba FC."
+    },
+    {
+      "minute": 3.14,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-9",
+        "away-11"
+      ],
+      "commentary": "Enyimba FC FW9 finds Enyimba FC FW11 with a short pass."
+    },
+    {
+      "minute": 3.49,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-11",
+        "away-7"
+      ],
+      "commentary": "Enyimba FC FW11 finds Enyimba FC MF7 with a short pass."
+    },
+    {
+      "minute": 3.84,
+      "type": "SHOT_SCENE",
+      "duration": 1.2,
+      "actor": "away-7",
+      "outcome": "save",
+      "commentary": "Enyimba FC MF7 gets the shot away."
+    },
+    {
+      "minute": 4.09,
+      "type": "SAVE_SCENE",
+      "duration": 1,
+      "actor": "home-1",
+      "commentary": "Kano Pillars GK1 makes the save."
+    },
+    {
+      "minute": 8,
+      "type": "COMMENTARY_SCENE",
+      "duration": 0.8,
+      "commentary": "Enyimba FC control the spell without a clear opening."
+    },
+    {
+      "minute": 13.69,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-11",
+        "away-9"
+      ],
+      "commentary": "Enyimba FC FW11 finds Enyimba FC FW9 with a short pass."
+    },
+    {
+      "minute": 14.04,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-9",
+        "away-10"
+      ],
+      "commentary": "Enyimba FC FW9 finds Enyimba FC FW10 with a short pass."
+    },
+    {
+      "minute": 14.39,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-10",
+        "away-8"
+      ],
+      "commentary": "Enyimba FC FW10 finds Enyimba FC MF8 with a short pass."
+    },
+    {
+      "minute": 14.74,
+      "type": "SHOT_SCENE",
+      "duration": 1.2,
+      "actor": "away-8",
+      "outcome": "save",
+      "commentary": "Enyimba FC MF8 gets the shot away."
+    },
+    {
+      "minute": 14.99,
+      "type": "SAVE_SCENE",
+      "duration": 1,
+      "actor": "home-1",
+      "commentary": "Kano Pillars GK1 makes the save."
+    },
+    {
+      "minute": 18.06,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-9",
+        "away-11"
+      ],
+      "commentary": "Enyimba FC FW9 finds Enyimba FC FW11 with a short pass."
+    },
+    {
+      "minute": 18.41,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-11",
+        "away-8"
+      ],
+      "commentary": "Enyimba FC FW11 finds Enyimba FC MF8 with a short pass."
+    },
+    {
+      "minute": 18.76,
+      "type": "TACKLE_SCENE",
+      "duration": 0.9,
+      "actors": [
+        "home-8",
+        "away-8"
+      ],
+      "commentary": "Kano Pillars MF8 steps in to challenge Enyimba FC MF8."
+    },
+    {
+      "minute": 23,
+      "type": "COMMENTARY_SCENE",
+      "duration": 0.8,
+      "commentary": "Enyimba FC control the spell without a clear opening."
+    },
+    {
+      "minute": 28.75,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-7",
+        "away-6"
+      ],
+      "commentary": "Enyimba FC MF7 finds Enyimba FC MF6 with a short pass."
+    },
+    {
+      "minute": 29.1,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-6",
+        "away-8"
+      ],
+      "commentary": "Enyimba FC MF6 finds Enyimba FC MF8 with a short pass."
+    },
+    {
+      "minute": 29.45,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-8",
+        "away-10"
+      ],
+      "commentary": "Enyimba FC MF8 finds Enyimba FC FW10 with a short pass."
+    },
+    {
+      "minute": 33.15,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-7",
+        "home-11"
+      ],
+      "commentary": "Kano Pillars MF7 finds Kano Pillars FW11 with a short pass."
+    },
+    {
+      "minute": 33.5,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-11",
+        "home-10"
+      ],
+      "commentary": "Kano Pillars FW11 finds Kano Pillars FW10 with a short pass."
+    },
+    {
+      "minute": 38.6,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-9",
+        "away-10"
+      ],
+      "commentary": "Enyimba FC FW9 finds Enyimba FC FW10 with a short pass."
+    },
+    {
+      "minute": 38.95,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-10",
+        "away-7"
+      ],
+      "commentary": "Enyimba FC FW10 finds Enyimba FC MF7 with a short pass."
+    },
+    {
+      "minute": 39.3,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-7",
+        "away-9"
+      ],
+      "commentary": "Enyimba FC MF7 finds Enyimba FC FW9 with a short pass."
+    },
+    {
+      "minute": 39.65,
+      "type": "TACKLE_SCENE",
+      "duration": 0.9,
+      "actors": [
+        "home-9",
+        "away-9"
+      ],
+      "commentary": "Kano Pillars FW9 steps in to challenge Enyimba FC FW9."
+    },
+    {
+      "minute": 43.34,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-9",
+        "home-10"
+      ],
+      "commentary": "Kano Pillars FW9 finds Kano Pillars FW10 with a short pass."
+    },
+    {
+      "minute": 43.69,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-10",
+        "home-7"
+      ],
+      "commentary": "Kano Pillars FW10 finds Kano Pillars MF7 with a short pass."
+    },
+    {
+      "minute": 44.04,
+      "type": "THROUGH_PASS_SCENE",
+      "duration": 1.25,
+      "actors": [
+        "home-7",
+        "home-10"
+      ],
+      "commentary": "Kano Pillars MF7 slides a measured through ball for Kano Pillars FW10."
+    },
+    {
+      "minute": 44.39,
+      "type": "SHOT_SCENE",
+      "duration": 1.2,
+      "actor": "home-10",
+      "outcome": "save",
+      "commentary": "Kano Pillars FW10 gets the shot away."
+    },
+    {
+      "minute": 44.64,
+      "type": "SAVE_SCENE",
+      "duration": 1,
+      "actor": "away-1",
+      "commentary": "Enyimba FC GK1 makes the save."
+    },
+    {
+      "minute": 48,
+      "type": "COMMENTARY_SCENE",
+      "duration": 0.8,
+      "commentary": "Enyimba FC control the spell without a clear opening."
+    },
+    {
+      "minute": 53.48,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-11",
+        "away-9"
+      ],
+      "commentary": "Enyimba FC FW11 finds Enyimba FC FW9 with a short pass."
+    },
+    {
+      "minute": 53.83,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-9",
+        "away-7"
+      ],
+      "commentary": "Enyimba FC FW9 finds Enyimba FC MF7 with a short pass."
+    },
+    {
+      "minute": 54.18,
+      "type": "TACKLE_SCENE",
+      "duration": 0.9,
+      "actors": [
+        "home-2",
+        "away-7"
+      ],
+      "commentary": "Kano Pillars DF2 steps in to challenge Enyimba FC MF7."
+    },
+    {
+      "minute": 54.43,
+      "type": "SHOT_SCENE",
+      "duration": 1.2,
+      "actor": "away-7",
+      "outcome": "goal",
+      "commentary": "Enyimba FC MF7 gets the shot away."
+    },
+    {
+      "minute": 54.68,
+      "type": "GOAL_SCENE",
+      "duration": 1.35,
+      "actor": "away-7",
+      "commentary": "Goal for Enyimba FC. Enyimba FC MF7 finishes the move."
+    },
+    {
+      "minute": 58,
+      "type": "COMMENTARY_SCENE",
+      "duration": 0.8,
+      "commentary": "Enyimba FC control the spell without a clear opening."
+    },
+    {
+      "minute": 63.74,
+      "type": "THROUGH_PASS_SCENE",
+      "duration": 1.25,
+      "actors": [
+        "home-6",
+        "home-9"
+      ],
+      "commentary": "Kano Pillars MF6 slides a measured through ball for Kano Pillars FW9."
+    },
+    {
+      "minute": 64.09,
+      "type": "THROUGH_PASS_SCENE",
+      "duration": 1.25,
+      "actors": [
+        "home-9",
+        "home-7"
+      ],
+      "commentary": "Kano Pillars FW9 slides a measured through ball for Kano Pillars MF7."
+    },
+    {
+      "minute": 64.44,
+      "type": "SHOT_SCENE",
+      "duration": 1.2,
+      "actor": "home-7",
+      "outcome": "save",
+      "commentary": "Kano Pillars MF7 gets the shot away."
+    },
+    {
+      "minute": 64.69,
+      "type": "SAVE_SCENE",
+      "duration": 1,
+      "actor": "away-1",
+      "commentary": "Enyimba FC GK1 makes the save."
+    },
+    {
+      "minute": 68.06,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-7",
+        "home-6"
+      ],
+      "commentary": "Kano Pillars MF7 finds Kano Pillars MF6 with a short pass."
+    },
+    {
+      "minute": 68.41,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-6",
+        "home-10"
+      ],
+      "commentary": "Kano Pillars MF6 finds Kano Pillars FW10 with a short pass."
+    },
+    {
+      "minute": 68.76,
+      "type": "DRIBBLE_SCENE",
+      "duration": 1.1,
+      "actor": "home-10",
+      "commentary": "Kano Pillars FW10 carries the move into the final third."
+    },
+    {
+      "minute": 69.21,
+      "type": "SHOT_SCENE",
+      "duration": 1.2,
+      "actor": "home-10",
+      "outcome": "goal",
+      "commentary": "Kano Pillars FW10 gets the shot away."
+    },
+    {
+      "minute": 69.46,
+      "type": "GOAL_SCENE",
+      "duration": 1.35,
+      "actor": "home-10",
+      "commentary": "Goal for Kano Pillars. Kano Pillars FW10 finishes the move."
+    },
+    {
+      "minute": 73.36,
+      "type": "THROUGH_PASS_SCENE",
+      "duration": 1.25,
+      "actors": [
+        "home-7",
+        "home-8"
+      ],
+      "commentary": "Kano Pillars MF7 slides a measured through ball for Kano Pillars MF8."
+    },
+    {
+      "minute": 73.71,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-8",
+        "home-10"
+      ],
+      "commentary": "Kano Pillars MF8 finds Kano Pillars FW10 with a short pass."
+    },
+    {
+      "minute": 78.27,
+      "type": "THROUGH_PASS_SCENE",
+      "duration": 1.25,
+      "actors": [
+        "away-8",
+        "away-9"
+      ],
+      "commentary": "Enyimba FC MF8 slides a measured through ball for Enyimba FC FW9."
+    },
+    {
+      "minute": 78.62,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "away-9",
+        "away-6"
+      ],
+      "commentary": "Enyimba FC FW9 finds Enyimba FC MF6 with a short pass."
+    },
+    {
+      "minute": 78.97,
+      "type": "SHOT_SCENE",
+      "duration": 1.2,
+      "actor": "away-6",
+      "outcome": "save",
+      "commentary": "Enyimba FC MF6 gets the shot away."
+    },
+    {
+      "minute": 79.22,
+      "type": "SAVE_SCENE",
+      "duration": 1,
+      "actor": "home-1",
+      "commentary": "Kano Pillars GK1 makes the save."
+    },
+    {
+      "minute": 83.7,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-9",
+        "home-10"
+      ],
+      "commentary": "Kano Pillars FW9 finds Kano Pillars FW10 with a short pass."
+    },
+    {
+      "minute": 84.05,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-10",
+        "home-6"
+      ],
+      "commentary": "Kano Pillars FW10 finds Kano Pillars MF6 with a short pass."
+    },
+    {
+      "minute": 84.4,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-6",
+        "home-7"
+      ],
+      "commentary": "Kano Pillars MF6 finds Kano Pillars MF7 with a short pass."
+    },
+    {
+      "minute": 84.75,
+      "type": "DRIBBLE_SCENE",
+      "duration": 1.1,
+      "actor": "home-7",
+      "commentary": "Kano Pillars MF7 carries the move into the final third."
+    },
+    {
+      "minute": 88.67,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-8",
+        "home-11"
+      ],
+      "commentary": "Kano Pillars MF8 finds Kano Pillars FW11 with a short pass."
+    },
+    {
+      "minute": 89.02,
+      "type": "PASS_SCENE",
+      "duration": 1.1,
+      "actors": [
+        "home-11",
+        "home-10"
+      ],
+      "commentary": "Kano Pillars FW11 finds Kano Pillars FW10 with a short pass."
+    },
+    {
+      "minute": 89.37,
+      "type": "SHOT_SCENE",
+      "duration": 1.2,
+      "actor": "home-10",
+      "outcome": "save",
+      "commentary": "Kano Pillars FW10 gets the shot away."
+    },
+    {
+      "minute": 89.62,
+      "type": "SAVE_SCENE",
+      "duration": 1,
+      "actor": "away-1",
+      "commentary": "Enyimba FC GK1 makes the save."
+    },
+    {
+      "minute": 90,
+      "type": "COMMENTARY_SCENE",
+      "duration": 0.8,
+      "commentary": "Full time. Kano Pillars 1-1 Enyimba FC."
+    }
+  ]
+}

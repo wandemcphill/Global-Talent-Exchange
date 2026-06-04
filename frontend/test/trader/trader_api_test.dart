@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
-import 'package:gte_frontend/data/trader_api.dart';
+import 'package:gte_frontend/features/capital/trader/data/trader_api.dart';
 
 void main() {
   test('trader api uses canonical trader routes', () async {
@@ -89,7 +89,16 @@ void main() {
     await api.setupTotp();
 
     expect(overview.profile.tradingAlias, 'Atlas Desk');
+    expect(overview.profile.isOnline, isTrue);
+    expect(overview.profile.trustScore, 91);
+    expect(overview.profile.ratingAverage, 4.8);
+    expect(overview.profile.disputeHistory.single.status, 'resolved');
     expect(markets.single.symbol, 'GTEX');
+    expect(markets.single.orderBook?.bestBid, 1.41);
+    expect(markets.single.orderBook?.bestAsk, 1.43);
+    expect(markets.single.liveSpread, closeTo(0.02, 0.0001));
+    expect(markets.single.settlementEtaMinutes, 12);
+    expect(markets.single.settlementRails, <String>['KoraPay', 'manual']);
     expect(
       transport.requests.map((GteTransportRequest request) => request.method),
       <String>['GET', 'GET', 'POST', 'POST', 'GET', 'POST', 'POST'],
@@ -115,6 +124,63 @@ void main() {
       containsPair('market_id', 'market-lagfc'),
     );
   });
+
+  test('trader parser reads live depth and trust metadata', () {
+    final TraderOverview overview = TraderOverview.fromJson(<String, Object?>{
+      'profile': _profileJson(),
+      'portfolio_value': '24820.00',
+      'gtex_coin_price': '1.42',
+      'daily_pl': '312.40',
+      'wallet_balance': '8410.50',
+      'market_cap': '412800000',
+      'trading_volume': '18200000',
+      'trending': <Object?>[_marketJson('market-gtex', 'GTEX')],
+      'top_gainers': const <Object?>[],
+      'top_losers': const <Object?>[],
+      'most_traded_fan_coins': const <Object?>[],
+      'liquidity_activity': const <Object?>[],
+    });
+
+    final TraderMarket market = overview.trending.single;
+    expect(overview.profile.tradingAlias, 'Atlas Desk');
+    expect(overview.profile.isOnline, isTrue);
+    expect(overview.profile.trustScore, 91);
+    expect(overview.profile.ratingAverage, 4.8);
+    expect(overview.profile.disputeHistory.single.status, 'resolved');
+    expect(market.orderBook?.bestBid, 1.41);
+    expect(market.orderBook?.bestAsk, 1.43);
+    expect(market.liveSpread, closeTo(0.02, 0.0001));
+    expect(market.settlementEtaMinutes, 12);
+    expect(market.settlementRails, <String>['KoraPay', 'manual']);
+  });
+
+  test('trader parser does not invent missing market truth', () {
+    final TraderOverview overview = TraderOverview.fromJson(<String, Object?>{
+      'profile': _profileJson(),
+      'trending': <Object?>[
+        <String, Object?>{
+          'id': 'market-empty',
+          'symbol': 'EMPTY',
+          'display_name': 'Empty Feed',
+          'asset_type': 'fan_coin',
+          'updated_at': '2026-05-18T12:00:00Z',
+        },
+      ],
+      'top_gainers': const <Object?>[],
+      'top_losers': const <Object?>[],
+      'most_traded_fan_coins': const <Object?>[],
+      'liquidity_activity': const <Object?>[],
+    });
+
+    final TraderMarket market = overview.trending.single;
+    expect(overview.walletBalance, isNull);
+    expect(overview.tradingVolume, isNull);
+    expect(market.price, isNull);
+    expect(market.orderBook, isNull);
+    expect(market.liveSpread, isNull);
+    expect(market.settlementRails, isEmpty);
+    expect(market.hasSettlementRails, isFalse);
+  });
 }
 
 class _RecordingTransport implements GteTransport {
@@ -139,6 +205,20 @@ Map<String, Object?> _profileJson() => <String, Object?>{
   'interests_json': <Object?>['GTEX Coin', 'Fan Coins'],
   'wallet_label': 'Prime Wallet',
   'status': 'VERIFIED',
+  'is_online': true,
+  'trust_score': 91,
+  'trust_tier': 'Prime',
+  'rating_average': '4.8',
+  'rating_count': 38,
+  'dispute_history': <Object?>[
+    <String, Object?>{
+      'id': 'dispute-1',
+      'status': 'resolved',
+      'summary': 'Released after evidence review',
+      'opened_at': '2026-05-16T12:00:00Z',
+      'resolved_at': '2026-05-17T12:00:00Z',
+    },
+  ],
   'created_at': '2026-05-18T12:00:00Z',
   'updated_at': '2026-05-18T12:00:00Z',
 };
@@ -153,6 +233,31 @@ Map<String, Object?> _marketJson(String id, String symbol) => <String, Object?>{
   'market_cap': '412800000',
   'volume_24h': '18200000',
   'liquidity_score': 92,
+  'buy_price': '1.43',
+  'sell_price': '1.41',
+  'settlement_eta_minutes': 12,
+  'settlement_rails': <Object?>['KoraPay', 'manual'],
+  'order_book': <String, Object?>{
+    'synced_at': '2026-05-18T12:00:00Z',
+    'bids': <Object?>[
+      <String, Object?>{'price': '1.41', 'quantity': '240'},
+      <String, Object?>{'price': '1.40', 'quantity': '180'},
+    ],
+    'asks': <Object?>[
+      <String, Object?>{'price': '1.43', 'quantity': '210'},
+      <String, Object?>{'price': '1.44', 'quantity': '160'},
+    ],
+  },
+  'candles': <Object?>[
+    <String, Object?>{
+      'timestamp': '2026-05-18T11:45:00Z',
+      'open': '1.39',
+      'high': '1.44',
+      'low': '1.38',
+      'close': '1.42',
+      'volume': '8000',
+    },
+  ],
   'updated_at': '2026-05-18T12:00:00Z',
 };
 

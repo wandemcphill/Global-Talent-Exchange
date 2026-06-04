@@ -217,26 +217,26 @@ class GTexMetrics:
             buckets=WORKER_DURATION_BUCKETS,
             registry=self.registry,
         )
-        self.unity_live_access_total = Counter(
-            "gtex_unity_live_access_total",
-            "Unity live access issue and refresh outcomes.",
+        self.legacy_match_runtime_access_total = Counter(
+            "gtex_legacy_match_runtime_access_total",
+            "Legacy match runtime access issue and refresh outcomes.",
             ("action", "result"),
             registry=self.registry,
         )
-        self.unity_live_payload_total = Counter(
-            "gtex_unity_live_payload_total",
-            "Unity live payload bridge outcomes by transport.",
+        self.legacy_match_runtime_payload_total = Counter(
+            "gtex_legacy_match_runtime_payload_total",
+            "Legacy match runtime payload bridge outcomes by transport.",
             ("transport", "result"),
             registry=self.registry,
         )
-        self.unity_live_websocket_events_total = Counter(
-            "gtex_unity_live_websocket_events_total",
-            "Unity live websocket lifecycle signals.",
+        self.legacy_match_runtime_websocket_events_total = Counter(
+            "gtex_legacy_match_runtime_websocket_events_total",
+            "Legacy match runtime websocket lifecycle signals.",
             ("event", "result"),
             registry=self.registry,
         )
-        self.unity_live_generated_match_total = Counter(
-            "gtex_unity_live_generated_match_total",
+        self.legacy_match_runtime_generated_match_total = Counter(
+            "gtex_legacy_match_runtime_generated_match_total",
             "Generated live match bootstrap outcomes.",
             ("result",),
             registry=self.registry,
@@ -397,17 +397,17 @@ class GTexMetrics:
         self.feed_refresh_total.labels(feed_name, result).inc()
         self.feed_refresh_duration_seconds.labels(feed_name, result).observe(max(float(duration_seconds), 0.0))
 
-    def record_unity_live_access(self, *, action: str, result: str) -> None:
-        self.unity_live_access_total.labels(action, result).inc()
+    def record_legacy_match_runtime_access(self, *, action: str, result: str) -> None:
+        self.legacy_match_runtime_access_total.labels(action, result).inc()
 
-    def record_unity_live_payload(self, *, transport: str, result: str) -> None:
-        self.unity_live_payload_total.labels(transport, result).inc()
+    def record_legacy_match_runtime_payload(self, *, transport: str, result: str) -> None:
+        self.legacy_match_runtime_payload_total.labels(transport, result).inc()
 
-    def record_unity_live_websocket_event(self, *, event: str, result: str) -> None:
-        self.unity_live_websocket_events_total.labels(event, result).inc()
+    def record_legacy_match_runtime_websocket_event(self, *, event: str, result: str) -> None:
+        self.legacy_match_runtime_websocket_events_total.labels(event, result).inc()
 
-    def record_unity_live_generated_match(self, *, result: str) -> None:
-        self.unity_live_generated_match_total.labels(result).inc()
+    def record_legacy_match_runtime_generated_match(self, *, result: str) -> None:
+        self.legacy_match_runtime_generated_match_total.labels(result).inc()
 
     def record_creator_earnings(
         self,

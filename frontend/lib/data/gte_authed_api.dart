@@ -201,7 +201,7 @@ class GteAuthedApi {
     final GteTransportResponse response = await transport.send(
       GteTransportRequest(
         method: 'POST',
-        uri: config.uriFor('/auth/refresh'),
+        uri: config.uriFor('/api/v2/auth/refresh'),
         headers: gteVersionedApiHeaders(headers),
         body: <String, Object?>{'refresh_token': refreshToken},
       ),
@@ -231,7 +231,7 @@ class GteAuthedApi {
     final GteTransportResponse response = await transport.send(
       GteTransportRequest(
         method: 'GET',
-        uri: config.uriFor('/api/session/bootstrap'),
+        uri: config.uriFor('/api/v2/session/bootstrap'),
         headers: gteVersionedApiHeaders(headers),
       ),
     );

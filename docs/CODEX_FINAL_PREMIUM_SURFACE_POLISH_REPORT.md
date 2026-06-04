@@ -29,7 +29,7 @@ This pass stayed within the requested constraints:
 - `frontend/lib/widgets/gte_state_panel.dart`
 - `frontend/lib/widgets/gte_route_integrity_screen.dart`
 - `frontend/lib/features/match/live_match_viewer_route_support.dart`
-- `frontend/lib/features/match/match_native_3d_blocked_screen.dart`
+- `frontend/lib/features/match_center/blocked_match_runtime_screen.dart`
 - `frontend/lib/features/match/match_viewer_capability.dart`
 - `frontend/lib/features/match/presentation/broadcast_package_screen.dart`
 - `frontend/lib/features/viral_feed/presentation/viral_feed_screen.dart`

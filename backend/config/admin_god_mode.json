@@ -28,21 +28,7 @@
       "deposits_enabled": true,
       "is_live": true,
       "maintenance_message": null,
-      "provider": "paystack",
-      "withdrawals_enabled": true
-    },
-    {
-      "deposits_enabled": true,
-      "is_live": true,
-      "maintenance_message": null,
-      "provider": "flutterwave",
-      "withdrawals_enabled": true
-    },
-    {
-      "deposits_enabled": true,
-      "is_live": true,
-      "maintenance_message": null,
-      "provider": "monnify",
+      "provider": "korapay",
       "withdrawals_enabled": true
     }
   ],

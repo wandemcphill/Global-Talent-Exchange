@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
-import 'package:gte_frontend/data/competition_api.dart';
+import 'package:gte_frontend/features/compete/repositories/competition_api.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
@@ -13,8 +13,7 @@ import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_r
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
-import 'package:gte_frontend/models/competition_models.dart';
-import 'package:gte_frontend/services/match_3d_monetization_service.dart';
+import 'package:gte_frontend/features/compete/domain/competition_models.dart';
 
 enum GteNavigationFallbackReason {
   inactiveWorldSuperCup,
@@ -53,6 +52,7 @@ class GteNavigationDependencies {
     bool canHostCompetitions = false,
     this.onOpenLogin,
     this.onOpenCreatorAccessRequest,
+    this.onRegenCreationSettled,
     this.competitionApi,
     this.trophyCabinetRepository,
     this.dynastyRepository,
@@ -70,7 +70,6 @@ class GteNavigationDependencies {
     this.isCheckingCreatorAccessProvider,
     this.hasApprovedCreatorAccessProvider,
     this.canHostCompetitionsProvider,
-    this.match3dEntitlementProvider,
   }) : _currentUserId = currentUserId,
        _currentUserName = currentUserName,
        _currentUserRole = currentUserRole,
@@ -96,6 +95,7 @@ class GteNavigationDependencies {
   final bool _canHostCompetitions;
   final Future<bool> Function(BuildContext context)? onOpenLogin;
   final Future<void> Function(BuildContext context)? onOpenCreatorAccessRequest;
+  final Future<void> Function()? onRegenCreationSettled;
   final CompetitionApi? competitionApi;
   final TrophyCabinetRepository? trophyCabinetRepository;
   final DynastyRepository? dynastyRepository;
@@ -114,7 +114,6 @@ class GteNavigationDependencies {
   final bool Function()? isCheckingCreatorAccessProvider;
   final bool Function()? hasApprovedCreatorAccessProvider;
   final bool Function()? canHostCompetitionsProvider;
-  final Match3dEntitlementProvider? match3dEntitlementProvider;
 
   String get currentUserId => currentUserIdProvider?.call() ?? _currentUserId;
 
@@ -143,9 +142,6 @@ class GteNavigationDependencies {
   bool get canHostCompetitions =>
       canHostCompetitionsProvider?.call() ?? _canHostCompetitions;
 
-  Match3dUserEntitlement? get match3dEntitlement =>
-      match3dEntitlementProvider?.call();
-
   GteNavigationDependencies liveOnly() {
     return GteNavigationDependencies(
       apiBaseUrl: apiBaseUrl,
@@ -162,6 +158,7 @@ class GteNavigationDependencies {
       canHostCompetitions: canHostCompetitions,
       onOpenLogin: onOpenLogin,
       onOpenCreatorAccessRequest: onOpenCreatorAccessRequest,
+      onRegenCreationSettled: onRegenCreationSettled,
       resolveWorldSuperCupCompetitionId: resolveWorldSuperCupCompetitionId,
       hasIdentitySetup: hasIdentitySetup,
       currentUserIdProvider: currentUserIdProvider,
@@ -174,7 +171,6 @@ class GteNavigationDependencies {
       isCheckingCreatorAccessProvider: isCheckingCreatorAccessProvider,
       hasApprovedCreatorAccessProvider: hasApprovedCreatorAccessProvider,
       canHostCompetitionsProvider: canHostCompetitionsProvider,
-      match3dEntitlementProvider: match3dEntitlementProvider,
     );
   }
 

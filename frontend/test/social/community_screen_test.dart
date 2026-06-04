@@ -39,6 +39,10 @@ void main() {
       expect(find.text('Creator Cup Night'), findsOneWidget);
       expect(find.text('Matchday derby watch party'), findsOneWidget);
       expect(find.text('Transfer room collab'), findsOneWidget);
+      expect(find.text('Community canonical surface'), findsOneWidget);
+      expect(find.text('Authenticated member'), findsOneWidget);
+      expect(find.text('Reports'), findsOneWidget);
+      expect(find.text('Gifting'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Unfollow'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(FilledButton, 'Unfollow'));
@@ -121,6 +125,46 @@ void main() {
   );
 
   testWidgets(
+    'community screen keeps canonical private surfaces role gated for readers',
+    (WidgetTester tester) async {
+      _setLargeViewport(tester);
+      final CommunityApi api = CommunityApi.fixture();
+      bool openedLogin = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: Scaffold(
+            body: CommunityScreen(
+              api: api,
+              baseUrl: 'http://127.0.0.1:8000',
+              backendMode: GteBackendMode.fixture,
+              isAuthenticated: false,
+              onOpenLogin: () {
+                openedLogin = true;
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Community canonical surface'), findsOneWidget);
+      expect(find.text('Public reader'), findsOneWidget);
+      expect(
+        find.text('Direct chat is locked until a live token is present.'),
+        findsOneWidget,
+      );
+      expect(find.text('Transfer room collab'), findsNothing);
+
+      await tester.tap(find.text('Sign in').first);
+      await tester.pump();
+
+      expect(openedLogin, isTrue);
+    },
+  );
+
+  testWidgets(
     'community route mounts the live community surface instead of hub aliasing',
     (WidgetTester tester) async {
       _setLargeViewport(tester);
@@ -154,7 +198,7 @@ void main() {
         find.text(
           'Watchlists, live threads, direct messages, and creator-club follows are wired to live community endpoints.',
         ),
-        findsOneWidget,
+        findsWidgets,
       );
     },
   );

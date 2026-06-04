@@ -5,7 +5,7 @@ from typing import Any
 
 
 _COUNTRY_BRANDS: dict[str, tuple[str, ...]] = {
-    "NG": ("MTN", "BetKing", "Flutterwave"),
+    "NG": ("MTN", "BetKing", "KoraPay"),
     "GB": ("Nike", "Adidas", "EA Sports"),
     "US": ("Nike", "Adidas", "FanDuel"),
     "GLOBAL": ("Nike", "Adidas", "EA Sports"),

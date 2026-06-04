@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from backend.tests.support.secrets import TEST_PASSWORD
-from backend.tests.support.signup_payloads import user_signup_payload
+from backend.tests.support.signup_payloads import player_signup_payload
 from app.auth.security import create_access_token
 from app.ingestion.models import Player
 from app.models.auth_session import AuthSession
@@ -48,8 +48,8 @@ def _error_message(response) -> str:
 def _register_user(client, *, prefix: str) -> dict[str, object]:
     email = f"{_suffix(prefix)}@example.com"
     response = client.post(
-        "/auth/signup/user",
-        json=user_signup_payload(
+        "/auth/signup/player",
+        json=player_signup_payload(
             email=email,
             username=email.split("@", maxsplit=1)[0].replace("-", "_"),
             full_name=f"{prefix.title()} User",
@@ -286,7 +286,7 @@ def _create_coin_payment_event(
         "/api/wallets/payment-events",
         headers=headers,
         json={
-            "provider": "monnify",
+            "provider": "korapay",
             "provider_reference": provider_reference,
             "amount": str(amount),
             "pack_code": "starter-50",

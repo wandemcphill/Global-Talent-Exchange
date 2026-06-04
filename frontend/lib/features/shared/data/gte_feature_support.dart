@@ -701,9 +701,9 @@ class _FeatureFixtureTransport implements GteTransport {
           'match_id': featuredMatchKey,
           'title': 'Ibadan Lions FC vs Atlas City',
           'subtitle':
-              'Live football runtime with tactical 2D, broadcast package, and Flutter 3D lanes armed.',
+              'Live football runtime with tactical 2D and broadcast package lanes armed.',
           'watch_route': '/matches/viewer/$featuredMatchKey',
-          'replay_route': '/matches/3d/$featuredMatchKey',
+          'replay_route': '/matches/viewer/$featuredMatchKey',
           'is_live': true,
           'metadata': <String, Object?>{
             'focus_reason':
@@ -720,9 +720,9 @@ class _FeatureFixtureTransport implements GteTransport {
             'match_id': featuredMatchKey,
             'title': 'Ibadan Lions FC vs Atlas City',
             'subtitle':
-                'Open the live match hub, then step into the 2D viewer, broadcast package, or Flutter 3D lane.',
+                'Open the live match hub, then step into the 2D viewer or broadcast package lane.',
             'watch_route': '/matches/viewer/$featuredMatchKey',
-            'replay_route': '/matches/3d/$featuredMatchKey',
+            'replay_route': '/matches/viewer/$featuredMatchKey',
             'is_live': true,
           },
         },
@@ -736,7 +736,7 @@ class _FeatureFixtureTransport implements GteTransport {
             'subtitle':
                 'Secondary matchday lane keeping pricing, scouting, and regen pull in sync.',
             'watch_route': '/matches/viewer/fixture-transfer-window',
-            'replay_route': '/matches/3d/fixture-transfer-window',
+            'replay_route': '/matches/viewer/fixture-transfer-window',
             'is_live': true,
           },
         },
@@ -746,10 +746,9 @@ class _FeatureFixtureTransport implements GteTransport {
         'title': 'Ibadan Lions FC vs Atlas City',
         'subtitle': 'Featured live football lane',
         'watch_route': '/matches/viewer/$featuredMatchKey',
-        'replay_route': '/matches/3d/$featuredMatchKey',
+        'replay_route': '/matches/viewer/$featuredMatchKey',
         'is_live': true,
       },
     };
   }
 }
-

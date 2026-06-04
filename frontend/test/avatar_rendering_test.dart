@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/gte_exchange_models.dart';
-import 'package:gte_frontend/data/live_match_fixtures.dart';
+import 'package:gte_frontend/features/match_center/data/live_match_fixtures.dart';
 import 'package:gte_frontend/features/player_card_marketplace/data/player_card_marketplace_models.dart';
 import 'package:gte_frontend/models/academy_models.dart';
 import 'package:gte_frontend/models/player_avatar.dart';
@@ -249,30 +249,31 @@ void main() {
     );
   });
 
-  testWidgets('shared card avatar renders a real portrait as the portrait state', (
-    WidgetTester tester,
-  ) async {
-    const String transparentPixel =
-        'data:image/png;base64,'
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+  testWidgets(
+    'shared card avatar renders a real portrait as the portrait state',
+    (WidgetTester tester) async {
+      const String transparentPixel =
+          'data:image/png;base64,'
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: PlayerCardAvatar(
-              avatar: null,
-              imageUrl: transparentPixel,
-              size: 72,
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: PlayerCardAvatar(
+                avatar: null,
+                imageUrl: transparentPixel,
+                size: 72,
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.byType(PlayerCardAvatar), findsOneWidget);
-    expect(find.byKey(PlayerCardAvatar.portraitKey), findsOneWidget);
-    expect(find.byKey(PlayerCardAvatar.fallbackKey), findsNothing);
-    expect(find.byIcon(Icons.person), findsNothing);
-  });
+      expect(find.byType(PlayerCardAvatar), findsOneWidget);
+      expect(find.byKey(PlayerCardAvatar.portraitKey), findsOneWidget);
+      expect(find.byKey(PlayerCardAvatar.fallbackKey), findsNothing);
+      expect(find.byIcon(Icons.person), findsNothing);
+    },
+  );
 }

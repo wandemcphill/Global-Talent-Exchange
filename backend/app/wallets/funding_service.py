@@ -21,7 +21,6 @@ from app.wallets.rail_service import WalletRailError, WalletRailService
 from app.wallets.service import WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
-PAYSTACK_BASE_URL = "https://api.paystack.co"
 KORAPAY_BASE_URL = "https://api.korapay.com/merchant/api/v1"
 VERIFIED_COMPLIANCE_STATUS = "verified"
 
@@ -128,13 +127,13 @@ class WalletFundingService:
         *,
         amount: Decimal,
         input_unit: str = "coin",
-        provider: str = "paystack",
+        provider: str = "korapay",
         unit: LedgerUnit = LedgerUnit.COIN,
         callback_url: str | None = None,
     ) -> WalletTopUpSession:
         normalized_provider = provider.strip().lower()
         if normalized_provider not in SUPPORTED_TOP_UP_PROVIDER_KEYS:
-            raise WalletFundingError("Only Paystack and KoraPay top-up are currently supported.")
+            raise WalletFundingError("Only KoraPay top-up is currently supported for automatic gateway deposits.")
 
         normalized_amount = self._normalize_amount(amount)
         if normalized_amount <= Decimal("0.0000"):
@@ -165,23 +164,14 @@ class WalletFundingService:
             raise WalletFundingError(str(exc)) from exc
 
         try:
-            if normalized_provider == "korapay":
-                payment_session = self._initialize_korapay_transaction(
-                    order=order,
-                    user=user,
-                    settings=settings,
-                    callback_url=callback_url,
-                )
-            else:
-                payment_session = self._initialize_paystack_transaction(
-                    order=order,
-                    user=user,
-                    settings=settings,
-                    callback_url=callback_url,
-                )
+            payment_session = self._initialize_korapay_transaction(
+                order=order,
+                user=user,
+                settings=settings,
+                callback_url=callback_url,
+            )
         except httpx.HTTPError as exc:
-            provider_label = "KoraPay" if normalized_provider == "korapay" else "Paystack"
-            raise WalletFundingError(f"Unable to create a {provider_label} payment session.") from exc
+            raise WalletFundingError("Unable to create a KoraPay payment session.") from exc
 
         order.provider_reference = str(
             payment_session.get("reference") or payment_session.get("payment_reference") or order.provider_reference
@@ -226,31 +216,19 @@ class WalletFundingService:
             wallet = self.sync_wallet_balance(session, user, wallet=wallet)
             return WalletTopUpVerificationResult(wallet=wallet, transaction=transaction)
 
-        if order.provider_key == "korapay":
-            try:
-                verification_payload = self._verify_korapay_transaction(reference=order.provider_reference)
-            except httpx.HTTPError as exc:
-                raise WalletTopUpVerificationError("Unable to verify the KoraPay transaction.") from exc
-            self._apply_korapay_verification(
-                session=session,
-                user=user,
-                order=order,
-                transaction=transaction,
-                verification_payload=verification_payload,
-            )
-        else:
-            try:
-                verification_payload = self._verify_paystack_transaction(reference=normalized_reference, order=order)
-            except httpx.HTTPError as exc:
-                raise WalletTopUpVerificationError("Unable to verify the Paystack transaction.") from exc
-            self._apply_paystack_verification(
-                session=session,
-                user=user,
-                order=order,
-                transaction=transaction,
-                verification_payload=verification_payload,
-                fallback_reference=normalized_reference,
-            )
+        if order.provider_key != "korapay":
+            raise WalletTopUpVerificationError("This automatic top-up provider is no longer supported.")
+        try:
+            verification_payload = self._verify_korapay_transaction(reference=order.provider_reference)
+        except httpx.HTTPError as exc:
+            raise WalletTopUpVerificationError("Unable to verify the KoraPay transaction.") from exc
+        self._apply_korapay_verification(
+            session=session,
+            user=user,
+            order=order,
+            transaction=transaction,
+            verification_payload=verification_payload,
+        )
 
         WalletRailService(session=session, wallet_service=self.wallet_service).apply_purchase_order_status(
             order=order,
@@ -265,79 +243,21 @@ class WalletFundingService:
         self,
         *,
         gateway_enabled: bool = True,
+        manual_enabled: bool = False,
         enabled_providers: set[str] | None = None,
     ) -> dict[str, str]:
-        if not gateway_enabled:
-            return {
-                "paystack": "blocked",
-                "korapay": "blocked",
-            }
-        paystack_secret = self._paystack_secret()
         status_by_provider = {
-            "paystack": (
-                "ready" if paystack_secret else ("unavailable" if self._is_production_environment() else "mock")
-            ),
-            "korapay": "ready" if self._korapay_secret() else "unavailable",
+            "bank_transfer_manual": "ready" if manual_enabled else "blocked",
+            "korapay": "ready" if gateway_enabled and self._korapay_secret() else "unavailable",
         }
+        if not gateway_enabled:
+            status_by_provider["korapay"] = "blocked"
         if enabled_providers is not None:
             normalized_enabled = {provider.strip().lower() for provider in enabled_providers}
-            for provider in status_by_provider:
+            for provider in ("korapay",):
                 if provider not in normalized_enabled:
                     status_by_provider[provider] = "blocked"
         return status_by_provider
-
-    def _initialize_paystack_transaction(
-        self,
-        *,
-        order: FancoinPurchaseOrder,
-        user: User,
-        settings: TreasurySettings,
-        callback_url: str | None,
-    ) -> dict[str, Any]:
-        secret = self._paystack_secret()
-        if not secret:
-            if self._is_production_environment():
-                raise WalletFundingError(
-                    "Paystack is not configured. Set GTE_PAYSTACK_SECRET_KEY before accepting real payments."
-                )
-            return {
-                "authorization_url": f"https://mock.paystack.local/{order.reference}",
-                "access_code": f"mock-{order.reference}",
-                "reference": order.reference,
-                "mock_mode": True,
-            }
-
-        payload: dict[str, Any] = {
-            "email": user.email,
-            "amount": int((order.amount_fiat * Decimal("100")).to_integral_value()),
-            "currency": settings.currency_code,
-            "reference": order.reference,
-            "metadata": {
-                "purchase_order_reference": order.reference,
-                "wallet_top_up": True,
-                "user_id": user.id,
-            },
-        }
-        resolved_callback_url = callback_url or self._paystack_callback_url()
-        if resolved_callback_url:
-            payload["callback_url"] = resolved_callback_url
-
-        response = httpx.post(
-            f"{self._paystack_base_url()}/transaction/initialize",
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {secret}",
-                "Content-Type": "application/json",
-            },
-            timeout=30.0,
-        )
-        response.raise_for_status()
-        body = response.json()
-        data = body.get("data") if isinstance(body, dict) else None
-        if not isinstance(data, dict) or not data.get("authorization_url"):
-            raise WalletFundingError("Paystack did not return an authorization URL.")
-        data["mock_mode"] = False
-        return data
 
     def _initialize_korapay_transaction(
         self,
@@ -389,38 +309,6 @@ class WalletFundingService:
         data["mock_mode"] = False
         return data
 
-    def _verify_paystack_transaction(
-        self,
-        *,
-        reference: str,
-        order: FancoinPurchaseOrder,
-    ) -> dict[str, Any]:
-        secret = self._paystack_secret()
-        if not secret:
-            if self._is_production_environment():
-                raise WalletTopUpVerificationError(
-                    "Paystack is not configured. Set GTE_PAYSTACK_SECRET_KEY before verifying real payments."
-                )
-            return {
-                "data": {
-                    "id": f"mock-{reference}",
-                    "status": "success",
-                    "reference": reference,
-                    "amount": int((self._normalize_amount(order.amount_fiat) * Decimal("100")).to_integral_value()),
-                }
-            }
-
-        response = httpx.get(
-            f"{self._paystack_base_url()}/transaction/verify/{reference}",
-            headers={"Authorization": f"Bearer {secret}"},
-            timeout=30.0,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if not isinstance(payload, dict):
-            raise WalletTopUpVerificationError("Paystack verification failed.")
-        return payload
-
     def _verify_korapay_transaction(self, *, reference: str) -> dict[str, Any]:
         secret = self._korapay_secret()
         if not secret:
@@ -439,52 +327,6 @@ class WalletFundingService:
         if not isinstance(payload, dict):
             raise WalletTopUpVerificationError("KoraPay verification failed.")
         return payload
-
-    def _apply_paystack_verification(
-        self,
-        *,
-        session: Session,
-        user: User,
-        order: FancoinPurchaseOrder,
-        transaction: WalletTransactionRecord,
-        verification_payload: dict[str, Any],
-        fallback_reference: str,
-    ) -> None:
-        data = verification_payload.get("data") if isinstance(verification_payload, dict) else None
-        if not isinstance(data, dict):
-            raise WalletTopUpVerificationError("Paystack returned an invalid verification payload.")
-
-        payment_status = str(data.get("status") or "").strip().lower()
-        if payment_status != "success":
-            transaction.status = "failed"
-            WalletRailService(session=session, wallet_service=self.wallet_service).apply_purchase_order_status(
-                order=order,
-                status=PurchaseOrderStatus.FAILED,
-                actor=user,
-                notes=f"paystack_status:{payment_status or 'unknown'}",
-            )
-            session.flush()
-            raise WalletTopUpVerificationError("Payment has not been completed successfully.")
-
-        paid_amount_fiat = self._normalize_paystack_amount(data.get("amount"))
-        if paid_amount_fiat != self._normalize_amount(order.amount_fiat):
-            transaction.status = "failed"
-            WalletRailService(session=session, wallet_service=self.wallet_service).apply_purchase_order_status(
-                order=order,
-                status=PurchaseOrderStatus.FAILED,
-                actor=user,
-                notes="paystack_amount_mismatch",
-            )
-            session.flush()
-            raise WalletTopUpVerificationError("Verified payment amount does not match the initiated top-up.")
-
-        order.provider_reference = str(data.get("reference") or fallback_reference)
-        provider_event_id = data.get("id")
-        if provider_event_id is not None:
-            order.provider_event_id = str(provider_event_id)
-        raw_payload = dict(order.raw_payload or {})
-        raw_payload["paystack_verify"] = verification_payload
-        order.raw_payload = raw_payload
 
     def _apply_korapay_verification(
         self,
@@ -612,39 +454,12 @@ class WalletFundingService:
             return Decimal("0.0000")
         return Decimal(str(value)).quantize(AMOUNT_QUANTUM)
 
-    @staticmethod
-    def _normalize_paystack_amount(value: Any) -> Decimal:
-        return (Decimal(str(value or 0)) / Decimal("100")).quantize(AMOUNT_QUANTUM)
-
     def _normalize_korapay_amount(self, value: Decimal | int | float | str) -> int:
         normalized = self._normalize_amount(value)
         integral = normalized.to_integral_value(rounding=ROUND_HALF_UP)
         if normalized != integral:
             raise WalletFundingError("KoraPay checkout currently requires whole-number NGN amounts.")
         return int(integral)
-
-    @staticmethod
-    def _paystack_secret() -> str | None:
-        for name in ("GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"):
-            secret = os.getenv(name)
-            if secret and secret.strip():
-                return secret.strip()
-        return None
-
-    @staticmethod
-    def _paystack_callback_url() -> str | None:
-        for name in ("GTE_PAYSTACK_CALLBACK_URL", "PAYSTACK_CALLBACK_URL"):
-            callback_url = os.getenv(name)
-            if callback_url and callback_url.strip():
-                return callback_url.strip()
-        return None
-
-    @staticmethod
-    def _paystack_base_url() -> str:
-        raw_value = os.getenv("GTE_PAYSTACK_BASE_URL") or os.getenv("PAYSTACK_BASE_URL")
-        if raw_value and raw_value.strip():
-            return raw_value.strip().rstrip("/")
-        return PAYSTACK_BASE_URL
 
     @staticmethod
     def _korapay_secret() -> str | None:

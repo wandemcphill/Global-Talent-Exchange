@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/controllers/match_3d_timeline_controller.dart';
-import 'package:gte_frontend/data/live_match_fixtures.dart';
+import 'package:gte_frontend/features/3d/controllers/match_3d_timeline_controller.dart';
 import 'package:gte_frontend/models/competition_models.dart';
-import 'package:gte_frontend/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
 import 'package:gte_frontend/models/match_type.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
-import 'package:gte_frontend/services/match_viewer_mapper.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 
@@ -18,7 +16,8 @@ void main() {
       final CompetitionSummary competition = _buildCompetition(
         id: 'match-controller-var',
       );
-      final MatchViewState viewState = await _loadFallbackState(competition);
+      final MatchViewState viewState =
+          await _loadBackendAuthoredQuarantineState(competition);
       final MatchTimelineFrame checkingFrame = viewState.frames.firstWhere(
         (MatchTimelineFrame frame) => frame.overlayText == 'Checking...',
       );
@@ -73,7 +72,9 @@ void main() {
     final CompetitionSummary competition = _buildCompetition(
       id: 'match-controller-offside',
     );
-    final MatchViewState viewState = await _loadFallbackState(competition);
+    final MatchViewState viewState = await _loadBackendAuthoredQuarantineState(
+      competition,
+    );
     final MatchTimelineFrame offsideFrame = viewState.frames.firstWhere(
       (MatchTimelineFrame frame) => frame.overlayText == 'OFFSIDE',
     );
@@ -206,16 +207,10 @@ CompetitionSummary _buildCompetition({required String id}) {
   );
 }
 
-Future<MatchViewState> _loadFallbackState(CompetitionSummary competition) {
-  final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
-    competition,
-  );
-  return MatchViewerMapper.load(
-    competition: competition,
-    matchKey: competition.id,
-    fallbackSnapshot: snapshot,
-    preferFallback: true,
-  );
+Future<MatchViewState> _loadBackendAuthoredQuarantineState(
+  CompetitionSummary competition,
+) async {
+  return buildBackendAuthored3dQuarantineViewState();
 }
 
 class _TickerHost extends StatefulWidget {

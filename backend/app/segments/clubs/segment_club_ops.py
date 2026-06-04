@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.access_control.dependencies import require_bound_organization_access
+from app.common.enums.academy_player_status import AcademyPlayerStatus
 from app.models.access_control import OrganizationRole
 from app.schemas.academy_core import AcademyPlayerView, AcademyProgramView
 from app.schemas.club_finance_core import ClubBudgetSnapshotView, ClubCashflowSummaryView
@@ -372,6 +375,279 @@ def update_scouting_prospect(
     scouting_service: ScoutingService = Depends(get_scouting_service),
 ) -> YouthProspectView:
     return _handle_domain_errors(lambda: scouting_service.update_prospect(club_id, prospect_id, payload))
+
+
+@router.get(
+    "/dashboard",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_club_dashboard(
+    club_id: str,
+    finance_service: ClubFinanceService = Depends(get_club_finance_service),
+    academy_service: AcademyService = Depends(get_academy_service),
+    sponsorship_service: ClubSponsorshipService = Depends(get_club_sponsorship_service),
+    scouting_service: ScoutingService = Depends(get_scouting_service),
+) -> dict[str, object]:
+    finance = finance_service.get_finance_overview(club_id)
+    academy = academy_service.get_overview(club_id)
+    sponsorships = sponsorship_service.get_overview(club_id)
+    scouting = scouting_service.get_overview(club_id)
+    recent_activity = [
+        f"{len(academy.programs)} academy programs tracked",
+        f"{len(sponsorships.contracts)} sponsorship contracts recorded",
+        f"{len(scouting.prospects)} scouting prospects in pipeline",
+    ]
+    return {
+        "club_id": club_id,
+        "name": _club_label(finance_service, club_id),
+        "total_squad_value": None,
+        "alerts": _club_dashboard_alerts(
+            academy_players=len(academy.players),
+            active_sponsorships=sponsorships.active_contract_count,
+            scouting_prospects=len(scouting.prospects),
+        ),
+        "recent_activity": recent_activity,
+        "finance_updated_at": finance.balance_summary.get("updated_at"),
+    }
+
+
+@router.get(
+    "/squad/readiness",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_squad_readiness(
+    club_id: str,
+    academy_service: AcademyService = Depends(get_academy_service),
+) -> dict[str, object]:
+    players = build_squad_players_from_academy(club_id, academy_service)
+    eligible_count = sum(1 for player in players if bool(player.get("selection_ready")))
+    injured_count = sum(1 for player in players if player.get("availability") == "injured")
+    suspended_count = sum(1 for player in players if player.get("availability") == "suspended")
+    return {
+        "eligible_count": eligible_count,
+        "injured_count": injured_count,
+        "suspended_count": suspended_count,
+        "available_for_next_fixture": eligible_count,
+        "readiness_score": round(min(100, (eligible_count / 11) * 100), 2) if players else None,
+        "warnings": [] if eligible_count >= 11 else ("Formation publish requires 11 backend-eligible players.",),
+    }
+
+
+@router.get(
+    "/staff",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_club_staff(club_id: str) -> None:
+    del club_id
+    return {"members": (), "state": "empty", "reason": "No staff contracts are recorded for this club yet."}
+
+
+@router.get(
+    "/rankings",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_club_rankings(club_id: str) -> None:
+    del club_id
+    return {"rankings": (), "state": "empty", "reason": "No published ranking rows are recorded for this club yet."}
+
+
+@router.get(
+    "/squad",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_squad_roster(
+    club_id: str,
+    academy_service: AcademyService = Depends(get_academy_service),
+) -> dict[str, object]:
+    return {"club_id": club_id, "players": build_squad_players_from_academy(club_id, academy_service)}
+
+
+@router.get(
+    "/squad/selection-ready",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_selection_ready_players(
+    club_id: str,
+    academy_service: AcademyService = Depends(get_academy_service),
+) -> dict[str, object]:
+    players = [
+        {
+            "id": player["id"],
+            "name": player["name"],
+            "position": player["position"],
+            "eligible": True,
+        }
+        for player in build_squad_players_from_academy(club_id, academy_service)
+        if bool(player.get("selection_ready"))
+    ]
+    return {"club_id": club_id, "players": players}
+
+
+@router.get(
+    "/squad/availability",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_squad_availability(
+    club_id: str,
+    academy_service: AcademyService = Depends(get_academy_service),
+) -> dict[str, object]:
+    players = build_squad_players_from_academy(club_id, academy_service)
+    return {
+        "players": [
+            {"player_id": player["id"], "name": player["name"], "position": player["position"]} for player in players
+        ],
+        "fixtures": (),
+        "cells": (),
+        "rows": [
+            {
+                "player_id": player["id"],
+                "name": player["name"],
+                "position": player["position"],
+                "statuses": (player["availability"],),
+            }
+            for player in players
+        ],
+    }
+
+
+@router.get(
+    "/squad/injuries",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_squad_injuries(club_id: str) -> None:
+    del club_id
+    return {"injuries": (), "state": "empty", "reason": "No injury records are recorded for this club yet."}
+
+
+@router.get(
+    "/squad/chemistry",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_squad_chemistry(club_id: str) -> None:
+    del club_id
+    return {"overall_score": None, "warnings": ("Chemistry model is not mounted for this club yet.",)}
+
+
+@router.get(
+    "/squad/contracts",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_squad_contracts(club_id: str) -> None:
+    del club_id
+    return {"contracts": (), "state": "empty", "reason": "No player contract records are recorded for this club yet."}
+
+
+@router.get(
+    "/squad/scouting",
+    dependencies=[
+        Depends(require_bound_organization_access(OrganizationRole.CLUB, forbidden_detail="club_access_required"))
+    ],
+)
+def get_canonical_squad_scouting(
+    club_id: str,
+    scouting_service: ScoutingService = Depends(get_scouting_service),
+) -> dict[str, object]:
+    scouting = scouting_service.get_overview(club_id)
+    notes: list[dict[str, object]] = []
+    for prospect in scouting.prospects:
+        for report in prospect.reports:
+            notes.append(
+                {
+                    "player_id": prospect.academy_player_id or prospect.id,
+                    "author_id": report.assignment_id,
+                    "content": report.summary_text,
+                    "created_at": report.created_at,
+                    "tags": (*report.strengths, *report.development_flags),
+                }
+            )
+    return {"club_id": club_id, "scouting_notes": notes}
+
+
+def _raise_canonical_backend_gap(*, club_id: str, code: str, message: str) -> None:
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "state": "blocked",
+            "club_id": club_id,
+            "code": code,
+            "reason": message,
+        },
+    )
+
+
+def _club_label(finance_service: ClubFinanceService, club_id: str) -> str:
+    finance_service.ensure_club_setup(club_id)
+    with finance_service.store.lock:
+        return finance_service.store.club_labels.get(club_id, club_id)
+
+
+def _club_dashboard_alerts(*, academy_players: int, active_sponsorships: int, scouting_prospects: int) -> tuple[str, ...]:
+    alerts: list[str] = []
+    if academy_players == 0:
+        alerts.append("No academy players are registered.")
+    if active_sponsorships == 0:
+        alerts.append("No active sponsorship contracts are recorded.")
+    if scouting_prospects == 0:
+        alerts.append("No scouting prospects are currently tracked.")
+    return tuple(alerts)
+
+
+def build_squad_players_from_academy(
+    club_id: str,
+    academy_service: AcademyService,
+) -> tuple[dict[str, Any], ...]:
+    academy = academy_service.get_overview(club_id)
+    return tuple(_academy_player_to_squad_player(player) for player in academy.players)
+
+
+def _academy_player_to_squad_player(player: AcademyPlayerView) -> dict[str, Any]:
+    status = player.status
+    if not isinstance(status, AcademyPlayerStatus):
+        status = AcademyPlayerStatus(str(status))
+    selection_ready = status == AcademyPlayerStatus.PROMOTED
+    availability = "available" if selection_ready else "unknown"
+    return {
+        "id": player.id,
+        "name": player.display_name,
+        "position": player.primary_position,
+        "age": player.age,
+        "availability": availability,
+        "selection_ready": selection_ready,
+        "morale": {"score": 0, "label": "unknown"},
+        "chemistry_fit": {"overall_score": 0, "position_fit": 0, "team_fit": 0, "warnings": ()},
+        "contract_status": {"player_id": player.id},
+        "stats": {"rating": player.overall_rating},
+        "scouting_notes": (
+            {
+                "player_id": player.id,
+                "content": player.pathway_note,
+                "created_at": player.last_progressed_at,
+                "tags": (str(status.value),),
+            },
+        )
+        if player.pathway_note
+        else (),
+    }
 
 
 def _handle_domain_errors(func):

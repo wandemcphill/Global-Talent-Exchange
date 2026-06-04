@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
+
+from fastapi import FastAPI
+
 from app.core.events import DomainEvent, InMemoryEventPublisher
 from app.viral.distribution import InMemoryViralDispatchPoolStore
 from app.viral.ingestion_runtime import ViralDispatchRuntime
+from app.viral import router as viral_router
 
 
 def test_viral_dispatch_runtime_seeds_pool_from_requested_events() -> None:
@@ -50,3 +56,48 @@ def test_viral_dispatch_runtime_ignores_malformed_dispatch_events() -> None:
     )
 
     assert store.top(limit=5) == []
+
+
+def test_clip_event_ingestion_dependency_defers_kafka_start(monkeypatch) -> None:
+    class _FakeProducer:
+        def __init__(self, settings) -> None:
+            self.settings = settings
+            self.started = False
+
+        def start(self) -> None:
+            self.started = True
+
+    app = FastAPI()
+    app.state.settings = SimpleNamespace()
+    request = SimpleNamespace(app=app)
+    monkeypatch.setattr(viral_router, "ClipEventKafkaProducer", _FakeProducer)
+
+    service = viral_router.ensure_clip_event_ingestion_service(request)
+
+    assert app.state.clip_event_ingestion_service is service
+    assert service.started is False
+
+
+def test_viral_router_startup_defers_kafka_start(monkeypatch) -> None:
+    class _FakeProducer:
+        def __init__(self, settings) -> None:
+            self.settings = settings
+            self.started = False
+
+        def start(self) -> None:
+            self.started = True
+
+    app = FastAPI()
+    app.state.settings = SimpleNamespace()
+    monkeypatch.setattr(viral_router, "ClipEventKafkaProducer", _FakeProducer)
+    monkeypatch.setattr(viral_router, "ensure_viral_dispatch_runtime", lambda app: None)
+    monkeypatch.setitem(
+        sys.modules,
+        "app.viral.worker",
+        SimpleNamespace(bind_viral_ranking_scheduler=lambda app, context: None),
+    )
+
+    viral_router.startup(app, SimpleNamespace())
+
+    assert isinstance(app.state.clip_event_ingestion_service, _FakeProducer)
+    assert app.state.clip_event_ingestion_service.started is False

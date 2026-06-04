@@ -56,7 +56,7 @@ class GteBootstrapFailure {
         message:
             'This build cannot open the live GTEX shell because '
             'GTE_API_BASE_URL was not compiled into the app. No routes were '
-            'mounted, and the 3D lane never opened.',
+            'mounted, so the live shell never opened.',
         command:
             'flutter run -d <device> '
             '--dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 '

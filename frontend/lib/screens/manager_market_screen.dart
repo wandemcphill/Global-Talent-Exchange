@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/app_feedback.dart';
-import '../data/competition_control_repository.dart';
+import '../features/compete/repositories/competition_control_repository.dart';
 import '../data/manager_market_repository.dart';
 import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_state_panel.dart';
@@ -1180,7 +1180,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                   padding: const EdgeInsets.all(24),
                   child: _stateCard(
                     icon: Icons.warning_amber_rounded,
-                    title: 'Manager market unavailable',
+                    title: 'Coach exchange unavailable',
                     message: _error!,
                     actionLabel: 'Retry',
                     onAction: _load,

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 import 'package:gte_frontend/services/fairness_indicator_service.dart';
-import 'package:gte_frontend/widgets/match/fairness_badge.dart';
+import 'package:gte_frontend/features/match_center/widgets/fairness_badge.dart';
 
 void main() {
   test('visible timeline hash is deterministic 32-bit hex', () {
@@ -16,8 +16,8 @@ void main() {
         FairnessIndicatorService.computeVisibleTimelineHash(baseState);
     final String changedHash =
         FairnessIndicatorService.computeVisibleTimelineHash(
-      baseState.copyWith(durationSeconds: baseState.durationSeconds + 1),
-    );
+          baseState.copyWith(durationSeconds: baseState.durationSeconds + 1),
+        );
 
     expect(firstHash, secondHash);
     expect(firstHash, matches(RegExp(r'^[0-9a-f]{8}$')));
@@ -62,8 +62,9 @@ void main() {
     );
   });
 
-  testWidgets('fairness badge renders the verified label',
-      (WidgetTester tester) async {
+  testWidgets('fairness badge renders the verified label', (
+    WidgetTester tester,
+  ) async {
     final MatchViewState baseState = _buildViewState();
     final MatchViewState verifiedState = baseState.copyWith(
       fairnessIndicator: const MatchFairnessIndicator(
@@ -79,9 +80,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: FairnessBadge(viewState: verifiedState),
-        ),
+        home: Scaffold(body: FairnessBadge(viewState: verifiedState)),
       ),
     );
 

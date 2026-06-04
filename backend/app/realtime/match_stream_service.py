@@ -121,6 +121,8 @@ class MatchStreamService:
         normalized = self._normalize_event(match_id=match_id, event=event)
         commentary_styles = self._commentary_engine.render_variations(normalized, match_id=match_id)
         selected_style = self._commentary_engine.resolve_style(style or self._default_style)
+        authored_commentary = normalized["source_commentary"]
+        commentary = authored_commentary
         return {
             "message_type": "match_event",
             "match_id": match_id,
@@ -138,10 +140,31 @@ class MatchStreamService:
             "secondary_player": normalized["secondary_player"],
             "home_score": normalized["home_score"],
             "away_score": normalized["away_score"],
-            "commentary": commentary_styles[selected_style],
+            "commentary": commentary,
             "commentary_style": selected_style,
             "commentary_styles": commentary_styles,
             "source_commentary": normalized["source_commentary"],
+            "score_authoritative": normalized["score_authoritative"],
+            "clock_authoritative": normalized["clock_authoritative"],
+            "minute_authoritative": normalized["minute_authoritative"],
+            "commentary_authoritative": normalized["commentary_authoritative"],
+            "stats_authoritative": normalized["stats_authoritative"],
+            "xg_authoritative": normalized["xg_authoritative"],
+            "momentum_authoritative": normalized["momentum_authoritative"],
+            "overlay_authoritative": normalized["overlay_authoritative"],
+            "inspector_authoritative": normalized["inspector_authoritative"],
+            "intelligence_authoritative": normalized["intelligence_authoritative"],
+            "data_status": normalized["data_status"],
+            "missing_data": normalized["missing_data"],
+            "degraded": normalized["degraded"],
+            "blocked": normalized["blocked"],
+            "stats": normalized["stats"],
+            "xg": normalized["xg"],
+            "momentum": normalized["momentum"],
+            "overlay_readiness": normalized["overlay_readiness"],
+            "inspector_state": normalized["inspector_state"],
+            "intelligence_state": normalized["intelligence_state"],
+            "backend_authored": True,
             "metadata": normalized["metadata"],
             "published_at": datetime.now(UTC).isoformat(),
         }
@@ -178,27 +201,73 @@ class MatchStreamService:
     def _normalize_event(self, *, match_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
         payload = make_json_safe(dict(event))
         event_type = self._map_event_type(payload.get("type") or payload.get("event_type"))
-        clock = str(payload.get("clock") or payload.get("clock_label") or f"{int(payload.get('minute') or 0)}'")
+        minute = _optional_int(payload.get("minute"))
+        clock = _optional_string(payload.get("clock") or payload.get("clock_label"))
+        home_score = _optional_int(payload.get("home_score"))
+        away_score = _optional_int(payload.get("away_score"))
+        source_commentary = _optional_string(
+            payload.get("source_commentary") or payload.get("commentary") or payload.get("description")
+        )
+        stats = _payload_mapping(payload, "stats")
+        xg = _payload_mapping(payload, "xg")
+        momentum = _payload_mapping(payload, "momentum")
+        overlay_readiness = _payload_mapping(payload, "overlay_readiness", "overlayReadiness")
+        inspector_state = _payload_mapping(payload, "inspector_state", "inspectorState")
+        intelligence_state = _payload_mapping(payload, "intelligence_state", "intelligenceState")
+        missing_data = _match_missing_data(
+            payload,
+            minute=minute,
+            clock=clock,
+            home_score=home_score,
+            away_score=away_score,
+            commentary=source_commentary,
+            stats=stats,
+            xg=xg,
+            momentum=momentum,
+            overlay_readiness=overlay_readiness,
+            inspector_state=inspector_state,
+            intelligence_state=intelligence_state,
+        )
         return {
             "event_id": str(payload.get("event_id") or uuid4().hex),
             "match_id": match_id,
             "type": event_type,
             "source_event_type": str(payload.get("event_type") or payload.get("type") or event_type),
-            "minute": int(payload.get("minute") or 0),
+            "minute": minute,
             "clock": clock,
             "team_id": _optional_string(payload.get("team_id")),
             "team": _optional_string(payload.get("team") or payload.get("team_name") or payload.get("club_name")),
             "player_id": _optional_string(payload.get("player_id")),
             "player": _optional_string(payload.get("player") or payload.get("player_name")),
             "secondary_player_id": _optional_string(payload.get("secondary_player_id")),
-            "secondary_player": _optional_string(payload.get("secondary_player") or payload.get("secondary_player_name")),
+            "secondary_player": _optional_string(
+                payload.get("secondary_player") or payload.get("secondary_player_name")
+            ),
             "home_team": _optional_string(payload.get("home_team")),
             "away_team": _optional_string(payload.get("away_team")),
-            "home_score": int(payload.get("home_score") or 0),
-            "away_score": int(payload.get("away_score") or 0),
-            "source_commentary": _optional_string(
-                payload.get("source_commentary") or payload.get("commentary") or payload.get("description")
-            ),
+            "home_score": home_score,
+            "away_score": away_score,
+            "source_commentary": source_commentary,
+            "score_authoritative": home_score is not None and away_score is not None,
+            "clock_authoritative": clock is not None,
+            "minute_authoritative": minute is not None,
+            "commentary_authoritative": source_commentary is not None,
+            "stats_authoritative": stats is not None,
+            "xg_authoritative": xg is not None,
+            "momentum_authoritative": momentum is not None,
+            "overlay_authoritative": overlay_readiness is not None,
+            "inspector_authoritative": inspector_state is not None,
+            "intelligence_authoritative": intelligence_state is not None,
+            "data_status": _status_from_missing_data(missing_data),
+            "missing_data": missing_data,
+            "degraded": any(item.get("severity") in {"degraded", "syncing", "empty"} for item in missing_data),
+            "blocked": any(item.get("severity") == "blocked" for item in missing_data),
+            "stats": stats,
+            "xg": xg,
+            "momentum": momentum,
+            "overlay_readiness": overlay_readiness,
+            "inspector_state": inspector_state,
+            "intelligence_state": intelligence_state,
             "metadata": dict(payload.get("metadata") or {}),
         }
 
@@ -222,7 +291,9 @@ class MatchStreamService:
                 "player_id": event.primary_player.player_id if event.primary_player is not None else None,
                 "player_name": event.primary_player.player_name if event.primary_player is not None else None,
                 "secondary_player_id": event.secondary_player.player_id if event.secondary_player is not None else None,
-                "secondary_player_name": event.secondary_player.player_name if event.secondary_player is not None else None,
+                "secondary_player_name": (
+                    event.secondary_player.player_name if event.secondary_player is not None else None
+                ),
                 "home_team": home_team_name,
                 "away_team": away_team_name,
                 "home_score": event.home_score,
@@ -275,6 +346,166 @@ def _optional_string(value: Any) -> str | None:
         return None
     resolved = str(value).strip()
     return resolved or None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_mapping(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, Mapping) and value:
+        return dict(value)
+    return None
+
+
+def _payload_mapping(payload: Mapping[str, Any], key: str, *aliases: str) -> dict[str, Any] | None:
+    metadata = payload.get("metadata")
+    sources = [payload]
+    if isinstance(metadata, Mapping):
+        sources.append(metadata)
+    for source in sources:
+        for candidate_key in (key, *aliases):
+            resolved = _optional_mapping(source.get(candidate_key))
+            if resolved is not None:
+                return resolved
+    return None
+
+
+def _append_missing_data_once(
+    missing_data: list[dict[str, Any]],
+    *,
+    code: str,
+    field: str,
+    severity: str,
+    message: str,
+) -> None:
+    if any(item.get("code") == code and item.get("field") == field for item in missing_data):
+        return
+    missing_data.append({"code": code, "field": field, "severity": severity, "message": message})
+
+
+def _match_missing_data(
+    payload: dict[str, Any],
+    *,
+    minute: int | None,
+    clock: str | None,
+    home_score: int | None,
+    away_score: int | None,
+    commentary: str | None,
+    stats: dict[str, Any] | None,
+    xg: dict[str, Any] | None,
+    momentum: dict[str, Any] | None,
+    overlay_readiness: dict[str, Any] | None,
+    inspector_state: dict[str, Any] | None,
+    intelligence_state: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    raw_missing_data = payload.get("missing_data")
+    missing_data = (
+        [dict(item) for item in raw_missing_data if isinstance(item, dict)]
+        if isinstance(raw_missing_data, list)
+        else []
+    )
+    if home_score is None or away_score is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_score",
+            field="score",
+            severity="blocked",
+            message="The backend match stream event did not include an authoritative scoreline.",
+        )
+    if minute is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_minute",
+            field="minute",
+            severity="blocked",
+            message="The backend match stream event did not include an authoritative match minute.",
+        )
+    if clock is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_clock",
+            field="clock",
+            severity="degraded",
+            message="The backend match stream event did not include an authoritative match clock.",
+        )
+    if commentary is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_commentary",
+            field="commentary",
+            severity="degraded",
+            message="The backend match stream event did not include authored commentary.",
+        )
+    if stats is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_stats",
+            field="stats",
+            severity="degraded",
+            message="The backend match stream event did not include authoritative live stats.",
+        )
+    if xg is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_xg",
+            field="xg",
+            severity="degraded",
+            message="The backend match stream event did not include authoritative xG.",
+        )
+    if momentum is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_momentum",
+            field="momentum",
+            severity="degraded",
+            message="The backend match stream event did not include authoritative momentum.",
+        )
+    if overlay_readiness is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_overlay_readiness",
+            field="overlay_readiness",
+            severity="degraded",
+            message="The backend match stream event did not include overlay readiness.",
+        )
+    if inspector_state is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_inspector_state",
+            field="inspector_state",
+            severity="degraded",
+            message="The backend match stream event did not include inspector state.",
+        )
+    if intelligence_state is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_intelligence_state",
+            field="intelligence_state",
+            severity="degraded",
+            message="The backend match stream event did not include intelligence state.",
+        )
+    return missing_data
+
+
+def _status_from_missing_data(missing_data: list[dict[str, Any]]) -> str:
+    severities = {str(item.get("severity") or "").strip().lower() for item in missing_data}
+    if "blocked" in severities:
+        return "blocked"
+    if "degraded" in severities:
+        return "degraded"
+    if "empty" in severities:
+        return "empty"
+    if "syncing" in severities:
+        return "syncing"
+    return "ready"
 
 
 __all__ = ["MatchStreamService", "match_event_channel"]

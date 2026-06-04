@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1455,
+  "route_count": 1510,
   "routes": [
     {
       "method": "POST",
@@ -182,6 +182,35 @@
       "response_shape": {
         "response_model": "AccountControlView",
         "returns": "AccountControlView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/finance/locks/{resource_type}/{resource_id}",
+      "effective_paths": [
+        "/api/admin/finance/locks/{resource_type}/{resource_id}"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "release_admin_resource_lock",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "resource_type",
+          "resource_id",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminLockStateView",
+        "returns": "AdminLockStateView"
       },
       "version": "canonical",
       "domain": "admin"
@@ -1098,6 +1127,63 @@
     },
     {
       "method": "GET",
+      "path": "/api/admin/finance/exports/{export_id}",
+      "effective_paths": [
+        "/api/admin/finance/exports/{export_id}"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "get_admin_export_status",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "export_id",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminExportStatusView",
+        "returns": "AdminExportStatusView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/finance/locks/{resource_type}/{resource_id}",
+      "effective_paths": [
+        "/api/admin/finance/locks/{resource_type}/{resource_id}"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "get_admin_resource_lock",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "resource_type",
+          "resource_id",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminLockStateView",
+        "returns": "AdminLockStateView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
       "path": "/api/admin/finance/manual-price-overrides",
       "effective_paths": [
         "/api/admin/finance/manual-price-overrides"
@@ -1144,6 +1230,68 @@
       "response_shape": {
         "response_model": "list[MatchKillSwitchView]",
         "returns": "list[MatchKillSwitchView]"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/finance/payment-queue",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "get_admin_payment_queue",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "tab",
+          "q",
+          "limit",
+          "ge",
+          "le",
+          "offset",
+          "ge",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueView",
+        "returns": "PaymentQueueView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/finance/payment-queue/bulk-actions/{bulk_action_id}",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/bulk-actions/{bulk_action_id}"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "get_admin_payment_queue_bulk_action_status",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "bulk_action_id",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminBulkActionStatusView",
+        "returns": "AdminBulkActionStatusView"
       },
       "version": "canonical",
       "domain": "admin"
@@ -2251,6 +2399,65 @@
     },
     {
       "method": "POST",
+      "path": "/api/admin/finance/exports",
+      "effective_paths": [
+        "/api/admin/finance/exports"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "request_admin_export",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "background_tasks",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminExportStatusView",
+        "returns": "AdminExportStatusView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/locks/{resource_type}/{resource_id}",
+      "effective_paths": [
+        "/api/admin/finance/locks/{resource_type}/{resource_id}"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "acquire_admin_resource_lock",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "resource_type",
+          "resource_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminLockStateView",
+        "returns": "AdminLockStateView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
       "path": "/api/admin/finance/manual-price-overrides",
       "effective_paths": [
         "/api/admin/finance/manual-price-overrides"
@@ -2299,6 +2506,327 @@
       "response_shape": {
         "response_model": "MatchKillSwitchView",
         "returns": "MatchKillSwitchView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/approve",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/approve"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "approve_admin_payment_queue_bid",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "window_id",
+          "bid_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/counter",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/counter"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "counter_admin_payment_queue_bid",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "window_id",
+          "bid_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/reject",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/bids/windows/{window_id}/bids/{bid_id}/reject"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "reject_admin_payment_queue_bid",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "window_id",
+          "bid_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/bulk-actions",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/bulk-actions"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "request_admin_payment_queue_bulk_action",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminBulkActionStatusView",
+        "returns": "AdminBulkActionStatusView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/deposits/{deposit_id}/approve",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/deposits/{deposit_id}/approve"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "approve_admin_payment_queue_deposit",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "deposit_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/deposits/{deposit_id}/reinstate",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/deposits/{deposit_id}/reinstate"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "reinstate_admin_payment_queue_deposit",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "deposit_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/deposits/{deposit_id}/reject",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/deposits/{deposit_id}/reject"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "reject_admin_payment_queue_deposit",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "deposit_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/deposits/{deposit_id}/review",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/deposits/{deposit_id}/review"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "review_admin_payment_queue_deposit",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "deposit_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/withdrawals/{withdrawal_id}/approve",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/withdrawals/{withdrawal_id}/approve"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "approve_admin_payment_queue_withdrawal",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "withdrawal_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/withdrawals/{withdrawal_id}/reinstate",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/withdrawals/{withdrawal_id}/reinstate"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "reinstate_admin_payment_queue_withdrawal",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "withdrawal_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/finance/payment-queue/withdrawals/{withdrawal_id}/reject",
+      "effective_paths": [
+        "/api/admin/finance/payment-queue/withdrawals/{withdrawal_id}/reject"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "reject_admin_payment_queue_withdrawal",
+      "router_variable": "router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "admin_finance"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "withdrawal_id",
+          "payload",
+          "actor",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PaymentQueueActionResultView",
+        "returns": "PaymentQueueActionResultView"
       },
       "version": "canonical",
       "domain": "admin"
@@ -3555,7 +4083,7 @@
         "parameters": [
           "club_id",
           "_current_user",
-          "service"
+          "finance_service"
         ]
       },
       "response_shape": {
@@ -3582,7 +4110,7 @@
         "parameters": [
           "club_id",
           "_current_user",
-          "service"
+          "academy_service"
         ]
       },
       "response_shape": {
@@ -4482,13 +5010,13 @@
     },
     {
       "method": "GET",
-      "path": "/api/auth/me",
+      "path": "/api/v2/auth/me",
       "effective_paths": [
-        "/api/auth/me"
+        "/api/v2/auth/me"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "read_current_user_profile",
-      "router_variable": "api_router",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -4509,9 +5037,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/session/bootstrap",
+      "path": "/api/v2/session/bootstrap",
       "effective_paths": [
-        "/api/session/bootstrap"
+        "/api/v2/session/bootstrap"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "get_session_bootstrap",
@@ -4536,13 +5064,13 @@
     },
     {
       "method": "PATCH",
-      "path": "/api/auth/me",
+      "path": "/api/v2/auth/me",
       "effective_paths": [
-        "/api/auth/me"
+        "/api/v2/auth/me"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "update_current_user_profile",
-      "router_variable": "api_router",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -4564,13 +5092,13 @@
     },
     {
       "method": "POST",
-      "path": "/api/auth/change-password",
+      "path": "/api/v2/auth/change-password",
       "effective_paths": [
-        "/api/auth/change-password"
+        "/api/v2/auth/change-password"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "change_current_user_password",
-      "router_variable": "api_router",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -4592,69 +5120,13 @@
     },
     {
       "method": "POST",
-      "path": "/api/auth/logout",
+      "path": "/api/v2/auth/confirm-email",
       "effective_paths": [
-        "/api/auth/logout"
-      ],
-      "file": "backend/app/auth/router.py",
-      "handler": "logout_user",
-      "router_variable": "api_router",
-      "module_path": "app.auth.router",
-      "module_mounts": [
-        "auth"
-      ],
-      "request_shape": {
-        "parameters": [
-          "request",
-          "current_user",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "ActionStatusResponse",
-        "returns": "ActionStatusResponse"
-      },
-      "version": "canonical",
-      "domain": "auth"
-    },
-    {
-      "method": "POST",
-      "path": "/api/auth/refresh",
-      "effective_paths": [
-        "/api/auth/refresh"
-      ],
-      "file": "backend/app/auth/router.py",
-      "handler": "refresh_auth_session",
-      "router_variable": "api_router",
-      "module_path": "app.auth.router",
-      "module_mounts": [
-        "auth"
-      ],
-      "request_shape": {
-        "parameters": [
-          "payload",
-          "request",
-          "session",
-          "x_device_id",
-          "Header(alias"
-        ]
-      },
-      "response_shape": {
-        "response_model": "TokenResponse",
-        "returns": "TokenResponse"
-      },
-      "version": "canonical",
-      "domain": "auth"
-    },
-    {
-      "method": "POST",
-      "path": "/auth/confirm-email",
-      "effective_paths": [
-        "/auth/confirm-email"
+        "/api/v2/auth/confirm-email"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "confirm_email",
-      "router_variable": "legacy_router",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -4675,13 +5147,13 @@
     },
     {
       "method": "POST",
-      "path": "/auth/login",
+      "path": "/api/v2/auth/login",
       "effective_paths": [
-        "/auth/login"
+        "/api/v2/auth/login"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "login_user",
-      "router_variable": "legacy_router",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -4692,6 +5164,8 @@
           "session",
           "request",
           "x_device_id",
+          "Header(alias",
+          "x_trusted_device_token",
           "Header(alias"
         ]
       },
@@ -4704,13 +5178,13 @@
     },
     {
       "method": "POST",
-      "path": "/auth/logout",
+      "path": "/api/v2/auth/logout",
       "effective_paths": [
-        "/auth/logout"
+        "/api/v2/auth/logout"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "logout_user",
-      "router_variable": "legacy_router",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -4731,13 +5205,68 @@
     },
     {
       "method": "POST",
-      "path": "/auth/recovery/request",
+      "path": "/api/v2/auth/pin/verify",
       "effective_paths": [
-        "/auth/recovery/request"
+        "/api/v2/auth/pin/verify"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "verify_sensitive_action_pin",
+      "router_variable": "api_v2_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ActionStatusResponse",
+        "returns": "ActionStatusResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/recovery/challenge",
+      "effective_paths": [
+        "/api/v2/auth/recovery/challenge"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "request_recovery_challenge",
+      "router_variable": "api_v2_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AccountRecoveryChallengeResponse",
+        "returns": "AccountRecoveryChallengeResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/recovery/request",
+      "effective_paths": [
+        "/api/v2/auth/recovery/request"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "request_account_recovery",
-      "router_variable": "legacy_router",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -4758,13 +5287,13 @@
     },
     {
       "method": "POST",
-      "path": "/auth/recovery/reset",
+      "path": "/api/v2/auth/recovery/reset",
       "effective_paths": [
-        "/auth/recovery/reset"
+        "/api/v2/auth/recovery/reset"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "reset_account_with_recovery",
-      "router_variable": "legacy_router",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -4785,13 +5314,40 @@
     },
     {
       "method": "POST",
-      "path": "/auth/refresh",
+      "path": "/api/v2/auth/recovery/reset-with-questions",
       "effective_paths": [
-        "/auth/refresh"
+        "/api/v2/auth/recovery/reset-with-questions"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "reset_account_with_recovery_questions",
+      "router_variable": "api_v2_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ActionStatusResponse",
+        "returns": "ActionStatusResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/refresh",
+      "effective_paths": [
+        "/api/v2/auth/refresh"
       ],
       "file": "backend/app/auth/router.py",
       "handler": "refresh_auth_session",
-      "router_variable": "legacy_router",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -4802,6 +5358,8 @@
           "request",
           "session",
           "x_device_id",
+          "Header(alias",
+          "x_trusted_device_token",
           "Header(alias"
         ]
       },
@@ -4814,13 +5372,40 @@
     },
     {
       "method": "POST",
-      "path": "/auth/register",
+      "path": "/api/v2/auth/signup/organization",
       "effective_paths": [
-        "/auth/register"
+        "/api/v2/auth/signup/organization"
       ],
       "file": "backend/app/auth/router.py",
-      "handler": "register_user",
-      "router_variable": "legacy_router",
+      "handler": "signup_organization_frictionless",
+      "router_variable": "api_v2_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/signup/player",
+      "effective_paths": [
+        "/api/v2/auth/signup/player"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "signup_player_frictionless",
+      "router_variable": "api_v2_router",
       "module_path": "app.auth.router",
       "module_mounts": [
         "auth"
@@ -6604,6 +7189,106 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/clubs/{club_id}/formation",
+      "effective_paths": [
+        "/api/v2/clubs/{club_id}/formation"
+      ],
+      "file": "backend/app/routes/club_ops.py",
+      "handler": "get_canonical_formation",
+      "router_variable": "formation_router",
+      "module_path": "app.routes.club_ops",
+      "module_mounts": [
+        "club_ops"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/clubs/{club_id}/formation/active",
+      "effective_paths": [
+        "/api/v2/clubs/{club_id}/formation/active"
+      ],
+      "file": "backend/app/routes/club_ops.py",
+      "handler": "get_active_formation",
+      "router_variable": "formation_router",
+      "module_path": "app.routes.club_ops",
+      "module_mounts": [
+        "club_ops"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/clubs/{club_id}/formations",
+      "effective_paths": [
+        "/api/v2/clubs/{club_id}/formations"
+      ],
+      "file": "backend/app/routes/club_ops.py",
+      "handler": "list_formation_history",
+      "router_variable": "formation_router",
+      "module_path": "app.routes.club_ops",
+      "module_mounts": [
+        "club_ops"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/formations/{formation_id}",
+      "effective_paths": [
+        "/api/v2/formations/{formation_id}"
+      ],
+      "file": "backend/app/routes/club_ops.py",
+      "handler": "get_formation_detail",
+      "router_variable": "formation_detail_router",
+      "module_path": "app.routes.club_ops",
+      "module_mounts": [
+        "club_ops"
+      ],
+      "request_shape": {
+        "parameters": [
+          "formation_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
       "path": "/club-infra/clubs/{club_id}",
       "effective_paths": [
         "/club-infra/clubs/{club_id}"
@@ -6857,6 +7542,31 @@
       "response_shape": {
         "response_model": "JerseySetView",
         "returns": "JerseySetView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v2/clubs/{club_id}/formation/draft",
+      "effective_paths": [
+        "/api/v2/clubs/{club_id}/formation/draft"
+      ],
+      "file": "backend/app/routes/club_ops.py",
+      "handler": "save_canonical_formation_draft",
+      "router_variable": "formation_router",
+      "module_path": "app.routes.club_ops",
+      "module_mounts": [
+        "club_ops"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "club"
@@ -7597,6 +8307,108 @@
       "response_shape": {
         "response_model": "SocialFollowView",
         "returns": "SocialFollowView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/clubs/{club_id}/formation/publish",
+      "effective_paths": [
+        "/api/v2/clubs/{club_id}/formation/publish"
+      ],
+      "file": "backend/app/routes/club_ops.py",
+      "handler": "publish_canonical_formation",
+      "router_variable": "formation_router",
+      "module_path": "app.routes.club_ops",
+      "module_mounts": [
+        "club_ops"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/clubs/{club_id}/formations/draft",
+      "effective_paths": [
+        "/api/v2/clubs/{club_id}/formations/draft"
+      ],
+      "file": "backend/app/routes/club_ops.py",
+      "handler": "save_formation_draft",
+      "router_variable": "formation_router",
+      "module_path": "app.routes.club_ops",
+      "module_mounts": [
+        "club_ops"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/clubs/{club_id}/formations/{formation_id}/publish",
+      "effective_paths": [
+        "/api/v2/clubs/{club_id}/formations/{formation_id}/publish"
+      ],
+      "file": "backend/app/routes/club_ops.py",
+      "handler": "publish_formation",
+      "router_variable": "formation_router",
+      "module_path": "app.routes.club_ops",
+      "module_mounts": [
+        "club_ops"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "formation_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/clubs/{club_id}/formations/{source_formation_id}/restore",
+      "effective_paths": [
+        "/api/v2/clubs/{club_id}/formations/{source_formation_id}/restore"
+      ],
+      "file": "backend/app/routes/club_ops.py",
+      "handler": "restore_formation_draft",
+      "router_variable": "formation_router",
+      "module_path": "app.routes.club_ops",
+      "module_mounts": [
+        "club_ops"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "source_formation_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "club"
@@ -18355,61 +19167,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/match/{match_id}/unity-access",
-      "effective_paths": [
-        "/api/match/{match_id}/unity-access"
-      ],
-      "file": "backend/app/live_matches/router.py",
-      "handler": "issue_unity_live_access",
-      "router_variable": "api_match_router",
-      "module_path": "app.live_matches.router",
-      "module_mounts": [
-        "live_matches"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "request",
-          "pay_to_view",
-          "current_user"
-        ]
-      },
-      "response_shape": {
-        "response_model": "UnityLiveAccessView",
-        "returns": "UnityLiveAccessView"
-      },
-      "version": "canonical",
-      "domain": "live"
-    },
-    {
-      "method": "POST",
-      "path": "/api/match/{match_id}/unity-access/refresh",
-      "effective_paths": [
-        "/api/match/{match_id}/unity-access/refresh"
-      ],
-      "file": "backend/app/live_matches/router.py",
-      "handler": "refresh_unity_live_access",
-      "router_variable": "api_match_router",
-      "module_path": "app.live_matches.router",
-      "module_mounts": [
-        "live_matches"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "payload",
-          "request"
-        ]
-      },
-      "response_shape": {
-        "response_model": "UnityLiveAccessView",
-        "returns": "UnityLiveAccessView"
-      },
-      "version": "canonical",
-      "domain": "live"
-    },
-    {
-      "method": "POST",
       "path": "/api/matches/{match_id}/spectate",
       "effective_paths": [
         "/api/matches/{match_id}/spectate"
@@ -18438,116 +19195,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/matches/{match_id}/unity-access",
-      "effective_paths": [
-        "/api/matches/{match_id}/unity-access"
-      ],
-      "file": "backend/app/live_matches/router.py",
-      "handler": "issue_unity_live_access",
-      "router_variable": "api_router",
-      "module_path": "app.live_matches.router",
-      "module_mounts": [
-        "live_matches"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "request",
-          "pay_to_view",
-          "current_user"
-        ]
-      },
-      "response_shape": {
-        "response_model": "UnityLiveAccessView",
-        "returns": "UnityLiveAccessView"
-      },
-      "version": "canonical",
-      "domain": "live"
-    },
-    {
-      "method": "POST",
-      "path": "/api/matches/{match_id}/unity-access/refresh",
-      "effective_paths": [
-        "/api/matches/{match_id}/unity-access/refresh"
-      ],
-      "file": "backend/app/live_matches/router.py",
-      "handler": "refresh_unity_live_access",
-      "router_variable": "api_router",
-      "module_path": "app.live_matches.router",
-      "module_mounts": [
-        "live_matches"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "payload",
-          "request"
-        ]
-      },
-      "response_shape": {
-        "response_model": "UnityLiveAccessView",
-        "returns": "UnityLiveAccessView"
-      },
-      "version": "canonical",
-      "domain": "live"
-    },
-    {
-      "method": "POST",
-      "path": "/match/{match_id}/unity-access",
-      "effective_paths": [
-        "/match/{match_id}/unity-access"
-      ],
-      "file": "backend/app/live_matches/router.py",
-      "handler": "issue_unity_live_access",
-      "router_variable": "match_router",
-      "module_path": "app.live_matches.router",
-      "module_mounts": [
-        "live_matches"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "request",
-          "pay_to_view",
-          "current_user"
-        ]
-      },
-      "response_shape": {
-        "response_model": "UnityLiveAccessView",
-        "returns": "UnityLiveAccessView"
-      },
-      "version": "canonical",
-      "domain": "live"
-    },
-    {
-      "method": "POST",
-      "path": "/match/{match_id}/unity-access/refresh",
-      "effective_paths": [
-        "/match/{match_id}/unity-access/refresh"
-      ],
-      "file": "backend/app/live_matches/router.py",
-      "handler": "refresh_unity_live_access",
-      "router_variable": "match_router",
-      "module_path": "app.live_matches.router",
-      "module_mounts": [
-        "live_matches"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "payload",
-          "request"
-        ]
-      },
-      "response_shape": {
-        "response_model": "UnityLiveAccessView",
-        "returns": "UnityLiveAccessView"
-      },
-      "version": "canonical",
-      "domain": "live"
-    },
-    {
-      "method": "POST",
       "path": "/matches/{match_id}/spectate",
       "effective_paths": [
         "/matches/{match_id}/spectate"
@@ -18570,61 +19217,6 @@
       "response_shape": {
         "response_model": "SpectatorSessionView",
         "returns": "SpectatorSessionView"
-      },
-      "version": "canonical",
-      "domain": "live"
-    },
-    {
-      "method": "POST",
-      "path": "/matches/{match_id}/unity-access",
-      "effective_paths": [
-        "/matches/{match_id}/unity-access"
-      ],
-      "file": "backend/app/live_matches/router.py",
-      "handler": "issue_unity_live_access",
-      "router_variable": "legacy_router",
-      "module_path": "app.live_matches.router",
-      "module_mounts": [
-        "live_matches"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "request",
-          "pay_to_view",
-          "current_user"
-        ]
-      },
-      "response_shape": {
-        "response_model": "UnityLiveAccessView",
-        "returns": "UnityLiveAccessView"
-      },
-      "version": "canonical",
-      "domain": "live"
-    },
-    {
-      "method": "POST",
-      "path": "/matches/{match_id}/unity-access/refresh",
-      "effective_paths": [
-        "/matches/{match_id}/unity-access/refresh"
-      ],
-      "file": "backend/app/live_matches/router.py",
-      "handler": "refresh_unity_live_access",
-      "router_variable": "legacy_router",
-      "module_path": "app.live_matches.router",
-      "module_mounts": [
-        "live_matches"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "payload",
-          "request"
-        ]
-      },
-      "response_shape": {
-        "response_model": "UnityLiveAccessView",
-        "returns": "UnityLiveAccessView"
       },
       "version": "canonical",
       "domain": "live"
@@ -20832,36 +21424,6 @@
       "response_shape": {
         "response_model": "MatchViewStateView",
         "returns": "MatchViewStateView"
-      },
-      "version": "canonical",
-      "domain": "match"
-    },
-    {
-      "method": "GET",
-      "path": "/match-viewer/{match_key}/illusion",
-      "effective_paths": [
-        "/api/match-viewer/{match_key}/illusion"
-      ],
-      "file": "backend/app/routes/match_viewer.py",
-      "handler": "read_match_viewer_illusion_payload",
-      "router_variable": "router",
-      "module_path": "app.routes.match_viewer",
-      "module_mounts": [
-        "match_viewer"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_key",
-          "request",
-          "session",
-          "service",
-          "scaling_service",
-          "presentation_service"
-        ]
-      },
-      "response_shape": {
-        "response_model": "MatchViewerIllusionPayloadView",
-        "returns": "MatchViewerIllusionPayloadView"
       },
       "version": "canonical",
       "domain": "match"
@@ -24003,6 +24565,7 @@
           "payload",
           "session",
           "current_user",
+          "get_current_trading_user)\n    )",
           "request"
         ]
       },
@@ -24081,6 +24644,7 @@
           "payload",
           "session",
           "current_user",
+          "get_current_trading_user)\n    )",
           "request"
         ]
       },
@@ -24511,10 +25075,36 @@
       "domain": "ownership"
     },
     {
-      "method": "GET",
-      "path": "/integrations/payments/methods",
+      "method": "POST",
+      "path": "/api/v2/integrations/payments/korapay/webhook",
       "effective_paths": [
-        "/integrations/payments/methods"
+        "/api/v2/integrations/payments/korapay/webhook"
+      ],
+      "file": "backend/app/admin_finance/router.py",
+      "handler": "handle_korapay_webhook",
+      "router_variable": "webhook_router",
+      "module_path": "app.admin_finance.router",
+      "module_mounts": [
+        "payment_webhooks"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminFinanceWebhookResultView",
+        "returns": "AdminFinanceWebhookResultView"
+      },
+      "version": "canonical",
+      "domain": "payment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/integrations/payments/methods",
+      "effective_paths": [
+        "/api/v2/integrations/payments/methods"
       ],
       "file": "backend/app/integrations/payments/router.py",
       "handler": "list_payment_methods",
@@ -24538,9 +25128,9 @@
     },
     {
       "method": "POST",
-      "path": "/integrations/payments/orders",
+      "path": "/api/v2/integrations/payments/orders",
       "effective_paths": [
-        "/integrations/payments/orders"
+        "/api/v2/integrations/payments/orders"
       ],
       "file": "backend/app/integrations/payments/router.py",
       "handler": "create_payment_order",
@@ -24566,9 +25156,9 @@
     },
     {
       "method": "POST",
-      "path": "/integrations/payments/quote",
+      "path": "/api/v2/integrations/payments/quote",
       "effective_paths": [
-        "/integrations/payments/quote"
+        "/api/v2/integrations/payments/quote"
       ],
       "file": "backend/app/integrations/payments/router.py",
       "handler": "quote_payment",
@@ -24590,58 +25180,6 @@
       },
       "version": "canonical",
       "domain": "payments"
-    },
-    {
-      "method": "POST",
-      "path": "/integrations/payments/korapay/webhook",
-      "effective_paths": [
-        "/integrations/payments/korapay/webhook"
-      ],
-      "file": "backend/app/admin_finance/router.py",
-      "handler": "handle_korapay_webhook",
-      "router_variable": "webhook_router",
-      "module_path": "app.admin_finance.router",
-      "module_mounts": [
-        "paystack_webhooks"
-      ],
-      "request_shape": {
-        "parameters": [
-          "request",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "AdminFinanceWebhookResultView",
-        "returns": "AdminFinanceWebhookResultView"
-      },
-      "version": "canonical",
-      "domain": "paystack"
-    },
-    {
-      "method": "POST",
-      "path": "/integrations/payments/paystack/webhook",
-      "effective_paths": [
-        "/integrations/payments/paystack/webhook"
-      ],
-      "file": "backend/app/admin_finance/router.py",
-      "handler": "handle_paystack_webhook",
-      "router_variable": "webhook_router",
-      "module_path": "app.admin_finance.router",
-      "module_mounts": [
-        "paystack_webhooks"
-      ],
-      "request_shape": {
-        "parameters": [
-          "request",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "AdminFinanceWebhookResultView",
-        "returns": "AdminFinanceWebhookResultView"
-      },
-      "version": "canonical",
-      "domain": "paystack"
     },
     {
       "method": "GET",
@@ -27804,33 +28342,6 @@
     },
     {
       "method": "GET",
-      "path": "/realtime/matches/{match_id}/gateway",
-      "effective_paths": [
-        "/realtime/matches/{match_id}/gateway"
-      ],
-      "file": "backend/app/realtime/router.py",
-      "handler": "get_match_gateway",
-      "router_variable": "realtime_router",
-      "module_path": "app.realtime.router",
-      "module_mounts": [
-        "realtime"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "request",
-          "_current_user"
-        ]
-      },
-      "response_shape": {
-        "response_model": "MatchGatewayView",
-        "returns": "MatchGatewayView"
-      },
-      "version": "canonical",
-      "domain": "realtime"
-    },
-    {
-      "method": "GET",
       "path": "/realtime/status",
       "effective_paths": [
         "/realtime/status"
@@ -27876,32 +28387,6 @@
       "response_shape": {
         "response_model": "WalletGatewayView",
         "returns": "WalletGatewayView"
-      },
-      "version": "canonical",
-      "domain": "realtime"
-    },
-    {
-      "method": "WEBSOCKET",
-      "path": "/realtime/matches/{match_id}/stream",
-      "effective_paths": [
-        "/realtime/matches/{match_id}/stream"
-      ],
-      "file": "backend/app/realtime/router.py",
-      "handler": "stream_match_updates",
-      "router_variable": "realtime_router",
-      "module_path": "app.realtime.router",
-      "module_mounts": [
-        "realtime"
-      ],
-      "request_shape": {
-        "parameters": [
-          "websocket",
-          "match_id"
-        ]
-      },
-      "response_shape": {
-        "response_model": null,
-        "returns": "None"
       },
       "version": "canonical",
       "domain": "realtime"
@@ -29285,6 +29770,34 @@
     },
     {
       "method": "POST",
+      "path": "/regens/creation-orders/{order_id}/cancel",
+      "effective_paths": [
+        "/api/regens/creation-orders/{order_id}/cancel",
+        "/regens/creation-orders/{order_id}/cancel"
+      ],
+      "file": "backend/app/regen_creation/router.py",
+      "handler": "cancel_creation_order",
+      "router_variable": "router",
+      "module_path": "app.regen_creation.router",
+      "module_mounts": [
+        "regen_creation"
+      ],
+      "request_shape": {
+        "parameters": [
+          "order_id",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RegenCreationOrderView",
+        "returns": "RegenCreationOrderView"
+      },
+      "version": "canonical",
+      "domain": "regen"
+    },
+    {
+      "method": "POST",
       "path": "/regens/creation-orders/{order_id}/generate-after-payment",
       "effective_paths": [
         "/api/regens/creation-orders/{order_id}/generate-after-payment",
@@ -29390,6 +29903,34 @@
       "response_shape": {
         "response_model": "RegenCreationOrderView",
         "returns": "RegenCreationOrderView"
+      },
+      "version": "canonical",
+      "domain": "regen"
+    },
+    {
+      "method": "POST",
+      "path": "/regens/request-son/preview",
+      "effective_paths": [
+        "/api/regens/request-son/preview",
+        "/regens/request-son/preview"
+      ],
+      "file": "backend/app/regen_creation/router.py",
+      "handler": "preview_request_son",
+      "router_variable": "router",
+      "module_path": "app.regen_creation.router",
+      "module_mounts": [
+        "regen_creation"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RequestSonPreviewView",
+        "returns": "RequestSonPreviewView"
       },
       "version": "canonical",
       "domain": "regen"
@@ -31007,6 +31548,33 @@
     },
     {
       "method": "GET",
+      "path": "/api/clubs/{club_id}/dashboard",
+      "effective_paths": [
+        "/api/clubs/{club_id}/dashboard"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_club_dashboard",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "finance_service",
+          "academy_service",
+          "sponsorship_service",
+          "scouting_service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
       "path": "/api/clubs/{club_id}/finances",
       "effective_paths": [
         "/api/clubs/{club_id}/finances"
@@ -31146,6 +31714,29 @@
       "response_shape": {
         "response_model": "ClubPurchasesView",
         "returns": "ClubPurchasesView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/rankings",
+      "effective_paths": [
+        "/api/clubs/{club_id}/rankings"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_club_rankings",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "segment"
@@ -31557,6 +32148,218 @@
       "response_shape": {
         "response_model": "ClubSponsorshipCatalogResponse",
         "returns": "ClubSponsorshipCatalogResponse"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/squad",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_squad_roster",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "academy_service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/squad/availability",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad/availability"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_squad_availability",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "academy_service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/squad/chemistry",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad/chemistry"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_squad_chemistry",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/squad/contracts",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad/contracts"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_squad_contracts",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/squad/injuries",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad/injuries"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_squad_injuries",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/squad/readiness",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad/readiness"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_squad_readiness",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "academy_service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/squad/scouting",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad/scouting"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_squad_scouting",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "scouting_service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/squad/selection-ready",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad/selection-ready"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_selection_ready_players",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "academy_service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/{club_id}/staff",
+      "effective_paths": [
+        "/api/clubs/{club_id}/staff"
+      ],
+      "file": "backend/app/segments/clubs/segment_club_ops.py",
+      "handler": "get_canonical_club_staff",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_club_ops",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "segment"
@@ -32978,6 +33781,33 @@
     },
     {
       "method": "POST",
+      "path": "/api/admin/transfers/windows/{window_id}/bids/{bid_id}/review-actions",
+      "effective_paths": [
+        "/api/admin/transfers/windows/{window_id}/bids/{bid_id}/review-actions"
+      ],
+      "file": "backend/app/segments/player_lifecycle/segment_player_lifecycle.py",
+      "handler": "record_admin_transfer_bid_review_action",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.segment_player_lifecycle",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "window_id",
+          "bid_id",
+          "payload",
+          "service",
+          "actor"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AdminTransferBidReviewActionResponse",
+        "returns": "AdminTransferBidReviewActionResponse"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
       "path": "/api/clubs",
       "effective_paths": [
         "/api/clubs"
@@ -34099,7 +34929,10 @@
         "parameters": [
           "window_id",
           "payload",
-          "service"
+          "service",
+          "actor",
+          "idempotency_key",
+          "alias"
         ]
       },
       "response_shape": {
@@ -34125,7 +34958,39 @@
           "window_id",
           "bid_id",
           "payload",
-          "service"
+          "service",
+          "actor",
+          "idempotency_key",
+          "alias"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TransferBidView",
+        "returns": "TransferBidView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transfers/windows/{window_id}/bids/{bid_id}/counter",
+      "effective_paths": [
+        "/api/transfers/windows/{window_id}/bids/{bid_id}/counter"
+      ],
+      "file": "backend/app/segments/player_lifecycle/segment_player_lifecycle.py",
+      "handler": "counter_transfer_bid",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.segment_player_lifecycle",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "window_id",
+          "bid_id",
+          "payload",
+          "service",
+          "actor",
+          "idempotency_key",
+          "alias"
         ]
       },
       "response_shape": {
@@ -34151,7 +35016,39 @@
           "window_id",
           "bid_id",
           "payload",
-          "service"
+          "service",
+          "actor",
+          "idempotency_key",
+          "alias"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TransferBidView",
+        "returns": "TransferBidView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transfers/windows/{window_id}/bids/{bid_id}/withdraw",
+      "effective_paths": [
+        "/api/transfers/windows/{window_id}/bids/{bid_id}/withdraw"
+      ],
+      "file": "backend/app/segments/player_lifecycle/segment_player_lifecycle.py",
+      "handler": "withdraw_transfer_bid",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.segment_player_lifecycle",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "window_id",
+          "bid_id",
+          "payload",
+          "service",
+          "actor",
+          "idempotency_key",
+          "alias"
         ]
       },
       "response_shape": {
@@ -35897,6 +36794,472 @@
     },
     {
       "method": "GET",
+      "path": "/api/trader/markets",
+      "effective_paths": [
+        "/api/trader/markets"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "list_markets",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "_"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[TraderMarketView]",
+        "returns": "list[TraderMarketView]"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "GET",
+      "path": "/api/trader/overview",
+      "effective_paths": [
+        "/api/trader/overview"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "trader_overview",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderOverviewView",
+        "returns": "TraderOverviewView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "GET",
+      "path": "/api/trader/watchlist",
+      "effective_paths": [
+        "/api/trader/watchlist"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "list_watchlist",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[TraderWatchlistView]",
+        "returns": "list[TraderWatchlistView]"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trader/orders",
+      "effective_paths": [
+        "/api/trader/orders"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "place_order",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderOrderView",
+        "returns": "TraderOrderView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trader/p2p",
+      "effective_paths": [
+        "/api/trader/p2p"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "create_p2p_offer",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderP2POfferView",
+        "returns": "TraderP2POfferView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trader/procurements",
+      "effective_paths": [
+        "/api/trader/procurements"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "create_procurement",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderProcurementView",
+        "returns": "TraderProcurementView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trader/procurements/quote",
+      "effective_paths": [
+        "/api/trader/procurements/quote"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "quote_procurement",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderProcurementQuoteView",
+        "returns": "TraderProcurementQuoteView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trader/security/totp/setup",
+      "effective_paths": [
+        "/api/trader/security/totp/setup"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "setup_totp",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TotpSetupView",
+        "returns": "TotpSetupView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trader/watchlist",
+      "effective_paths": [
+        "/api/trader/watchlist"
+      ],
+      "file": "backend/app/trader/router.py",
+      "handler": "add_watchlist",
+      "router_variable": "api_router",
+      "module_path": "app.trader.router",
+      "module_mounts": [
+        "trader"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TraderWatchlistView",
+        "returns": "TraderWatchlistView"
+      },
+      "version": "canonical",
+      "domain": "trader"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/transfer-market/basket/{player_id}",
+      "effective_paths": [
+        "/api/transfer-market/basket/{player_id}"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "remove_market_basket_item",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "player_id",
+          "club_id",
+          "alias",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketBasketDTO",
+        "returns": "MarketBasketDTO"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transfer-market/activity",
+      "effective_paths": [
+        "/api/transfer-market/activity"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "list_market_activity",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "limit",
+          "ge",
+          "le",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[TransferActivityDTO]",
+        "returns": "list[TransferActivityDTO]"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transfer-market/basket",
+      "effective_paths": [
+        "/api/transfer-market/basket"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "get_market_basket",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "club_id",
+          "alias",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketBasketDTO",
+        "returns": "MarketBasketDTO"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transfer-market/bid/{bid_id}",
+      "effective_paths": [
+        "/api/transfer-market/bid/{bid_id}"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "get_market_bid",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "bid_id",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketBidDTO",
+        "returns": "MarketBidDTO"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transfer-market/bids",
+      "effective_paths": [
+        "/api/transfer-market/bids"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "list_market_bids",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "club_id",
+          "alias",
+          "status_filter",
+          "alias",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[MarketBidDTO]",
+        "returns": "list[MarketBidDTO]"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transfer-market/checkout",
+      "effective_paths": [
+        "/api/transfer-market/checkout"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "get_market_checkout_readiness",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "club_id",
+          "alias",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketCheckoutReadinessDTO",
+        "returns": "MarketCheckoutReadinessDTO"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transfer-market/filters/meta",
+      "effective_paths": [
+        "/api/transfer-market/filters/meta"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "get_market_filter_meta",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketFilterMetaDTO",
+        "returns": "MarketFilterMetaDTO"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transfer-market/history",
+      "effective_paths": [
+        "/api/transfer-market/history"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "list_market_history",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "limit",
+          "ge",
+          "le",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[TransferActivityDTO]",
+        "returns": "list[TransferActivityDTO]"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "GET",
       "path": "/api/transfer-market/listings",
       "effective_paths": [
         "/api/transfer-market/listings"
@@ -35978,6 +37341,132 @@
       "domain": "transfer"
     },
     {
+      "method": "GET",
+      "path": "/api/transfer-market/players",
+      "effective_paths": [
+        "/api/transfer-market/players"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "list_market_players",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "q",
+          "position",
+          "nationality",
+          "availability",
+          "value_bracket",
+          "min_age",
+          "ge",
+          "max_age",
+          "ge",
+          "page",
+          "ge",
+          "page_size",
+          "ge",
+          "le",
+          "status_filter",
+          "alias",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketPlayerPageDTO",
+        "returns": "MarketPlayerPageDTO"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transfer-market/players/{player_id}",
+      "effective_paths": [
+        "/api/transfer-market/players/{player_id}"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "get_market_player",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketPlayerDTO",
+        "returns": "MarketPlayerDTO"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transfer-market/admin/listings/{listing_id}/bids/{bid_id}/reservation/release",
+      "effective_paths": [
+        "/api/transfer-market/admin/listings/{listing_id}/bids/{bid_id}/reservation/release"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "admin_release_transfer_market_bid_reservation",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "listing_id",
+          "bid_id",
+          "payload",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TransferListingView",
+        "returns": "TransferListingView"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/transfer-market/basket",
+      "effective_paths": [
+        "/api/transfer-market/basket"
+      ],
+      "file": "backend/app/transfer_market/router.py",
+      "handler": "add_market_basket_item",
+      "router_variable": "router",
+      "module_path": "app.transfer_market.router",
+      "module_mounts": [
+        "transfer_market"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "payload",
+          "club_id",
+          "alias",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "MarketBasketDTO",
+        "returns": "MarketBasketDTO"
+      },
+      "version": "canonical",
+      "domain": "transfer"
+    },
+    {
       "method": "POST",
       "path": "/api/transfer-market/coaches/{club_id}/demands",
       "effective_paths": [
@@ -36049,7 +37538,8 @@
         "parameters": [
           "payload",
           "service",
-          "current_user"
+          "current_user",
+          "get_current_user))"
         ]
       },
       "response_shape": {
@@ -36077,7 +37567,8 @@
           "listing_id",
           "payload",
           "service",
-          "current_user"
+          "current_user",
+          "get_current_user))"
         ]
       },
       "response_shape": {
@@ -39571,10 +41062,10 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/providers/{provider_key}/webhook",
+      "path": "/api/wallets/providers/korapay/webhook",
       "effective_paths": [
-        "/api/wallets/providers/{provider_key}/webhook",
-        "/wallets/providers/{provider_key}/webhook"
+        "/api/wallets/providers/korapay/webhook",
+        "/wallets/providers/korapay/webhook"
       ],
       "file": "backend/app/wallets/router.py",
       "handler": "handle_provider_webhook",
@@ -39585,9 +41076,34 @@
       ],
       "request_shape": {
         "parameters": [
-          "provider_key",
           "request",
           "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "dict[str, object]"
+      },
+      "version": "canonical",
+      "domain": "wallets"
+    },
+    {
+      "method": "POST",
+      "path": "/api/wallets/providers/{provider_key}/webhook",
+      "effective_paths": [
+        "/api/wallets/providers/{provider_key}/webhook",
+        "/wallets/providers/{provider_key}/webhook"
+      ],
+      "file": "backend/app/wallets/router.py",
+      "handler": "reject_unknown_provider_webhook",
+      "router_variable": "wallet_router",
+      "module_path": "app.wallets.router",
+      "module_mounts": [
+        "wallets"
+      ],
+      "request_shape": {
+        "parameters": [
+          "provider_key"
         ]
       },
       "response_shape": {

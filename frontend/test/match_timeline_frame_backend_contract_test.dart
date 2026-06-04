@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
 
 void main() {
   test('player frame parser preserves enriched backend animation states', () {

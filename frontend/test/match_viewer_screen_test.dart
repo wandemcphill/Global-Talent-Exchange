@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/features/match_center/controllers/match_playback_controller.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/presentation/gtex_match_viewer_screen.dart';
+import 'package:gte_frontend/features/match_center/services/match_commentary_engine.dart';
 import 'package:gte_frontend/models/competition_models.dart';
-import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_type.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
-import 'package:gte_frontend/screens/match/gtex_match_viewer_screen.dart';
-import 'package:gte_frontend/services/match_commentary_engine.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
-import 'package:gte_frontend/widgets/match/pitch_2d_widget.dart';
-import 'package:gte_frontend/widgets/match_3d/native_match_3d_surface.dart';
-import 'package:gte_frontend/widgets/match_3d/monetization/premium_controls.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 
@@ -89,49 +87,12 @@ void main() {
     expect(line, contains('Score: 2-1'));
   });
 
-  testWidgets('match viewer renders the minimal 2D matchday surface', (
+  testWidgets('legacy local viewer is blocked before loading playback data', (
     WidgetTester tester,
   ) async {
+    int loadCount = 0;
     final CompetitionSummary competition = _buildCompetition(
-      id: 'match-viewer-test',
-    );
-    final viewState = buildBroadcastTestViewState();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GtexMatchViewerScreen(
-          competition: competition,
-          matchKey: competition.id,
-          viewStateLoader: () async => viewState,
-        ),
-      ),
-    );
-
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 80));
-
-    expect(find.byKey(const Key('match-2d-score-strip')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-scoreline')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-pitch-stage')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-live-panel')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-tactical-summary')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-player-panels')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-event-feed')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-heat-overlay')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-formation-overlay')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-commentary-bar')), findsOneWidget);
-    expect(find.byKey(const Key('match-2d-controls')), findsOneWidget);
-    expect(find.byType(MatchPitch2D), findsOneWidget);
-    expect(find.byType(NativeMatch3dSurface), findsNothing);
-    expect(find.byType(PremiumControls), findsNothing);
-  });
-
-  testWidgets('match viewer can pause and resume the 2D playback loop', (
-    WidgetTester tester,
-  ) async {
-    final CompetitionSummary competition = _buildCompetition(
-      id: 'match-viewer-controls',
+      id: 'match-viewer-quarantine-test',
     );
 
     await tester.pumpWidget(
@@ -140,36 +101,62 @@ void main() {
         home: GtexMatchViewerScreen(
           competition: competition,
           matchKey: competition.id,
-          viewStateLoader: () async => buildBroadcastTestViewState(),
+          viewStateLoader: () async {
+            loadCount += 1;
+            return buildBroadcastTestViewState();
+          },
         ),
       ),
     );
 
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 80));
 
-    expect(find.byTooltip('Pause'), findsOneWidget);
-    await tester.tap(find.byTooltip('Pause'));
-    await tester.pump();
-    expect(find.byTooltip('Play'), findsOneWidget);
+    expect(loadCount, 0);
+    expect(
+      find.byKey(GtexMatchViewerScreen.quarantinePanelKey),
+      findsOneWidget,
+    );
+    expect(find.text(GtexMatchViewerScreen.quarantineTitle), findsOneWidget);
+    expect(
+      find.textContaining('legacy local 2D playback viewer'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('match-2d-score-strip')), findsNothing);
+    expect(find.byKey(const Key('match-2d-pitch-stage')), findsNothing);
+    expect(find.byKey(const Key('match-2d-live-panel')), findsNothing);
+    expect(find.byKey(const Key('match-2d-controls')), findsNothing);
   });
 
-  test('event-only pass payloads can build a fallback 2D frame', () {
+  testWidgets('legacy playback controller fails fast when constructed', (
+    WidgetTester tester,
+  ) async {
+    expect(
+      () => MatchPlaybackController(
+        vsync: tester,
+        viewState: buildBroadcastTestViewState(),
+        autoplay: false,
+      ),
+      throwsA(
+        isA<UnsupportedError>().having(
+          (UnsupportedError error) => error.message,
+          'message',
+          MatchPlaybackController.quarantineMessage,
+        ),
+      ),
+    );
+    expect(
+      MatchPlaybackController.clampAnimationDurationMs(1200),
+      MatchPlaybackController.maxAnimationMs,
+    );
+  });
+
+  test('event-only pass payloads do not build fallback 2D frames', () {
     final Map<String, Object?> payload = _eventOnlyPassPayload();
-
-    final state = buildBroadcastTestViewState();
-    final parsed = state.copyWith(
-      events: const <MatchEvent>[],
-      frames: const <MatchTimelineFrame>[],
-    );
-    expect(parsed.events, isEmpty);
 
     final MatchViewState eventState = MatchViewState.fromJson(payload);
     expect(eventState.events.single.type, MatchViewerEventType.pass);
     expect(eventState.events.single.durationMs, 650);
-    expect(eventState.frames, hasLength(1));
-    expect(eventState.frames.single.ball.position.x, 55);
-    expect(eventState.frames.single.ball.ownerPlayerId, 'away-8');
+    expect(eventState.frames, isEmpty);
   });
 }
 

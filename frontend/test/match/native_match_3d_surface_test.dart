@@ -2,21 +2,21 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/data/live_match_fixtures.dart';
 import 'package:gte_frontend/models/competition_models.dart';
-import 'package:gte_frontend/models/match_3d_native_session.dart';
-import 'package:gte_frontend/models/match_event.dart';
+import 'package:gte_frontend/features/3d/models/match_3d_native_session.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
 import 'package:gte_frontend/models/match_type.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
-import 'package:gte_frontend/services/match_3d_bridge.dart';
-import 'package:gte_frontend/services/match_3d_live_bootstrap_service.dart';
-import 'package:gte_frontend/services/match_viewer_mapper.dart';
-import 'package:gte_frontend/widgets/match_3d/gtex_3d_scene.dart';
-import 'package:gte_frontend/widgets/match_3d/native_match_3d_surface.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
+import 'package:gte_frontend/features/3d/services/match_3d_bridge.dart';
+import 'package:gte_frontend/features/3d/services/match_3d_live_bootstrap_service.dart';
+import 'package:gte_frontend/features/match_center/widgets/pitch_2d_widget.dart';
+import 'package:gte_frontend/features/3d/widgets/match_3d/native_match_3d_surface.dart';
+
+import '../support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   testWidgets(
-    'native surface mounts AndroidView when the native bridge is available',
+    'native surface stays on the 2D broadcast canvas by default',
     (WidgetTester tester) async {
       final MatchViewState viewState = await _loadFallbackState(
         _buildCompetition(id: 'native-match-3d-available'),
@@ -41,20 +41,11 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(AndroidView), findsOneWidget);
-      expect(find.byKey(NativeMatch3dSurface.runtimeBadgeKey), findsOneWidget);
-      expect(find.text('Native 3D Live'), findsOneWidget);
-      expect(backend.openedSessionIds, hasLength(1));
-      expect(
-        backend.openedSessionIds.single,
-        'native_match_3d:${viewState.matchId}',
-      );
-      expect(backend.sentEvents, isNotEmpty);
-      expect(backend.sentEvents.last['type'], 'SCENE_SYNC');
-      expect(
-        backend.sentEvents.last['sessionId'],
-        'native_match_3d:${viewState.matchId}',
-      );
+      expect(find.byType(Pitch2dWidget), findsOneWidget);
+      expect(find.byType(AndroidView), findsNothing);
+      expect(find.byKey(NativeMatch3dSurface.runtimeBadgeKey), findsNothing);
+      expect(backend.openedSessionIds, isEmpty);
+      expect(backend.sentEvents, isEmpty);
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
       TargetPlatform.android,
@@ -62,7 +53,7 @@ void main() {
   );
 
   testWidgets(
-    'native surface falls back to Flutter 3D when the native bridge is unavailable',
+    'native surface ignores unavailable legacy runtime and stays 2D',
     (WidgetTester tester) async {
       final MatchViewState viewState = await _loadFallbackState(
         _buildCompetition(id: 'native-match-3d-fallback'),
@@ -87,7 +78,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(Gtex3dScene), findsOneWidget);
+      expect(find.byType(Pitch2dWidget), findsOneWidget);
       expect(find.byType(AndroidView), findsNothing);
       expect(backend.openedSessionIds, isEmpty);
     },
@@ -97,7 +88,7 @@ void main() {
   );
 
   testWidgets(
-    'native surface shows the Unity activity shell when the runtime uses full-screen Unity',
+    'full-screen legacy activity runtime is hidden by default',
     (WidgetTester tester) async {
       final MatchViewState viewState = await _loadFallbackState(
         _buildCompetition(id: 'native-match-3d-unity-activity'),
@@ -129,13 +120,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
 
       expect(find.byType(AndroidView), findsNothing);
-      expect(find.byType(Gtex3dScene), findsNothing);
-      expect(find.text('Opening Unity match engine'), findsOneWidget);
-      expect(find.textContaining(viewState.matchId), findsOneWidget);
-      expect(
-        backend.openedSessionIds.single,
-        'native_match_3d:${viewState.matchId}',
-      );
+      expect(find.byType(Pitch2dWidget), findsOneWidget);
+      expect(find.textContaining(viewState.matchId), findsNothing);
+      expect(backend.openedSessionIds, isEmpty);
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
       TargetPlatform.android,
@@ -143,7 +130,7 @@ void main() {
   );
 
   testWidgets(
-    'native surface mounts AndroidView when Unity reports the embedded native view type',
+    'embedded legacy view runtime is hidden by default',
     (WidgetTester tester) async {
       final MatchViewState viewState = await _loadFallbackState(
         _buildCompetition(id: 'native-match-3d-unity-embedded'),
@@ -171,13 +158,9 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(AndroidView), findsOneWidget);
-      expect(find.byType(Gtex3dScene), findsNothing);
-      expect(find.text('Opening Unity match engine'), findsNothing);
-      expect(
-        backend.openedSessionIds.single,
-        'native_match_3d:${viewState.matchId}',
-      );
+      expect(find.byType(AndroidView), findsNothing);
+      expect(find.byType(Pitch2dWidget), findsOneWidget);
+      expect(backend.openedSessionIds, isEmpty);
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
       TargetPlatform.android,
@@ -185,7 +168,7 @@ void main() {
   );
 
   testWidgets(
-    'native surface falls back to Flutter 3D when Unity bootstrap staging fails',
+    'bootstrap staging is not attempted while the legacy runtime is quarantined',
     (WidgetTester tester) async {
       final MatchViewState viewState = await _loadFallbackState(
         _buildCompetition(id: 'native-match-3d-bootstrap-failure'),
@@ -217,12 +200,9 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(Gtex3dScene), findsOneWidget);
+      expect(find.byType(Pitch2dWidget), findsOneWidget);
       expect(find.byType(AndroidView), findsNothing);
-      expect(
-        reportedStatus,
-        'Unity live bootstrap could not be staged on Android; Flutter 3D fallback active.',
-      );
+      expect(reportedStatus, isNull);
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
       TargetPlatform.android,
@@ -230,7 +210,7 @@ void main() {
   );
 
   testWidgets(
-    'native surface falls back and reports status when the native session closes unexpectedly',
+    'unexpected legacy session events are ignored while quarantined',
     (WidgetTester tester) async {
       final MatchViewState viewState = await _loadFallbackState(
         _buildCompetition(id: 'native-match-3d-unexpected-close'),
@@ -261,13 +241,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 16));
 
-      expect(find.byType(Gtex3dScene), findsOneWidget);
+      expect(find.byType(Pitch2dWidget), findsOneWidget);
       expect(find.byType(AndroidView), findsNothing);
-      expect(find.text('Flutter 3D Fallback'), findsOneWidget);
-      expect(
-        reportedStatus,
-        'Native 3D session closed; Flutter 3D fallback active.',
-      );
+      expect(find.byKey(NativeMatch3dSurface.runtimeBadgeKey), findsNothing);
+      expect(reportedStatus, isNull);
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
       TargetPlatform.android,
@@ -275,7 +252,7 @@ void main() {
   );
 
   testWidgets(
-    'native surface closes the active native session when unmounted',
+    'native surface opens no legacy session while quarantined',
     (WidgetTester tester) async {
       final MatchViewState viewState = await _loadFallbackState(
         _buildCompetition(id: 'native-match-3d-dispose'),
@@ -301,10 +278,7 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
       await tester.pump();
 
-      expect(
-        backend.closedSessionIds,
-        contains('native_match_3d:${viewState.matchId}'),
-      );
+      expect(backend.closedSessionIds, isEmpty);
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
       TargetPlatform.android,
@@ -340,16 +314,8 @@ CompetitionSummary _buildCompetition({required String id}) {
   );
 }
 
-Future<MatchViewState> _loadFallbackState(CompetitionSummary competition) {
-  final LiveMatchSnapshot snapshot = LiveMatchFixtures.buildSnapshot(
-    competition,
-  );
-  return MatchViewerMapper.load(
-    competition: competition,
-    matchKey: competition.id,
-    fallbackSnapshot: snapshot,
-    preferFallback: true,
-  );
+Future<MatchViewState> _loadFallbackState(CompetitionSummary _) async {
+  return buildBroadcastTestViewState();
 }
 
 class _FakeMatch3dBridgeBackend
@@ -565,7 +531,7 @@ class _FailingBootstrapProvisioner
   }) async {
     return const Match3dAndroidLiveBootstrapResult.unstaged(
       message:
-          'Unity live bootstrap could not be staged on Android; Flutter 3D fallback active.',
+          'Legacy match runtime could not be staged; the 2D broadcast remains active.',
     );
   }
 }

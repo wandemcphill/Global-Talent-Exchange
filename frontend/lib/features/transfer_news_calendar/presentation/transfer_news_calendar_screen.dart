@@ -433,7 +433,10 @@ class _TransferNewsCalendarScreenState
                                                     context,
                                                   ).textTheme.bodyMedium,
                                             ),
-                                            if (_isAuthenticated) ...<Widget>[
+                                            if (_isAuthenticated &&
+                                                isActionableTransferBidStatus(
+                                                  item.status,
+                                                )) ...<Widget>[
                                               const SizedBox(height: 10),
                                               Wrap(
                                                 spacing: 10,

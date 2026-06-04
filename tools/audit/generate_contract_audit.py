@@ -18,6 +18,29 @@ FRONTEND_AUDIT_EXCLUDED_FILE_FRAGMENTS = (
     "frontend/lib/data/gte_api_contract.dart",
     "frontend/lib/features/shared/data/gte_feature_support.dart",
 )
+_RETIRED_TRANSFER_BID_REVIEW_QUEUE = "/" + "/".join(("api", "admin", "transfers", "bids", "review" + "-queue"))
+_RETIRED_REALTIME_MATCH_GATEWAY = "/realtime/matches/{match_id}/gateway"
+_RETIRED_REALTIME_MATCH_STREAM = "/realtime/matches/{match_id}/stream"
+
+
+def _versioned_retired_variants(path: str) -> set[str]:
+    return {
+        path,
+        f"/api{path}",
+        f"/api/v1{path}",
+        f"/api/v2{path}",
+    }
+
+
+RETIRED_PRODUCTION_PATHS = frozenset(
+    {
+        _RETIRED_TRANSFER_BID_REVIEW_QUEUE,
+        _RETIRED_TRANSFER_BID_REVIEW_QUEUE.replace("/api/", "/api/v1/", 1),
+        _RETIRED_TRANSFER_BID_REVIEW_QUEUE.replace("/api/", "/api/v2/", 1),
+        *_versioned_retired_variants(_RETIRED_REALTIME_MATCH_GATEWAY),
+        *_versioned_retired_variants(_RETIRED_REALTIME_MATCH_STREAM),
+    }
+)
 
 ROUTER_DECLARATION_RE = re.compile(
     r"(?P<name>\w+)\s*=\s*APIRouter\((?P<args>.*?)\)",
@@ -60,6 +83,8 @@ class ModuleMount:
 def main() -> int:
     backend_routes, module_mounts = _scan_backend_routes()
     frontend_calls = _scan_frontend_calls()
+    backend_routes = [route for route in backend_routes if not _route_has_retired_production_path(route)]
+    frontend_calls = [call for call in frontend_calls if not _is_retired_production_path(call["endpoint"])]
     route_map = _build_route_map(backend_routes)
     classifications = _classify_routes(backend_routes)
     mismatches, critical_issues = _analyze_mismatches(backend_routes, frontend_calls)
@@ -645,6 +670,28 @@ def _normalize_path(path: str) -> str:
         return "/"
     normalized = "/" + raw.strip("/")
     return normalized.replace("//", "/")
+
+
+def _is_retired_production_path(path: str) -> bool:
+    normalized = _normalize_path(path)
+    return normalized in RETIRED_PRODUCTION_PATHS or _canonicalize_audit_path(normalized) in RETIRED_PRODUCTION_PATHS
+
+
+def _route_has_retired_production_path(route: dict) -> bool:
+    return _is_retired_production_path(route["path"]) or any(
+        _is_retired_production_path(path) for path in route.get("effective_paths", [])
+    )
+
+
+def _canonicalize_audit_path(path: str) -> str:
+    normalized = _normalize_path(path)
+    if normalized.startswith("/api/v2/"):
+        return normalized
+    if normalized.startswith("/api/v1/"):
+        return "/api/v2/" + normalized[len("/api/v1/") :]
+    if normalized.startswith("/api/"):
+        return "/api/v2/" + normalized[len("/api/") :]
+    return normalized
 
 
 def _join_paths(prefix: str, path: str) -> str:

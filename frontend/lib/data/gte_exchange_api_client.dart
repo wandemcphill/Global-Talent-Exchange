@@ -6,7 +6,8 @@ import 'gte_exchange_models.dart';
 import 'gte_http_transport.dart';
 import 'gte_models.dart';
 import 'package:gte_frontend/data/gte_mock_api.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
+import 'package:gte_frontend/features/capital/capital_fixture_repository.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 
 class GteExchangeApiClient {
   GteExchangeApiClient({
@@ -23,10 +24,13 @@ class GteExchangeApiClient {
     required String baseUrl,
     GteBackendMode mode = GteBackendMode.live,
     AuthSessionStore? authSessionStore,
+    DeviceIdentityStore? deviceIdentityStore,
+    TrustedDeviceTokenStore? trustedDeviceTokenStore,
   }) {
+    final GteBackendMode effectiveMode = gteProductionBackendMode(mode);
     final GteRepositoryConfig config = GteRepositoryConfig(
       baseUrl: baseUrl,
-      mode: mode,
+      mode: effectiveMode,
     );
     final GteTransport transport = GteHttpTransport();
     final GteApiRepository fixtures = GteMockApi();
@@ -38,6 +42,9 @@ class GteExchangeApiClient {
         transport: transport,
         fixtures: fixtures,
         authSessionStore: authSessionStore ?? SecureAuthSessionStore(),
+        deviceIdentityStore: deviceIdentityStore ?? SecureDeviceIdentityStore(),
+        trustedDeviceTokenStore:
+            trustedDeviceTokenStore ?? SecureTrustedDeviceTokenStore(),
       ),
     );
   }
@@ -48,7 +55,9 @@ class GteExchangeApiClient {
       mode: GteBackendMode.fixture,
     );
     final GteTransport transport = _UnsupportedTransport();
-    final GteApiRepository fixtures = GteMockApi(latency: latency);
+    final GteApiRepository fixtures = createCapitalFixtureRepository(
+      latency: latency,
+    );
     return GteExchangeApiClient(
       config: config,
       transport: transport,
@@ -57,6 +66,8 @@ class GteExchangeApiClient {
         transport: transport,
         fixtures: fixtures,
         authSessionStore: MemoryAuthSessionStore(),
+        deviceIdentityStore: MemoryDeviceIdentityStore(),
+        trustedDeviceTokenStore: MemoryTrustedDeviceTokenStore(),
       ),
     );
   }
@@ -70,38 +81,30 @@ class GteExchangeApiClient {
     );
   }
 
-  Future<GteAuthSession> register({
-    required String fullName,
-    required String phoneNumber,
-    required String email,
-    required String password,
-    required bool isOver18,
-    required String regionCode,
-    String? username,
-  }) {
-    return repository.register(
-      GteAuthRegisterRequest(
-        email: email,
-        fullName: fullName,
-        phoneNumber: phoneNumber,
-        isOver18: isOver18,
-        regionCode: regionCode,
-        username: username,
-        password: password,
-      ),
-    );
+  Future<GteAuthSession> signupPlayer(
+    GtePlayerFrictionlessSignupRequest request,
+  ) {
+    return repository.signupPlayer(request);
   }
 
-  Future<GteAuthSession> signupUser(GteUserSignupRequest request) {
-    return repository.signupUser(request);
+  Future<GteAuthSession> signupOrganization(
+    GteOrganizationFrictionlessSignupRequest request,
+  ) {
+    return repository.signupOrganization(request);
   }
 
-  Future<GteAuthSession> signupCreator(GteCreatorSignupRequest request) {
-    return repository.signupCreator(request);
+  Future<GteRecoveryChallenge> requestRecoveryChallenge(String email) {
+    return repository.requestRecoveryChallenge(email);
   }
 
-  Future<GteAuthSession> signupTrader(GteTraderSignupRequest request) {
-    return repository.signupTrader(request);
+  Future<void> resetPasswordWithRecoveryQuestions(
+    GteRecoveryQuestionResetRequest request,
+  ) {
+    return repository.resetPasswordWithRecoveryQuestions(request);
+  }
+
+  Future<void> verifyPin(GtePinVerificationRequest request) {
+    return repository.verifyPin(request);
   }
 
   Future<void> logout() => repository.logout();
@@ -996,7 +999,7 @@ class GteExchangeApiClient {
         eligible: true,
         reason: transferSignal.isEmpty ? null : transferSignal,
         windowLabel: 'Open market',
-        lastBidStatus: snapshot.inTransferRoom ? 'active' : null,
+        lastBidStatus: snapshot.inTransferRoom ? 'submitted' : null,
       ),
       agencySummary: null,
       recentEvents: events,

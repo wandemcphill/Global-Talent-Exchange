@@ -19,6 +19,7 @@ class ClubOpsController extends ChangeNotifier {
   final GteRequestGate _adminGate = GteRequestGate();
   final String clubId;
   final String? clubName;
+  bool _isDisposed = false;
 
   bool isLoadingClubData = false;
   bool isLoadingAdminData = false;
@@ -71,6 +72,9 @@ class ClubOpsController extends ChangeNotifier {
           .join(' ');
 
   Future<void> loadClubData({bool force = false}) async {
+    if (_isDisposed) {
+      return;
+    }
     if (isLoadingClubData) {
       return;
     }
@@ -80,7 +84,7 @@ class ClubOpsController extends ChangeNotifier {
     final int requestId = _clubGate.begin();
     isLoadingClubData = true;
     clubErrorMessage = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final List<Object?> payload =
@@ -91,7 +95,7 @@ class ClubOpsController extends ChangeNotifier {
             _api.fetchScouting(clubId: clubId, clubName: clubName),
             _api.fetchYouthPipeline(clubId: clubId, clubName: clubName),
           ]);
-      if (!_clubGate.isActive(requestId)) {
+      if (!_isActiveClubRequest(requestId)) {
         return;
       }
       finance = payload[0] as ClubFinanceSnapshot;
@@ -101,18 +105,21 @@ class ClubOpsController extends ChangeNotifier {
       youthPipeline = payload[4] as YouthPipelineSnapshot;
       clubErrorMessage = null;
     } catch (error) {
-      if (_clubGate.isActive(requestId)) {
+      if (_isActiveClubRequest(requestId)) {
         clubErrorMessage = AppFeedback.messageFor(error);
       }
     } finally {
-      if (_clubGate.isActive(requestId)) {
+      if (_isActiveClubRequest(requestId)) {
         isLoadingClubData = false;
-        notifyListeners();
+        _notifyIfActive();
       }
     }
   }
 
   Future<void> loadAdminData({bool force = false}) async {
+    if (_isDisposed) {
+      return;
+    }
     if (isLoadingAdminData) {
       return;
     }
@@ -122,7 +129,7 @@ class ClubOpsController extends ChangeNotifier {
     final int requestId = _adminGate.begin();
     isLoadingAdminData = true;
     adminErrorMessage = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final List<Object?> payload =
@@ -133,7 +140,7 @@ class ClubOpsController extends ChangeNotifier {
             _api.fetchAcademyAnalytics(),
             _api.fetchScoutingAnalytics(),
           ]);
-      if (!_adminGate.isActive(requestId)) {
+      if (!_isActiveAdminRequest(requestId)) {
         return;
       }
       adminSummary = payload[0] as ClubOpsAdminSnapshot;
@@ -143,13 +150,13 @@ class ClubOpsController extends ChangeNotifier {
       scoutingAnalytics = payload[4] as ScoutingAnalyticsSnapshot;
       adminErrorMessage = null;
     } catch (error) {
-      if (_adminGate.isActive(requestId)) {
+      if (_isActiveAdminRequest(requestId)) {
         adminErrorMessage = AppFeedback.messageFor(error);
       }
     } finally {
-      if (_adminGate.isActive(requestId)) {
+      if (_isActiveAdminRequest(requestId)) {
         isLoadingAdminData = false;
-        notifyListeners();
+        _notifyIfActive();
       }
     }
   }
@@ -167,7 +174,7 @@ class ClubOpsController extends ChangeNotifier {
 
     isSubmittingSponsorshipApplication = true;
     sponsorshipApplicationErrorMessage = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final Map<String, String> packageNamesByCode = <String, String>{
@@ -180,18 +187,26 @@ class ClubOpsController extends ChangeNotifier {
         draft: draft,
         packageNamesByCode: packageNamesByCode,
       );
+      if (_isDisposed) {
+        return contract;
+      }
       sponsorships = await _api.fetchSponsorships(
         clubId: clubId,
         clubName: clubName,
       );
+      if (_isDisposed) {
+        return contract;
+      }
       sponsorshipApplicationErrorMessage = null;
       return contract;
     } catch (error) {
       sponsorshipApplicationErrorMessage = AppFeedback.messageFor(error);
       rethrow;
     } finally {
-      isSubmittingSponsorshipApplication = false;
-      notifyListeners();
+      if (!_isDisposed) {
+        isSubmittingSponsorshipApplication = false;
+        _notifyIfActive();
+      }
     }
   }
 
@@ -205,7 +220,7 @@ class ClubOpsController extends ChangeNotifier {
 
     isUpdatingSponsorshipContract = true;
     sponsorshipContractErrorMessage = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final Map<String, String> packageNamesByCode = <String, String>{
@@ -219,18 +234,26 @@ class ClubOpsController extends ChangeNotifier {
         draft: draft,
         packageNamesByCode: packageNamesByCode,
       );
+      if (_isDisposed) {
+        return contract;
+      }
       sponsorships = await _api.fetchSponsorships(
         clubId: clubId,
         clubName: clubName,
       );
+      if (_isDisposed) {
+        return contract;
+      }
       sponsorshipContractErrorMessage = null;
       return contract;
     } catch (error) {
       sponsorshipContractErrorMessage = AppFeedback.messageFor(error);
       rethrow;
     } finally {
-      isUpdatingSponsorshipContract = false;
-      notifyListeners();
+      if (!_isDisposed) {
+        isUpdatingSponsorshipContract = false;
+        _notifyIfActive();
+      }
     }
   }
 
@@ -271,5 +294,25 @@ class ClubOpsController extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  bool _isActiveClubRequest(int requestId) =>
+      !_isDisposed && _clubGate.isActive(requestId);
+
+  bool _isActiveAdminRequest(int requestId) =>
+      !_isDisposed && _adminGate.isActive(requestId);
+
+  void _notifyIfActive() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _clubGate.cancel();
+    _adminGate.cancel();
+    super.dispose();
   }
 }

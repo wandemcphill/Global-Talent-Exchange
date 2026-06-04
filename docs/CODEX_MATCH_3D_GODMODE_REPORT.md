@@ -67,7 +67,7 @@
 - `PSEUDO_3D`
   - `frontend/lib/features/match/match_broadcast_screen.dart`
 - `FLUTTER_3D`
-  - `frontend/lib/features/match/match_3d_route_screen.dart`
+  - `frontend/lib/features/match_center/legacy_match_runtime_blocked_screen.dart`
   - backed by `frontend/lib/widgets/match_3d/gtex_3d_scene.dart`
 - `NATIVE_3D`
   - only reported when `Match3DBridge.isNativeAvailable()` succeeds

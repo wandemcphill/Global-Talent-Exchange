@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from random import Random
 
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import (
@@ -892,11 +893,11 @@ class RegenUniverseService:
             return existing
         try:
             return RegenPortraitService(self.session).ensure_player_portrait(player, regen=regen).portrait_url
-        except RegenPortraitError:
+        except (RegenPortraitError, SQLAlchemyError):
             return None
 
     def _player_summary_payload(self, prospect: _UniverseProspect) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "id": prospect.lookup_id,
             "name": prospect.name,
             "image_url": prospect.image_url,
@@ -912,6 +913,166 @@ class RegenUniverseService:
             "source_type": prospect.source_type,
             "market_access": self._prospect_market_access_payload(prospect),
         }
+        payload.update(self._prospect_world_truth_payload(prospect))
+        return payload
+
+    def _prospect_world_truth_payload(self, prospect: _UniverseProspect) -> dict[str, object]:
+        metadata = dict(prospect.metadata or {})
+        player_dna = self._player_dna_profile(prospect.player_id)
+        lineage_payload = metadata.get("lineage")
+        lineage_metadata = lineage_payload if isinstance(lineage_payload, dict) else {}
+        profile = prospect.profile
+
+        sources: list[dict[str, object]] = [metadata]
+        if player_dna:
+            sources.append(player_dna)
+        if lineage_metadata:
+            sources.append(lineage_metadata)
+        if profile is not None:
+            sources.append(dict(profile.metadata or {}))
+            if profile.lineage is not None:
+                sources.append(dict(profile.lineage.metadata or {}))
+
+        generation_number = self._first_int(
+            sources,
+            ("generation_number", "generation", "generation_index"),
+        )
+        generation_label = self._first_string(
+            sources,
+            ("generation_label", "generationLabel", "gen"),
+        )
+        if generation_label is None and generation_number is not None:
+            generation_label = f"GEN-{generation_number}"
+
+        dna_profile = self._first_dict(
+            sources,
+            ("dna_profile", "dnaProfile", "projected_dna", "projectedDna", "dna"),
+        )
+        traits = self._prospect_traits(sources)
+        lineage = self._prospect_lineage(metadata=metadata, prospect=prospect)
+        rarity_tier = self._first_string(sources, ("rarity_tier", "rarityTier", "lineage_tier"))
+        if rarity_tier is None and profile is not None and profile.lineage is not None:
+            rarity_tier = profile.lineage.lineage_tier
+
+        origin_story = self._first_string(sources, ("origin_story", "originStory", "origin"))
+        if origin_story is None and profile is not None:
+            if profile.story_seed is not None and profile.story_seed.snippet:
+                origin_story = profile.story_seed.snippet
+            elif profile.lineage is not None and profile.lineage.narrative_text:
+                origin_story = profile.lineage.narrative_text
+        origin_story = origin_story or prospect.story_snippet
+
+        projected_value_coin = self._first_int(
+            sources,
+            ("projected_value_coin", "projectedValueCoin", "market_value_coin", "marketValueCoin"),
+        )
+        if projected_value_coin is None:
+            projected_value_coin = prospect.market_value_coin
+
+        payload: dict[str, object] = {}
+        if generation_number is not None:
+            payload["generation_number"] = generation_number
+        if generation_label is not None:
+            payload["generation_label"] = generation_label
+        if rarity_tier is not None:
+            payload["rarity_tier"] = rarity_tier
+        if origin_story is not None:
+            payload["origin_story"] = origin_story
+        if projected_value_coin is not None:
+            payload["projected_value_coin"] = max(0, int(projected_value_coin))
+        if traits:
+            payload["traits"] = traits
+        if lineage:
+            payload["lineage"] = lineage
+        if dna_profile:
+            payload["dna_profile"] = dna_profile
+        return payload
+
+    def _player_dna_profile(self, player_id: str | None) -> dict[str, object]:
+        if player_id is None:
+            return {}
+        player = self.session.get(Player, player_id)
+        if player is None or not isinstance(player.dna_profile, dict):
+            return {}
+        return dict(player.dna_profile)
+
+    @staticmethod
+    def _first_string(sources: list[dict[str, object]], keys: tuple[str, ...]) -> str | None:
+        for source in sources:
+            for key in keys:
+                value = source.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+        return None
+
+    @staticmethod
+    def _first_int(sources: list[dict[str, object]], keys: tuple[str, ...]) -> int | None:
+        for source in sources:
+            for key in keys:
+                value = source.get(key)
+                if value is None:
+                    continue
+                try:
+                    return int(round(float(value)))
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    @staticmethod
+    def _first_dict(sources: list[dict[str, object]], keys: tuple[str, ...]) -> dict[str, object]:
+        for source in sources:
+            for key in keys:
+                value = source.get(key)
+                if isinstance(value, dict) and value:
+                    return dict(value)
+        return {}
+
+    @staticmethod
+    def _string_list(value: object) -> list[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if item is not None and str(item).strip()]
+        if isinstance(value, tuple):
+            return [str(item).strip() for item in value if item is not None and str(item).strip()]
+        if isinstance(value, str) and value.strip():
+            return [value.strip()]
+        return []
+
+    @classmethod
+    def _dedupe_strings(cls, values: list[str]) -> list[str]:
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            key = " ".join(value.strip().lower().replace("_", " ").replace("-", " ").split())
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(value)
+        return deduped
+
+    @classmethod
+    def _prospect_traits(cls, sources: list[dict[str, object]]) -> list[str]:
+        values: list[str] = []
+        for source in sources:
+            for key in ("selected_traits", "traits", "trait_names", "unique_traits", "traitNames"):
+                values.extend(cls._string_list(source.get(key)))
+        return cls._dedupe_strings(values)
+
+    @classmethod
+    def _prospect_lineage(cls, *, metadata: dict[str, object], prospect: _UniverseProspect) -> list[str]:
+        values: list[str] = []
+        lineage_payload = metadata.get("lineage")
+        if isinstance(lineage_payload, list):
+            values.extend(cls._string_list(lineage_payload))
+        if isinstance(lineage_payload, dict):
+            for key in ("lineage", "bloodline", "lineage_names", "bloodline_names", "bloodlineNames"):
+                values.extend(cls._string_list(lineage_payload.get(key)))
+            for key in ("parent_player_name", "parentPlayerName"):
+                values.extend(cls._string_list(lineage_payload.get(key)))
+        for key in ("parent_player_name", "parentPlayerName"):
+            values.extend(cls._string_list(metadata.get(key)))
+        if values:
+            values.append(prospect.name)
+        return cls._dedupe_strings(values)
 
     def _prospect_market_access_payload(self, prospect: _UniverseProspect) -> dict[str, bool]:
         if prospect.source_type == "national_seed":
@@ -981,7 +1142,7 @@ class RegenUniverseService:
             growth_curve=profile.growth_curve,
             club_id=profile.club_id,
             generated_at=profile.generated_at,
-            source_type="regen",
+            source_type=profile.generation_source or "regen",
             regen_type=profile.regen_type,
             uniqueness_score=profile.uniqueness_score,
             story_snippet=profile.story_seed.snippet if profile.story_seed is not None else None,

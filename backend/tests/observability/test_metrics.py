@@ -128,17 +128,17 @@ def test_metrics_capture_economy_and_gameplay_events() -> None:
     assert _sample_value(samples_by_name, "gtex_matches_total", competition_type="league", result="home_win") == 1.0
 
 
-def test_metrics_capture_unity_live_observability_signals() -> None:
+def test_metrics_capture_legacy_match_runtime_observability_signals() -> None:
     metrics = GTexMetrics(runtime_name="test")
 
-    metrics.record_unity_live_access(action="issue", result="success")
-    metrics.record_unity_live_access(action="refresh", result="invalid_token")
-    metrics.record_unity_live_payload(transport="http", result="success")
-    metrics.record_unity_live_payload(transport="websocket", result="error")
-    metrics.record_unity_live_websocket_event(event="accepted", result="success")
-    metrics.record_unity_live_websocket_event(event="stale_state", result="detected")
-    metrics.record_unity_live_generated_match(result="started")
-    metrics.record_unity_live_generated_match(result="missing_stream")
+    metrics.record_legacy_match_runtime_access(action="issue", result="success")
+    metrics.record_legacy_match_runtime_access(action="refresh", result="invalid_token")
+    metrics.record_legacy_match_runtime_payload(transport="http", result="success")
+    metrics.record_legacy_match_runtime_payload(transport="websocket", result="error")
+    metrics.record_legacy_match_runtime_websocket_event(event="accepted", result="success")
+    metrics.record_legacy_match_runtime_websocket_event(event="stale_state", result="detected")
+    metrics.record_legacy_match_runtime_generated_match(result="started")
+    metrics.record_legacy_match_runtime_generated_match(result="missing_stream")
 
     rendered = metrics.render_latest().decode("utf-8")
     samples_by_name: dict[str, list[object]] = {}
@@ -149,7 +149,7 @@ def test_metrics_capture_unity_live_observability_signals() -> None:
     assert (
         _sample_value(
             samples_by_name,
-            "gtex_unity_live_access_total",
+            "gtex_legacy_match_runtime_access_total",
             action="issue",
             result="success",
         )
@@ -158,7 +158,7 @@ def test_metrics_capture_unity_live_observability_signals() -> None:
     assert (
         _sample_value(
             samples_by_name,
-            "gtex_unity_live_access_total",
+            "gtex_legacy_match_runtime_access_total",
             action="refresh",
             result="invalid_token",
         )
@@ -167,7 +167,7 @@ def test_metrics_capture_unity_live_observability_signals() -> None:
     assert (
         _sample_value(
             samples_by_name,
-            "gtex_unity_live_payload_total",
+            "gtex_legacy_match_runtime_payload_total",
             transport="http",
             result="success",
         )
@@ -176,7 +176,7 @@ def test_metrics_capture_unity_live_observability_signals() -> None:
     assert (
         _sample_value(
             samples_by_name,
-            "gtex_unity_live_payload_total",
+            "gtex_legacy_match_runtime_payload_total",
             transport="websocket",
             result="error",
         )
@@ -185,7 +185,7 @@ def test_metrics_capture_unity_live_observability_signals() -> None:
     assert (
         _sample_value(
             samples_by_name,
-            "gtex_unity_live_websocket_events_total",
+            "gtex_legacy_match_runtime_websocket_events_total",
             event="accepted",
             result="success",
         )
@@ -194,7 +194,7 @@ def test_metrics_capture_unity_live_observability_signals() -> None:
     assert (
         _sample_value(
             samples_by_name,
-            "gtex_unity_live_websocket_events_total",
+            "gtex_legacy_match_runtime_websocket_events_total",
             event="stale_state",
             result="detected",
         )
@@ -203,7 +203,7 @@ def test_metrics_capture_unity_live_observability_signals() -> None:
     assert (
         _sample_value(
             samples_by_name,
-            "gtex_unity_live_generated_match_total",
+            "gtex_legacy_match_runtime_generated_match_total",
             result="started",
         )
         == 1.0
@@ -211,7 +211,7 @@ def test_metrics_capture_unity_live_observability_signals() -> None:
     assert (
         _sample_value(
             samples_by_name,
-            "gtex_unity_live_generated_match_total",
+            "gtex_legacy_match_runtime_generated_match_total",
             result="missing_stream",
         )
         == 1.0

@@ -2,6 +2,18 @@
 
 This file is the execution order for GTEX implementation work.
 
+## Canonical Override - 2026-06-04
+
+The production GTEX direction is now the canonical Flutter/backend football operating system.
+Legacy Unity/current-engine/original-visual-runtime phases below are historical quarantine records, not active production instructions.
+
+Active production work must prioritize:
+- Flutter canonical shell and feature-first screens.
+- Backend DTO/repository contracts.
+- 2D broadcast-style match center only.
+- KoraPay and manual bank transfer only.
+- No Paystack, Unity route promotion, native 3D, pseudo-3D, or production 3D CTAs.
+
 Rules:
 - Only implement phases marked `READY`
 - Do not start phases marked `BLOCKED`
@@ -10,12 +22,9 @@ Rules:
 
 ## Current Target
 
-- `P5` is complete
-- `P6` remains `READY` for current-engine production hardening
-- `P6V` is `READY` for the controlled Original Visual Runtime Pivot
-- `P6V` supersedes the old P6/P7/P8 current-engine-only restriction for this isolated visual-runtime pivot only
-- The pivot is not a rewrite: GTEX remains the match authority and the original simulator owns football visuals in a separate scene
-- Batchmode build stability and the current `Gtex_MainScene` path remain required acceptance gates
+- Canonical Flutter/backend GTEX is the active production target.
+- Legacy Unity P6/P6V work is quarantined and must not be promoted into production navigation, deploy checks, contracts, or monetization.
+- Do not start Unity/current-engine work unless the user explicitly requests legacy quarantine maintenance.
 
 ## Phases
 
@@ -93,7 +102,7 @@ Exit gate:
 - Local sim mode is explicit, stable, and does not break live mode
 
 ### P6 GTEX Current-Engine Integration Hardening
-Status: `READY`
+Status: `BLOCKED_QUARANTINED`
 
 Source prompt:
 - `Prompt C` in `GTEX_PHASED_PROMPTS.md`
@@ -123,7 +132,7 @@ Exit gate:
 - Staging passes a 15-minute soak run and production has actionable observability plus rollback-ready procedures
 
 ### P6V Original Visual Runtime Pivot
-Status: `READY`
+Status: `BLOCKED_QUARANTINED`
 
 Source prompt:
 - `Prompt C2` in `GTEX_PHASED_PROMPTS.md`

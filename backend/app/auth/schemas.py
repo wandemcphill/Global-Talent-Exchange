@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.access_control.schemas import OrganizationMembershipView
 from app.models.access_control import OrganizationType
-from app.models.club_profile import ClubType
 from app.models.user import KycStatus, PublicAccountType, UserRole
 from app.policies.schemas import UserComplianceStatus
 from app.schemas.club_identity_core import ClubProfileCore
@@ -32,6 +31,56 @@ PROTECTED_PROFILE_FIELDS = frozenset(
         "username",
     }
 )
+
+GENERIC_RECOVERY_QUESTION_FRAGMENTS = frozenset(
+    {
+        "favorite color",
+        "favourite colour",
+        "favorite food",
+        "favourite food",
+        "mother's maiden",
+        "mothers maiden",
+        "maiden name",
+        "pet's name",
+        "pet name",
+        "first car",
+        "birth city",
+        "city were you born",
+        "name of your school",
+    }
+)
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = value.strip()
+    return candidate or None
+
+
+def _validate_recovery_question_text(value: str) -> str:
+    candidate = value.strip()
+    if not candidate:
+        raise ValueError("Recovery question is required.")
+    normalized = " ".join(candidate.casefold().replace("?", "").split())
+    if any(fragment in normalized for fragment in GENERIC_RECOVERY_QUESTION_FRAGMENTS):
+        raise ValueError("Use a custom football or personal recovery question, not a generic predefined prompt.")
+    return candidate
+
+
+def _validate_four_digit_pin(value: str) -> str:
+    candidate = value.strip()
+    if len(candidate) != 4 or not candidate.isdigit():
+        raise ValueError("Security PIN must be exactly 4 digits.")
+    return candidate
+
+
+def _validate_exactly_two_recovery_questions(questions: list["RecoveryQuestionInput"]) -> None:
+    if len(questions) != 2:
+        raise ValueError("Exactly 2 custom recovery questions are required.")
+    normalized_questions = {_validate_recovery_question_text(question.question).casefold() for question in questions}
+    if len(normalized_questions) != 2:
+        raise ValueError("Recovery questions must be distinct.")
 
 
 class RegisterRequest(BaseModel):
@@ -92,164 +141,135 @@ class RegisterRequest(BaseModel):
         return candidate
 
 
-class ComplianceSubmissionRequest(BaseModel):
+class RecoveryQuestionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    government_id_attachment_id: str = Field(min_length=1, max_length=255)
-    selfie_attachment_id: str = Field(min_length=1, max_length=255)
-    country_confirmation: str = Field(min_length=2, max_length=120)
-    proof_of_address_attachment_id: str | None = Field(default=None, max_length=255)
+    question: str = Field(min_length=8, max_length=255)
+    answer: str = Field(min_length=2, max_length=255)
 
-    @field_validator(
-        "government_id_attachment_id",
-        "selfie_attachment_id",
-        "country_confirmation",
-        "proof_of_address_attachment_id",
-    )
+    @field_validator("question")
     @classmethod
-    def normalize_optional_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
+    def validate_question(cls, value: str) -> str:
+        return _validate_recovery_question_text(value)
+
+    @field_validator("answer")
+    @classmethod
+    def normalize_answer(cls, value: str) -> str:
         candidate = value.strip()
-        return candidate or None
+        if not candidate:
+            raise ValueError("Recovery answer is required.")
+        return candidate
 
 
-class UserClubSignupRequest(BaseModel):
+class RecoveryAnswerInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: str = Field(min_length=1, max_length=64)
+    answer: str = Field(min_length=1, max_length=255)
+
+    @field_validator("question_id", "answer")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("Recovery answer is required.")
+        return candidate
+
+
+class DeviceTrustRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    device_id: str | None = Field(default=None, min_length=4, max_length=120)
+    install_id: str | None = Field(default=None, min_length=4, max_length=120)
+    os: str | None = Field(default=None, max_length=80)
+    device_model: str | None = Field(default=None, max_length=160)
+    ip_region: str | None = Field(default=None, max_length=120)
+    trusted_device_token: str | None = Field(default=None, min_length=16, max_length=256)
+    biometric_enabled: bool = False
+
+    @field_validator("device_id", "install_id", "os", "device_model", "ip_region", "trusted_device_token")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
+
+
+class PlayerFrictionlessSignupRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     full_name: str = Field(min_length=2, max_length=160)
-    username: str = Field(min_length=3, max_length=64)
     email: str = Field(min_length=5, max_length=320)
     password: str = Field(min_length=8, max_length=128)
+    phone_number: str | None = Field(default=None, min_length=6, max_length=32)
     country: str = Field(min_length=2, max_length=120)
-    state: str | None = Field(default=None, max_length=120)
-    city: str | None = Field(default=None, max_length=120)
-    club_name: str = Field(min_length=2, max_length=120)
-    club_short_tag: str = Field(min_length=2, max_length=40)
-    club_country: str = Field(min_length=2, max_length=120)
-    club_state: str | None = Field(default=None, max_length=120)
-    club_locality: str | None = Field(default=None, max_length=120)
-    club_type: ClubType
-    crest_asset_ref: str | None = Field(default=None, max_length=255)
-    primary_color: str = Field(default="#0F766E", max_length=16)
-    secondary_color: str = Field(default="#F8FAFC", max_length=16)
-    football_identity: str = Field(default="club_owner", max_length=32)
-    position: str | None = Field(default=None, max_length=40)
-    dominant_foot: str | None = Field(default=None, max_length=16)
-    height_cm: int | None = Field(default=None, ge=120, le=230)
-    jersey_number: int | None = Field(default=None, ge=1, le=99)
-    preferred_role: str | None = Field(default=None, max_length=80)
-    compliance: ComplianceSubmissionRequest
+    preferred_position: str = Field(min_length=2, max_length=120)
+    date_of_birth: date
+    pin: str = Field(min_length=4, max_length=4)
+    recovery_questions: list[RecoveryQuestionInput] = Field(min_length=2, max_length=2)
+    device: DeviceTrustRequest | None = None
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, value: str) -> str:
         return RegisterRequest.validate_email(value)
 
-    @field_validator("username")
-    @classmethod
-    def normalize_username(cls, value: str) -> str:
-        resolved = RegisterRequest.normalize_username(value)
-        if resolved is None:
-            raise ValueError("Username is required.")
-        return resolved
-
-    @field_validator(
-        "full_name",
-        "country",
-        "state",
-        "city",
-        "club_name",
-        "club_short_tag",
-        "club_country",
-        "club_state",
-        "club_locality",
-        "crest_asset_ref",
-        "primary_color",
-        "secondary_color",
-        "football_identity",
-        "position",
-        "dominant_foot",
-        "preferred_role",
-    )
+    @field_validator("full_name", "phone_number", "country", "preferred_position")
     @classmethod
     def normalize_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        candidate = value.strip()
-        return candidate or None
+        return _normalize_optional_text(value)
+
+    @field_validator("pin")
+    @classmethod
+    def validate_pin(cls, value: str) -> str:
+        return _validate_four_digit_pin(value)
 
     @model_validator(mode="after")
-    def validate_player_fields(self) -> "UserClubSignupRequest":
-        identity = self.football_identity.strip().lower().replace(" ", "_")
-        if identity not in {"club_owner", "player", "both"}:
-            raise ValueError("football_identity must be club_owner, player, or both.")
-        self.football_identity = identity
-        if identity in {"player", "both"} and not self.position:
-            raise ValueError("position is required when football_identity includes player.")
+    def validate_recovery_questions(self) -> "PlayerFrictionlessSignupRequest":
+        _validate_exactly_two_recovery_questions(self.recovery_questions)
         return self
 
 
-class CreatorSignupRequest(BaseModel):
+class OrganizationFrictionlessSignupRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    creator_name: str = Field(min_length=2, max_length=120)
-    username: str = Field(min_length=3, max_length=64)
+    organization_name: str = Field(min_length=2, max_length=160)
+    contact_name: str = Field(min_length=2, max_length=160)
     email: str = Field(min_length=5, max_length=320)
     password: str = Field(min_length=8, max_length=128)
+    phone_number: str | None = Field(default=None, min_length=6, max_length=32)
+    organization_type: str = Field(min_length=2, max_length=40)
     country: str = Field(min_length=2, max_length=120)
-    category: str = Field(min_length=2, max_length=80)
-    main_club_supported: str | None = Field(default=None, max_length=120)
-    primary_language: str = Field(min_length=2, max_length=80)
-    avatar_asset_ref: str | None = Field(default=None, max_length=255)
-    banner_asset_ref: str | None = Field(default=None, max_length=255)
-    monetization: list[str] = Field(default_factory=list, max_length=4)
+    pin: str = Field(min_length=4, max_length=4)
+    recovery_questions: list[RecoveryQuestionInput] = Field(min_length=2, max_length=2)
+    device: DeviceTrustRequest | None = None
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, value: str) -> str:
         return RegisterRequest.validate_email(value)
 
-    @field_validator("username")
+    @field_validator("organization_name", "contact_name", "phone_number", "country")
     @classmethod
-    def normalize_username(cls, value: str) -> str:
-        resolved = RegisterRequest.normalize_username(value)
-        if resolved is None:
-            raise ValueError("Username is required.")
-        return resolved
+    def normalize_text(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
 
-
-class TraderSignupRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    full_name: str = Field(min_length=2, max_length=160)
-    trading_alias: str = Field(min_length=2, max_length=120)
-    email: str = Field(min_length=5, max_length=320)
-    password: str = Field(min_length=8, max_length=128)
-    phone_number: str = Field(min_length=6, max_length=32)
-    country: str = Field(min_length=2, max_length=120)
-    preferred_currency: str = Field(min_length=2, max_length=12)
-    trading_experience: str = Field(min_length=2, max_length=32)
-    interests: list[str] = Field(default_factory=list, max_length=4)
-    wallet_label: str = Field(default="GTEX Trading Wallet", max_length=120)
-    totp_secret: str = Field(min_length=16, max_length=128)
-    recovery_phrase_hash: str = Field(min_length=16, max_length=255)
-    security_pin_hash: str = Field(min_length=16, max_length=255)
-    totp_code: str = Field(min_length=6, max_length=12)
-    compliance: ComplianceSubmissionRequest
-
-    @field_validator("email")
+    @field_validator("organization_type")
     @classmethod
-    def validate_email(cls, value: str) -> str:
-        return RegisterRequest.validate_email(value)
-
-    @field_validator("trading_experience")
-    @classmethod
-    def validate_experience(cls, value: str) -> str:
-        candidate = value.strip().lower()
-        if candidate not in {"beginner", "intermediate", "professional"}:
-            raise ValueError("trading_experience must be beginner, intermediate, or professional.")
+    def normalize_organization_type(cls, value: str) -> str:
+        candidate = value.strip().lower().replace(" ", "_")
+        allowed = {"club", "academy", "scout", "agent", "agency", "coach", "analyst", "recruiter"}
+        if candidate not in allowed:
+            raise ValueError("organization_type must be club, academy, scout, agent, agency, coach, analyst, or recruiter.")
         return candidate
+
+    @field_validator("pin")
+    @classmethod
+    def validate_pin(cls, value: str) -> str:
+        return _validate_four_digit_pin(value)
+
+    @model_validator(mode="after")
+    def validate_recovery_questions(self) -> "OrganizationFrictionlessSignupRequest":
+        _validate_exactly_two_recovery_questions(self.recovery_questions)
+        return self
 
 
 class LoginRequest(BaseModel):
@@ -257,6 +277,7 @@ class LoginRequest(BaseModel):
 
     email: str = Field(min_length=5, max_length=320)
     password: str = Field(min_length=8, max_length=128)
+    device: DeviceTrustRequest | None = None
 
     @field_validator("email")
     @classmethod
@@ -268,6 +289,7 @@ class RefreshTokenRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     refresh_token: str = Field(min_length=24, max_length=4096)
+    device: DeviceTrustRequest | None = None
 
     @field_validator("refresh_token")
     @classmethod
@@ -323,6 +345,65 @@ class AccountRecoveryResetRequest(BaseModel):
         return self
 
 
+class RecoveryChallengeQuestion(BaseModel):
+    id: str
+    question: str
+
+
+class AccountRecoveryChallengeResponse(BaseModel):
+    email: str
+    questions: list[RecoveryChallengeQuestion] = Field(default_factory=list)
+
+
+class AccountRecoveryQuestionResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=5, max_length=320)
+    answers: list[RecoveryAnswerInput] = Field(min_length=2, max_length=2)
+    pin: str = Field(min_length=4, max_length=4)
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_new_password: str = Field(min_length=8, max_length=128)
+    device: DeviceTrustRequest | None = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("pin")
+    @classmethod
+    def validate_pin(cls, value: str) -> str:
+        return _validate_four_digit_pin(value)
+
+    @model_validator(mode="after")
+    def validate_reset_payload(self) -> "AccountRecoveryQuestionResetRequest":
+        if self.new_password != self.confirm_new_password:
+            raise ValueError("New password confirmation does not match.")
+        if len({answer.question_id for answer in self.answers}) != 2:
+            raise ValueError("Recovery answers must reference two distinct questions.")
+        return self
+
+
+class PinVerificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pin: str = Field(min_length=4, max_length=4)
+    action_type: str = Field(min_length=2, max_length=80)
+
+    @field_validator("pin")
+    @classmethod
+    def validate_pin(cls, value: str) -> str:
+        return _validate_four_digit_pin(value)
+
+    @field_validator("action_type")
+    @classmethod
+    def normalize_action_type(cls, value: str) -> str:
+        candidate = value.strip().lower().replace(" ", "_")
+        if not candidate:
+            raise ValueError("action_type is required.")
+        return candidate
+
+
 class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -351,6 +432,10 @@ class TokenResponse(BaseModel):
     user: UserPublic
     permissions: list[str] = Field(default_factory=list)
     landing_route: str = "/"
+    trusted_device_token: str | None = None
+    trusted_device_id: str | None = None
+    device_trusted: bool = False
+    biometric_enabled: bool = False
 
 
 class CurrentUserResponse(BaseModel):

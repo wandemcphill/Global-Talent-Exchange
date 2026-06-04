@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gte_frontend/features/match/presentation/broadcast_package_models.dart';
-import 'package:gte_frontend/features/match/presentation/real_match_scene_director.dart';
-import 'package:gte_frontend/models/match_event.dart';
-import 'package:gte_frontend/models/match_timeline_frame.dart';
-import 'package:gte_frontend/models/match_view_state.dart';
-import 'package:gte_frontend/models/real_match_engine_presentation.dart';
+import 'package:gte_frontend/features/match_center/presentation/broadcast_package_models.dart';
+import 'package:gte_frontend/features/match_center/presentation/real_match_scene_director.dart';
+import 'package:gte_frontend/features/match_center/models/match_event.dart';
+import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
+import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
+import 'package:gte_frontend/features/match_center/models/real_match_engine_presentation.dart';
 
 import 'support/gtex_match_broadcast_fixture.dart';
 

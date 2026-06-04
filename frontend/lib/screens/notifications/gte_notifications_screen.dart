@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:gte_frontend/features/capital/disputes/presentation/gte_support_dispute_screens.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_deposit_history_screen.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_kyc_screen.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_wallet_overview_screen.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_withdrawal_flow_screen.dart';
 
 import '../../data/gte_models.dart';
 import '../../providers/gte_exchange_controller.dart';
@@ -6,17 +11,9 @@ import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
-import '../support/gte_support_dispute_screens.dart';
-import '../wallet/gte_deposit_history_screen.dart';
-import '../wallet/gte_kyc_screen.dart';
-import '../wallet/gte_wallet_overview_screen.dart';
-import '../wallet/gte_withdrawal_flow_screen.dart';
 
 class GteNotificationsScreen extends StatefulWidget {
-  const GteNotificationsScreen({
-    super.key,
-    required this.controller,
-  });
+  const GteNotificationsScreen({super.key, required this.controller});
 
   final GteExchangeController controller;
 
@@ -46,8 +43,9 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
 
   Future<void> _openNotification(GteNotification notification) async {
     if (!notification.isRead) {
-      await widget.controller.api
-          .markNotificationRead(notification.notificationId);
+      await widget.controller.api.markNotificationRead(
+        notification.notificationId,
+      );
       if (mounted) {
         await _refresh();
       }
@@ -60,8 +58,9 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
     if (topic.contains('deposit') || resource.startsWith('deposit')) {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              GteDepositHistoryScreen(controller: widget.controller),
+          builder:
+              (BuildContext context) =>
+                  GteDepositHistoryScreen(controller: widget.controller),
         ),
       );
       return;
@@ -72,8 +71,9 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
         resource.startsWith('payout')) {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              GteWithdrawalEligibilityScreen(controller: widget.controller),
+          builder:
+              (BuildContext context) =>
+                  GteWithdrawalEligibilityScreen(controller: widget.controller),
         ),
       );
       return;
@@ -81,8 +81,9 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
     if (topic.contains('kyc')) {
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              GteKycScreen(controller: widget.controller),
+          builder:
+              (BuildContext context) =>
+                  GteKycScreen(controller: widget.controller),
         ),
       );
       return;
@@ -91,26 +92,29 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
       if (notification.resourceId != null) {
         Navigator.of(context).push<void>(
           MaterialPageRoute<void>(
-            builder: (BuildContext context) => GteDisputeThreadScreen(
-              api: widget.controller.api,
-              disputeId: notification.resourceId!,
-            ),
+            builder:
+                (BuildContext context) => GteDisputeThreadScreen(
+                  disputeApi: widget.controller.disputeApi,
+                  disputeId: notification.resourceId!,
+                ),
           ),
         );
         return;
       }
       Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              GteDisputeHubScreen(controller: widget.controller),
+          builder:
+              (BuildContext context) =>
+                  GteDisputeHubScreen(controller: widget.controller),
         ),
       );
       return;
     }
     Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (BuildContext context) =>
-            GteWalletOverviewScreen(controller: widget.controller),
+        builder:
+            (BuildContext context) =>
+                GteWalletOverviewScreen(controller: widget.controller),
       ),
     );
   }
@@ -130,8 +134,10 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
       ),
       body: FutureBuilder<List<GteNotification>>(
         future: _notificationsFuture,
-        builder: (BuildContext context,
-            AsyncSnapshot<List<GteNotification>> snapshot) {
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<List<GteNotification>> snapshot,
+        ) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -154,9 +160,10 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (BuildContext context, int index) {
                 final GteNotification notification = notifications[index];
-                final Color accent = notification.isRead
-                    ? GteShellTheme.stroke
-                    : GteShellTheme.accentCapital;
+                final Color accent =
+                    notification.isRead
+                        ? GteShellTheme.stroke
+                        : GteShellTheme.accentCapital;
                 return GteSurfacePanel(
                   emphasized: !notification.isRead,
                   accentColor: accent,
@@ -176,10 +183,9 @@ class _GteNotificationsScreenState extends State<GteNotificationsScreen> {
                       const SizedBox(height: 6),
                       Text(
                         notification.isRead ? 'Read' : 'Unread',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: accent),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: accent),
                       ),
                     ],
                   ),

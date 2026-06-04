@@ -1,6 +1,7 @@
 using System;
 using FStudio.GTEX;
 using FStudio.GTEX.Engine;
+using FStudio.GTEX.Illusion;
 using FStudio.GTEX.Simulation;
 using FStudio.GTEX.VisualBridge;
 using FStudio.MatchEngine;
@@ -57,12 +58,6 @@ namespace FStudio.GTEX.Core
 
         public static bool TryAutoStart(GtexMatchConfig config, bool allowLocalSimulationInBatchMode = false)
         {
-            if (UnityEngine.Object.FindFirstObjectByType<GtexMatchRuntime>() != null ||
-                UnityEngine.Object.FindFirstObjectByType<GtexSimRuntimeHost>() != null)
-            {
-                return true;
-            }
-
             var resolvedConfig = config ?? GtexMatchConfigLoader.Load();
             if (resolvedConfig == null || !resolvedConfig.CanAutoStartSelectedRuntime)
             {
@@ -70,6 +65,16 @@ namespace FStudio.GTEX.Core
             }
 
             var runtimeMode = resolvedConfig.ResolveRuntimeMode();
+            if ((runtimeMode == GtexRuntimeMode.LivePlayback &&
+                 UnityEngine.Object.FindFirstObjectByType<GtexMatchRuntime>() != null) ||
+                (runtimeMode == GtexRuntimeMode.LocalSimulation &&
+                 UnityEngine.Object.FindFirstObjectByType<GtexSimRuntimeHost>() != null) ||
+                (runtimeMode == GtexRuntimeMode.IllusionRuntime &&
+                 UnityEngine.Object.FindFirstObjectByType<GtexIllusionRuntimeHost>() != null))
+            {
+                return true;
+            }
+
             if (runtimeMode == GtexRuntimeMode.OriginalVisualRuntime ||
                 GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntimeScene())
             {
@@ -84,6 +89,14 @@ namespace FStudio.GTEX.Core
 
                 director.Initialize(resolvedConfig);
                 return true;
+            }
+
+            if (runtimeMode == GtexRuntimeMode.IllusionRuntime)
+            {
+                Debug.Log("[GTEX Runtime Bootstrap] IllusionRuntime requested.");
+                var illusionStarted = GtexIllusionRuntimeHost.TryAutoStart(resolvedConfig, allowLocalSimulationInBatchMode);
+                Debug.Log("[GTEX Runtime Bootstrap] IllusionRuntime started=" + illusionStarted + ".");
+                return illusionStarted;
             }
 
             livePlaybackRequested = runtimeMode == GtexRuntimeMode.LivePlayback;

@@ -10,7 +10,7 @@ This pass did not turn GTEX into a native or Unity runtime. `/matches/native-3d`
 
 ### Route and 3D lane wiring
 
-- `frontend/lib/features/match/match_3d_route_screen.dart`
+- `frontend/lib/features/match_center/legacy_match_runtime_blocked_screen.dart`
 - `frontend/lib/screens/match/gtex_match_viewer_screen.dart`
 - `frontend/lib/widgets/match_3d/gtex_3d_scene.dart`
 

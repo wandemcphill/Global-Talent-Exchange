@@ -116,7 +116,9 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
 
     fixtures_response = client.get(f"/api/competitions/{competition_id}/fixtures")
     assert fixtures_response.status_code == 200
-    fixtures = fixtures_response.json()
+    fixtures_payload = fixtures_response.json()
+    assert fixtures_payload["status"] == "synced"
+    fixtures = fixtures_payload["items"]
     assert len(fixtures) == 6
 
     entrant_rank = {entrant_id: rank for rank, entrant_id in enumerate(entrant_ids)}
@@ -156,7 +158,10 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
 
     standings_response = client.get(f"/api/competitions/{competition_id}/standings")
     assert standings_response.status_code == 200
-    standings = standings_response.json()
+    standings_payload = standings_response.json()
+    assert standings_payload["status"] == "synced"
+    assert standings_payload["standings_complete"] is True
+    standings = standings_payload["items"]
     assert [item["club_id"] for item in standings] == entrant_ids
     assert standings[0]["reward_amount"] == "40.8000"
     assert standings[0]["reward_currency"] == "credit"

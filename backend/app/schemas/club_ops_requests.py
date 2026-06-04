@@ -76,11 +76,29 @@ class UpdateYouthProspectRequest(CommonSchema):
     notes: str | None = Field(default=None, max_length=240)
 
 
+class SaveFormationDraftRequest(CommonSchema):
+    sync_token: str | None = Field(default=None, max_length=160)
+    formation_id: str | None = Field(default=None, max_length=80)
+    version: int | None = Field(default=None, ge=0)
+    name: str | None = Field(default=None, max_length=120)
+    shape: str | None = Field(default=None, max_length=16)
+    scheme: str | None = Field(default=None, max_length=16)
+    slots: tuple[dict[str, object], ...] = Field(default_factory=tuple)
+
+
+class PublishFormationRequest(CommonSchema):
+    sync_token: str | None = Field(default=None, max_length=160)
+    formation_id: str | None = Field(default=None, max_length=80)
+    version: int | None = Field(default=None, ge=0)
+
+
 __all__ = [
     "CreateAcademyPlayerRequest",
     "CreateAcademyProgramRequest",
     "CreateScoutAssignmentRequest",
     "CreateSponsorshipContractRequest",
+    "PublishFormationRequest",
+    "SaveFormationDraftRequest",
     "UpdateAcademyPlayerRequest",
     "UpdateSponsorshipContractRequest",
     "UpdateYouthProspectRequest",

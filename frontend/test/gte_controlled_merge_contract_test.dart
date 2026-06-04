@@ -5,10 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
-import 'package:gte_frontend/features/club_sale_market/presentation/club_sale_market_screen.dart';
+import 'package:gte_frontend/features/capital/liquidity/club_sale_market/presentation/club_sale_market_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
-import 'package:gte_frontend/screens/wallet/gte_wallet_overview_screen.dart';
+import 'package:gte_frontend/features/capital/wallet/presentation/gte_wallet_overview_screen.dart';
 import 'package:gte_frontend/theme/gte_theme_controller.dart';
 import 'package:gte_frontend/theme/gte_theme_metadata.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
@@ -33,7 +33,7 @@ void main() {
         appSource,
         contains('theme: GteShellTheme.build(_themeController.activeTheme),'),
       );
-      expect(appSource, contains("this.initialPath = '/app/home',"));
+      expect(appSource, contains("this.initialPath = '/app/world',"));
     });
 
     test(
@@ -65,53 +65,42 @@ void main() {
         );
 
         expect(home, lessThan(market));
-        expect(market, lessThan(play));
-        expect(play, lessThan(club));
+        expect(market, lessThan(club));
+        expect(club, lessThan(play));
         expect(club, lessThan(hub));
-        expect(shellSource, contains('_buildThemePickerAction(context)'));
-        expect(shellSource, contains('_buildCapitalAction()'));
-        expect(shellSource, contains("tooltip: 'Club funds'"));
+        expect(shellSource, contains('GtexOperatingShell('));
+        expect(shellSource, contains('onOpenWallet:'));
+        expect(shellSource, contains('onToggleTheme:'));
         expect(shellSource, contains('GteThemePickerSheet'));
         expect(shellSource, contains('destination.label,'));
       },
     );
 
-    test('home dashboard preserves hero to secondary information order', () {
+    test('home dashboard preserves role-aware operating order', () {
       final String homeSource = _readSource(
         'lib/features/home_dashboard/home_dashboard_screen.dart',
       );
 
-      final int heroV2 = _indexOfOrThrow(homeSource, '_HomeHeroPanelV2(');
-      final int quickActions = _indexOfOrThrow(
+      final int roleHero = _indexOfOrThrow(homeSource, '_RoleHero(');
+      final int liveTicker = _indexOfOrThrow(homeSource, 'GtexLiveTicker(');
+      final int statePanel = _indexOfOrThrow(homeSource, '_GlobalStatePanel(');
+      final int questionStrip = _indexOfOrThrow(
         homeSource,
-        '_HomeQuickActionsStrip(',
+        '_DashboardQuestionStrip(',
       );
-      final int runtimePanel = _indexOfOrThrow(
+      final int priorityGrid = _indexOfOrThrow(homeSource, '_PriorityGrid(');
+      final int expansionLanes = _indexOfOrThrow(
         homeSource,
-        '_HomeRuntimeSignalPanel(',
+        '_ExpansionLanes(',
       );
-      final int status = _indexOfOrThrow(homeSource, 'GteSyncStatusCard(');
-      final int banner = _indexOfOrThrow(
-        homeSource,
-        'HomeFeaturedEventBanner(',
-      );
-      final int majorMoves = _indexOfOrThrow(
-        homeSource,
-        "eyebrow: 'LIVE BOARD'",
-      );
-      final int journey = _indexOfOrThrow(homeSource, '_HomeJourneyPanel(');
-      final int quieterSignals = _indexOfOrThrow(
-        homeSource,
-        "eyebrow: 'QUIETER SIGNALS'",
-      );
+      final int noClubLinks = _indexOfOrThrow(homeSource, '_NoClubQuickLinks(');
 
-      expect(heroV2, lessThan(banner));
-      expect(banner, lessThan(quickActions));
-      expect(quickActions, lessThan(runtimePanel));
-      expect(runtimePanel, lessThan(status));
-      expect(status, lessThan(majorMoves));
-      expect(quickActions, lessThan(journey));
-      expect(journey, lessThan(quieterSignals));
+      expect(roleHero, lessThan(liveTicker));
+      expect(liveTicker, lessThan(statePanel));
+      expect(statePanel, lessThan(questionStrip));
+      expect(questionStrip, lessThan(priorityGrid));
+      expect(priorityGrid, lessThan(expansionLanes));
+      expect(expansionLanes, lessThan(noClubLinks));
     });
   });
 

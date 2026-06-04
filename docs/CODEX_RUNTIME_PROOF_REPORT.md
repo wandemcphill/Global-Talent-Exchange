@@ -229,7 +229,7 @@ Verified on March 29, 2026 against the shipped local runtime and the provided ex
 ### 17. Flutter 3D viewer
 
 - Status: `NOT VERIFIABLE IN CURRENT ENVIRONMENT`
-- Route/screen: `/matches/3d/:matchKey` -> `Match3dRouteScreen`
+- Route/screen: `/matches/3d/:matchKey` -> `LegacyMatchRuntimeBlockedScreen`
 - Backend endpoint(s) required by the shipped route: `GET /api/match-viewer/{matchKey}`, `GET /api/match-viewer/{matchKey}/session`
 - Exact blocking reason:
   - Same blocker as items 15 and 16: no authenticated broadcast overview, no verified live `matchKey`, no DB fallback key
@@ -239,9 +239,9 @@ Verified on March 29, 2026 against the shipped local runtime and the provided ex
 ### 18. Native 3D blocked truth
 
 - Status: `VERIFIED BLOCKED`
-- Route/screen: `/matches/native-3d` -> `MatchNative3dBlockedScreen`
+- Route/screen: `/internal/dev/blocked-match-runtime` -> `BlockedMatchRuntimeScreen`
 - Blocking reason:
-  - The shipped blocked route explicitly states that the active shell does not mount a verified native MethodChannel/EventChannel bridge
+  - The shipped blocked route explicitly states that the active shell does not mount a verified runtime bridge
   - The bridge code checks channel names `match_3d` and `match_3d/events`
   - In this shipped runtime, native 3D remains intentionally blocked instead of being mislabeled as the Flutter 3D surface
 - Blocker type: `code`

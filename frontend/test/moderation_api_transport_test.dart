@@ -102,4 +102,3 @@ Map<String, Object?> _reportJson(String id) => <String, Object?>{
   'created_at': '2026-04-18T10:00:00Z',
   'updated_at': '2026-04-18T10:00:00Z',
 };
-

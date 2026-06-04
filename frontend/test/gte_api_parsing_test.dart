@@ -26,32 +26,37 @@ void main() {
   });
 
   test('candles parsing preserves order and timestamps', () {
-    final GteMarketCandles candles = GteMarketCandles.fromJson(<String, Object?>{
-      'player_id': 'player-123',
-      'interval': '1h',
-      'candles': <Map<String, Object?>>[
-        <String, Object?>{
-          'timestamp': '2026-03-11T10:00:00Z',
-          'open': '118.0',
-          'high': 122,
-          'low': '117.5',
-          'close': 120.0,
-          'volume': '2.0',
-        },
-        <String, Object?>{
-          'timestamp': '2026-03-11T11:00:00Z',
-          'open': 120,
-          'high': '124.0',
-          'low': 119.0,
-          'close': '123.5',
-          'volume': 3,
-        },
-      ],
-    });
+    final GteMarketCandles candles = GteMarketCandles.fromJson(
+      <String, Object?>{
+        'player_id': 'player-123',
+        'interval': '1h',
+        'candles': <Map<String, Object?>>[
+          <String, Object?>{
+            'timestamp': '2026-03-11T10:00:00Z',
+            'open': '118.0',
+            'high': 122,
+            'low': '117.5',
+            'close': 120.0,
+            'volume': '2.0',
+          },
+          <String, Object?>{
+            'timestamp': '2026-03-11T11:00:00Z',
+            'open': 120,
+            'high': '124.0',
+            'low': 119.0,
+            'close': '123.5',
+            'volume': 3,
+          },
+        ],
+      },
+    );
 
     expect(candles.playerId, 'player-123');
     expect(candles.candles, hasLength(2));
-    expect(candles.candles.first.timestamp.toIso8601String(), '2026-03-11T10:00:00.000Z');
+    expect(
+      candles.candles.first.timestamp.toIso8601String(),
+      '2026-03-11T10:00:00.000Z',
+    );
     expect(candles.candles.last.close, 123.5);
   });
 
@@ -68,7 +73,10 @@ void main() {
     });
 
     expect(orderBook.playerId, 'player-123');
-    expect(orderBook.generatedAt?.toIso8601String(), '2026-03-11T12:00:00.000Z');
+    expect(
+      orderBook.generatedAt?.toIso8601String(),
+      '2026-03-11T12:00:00.000Z',
+    );
     expect(orderBook.bids.single.price, 12.5);
     expect(orderBook.asks.single.orderCount, 1);
   });

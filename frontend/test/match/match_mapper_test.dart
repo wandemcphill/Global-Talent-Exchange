@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:gte_frontend/data/match/match_dto.dart';
-import 'package:gte_frontend/data/match/match_mapper.dart';
+import 'package:gte_frontend/features/match_center/data/match/match_dto.dart';
+import 'package:gte_frontend/features/match_center/data/match/match_mapper.dart';
 
 void main() {
   test('mapper converts v2 match dto into a stable domain result', () {
@@ -44,12 +44,8 @@ void main() {
             },
           },
         ],
-        'meta': <String, dynamic>{
-          'total': 1,
-        },
-        'summary': <String, dynamic>{
-          'returned': 1,
-        },
+        'meta': <String, dynamic>{'total': 1},
+        'summary': <String, dynamic>{'returned': 1},
       },
     );
 

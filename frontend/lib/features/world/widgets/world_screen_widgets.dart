@@ -5,7 +5,6 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/app_formatters.dart';
 import '../../../core/widgets/gtex_surface_card.dart';
-import '../../../shared/models/competition.dart';
 import '../../../shared/models/federation.dart';
 import '../../../shared/models/player.dart';
 import '../../../shared/widgets/metric_pill.dart';
@@ -283,122 +282,6 @@ class RegensGrid extends StatelessWidget {
               ),
             );
           },
-        );
-      },
-    );
-  }
-}
-
-class CompetitionsList extends StatelessWidget {
-  const CompetitionsList({
-    super.key,
-    required this.competitions,
-    required this.bottomPadding,
-  });
-
-  final List<Competition> competitions;
-  final double bottomPadding;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      key: const Key('world-competitions-list'),
-      padding: EdgeInsets.only(bottom: bottomPadding),
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
-      itemCount: competitions.length,
-      separatorBuilder: (_, _) => const SizedBox(height: spacingMD),
-      itemBuilder: (BuildContext context, int index) {
-        final Competition competition = competitions[index];
-        return _HoverLift(
-          child: GtexSurfaceCard(
-            key: Key('world-competition-card-$index'),
-            padding: EdgeInsets.zero,
-            glowColor: index.isEven ? AppColors.primary : AppColors.gold,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(cardRadius),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Container(
-                    height: 148,
-                    padding: const EdgeInsets.all(spacingLG),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[
-                          index.isEven
-                              ? AppColors.primary.withValues(alpha: 0.28)
-                              : AppColors.gold.withValues(alpha: 0.18),
-                          AppColors.surfaceMuted,
-                          AppColors.card,
-                        ],
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            MetricPill(
-                              label: 'Region',
-                              value: competition.region,
-                              highlight: true,
-                            ),
-                            const Spacer(),
-                            Icon(
-                              index.isEven
-                                  ? Icons.stadium_rounded
-                                  : Icons.videocam_rounded,
-                              color:
-                                  index.isEven
-                                      ? AppColors.primary
-                                      : AppColors.gold,
-                            ),
-                          ],
-                        ),
-                        const Spacer(),
-                        Text(
-                          competition.name,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(height: spacingXS),
-                        Text(
-                          competition.stage,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodyLarge?.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(spacingMD),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          competition.nextFixture,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: spacingSM),
-                        Text(
-                          competition.spotlight,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         );
       },
     );

@@ -2,14 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.wallets.providers.apple_pay import ApplePayProviderAdapter
 from app.wallets.providers.base import ProviderAdapter
-from app.wallets.providers.cards import CardsProviderAdapter
-from app.wallets.providers.crypto_fiat import CryptoFiatProviderAdapter
-from app.wallets.providers.google_pay import GooglePayProviderAdapter
 from app.wallets.providers.korapay import KoraPayProviderAdapter
-from app.wallets.providers.paystack import PaystackProviderAdapter
-from app.wallets.providers.regional_rails import RegionalRailsProviderAdapter
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,13 +14,7 @@ class ProviderRegistration:
 
 
 _REGISTRY: dict[str, ProviderRegistration] = {
-    "cards": ProviderRegistration(adapter=CardsProviderAdapter(), is_live=False, status="stubbed"),
-    "apple_pay": ProviderRegistration(adapter=ApplePayProviderAdapter(), is_live=False, status="stubbed"),
-    "google_pay": ProviderRegistration(adapter=GooglePayProviderAdapter(), is_live=False, status="stubbed"),
     "korapay": ProviderRegistration(adapter=KoraPayProviderAdapter(), is_live=True, status="live"),
-    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live"),
-    "regional_rails": ProviderRegistration(adapter=RegionalRailsProviderAdapter(), is_live=False, status="stubbed"),
-    "crypto_fiat": ProviderRegistration(adapter=CryptoFiatProviderAdapter(), is_live=False, status="stubbed"),
 }
 
 

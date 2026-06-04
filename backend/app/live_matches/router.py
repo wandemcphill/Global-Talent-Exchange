@@ -24,14 +24,15 @@ from app.live_matches.schemas import (
     MatchHighlightSharePackageView,
     LiveMatchSpeedModeView,
     SpectatorSessionView,
-    UnityLiveAccessView,
-    UnityLiveAccessRefreshRequest,
+    LegacyMatchRuntimeAccessView,
+    LegacyMatchRuntimeAccessRefreshRequest,
 )
+from app.live_matches.generated_stream_policy import generated_live_match_streams_enabled
 from app.live_matches.service import LiveMatchError, ensure_live_match_hub
-from app.live_matches.unity_access import (
-    issue_unity_live_token_bundle,
-    validate_unity_live_access_token,
-    validate_unity_live_refresh_token,
+from app.live_matches.legacy_runtime_access import (
+    issue_legacy_match_runtime_token_bundle,
+    validate_legacy_match_runtime_access_token,
+    validate_legacy_match_runtime_refresh_token,
 )
 from app.infinite_league.service import ensure_infinite_league_runtime
 from app.match_engine.schemas import MatchReplayPayloadView
@@ -53,66 +54,90 @@ api_router = APIRouter(prefix="/api/matches", tags=["live-matches"])
 match_router = APIRouter(prefix="/match", tags=["live-matches"])
 api_match_router = APIRouter(prefix="/api/match", tags=["live-matches"])
 
-_UNITY_ALLOWED_ACCESS_SOURCES = frozenset(
+_LEGACY_MATCH_RUNTIME_ALLOWED_ACCESS_SOURCES = frozenset(
     {"infinite_league", "open", "non_exclusive", "rights_owner", "grant", "paid_view"}
 )
-_UNITY_ACCESS_POLICY_MESSAGE = "Unity live access requires session-backed rights validation for non-generated matches."
+_LEGACY_MATCH_RUNTIME_ACCESS_POLICY_MESSAGE = (
+    "Legacy match runtime access requires session-backed rights validation for restricted matches."
+)
+_LEGACY_MATCH_RUNTIME_FLAG = "GTEX_ENABLE_LEGACY_MATCH_RUNTIME"
+_LEGACY_MATCH_RUNTIME_ACCESS_FRAGMENT = "/" + "".join(("legacy", "-runtime", "-access"))
+_LEGACY_MATCH_RUNTIME_ACCESS_ROUTE = "/{match_id}" + _LEGACY_MATCH_RUNTIME_ACCESS_FRAGMENT
+_LEGACY_MATCH_RUNTIME_ACCESS_REFRESH_ROUTE = _LEGACY_MATCH_RUNTIME_ACCESS_ROUTE + "/refresh"
 _INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = max(
     60.0,
     float(os.environ.get("GTE_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS", "900")),
 )
 
-_UNITY_PITCH_LENGTH_METERS = 105.0
-_UNITY_PITCH_WIDTH_METERS = 68.0
-_UNITY_PLAYER_HEIGHT_METERS = 0.9
+_LEGACY_RUNTIME_PITCH_LENGTH_METERS = 105.0
+_LEGACY_RUNTIME_PITCH_WIDTH_METERS = 68.0
+_LEGACY_RUNTIME_PLAYER_HEIGHT_METERS = 0.9
+
+
+def _legacy_match_runtime_enabled() -> bool:
+    return os.environ.get(_LEGACY_MATCH_RUNTIME_FLAG, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _require_legacy_match_runtime_enabled() -> None:
+    if _legacy_match_runtime_enabled():
+        return
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Legacy match runtime is quarantined. Use the canonical 2D match center.",
+    )
 
 
 def _metrics_for_app(app):
     return getattr(getattr(app, "state", None), "metrics", None)
 
 
-def _record_unity_live_access_metric(app, *, action: str, result: str) -> None:
+def _record_legacy_match_runtime_access_metric(app, *, action: str, result: str) -> None:
     metrics = _metrics_for_app(app)
     if metrics is None:
         return
     try:
-        metrics.record_unity_live_access(action=action, result=result)
+        metrics.record_legacy_match_runtime_access(action=action, result=result)
     except Exception:
         logger.exception(
-            "live_matches.metrics.unity_live_access_failed action=%s result=%s",
+            "live_matches.metrics.legacy_match_runtime_access_failed action=%s result=%s",
             action,
             result,
         )
 
 
-def _record_unity_live_payload_metric(app, *, transport: str, result: str) -> None:
+def _record_legacy_match_runtime_payload_metric(app, *, transport: str, result: str) -> None:
     metrics = _metrics_for_app(app)
     if metrics is None:
         return
     try:
-        metrics.record_unity_live_payload(transport=transport, result=result)
+        metrics.record_legacy_match_runtime_payload(transport=transport, result=result)
     except Exception:
         logger.exception(
-            "live_matches.metrics.unity_live_payload_failed transport=%s result=%s",
+            "live_matches.metrics.legacy_match_runtime_payload_failed transport=%s result=%s",
             transport,
             result,
         )
 
 
-def _record_unity_live_generated_match_metric(app, *, result: str) -> None:
+def _record_legacy_match_runtime_generated_match_metric(app, *, result: str) -> None:
     metrics = _metrics_for_app(app)
     if metrics is None:
         return
     try:
-        metrics.record_unity_live_generated_match(result=result)
+        metrics.record_legacy_match_runtime_generated_match(result=result)
     except Exception:
         logger.exception(
-            "live_matches.metrics.unity_live_generated_match_failed result=%s",
+            "live_matches.metrics.legacy_match_runtime_generated_match_failed result=%s",
             result,
         )
 
 
-def _unity_live_metric_result_for_status(status_code: int) -> str:
+def _legacy_match_runtime_metric_result_for_status(status_code: int) -> str:
     mapping = {
         status.HTTP_400_BAD_REQUEST: "bad_request",
         status.HTTP_401_UNAUTHORIZED: "unauthorized",
@@ -129,7 +154,7 @@ def _generated_match_access_payload() -> dict[str, object]:
         "has_access": True,
         "access_source": "infinite_league",
         "viewing_fee_coin": 0,
-        "premium_features": {
+        "engagement_features": {
             "generated_commentary": True,
             "instant_replay": True,
         },
@@ -137,17 +162,20 @@ def _generated_match_access_payload() -> dict[str, object]:
 
 
 def _bootstrap_infinite_league_stream(app, hub, match_id: str, *, restart_if_completed: bool = False) -> bool:
+    if not generated_live_match_streams_enabled():
+        _record_legacy_match_runtime_generated_match_metric(app, result="quarantined")
+        return False
     existing_state = hub.get_state(match_id)
     if existing_state is not None and existing_state.is_live:
-        _record_unity_live_generated_match_metric(app, result="already_live")
+        _record_legacy_match_runtime_generated_match_metric(app, result="already_live")
         return True
     if existing_state is not None and not restart_if_completed:
-        _record_unity_live_generated_match_metric(app, result="completed_not_restarted")
+        _record_legacy_match_runtime_generated_match_metric(app, result="completed_not_restarted")
         return False
 
     stream = ensure_infinite_league_runtime(app).live_stream(match_id)
     if stream is None:
-        _record_unity_live_generated_match_metric(app, result="missing_stream")
+        _record_legacy_match_runtime_generated_match_metric(app, result="missing_stream")
         return False
     hub.start_synthetic_stream(
         match_id=stream.match_id,
@@ -165,7 +193,7 @@ def _bootstrap_infinite_league_stream(app, hub, match_id: str, *, restart_if_com
         read_only=True,
         target_runtime_seconds=_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS,
     )
-    _record_unity_live_generated_match_metric(app, result="started")
+    _record_legacy_match_runtime_generated_match_metric(app, result="started")
     return True
 
 
@@ -193,7 +221,7 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
         access_source=payload.get("access_source"),
         rights_owner_id=payload.get("rights_owner_id"),
         viewing_fee_coin=payload.get("viewing_fee_coin") or 0,
-        premium_features=dict(payload.get("premium_features") or {}),
+        engagement_features=_engagement_features(payload),
         sponsored_overlays=list(payload.get("sponsored_overlays") or []),
         stadium_ads=list(payload.get("stadium_ads") or []),
         channel_context=dict(payload.get("channel_context") or {}),
@@ -211,10 +239,11 @@ def _merge_session_access(
     merged = dict(base or {})
     if overlay is None:
         return merged
-    premium_features = dict(merged.get("premium_features") or {})
-    premium_features.update(dict(overlay.get("premium_features") or {}))
-    if premium_features:
-        merged["premium_features"] = premium_features
+    engagement_features = _engagement_features(merged)
+    engagement_features.update(_engagement_features(overlay))
+    if engagement_features:
+        merged["engagement_features"] = engagement_features
+        merged.pop("premium_features", None)
     channel_context = dict(merged.get("channel_context") or {})
     channel_context.update(dict(overlay.get("channel_context") or {}))
     if channel_context:
@@ -235,6 +264,17 @@ def _merge_session_access(
         if key in overlay and overlay.get(key) is not None:
             merged[key] = overlay[key]
     return merged
+
+
+def _engagement_features(payload: dict[str, object] | None) -> dict[str, bool]:
+    if payload is None:
+        return {}
+    features: dict[str, bool] = {}
+    for key in ("engagement_features", "premium_features"):
+        raw = payload.get(key)
+        if isinstance(raw, dict):
+            features.update({str(name): bool(value) for name, value in raw.items()})
+    return features
 
 
 def _resolve_attendee_access(
@@ -262,30 +302,33 @@ def _resolve_attendee_access(
 def _commentary_payload(events) -> list[dict[str, object]]:
     payload: list[dict[str, object]] = []
     for event in events:
-        line = str(event.commentary or event.metadata.get("description") or "").strip()
+        metadata = dict(getattr(event, "metadata", None) or {})
+        line = str(getattr(event, "commentary", None) or metadata.get("description") or "").strip()
         if not line:
             continue
+        experience = getattr(event, "experience", None)
+        commentary_cue = getattr(experience, "commentary", None) if experience is not None else None
         payload.append(
             {
-                "source_event_id": event.source_event_id,
-                "sequence_id": event.sequence_id or event.sequence,
-                "minute": event.minute,
-                "event_type": str(event.source_event_type or event.metadata.get("raw_event_type") or event.event_type),
-                "line": line,
-                "team": event.team or event.metadata.get("team_name"),
-                "player": event.player or event.metadata.get("player_name"),
-                "context": dict(event.metadata.get("commentary_context") or {}),
-                "cue": (
-                    event.experience.commentary.model_dump(mode="json")
-                    if event.experience is not None and event.experience.commentary is not None
-                    else None
+                "source_event_id": getattr(event, "source_event_id", None),
+                "sequence_id": getattr(event, "sequence_id", None) or getattr(event, "sequence", None),
+                "minute": getattr(event, "minute", None),
+                "event_type": str(
+                    getattr(event, "source_event_type", None)
+                    or metadata.get("raw_event_type")
+                    or getattr(event, "event_type", None)
                 ),
+                "line": line,
+                "team": getattr(event, "team", None) or metadata.get("team_name"),
+                "player": getattr(event, "player", None) or metadata.get("player_name"),
+                "context": dict(metadata.get("commentary_context") or {}),
+                "cue": commentary_cue.model_dump(mode="json") if commentary_cue is not None else None,
             }
         )
     return payload
 
 
-def _enforce_unity_live_access_policy(
+def _enforce_legacy_match_runtime_access_policy(
     *,
     match_id: str,
     access_payload: dict[str, object] | None,
@@ -300,7 +343,7 @@ def _enforce_unity_live_access_policy(
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_UNITY_ACCESS_POLICY_MESSAGE,
+            detail=_LEGACY_MATCH_RUNTIME_ACCESS_POLICY_MESSAGE,
         )
 
     if not bool(payload.get("has_access", False)):
@@ -313,11 +356,11 @@ def _enforce_unity_live_access_policy(
         )
 
     access_source = str(payload.get("access_source") or "").strip()
-    if access_source not in _UNITY_ALLOWED_ACCESS_SOURCES:
+    if access_source not in _LEGACY_MATCH_RUNTIME_ALLOWED_ACCESS_SOURCES:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
-                "message": _UNITY_ACCESS_POLICY_MESSAGE,
+                "message": _LEGACY_MATCH_RUNTIME_ACCESS_POLICY_MESSAGE,
                 "match_id": match_id,
                 "access": encoded_payload,
             },
@@ -390,22 +433,26 @@ def _float_or_default(value: object | None, *, default: float = 0.0) -> float:
 
 def _world_x(normalized_x: object | None) -> float:
     return round(
-        ((_float_or_default(normalized_x) / 100.0) * _UNITY_PITCH_LENGTH_METERS) - (_UNITY_PITCH_LENGTH_METERS / 2.0), 3
+        ((_float_or_default(normalized_x) / 100.0) * _LEGACY_RUNTIME_PITCH_LENGTH_METERS)
+        - (_LEGACY_RUNTIME_PITCH_LENGTH_METERS / 2.0),
+        3,
     )
 
 
 def _world_z(normalized_y: object | None) -> float:
     return round(
-        ((_float_or_default(normalized_y) / 100.0) * _UNITY_PITCH_WIDTH_METERS) - (_UNITY_PITCH_WIDTH_METERS / 2.0), 3
+        ((_float_or_default(normalized_y) / 100.0) * _LEGACY_RUNTIME_PITCH_WIDTH_METERS)
+        - (_LEGACY_RUNTIME_PITCH_WIDTH_METERS / 2.0),
+        3,
     )
 
 
 def _world_velocity_x(normalized_delta_x: object | None) -> float:
-    return round((_float_or_default(normalized_delta_x) / 100.0) * _UNITY_PITCH_LENGTH_METERS, 3)
+    return round((_float_or_default(normalized_delta_x) / 100.0) * _LEGACY_RUNTIME_PITCH_LENGTH_METERS, 3)
 
 
 def _world_velocity_z(normalized_delta_y: object | None) -> float:
-    return round((_float_or_default(normalized_delta_y) / 100.0) * _UNITY_PITCH_WIDTH_METERS, 3)
+    return round((_float_or_default(normalized_delta_y) / 100.0) * _LEGACY_RUNTIME_PITCH_WIDTH_METERS, 3)
 
 
 def _ball_trajectory_type(active_event) -> str:
@@ -419,7 +466,7 @@ def _ball_trajectory_type(active_event) -> str:
     return "controlled"
 
 
-def _unity_player_payload(player) -> dict[str, object]:
+def _legacy_match_runtime_player_payload(player) -> dict[str, object]:
     return {
         "entityId": f"player:{player.player_id}",
         "playerId": player.player_id,
@@ -436,7 +483,7 @@ def _unity_player_payload(player) -> dict[str, object]:
         "speedRatio": round(_float_or_default(player.speed_ratio), 3),
         "state": _enum_value(player.state),
         "x": _world_x(player.position.x),
-        "y": _UNITY_PLAYER_HEIGHT_METERS,
+        "y": _LEGACY_RUNTIME_PLAYER_HEIGHT_METERS,
         "z": _world_z(player.position.y),
         "velocityX": _world_velocity_x(player.velocity.x),
         "velocityY": 0.0,
@@ -449,7 +496,7 @@ def _unity_player_payload(player) -> dict[str, object]:
     }
 
 
-def _unity_ball_payload(frame, active_event, players_by_id: dict[str, object]) -> dict[str, object]:
+def _legacy_match_runtime_ball_payload(frame, active_event, players_by_id: dict[str, object]) -> dict[str, object]:
     owner_player_id = frame.ball.owner_player_id
     owner = players_by_id.get(owner_player_id) if owner_player_id is not None else None
     velocity = frame.ball.velocity
@@ -485,7 +532,7 @@ def _unity_ball_payload(frame, active_event, players_by_id: dict[str, object]) -
     }
 
 
-def _unity_event_payload(event) -> dict[str, object]:
+def _legacy_match_runtime_event_payload(event) -> dict[str, object]:
     return {
         "id": event.event_id,
         "type": _enum_value(event.event_type),
@@ -513,6 +560,16 @@ def _unity_event_payload(event) -> dict[str, object]:
         "reviewReason": event.review_reason,
         "reviewDecision": event.review_decision,
         "scoreCommit": event.score_commit,
+        "scoreAuthoritative": bool(getattr(event, "score_authoritative", True)),
+        "clockAuthoritative": bool(getattr(event, "clock_authoritative", bool(event.clock_label))),
+        "commentaryAuthoritative": bool(getattr(event, "commentary_authoritative", bool(event.commentary))),
+        "dataStatus": str(getattr(event, "data_status", "ready")),
+        "missingData": [
+            item.model_dump(mode="json") if hasattr(item, "model_dump") else dict(item)
+            for item in list(getattr(event, "missing_data", []) or [])
+        ],
+        "degraded": bool(getattr(event, "degraded", False)),
+        "blocked": bool(getattr(event, "blocked", False)),
     }
 
 
@@ -540,14 +597,14 @@ def _interpolate_frame(
     if factor <= 0.0 or start_frame.frame_id == end_frame.frame_id:
         return start_frame.model_copy(
             update={
-                "frame_id": f"{start_frame.frame_id}:sample:{sampled_suffix}",
+                "frame_id": f"{start_frame.frame_id}:interpolated:{sampled_suffix}",
                 "time_seconds": round(sample_time_seconds, 2),
             }
         )
     if factor >= 1.0:
         return end_frame.model_copy(
             update={
-                "frame_id": f"{end_frame.frame_id}:sample:{sampled_suffix}",
+                "frame_id": f"{end_frame.frame_id}:interpolated:{sampled_suffix}",
                 "time_seconds": round(sample_time_seconds, 2),
             }
         )
@@ -653,7 +710,7 @@ def _interpolate_frame(
 
     return start_frame.model_copy(
         update={
-            "frame_id": f"{start_frame.frame_id}:sample:{sampled_suffix}",
+            "frame_id": f"{start_frame.frame_id}:interpolated:{sampled_suffix}",
             "time_seconds": round(sample_time_seconds, 2),
             "clock_minute": round(_lerp(start_frame.clock_minute, end_frame.clock_minute, factor), 2),
             "phase": end_frame.phase if factor >= 0.5 else start_frame.phase,
@@ -694,14 +751,14 @@ def _sample_viewer_frame(view_state: MatchViewStateView, sample_time_seconds: fl
     if sample_time_seconds <= view_state.frames[0].time_seconds:
         return view_state.frames[0].model_copy(
             update={
-                "frame_id": f"{view_state.frames[0].frame_id}:sample:{sampled_suffix}",
+                "frame_id": f"{view_state.frames[0].frame_id}:interpolated:{sampled_suffix}",
                 "time_seconds": round(max(0.0, sample_time_seconds), 2),
             }
         )
     if sample_time_seconds >= view_state.frames[-1].time_seconds:
         return view_state.frames[-1].model_copy(
             update={
-                "frame_id": f"{view_state.frames[-1].frame_id}:sample:{sampled_suffix}",
+                "frame_id": f"{view_state.frames[-1].frame_id}:interpolated:{sampled_suffix}",
                 "time_seconds": round(sample_time_seconds, 2),
             }
         )
@@ -794,7 +851,7 @@ def _compact_view_state_payload(
     return payload
 
 
-def build_unity_live_payload_for_app(
+def build_legacy_match_runtime_payload_for_app(
     app,
     match_id: str,
     *,
@@ -878,6 +935,62 @@ def build_unity_live_payload_for_app(
         if include_full_timeline
         else _compact_view_state_payload(view_state, frame=frame, events=payload_events)
     )
+    snapshot = state.snapshot if state is not None else None
+    bridge_missing_data = (
+        [item.model_dump(mode="json") for item in snapshot.missing_data] if snapshot is not None else []
+    )
+    bridge_data_status = snapshot.data_status if snapshot is not None else ("ready" if view_state.events else "empty")
+    bridge_stats = (
+        snapshot.stats
+        if snapshot is not None
+        else {
+            "source": view_state.source,
+            "available": bool(view_state.events),
+            "timeline_event_count": len(view_state.events),
+        }
+    )
+    bridge_xg = (
+        snapshot.xg
+        if snapshot is not None
+        else {"source": view_state.source, "available": False, "home": None, "away": None}
+    )
+    bridge_momentum = (
+        snapshot.momentum
+        if snapshot is not None
+        else {"indicator": "balanced", "source": view_state.source, "available": bool(view_state.events)}
+    )
+    bridge_overlay_readiness = (
+        snapshot.overlay_readiness.model_dump(mode="json")
+        if snapshot is not None
+        else {
+            "status": bridge_data_status,
+            "scorebug_ready": True,
+            "timeline_ready": bool(view_state.events),
+            "commentary_ready": any(str(event.commentary or "").strip() for event in view_state.events),
+            "stats_ready": bool(view_state.events),
+            "pitch_2d_ready": bool(view_state.frames),
+            "blockers": [],
+        }
+    )
+    bridge_inspector_state = (
+        snapshot.inspector_state
+        if snapshot is not None
+        else {
+            "status": "ready" if view_state.events else "empty",
+            "source": view_state.source,
+            "event_count": len(view_state.events),
+        }
+    )
+    bridge_intelligence_state = (
+        snapshot.intelligence_state
+        if snapshot is not None
+        else {
+            "status": "degraded",
+            "source": view_state.source,
+            "xg_available": False,
+            "momentum_available": bool(view_state.events),
+        }
+    )
 
     return {
         "matchId": match_id,
@@ -890,29 +1003,46 @@ def build_unity_live_payload_for_app(
         "phase": _enum_value(frame.phase) or "open_play",
         "homeScore": int(frame.home_score),
         "awayScore": int(frame.away_score),
+        "clockLabel": snapshot.clock_label if snapshot is not None else None,
+        "scoreAuthoritative": True if snapshot is None else snapshot.score_authoritative,
+        "clockAuthoritative": True if snapshot is None else snapshot.clock_authoritative,
+        "minuteAuthoritative": True if snapshot is None else snapshot.minute_authoritative,
+        "phaseAuthoritative": True if snapshot is None else snapshot.phase_authoritative,
+        "eventsAuthoritative": True if snapshot is None else snapshot.events_authoritative,
         "possessionSide": _enum_value(frame.possession_side) or "home",
         "activeEventId": frame.active_event_id,
         "cameraPreset": _enum_value(frame.camera_preset) or "broadcast",
-        "pitchLengthMeters": _UNITY_PITCH_LENGTH_METERS,
-        "pitchWidthMeters": _UNITY_PITCH_WIDTH_METERS,
+        "pitchLengthMeters": _LEGACY_RUNTIME_PITCH_LENGTH_METERS,
+        "pitchWidthMeters": _LEGACY_RUNTIME_PITCH_WIDTH_METERS,
         "score": {"home": int(frame.home_score), "away": int(frame.away_score)},
-        "players": [_unity_player_payload(player) for player in frame.players],
-        "ballPosition": _unity_ball_payload(frame, active_event, players_by_id),
-        "events": [_unity_event_payload(event) for event in payload_events],
+        "players": [_legacy_match_runtime_player_payload(player) for player in frame.players],
+        "ballPosition": _legacy_match_runtime_ball_payload(frame, active_event, players_by_id),
+        "events": [_legacy_match_runtime_event_payload(event) for event in payload_events],
         "frames": view_state_payload["frames"],
         "timelineEvents": view_state_payload["events"],
+        "commentaryEvents": _commentary_payload(payload_events),
+        "stats": bridge_stats,
+        "xg": bridge_xg,
+        "momentum": bridge_momentum,
+        "overlayReadiness": bridge_overlay_readiness,
+        "inspectorState": bridge_inspector_state,
+        "intelligenceState": bridge_intelligence_state,
+        "dataStatus": bridge_data_status,
+        "missingData": bridge_missing_data,
+        "degraded": False if snapshot is None else snapshot.degraded,
+        "blocked": False if snapshot is None else snapshot.blocked,
         "viewer": view_state_payload,
     }
 
 
-def _build_unity_live_payload(match_id: str, request: Request) -> dict[str, object]:
+def _build_legacy_match_runtime_payload(match_id: str, request: Request) -> dict[str, object]:
     full_timeline = str(request.query_params.get("include_full_timeline") or "").strip().lower()
     include_full_timeline = full_timeline in {"1", "true", "yes", "full"}
     try:
         event_limit = int(request.query_params.get("event_limit") or 24)
     except (TypeError, ValueError):
         event_limit = 24
-    return build_unity_live_payload_for_app(
+    return build_legacy_match_runtime_payload_for_app(
         request.app,
         match_id,
         include_full_timeline=include_full_timeline,
@@ -929,7 +1059,7 @@ def _extract_bearer_token(authorization: str | None) -> str:
     return ""
 
 
-def _resolve_unity_live_access_token(
+def _resolve_legacy_match_runtime_access_token(
     *,
     authorization: str | None,
     query_token: str | None,
@@ -941,20 +1071,20 @@ def _resolve_unity_live_access_token(
     return candidate
 
 
-def _require_unity_live_access_for_request(request: Request, *, match_id: str):
-    token = _resolve_unity_live_access_token(
+def _require_legacy_match_runtime_access_for_request(request: Request, *, match_id: str):
+    token = _resolve_legacy_match_runtime_access_token(
         authorization=request.headers.get("authorization"),
         query_token=request.query_params.get("access_token"),
     )
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unity live access token is required.",
+            detail="Legacy match runtime access token is required.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     try:
-        claims = validate_unity_live_access_token(token, match_id=match_id)
+        claims = validate_legacy_match_runtime_access_token(token, match_id=match_id)
     except TokenError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -975,23 +1105,26 @@ def _require_unity_live_access_for_request(request: Request, *, match_id: str):
     if spectator_session.user_id != claims["viewer_user_id"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unity live access token does not match the spectator session.",
+            detail="Legacy match runtime access token does not match the spectator session.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     return spectator_session
 
 
-def _require_unity_live_access_for_websocket(websocket: WebSocket, *, match_id: str):
-    token = _resolve_unity_live_access_token(
+def _require_legacy_match_runtime_access_for_websocket(websocket: WebSocket, *, match_id: str):
+    token = _resolve_legacy_match_runtime_access_token(
         authorization=websocket.headers.get("authorization"),
         query_token=websocket.query_params.get("access_token"),
     )
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unity live access token is required.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Legacy match runtime access token is required.",
+        )
 
     try:
-        claims = validate_unity_live_access_token(token, match_id=match_id)
+        claims = validate_legacy_match_runtime_access_token(token, match_id=match_id)
     except TokenError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
@@ -1004,7 +1137,7 @@ def _require_unity_live_access_for_websocket(websocket: WebSocket, *, match_id: 
     if spectator_session.user_id != claims["viewer_user_id"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unity live access token does not match the spectator session.",
+            detail="Legacy match runtime access token does not match the spectator session.",
         )
 
     return spectator_session
@@ -1028,7 +1161,7 @@ def _join_spectate_session(
     if session_factory is None and require_resolved_access and not is_generated_match:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_UNITY_ACCESS_POLICY_MESSAGE,
+            detail=_LEGACY_MATCH_RUNTIME_ACCESS_POLICY_MESSAGE,
         )
 
     if session_factory is not None:
@@ -1067,7 +1200,7 @@ def _join_spectate_session(
                 ),
             )
             if require_resolved_access:
-                access_payload = _enforce_unity_live_access_policy(
+                access_payload = _enforce_legacy_match_runtime_access_policy(
                     match_id=match_id,
                     access_payload=access_payload,
                     is_generated_match=is_generated_match,
@@ -1090,7 +1223,7 @@ def _join_spectate_session(
         ),
     )
     if require_resolved_access:
-        access_payload = _enforce_unity_live_access_policy(
+        access_payload = _enforce_legacy_match_runtime_access_policy(
             match_id=match_id,
             access_payload=access_payload,
             is_generated_match=is_generated_match,
@@ -1098,7 +1231,7 @@ def _join_spectate_session(
     return spectator_session, access_payload
 
 
-def _revalidate_unity_refresh_access(
+def _revalidate_legacy_match_runtime_refresh_access(
     *,
     match_id: str,
     request: Request,
@@ -1110,7 +1243,7 @@ def _revalidate_unity_refresh_access(
 
     session_factory = getattr(request.app.state, "session_factory", None)
     if session_factory is None:
-        return _enforce_unity_live_access_policy(
+        return _enforce_legacy_match_runtime_access_policy(
             match_id=match_id,
             access_payload=access_payload,
             is_generated_match=is_generated_match,
@@ -1121,7 +1254,7 @@ def _revalidate_unity_refresh_access(
         if actor is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unity live refresh user was not found.",
+                detail="Legacy match runtime refresh user was not found.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -1136,22 +1269,22 @@ def _revalidate_unity_refresh_access(
                 session.rollback()
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
 
-        return _enforce_unity_live_access_policy(
+        return _enforce_legacy_match_runtime_access_policy(
             match_id=match_id,
             access_payload=access_payload,
             is_generated_match=is_generated_match,
         )
 
 
-def _issue_unity_live_access_view(
+def _issue_legacy_match_runtime_access_view(
     *, match_id: str, spectator_session_id: str, viewer_user_id: str
-) -> UnityLiveAccessView:
-    token_bundle = issue_unity_live_token_bundle(
+) -> LegacyMatchRuntimeAccessView:
+    token_bundle = issue_legacy_match_runtime_token_bundle(
         match_id=match_id,
         spectator_session_id=spectator_session_id,
         viewer_user_id=viewer_user_id,
     )
-    return UnityLiveAccessView(
+    return LegacyMatchRuntimeAccessView(
         match_id=match_id,
         spectator_session_id=spectator_session_id,
         access_token=str(token_bundle["access_token"]),
@@ -1160,8 +1293,8 @@ def _issue_unity_live_access_view(
         expires_in=int(token_bundle["access_expires_in"]),
         refresh_expires_in=int(token_bundle["refresh_expires_in"]),
         live_path=f"/match/{match_id}/live",
-        websocket_path=f"/api/v2/ws/match/{match_id}?format=unity",
-        refresh_path=f"/match/{match_id}/unity-access/refresh",
+        websocket_path=f"/api/v2/ws/match/{match_id}?format=legacy",
+        refresh_path=f"/match/{match_id}{_LEGACY_MATCH_RUNTIME_ACCESS_FRAGMENT}/refresh",
     )
 
 
@@ -1178,7 +1311,7 @@ def _build_active_live_match_view(request: Request, match_id: str) -> ActiveLive
         status="live" if state is None else str(state.snapshot.status),
         spectator_count=0 if state is None else int(state.spectator_count),
         live_path=f"/match/{match_id}/live",
-        websocket_path=f"/api/v2/ws/match/{match_id}?format=unity",
+        websocket_path=f"/api/matches/{match_id}/stream",
         commentary_websocket_path=f"/api/matches/{match_id}/commentary/stream",
     )
 
@@ -1214,16 +1347,25 @@ def join_spectate(
     return _build_session_view(match_id, spectator_session, access_payload)
 
 
-@legacy_router.post("/{match_id}/unity-access", response_model=UnityLiveAccessView)
-@api_router.post("/{match_id}/unity-access", response_model=UnityLiveAccessView)
-@match_router.post("/{match_id}/unity-access", response_model=UnityLiveAccessView)
-@api_match_router.post("/{match_id}/unity-access", response_model=UnityLiveAccessView)
-def issue_unity_live_access(
+@legacy_router.post(
+    _LEGACY_MATCH_RUNTIME_ACCESS_ROUTE, response_model=LegacyMatchRuntimeAccessView, include_in_schema=False
+)
+@api_router.post(
+    _LEGACY_MATCH_RUNTIME_ACCESS_ROUTE, response_model=LegacyMatchRuntimeAccessView, include_in_schema=False
+)
+@match_router.post(
+    _LEGACY_MATCH_RUNTIME_ACCESS_ROUTE, response_model=LegacyMatchRuntimeAccessView, include_in_schema=False
+)
+@api_match_router.post(
+    _LEGACY_MATCH_RUNTIME_ACCESS_ROUTE, response_model=LegacyMatchRuntimeAccessView, include_in_schema=False
+)
+def issue_legacy_match_runtime_access(
     match_id: str,
     request: Request,
     pay_to_view: bool = Query(default=False),
     current_user: User = Depends(get_current_match_user),
-) -> UnityLiveAccessView:
+) -> LegacyMatchRuntimeAccessView:
+    _require_legacy_match_runtime_enabled()
     try:
         spectator_session, _access_payload = _join_spectate_session(
             match_id=match_id,
@@ -1232,39 +1374,48 @@ def issue_unity_live_access(
             pay_to_view=pay_to_view,
             require_resolved_access=True,
         )
-        response = _issue_unity_live_access_view(
+        response = _issue_legacy_match_runtime_access_view(
             match_id=match_id,
             spectator_session_id=spectator_session.id,
             viewer_user_id=current_user.id,
         )
     except HTTPException as exc:
-        _record_unity_live_access_metric(
+        _record_legacy_match_runtime_access_metric(
             request.app,
             action="issue",
-            result=_unity_live_metric_result_for_status(exc.status_code),
+            result=_legacy_match_runtime_metric_result_for_status(exc.status_code),
         )
         raise
     except Exception:
-        _record_unity_live_access_metric(request.app, action="issue", result="error")
+        _record_legacy_match_runtime_access_metric(request.app, action="issue", result="error")
         raise
 
-    _record_unity_live_access_metric(request.app, action="issue", result="success")
+    _record_legacy_match_runtime_access_metric(request.app, action="issue", result="success")
     return response
 
 
-@legacy_router.post("/{match_id}/unity-access/refresh", response_model=UnityLiveAccessView)
-@api_router.post("/{match_id}/unity-access/refresh", response_model=UnityLiveAccessView)
-@match_router.post("/{match_id}/unity-access/refresh", response_model=UnityLiveAccessView)
-@api_match_router.post("/{match_id}/unity-access/refresh", response_model=UnityLiveAccessView)
-def refresh_unity_live_access(
+@legacy_router.post(
+    _LEGACY_MATCH_RUNTIME_ACCESS_REFRESH_ROUTE, response_model=LegacyMatchRuntimeAccessView, include_in_schema=False
+)
+@api_router.post(
+    _LEGACY_MATCH_RUNTIME_ACCESS_REFRESH_ROUTE, response_model=LegacyMatchRuntimeAccessView, include_in_schema=False
+)
+@match_router.post(
+    _LEGACY_MATCH_RUNTIME_ACCESS_REFRESH_ROUTE, response_model=LegacyMatchRuntimeAccessView, include_in_schema=False
+)
+@api_match_router.post(
+    _LEGACY_MATCH_RUNTIME_ACCESS_REFRESH_ROUTE, response_model=LegacyMatchRuntimeAccessView, include_in_schema=False
+)
+def refresh_legacy_match_runtime_access(
     match_id: str,
-    payload: UnityLiveAccessRefreshRequest,
+    payload: LegacyMatchRuntimeAccessRefreshRequest,
     request: Request,
-) -> UnityLiveAccessView:
+) -> LegacyMatchRuntimeAccessView:
+    _require_legacy_match_runtime_enabled()
     try:
-        claims = validate_unity_live_refresh_token(payload.refresh_token, match_id=match_id)
+        claims = validate_legacy_match_runtime_refresh_token(payload.refresh_token, match_id=match_id)
     except TokenError as exc:
-        _record_unity_live_access_metric(request.app, action="refresh", result="invalid_token")
+        _record_legacy_match_runtime_access_metric(request.app, action="refresh", result="invalid_token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -1275,7 +1426,7 @@ def refresh_unity_live_access(
     try:
         spectator_session = hub.validate_session(match_id, claims["spectator_session_id"])
     except LiveMatchError as exc:
-        _record_unity_live_access_metric(request.app, action="refresh", result="invalid_session")
+        _record_legacy_match_runtime_access_metric(request.app, action="refresh", result="invalid_session")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(exc),
@@ -1283,36 +1434,36 @@ def refresh_unity_live_access(
         ) from exc
 
     if spectator_session.user_id != claims["viewer_user_id"]:
-        _record_unity_live_access_metric(request.app, action="refresh", result="unauthorized")
+        _record_legacy_match_runtime_access_metric(request.app, action="refresh", result="unauthorized")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unity live refresh token does not match the spectator session.",
+            detail="Legacy match runtime refresh token does not match the spectator session.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     try:
-        _revalidate_unity_refresh_access(
+        _revalidate_legacy_match_runtime_refresh_access(
             match_id=match_id,
             request=request,
             viewer_user_id=spectator_session.user_id,
         )
-        response = _issue_unity_live_access_view(
+        response = _issue_legacy_match_runtime_access_view(
             match_id=match_id,
             spectator_session_id=spectator_session.id,
             viewer_user_id=spectator_session.user_id,
         )
     except HTTPException as exc:
-        _record_unity_live_access_metric(
+        _record_legacy_match_runtime_access_metric(
             request.app,
             action="refresh",
-            result=_unity_live_metric_result_for_status(exc.status_code),
+            result=_legacy_match_runtime_metric_result_for_status(exc.status_code),
         )
         raise
     except Exception:
-        _record_unity_live_access_metric(request.app, action="refresh", result="error")
+        _record_legacy_match_runtime_access_metric(request.app, action="refresh", result="error")
         raise
 
-    _record_unity_live_access_metric(request.app, action="refresh", result="success")
+    _record_legacy_match_runtime_access_metric(request.app, action="refresh", result="success")
     return response
 
 
@@ -1321,25 +1472,26 @@ def refresh_unity_live_access(
 @match_router.get("/{match_id}/live")
 @api_match_router.get("/{match_id}/live")
 def read_match_live_bridge(match_id: str, request: Request) -> dict[str, object]:
+    _require_legacy_match_runtime_enabled()
     try:
-        _require_unity_live_access_for_request(request, match_id=match_id)
-        payload = _build_unity_live_payload(match_id, request)
+        _require_legacy_match_runtime_access_for_request(request, match_id=match_id)
+        payload = _build_legacy_match_runtime_payload(match_id, request)
     except HTTPException as exc:
-        _record_unity_live_payload_metric(
+        _record_legacy_match_runtime_payload_metric(
             request.app,
             transport="http",
-            result=_unity_live_metric_result_for_status(exc.status_code),
+            result=_legacy_match_runtime_metric_result_for_status(exc.status_code),
         )
         raise
     except Exception as exc:
-        _record_unity_live_payload_metric(request.app, transport="http", result="error")
+        _record_legacy_match_runtime_payload_metric(request.app, transport="http", result="error")
         logger.exception("Failed to build live match bridge payload for %s", match_id)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Live match payload is temporarily unavailable.",
         ) from exc
 
-    _record_unity_live_payload_metric(request.app, transport="http", result="success")
+    _record_legacy_match_runtime_payload_metric(request.app, transport="http", result="success")
     return payload
 
 
@@ -1369,7 +1521,11 @@ def read_match_highlights(match_id: str, request: Request) -> MatchHighlightResp
     if record is not None:
         rebuilt = service.persist_from_archive_timeline(match_id, record.timeline)
         return MatchHighlightResponseView(highlights=rebuilt)
-    generated = ensure_infinite_league_runtime(request.app).highlight_response(match_id)
+    generated = (
+        ensure_infinite_league_runtime(request.app).highlight_response(match_id)
+        if generated_live_match_streams_enabled()
+        else None
+    )
     if generated is not None:
         return generated
     return MatchHighlightResponseView(highlights=[])

@@ -42,60 +42,60 @@ groups:
           summary: Treasury balance fell below the red-alert threshold
           description: GTex treasury balance is under 1000 coin. Investigate immediately.
 
-      - alert: GTexUnityLiveRefreshFailuresHigh
-        expr: sum(rate(gtex_unity_live_access_total{job="gtex-api",action="refresh",result!="success"}[5m])) > 0
+      - alert: GTexLegacyMatchRuntimeRefreshFailuresHigh
+        expr: sum(rate(gtex_legacy_match_runtime_access_total{job="gtex-api",action="refresh",result!="success"}[5m])) > 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: Unity live token refresh failures detected
-          description: Refresh token issuance or revalidation is failing for the Unity live lane.
+          summary: Legacy match runtime token refresh failures detected
+          description: Refresh token issuance or revalidation is failing for the quarantined legacy match runtime lane.
 
-      - alert: GTexUnityLivePayloadFailuresHigh
-        expr: sum(rate(gtex_unity_live_payload_total{job="gtex-api",result=~"unavailable|error|not_found"}[5m])) > 0
+      - alert: GTexLegacyMatchRuntimePayloadFailuresHigh
+        expr: sum(rate(gtex_legacy_match_runtime_payload_total{job="gtex-api",result=~"unavailable|error|not_found"}[5m])) > 0
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: Unity live payload bridge failures detected
+          summary: Legacy match runtime payload bridge failures detected
           description: The GTEX live payload bridge is returning unavailable, missing, or error states.
 
-      - alert: GTexUnityLiveStaleStateDetected
-        expr: sum(rate(gtex_unity_live_websocket_events_total{job="gtex-api",event="stale_state",result="detected"}[5m])) > 0
+      - alert: GTexLegacyMatchRuntimeStaleStateDetected
+        expr: sum(rate(gtex_legacy_match_runtime_websocket_events_total{job="gtex-api",event="stale_state",result="detected"}[5m])) > 0
         for: 2m
         labels:
           severity: warning
         annotations:
-          summary: Unity live websocket state appears stale
+          summary: Legacy match runtime websocket state appears stale
           description: Websocket sessions are remaining live without frame advancement long enough to trigger stale-state detection.
 
-      - alert: GTexUnityLiveWebsocketRejectsHigh
-        expr: sum(rate(gtex_unity_live_websocket_events_total{job="gtex-api",event="reject"}[5m])) > 0
+      - alert: GTexLegacyMatchRuntimeWebsocketRejectsHigh
+        expr: sum(rate(gtex_legacy_match_runtime_websocket_events_total{job="gtex-api",event="reject"}[5m])) > 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: Unity live websocket rejects detected
-          description: Unity live websocket bootstrap or auth rejects are occurring on the GTEX live lane.
+          summary: Legacy match runtime websocket rejects detected
+          description: Legacy match runtime websocket bootstrap or auth rejects are occurring on the quarantined lane.
 
-      - alert: GTexUnityLiveReconnectChurnHigh
+      - alert: GTexLegacyMatchRuntimeReconnectChurnHigh
         expr: |
-          sum(rate(gtex_unity_live_websocket_events_total{job="gtex-api",event="closed",result!="terminal"}[5m]))
+          sum(rate(gtex_legacy_match_runtime_websocket_events_total{job="gtex-api",event="closed",result!="terminal"}[5m]))
           /
-          clamp_min(sum(rate(gtex_unity_live_websocket_events_total{job="gtex-api",event="accepted",result="success"}[5m])), 1)
+          clamp_min(sum(rate(gtex_legacy_match_runtime_websocket_events_total{job="gtex-api",event="accepted",result="success"}[5m])), 1)
           > 1.5
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: Unity live websocket reconnect churn is high
-          description: Non-terminal websocket closes are outpacing accepted Unity live sessions, indicating reconnect degradation.
+          summary: Legacy match runtime websocket reconnect churn is high
+          description: Non-terminal websocket closes are outpacing accepted legacy runtime sessions, indicating reconnect degradation.
 
-      - alert: GTexUnityLiveMatchGenerationFailuresHigh
-        expr: sum(rate(gtex_unity_live_generated_match_total{job="gtex-api",result="missing_stream"}[5m])) > 0
+      - alert: GTexLegacyMatchRuntimeGenerationFailuresHigh
+        expr: sum(rate(gtex_legacy_match_runtime_generated_match_total{job="gtex-api",result="missing_stream"}[5m])) > 0
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: GTEX generated live matches failed to bootstrap
-          description: Generated live match requests are failing to resolve a backing stream for Unity playback.
+          description: Generated live match requests are failing to resolve a backing stream for the quarantined legacy runtime.

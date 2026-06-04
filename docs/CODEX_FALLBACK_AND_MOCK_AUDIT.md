@@ -5,7 +5,7 @@
 | Category | File(s) | Reachable from active shell? | Status after sweep | Notes |
 | --- | --- | --- | --- | --- |
 | Explicit demo route | `frontend/lib/features/match/match_simulate_screen.dart` | yes | DEMO | Kept reachable, but explicitly labeled demo. |
-| Explicit blocked route | `frontend/lib/features/match/match_native_3d_blocked_screen.dart` | yes | BLOCKED | Native 3D is not claimed as live. |
+| Explicit blocked route | `frontend/lib/features/match_center/blocked_match_runtime_screen.dart` | yes | BLOCKED | Blocked match runtime is not claimed as live. |
 | Guest clips route gate | `frontend/lib/features/viral_feed/presentation/clips_blocked_screen.dart` | yes | BLOCKED | Added so guests no longer mount the live feed and then fail deep in the repository. |
 | Federation join summary action | `frontend/lib/features/world/world_screen.dart` | yes | BLOCKED | Left disabled until a real federation join flow exists. |
 

@@ -252,6 +252,14 @@ class RegenPlayerView(CommonSchema):
     club_id: str | None = None
     source_type: str = "regen"
     market_access: RegenPlayerMarketAccessView = Field(default_factory=RegenPlayerMarketAccessView)
+    generation_number: int | None = None
+    generation_label: str | None = None
+    rarity_tier: str | None = None
+    origin_story: str | None = None
+    projected_value_coin: int | None = None
+    traits: list[str] = Field(default_factory=list)
+    lineage: list[str] = Field(default_factory=list)
+    dna_profile: dict[str, object] | None = None
 
 
 class RegenUniversePlayerLookupView(CommonSchema):

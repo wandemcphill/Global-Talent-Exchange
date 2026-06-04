@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -157,6 +158,116 @@ class AdminFinanceWebhookResultView(BaseModel):
     order_status: str | None = None
     reference: str | None = None
     signature_verified: bool = False
+
+
+class PaymentQueueActionRequest(BaseModel):
+    admin_notes: str | None = Field(default=None, max_length=1000)
+    reason: str | None = Field(default=None, max_length=1000)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class PaymentQueueTabView(BaseModel):
+    key: str
+    label: str
+    total: int
+    action_state: str = "enabled"
+
+
+class PaymentQueueSectionView(BaseModel):
+    key: str
+    label: str
+    item_type: str
+    statuses: list[str] = Field(default_factory=list)
+    items: list[dict[str, Any]] = Field(default_factory=list)
+    total: int
+    limit: int
+    offset: int
+    action_state: str = "enabled"
+    blocked_reason: str | None = None
+
+
+class PaymentQueueView(BaseModel):
+    generated_at: datetime
+    tabs: list[PaymentQueueTabView]
+    sections: dict[str, PaymentQueueSectionView]
+    pending: PaymentQueueSectionView
+    approved: PaymentQueueSectionView
+    rejected: PaymentQueueSectionView
+    bids: PaymentQueueSectionView
+
+
+class PaymentQueueActionResultView(BaseModel):
+    action: str
+    item_type: str
+    action_state: str
+    business_state_changed: bool | None = None
+    wallet_state_changed: bool | None = None
+    audit_reference: str | None = None
+    audit: dict[str, Any] | None = None
+    notes: dict[str, Any] | None = None
+    item: dict[str, Any] | None = None
+    blocked_reason: str | None = None
+
+
+class AdminLockAcquireRequest(BaseModel):
+    ttl_seconds: int = Field(default=600, ge=30, le=3600)
+
+
+class AdminLockStateView(BaseModel):
+    state: str
+    action_state: str
+    resource_type: str
+    resource_id: str
+    locked_by_user_id: str | None = None
+    locked_by_email: str | None = None
+    locked_at: datetime | None = None
+    expires_at: datetime | None = None
+    blocked_reason: str | None = None
+    audit_reference: str | None = None
+
+
+class AdminExportRequest(BaseModel):
+    export_type: str = Field(min_length=2, max_length=64)
+    format: str = Field(default="csv", min_length=3, max_length=8)
+    filters: dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminExportStatusView(BaseModel):
+    export_id: str
+    status: str
+    export_type: str
+    format: str
+    filters: dict[str, Any] = Field(default_factory=dict)
+    requested_at: datetime
+    completed_at: datetime | None = None
+    download_url: str | None = None
+    blocked_reason: str | None = None
+    audit_reference: str | None = None
+    requested_audit_reference: str | None = None
+    audit: dict[str, Any] | None = None
+    artifact: dict[str, Any] | None = None
+
+
+class AdminBulkActionRequest(BaseModel):
+    item_type: str = Field(min_length=2, max_length=64)
+    action: str = Field(min_length=2, max_length=64)
+    item_ids: list[str] = Field(min_length=1, max_length=200)
+    admin_notes: str = Field(min_length=1, max_length=1000)
+
+
+class AdminBulkActionStatusView(BaseModel):
+    bulk_action_id: str
+    status: str
+    item_type: str
+    action: str
+    item_ids: list[str] = Field(default_factory=list)
+    queued_count: int
+    blocked_count: int = 0
+    requested_at: datetime
+    completed_at: datetime | None = None
+    audit_reference: str | None = None
+    audit: dict[str, Any] | None = None
+    blocked_reason: str | None = None
 
 
 class ManualPriceOverrideUpsertRequest(BaseModel):

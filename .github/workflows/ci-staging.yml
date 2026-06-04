@@ -29,9 +29,11 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - run: rm -rf build/unit_test_assets build/native_assets
       - run: python tool/check_analyzer_hard_errors.py
       - run: |
           if [ -d test ]; then
+            rm -rf build/unit_test_assets build/native_assets
             flutter test
           fi
 
@@ -47,28 +49,35 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter test test/secondary_api_backend_mode_test.dart -r compact
+      - run: |
+          rm -rf build/unit_test_assets build/native_assets
+          flutter test test/secondary_api_backend_mode_test.dart -r compact
       - run: >
+          rm -rf build/unit_test_assets build/native_assets &&
           flutter test
           test/live_clients_provider_test.dart
           --plain-name "active-shell routed providers clamp liveThenFixture down to live"
           -r compact
       - run: >
+          rm -rf build/unit_test_assets build/native_assets &&
           flutter test
           test/gte_api_repository_test.dart
           --plain-name "does not fall back"
           -r compact
       - run: >
+          rm -rf build/unit_test_assets build/native_assets &&
           flutter test
           test/gte_api_repository_test.dart
           --plain-name "fail closed in live mode without consulting fixtures"
           -r compact
       - run: >
+          rm -rf build/unit_test_assets build/native_assets &&
           flutter test
           test/gte_api_repository_test.dart
           --plain-name "policy document reads no longer fall back to fixtures in live-then-fixture mode"
           -r compact
       - run: >
+          rm -rf build/unit_test_assets build/native_assets &&
           flutter test
           test/gte_api_repository_test.dart
           --plain-name "policy acceptance reads no longer fall back to fixtures in live-then-fixture mode"
@@ -87,21 +96,33 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter test test/navigation_surface_truth_test.dart -r compact
-      - run: flutter test test/match/match_screen_broadcast_test.dart -r compact
+      - run: |
+          rm -rf build/unit_test_assets build/native_assets
+          flutter test test/guardrails/forbidden_text_guard_test.dart -r compact
       - run: >
+          rm -rf build/unit_test_assets build/native_assets &&
+          flutter test
+          test/match_center/canonical_match_center_test.dart
+          test/match_center/live_match_realtime_test.dart
+          -r compact
+      - run: |
+          rm -rf build/unit_test_assets build/native_assets
+          flutter test test/navigation_surface_truth_test.dart -r compact
+      - run: |
+          rm -rf build/unit_test_assets build/native_assets
+          flutter test test/match/match_screen_broadcast_test.dart -r compact
+      - run: >
+          rm -rf build/unit_test_assets build/native_assets &&
           flutter test
           test/active_shell_route_mount_test.dart
-          --plain-name "router mounts live 2D routes, live broadcast, gated Flutter 3D, and profile admin"
+          --plain-name "router mounts live 2D routes, live broadcast, redirects quarantined match lanes, and profile admin"
           -r compact
       - run: >
+          rm -rf build/unit_test_assets build/native_assets &&
           flutter test
           test/surface_runtime_proof_test.dart
           --plain-name "router mounts federations, national teams, and transfer center routes"
           -r compact
-      - run: flutter test test/match_3d_route_truth_test.dart -r compact
-      - run: flutter test test/match_3d_route_hardening_test.dart -r compact
-      - run: flutter test test/match/native_match_3d_surface_test.dart -r compact
 
   frontend-android-build:
     runs-on: ubuntu-latest
@@ -149,6 +170,8 @@ jobs:
           backend/tests/leaderboards/test_ranking_service.py
           backend/tests/wallets/test_wallet_event_backbone.py
           -q
+      - name: Verify canonical 2D/payment guardrails
+        run: python -m pytest backend/tests/ops/test_canonical_production_guards.py -q
 
   backend-app-contract-tests:
     runs-on: ubuntu-latest
@@ -172,7 +195,7 @@ jobs:
           backend/tests/app/test_module_registration_hydration.py
           -q
 
-  backend-live-playback-tests:
+  backend-live-match-center-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -189,6 +212,8 @@ jobs:
           backend/tests/live_matches/test_live_match_hot_path_cache.py
           backend/tests/live_matches/test_live_match_sampling.py
           backend/tests/match_engine/test_live_match_experience_contract.py
+          backend/tests/realtime/test_match_websocket_gateway.py
+          backend/tests/app/test_realtime_match_stream.py
           backend/tests/test_match_timeline_service.py
           -q
 
@@ -207,7 +232,6 @@ jobs:
           python -m pytest
           backend/tests/admin_godmode/test_payment_rails_truth.py::test_payment_rails_drop_stale_non_live_defaults
           backend/tests/admin_godmode/test_payment_rails_truth.py::test_payment_rail_update_rejects_unsupported_provider
-          backend/tests/admin_finance/test_payment_webhook_fraud_regressions.py::test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured
           backend/tests/admin_finance/test_payment_webhook_fraud_regressions.py::test_korapay_webhook_rejects_invalid_signature_when_secret_is_configured
           backend/tests/wallets/test_wallet_http.py::test_wallet_overview_surfaces_provider_status_and_live_restrictions
           backend/tests/wallets/test_wallet_http.py::test_provider_webhook_rejects_stub_provider
@@ -276,432 +300,6 @@ jobs:
           -k "ensure_database_schema_current or history_engagement_schema_repair or head_upgrade_materializes_model_tables_and_columns or head_upgrade_has_no_unmapped_tables_or_columns or head_upgrade_has_expected_index_coverage"
           -q
 
-  unity-windows-build:
-    runs-on:
-      - self-hosted
-      - windows
-      - unity
-    timeout-minutes: 90
-    defaults:
-      run:
-        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -command ". '{0}'"
-    env:
-      UNITY_EDITOR_PATH: ${{ vars.GTEX_UNITY_EDITOR_PATH }}
-      GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
-      GTEX_UNITY_BUILD_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_windows_build.log
-      GTEX_FORCE_CLEAN_LIBRARY: "false"
-      GTEX_UNITY_RUNNER_PROFILE_ROOT: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}
-      LOCALAPPDATA: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\LocalAppData
-      APPDATA: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\RoamingAppData
-      TEMP: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\Temp
-      TMP: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\Temp
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify Unity CI configuration
-        run: |
-          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
-
-          if ([string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)) {
-            "Missing GTEX_UNITY_EDITOR_PATH on runner." | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Set repository variable GTEX_UNITY_EDITOR_PATH to the Unity editor executable on the Windows runner."
-          }
-          if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
-            "Unity editor path does not exist: $env:UNITY_EDITOR_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Unity editor path does not exist: $env:UNITY_EDITOR_PATH"
-          }
-          if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
-            "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
-          }
-
-          foreach ($path in @(
-            $env:GTEX_UNITY_RUNNER_PROFILE_ROOT,
-            $env:LOCALAPPDATA,
-            $env:APPDATA,
-            $env:TEMP
-          )) {
-            New-Item -ItemType Directory -Force -Path $path | Out-Null
-          }
-
-          $runnerIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-          Write-Host "Unity runner identity: $runnerIdentity"
-          Write-Host "LOCALAPPDATA: $env:LOCALAPPDATA"
-          Write-Host "APPDATA: $env:APPDATA"
-          Write-Host "TEMP: $env:TEMP"
-
-          if ($runnerIdentity -match 'NETWORK SERVICE') {
-            Write-Warning "The GitHub Actions runner is executing as NETWORK SERVICE. Unity batchmode builds on this account usually fail unless that service identity has its own Unity license."
-          }
-      - name: Clean Unity transient folders
-        run: |
-          $project = $env:GTEX_UNITY_PROJECT_PATH
-
-          if (Test-Path "$project\Temp") {
-            Remove-Item -Recurse -Force "$project\Temp" -ErrorAction Stop
-          }
-          if (Test-Path "$project\obj") {
-            Remove-Item -Recurse -Force "$project\obj" -ErrorAction Stop
-          }
-
-          if ($env:GTEX_FORCE_CLEAN_LIBRARY -eq "true") {
-            if (Test-Path "$project\Library") {
-              Write-Warning "Removing Unity Library because GTEX_FORCE_CLEAN_LIBRARY=true."
-              Remove-Item -Recurse -Force "$project\Library" -ErrorAction Stop
-            }
-          }
-      - name: Build GTEX Windows player
-        run: |
-          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
-
-          $unityArgs = @(
-            '-batchmode'
-            '-quit'
-            '-nographics'
-            '-buildTarget'
-            'StandaloneWindows64'
-            '-projectPath'
-            ('"{0}"' -f $env:GTEX_UNITY_PROJECT_PATH)
-            '-executeMethod'
-            'FStudio.GTEX.Editor.GtexBuildTools.BuildWindows64ProductionFromCommandLine'
-            '-logFile'
-            ('"{0}"' -f $env:GTEX_UNITY_BUILD_LOG)
-          ) -join ' '
-
-          $unityProcess = Start-Process `
-            -FilePath $env:UNITY_EDITOR_PATH `
-            -ArgumentList $unityArgs `
-            -NoNewWindow `
-            -Wait `
-            -PassThru
-
-          $exitCode = [int]$unityProcess.ExitCode
-          if ($exitCode -ne 0) {
-            if (Test-Path $env:GTEX_UNITY_BUILD_LOG) {
-              Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
-
-              $licenseFailurePatterns = @(
-                'No valid Unity Editor license found',
-                'Found 0 entitlement groups and 0 free entitlements matching requested entitlement ids',
-                "'com.unity.editor.headless' was not found"
-              )
-
-              foreach ($pattern in $licenseFailurePatterns) {
-                if (Select-String -Path $env:GTEX_UNITY_BUILD_LOG -Pattern $pattern -Quiet) {
-                  $runnerIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-                  throw (
-                    "Unity Windows batch build failed before project compilation because the runner account does not have a usable Unity Editor license. " +
-                    "Runner account: $runnerIdentity. " +
-                    "Activate Unity for that account or run the self-hosted runner service as the Windows user that already owns the Unity activation. " +
-                    "The job now redirects LOCALAPPDATA/APPDATA/TEMP to workspace-owned folders, so cache-path errors are not the remaining blocker. " +
-                    "See $env:GTEX_UNITY_BUILD_LOG for the full Unity licensing log."
-                  )
-                }
-              }
-            }
-            throw "Unity Windows batch build failed with exit code $exitCode."
-          }
-      - name: Verify Unity build log
-        run: |
-          if (-not (Test-Path $env:GTEX_UNITY_BUILD_LOG)) {
-            throw "Unity build log was not produced: $env:GTEX_UNITY_BUILD_LOG"
-          }
-
-          $errorPatterns = @(
-            'error CS',
-            'Compilation failed',
-            "Build completed with a result of 'Failed'",
-            'Aborting batchmode due to failure'
-          )
-
-          foreach ($pattern in $errorPatterns) {
-            if (Select-String -Path $env:GTEX_UNITY_BUILD_LOG -Pattern $pattern -Quiet) {
-              Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
-              throw "Unity build log contains failure marker: $pattern"
-            }
-          }
-      - name: Upload Unity build log
-        if: always() && hashFiles('tmp/gtex_test_migration_windows_build.log') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: gtex-test-migration-windows-build-log
-          path: tmp/gtex_test_migration_windows_build.log
-          if-no-files-found: warn
-
-  unity-android-build:
-    if: vars.GTEX_ENABLE_ANDROID_UNITY_CI == 'true'
-    runs-on:
-      - self-hosted
-      - windows
-      - unity
-    timeout-minutes: 120
-    defaults:
-      run:
-        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -command ". '{0}'"
-    env:
-      UNITY_EDITOR_PATH: ${{ vars.GTEX_UNITY_EDITOR_PATH }}
-      GTEX_ANDROID_SDK_ROOT: ${{ vars.GTEX_ANDROID_SDK_ROOT }}
-      ANDROID_SDK_ROOT: ${{ vars.GTEX_ANDROID_SDK_ROOT }}
-      ANDROID_HOME: ${{ vars.GTEX_ANDROID_SDK_ROOT }}
-      GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
-      GTEX_UNITY_BUILD_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_android_build.log
-      GTEX_ANDROID_APK_PATH: ${{ github.workspace }}\Gtex_Test_Migration\Builds\Android\GTEXMatch.apk
-      GTEX_FORCE_CLEAN_LIBRARY: "false"
-      GTEX_UNITY_RUNNER_PROFILE_ROOT: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}
-      LOCALAPPDATA: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\LocalAppData
-      APPDATA: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\RoamingAppData
-      TEMP: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\Temp
-      TMP: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\Temp
-    steps:
-      - uses: actions/checkout@v4
-      - name: Verify Unity Android CI configuration
-        run: |
-          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
-
-          if ([string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)) {
-            "Missing GTEX_UNITY_EDITOR_PATH on runner." | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Set repository variable GTEX_UNITY_EDITOR_PATH to the Unity editor executable on the Windows runner."
-          }
-          if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
-            "Unity editor path does not exist: $env:UNITY_EDITOR_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Unity editor path does not exist: $env:UNITY_EDITOR_PATH"
-          }
-          if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
-            "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
-          }
-          if ([string]::IsNullOrWhiteSpace($env:GTEX_ANDROID_SDK_ROOT)) {
-            "Missing GTEX_ANDROID_SDK_ROOT on runner." | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Set repository variable GTEX_ANDROID_SDK_ROOT to the Android SDK root on the Windows Unity runner."
-          }
-          if (-not (Test-Path $env:GTEX_ANDROID_SDK_ROOT)) {
-            "Android SDK path does not exist: $env:GTEX_ANDROID_SDK_ROOT" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Android SDK path does not exist: $env:GTEX_ANDROID_SDK_ROOT"
-          }
-
-          foreach ($path in @(
-            $env:GTEX_UNITY_RUNNER_PROFILE_ROOT,
-            $env:LOCALAPPDATA,
-            $env:APPDATA,
-            $env:TEMP
-          )) {
-            New-Item -ItemType Directory -Force -Path $path | Out-Null
-          }
-
-          $runnerIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-          Write-Host "Unity runner identity: $runnerIdentity"
-          Write-Host "ANDROID_SDK_ROOT: $env:ANDROID_SDK_ROOT"
-          Write-Host "LOCALAPPDATA: $env:LOCALAPPDATA"
-          Write-Host "APPDATA: $env:APPDATA"
-          Write-Host "TEMP: $env:TEMP"
-
-          if ($runnerIdentity -match 'NETWORK SERVICE') {
-            Write-Warning "The GitHub Actions runner is executing as NETWORK SERVICE. Unity batchmode builds on this account usually fail unless that service identity has its own Unity license."
-          }
-      - name: Clean Unity transient folders
-        run: |
-          $project = $env:GTEX_UNITY_PROJECT_PATH
-
-          if (Test-Path "$project\Temp") {
-            Remove-Item -Recurse -Force "$project\Temp" -ErrorAction Stop
-          }
-          if (Test-Path "$project\obj") {
-            Remove-Item -Recurse -Force "$project\obj" -ErrorAction Stop
-          }
-
-          if ($env:GTEX_FORCE_CLEAN_LIBRARY -eq "true") {
-            if (Test-Path "$project\Library") {
-              Write-Warning "Removing Unity Library because GTEX_FORCE_CLEAN_LIBRARY=true."
-              Remove-Item -Recurse -Force "$project\Library" -ErrorAction Stop
-            }
-          }
-      - name: Build GTEX Android player
-        run: |
-          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
-
-          $unityArgs = @(
-            '-batchmode'
-            '-quit'
-            '-nographics'
-            '-buildTarget'
-            'Android'
-            '-projectPath'
-            ('"{0}"' -f $env:GTEX_UNITY_PROJECT_PATH)
-            '-executeMethod'
-            'FStudio.GTEX.Editor.GtexBuildTools.BuildAndroidApkFromCommandLine'
-            '-logFile'
-            ('"{0}"' -f $env:GTEX_UNITY_BUILD_LOG)
-          ) -join ' '
-
-          $unityProcess = Start-Process `
-            -FilePath $env:UNITY_EDITOR_PATH `
-            -ArgumentList $unityArgs `
-            -NoNewWindow `
-            -Wait `
-            -PassThru
-
-          $exitCode = [int]$unityProcess.ExitCode
-          if ($exitCode -ne 0) {
-            if (Test-Path $env:GTEX_UNITY_BUILD_LOG) {
-              Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
-            }
-            throw "Unity Android batch build failed with exit code $exitCode."
-          }
-      - name: Verify Unity Android build outputs
-        run: |
-          if (-not (Test-Path $env:GTEX_UNITY_BUILD_LOG)) {
-            throw "Unity Android build log was not produced: $env:GTEX_UNITY_BUILD_LOG"
-          }
-
-          $errorPatterns = @(
-            'error CS',
-            'Compilation failed',
-            "Build completed with a result of 'Failed'",
-            'Aborting batchmode due to failure',
-            'Unity Android SDK path is not configured'
-          )
-
-          foreach ($pattern in $errorPatterns) {
-            if (Select-String -Path $env:GTEX_UNITY_BUILD_LOG -Pattern $pattern -Quiet) {
-              Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
-              throw "Unity Android build log contains failure marker: $pattern"
-            }
-          }
-
-          if (-not (Test-Path $env:GTEX_ANDROID_APK_PATH)) {
-            Get-Content $env:GTEX_UNITY_BUILD_LOG -Tail 200
-            throw "Unity Android build did not produce the expected APK: $env:GTEX_ANDROID_APK_PATH"
-          }
-      - name: Upload Unity Android build log
-        if: always() && hashFiles('tmp/gtex_test_migration_android_build.log') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: gtex-test-migration-android-build-log
-          path: tmp/gtex_test_migration_android_build.log
-          if-no-files-found: warn
-
-  unity-android-export-embed-compile:
-    if: vars.GTEX_ENABLE_ANDROID_UNITY_CI == 'true'
-    needs:
-      - unity-android-build
-    runs-on:
-      - self-hosted
-      - windows
-      - unity
-    timeout-minutes: 120
-    defaults:
-      run:
-        shell: powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -command ". '{0}'"
-    env:
-      UNITY_EDITOR_PATH: ${{ vars.GTEX_UNITY_EDITOR_PATH }}
-      GTEX_ANDROID_SDK_ROOT: ${{ vars.GTEX_ANDROID_SDK_ROOT }}
-      ANDROID_SDK_ROOT: ${{ vars.GTEX_ANDROID_SDK_ROOT }}
-      ANDROID_HOME: ${{ vars.GTEX_ANDROID_SDK_ROOT }}
-      GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
-      GTEX_UNITY_EXPORT_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_android_export.log
-      GTEX_ANDROID_UNITY_EXPORT_PATH: ${{ github.workspace }}\frontend\android\unityExport
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - name: Verify Unity Android export configuration
-        run: |
-          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_EXPORT_LOG) | Out-Null
-
-          if ([string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)) {
-            "Missing GTEX_UNITY_EDITOR_PATH on runner." | Set-Content -Path $env:GTEX_UNITY_EXPORT_LOG
-            throw "Set repository variable GTEX_UNITY_EDITOR_PATH to the Unity editor executable on the Windows runner."
-          }
-          if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
-            "Unity editor path does not exist: $env:UNITY_EDITOR_PATH" | Set-Content -Path $env:GTEX_UNITY_EXPORT_LOG
-            throw "Unity editor path does not exist: $env:UNITY_EDITOR_PATH"
-          }
-          if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
-            "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_EXPORT_LOG
-            throw "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH"
-          }
-          if ([string]::IsNullOrWhiteSpace($env:GTEX_ANDROID_SDK_ROOT)) {
-            "Missing GTEX_ANDROID_SDK_ROOT on runner." | Set-Content -Path $env:GTEX_UNITY_EXPORT_LOG
-            throw "Set repository variable GTEX_ANDROID_SDK_ROOT to the Android SDK root on the Windows Unity runner."
-          }
-          if (-not (Test-Path $env:GTEX_ANDROID_SDK_ROOT)) {
-            "Android SDK path does not exist: $env:GTEX_ANDROID_SDK_ROOT" | Set-Content -Path $env:GTEX_UNITY_EXPORT_LOG
-            throw "Android SDK path does not exist: $env:GTEX_ANDROID_SDK_ROOT"
-          }
-      - name: Export Unity Android library
-        run: |
-          if (Test-Path $env:GTEX_ANDROID_UNITY_EXPORT_PATH) {
-            Remove-Item -Recurse -Force $env:GTEX_ANDROID_UNITY_EXPORT_PATH -ErrorAction Stop
-          }
-
-          $unityArgs = @(
-            '-batchmode'
-            '-quit'
-            '-nographics'
-            '-buildTarget'
-            'Android'
-            '-projectPath'
-            ('"{0}"' -f $env:GTEX_UNITY_PROJECT_PATH)
-            '-executeMethod'
-            'FStudio.GTEX.Editor.GtexBuildTools.ExportAndroidLibraryFromCommandLine'
-            '-logFile'
-            ('"{0}"' -f $env:GTEX_UNITY_EXPORT_LOG)
-          ) -join ' '
-
-          $unityProcess = Start-Process `
-            -FilePath $env:UNITY_EDITOR_PATH `
-            -ArgumentList $unityArgs `
-            -NoNewWindow `
-            -Wait `
-            -PassThru
-
-          $exitCode = [int]$unityProcess.ExitCode
-          if ($exitCode -ne 0) {
-            if (Test-Path $env:GTEX_UNITY_EXPORT_LOG) {
-              Get-Content $env:GTEX_UNITY_EXPORT_LOG -Tail 200
-            }
-            throw "Unity Android export failed with exit code $exitCode."
-          }
-      - name: Verify Unity Android export outputs
-        run: |
-          if (-not (Test-Path $env:GTEX_UNITY_EXPORT_LOG)) {
-            throw "Unity Android export log was not produced: $env:GTEX_UNITY_EXPORT_LOG"
-          }
-
-          $errorPatterns = @(
-            'error CS',
-            'Compilation failed',
-            "Build completed with a result of 'Failed'",
-            'Aborting batchmode due to failure',
-            'Unity Android SDK path is not configured'
-          )
-
-          foreach ($pattern in $errorPatterns) {
-            if (Select-String -Path $env:GTEX_UNITY_EXPORT_LOG -Pattern $pattern -Quiet) {
-              Get-Content $env:GTEX_UNITY_EXPORT_LOG -Tail 200
-              throw "Unity Android export log contains failure marker: $pattern"
-            }
-          }
-
-          $unityLibraryDir = Join-Path $env:GTEX_ANDROID_UNITY_EXPORT_PATH 'unityLibrary'
-          if (-not (Test-Path $unityLibraryDir)) {
-            Get-Content $env:GTEX_UNITY_EXPORT_LOG -Tail 200
-            throw "Unity Android export did not produce the expected library directory: $unityLibraryDir"
-          }
-      - name: Build Flutter Android host against unityLibrary
-        working-directory: frontend
-        run: |
-          flutter pub get
-          flutter build apk --debug
-      - name: Upload Unity Android export log
-        if: always() && hashFiles('tmp/gtex_test_migration_android_export.log') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: gtex-test-migration-android-export-log
-          path: tmp/gtex_test_migration_android_export.log
-          if-no-files-found: warn
-
   deploy-staging:
     if: >-
       github.event_name == 'push' &&
@@ -711,24 +309,22 @@ jobs:
       needs.frontend-route-integrity-regressions.result == 'success' &&
       needs.backend-tests.result == 'success' &&
       needs.backend-app-contract-tests.result == 'success' &&
-      needs.backend-live-playback-tests.result == 'success' &&
+      needs.backend-live-match-center-tests.result == 'success' &&
       needs.backend-payment-regressions.result == 'success' &&
       needs.backend-referral-durability.result == 'success' &&
       needs.backend-highlight-regressions.result == 'success' &&
-      needs.backend-migration-integrity.result == 'success' &&
-      (needs.unity-windows-build.result == 'success' || needs.unity-windows-build.result == 'skipped')
+      needs.backend-migration-integrity.result == 'success'
     needs:
       - frontend-tests
       - frontend-live-fallback-regressions
       - frontend-route-integrity-regressions
       - backend-tests
       - backend-app-contract-tests
-      - backend-live-playback-tests
+      - backend-live-match-center-tests
       - backend-payment-regressions
       - backend-referral-durability
       - backend-highlight-regressions
       - backend-migration-integrity
-      - unity-windows-build
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -744,7 +340,9 @@ jobs:
           python-version: "3.14"
       - run: python -m pip install --upgrade pip
       - run: python -m pip install httpx websockets
-      - run: python -m py_compile ops/render/deploy.py ops/render/verify_unity_routes.py tools/provision_gtex_live_match.py
+      - run: python -m py_compile ops/render/deploy.py ops/render/verify_match_center_routes.py
+      - name: Verify canonical staging ops guardrails
+        run: python tools/quality/run_gtex_canonical_acceptance.py --diff-base=
       - name: Check Render deploy config
         id: render-config
         shell: bash
@@ -783,17 +381,4 @@ jobs:
           RENDER_DEPLOY_HOOK_WEB: ${{ secrets.RENDER_DEPLOY_HOOK_WEB }}
           RENDER_SERVICE_ORDER: ${{ vars.RENDER_SERVICE_ORDER }}
           RENDER_HEALTH_URL: ${{ vars.RENDER_HEALTH_URL }}
-          RENDER_VERIFY_UNITY_ROUTES: "true"
-          RENDER_UNITY_ROUTE_PROBE_MATCH_ID: gtex-render-route-probe
-          RENDER_VERIFY_UNITY_LIVE_PLAYBACK: ${{ vars.RENDER_VERIFY_UNITY_LIVE_PLAYBACK }}
-          RENDER_UNITY_LIVE_VERIFY_PROFILE: staging
-          RENDER_UNITY_LIVE_VERIFY_BASE_URL: ${{ vars.RENDER_UNITY_LIVE_VERIFY_BASE_URL }}
-          RENDER_UNITY_LIVE_VERIFY_USER_ACCESS_TOKEN: ${{ secrets.RENDER_UNITY_LIVE_VERIFY_USER_ACCESS_TOKEN }}
-          RENDER_UNITY_LIVE_VERIFY_USER_EMAIL: ${{ secrets.RENDER_UNITY_LIVE_VERIFY_USER_EMAIL }}
-          RENDER_UNITY_LIVE_VERIFY_USER_PASSWORD: ${{ secrets.RENDER_UNITY_LIVE_VERIFY_USER_PASSWORD }}
-          RENDER_UNITY_LIVE_VERIFY_MATCH_ID: ${{ vars.RENDER_UNITY_LIVE_VERIFY_MATCH_ID }}
-          RENDER_UNITY_LIVE_VERIFY_ALLOW_MATCH_GENERATION: ${{ vars.RENDER_UNITY_LIVE_VERIFY_ALLOW_MATCH_GENERATION }}
-          RENDER_UNITY_LIVE_VERIFY_SKIP_WEBSOCKET: ${{ vars.RENDER_UNITY_LIVE_VERIFY_SKIP_WEBSOCKET }}
-          RENDER_UNITY_LIVE_VERIFY_PAY_TO_VIEW: ${{ vars.RENDER_UNITY_LIVE_VERIFY_PAY_TO_VIEW }}
-          RENDER_UNITY_LIVE_VERIFY_TICK_COUNT: ${{ vars.RENDER_UNITY_LIVE_VERIFY_TICK_COUNT }}
-          RENDER_UNITY_LIVE_VERIFY_TIMEOUT_SECONDS: ${{ vars.RENDER_UNITY_LIVE_VERIFY_TIMEOUT_SECONDS }}
+          RENDER_VERIFY_MATCH_CENTER_ROUTES: "true"

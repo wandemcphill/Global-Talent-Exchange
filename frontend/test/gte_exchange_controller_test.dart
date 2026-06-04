@@ -33,7 +33,7 @@ void main() {
     );
 
     expect(controller.isAuthenticated, isTrue);
-    expect(controller.walletSummary?.availableBalance, greaterThan(0));
+    expect(controller.walletDisplay?.availableBalance, greaterThan(0));
     expect(controller.portfolioSummary?.totalEquity, greaterThan(0));
     expect(controller.recentOrders, isNotEmpty);
     expect(controller.recentOrderTotal, greaterThan(0));
@@ -54,8 +54,8 @@ void main() {
       );
       await controller.openPlayer('lamine-yamal');
       final double startingAvailable =
-          controller.walletSummary!.availableBalance;
-      final double startingReserved = controller.walletSummary!.reservedBalance;
+          controller.walletDisplay!.availableBalance;
+      final double startingReserved = controller.walletDisplay!.reservedBalance;
       final int startingOpenOrders = controller.openOrders.length;
       final GteOrderRecord? order = await controller.placeOrder(
         playerId: 'lamine-yamal',
@@ -78,11 +78,11 @@ void main() {
       );
       expect(controller.openOrders.length, greaterThan(startingOpenOrders));
       expect(
-        controller.walletSummary!.availableBalance,
+        controller.walletDisplay!.availableBalance,
         lessThan(startingAvailable),
       );
       expect(
-        controller.walletSummary!.reservedBalance,
+        controller.walletDisplay!.reservedBalance,
         greaterThan(startingReserved),
       );
 
@@ -98,11 +98,11 @@ void main() {
         isFalse,
       );
       expect(
-        controller.walletSummary!.availableBalance,
+        controller.walletDisplay!.availableBalance,
         closeTo(startingAvailable, 0.001),
       );
       expect(
-        controller.walletSummary!.reservedBalance,
+        controller.walletDisplay!.reservedBalance,
         closeTo(startingReserved, 0.001),
       );
     },

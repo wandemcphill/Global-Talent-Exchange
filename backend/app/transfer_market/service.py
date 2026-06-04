@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService
@@ -21,6 +21,7 @@ from app.market.player_eligibility_policy import (
 from app.models.access_control import OrganizationRole, OrganizationType
 from app.models.base import utcnow
 from app.models.club_profile import ClubProfile
+from app.models.dispute import Dispute, DisputeStatus
 from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_contract import PlayerContract
 from app.models.player_personality import PlayerPersonality
@@ -38,6 +39,7 @@ from app.models.transfer_market import (
     TransferNegotiation,
 )
 from app.models.user import User, UserRole
+from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionRequest
 from app.schemas.player_lifecycle import TransferBidAcceptRequest, TransferBidCreateRequest, TransferBidRejectRequest
 from app.services.player_agency_context_service import PlayerAgencyContextService, clamp, quantize_amount
@@ -56,11 +58,25 @@ from app.transfer_market.schemas import (
     CoachProfileUpsertRequest,
     CoachProfileView,
     ContractOfferRequest,
+    MARKET_BID_STATUSES,
+    SQUAD_AVAILABILITY_STATUSES,
+    MarketBasketDTO,
+    MarketBasketItemDTO,
+    MarketBidDTO,
+    MarketBidEventDTO,
+    MarketCheckoutReadinessDTO,
+    MarketCheckoutSubmissionDTO,
+    MarketClubRefDTO,
+    MarketFilterMetaDTO,
+    MarketPlayerDTO,
+    MarketPlayerPageDTO,
+    MarketValueBracketDTO,
     MarketWatchlistEntryView,
     PlayerDecisionProfileUpsertRequest,
     PlayerDecisionProfileView,
     PlayerDecisionView,
     TeamDynamicsUpsertRequest,
+    TransferActivityDTO,
     TransferBidderView,
     TransferListingCreateRequest,
     TransferListingView,
@@ -71,6 +87,7 @@ from app.transfer_market.schemas import (
     TransferNegotiationView,
     WatchlistEntryCreateRequest,
 )
+from app.wallets.service import InsufficientBalanceError, WalletService
 
 ANTI_SNIPING_WINDOW_SECONDS = 30
 ANTI_SNIPING_EXTENSION_SECONDS = 90
@@ -79,6 +96,19 @@ PLAYER_DECISION_DELAY_HOURS = 12
 AGENT_COUNTER_DEADLINE_HOURS = 12
 TRANSFER_MARKET_EXECUTION_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB})
 TRANSFER_MARKET_WATCHLIST_ROLES = frozenset({OrganizationRole.ADMIN, OrganizationRole.CLUB, OrganizationRole.SCOUT})
+TRANSFER_MARKET_OPEN_DISPUTE_STATUSES = (
+    DisputeStatus.OPEN,
+    DisputeStatus.AWAITING_ADMIN,
+    DisputeStatus.AWAITING_USER,
+)
+MARKET_DEFAULT_PAGE_SIZE = 20
+MARKET_MAX_PAGE_SIZE = 100
+MARKET_VALUE_BRACKETS: tuple[tuple[str, Decimal | None, Decimal | None], ...] = (
+    ("under_1m", None, Decimal("1000000")),
+    ("1m_to_5m", Decimal("1000000"), Decimal("5000000")),
+    ("5m_to_20m", Decimal("5000000"), Decimal("20000000")),
+    ("20m_plus", Decimal("20000000"), None),
+)
 
 
 class TransferMarketError(Exception):
@@ -300,6 +330,9 @@ class TransferMarketService:
         club_id: str | None = None,
         reference_at: datetime | None = None,
     ) -> list[TransferListingView]:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        self._finalize_expired_open_listings(effective_at)
+        self._process_expired_contract_offer_negotiations(effective_at)
         statement = select(TransferListing).order_by(TransferListing.created_at.desc())
         if status is not None:
             statement = statement.where(TransferListing.status == status)
@@ -309,18 +342,446 @@ class TransferMarketService:
             statement = statement.where(
                 (TransferListing.selling_club_id == club_id) | (TransferListing.highest_bidder_id == club_id)
             )
-        effective_at = self._coerce_utc(reference_at or utcnow())
         return [self.to_listing_view(item, reference_at=effective_at) for item in self.session.scalars(statement).all()]
 
     def get_listing(self, listing_id: str, *, reference_at: datetime | None = None) -> TransferListingView:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        self._finalize_expired_open_listings(effective_at, listing_id=listing_id)
+        self._process_expired_contract_offer_negotiations(effective_at, listing_id=listing_id)
         listing = self._require_listing(listing_id)
-        return self.to_listing_view(listing, reference_at=self._coerce_utc(reference_at or utcnow()))
+        return self.to_listing_view(listing, reference_at=effective_at)
 
     def get_current_player_club(self, player_id: str, *, on_date: date | None = None) -> ClubProfile:
         club_id = self._current_player_club_id(player_id, on_date=on_date or utcnow().date())
         if club_id is None:
             raise TransferMarketValidationError("Player is not currently assigned to a club.")
         return self._require_club(club_id)
+
+    def list_market_players(
+        self,
+        *,
+        q: str | None = None,
+        position: str | None = None,
+        nationality: str | None = None,
+        availability: str | None = None,
+        value_bracket: str | None = None,
+        min_age: int | None = None,
+        max_age: int | None = None,
+        page: int = 1,
+        page_size: int = MARKET_DEFAULT_PAGE_SIZE,
+        status: str | None = None,
+        reference_at: datetime | None = None,
+    ) -> MarketPlayerPageDTO:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        self._finalize_expired_open_listings(effective_at)
+        self._process_expired_contract_offer_negotiations(effective_at)
+        players = self._market_player_dtos(status=status, reference_at=effective_at)
+        filtered = [
+            player
+            for player in players
+            if self._market_player_matches(
+                player,
+                q=q,
+                position=position,
+                nationality=nationality,
+                availability=availability,
+                value_bracket=value_bracket,
+                min_age=min_age,
+                max_age=max_age,
+            )
+        ]
+        safe_page = max(1, int(page))
+        safe_page_size = min(MARKET_MAX_PAGE_SIZE, max(1, int(page_size)))
+        start = (safe_page - 1) * safe_page_size
+        end = start + safe_page_size
+        return MarketPlayerPageDTO(
+            items=filtered[start:end],
+            total=len(filtered),
+            page=safe_page,
+            page_size=safe_page_size,
+            has_next=end < len(filtered),
+        )
+
+    def get_market_player_detail(
+        self,
+        player_id: str,
+        *,
+        reference_at: datetime | None = None,
+    ) -> MarketPlayerDTO:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        self._finalize_expired_open_listings(effective_at, listing_id=None)
+        self._process_expired_contract_offer_negotiations(effective_at, listing_id=None)
+        listing = self.session.scalar(
+            select(TransferListing)
+            .where(TransferListing.player_id == player_id, TransferListing.status == "open")
+            .order_by(TransferListing.created_at.desc())
+        )
+        if listing is None:
+            listing = self.session.scalar(
+                select(TransferListing)
+                .where(TransferListing.player_id == player_id)
+                .order_by(TransferListing.created_at.desc())
+            )
+        if listing is not None:
+            return self._market_player_from_listing_view(self.to_listing_view(listing, reference_at=effective_at))
+        return self._market_player_from_player(self._require_player(player_id), listing_view=None)
+
+    def get_market_filter_meta(self, *, reference_at: datetime | None = None) -> MarketFilterMetaDTO:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        players = self._market_player_dtos(status=None, reference_at=effective_at)
+        ages = [player.age for player in players if player.age is not None]
+        return MarketFilterMetaDTO(
+            positions=sorted(
+                {
+                    str(player.position).strip().lower()
+                    for player in players
+                    if player.position is not None and str(player.position).strip()
+                }
+            ),
+            nationalities=sorted(
+                {
+                    str(player.nationality).strip()
+                    for player in players
+                    if player.nationality is not None and str(player.nationality).strip()
+                }
+            ),
+            age_range={"min": min(ages) if ages else None, "max": max(ages) if ages else None},
+            value_brackets=[
+                MarketValueBracketDTO(label=label, min_value=min_value, max_value=max_value)
+                for label, min_value, max_value in MARKET_VALUE_BRACKETS
+            ],
+            availability_types=list(SQUAD_AVAILABILITY_STATUSES),
+            bid_statuses=list(MARKET_BID_STATUSES),
+            default_page_size=MARKET_DEFAULT_PAGE_SIZE,
+            max_page_size=MARKET_MAX_PAGE_SIZE,
+        )
+
+    def list_market_bids(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+        status_filter: str | None = None,
+        reference_at: datetime | None = None,
+    ) -> list[MarketBidDTO]:
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        rows = self.session.scalars(
+            select(TransferListingBid)
+            .where(TransferListingBid.bidder_club_id == resolved_club_id)
+            .order_by(TransferListingBid.timestamp.desc())
+        ).all()
+        bids = [self._market_bid_from_listing_bid(row, reference_at=effective_at) for row in rows]
+        if status_filter:
+            bids = [bid for bid in bids if bid.status == status_filter]
+        return bids
+
+    def get_market_bid(
+        self,
+        bid_id: str,
+        *,
+        actor: User | None = None,
+        reference_at: datetime | None = None,
+    ) -> MarketBidDTO:
+        bid = self.session.get(TransferListingBid, bid_id)
+        if bid is None:
+            raise TransferMarketNotFoundError(f"Market bid {bid_id} was not found.")
+        listing = self._require_listing(bid.listing_id)
+        if actor is not None:
+            self._require_actor_any_club_access(
+                actor,
+                [bid.bidder_club_id, listing.selling_club_id],
+                allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+                forbidden_detail="transfer_market_bid_access_required",
+            )
+        return self._market_bid_from_listing_bid(bid, listing=listing, reference_at=reference_at)
+
+    def list_market_basket(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+        reference_at: datetime | None = None,
+    ) -> MarketBasketDTO:
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_WATCHLIST_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        return self._market_basket_for_club(resolved_club_id, reference_at=reference_at)
+
+    def add_market_basket_item(
+        self,
+        *,
+        actor: User,
+        player_id: str,
+        club_id: str | None = None,
+        reference_at: datetime | None = None,
+    ) -> MarketBasketDTO:
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_WATCHLIST_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        self.add_watchlist_entry(
+            WatchlistEntryCreateRequest(
+                club_id=resolved_club_id,
+                player_id=player_id,
+                source="basket",
+                discovery_score=50,
+                metadata_json={"basket_added_at": self._coerce_utc(reference_at or utcnow()).isoformat()},
+            ),
+            actor=actor,
+            club_id=resolved_club_id,
+        )
+        return self._market_basket_for_club(resolved_club_id, reference_at=reference_at)
+
+    def remove_market_basket_item(
+        self,
+        *,
+        actor: User,
+        player_id: str,
+        club_id: str | None = None,
+        reference_at: datetime | None = None,
+    ) -> MarketBasketDTO:
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_WATCHLIST_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        entry = self.session.scalar(
+            select(MarketWatchlistEntry).where(
+                MarketWatchlistEntry.club_id == resolved_club_id,
+                MarketWatchlistEntry.player_id == player_id,
+                MarketWatchlistEntry.source == "basket",
+            )
+        )
+        if entry is not None:
+            self.session.delete(entry)
+            self.session.commit()
+        return self._market_basket_for_club(resolved_club_id, reference_at=reference_at)
+
+    def get_market_checkout_readiness(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+        reference_at: datetime | None = None,
+    ) -> MarketCheckoutReadinessDTO:
+        basket = self.list_market_basket(actor=actor, club_id=club_id, reference_at=reference_at)
+        blocked_reasons = list(
+            dict.fromkeys(
+                item.blocked_reason or "checkout_not_ready"
+                for item in basket.items
+                if not item.checkout_eligible
+            )
+        )
+        if not basket.items:
+            blocked_reasons.append("basket_empty")
+        return MarketCheckoutReadinessDTO(
+            ready=bool(basket.items) and not blocked_reasons,
+            blocked_reasons=blocked_reasons,
+            items=basket.items,
+        )
+
+    def submit_market_checkout(
+        self,
+        *,
+        actor: User,
+        club_id: str | None = None,
+        idempotency_key: str | None = None,
+        notes: str | None = None,
+        reference_at: datetime | None = None,
+    ) -> MarketCheckoutSubmissionDTO:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        resolved_club_id = self._resolve_actor_club_id(
+            actor,
+            club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_club_access_required",
+        )
+        readiness = self.get_market_checkout_readiness(
+            actor=actor,
+            club_id=resolved_club_id,
+            reference_at=effective_at,
+        )
+        audit_ref = idempotency_key or f"market-checkout:{resolved_club_id}:{int(effective_at.timestamp())}"
+        entries = list(
+            self.session.scalars(
+                select(MarketWatchlistEntry).where(
+                    MarketWatchlistEntry.club_id == resolved_club_id,
+                    MarketWatchlistEntry.source == "basket",
+                )
+            ).all()
+        )
+        for entry in entries:
+            metadata = dict(entry.metadata_json or {})
+            attempts = list(metadata.get("checkout_attempts") or [])
+            attempts.append(
+                {
+                    "audit_ref": audit_ref,
+                    "ready": readiness.ready,
+                    "blocked_reasons": readiness.blocked_reasons,
+                    "submitted_at": effective_at.isoformat(),
+                    "notes": notes or "",
+                }
+            )
+            metadata["checkout_attempts"] = attempts
+            entry.metadata_json = metadata
+        self.session.commit()
+        return MarketCheckoutSubmissionDTO(
+            ready=readiness.ready,
+            audit_ref=audit_ref,
+            blocked_reasons=readiness.blocked_reasons,
+            items=readiness.items,
+        )
+
+    def withdraw_market_bid(
+        self,
+        bid_id: str,
+        *,
+        actor: User,
+        reason: str | None = None,
+        reference_at: datetime | None = None,
+    ) -> MarketBidDTO:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        bid = self.session.get(TransferListingBid, bid_id)
+        if bid is None:
+            raise TransferMarketNotFoundError(f"Market bid {bid_id} was not found.")
+        listing = self._require_listing(bid.listing_id, for_update=True)
+        self._resolve_actor_club_id(
+            actor,
+            bid.bidder_club_id,
+            allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+            forbidden_detail="transfer_market_bid_withdraw_forbidden",
+        )
+        status = self._market_bid_status_for_listing_bid(
+            bid,
+            listing=listing,
+            reservation=self._listing_bid_wallet_reservation_for_view(bid),
+        )
+        if status in {"accepted", "rejected", "withdrawn"}:
+            raise TransferMarketValidationError("Only pending or counter transfer-market bids can be withdrawn.")
+        self._release_listing_bid_reservation(
+            bid,
+            listing=listing,
+            released_at=effective_at,
+            reason="withdrawn",
+        )
+        metadata = dict(bid.metadata_json or {})
+        metadata["market_bid_status"] = "withdrawn"
+        metadata["withdrawn_at"] = effective_at.isoformat()
+        metadata["withdrawn_reason"] = reason or ""
+        bid.metadata_json = metadata
+        remaining_bids = [
+            item
+            for item in self._listing_bids(listing.id)
+            if item.id != bid.id and dict(item.metadata_json or {}).get("market_bid_status") != "withdrawn"
+        ]
+        winner = remaining_bids[0] if remaining_bids else None
+        listing.highest_bidder_id = winner.bidder_club_id if winner is not None else None
+        listing.current_highest_bid = winner.amount if winner is not None else listing.base_price
+        listing.updated_at = effective_at
+        self._append_drama_event(
+            listing,
+            event_type="market_bid_withdrawn",
+            headline="Bid withdrawn",
+            effective_at=effective_at,
+            metadata={"bid_id": bid.id, "club_id": bid.bidder_club_id, "reason": reason or ""},
+        )
+        self.session.commit()
+        self.session.refresh(bid)
+        return self._market_bid_from_listing_bid(bid, listing=listing, reference_at=effective_at)
+
+    def list_market_activity(
+        self,
+        *,
+        limit: int = 50,
+        reference_at: datetime | None = None,
+    ) -> list[TransferActivityDTO]:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        activities: list[TransferActivityDTO] = []
+        for listing in self.session.scalars(
+            select(TransferListing).order_by(TransferListing.created_at.desc())
+        ).all():
+            view = self.to_listing_view(listing, reference_at=effective_at)
+            player = self._market_player_from_listing_view(view)
+            seller = self._club_ref(listing.selling_club_id)
+            for bid in self._listing_bids(listing.id):
+                dto = self._market_bid_from_listing_bid(bid, listing=listing, reference_at=effective_at)
+                activities.append(
+                    TransferActivityDTO(
+                        id=f"market-bid:{bid.id}",
+                        type="market.bid.placed",
+                        from_club=dto.from_club,
+                        to_club=seller,
+                        player=player,
+                        amount=bid.amount,
+                        timestamp=self._coerce_utc(bid.timestamp),
+                        status=dto.status,
+                        bid_id=bid.id,
+                        listing_id=listing.id,
+                    )
+                )
+            for index, event in enumerate(list((listing.metadata_json or {}).get("drama_events") or [])):
+                occurred_at = self._parse_event_timestamp(event.get("occurred_at"), fallback=listing.updated_at)
+                activities.append(
+                    TransferActivityDTO(
+                        id=f"market-event:{listing.id}:{index}",
+                        type=str(event.get("type") or "market.activity"),
+                        from_club=self._club_ref(str(event.get("from_club_id") or "")) if event.get("from_club_id") else None,
+                        to_club=self._club_ref(str(event.get("to_club_id") or listing.selling_club_id)),
+                        player=player,
+                        amount=self._optional_decimal(event.get("amount")),
+                        timestamp=occurred_at,
+                        status=str(event.get("status") or listing.status),
+                        bid_id=str(event.get("winning_bid_id") or event.get("bid_id") or "") or None,
+                        listing_id=listing.id,
+                    )
+                )
+        activities.sort(key=lambda item: item.timestamp, reverse=True)
+        return activities[: max(1, min(MARKET_MAX_PAGE_SIZE, int(limit)))]
+
+    def list_market_history(
+        self,
+        *,
+        limit: int = 50,
+        reference_at: datetime | None = None,
+    ) -> list[TransferActivityDTO]:
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        activities: list[TransferActivityDTO] = []
+        for negotiation in self.session.scalars(
+            select(TransferNegotiation)
+            .where(TransferNegotiation.status == "completed")
+            .order_by(TransferNegotiation.resolved_at.desc().nullslast(), TransferNegotiation.updated_at.desc())
+        ).all():
+            listing = self.session.get(TransferListing, negotiation.listing_id)
+            if listing is None:
+                continue
+            view = self.to_listing_view(listing, reference_at=effective_at)
+            activities.append(
+                TransferActivityDTO(
+                    id=f"transfer-history:{negotiation.id}",
+                    type="market.transfer.completed",
+                    from_club=self._club_ref(negotiation.bidder_club_id),
+                    to_club=self._club_ref(negotiation.selling_club_id),
+                    player=self._market_player_from_listing_view(view),
+                    amount=listing.current_highest_bid,
+                    timestamp=self._coerce_utc(negotiation.resolved_at or listing.closed_at or listing.updated_at),
+                    status="accepted",
+                    bid_id=negotiation.winning_bid_id,
+                    listing_id=listing.id,
+                )
+            )
+        return activities[: max(1, min(MARKET_MAX_PAGE_SIZE, int(limit)))]
 
     def create_listing(
         self,
@@ -397,7 +858,7 @@ class TransferMarketService:
             allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
             forbidden_detail="transfer_market_club_access_required",
         )
-        listing = self._require_listing(listing_id)
+        listing = self._require_listing(listing_id, for_update=True)
         if listing.status != "open":
             raise TransferMarketValidationError("Bids can only be placed on open transfer listings.")
         if effective_at >= self._coerce_utc(listing.expires_at):
@@ -410,8 +871,18 @@ class TransferMarketService:
         if amount <= current_highest:
             raise TransferMarketValidationError("Bid must exceed the current highest bid.")
 
+        previous_winning_bid = self._winning_bid_for_listing(listing.id)
         previous_bidder_id = listing.highest_bidder_id
         previous_amount = listing.current_highest_bid
+        replacement_released = False
+        if previous_winning_bid is not None and previous_winning_bid.bidder_club_id == resolved_bidder_club_id:
+            self._release_listing_bid_reservation(
+                previous_winning_bid,
+                listing=listing,
+                released_at=effective_at,
+                reason="bid_replaced",
+            )
+            replacement_released = True
         bid = TransferListingBid(
             listing_id=listing.id,
             bidder_club_id=resolved_bidder_club_id,
@@ -420,10 +891,20 @@ class TransferMarketService:
             metadata_json={"activity_context": activity_context or ""},
         )
         self.session.add(bid)
+        self.session.flush()
+        self._reserve_listing_bid_funds(bid, listing=listing, reserved_at=effective_at)
         listing.current_highest_bid = amount
         listing.highest_bidder_id = resolved_bidder_club_id
         listing.bid_count += 1
         listing.last_bid_at = effective_at
+        if previous_winning_bid is not None and not replacement_released:
+            self._release_listing_bid_reservation(
+                previous_winning_bid,
+                listing=listing,
+                released_at=effective_at,
+                reason="outbid",
+                replacement_bid_id=bid.id,
+            )
         time_remaining = max(0, int((self._coerce_utc(listing.expires_at) - effective_at).total_seconds()))
         extended = False
         if time_remaining <= ANTI_SNIPING_WINDOW_SECONDS:
@@ -532,7 +1013,7 @@ class TransferMarketService:
         actor: User,
         reference_at: datetime | None = None,
     ) -> TransferListingView:
-        listing = self._require_listing(listing_id)
+        listing = self._require_listing(listing_id, for_update=True)
         self._require_actor_club_access(
             actor,
             listing.selling_club_id,
@@ -543,14 +1024,18 @@ class TransferMarketService:
 
     def _finalize_listing(self, listing_id: str, *, reference_at: datetime | None = None) -> TransferListingView:
         effective_at = self._coerce_utc(reference_at or utcnow())
-        listing = self._require_listing(listing_id)
+        listing = self._require_listing(listing_id, for_update=True)
         if listing.status in {"closed", "sold"}:
             return self.to_listing_view(listing, reference_at=effective_at)
 
         listing.status = "closed"
         listing.closed_at = effective_at
         winning_bid = self._winning_bid_for_listing(listing.id)
-        if winning_bid is not None:
+        reserve_price_met = (
+            winning_bid is not None
+            and (listing.reserve_price is None or winning_bid.amount >= listing.reserve_price)
+        )
+        if winning_bid is not None and reserve_price_met:
             self._ensure_negotiation(listing, winning_bid, effective_at)
             self._append_drama_event(
                 listing,
@@ -561,6 +1046,24 @@ class TransferMarketService:
                     "winning_bid_id": winning_bid.id,
                     "bidder_club_id": winning_bid.bidder_club_id,
                     "amount": str(winning_bid.amount),
+                },
+            )
+        elif winning_bid is not None:
+            self._release_all_listing_bid_reservations(
+                listing,
+                released_at=effective_at,
+                reason="reserve_not_met",
+            )
+            self._append_drama_event(
+                listing,
+                event_type="reserve_not_met",
+                headline="Reserve not met",
+                effective_at=effective_at,
+                metadata={
+                    "winning_bid_id": winning_bid.id,
+                    "bidder_club_id": winning_bid.bidder_club_id,
+                    "amount": str(winning_bid.amount),
+                    "reserve_price": str(listing.reserve_price),
                 },
             )
         else:
@@ -586,6 +1089,73 @@ class TransferMarketService:
             },
         )
         return snapshot
+
+    def _finalize_expired_open_listings(
+        self,
+        effective_at: datetime,
+        *,
+        listing_id: str | None = None,
+    ) -> None:
+        statement = select(TransferListing.id).where(
+            TransferListing.status == "open",
+            TransferListing.expires_at <= effective_at,
+        )
+        if listing_id is not None:
+            statement = statement.where(TransferListing.id == listing_id)
+        for expired_listing_id in self.session.scalars(statement).all():
+            self._finalize_listing(expired_listing_id, reference_at=effective_at)
+
+    def _process_expired_contract_offer_negotiations(
+        self,
+        effective_at: datetime,
+        *,
+        listing_id: str | None = None,
+    ) -> int:
+        statement = select(TransferNegotiation).where(
+            TransferNegotiation.status == "awaiting_contract_offer",
+            TransferNegotiation.decision_due_at.is_not(None),
+            TransferNegotiation.decision_due_at <= effective_at,
+        )
+        if listing_id is not None:
+            statement = statement.where(TransferNegotiation.listing_id == listing_id)
+        try:
+            statement = statement.with_for_update(skip_locked=True)
+        except (AttributeError, TypeError):
+            try:
+                statement = statement.with_for_update()
+            except AttributeError:
+                pass
+        processed = 0
+        for negotiation in self.session.scalars(statement).all():
+            listing = self._require_listing(negotiation.listing_id, for_update=True)
+            if negotiation.status != "awaiting_contract_offer":
+                continue
+            negotiation.status = "collapsed"
+            negotiation.resolved_at = effective_at
+            negotiation.decision_due_at = None
+            self._release_winning_listing_bid_reservation(
+                listing,
+                released_at=effective_at,
+                reason="contract_offer_expired",
+            )
+            self._append_drama_event(
+                listing,
+                event_type="deal_collapsed",
+                headline="Deal collapsed",
+                effective_at=effective_at,
+                metadata={"reason": "contract_offer_expired"},
+            )
+            processed += 1
+            self.session.commit()
+            self.session.refresh(negotiation)
+            self.session.refresh(listing)
+            self._sync_listing_snapshot(self.to_listing_view(listing, reference_at=effective_at))
+            self._push_listing_event(
+                listing.id,
+                "contract_offer_timer_processed",
+                {"listing_id": listing.id, "status": negotiation.status},
+            )
+        return processed
 
     def get_negotiation(self, listing_id: str, *, actor: User) -> TransferNegotiationView:
         negotiation = self._require_negotiation_by_listing(listing_id)
@@ -685,6 +1255,7 @@ class TransferMarketService:
             negotiation.status = "coach_blocked"
             negotiation.resolved_at = effective_at
             negotiation.decision_due_at = None
+            self._release_winning_listing_bid_reservation(listing, released_at=effective_at, reason="coach_blocked")
             self._append_drama_event(
                 listing,
                 event_type="coach_disagreement",
@@ -705,6 +1276,7 @@ class TransferMarketService:
             negotiation.status = "rejected"
             negotiation.resolved_at = effective_at
             negotiation.decision_due_at = None
+            self._release_winning_listing_bid_reservation(listing, released_at=effective_at, reason="offer_rejected")
             self._append_drama_event(
                 listing,
                 event_type="deal_collapsed",
@@ -742,6 +1314,7 @@ class TransferMarketService:
                 negotiation.status = "collapsed"
                 negotiation.resolved_at = effective_at
                 negotiation.decision_due_at = None
+                self._release_winning_listing_bid_reservation(listing, released_at=effective_at, reason="collapsed")
                 updated_concerns = list(dict.fromkeys([*concerns, str(exc)]))
                 negotiation.concerns_json = updated_concerns
                 self._append_drama_event(
@@ -822,6 +1395,8 @@ class TransferMarketService:
             self._finalize_listing(listing.id, reference_at=effective_at)
             closed_auctions += 1
 
+        collapsed_negotiations += self._process_expired_contract_offer_negotiations(effective_at)
+
         delayed_negotiations = list(
             self.session.scalars(
                 select(TransferNegotiation).where(
@@ -845,6 +1420,7 @@ class TransferMarketService:
                 except (PlayerLifecycleError, TransferMarketError):
                     negotiation.status = "collapsed"
                     negotiation.resolved_at = effective_at
+                    self._release_winning_listing_bid_reservation(listing, released_at=effective_at, reason="collapsed")
                     collapsed_negotiations += 1
                 else:
                     negotiation.status = "completed"
@@ -856,6 +1432,7 @@ class TransferMarketService:
             else:
                 negotiation.status = "rejected"
                 negotiation.resolved_at = effective_at
+                self._release_winning_listing_bid_reservation(listing, released_at=effective_at, reason="offer_rejected")
                 self._apply_rejection_fallout(negotiation.player_id, severity=5.0)
                 rejected_negotiations += 1
             negotiation.decision_due_at = None
@@ -883,6 +1460,7 @@ class TransferMarketService:
             negotiation.status = "collapsed"
             negotiation.resolved_at = effective_at
             negotiation.decision_due_at = None
+            self._release_winning_listing_bid_reservation(listing, released_at=effective_at, reason="counter_expired")
             self._append_drama_event(
                 listing,
                 event_type="deal_collapsed",
@@ -907,6 +1485,77 @@ class TransferMarketService:
             rejected_negotiations=rejected_negotiations,
             collapsed_negotiations=collapsed_negotiations,
         )
+
+    def admin_release_listing_bid_reservation(
+        self,
+        listing_id: str,
+        bid_id: str,
+        *,
+        actor: User,
+        reason: str,
+        reference_at: datetime | None = None,
+    ) -> TransferListingView:
+        self._require_admin_actor(actor)
+        effective_at = self._coerce_utc(reference_at or utcnow())
+        listing = self._require_listing(listing_id, for_update=True)
+        statement = select(TransferListingBid).where(
+            TransferListingBid.id == bid_id,
+            TransferListingBid.listing_id == listing.id,
+        )
+        try:
+            statement = statement.with_for_update()
+        except AttributeError:
+            pass
+        bid = self.session.scalar(statement)
+        if bid is None:
+            raise TransferMarketNotFoundError(f"Transfer-market bid {bid_id} was not found.")
+        has_dispute = self._has_open_transfer_dispute(listing=listing, listing_bid=bid)
+        if listing.status not in {"closed", "sold"} and not has_dispute:
+            raise TransferMarketValidationError(
+                "Admin reservation release requires a terminal listing or an open dispute."
+            )
+        previous_reservation = self._listing_bid_wallet_reservation_for_view(bid)
+        if previous_reservation.get("status") != "reserved":
+            raise TransferMarketValidationError(
+                "Only actively reserved transfer-market listing bids can be force released."
+            )
+        release_reason = "admin_release"
+        self._release_listing_bid_reservation(
+            bid,
+            listing=listing,
+            released_at=effective_at,
+            reason=release_reason,
+        )
+        new_reservation = self._listing_bid_wallet_reservation_for_view(bid)
+        self._append_drama_event(
+            listing,
+            event_type="admin_reservation_release",
+            headline="Admin released a stuck bid reservation",
+            effective_at=effective_at,
+            metadata={
+                "actor": actor.id,
+                "action_type": "transfer_market_reservation_force_release",
+                "bid_id": bid.id,
+                "previous_state": previous_reservation,
+                "new_state": new_reservation,
+                "reason": reason.strip(),
+            },
+        )
+        self.session.commit()
+        self.session.refresh(listing)
+        snapshot = self.to_listing_view(listing, reference_at=effective_at)
+        self._sync_listing_snapshot(snapshot)
+        self._push_listing_event(
+            listing.id,
+            "admin_reservation_release",
+            {
+                "listing_id": listing.id,
+                "bid_id": bid.id,
+                "status": listing.status,
+                "reason": reason.strip(),
+            },
+        )
+        return snapshot
 
     def upsert_player_decision_profile(
         self,
@@ -1033,19 +1682,28 @@ class TransferMarketService:
             [listing.selling_club_id, listing.highest_bidder_id, player.current_club_profile_id]
             + [bid.bidder_club_id for bid in self._listing_bids(listing.id)]
         )
-        bids = [
-            TransferBidderView(
-                bid_id=item.id,
-                club_id=item.bidder_club_id,
-                club_name=(
-                    clubs.get(item.bidder_club_id).club_name if clubs.get(item.bidder_club_id) is not None else None
-                ),
-                amount=item.amount,
-                timestamp=self._coerce_utc(item.timestamp),
-                is_highest=item.id == self._winning_bid_id(listing.id),
+        bids: list[TransferBidderView] = []
+        for item in self._listing_bids(listing.id):
+            reservation_view = self._listing_bid_wallet_reservation_for_view(item)
+            bids.append(
+                TransferBidderView(
+                    bid_id=item.id,
+                    club_id=item.bidder_club_id,
+                    club_name=(
+                        clubs.get(item.bidder_club_id).club_name
+                        if clubs.get(item.bidder_club_id) is not None
+                        else None
+                    ),
+                    amount=item.amount,
+                    timestamp=self._coerce_utc(item.timestamp),
+                    is_highest=item.id == self._winning_bid_id(listing.id),
+                    wallet_reservation_status=reservation_view.get("status"),
+                    wallet_reserved_amount=self._listing_bid_reserved_amount_for_view(reservation_view),
+                    wallet_reservation_reference=str(
+                        reservation_view.get("reference") or self._listing_bid_reservation_reference(item)
+                    ),
+                )
             )
-            for item in self._listing_bids(listing.id)
-        ]
         current_bid = next((item for item in bids if item.is_highest), None)
         negotiation = self.session.scalar(
             select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id)
@@ -1110,6 +1768,275 @@ class TransferMarketService:
             lifecycle_transfer_bid_id=negotiation.lifecycle_transfer_bid_id,
             player_contract_id=negotiation.player_contract_id,
         )
+
+    def _market_player_dtos(
+        self,
+        *,
+        status: str | None,
+        reference_at: datetime,
+    ) -> list[MarketPlayerDTO]:
+        statement = select(TransferListing).order_by(TransferListing.created_at.desc())
+        if status and status != "all":
+            statement = statement.where(TransferListing.status == status)
+        elif status is None:
+            statement = statement.where(TransferListing.status == "open")
+        return [
+            self._market_player_from_listing_view(self.to_listing_view(listing, reference_at=reference_at))
+            for listing in self.session.scalars(statement).all()
+        ]
+
+    def _market_player_matches(
+        self,
+        player: MarketPlayerDTO,
+        *,
+        q: str | None,
+        position: str | None,
+        nationality: str | None,
+        availability: str | None,
+        value_bracket: str | None,
+        min_age: int | None,
+        max_age: int | None,
+    ) -> bool:
+        query = (q or "").strip().lower()
+        if query and query not in player.name.lower():
+            return False
+        if position and (player.position or "").strip().lower() != position.strip().lower():
+            return False
+        if nationality and (player.nationality or "").strip().lower() != nationality.strip().lower():
+            return False
+        if availability and player.availability != availability:
+            return False
+        if min_age is not None and (player.age is None or player.age < min_age):
+            return False
+        if max_age is not None and (player.age is None or player.age > max_age):
+            return False
+        if value_bracket:
+            bracket = next((item for item in MARKET_VALUE_BRACKETS if item[0] == value_bracket), None)
+            if bracket is None:
+                return False
+            _, min_value, max_value = bracket
+            value = player.value
+            if value is None:
+                return False
+            if min_value is not None and value < min_value:
+                return False
+            if max_value is not None and value >= max_value:
+                return False
+        return True
+
+    def _market_player_from_listing_view(self, listing_view: TransferListingView) -> MarketPlayerDTO:
+        player = self._require_player(listing_view.player_id)
+        return self._market_player_from_player(player, listing_view=listing_view)
+
+    def _market_player_from_player(
+        self,
+        player: Player,
+        *,
+        listing_view: TransferListingView | None,
+    ) -> MarketPlayerDTO:
+        current_club_id = player.current_club_profile_id or (listing_view.selling_club_id if listing_view else None)
+        listing_is_open = listing_view is not None and listing_view.status == "open"
+        value = self._player_market_value(player, listing_view=listing_view)
+        return MarketPlayerDTO(
+            id=player.id,
+            name=player.full_name,
+            age=self._player_age(player),
+            position=player.normalized_position or player.position,
+            club=self._club_ref(current_club_id) if current_club_id else None,
+            nationality=player.country.name if player.country is not None else None,
+            value=value,
+            availability="available",
+            contract_end=self._player_contract_end(player.id),
+            stats=self._market_player_stats(player),
+            listing_id=listing_view.id if listing_view is not None else None,
+            listing_status=listing_view.status if listing_view is not None else None,
+            base_price=listing_view.base_price if listing_view is not None else None,
+            current_highest_bid=listing_view.current_highest_bid if listing_view is not None else None,
+            bid_count=listing_view.bid_count if listing_view is not None else 0,
+            checkout_eligible=listing_is_open,
+            blocked_reason=None if listing_is_open else "player_not_open_for_checkout",
+        )
+
+    def _market_bid_from_listing_bid(
+        self,
+        bid: TransferListingBid,
+        *,
+        listing: TransferListing | None = None,
+        reference_at: datetime | None = None,
+    ) -> MarketBidDTO:
+        del reference_at
+        listing = listing or self._require_listing(bid.listing_id)
+        reservation = self._listing_bid_wallet_reservation_for_view(bid)
+        return MarketBidDTO(
+            id=bid.id,
+            player_id=listing.player_id,
+            listing_id=listing.id,
+            from_club=self._club_ref(bid.bidder_club_id),
+            to_club=self._club_ref(listing.selling_club_id),
+            amount=bid.amount,
+            status=self._market_bid_status_for_listing_bid(bid, listing=listing, reservation=reservation),
+            created_at=self._coerce_utc(bid.timestamp),
+            expires_at=self._coerce_utc(listing.expires_at),
+            events=self._market_bid_events(bid, listing=listing),
+            wallet_reservation_status=reservation.get("status"),
+            wallet_reserved_amount=self._listing_bid_reserved_amount_for_view(reservation),
+            wallet_reservation_reference=str(reservation.get("reference") or self._listing_bid_reservation_reference(bid)),
+        )
+
+    def _market_bid_status_for_listing_bid(
+        self,
+        bid: TransferListingBid,
+        *,
+        listing: TransferListing,
+        reservation: dict[str, Any],
+    ) -> str:
+        metadata = dict(bid.metadata_json or {})
+        explicit_status = str(metadata.get("market_bid_status") or "").strip()
+        if explicit_status in MARKET_BID_STATUSES:
+            return explicit_status
+        release_reason = str(reservation.get("release_reason") or "").strip()
+        if release_reason == "withdrawn":
+            return "withdrawn"
+        if reservation.get("status") == "settled":
+            return "accepted"
+        negotiation = self.session.scalar(select(TransferNegotiation).where(TransferNegotiation.listing_id == listing.id))
+        if negotiation is not None and negotiation.winning_bid_id == bid.id:
+            if negotiation.status == "counter_offer":
+                return "counter"
+            if negotiation.status == "completed":
+                return "accepted"
+            if negotiation.status in {"coach_blocked", "rejected", "collapsed"}:
+                return "rejected"
+            return "pending"
+        if listing.status == "open" and bid.id == self._winning_bid_id(listing.id):
+            return "pending"
+        if listing.status == "sold" and bid.id == self._winning_bid_id(listing.id):
+            return "accepted"
+        return "rejected"
+
+    def _market_bid_events(self, bid: TransferListingBid, *, listing: TransferListing) -> list[MarketBidEventDTO]:
+        events = [
+            MarketBidEventDTO(
+                id=f"market-bid:{bid.id}:placed",
+                type="market.bid.placed",
+                timestamp=self._coerce_utc(bid.timestamp),
+                message="Bid placed",
+                metadata={"listing_id": listing.id, "amount": str(bid.amount)},
+            )
+        ]
+        for index, event in enumerate(list((listing.metadata_json or {}).get("drama_events") or [])):
+            event_bid_id = str(event.get("winning_bid_id") or event.get("bid_id") or "")
+            if event_bid_id and event_bid_id != bid.id:
+                continue
+            events.append(
+                MarketBidEventDTO(
+                    id=f"market-bid:{bid.id}:event:{index}",
+                    type=str(event.get("type") or "market.bid.event"),
+                    timestamp=self._parse_event_timestamp(event.get("occurred_at"), fallback=listing.updated_at),
+                    message=str(event.get("headline") or "") or None,
+                    metadata={key: value for key, value in event.items() if key not in {"type", "headline", "occurred_at"}},
+                )
+            )
+        events.sort(key=lambda item: item.timestamp)
+        return events
+
+    def _market_basket_for_club(
+        self,
+        club_id: str,
+        *,
+        reference_at: datetime | None = None,
+    ) -> MarketBasketDTO:
+        entries = list(
+            self.session.scalars(
+                select(MarketWatchlistEntry)
+                .where(MarketWatchlistEntry.club_id == club_id, MarketWatchlistEntry.source == "basket")
+                .order_by(MarketWatchlistEntry.created_at.desc())
+            ).all()
+        )
+        items = [self._market_basket_item(entry, reference_at=reference_at) for entry in entries]
+        return MarketBasketDTO(items=items, count=len(items))
+
+    def _market_basket_item(
+        self,
+        entry: MarketWatchlistEntry,
+        *,
+        reference_at: datetime | None = None,
+    ) -> MarketBasketItemDTO:
+        try:
+            player = self.get_market_player_detail(entry.player_id, reference_at=reference_at)
+        except TransferMarketError:
+            player = None
+        metadata = dict(entry.metadata_json or {})
+        return MarketBasketItemDTO(
+            player_id=entry.player_id,
+            added_at=self._parse_event_timestamp(metadata.get("basket_added_at"), fallback=entry.created_at),
+            checkout_eligible=bool(player and player.checkout_eligible),
+            blocked_reason=None if player and player.checkout_eligible else "player_not_open_for_checkout",
+            listing_id=player.listing_id if player is not None else None,
+            player=player,
+        )
+
+    def _club_ref(self, club_id: str | None) -> MarketClubRefDTO | None:
+        if not club_id:
+            return None
+        club = self.session.get(ClubProfile, club_id)
+        if club is None:
+            return MarketClubRefDTO(id=club_id, name=None)
+        return MarketClubRefDTO(id=club.id, name=club.club_name)
+
+    def _player_age(self, player: Player, *, on_date: date | None = None) -> int | None:
+        if player.date_of_birth is None:
+            return None
+        today = on_date or utcnow().date()
+        years = today.year - player.date_of_birth.year
+        if (today.month, today.day) < (player.date_of_birth.month, player.date_of_birth.day):
+            years -= 1
+        return max(0, years)
+
+    def _player_market_value(
+        self,
+        player: Player,
+        *,
+        listing_view: TransferListingView | None,
+    ) -> Decimal | None:
+        if player.current_market_reference_value is not None:
+            return Decimal(str(player.current_market_reference_value))
+        if player.market_value_eur is not None:
+            return Decimal(str(player.market_value_eur))
+        if listing_view is not None:
+            return listing_view.suggested_price
+        return None
+
+    def _player_contract_end(self, player_id: str) -> date | None:
+        contract = self.session.scalar(
+            select(PlayerContract)
+            .where(PlayerContract.player_id == player_id, PlayerContract.status.in_(("active", "expiring")))
+            .order_by(PlayerContract.ends_on.desc())
+        )
+        return contract.ends_on if contract is not None else None
+
+    @staticmethod
+    def _market_player_stats(player: Player) -> dict[str, Any]:
+        stats: dict[str, Any] = {"morale": player.morale}
+        if player.profile_completeness_score is not None:
+            stats["profile_completeness_score"] = player.profile_completeness_score
+        return stats
+
+    def _parse_event_timestamp(self, raw_value: Any, *, fallback: datetime) -> datetime:
+        if isinstance(raw_value, datetime):
+            return self._coerce_utc(raw_value)
+        if isinstance(raw_value, str) and raw_value.strip():
+            try:
+                return self._coerce_utc(datetime.fromisoformat(raw_value.replace("Z", "+00:00")))
+            except ValueError:
+                return self._coerce_utc(fallback)
+        return self._coerce_utc(fallback)
+
+    @staticmethod
+    def _optional_decimal(raw_value: Any) -> Decimal | None:
+        if raw_value is None or raw_value == "":
+            return None
+        return Decimal(str(raw_value))
 
     def _evaluate_player_decision(
         self,
@@ -1362,6 +2289,12 @@ class TransferMarketService:
     ) -> tuple[Any, str | None]:
         lifecycle_service = PlayerLifecycleService(self.session)
         window_id, outside_window = self._resolve_window_id(listing=listing, reference_at=reference_at.date())
+        winning_bid = self._winning_bid_for_listing(listing.id)
+        self._assert_no_open_transfer_disputes(
+            listing=listing,
+            listing_bid=winning_bid,
+            negotiation=negotiation,
+        )
         bid = lifecycle_service.create_bid(
             window_id,
             TransferBidCreateRequest(
@@ -1377,7 +2310,15 @@ class TransferMarketService:
                 exemption_reason="transfer_market_auction" if outside_window else None,
             ),
             submitted_on=reference_at.date(),
+            reserve_wallet=False,
         )
+        if winning_bid is not None:
+            self._move_listing_bid_reservation_to_lifecycle_bid(
+                winning_bid,
+                lifecycle_bid=bid,
+                listing=listing,
+                moved_at=reference_at,
+            )
         contract_ends_on = (payload.contract_starts_on or reference_at.date()) + timedelta(
             days=(365 * payload.contract_years) - 1
         )
@@ -1771,12 +2712,291 @@ class TransferMarketService:
         )
 
     def _winning_bid_for_listing(self, listing_id: str) -> TransferListingBid | None:
-        bids = self._listing_bids(listing_id)
-        return bids[0] if bids else None
+        for bid in self._listing_bids(listing_id):
+            if dict(bid.metadata_json or {}).get("market_bid_status") == "withdrawn":
+                continue
+            return bid
+        return None
 
     def _winning_bid_id(self, listing_id: str) -> str | None:
         bid = self._winning_bid_for_listing(listing_id)
         return bid.id if bid is not None else None
+
+    def _has_open_transfer_dispute(
+        self,
+        *,
+        listing: TransferListing | None = None,
+        listing_bid: TransferListingBid | None = None,
+        negotiation: TransferNegotiation | None = None,
+        lifecycle_transfer_bid_id: str | None = None,
+    ) -> bool:
+        filters = []
+        if listing is not None:
+            filters.append((Dispute.resource_type == "transfer_listing") & (Dispute.resource_id == listing.id))
+        if listing_bid is not None:
+            filters.append((Dispute.resource_type == "transfer_listing_bid") & (Dispute.resource_id == listing_bid.id))
+        if negotiation is not None:
+            filters.append((Dispute.resource_type == "transfer_negotiation") & (Dispute.resource_id == negotiation.id))
+        if lifecycle_transfer_bid_id:
+            filters.append((Dispute.resource_type == "transfer_bid") & (Dispute.resource_id == lifecycle_transfer_bid_id))
+        if not filters:
+            return False
+        return (
+            self.session.scalar(
+                select(Dispute.id)
+                .where(
+                    Dispute.status.in_(TRANSFER_MARKET_OPEN_DISPUTE_STATUSES),
+                    or_(*filters),
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    def _assert_no_open_transfer_disputes(
+        self,
+        *,
+        listing: TransferListing,
+        listing_bid: TransferListingBid | None,
+        negotiation: TransferNegotiation,
+    ) -> None:
+        if self._has_open_transfer_dispute(
+            listing=listing,
+            listing_bid=listing_bid,
+            negotiation=negotiation,
+            lifecycle_transfer_bid_id=negotiation.lifecycle_transfer_bid_id,
+        ):
+            raise TransferMarketValidationError(
+                "Transfer settlement is blocked by an open transfer-market dispute."
+            )
+
+    @staticmethod
+    def _listing_bid_reservation_reference(bid: TransferListingBid) -> str:
+        return f"transfer-market-bid:{bid.id}"
+
+    def _listing_bid_reservation_terms(self, bid: TransferListingBid) -> dict[str, Any]:
+        return dict((bid.metadata_json or {}).get("wallet_reservation") or {})
+
+    def _set_listing_bid_reservation(self, bid: TransferListingBid, updates: dict[str, Any]) -> None:
+        metadata = dict(bid.metadata_json or {})
+        reservation = dict(metadata.get("wallet_reservation") or {})
+        reservation.update(updates)
+        metadata["wallet_reservation"] = reservation
+        bid.metadata_json = metadata
+
+    def _listing_bid_reserved_amount_for_view(self, reservation: dict[str, Any]) -> Decimal | None:
+        raw_amount = reservation.get("actual_reserved_gtex_coin", reservation.get("amount_gtex_coin"))
+        if raw_amount is None:
+            return None
+        return Decimal(str(raw_amount))
+
+    def _listing_bid_wallet_reservation_for_view(self, bid: TransferListingBid) -> dict[str, Any]:
+        reservation = self._listing_bid_reservation_terms(bid)
+        reference = str(reservation.get("reference") or self._listing_bid_reservation_reference(bid))
+        target_amount = self._listing_bid_reserved_amount_for_view({"amount_gtex_coin": bid.amount}) or Decimal("0")
+        try:
+            target_amount = self._listing_bid_reserved_amount_for_view(
+                {"amount_gtex_coin": reservation.get("amount_gtex_coin", bid.amount)}
+            ) or target_amount
+            owner = self._club_owner(bid.bidder_club_id)
+            actual_reserved = WalletService().get_transfer_bid_reserved_amount(
+                self.session,
+                user=owner,
+                transfer_bid_id=bid.id,
+                unit=LedgerUnit.COIN,
+            )
+        except TransferMarketError:
+            return {
+                **reservation,
+                "reference": reference,
+                "amount_gtex_coin": str(target_amount),
+            }
+
+        metadata_status = str(reservation.get("status") or "").strip()
+        if metadata_status in {"released", "settled"} and actual_reserved <= Decimal("0.0000"):
+            status = metadata_status
+        elif actual_reserved >= target_amount and target_amount > Decimal("0.0000"):
+            status = metadata_status if metadata_status == "moved_to_lifecycle" else "reserved"
+        elif actual_reserved > Decimal("0.0000"):
+            status = "partially_reserved"
+        elif metadata_status:
+            status = metadata_status
+        elif target_amount > Decimal("0.0000"):
+            status = "missing"
+        else:
+            status = None
+        return {
+            **reservation,
+            "status": status,
+            "amount_gtex_coin": str(target_amount),
+            "actual_reserved_gtex_coin": str(actual_reserved),
+            "currency": LedgerUnit.COIN.value,
+            "reference": reference,
+        }
+
+    def _club_owner(self, club_id: str) -> User:
+        club = self._require_club(club_id)
+        user = self.session.get(User, club.owner_user_id)
+        if user is None:
+            raise TransferMarketValidationError("Club owner wallet was not found for transfer-market reservation.")
+        return user
+
+    def _reserve_listing_bid_funds(
+        self,
+        bid: TransferListingBid,
+        *,
+        listing: TransferListing,
+        reserved_at: datetime,
+    ) -> None:
+        owner = self._club_owner(bid.bidder_club_id)
+        reference = self._listing_bid_reservation_reference(bid)
+        try:
+            WalletService().reserve_transfer_bid_funds(
+                self.session,
+                user=owner,
+                transfer_bid_id=bid.id,
+                amount=bid.amount,
+                reference=reference,
+                description=f"Reserved GTex Coin for transfer-market bid {bid.id}",
+                unit=LedgerUnit.COIN,
+                player_id=listing.player_id,
+                buying_club_id=bid.bidder_club_id,
+                selling_club_id=listing.selling_club_id,
+                source_tag=LedgerSourceTag.MARKET_TOPUP,
+                metadata={
+                    "listing_id": listing.id,
+                    "reservation_scope": "transfer_market_listing_bid",
+                },
+            )
+        except InsufficientBalanceError as exc:
+            raise TransferMarketValidationError(
+                "Bidding club owner does not have enough GTex Coin to reserve this transfer-market bid."
+            ) from exc
+        self._set_listing_bid_reservation(
+            bid,
+            {
+                "status": "reserved",
+                "amount_gtex_coin": str(bid.amount),
+                "currency": LedgerUnit.COIN.value,
+                "reference": reference,
+                "reserved_at": self._coerce_utc(reserved_at).isoformat(),
+                "owner_user_id": owner.id,
+                "listing_id": listing.id,
+            },
+        )
+
+    def _release_listing_bid_reservation(
+        self,
+        bid: TransferListingBid,
+        *,
+        listing: TransferListing,
+        released_at: datetime,
+        reason: str,
+        replacement_bid_id: str | None = None,
+    ) -> None:
+        reservation = self._listing_bid_reservation_terms(bid)
+        if reservation.get("status") != "reserved":
+            return
+        owner = self._club_owner(bid.bidder_club_id)
+        reference = str(reservation.get("reference") or self._listing_bid_reservation_reference(bid))
+        WalletService().release_transfer_bid_reservation(
+            self.session,
+            user=owner,
+            transfer_bid_id=bid.id,
+            amount=bid.amount,
+            release_reason=reason,
+            reference=reference,
+            description=f"Released GTex Coin reservation for transfer-market bid {bid.id}",
+            unit=LedgerUnit.COIN,
+            player_id=listing.player_id,
+            buying_club_id=bid.bidder_club_id,
+            selling_club_id=listing.selling_club_id,
+            source_tag=LedgerSourceTag.MARKET_TOPUP,
+            metadata={
+                "listing_id": listing.id,
+                "reservation_scope": "transfer_market_listing_bid",
+                "replacement_bid_id": replacement_bid_id,
+            },
+        )
+        updates: dict[str, Any] = {
+            "status": "released",
+            "released_at": self._coerce_utc(released_at).isoformat(),
+            "release_reason": reason,
+        }
+        if replacement_bid_id is not None:
+            updates["replacement_bid_id"] = replacement_bid_id
+        self._set_listing_bid_reservation(bid, updates)
+
+    def _release_winning_listing_bid_reservation(
+        self,
+        listing: TransferListing,
+        *,
+        released_at: datetime,
+        reason: str,
+    ) -> None:
+        winning_bid = self._winning_bid_for_listing(listing.id)
+        if winning_bid is not None:
+            self._release_listing_bid_reservation(
+                winning_bid,
+                listing=listing,
+                released_at=released_at,
+                reason=reason,
+            )
+
+    def _release_all_listing_bid_reservations(
+        self,
+        listing: TransferListing,
+        *,
+        released_at: datetime,
+        reason: str,
+    ) -> None:
+        for bid in self._listing_bids(listing.id):
+            self._release_listing_bid_reservation(bid, listing=listing, released_at=released_at, reason=reason)
+
+    def _move_listing_bid_reservation_to_lifecycle_bid(
+        self,
+        bid: TransferListingBid,
+        *,
+        lifecycle_bid: Any,
+        listing: TransferListing,
+        moved_at: datetime,
+    ) -> None:
+        reservation = self._listing_bid_reservation_terms(bid)
+        if reservation.get("status") != "reserved":
+            raise TransferMarketValidationError("Winning transfer-market bid is missing a reserved wallet hold.")
+        owner = self._club_owner(bid.bidder_club_id)
+        actual_reserved = WalletService().get_transfer_bid_reserved_amount(
+            self.session,
+            user=owner,
+            transfer_bid_id=bid.id,
+            unit=LedgerUnit.COIN,
+        )
+        if actual_reserved < bid.amount:
+            raise TransferMarketValidationError("Winning transfer-market bid does not have a complete wallet hold.")
+        reference = str(reservation.get("reference") or self._listing_bid_reservation_reference(bid))
+        lifecycle_terms = dict(lifecycle_bid.structured_terms_json or {})
+        lifecycle_terms["wallet_reservation"] = {
+            **dict(lifecycle_terms.get("wallet_reservation") or {}),
+            "status": "reserved",
+            "amount_gtex_coin": str(bid.amount),
+            "actual_reserved_gtex_coin": str(actual_reserved),
+            "currency": LedgerUnit.COIN.value,
+            "owner_user_id": owner.id,
+            "reference": reference,
+            "ledger_transfer_bid_id": bid.id,
+            "transfer_market_listing_id": listing.id,
+            "transfer_market_bid_id": bid.id,
+        }
+        lifecycle_bid.structured_terms_json = lifecycle_terms
+        self._set_listing_bid_reservation(
+            bid,
+            {
+                "status": "moved_to_lifecycle",
+                "moved_at": self._coerce_utc(moved_at).isoformat(),
+                "lifecycle_transfer_bid_id": lifecycle_bid.id,
+                "reference": reference,
+            },
+        )
 
     def _append_drama_event(
         self,
@@ -1945,8 +3165,16 @@ class TransferMarketService:
             return value.replace(tzinfo=UTC)
         return value.astimezone(UTC)
 
-    def _require_listing(self, listing_id: str) -> TransferListing:
-        listing = self.session.get(TransferListing, listing_id)
+    def _require_listing(self, listing_id: str, *, for_update: bool = False) -> TransferListing:
+        if for_update:
+            statement = select(TransferListing).where(TransferListing.id == listing_id)
+            try:
+                statement = statement.with_for_update()
+            except AttributeError:
+                pass
+            listing = self.session.scalar(statement)
+        else:
+            listing = self.session.get(TransferListing, listing_id)
         if listing is None:
             raise TransferMarketNotFoundError(f"Transfer listing {listing_id} was not found.")
         return listing

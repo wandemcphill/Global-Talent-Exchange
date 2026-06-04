@@ -37,6 +37,13 @@ MATCH_ENGINE_OPENAPI_PRESENT_PATHS = [
     "/match-engine/summary",
 ]
 
+MATCH_ENGINE_OPENAPI_ABSENT_PATHS = [
+    "/match-engine/render-sync",
+    "/match-engine/render-sync/{match_key}",
+    "/api/match-engine/render-sync",
+    "/api/match-engine/render-sync/{match_key}",
+]
+
 CREATOR_MEDIA_OPENAPI_PRESENT_PATHS = [
     "/api/creators/profile",
     "/api/v2/creators/profile",
@@ -352,6 +359,10 @@ PUBLIC_MISC_OPENAPI_ABSENT_PATHS = [
     "/federations/{federation_id}/governance",
     "/admin/federations/run-jobs",
     "/match-viewer/{match_key}",
+    # Quarantined legacy pseudo-render payload: never expose it in OpenAPI.
+    "/match-viewer/{match_key}/illusion",
+    "/api/match-viewer/{match_key}/illusion",
+    "/api/v2/match-viewer/{match_key}/illusion",
 ]
 
 CORE_OPENAPI_PRESENT_PATHS = [
@@ -743,6 +754,6 @@ CREATOR_AND_MEDIA_ROUTE_CASES = [
 ]
 
 LIVE_BROADCAST_AND_MATCH_VIEWER_HYDRATION_ROUTE_CASES = [
-    ("/api/broadcast/home", 200),
-    ("/api/match-viewer/nonexistent", 404),
+    ("/api/v2/broadcast/home", {"X-API-Version": "2"}, 200),
+    ("/api/v2/match-viewer/nonexistent", {"X-API-Version": "2"}, 404),
 ]

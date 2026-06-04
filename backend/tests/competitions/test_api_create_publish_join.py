@@ -202,10 +202,13 @@ def test_creator_can_publish_and_launch_full_competition(client, auth_user_facto
     fixtures = client.get(f"/api/competitions/{competition_id}/fixtures")
     assert fixtures.status_code == 200
     fixture_payload = fixtures.json()
-    assert len(fixture_payload) == 1
-    assert fixture_payload[0]["status"] == "scheduled"
+    assert fixture_payload["status"] == "synced"
+    assert fixture_payload["score_status"] == "pending_results"
+    assert fixture_payload["authoritative_scores"] is False
+    assert len(fixture_payload["items"]) == 1
+    assert fixture_payload["items"][0]["status"] == "scheduled"
 
-    events = client.get(f"/api/competitions/{competition_id}/matches/{fixture_payload[0]['id']}/events")
+    events = client.get(f"/api/competitions/{competition_id}/matches/{fixture_payload['items'][0]['id']}/events")
     assert events.status_code == 200
     assert events.json() == []
 

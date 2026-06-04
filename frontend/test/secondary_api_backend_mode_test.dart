@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/admin_engine_api.dart';
-import 'package:gte_frontend/data/admin_finance_api.dart';
+import 'package:gte_frontend/features/capital/settlement/data/admin_finance_api.dart';
 import 'package:gte_frontend/data/agent_marketplace_api.dart';
 import 'package:gte_frontend/data/club_api.dart';
 import 'package:gte_frontend/data/club_ops_api.dart';
@@ -11,7 +11,7 @@ import 'package:gte_frontend/data/competition_control_repository.dart';
 import 'package:gte_frontend/data/creator_api.dart';
 import 'package:gte_frontend/data/creator_application_api.dart';
 import 'package:gte_frontend/data/discovery_api.dart';
-import 'package:gte_frontend/data/dispute_engine_api.dart';
+import 'package:gte_frontend/features/capital/disputes/data/dispute_engine_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/hosted_competition_api.dart';
@@ -31,7 +31,7 @@ import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_r
 import 'package:gte_frontend/features/club_identity/reputation/data/reputation_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart';
 import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
-import 'package:gte_frontend/features/club_sale_market/data/club_sale_market_repository.dart';
+import 'package:gte_frontend/features/capital/liquidity/club_sale_market/data/club_sale_market_repository.dart';
 import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 
 void main() {

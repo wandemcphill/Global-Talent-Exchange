@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
-import '../../features/competitions/live_competitions_provider.dart';
+import '../../features/compete/providers/live_competitions_provider.dart';
 import '../../features/shared/data/gte_feature_support.dart';
 import '../../navigation/app_destinations.dart';
 import '../../shared/models/data_source_status.dart';

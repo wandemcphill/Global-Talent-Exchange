@@ -107,6 +107,9 @@ class CreatorFinanceSummary {
     required this.attributedSignups,
     required this.qualifiedJoins,
     required this.insights,
+    this.hasCompleteBackendPayload = true,
+    this.hasWalletPayload = true,
+    this.hasClipEarningsPayload = true,
   });
 
   final String currency;
@@ -130,6 +133,9 @@ class CreatorFinanceSummary {
   final int attributedSignups;
   final int qualifiedJoins;
   final List<String> insights;
+  final bool hasCompleteBackendPayload;
+  final bool hasWalletPayload;
+  final bool hasClipEarningsPayload;
 }
 
 class CreatorCompetition {

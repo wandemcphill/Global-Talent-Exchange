@@ -18,9 +18,10 @@ PROTECTED_PATH_PREFIXES = (
 )
 PROTECTED_EXACT_PATHS = frozenset(
     {
-        "/api/auth/me",
-        "/api/auth/logout",
-        "/api/auth/change-password",
+        "/api/v2/auth/me",
+        "/api/v2/auth/logout",
+        "/api/v2/auth/change-password",
+        "/api/v2/auth/pin/verify",
     }
 )
 

@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import '../features/app_routes/gte_navigation_helpers.dart';
 import '../features/app_routes/gte_route_data.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
+import '../features/shell/shell.dart' as shell;
 import '../core/widgets/player_card.dart';
 import '../shared/widgets/gtex_premium_panels.dart';
 import '../data/gte_exchange_models.dart';
-import '../data/player_match_service.dart';
+import '../features/match_center/data/player_match_service.dart';
 import '../providers/gte_exchange_controller.dart';
 import '../widgets/gte_formatters.dart';
 import '../widgets/gte_metric_chip.dart';
@@ -349,7 +350,7 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
                         child: _MiniTerminalTile(
                           label: 'Capital',
                           value:
-                              widget.controller.walletSummary == null
+                              widget.controller.walletDisplay == null
                                   ? 'SYNCING'
                                   : 'READY',
                           accent: GteShellTheme.accentWarm,
@@ -364,6 +365,17 @@ class _GteMarketPlayersScreenState extends State<GteMarketPlayersScreen> {
             GtexLiveTickerBar(
               accentColor: GteShellTheme.accent,
               items: _marketTickerItems(),
+            ),
+            const SizedBox(height: 20),
+            _MarketOperatingStateStrip(
+              isAuthenticated: widget.controller.isAuthenticated,
+              isLoading:
+                  widget.controller.isLoadingMarket ||
+                  widget.controller.isLoadingMoreMarket,
+              hasWallet: widget.controller.walletDisplay != null,
+              marketError: widget.controller.marketError,
+              visiblePlayers: _filteredPlayers.length,
+              onOpenLogin: widget.onOpenLogin,
             ),
             const SizedBox(height: 20),
             GtexSignalStrip(
@@ -787,6 +799,242 @@ String _deskBiasLabel(List<GteMarketPlayerListItem> players) {
     return 'BALANCED';
   }
   return risers > fallers ? 'RISING' : 'COOLING';
+}
+
+class _MarketOperatingStateStrip extends StatelessWidget {
+  const _MarketOperatingStateStrip({
+    required this.isAuthenticated,
+    required this.isLoading,
+    required this.hasWallet,
+    required this.marketError,
+    required this.visiblePlayers,
+    required this.onOpenLogin,
+  });
+
+  final bool isAuthenticated;
+  final bool isLoading;
+  final bool hasWallet;
+  final String? marketError;
+  final int visiblePlayers;
+  final VoidCallback onOpenLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<_MarketOperatingState> states = <_MarketOperatingState>[
+      _MarketOperatingState(
+        title: 'Transfer basket',
+        value: isAuthenticated ? 'EMPTY' : 'BLOCKED',
+        state:
+            isAuthenticated
+                ? shell.GtexSurfaceState.empty
+                : shell.GtexSurfaceState.blocked,
+        message:
+            isAuthenticated
+                ? 'No backend-confirmed basket is active from this board yet.'
+                : 'Sign in before turning scouting into a transfer action.',
+        icon: Icons.shopping_bag_outlined,
+        actionLabel: isAuthenticated ? null : 'Sign in',
+        onAction: isAuthenticated ? null : onOpenLogin,
+      ),
+      _MarketOperatingState(
+        title: 'Checkout guard',
+        value:
+            !isAuthenticated
+                ? 'BLOCKED'
+                : hasWallet
+                ? 'READY'
+                : 'SYNCING',
+        state:
+            !isAuthenticated
+                ? shell.GtexSurfaceState.blocked
+                : hasWallet
+                ? shell.GtexSurfaceState.confirmed
+                : shell.GtexSurfaceState.syncing,
+        message:
+            !isAuthenticated
+                ? 'Checkout requires a confirmed account session.'
+                : hasWallet
+                ? 'Wallet context is present. Balance details use backend values only.'
+                : 'Wallet summary has not been confirmed by the backend yet.',
+        icon: Icons.verified_user_outlined,
+      ),
+      _MarketOperatingState(
+        title: 'Activity feed',
+        value:
+            isLoading
+                ? 'SYNCING'
+                : marketError != null
+                ? 'DEGRADED'
+                : visiblePlayers > 0
+                ? '$visiblePlayers LIVE'
+                : 'EMPTY',
+        state:
+            isLoading
+                ? shell.GtexSurfaceState.syncing
+                : marketError != null
+                ? shell.GtexSurfaceState.degraded
+                : visiblePlayers > 0
+                ? shell.GtexSurfaceState.confirmed
+                : shell.GtexSurfaceState.empty,
+        message:
+            marketError != null
+                ? 'Latest confirmed board remains visible while the feed recovers.'
+                : visiblePlayers > 0
+                ? 'Visible players are derived from the confirmed market board.'
+                : 'No player activity is available for this filter right now.',
+        icon: Icons.timeline_outlined,
+      ),
+    ];
+
+    return GteSurfacePanel(
+      key: const Key('market-operating-state-strip'),
+      accentColor: GteShellTheme.accent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Market operating state',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Every move lane stays honest about what is confirmed, what is empty, and what is blocked.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final bool stacked = constraints.maxWidth < 820;
+              final double itemWidth =
+                  stacked
+                      ? constraints.maxWidth
+                      : (constraints.maxWidth - 24) / 3;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: states
+                    .map(
+                      (_MarketOperatingState state) => SizedBox(
+                        width: itemWidth,
+                        child: _MarketOperatingTile(state: state),
+                      ),
+                    )
+                    .toList(growable: false),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MarketOperatingState {
+  const _MarketOperatingState({
+    required this.title,
+    required this.value,
+    required this.state,
+    required this.message,
+    required this.icon,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String title;
+  final String value;
+  final shell.GtexSurfaceState state;
+  final String message;
+  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+}
+
+class _MarketOperatingTile extends StatelessWidget {
+  const _MarketOperatingTile({required this.state});
+
+  final _MarketOperatingState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = _colorFor(state.state);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(state.icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Text(
+                state.state.name.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            state.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            state.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            state.message,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          if (state.actionLabel != null && state.onAction != null) ...<Widget>[
+            const SizedBox(height: 10),
+            FilledButton.tonal(
+              onPressed: state.onAction,
+              child: Text(state.actionLabel!),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _colorFor(shell.GtexSurfaceState state) {
+    switch (state) {
+      case shell.GtexSurfaceState.confirmed:
+      case shell.GtexSurfaceState.data:
+        return GteShellTheme.positive;
+      case shell.GtexSurfaceState.blocked:
+      case shell.GtexSurfaceState.error:
+        return GteShellTheme.negative;
+      case shell.GtexSurfaceState.pending:
+      case shell.GtexSurfaceState.degraded:
+        return GteShellTheme.warning;
+      case shell.GtexSurfaceState.loading:
+      case shell.GtexSurfaceState.syncing:
+      case shell.GtexSurfaceState.reconnecting:
+        return GteShellTheme.accent;
+      case shell.GtexSurfaceState.empty:
+        return GteShellTheme.textMuted;
+    }
+  }
 }
 
 class _MarketRoutePanel extends StatelessWidget {

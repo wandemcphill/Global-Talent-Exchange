@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from backend.tests.support.secrets import TEST_PASSWORD
-from backend.tests.support.signup_payloads import user_signup_payload
+from backend.tests.support.signup_payloads import player_signup_payload
 from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.models.admin_runtime_state import AdminRuntimeState
 
@@ -15,8 +15,8 @@ def _suffix(prefix: str) -> str:
 def _register_user(client, *, prefix: str) -> dict[str, object]:
     email = f"{_suffix(prefix)}@example.com"
     response = client.post(
-        "/auth/signup/user",
-        json=user_signup_payload(
+        "/auth/signup/player",
+        json=player_signup_payload(
             email=email,
             username=email.split("@", maxsplit=1)[0].replace("-", "_"),
             full_name=f"{prefix.title()} User",
@@ -60,7 +60,6 @@ def test_creator_owned_gtex_hosted_competition_can_publish_without_admin_permiss
     )
     assert publish_response.status_code == 200, publish_response.text
     assert publish_response.json()["status"] == "open"
-
 
 def test_creator_owned_gtex_hosted_launch_is_not_blocked_by_admin_permission_gate(client) -> None:
     host = _register_user(client, prefix="gtex-hosted-launch-owner")

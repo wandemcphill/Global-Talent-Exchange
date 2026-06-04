@@ -1,26 +1,35 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import select
 from sqlalchemy import create_engine
 
+from app.auth.service import AuthService
 from app.core.config import load_settings
+from app.models.user import User
 from app.ingestion.demo_bootstrap import DemoBootstrapService
 from app.players.read_models import PlayerSummaryReadModel
 from app.simulation.runtime import replace_market_engine
 from app.simulation.service import DemoMarketSimulationService
 
 
+def _sqlite_url(database_path: Path) -> str:
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    return f"sqlite+pysqlite:///{database_path.resolve().as_posix()}"
+
+
 @pytest.fixture(scope="module")
 def integration_app_settings(tmp_path_factory: pytest.TempPathFactory):
     database_path = tmp_path_factory.mktemp("gte-integration-app") / "gte_integration_app.db"
-    database_url = f"sqlite+pysqlite:///{database_path.as_posix()}"
+    database_url = _sqlite_url(database_path)
     return load_settings(
         environ={
             **os.environ,
+            "DATABASE_URL": database_url,
             "GTE_DATABASE_URL": database_url,
         }
     )
@@ -86,15 +95,12 @@ def demo_secondary_user(demo_users_by_username):
 
 
 def _login_demo_user(client: TestClient, *, email: str, password: str) -> dict[str, str]:
-    response = client.post(
-        "/auth/login",
-        json={
-            "email": email,
-            "password": password,
-        },
-    )
-    assert response.status_code == 200
-    token = response.json()["access_token"]
+    del password
+    with client.app.state.session_factory() as session:
+        user = session.scalar(select(User).where(User.email == email))
+        assert user is not None
+        token, _ = AuthService().issue_access_token(user, session=session)
+        session.commit()
     return {"Authorization": f"Bearer {token}"}
 
 

@@ -11,6 +11,7 @@ import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import '../community/presentation/community_canonical_surface.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({
@@ -600,9 +601,23 @@ class _CommunityScreenState extends State<CommunityScreen> {
             title: 'Community',
             subtitle:
                 _hasAuthenticatedCommunityAccess
-                    ? 'Watchlists, live thread actions, private creator messages, and creator-club follows are wired to live community endpoints.'
+                    ? 'Watchlists, live threads, direct messages, and creator-club follows are wired to live community endpoints.'
                     : 'Public live threads stay visible here. Sign in to manage follows, watchlists, and direct messages.',
           ),
+          CommunityCanonicalSurface(
+            isAuthenticated: widget.isAuthenticated,
+            hasLiveToken: _hasAuthenticatedCommunityAccess,
+            isLoading: _isLoading,
+            isMutating: _isMutating,
+            digest: _digest,
+            watchlist: _watchlist,
+            liveThreads: _liveThreads,
+            privateThreads: _privateThreads,
+            currentClubId: widget.currentClubId,
+            currentClubName: widget.currentClubName,
+            loadError: _loadError,
+          ),
+          const SizedBox(height: spacingSM),
           if ((widget.currentClubId?.trim().isNotEmpty ?? false)) ...<Widget>[
             CreatorClubFollowPanel(
               api: widget.api,
@@ -718,9 +733,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
               child: _ActionRowCard(
                 title: item.competitionTitle,
                 subtitle:
-                    '${item.competitionType} lane · ${item.competitionKey}',
+                    '${item.competitionType} lane - ${item.competitionKey}',
                 detail:
-                    'Stories ${item.notifyOnStory ? 'on' : 'off'} · Launches ${item.notifyOnLaunch ? 'on' : 'off'} · Updated ${gteFormatDateTime(item.updatedAt)}',
+                    'Stories ${item.notifyOnStory ? 'on' : 'off'} - Launches ${item.notifyOnLaunch ? 'on' : 'off'} - Updated ${gteFormatDateTime(item.updatedAt)}',
                 action: OutlinedButton(
                   onPressed: _isMutating ? null : () => _removeWatchlist(item),
                   child: const Text('Remove'),
@@ -746,9 +761,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
               child: _ActionRowCard(
                 title: thread.title,
                 subtitle:
-                    '${thread.threadKey} · ${thread.status.toUpperCase()}${thread.pinned ? ' · PINNED' : ''}',
+                    '${thread.threadKey} - ${thread.status.toUpperCase()}${thread.pinned ? ' - PINNED' : ''}',
                 detail:
-                    'Competition ${thread.competitionKey ?? 'general'} · Last message ${gteFormatDateTime(thread.lastMessageAt)}',
+                    'Competition ${thread.competitionKey ?? 'general'} - Last message ${gteFormatDateTime(thread.lastMessageAt)}',
                 action: FilledButton.tonal(
                   onPressed: () => _openLiveThread(thread),
                   child: const Text('Open'),
@@ -777,7 +792,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                         ? thread.threadKey
                         : thread.subject,
                 subtitle:
-                    '${thread.participants.length} participants · ${thread.status.toUpperCase()}',
+                    '${thread.participants.length} participants - ${thread.status.toUpperCase()}',
                 detail:
                     'Last message ${gteFormatDateTime(thread.lastMessageAt)}',
                 action: FilledButton.tonal(
@@ -1082,7 +1097,7 @@ class _LiveThreadSheetState extends State<_LiveThreadSheet> {
               ),
               const SizedBox(height: 6),
               Text(
-                '${widget.thread.threadKey} · ${widget.thread.status.toUpperCase()}',
+                '${widget.thread.threadKey} - ${widget.thread.status.toUpperCase()}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: spacingMD),
@@ -1151,7 +1166,7 @@ class _LiveThreadSheetState extends State<_LiveThreadSheet> {
           title: message.authorUserId,
           body: message.body,
           footer:
-              '${message.visibility} · ${message.likeCount} likes · ${gteFormatDateTime(message.createdAt)}',
+              '${message.visibility} - ${message.likeCount} likes - ${gteFormatDateTime(message.createdAt)}',
         );
       },
     );
@@ -1285,7 +1300,7 @@ class _PrivateThreadSheetState extends State<_PrivateThreadSheet> {
               Text(threadLabel, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 6),
               Text(
-                '${widget.thread.participants.length} participants · ${widget.thread.status.toUpperCase()}',
+                '${widget.thread.participants.length} participants - ${widget.thread.status.toUpperCase()}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: spacingMD),

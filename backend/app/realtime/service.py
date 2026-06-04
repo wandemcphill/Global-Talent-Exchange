@@ -11,6 +11,7 @@ from uuid import uuid4
 from fastapi import WebSocket
 
 from app.core.events import DomainEvent
+from app.realtime.match_stream_service import match_event_channel
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def wallet_topic(user_id: str) -> str:
 
 
 def match_topic(match_id: str) -> str:
-    return f"match:{match_id}"
+    return match_event_channel(match_id)
 
 
 def commentary_topic(match_id: str) -> str:
@@ -282,6 +283,61 @@ class RealtimeHub:
                 )
             ]
 
+        if event.name.startswith("regen.creation_order."):
+            user_id = _optional_string(payload.get("user_id"))
+            order_id = _optional_string(payload.get("order_id") or event.aggregate_id)
+            if user_id is None or order_id is None:
+                return []
+            data = {
+                "event_name": event.name,
+                "order_id": order_id,
+                "user_id": user_id,
+                "actor_user_id": payload.get("actor_user_id"),
+                "club_id": payload.get("club_id"),
+                "request_type": payload.get("request_type"),
+                "status": payload.get("status"),
+                "previous_status": payload.get("previous_status"),
+                "payment_method": payload.get("payment_method"),
+                "payment_provider": payload.get("payment_provider"),
+                "payment_reference": payload.get("payment_reference"),
+                "wallet_reservation": payload.get("wallet_reservation"),
+                "generated_player_id": payload.get("generated_player_id"),
+                "generated_regen_profile_id": payload.get("generated_regen_profile_id"),
+                "amount_coin": payload.get("amount_coin"),
+                "currency": payload.get("currency"),
+                "audit_reference": payload.get("audit_reference"),
+            }
+            dispatches = [
+                RealtimeDispatch(
+                    type="regen_creation_order_update",
+                    topics=(wallet_topic(user_id),),
+                    data=data,
+                )
+            ]
+            action = event.name.rsplit(".", maxsplit=1)[-1]
+            if action in {"generated", "cancelled"}:
+                message = (
+                    "Build-a-Son generation completed."
+                    if action == "generated"
+                    else "Build-a-Son wallet reservation was cancelled."
+                )
+                dispatches.append(
+                    RealtimeDispatch(
+                        type="notification",
+                        topics=(wallet_topic(user_id),),
+                        data={
+                            "user_id": user_id,
+                            "topic": "regen_creation",
+                            "template_key": f"REGEN_CREATION_ORDER_{action.upper()}",
+                            "resource_type": "regen_creation_order",
+                            "resource_id": order_id,
+                            "message": message,
+                            "metadata": data,
+                        },
+                    )
+                )
+            return dispatches
+
         if event.name == "JACKPOT_TRIGGERED":
             dispatches: list[RealtimeDispatch] = []
             for winner in payload.get("winners") or []:
@@ -360,15 +416,57 @@ class RealtimeHub:
             commentary = _optional_string(
                 payload.get("commentary") or payload.get("description") or payload.get("source_commentary")
             )
+            stats = _payload_mapping(payload, "stats")
+            xg = _payload_mapping(payload, "xg")
+            momentum = _payload_mapping(payload, "momentum")
+            overlay_readiness = _payload_mapping(payload, "overlay_readiness", "overlayReadiness")
+            inspector_state = _payload_mapping(payload, "inspector_state", "inspectorState")
+            intelligence_state = _payload_mapping(payload, "intelligence_state", "intelligenceState")
+            missing_data = _match_missing_data(
+                payload,
+                commentary=commentary,
+                stats=stats,
+                xg=xg,
+                momentum=momentum,
+                overlay_readiness=overlay_readiness,
+                inspector_state=inspector_state,
+                intelligence_state=intelligence_state,
+            )
+            data_status = _most_restrictive_status(
+                payload.get("data_status"),
+                _status_from_missing_data(missing_data),
+            )
+            blocked = bool(payload.get("blocked")) or any(item.get("severity") == "blocked" for item in missing_data)
+            degraded = bool(payload.get("degraded")) or any(
+                item.get("severity") in {"degraded", "syncing", "empty"} for item in missing_data
+            )
+            score_fields_present = _payload_has_value(payload, "home_score") and _payload_has_value(
+                payload,
+                "away_score",
+            )
+            clock_field_present = _payload_has_value(payload, "clock")
+            minute_field_present = _payload_has_value(payload, "minute")
+            commentary_present = commentary is not None
+            score_authoritative = (
+                bool(payload.get("score_authoritative", score_fields_present)) and score_fields_present
+            )
+            clock_authoritative = bool(payload.get("clock_authoritative", clock_field_present)) and clock_field_present
+            minute_authoritative = (
+                bool(payload.get("minute_authoritative", minute_field_present)) and minute_field_present
+            )
+            commentary_authoritative = (
+                bool(payload.get("commentary_authoritative", commentary_present)) and commentary_present
+            )
             score_payload = {
                 "match_id": match_id,
+                "channel": match_topic(match_id),
                 "event_id": payload.get("event_id"),
                 "minute": payload.get("minute"),
                 "event_type": payload.get("event_type"),
                 "source_event_type": payload.get("source_event_type"),
                 "home_score": payload.get("home_score"),
                 "away_score": payload.get("away_score"),
-                "status": "live",
+                "status": payload.get("status") or payload.get("result_status"),
                 "clock": payload.get("clock"),
                 "team_id": payload.get("team_id"),
                 "team_name": payload.get("team") or payload.get("team_name"),
@@ -378,6 +476,38 @@ class RealtimeHub:
                 "secondary_player_name": payload.get("secondary_player") or payload.get("secondary_player_name"),
                 "commentary": commentary,
                 "description": commentary,
+                "score_authoritative": score_authoritative,
+                "clock_authoritative": clock_authoritative,
+                "minute_authoritative": minute_authoritative,
+                "commentary_authoritative": commentary_authoritative,
+                "stats_authoritative": bool(payload.get("stats_authoritative", stats is not None)) and stats is not None,
+                "xg_authoritative": bool(payload.get("xg_authoritative", xg is not None)) and xg is not None,
+                "momentum_authoritative": (
+                    bool(payload.get("momentum_authoritative", momentum is not None)) and momentum is not None
+                ),
+                "overlay_authoritative": (
+                    bool(payload.get("overlay_authoritative", overlay_readiness is not None))
+                    and overlay_readiness is not None
+                ),
+                "inspector_authoritative": (
+                    bool(payload.get("inspector_authoritative", inspector_state is not None))
+                    and inspector_state is not None
+                ),
+                "intelligence_authoritative": (
+                    bool(payload.get("intelligence_authoritative", intelligence_state is not None))
+                    and intelligence_state is not None
+                ),
+                "data_status": data_status,
+                "missing_data": missing_data,
+                "degraded": degraded,
+                "blocked": blocked,
+                "stats": stats,
+                "xg": xg,
+                "momentum": momentum,
+                "overlay_readiness": overlay_readiness,
+                "inspector_state": inspector_state,
+                "intelligence_state": intelligence_state,
+                "backend_authored": True,
             }
             dispatches = [
                 RealtimeDispatch(
@@ -476,6 +606,170 @@ def _optional_string(value: Any) -> str | None:
         return None
     resolved = str(value).strip()
     return resolved or None
+
+
+def _payload_has_value(payload: dict[str, Any], key: str) -> bool:
+    if key not in payload:
+        return False
+    value = payload.get(key)
+    if value is None:
+        return False
+    if isinstance(value, str) and not value.strip():
+        return False
+    return True
+
+
+def _payload_mapping(payload: dict[str, Any], key: str, *aliases: str) -> dict[str, Any] | None:
+    metadata = payload.get("metadata")
+    sources = [payload]
+    if isinstance(metadata, dict):
+        sources.append(metadata)
+    for source in sources:
+        for candidate_key in (key, *aliases):
+            value = source.get(candidate_key)
+            if isinstance(value, dict) and value:
+                return dict(value)
+    return None
+
+
+def _append_missing_data_once(
+    missing_data: list[dict[str, Any]],
+    *,
+    code: str,
+    field: str,
+    severity: str,
+    message: str,
+) -> None:
+    if any(item.get("code") == code and item.get("field") == field for item in missing_data):
+        return
+    missing_data.append({"code": code, "field": field, "severity": severity, "message": message})
+
+
+def _match_missing_data(
+    payload: dict[str, Any],
+    *,
+    commentary: str | None,
+    stats: dict[str, Any] | None,
+    xg: dict[str, Any] | None,
+    momentum: dict[str, Any] | None,
+    overlay_readiness: dict[str, Any] | None,
+    inspector_state: dict[str, Any] | None,
+    intelligence_state: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    raw_missing_data = payload.get("missing_data")
+    missing_data = (
+        [dict(item) for item in raw_missing_data if isinstance(item, dict)]
+        if isinstance(raw_missing_data, list)
+        else []
+    )
+    if not (_payload_has_value(payload, "home_score") and _payload_has_value(payload, "away_score")):
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_score",
+            field="score",
+            severity="blocked",
+            message="The realtime match event did not include an authoritative scoreline.",
+        )
+    if not _payload_has_value(payload, "minute"):
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_minute",
+            field="minute",
+            severity="blocked",
+            message="The realtime match event did not include an authoritative match minute.",
+        )
+    if not _payload_has_value(payload, "clock"):
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_clock",
+            field="clock",
+            severity="degraded",
+            message="The realtime match event did not include an authoritative match clock.",
+        )
+    if commentary is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_commentary",
+            field="commentary",
+            severity="degraded",
+            message="The realtime match event did not include authored commentary.",
+        )
+    if stats is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_stats",
+            field="stats",
+            severity="degraded",
+            message="The realtime match event did not include authoritative live stats.",
+        )
+    if xg is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_xg",
+            field="xg",
+            severity="degraded",
+            message="The realtime match event did not include authoritative xG.",
+        )
+    if momentum is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_authoritative_momentum",
+            field="momentum",
+            severity="degraded",
+            message="The realtime match event did not include authoritative momentum.",
+        )
+    if overlay_readiness is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_overlay_readiness",
+            field="overlay_readiness",
+            severity="degraded",
+            message="The realtime match event did not include overlay readiness.",
+        )
+    if inspector_state is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_inspector_state",
+            field="inspector_state",
+            severity="degraded",
+            message="The realtime match event did not include inspector state.",
+        )
+    if intelligence_state is None:
+        _append_missing_data_once(
+            missing_data,
+            code="missing_intelligence_state",
+            field="intelligence_state",
+            severity="degraded",
+            message="The realtime match event did not include intelligence state.",
+        )
+    return missing_data
+
+
+def _status_from_missing_data(missing_data: list[dict[str, Any]]) -> str:
+    severities = {str(item.get("severity") or "").strip().lower() for item in missing_data}
+    if "blocked" in severities:
+        return "blocked"
+    if "degraded" in severities:
+        return "degraded"
+    if "empty" in severities:
+        return "empty"
+    if "syncing" in severities:
+        return "syncing"
+    return "ready"
+
+
+def _most_restrictive_status(*statuses: Any) -> str:
+    order = {
+        "ready": 0,
+        "syncing": 1,
+        "empty": 1,
+        "degraded": 2,
+        "blocked": 3,
+    }
+    resolved = [str(status or "").strip().lower() for status in statuses if str(status or "").strip().lower() in order]
+    if not resolved:
+        return "ready"
+    return max(resolved, key=lambda status: order[status])
 
 
 __all__ = [

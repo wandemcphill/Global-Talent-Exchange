@@ -180,7 +180,8 @@ class _AuthenticatedProfile extends ConsumerWidget {
         GtexSectionPanel(
           eyebrow: 'SESSION DETAIL',
           title: 'Account detail',
-          subtitle: 'Critical identity fields from /api/auth/me and /users/me.',
+          subtitle:
+              'Critical identity fields from /api/v2/auth/me and /users/me.',
           child: Text(
             profile.user.entries
                 .where(

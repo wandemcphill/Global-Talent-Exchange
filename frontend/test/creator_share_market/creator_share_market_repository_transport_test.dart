@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
-import 'package:gte_frontend/features/creator_share_market/data/creator_share_market_models.dart';
-import 'package:gte_frontend/features/creator_share_market/data/creator_share_market_repository.dart';
+import 'package:gte_frontend/features/capital/liquidity/creator_share_market/data/creator_share_market_models.dart';
+import 'package:gte_frontend/features/capital/liquidity/creator_share_market/data/creator_share_market_repository.dart';
 
 void main() {
   test('creator share market repository uses creator ops routes', () async {
@@ -197,4 +197,3 @@ class _RecordingTransport implements GteTransport {
     return _responses.removeAt(0);
   }
 }
-

@@ -1,5 +1,11 @@
 # GTEX Deployment Guide
 
+## Canonical Production Override
+
+GTEX production deploys target the Flutter/backend football operating system.
+The active match experience is the 2D broadcast-style match center backed by realtime/backend truth.
+Legacy Unity, native 3D, pseudo-3D, and original visual runtime routes are quarantined and must not be used as production deploy gates, rollout checks, CTAs, monetization, or navigation.
+
 ## Recommended production stack
 - Backend: FastAPI
 - Database: PostgreSQL
@@ -79,18 +85,15 @@ Create separate GitHub environments named `staging` and `production` and define 
   - optional `RENDER_DEPLOY_TIMEOUT_SECONDS`
   - optional `RENDER_HEALTH_TIMEOUT_SECONDS`
   - optional `RENDER_POLL_INTERVAL_SECONDS`
-  - optional `RENDER_VERIFY_UNITY_LIVE_PLAYBACK`
-  - optional `RENDER_UNITY_LIVE_VERIFY_BASE_URL`
-  - optional `RENDER_UNITY_LIVE_VERIFY_MATCH_ID`
-  - optional `RENDER_UNITY_LIVE_VERIFY_ALLOW_MATCH_GENERATION`
-  - optional `RENDER_UNITY_LIVE_VERIFY_SKIP_WEBSOCKET`
-  - optional `RENDER_UNITY_LIVE_VERIFY_PAY_TO_VIEW`
-  - optional `RENDER_UNITY_LIVE_VERIFY_TICK_COUNT`
-  - optional `RENDER_UNITY_LIVE_VERIFY_TIMEOUT_SECONDS`
-- Additional secrets when live playback verification is enabled:
-  - `RENDER_UNITY_LIVE_VERIFY_USER_ACCESS_TOKEN` or both
-  - `RENDER_UNITY_LIVE_VERIFY_USER_EMAIL`
-  - `RENDER_UNITY_LIVE_VERIFY_USER_PASSWORD`
+  - optional `RENDER_VERIFY_MATCH_CENTER`
+  - optional `RENDER_MATCH_CENTER_BASE_URL`
+  - optional `RENDER_MATCH_CENTER_MATCH_ID`
+  - optional `RENDER_MATCH_CENTER_SKIP_WEBSOCKET`
+  - optional `RENDER_MATCH_CENTER_TIMEOUT_SECONDS`
+- Additional secrets when match-center verification is enabled:
+  - `RENDER_MATCH_CENTER_USER_ACCESS_TOKEN` or both
+  - `RENDER_MATCH_CENTER_USER_EMAIL`
+  - `RENDER_MATCH_CENTER_USER_PASSWORD`
 
 The workflow reads the same variable names in both environments, but GitHub resolves different values per environment so staging and production stay isolated.
 
@@ -104,25 +107,23 @@ The workflow reads the same variable names in both environments, but GitHub reso
   - `api`
   - `database`
   - `redis`
-- After the API health gate passes, the deploy runner also verifies the hosted Unity live contract:
-  - `/api/matches/{match_id}/unity-access`
-  - `/api/matches/{match_id}/unity-access/refresh`
-- That post-deploy gate fails the rollout if the hosted API is still behind the GTEX workspace backend shape.
-- When `RENDER_VERIFY_UNITY_LIVE_PLAYBACK=true`, the deploy runner also provisions a real Unity live session in dry-run mode and requires hosted playback to advance over HTTP and websocket before the rollout is accepted.
+- After the API health gate passes, the deploy runner should verify the hosted 2D match-center and realtime health contract.
+- Unity access, native 3D, pseudo-3D, and original visual runtime checks are legacy quarantine checks and must not gate production rollout.
+- When `RENDER_VERIFY_MATCH_CENTER=true`, the deploy runner should require the backend match payload, scoreboard contract, timeline/event contract, and websocket/reconnect health to respond without local clock, score, or event generation.
 - If any deploy or health gate fails, the runner triggers Render rollbacks for the services already promoted in that release.
 - The API service runs with two instances and an extended shutdown delay so Render can roll instances without dropping all capacity at once.
 
-### Manual hosted Unity verification
+### Manual hosted match-center verification
 
 Run this after any manual Render rollout or when validating a hosted incident:
 
 ```powershell
-python ops/render/verify_unity_routes.py --url "https://gtex-api.onrender.com/health"
+python ops/render/verify_match_center_routes.py --url "https://gtex-api.onrender.com/health"
 ```
 
-This accepts either the API base URL or the health URL and fails if the hosted deployment does not expose the Unity access and refresh routes expected by the GTEX Unity runtime.
+This accepts either the API base URL or the health URL and fails if the hosted deployment does not expose the canonical match-center/realtime contract expected by the Flutter GTEX runtime.
 
-To verify hosted live playback end-to-end without mutating local Unity files:
+To verify hosted match-center websocket/realtime behavior end-to-end:
 
 ```powershell
 python tools/provision_gtex_live_match.py `
@@ -130,11 +131,10 @@ python tools/provision_gtex_live_match.py `
   --base-url "https://gtex-api.onrender.com" `
   --user-email "<viewer-email>" `
   --user-password "<viewer-password>" `
-  --allow-match-generation `
   --dry-run
 ```
 
-This fails if the backend cannot mint Unity access, return a live payload, or advance the websocket bridge to a new frame.
+This fails if the backend cannot return authoritative match state, expose timeline/commentary/stat payloads, or reconcile websocket updates without client-side simulated clocks, scores, or events.
 
 ## Render to Kubernetes
 

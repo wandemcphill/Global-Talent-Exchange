@@ -1,0 +1,3068 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101316">
+  <title>GTEX Football OS Alternative Prototype</title>
+  <style>
+    :root {
+      --bg: #101316;
+      --bg-deep: #0b0d10;
+      --surface-1: #171b20;
+      --surface-2: #1e242b;
+      --surface-3: #252c35;
+      --surface-4: #2d333b;
+      --line: #343c46;
+      --line-soft: #252b33;
+      --text: #f2f4f6;
+      --muted: #a9b1ba;
+      --dim: #717b86;
+      --blue: #2f6fed;
+      --blue-soft: #8fb3ff;
+      --green: #19a974;
+      --amber: #d99a24;
+      --red: #d34d4d;
+      --gold: #c7a24a;
+      --pitch: #2f7d4a;
+      --home: #edf3f8;
+      --away: #d7b56d;
+      --shadow: rgba(0, 0, 0, 0.34);
+      --radius: 6px;
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --fs-xs: 11px;
+      --fs-sm: 12px;
+      --fs-md: 13px;
+      --fs-base: 14px;
+      --fs-lg: 16px;
+      --fs-xl: 20px;
+      --fs-xxl: 28px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-variant-numeric: tabular-nums;
+    }
+
+    body {
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+      color: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr) 362px;
+      grid-template-rows: 56px minmax(0, 1fr) 34px;
+      grid-template-areas:
+        "sidebar topbar rail"
+        "sidebar main rail"
+        "ticker ticker ticker";
+      height: 100vh;
+      background:
+        linear-gradient(90deg, rgba(199, 162, 74, 0.03), transparent 34%),
+        linear-gradient(180deg, #13171c 0%, #0e1115 100%);
+    }
+
+    .sidebar {
+      grid-area: sidebar;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-width: 0;
+      border-right: 1px solid var(--line);
+      background: #11151a;
+    }
+
+    .brand-block {
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .brand-lockup {
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(199, 162, 74, 0.72);
+      border-radius: var(--radius);
+      color: var(--gold);
+      font-family: var(--mono);
+      font-size: var(--fs-sm);
+      font-weight: 800;
+      background:
+        linear-gradient(135deg, rgba(199, 162, 74, 0.16), transparent 52%),
+        #141a20;
+    }
+
+    .brand-kicker {
+      margin: 0;
+      color: var(--muted);
+      font-size: var(--fs-xs);
+      line-height: 1.3;
+    }
+
+    .brand-title {
+      margin: 0 0 2px;
+      font-size: var(--fs-lg);
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .club-strip {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+      padding: 8px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: var(--surface-1);
+    }
+
+    .club-strip strong {
+      display: block;
+      font-size: var(--fs-sm);
+    }
+
+    .club-strip span {
+      display: block;
+      color: var(--dim);
+      font-size: var(--fs-xs);
+    }
+
+    .crest {
+      width: 24px;
+      height: 28px;
+      border-radius: 5px 5px 9px 9px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background:
+        linear-gradient(90deg, var(--gold) 0 33%, #161b20 33% 66%, var(--green) 66%),
+        var(--surface-3);
+      box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.18);
+    }
+
+    .module-nav {
+      padding: 10px 8px;
+      overflow-y: auto;
+    }
+
+    .nav-button {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 32px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      min-height: 42px;
+      margin-bottom: 4px;
+      padding: 6px 8px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: transparent;
+      text-align: left;
+      transition: background 120ms ease, border-color 120ms ease;
+    }
+
+    .nav-button:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: var(--line-soft);
+    }
+
+    .nav-button.is-active {
+      border-color: rgba(199, 162, 74, 0.52);
+      background: rgba(199, 162, 74, 0.12);
+    }
+
+    .nav-code {
+      width: 30px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: var(--fs-xs);
+      background: var(--bg-deep);
+    }
+
+    .is-active .nav-code {
+      color: var(--gold);
+      border-color: rgba(199, 162, 74, 0.7);
+    }
+
+    .nav-label strong {
+      display: block;
+      font-size: var(--fs-sm);
+      line-height: 1.2;
+    }
+
+    .nav-label span {
+      display: block;
+      color: var(--dim);
+      font-size: var(--fs-xs);
+      line-height: 1.2;
+    }
+
+    .nav-count {
+      min-width: 22px;
+      padding: 2px 5px;
+      border-radius: 99px;
+      color: var(--muted);
+      background: var(--surface-2);
+      font-family: var(--mono);
+      font-size: 10px;
+      text-align: center;
+    }
+
+    .sidebar-footer {
+      padding: 10px 12px 12px;
+      border-top: 1px solid var(--line-soft);
+    }
+
+    .operator-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .topbar {
+      grid-area: topbar;
+      display: grid;
+      grid-template-columns: minmax(170px, 0.75fr) minmax(190px, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #151a20;
+    }
+
+    .topbar-section {
+      min-width: 0;
+    }
+
+    .market-window {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .live-dot {
+      width: 9px;
+      height: 9px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 0 rgba(25, 169, 116, 0.5);
+      animation: livePulse 1800ms ease-out infinite;
+    }
+
+    @keyframes livePulse {
+      0% { box-shadow: 0 0 0 0 rgba(25, 169, 116, 0.5); }
+      70% { box-shadow: 0 0 0 7px rgba(25, 169, 116, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(25, 169, 116, 0); }
+    }
+
+    .market-window strong {
+      overflow: hidden;
+      font-size: var(--fs-sm);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .market-window span {
+      color: var(--dim);
+      font-family: var(--mono);
+      font-size: var(--fs-xs);
+      white-space: nowrap;
+    }
+
+    .search-box {
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      align-items: center;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-deep);
+    }
+
+    .search-box span {
+      color: var(--dim);
+      text-align: center;
+      font-family: var(--mono);
+      font-size: var(--fs-sm);
+    }
+
+    .search-box input {
+      width: 100%;
+      min-width: 0;
+      height: 34px;
+      border: 0;
+      outline: 0;
+      color: var(--text);
+      background: transparent;
+      font-size: var(--fs-sm);
+    }
+
+    .search-box kbd {
+      margin-right: 7px;
+      padding: 2px 5px;
+      border: 1px solid var(--line-soft);
+      border-radius: 4px;
+      color: var(--dim);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .main {
+      grid-area: main;
+      min-width: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 180px),
+        var(--bg);
+    }
+
+    .workspace {
+      min-height: 100%;
+      min-width: 0;
+      overflow-x: hidden;
+      padding: 12px;
+    }
+
+    .context-rail {
+      grid-area: rail;
+      min-width: 0;
+      overflow: auto;
+      border-left: 1px solid var(--line);
+      background: #12171d;
+    }
+
+    .rail-inner {
+      padding: 12px;
+    }
+
+    .ticker {
+      grid-area: ticker;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      min-width: 0;
+      height: 34px;
+      border-top: 1px solid var(--line);
+      background: #090b0e;
+    }
+
+    .ticker-label {
+      align-self: stretch;
+      display: grid;
+      place-items: center;
+      padding: 0 12px;
+      color: #101316;
+      background: var(--gold);
+      font-size: var(--fs-xs);
+      font-weight: 900;
+    }
+
+    .ticker-track {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      min-width: 0;
+      overflow: hidden;
+      padding: 0 12px;
+      color: var(--muted);
+      font-size: var(--fs-xs);
+      white-space: nowrap;
+    }
+
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      font-size: var(--fs-xs);
+      white-space: nowrap;
+    }
+
+    .ticker-item:hover {
+      color: var(--text);
+    }
+
+    .ticker-time {
+      color: var(--gold);
+      font-family: var(--mono);
+    }
+
+    .ticker-channel {
+      color: var(--blue-soft);
+      font-family: var(--mono);
+    }
+
+    .ticker-control {
+      height: 100%;
+      padding: 0 10px;
+      border: 0;
+      border-left: 1px solid var(--line-soft);
+      color: var(--muted);
+      background: transparent;
+      font-size: var(--fs-xs);
+    }
+
+    .view-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--gold);
+      font-size: var(--fs-xs);
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .view-title {
+      margin: 0;
+      font-size: var(--fs-xxl);
+      line-height: 1;
+    }
+
+    .view-subtitle {
+      max-width: 820px;
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: var(--fs-sm);
+      line-height: 1.45;
+    }
+
+    .header-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .signal-band {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: var(--surface-1);
+    }
+
+    .metric span {
+      display: block;
+      overflow: hidden;
+      color: var(--dim);
+      font-size: var(--fs-xs);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      overflow: hidden;
+      font-family: var(--mono);
+      font-size: var(--fs-xl);
+      line-height: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .metric em {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-style: normal;
+      font-size: var(--fs-xs);
+    }
+
+    .work-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .grid-two {
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+    }
+
+    .grid-three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid-wide {
+      grid-column: 1 / -1;
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: var(--surface-1);
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 36px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line-soft);
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .panel-header h2,
+    .panel-header h3 {
+      margin: 0;
+      overflow: hidden;
+      font-size: var(--fs-sm);
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .panel-header span {
+      color: var(--dim);
+      font-family: var(--mono);
+      font-size: var(--fs-xs);
+      white-space: nowrap;
+    }
+
+    .panel-body {
+      min-width: 0;
+      padding: 10px;
+    }
+
+    .panel-scroll {
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    .broadcast-panel {
+      border-color: rgba(199, 162, 74, 0.38);
+      background:
+        linear-gradient(135deg, rgba(199, 162, 74, 0.08), transparent 44%),
+        var(--surface-1);
+    }
+
+    .row-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .info-row,
+    .list-row {
+      display: grid;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.02);
+      transition: background 120ms ease, border-color 120ms ease;
+    }
+
+    .list-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .list-row:hover,
+    .info-row:hover {
+      border-color: var(--line);
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .list-row.is-selected,
+    .info-row.is-selected {
+      border-color: rgba(47, 111, 237, 0.58);
+      background: rgba(47, 111, 237, 0.1);
+    }
+
+    .row-main {
+      min-width: 0;
+    }
+
+    .row-title {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+      margin: 0;
+      font-size: var(--fs-sm);
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .row-title span:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .row-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+      color: var(--dim);
+      font-size: var(--fs-xs);
+      line-height: 1.3;
+    }
+
+    .row-meta b {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-weight: 700;
+    }
+
+    .row-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 5px;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--fs-xs);
+    }
+
+    .table-wrap {
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: 7px 8px;
+      border-bottom: 1px solid var(--line-soft);
+      text-align: left;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    .data-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      color: var(--dim);
+      background: var(--surface-1);
+      font-weight: 700;
+    }
+
+    .data-table tbody tr {
+      transition: background 120ms ease;
+    }
+
+    .data-table tbody tr:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .data-table tbody tr.is-selected {
+      background: rgba(47, 111, 237, 0.11);
+      box-shadow: inset 2px 0 0 var(--blue);
+    }
+
+    .mono {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .muted {
+      color: var(--dim);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 18px;
+      padding: 2px 6px;
+      border: 1px solid currentColor;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .badge.live,
+    .status-positive {
+      color: var(--green);
+    }
+
+    .badge.info,
+    .status-info {
+      color: var(--blue-soft);
+    }
+
+    .badge.warn,
+    .status-warning {
+      color: var(--amber);
+    }
+
+    .badge.danger,
+    .status-danger {
+      color: var(--red);
+    }
+
+    .badge.gold,
+    .status-gold {
+      color: var(--gold);
+    }
+
+    .badge.neutral {
+      color: var(--muted);
+    }
+
+    .btn {
+      min-height: 28px;
+      padding: 5px 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--muted);
+      background: var(--surface-2);
+      font-size: var(--fs-xs);
+      font-weight: 700;
+      transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    }
+
+    .btn:hover {
+      color: var(--text);
+      border-color: var(--muted);
+      background: var(--surface-3);
+    }
+
+    .btn.primary {
+      color: #f5f8ff;
+      border-color: rgba(47, 111, 237, 0.8);
+      background: var(--blue);
+    }
+
+    .btn.gold {
+      color: #15120a;
+      border-color: var(--gold);
+      background: var(--gold);
+    }
+
+    .btn.danger {
+      color: #fff6f6;
+      border-color: rgba(211, 77, 77, 0.8);
+      background: rgba(211, 77, 77, 0.25);
+    }
+
+    .btn.ghost {
+      background: transparent;
+    }
+
+    .segmented {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .segmented .btn.is-active {
+      color: var(--gold);
+      border-color: rgba(199, 162, 74, 0.7);
+      background: rgba(199, 162, 74, 0.12);
+    }
+
+    .spark {
+      display: grid;
+      grid-template-columns: repeat(16, 1fr);
+      gap: 2px;
+      align-items: end;
+      height: 30px;
+      margin-top: 7px;
+    }
+
+    .spark i {
+      display: block;
+      min-height: 4px;
+      border-radius: 2px 2px 0 0;
+      background: var(--blue-soft);
+      opacity: 0.72;
+    }
+
+    .bar-track {
+      height: 7px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: var(--bg-deep);
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--green);
+    }
+
+    .split-bars {
+      display: grid;
+      gap: 8px;
+    }
+
+    .split-line {
+      display: grid;
+      grid-template-columns: 100px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: var(--fs-xs);
+    }
+
+    .mini-board {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+      gap: 6px;
+    }
+
+    .mini-cell {
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .mini-cell span {
+      display: block;
+      color: var(--dim);
+      font-size: var(--fs-xs);
+    }
+
+    .mini-cell strong {
+      display: block;
+      margin-top: 3px;
+      font-family: var(--mono);
+      font-size: var(--fs-md);
+    }
+
+    .rail-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .rail-title h2 {
+      margin: 0;
+      font-size: var(--fs-lg);
+    }
+
+    .rail-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .rail-section {
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: var(--surface-1);
+    }
+
+    .rail-section h3 {
+      margin: 0;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line-soft);
+      font-size: var(--fs-sm);
+    }
+
+    .rail-section .rail-body {
+      padding: 10px;
+    }
+
+    .key-value {
+      display: grid;
+      grid-template-columns: minmax(110px, 1fr) auto;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--line-soft);
+      color: var(--muted);
+      font-size: var(--fs-xs);
+    }
+
+    .key-value:last-child {
+      border-bottom: 0;
+    }
+
+    .key-value strong {
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: var(--fs-xs);
+      text-align: right;
+    }
+
+    .match-layout {
+      display: grid;
+      grid-template-columns: minmax(150px, 0.55fr) minmax(320px, 1.4fr) minmax(190px, 0.75fr);
+      gap: 10px;
+    }
+
+    .scorebug {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid rgba(199, 162, 74, 0.42);
+      border-radius: var(--radius);
+      background: #161b22;
+    }
+
+    .team-score {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .team-score.away {
+      justify-content: flex-end;
+    }
+
+    .team-score strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .score-number {
+      font-family: var(--mono);
+      font-size: 34px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .clock-block {
+      min-width: 100px;
+      text-align: center;
+    }
+
+    .clock-block strong {
+      display: block;
+      font-family: var(--mono);
+      font-size: var(--fs-xl);
+      line-height: 1;
+    }
+
+    .clock-block span {
+      display: inline-flex;
+      margin-top: 4px;
+    }
+
+    .pitch-shell {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #102416;
+    }
+
+    .pitch-svg {
+      display: block;
+      width: 100%;
+      aspect-ratio: 100 / 64;
+      min-height: 326px;
+    }
+
+    .pitch-player,
+    .pitch-event,
+    .pitch-zone {
+      cursor: pointer;
+    }
+
+    .pitch-player circle {
+      transition: r 120ms ease, stroke-width 120ms ease;
+    }
+
+    .pitch-player:hover circle,
+    .pitch-player.is-selected circle {
+      r: 2.25;
+      stroke-width: 0.7;
+    }
+
+    .pitch-label {
+      pointer-events: none;
+      font-family: var(--mono);
+      font-size: 2.4px;
+      font-weight: 900;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+
+    .pitch-overlay {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      border-top: 1px solid var(--line-soft);
+      background: rgba(0, 0, 0, 0.24);
+    }
+
+    .event-feed {
+      display: grid;
+      gap: 5px;
+      max-height: 342px;
+      overflow: auto;
+    }
+
+    .event-row {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 7px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .event-row.is-selected {
+      border-color: rgba(199, 162, 74, 0.68);
+      background: rgba(199, 162, 74, 0.08);
+    }
+
+    .event-time {
+      color: var(--gold);
+      font-family: var(--mono);
+      font-size: var(--fs-xs);
+      font-weight: 800;
+    }
+
+    .event-copy {
+      min-width: 0;
+      color: var(--muted);
+      font-size: var(--fs-xs);
+    }
+
+    .event-copy strong {
+      display: block;
+      overflow: hidden;
+      color: var(--text);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .formation-board {
+      position: relative;
+      height: 210px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(90deg, transparent 49%, rgba(255, 255, 255, 0.12) 49% 51%, transparent 51%),
+        linear-gradient(0deg, rgba(47, 125, 74, 0.22), rgba(47, 125, 74, 0.06));
+    }
+
+    .formation-dot {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: 50%;
+      color: #0b0d10;
+      background: var(--home);
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 900;
+      transform: translate(-50%, -50%);
+    }
+
+    .capital-map {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+      gap: 8px;
+    }
+
+    .capital-node {
+      padding: 9px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .capital-node strong {
+      display: block;
+      font-family: var(--mono);
+      font-size: var(--fs-lg);
+    }
+
+    .capital-node span {
+      display: block;
+      margin-top: 4px;
+      color: var(--dim);
+      font-size: var(--fs-xs);
+    }
+
+    .heat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+      gap: 5px;
+    }
+
+    .heat-cell {
+      min-height: 58px;
+      padding: 7px;
+      border: 1px solid var(--line-soft);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .heat-cell strong {
+      display: block;
+      font-family: var(--mono);
+      font-size: var(--fs-md);
+    }
+
+    .heat-cell span {
+      color: var(--dim);
+      font-size: var(--fs-xs);
+    }
+
+    .pulse-high {
+      background: rgba(25, 169, 116, 0.15);
+      border-color: rgba(25, 169, 116, 0.35);
+    }
+
+    .pulse-mid {
+      background: rgba(217, 154, 36, 0.14);
+      border-color: rgba(217, 154, 36, 0.35);
+    }
+
+    .pulse-low {
+      background: rgba(47, 111, 237, 0.13);
+      border-color: rgba(47, 111, 237, 0.35);
+    }
+
+    .notice {
+      padding: 9px;
+      border: 1px solid rgba(217, 154, 36, 0.4);
+      border-radius: var(--radius);
+      color: var(--muted);
+      background: rgba(217, 154, 36, 0.08);
+      font-size: var(--fs-xs);
+      line-height: 1.4;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .app-shell {
+        grid-template-columns: 220px minmax(0, 1fr);
+        grid-template-rows: 56px minmax(0, 1fr) auto 34px;
+        grid-template-areas:
+          "sidebar topbar"
+          "sidebar main"
+          "sidebar rail"
+          "ticker ticker";
+      }
+
+      .context-rail {
+        max-height: 310px;
+        border-top: 1px solid var(--line);
+        border-left: 0;
+      }
+
+      .signal-band {
+        grid-template-columns: repeat(3, minmax(150px, 1fr));
+      }
+
+      .grid-two,
+      .grid-three,
+      .match-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .capital-map,
+      .heat-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 860px) {
+      body {
+        overflow: auto;
+      }
+
+      .app-shell {
+        min-height: 100vh;
+        height: auto;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto auto minmax(0, 1fr) auto 38px;
+        grid-template-areas:
+          "topbar"
+          "sidebar"
+          "main"
+          "rail"
+          "ticker";
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      .sidebar {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand-block {
+        display: none;
+      }
+
+      .module-nav {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 8px;
+      }
+
+      .nav-button {
+        width: 168px;
+        flex: 0 0 auto;
+        margin: 0;
+      }
+
+      .sidebar-footer {
+        display: none;
+      }
+
+      .view-header {
+        grid-template-columns: 1fr;
+      }
+
+      .header-actions {
+        justify-content: flex-start;
+      }
+
+      .signal-band {
+        grid-template-columns: repeat(2, minmax(130px, 1fr));
+      }
+
+      .capital-map,
+      .heat-grid,
+      .mini-board {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .data-table {
+        min-width: 680px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .ticker {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+      }
+    }
+
+    @media (max-width: 540px) {
+      .workspace,
+      .rail-inner {
+        padding: 8px;
+      }
+
+      .signal-band,
+      .capital-map,
+      .heat-grid,
+      .mini-board {
+        grid-template-columns: 1fr;
+      }
+
+      .view-title {
+        font-size: 24px;
+      }
+
+      .scorebug {
+        grid-template-columns: 1fr;
+      }
+
+      .team-score.away {
+        justify-content: flex-start;
+      }
+
+      .ticker-track {
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell" id="app">
+    <aside class="sidebar" aria-label="GTEX command navigation">
+      <div class="brand-block">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">GX</div>
+          <div>
+            <p class="brand-title">GTEX OS</p>
+            <p class="brand-kicker">Football economy command surface</p>
+          </div>
+        </div>
+        <div class="club-strip">
+          <div>
+            <strong>Lagos Crown FC</strong>
+            <span>Operator desk: transfer window live</span>
+          </div>
+          <div class="crest" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <nav class="module-nav" id="nav" aria-label="Primary modules"></nav>
+
+      <div class="sidebar-footer">
+        <div class="operator-grid">
+          <button class="btn" data-role="Club Operator" data-action="role">Club</button>
+          <button class="btn" data-role="Trader" data-action="role">Trader</button>
+          <button class="btn" data-role="Creator Desk" data-action="role">Creator</button>
+          <button class="btn" data-role="Admin Ops" data-action="role">Admin</button>
+        </div>
+      </div>
+    </aside>
+
+    <header class="topbar" aria-label="Operational topbar">
+      <div class="topbar-section market-window">
+        <span class="live-dot" aria-hidden="true"></span>
+        <div>
+          <strong id="windowTitle">Transfer Window: West Africa prime cycle</strong>
+          <span id="clockText">SYNC 14:21:08 WAT</span>
+        </div>
+      </div>
+
+      <label class="search-box">
+        <span aria-hidden="true">F</span>
+        <input id="globalSearch" type="search" autocomplete="off" placeholder="Search clubs, players, wallets, traders, fixtures">
+        <kbd>CTRL K</kbd>
+      </label>
+
+      <div class="topbar-actions">
+        <span class="badge live" id="marketStatus">MARKET OPEN</span>
+        <span class="badge warn" id="riskStatus">RISK 12</span>
+        <button class="btn" id="liveToggle" data-action="toggle-live">Pause Live</button>
+        <select class="btn" id="speedSelect" aria-label="Simulation speed">
+          <option value="4200">Calm</option>
+          <option value="2600" selected>Normal</option>
+          <option value="1200">Deadline</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="main" id="main" tabindex="-1">
+      <div class="workspace" id="workspace"></div>
+    </main>
+
+    <aside class="context-rail" aria-label="Contextual intelligence rail">
+      <div class="rail-inner" id="rail"></div>
+    </aside>
+
+    <footer class="ticker" aria-label="Realtime ticker">
+      <div class="ticker-label">GTEX LIVE</div>
+      <div class="ticker-track" id="tickerTrack"></div>
+      <button class="ticker-control" data-action="toggle-ticker" id="tickerControl">Hold</button>
+    </footer>
+  </div>
+
+  <script>
+    const money = new Intl.NumberFormat("en", {
+      notation: "compact",
+      maximumFractionDigits: 1
+    });
+
+    const fullMoney = new Intl.NumberFormat("en", {
+      maximumFractionDigits: 0
+    });
+
+    const pct = value => `${Number(value).toFixed(1)}%`;
+    const gtx = value => `GTX ${money.format(value)}`;
+    const gtxFull = value => `GTX ${fullMoney.format(value)}`;
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const pad = value => String(value).padStart(2, "0");
+
+    const navItems = [
+      { id: "pulse", code: "EP", label: "Ecosystem Pulse", hint: "World health", count: 8 },
+      { id: "club", code: "HQ", label: "Club HQ", hint: "Squad command", count: 24 },
+      { id: "transfers", code: "TM", label: "Transfer Market", hint: "Deals and auctions", count: 17 },
+      { id: "capital", code: "CA", label: "Capital", hint: "Wallets and runway", count: 11 },
+      { id: "traders", code: "TR", label: "Trader Marketplace", hint: "Mandates and indexes", count: 14 },
+      { id: "creators", code: "CR", label: "Creator Economy", hint: "Campaign yield", count: 9 },
+      { id: "match", code: "MC", label: "Match Center", hint: "2D broadcast ops", count: 1 },
+      { id: "admin", code: "AD", label: "Admin Ops", hint: "Integrity desk", count: 19 }
+    ];
+
+    const state = {
+      role: "Club Operator",
+      activeView: "pulse",
+      selected: { type: null, id: null },
+      search: "",
+      running: true,
+      tickerHeld: false,
+      speed: 2600,
+      overlay: "shape",
+      tick: 0,
+      now: new Date("2026-05-28T14:21:08+01:00"),
+      match: {
+        minute: 37,
+        second: 42,
+        status: "LIVE",
+        league: "GTEX Premier Circuit",
+        venue: "Eko Arena",
+        home: "Lagos Crown FC",
+        away: "Atlantic Forge",
+        score: { home: 1, away: 0 },
+        possession: { home: 56, away: 44 },
+        shots: { home: 7, away: 3 },
+        xg: { home: 1.28, away: 0.42 },
+        territory: { home: 58, away: 42 },
+        ball: { x: 63, y: 30 },
+        momentum: 64,
+        timeline: [38, 44, 51, 47, 54, 61, 58, 64, 67, 63, 70, 68]
+      },
+      clubs: [
+        { id: "club-lagos", name: "Lagos Crown FC", league: "GTEX Premier Circuit", cash: 48200000, transferBudget: 22000000, wageBill: 3100000, revenue: 5200000, debt: 9500000, ffp: 22, sentiment: 81, board: 74, form: "W W D L W", liquidity: 87, rank: 2 },
+        { id: "club-berlin", name: "Berlin Forge", league: "Continental North", cash: 33100000, transferBudget: 16500000, wageBill: 2800000, revenue: 4100000, debt: 12000000, ffp: 36, sentiment: 68, board: 69, form: "D W W W L", liquidity: 72, rank: 4 },
+        { id: "club-cairo", name: "Cairo Union", league: "Mediterranean Elite", cash: 59600000, transferBudget: 30500000, wageBill: 3600000, revenue: 6400000, debt: 7100000, ffp: 18, sentiment: 77, board: 82, form: "W W W D W", liquidity: 91, rank: 1 },
+        { id: "club-lisbon", name: "Lisbon Mariners", league: "Atlantic League", cash: 28900000, transferBudget: 9800000, wageBill: 2400000, revenue: 3900000, debt: 15100000, ffp: 48, sentiment: 62, board: 58, form: "L W D D L", liquidity: 54, rank: 7 }
+      ],
+      players: [
+        { id: "p-okoro", no: 11, name: "Chidi Okoro", club: "Lagos Crown FC", pos: "IF", age: 22, value: 24800000, wage: 76000, form: 7.6, potential: 87, risk: "low", scout: "A", available: "protected", demand: 91, status: "tracked", rating: 7.4, fitness: 82, xg: 0.54, xa: 0.12, x: 76, y: 23, team: "home" },
+        { id: "p-bello", no: 9, name: "Ayo Bello", club: "Lagos Crown FC", pos: "ST", age: 25, value: 18400000, wage: 88000, form: 7.2, potential: 80, risk: "medium", scout: "B+", available: "approachable", demand: 74, status: "shortlist", rating: 7.1, fitness: 76, xg: 0.43, xa: 0.06, x: 84, y: 32, team: "home" },
+        { id: "p-diallo", no: 6, name: "Moussa Diallo", club: "Lagos Crown FC", pos: "DM", age: 28, value: 11900000, wage: 62000, form: 7.0, potential: 75, risk: "low", scout: "B", available: "hold", demand: 58, status: "core", rating: 6.9, fitness: 88, xg: 0.03, xa: 0.09, x: 53, y: 34, team: "home" },
+        { id: "p-rivas", no: 14, name: "Mateo Rivas", club: "Valencia Norte", pos: "DM", age: 23, value: 14200000, wage: 62000, form: 7.4, potential: 84, risk: "medium", scout: "A-", available: "approachable", demand: 86, status: "open", rating: 0, fitness: 91, xg: 0, xa: 0, x: 45, y: 31, team: "market" },
+        { id: "p-mensah", no: 6, name: "Kojo Mensah", club: "Atlantic Forge", pos: "CM", age: 24, value: 16700000, wage: 71000, form: 7.1, potential: 82, risk: "medium", scout: "B+", available: "contested", demand: 79, status: "rival bid", rating: 6.8, fitness: 73, xg: 0.04, xa: 0.14, x: 42, y: 30, team: "away" },
+        { id: "p-hart", no: 10, name: "Elias Hart", club: "Atlantic Forge", pos: "AM", age: 27, value: 21300000, wage: 98000, form: 7.3, potential: 81, risk: "low", scout: "A-", available: "expensive", demand: 83, status: "watched", rating: 6.7, fitness: 69, xg: 0.19, xa: 0.18, x: 28, y: 39, team: "away" },
+        { id: "p-sato", no: 7, name: "Ren Sato", club: "Osaka Harbor", pos: "RW", age: 21, value: 19700000, wage: 69000, form: 7.5, potential: 88, risk: "low", scout: "A", available: "approachable", demand: 88, status: "open", rating: 0, fitness: 94, xg: 0, xa: 0, x: 0, y: 0, team: "market" },
+        { id: "p-njie", no: 3, name: "Samba Njie", club: "Dakar Rail", pos: "LB", age: 20, value: 9800000, wage: 42000, form: 7.0, potential: 83, risk: "work permit", scout: "B+", available: "open", demand: 64, status: "open", rating: 0, fitness: 89, xg: 0, xa: 0, x: 0, y: 0, team: "market" }
+      ],
+      transferOrders: [
+        { id: "ord-4412", type: "BUY", club: "Lagos Crown FC", position: "DM", maxFee: 18500000, wageCap: 85000, priority: "urgent", status: "open", expires: 18, tags: "ball-winner, u23, resale" },
+        { id: "ord-4490", type: "SELL", club: "Lisbon Mariners", position: "ST", maxFee: 12800000, wageCap: 0, priority: "cashflow", status: "counter", expires: 11, tags: "wage relief, rotation" },
+        { id: "ord-4528", type: "LOAN", club: "Cairo Union", position: "RW", maxFee: 3800000, wageCap: 52000, priority: "opportunistic", status: "open", expires: 36, tags: "minutes, buy option" },
+        { id: "ord-4551", type: "BUY", club: "Berlin Forge", position: "CB", maxFee: 22000000, wageCap: 96000, priority: "strategic", status: "rival watch", expires: 29, tags: "leader, aerial" }
+      ],
+      deals: [
+        { id: "deal-901", player: "Mateo Rivas", buyer: "Lagos Crown FC", seller: "Valencia Norte", fee: 15800000, status: "agent terms", risk: "medium", next: "Counter wage bonus" },
+        { id: "deal-918", player: "Ren Sato", buyer: "Cairo Union", seller: "Osaka Harbor", fee: 21200000, status: "medical booked", risk: "low", next: "Release clause escrow" },
+        { id: "deal-936", player: "Samba Njie", buyer: "Lagos Crown FC", seller: "Dakar Rail", fee: 10200000, status: "work permit", risk: "high", next: "Appeal packet" }
+      ],
+      wallets: [
+        { id: "wallet-club", name: "Club operating wallet", balance: 48200000, inflow: 5200000, outflow: 4100000, status: "healthy", risk: 16 },
+        { id: "wallet-escrow", name: "Transfer escrow", balance: 10300000, inflow: 3500000, outflow: 15800000, status: "pending", risk: 31 },
+        { id: "wallet-creator", name: "Creator revenue pool", balance: 1280000, inflow: 214000, outflow: 76000, status: "settling", risk: 9 },
+        { id: "wallet-trader", name: "Trader settlement rail", balance: 18800000, inflow: 1280000, outflow: 910000, status: "open", risk: 21 }
+      ],
+      ledger: [
+        { id: "led-9002", wallet: "Transfer escrow", type: "TRANSFER_ESCROW", dir: "debit", amount: 3500000, status: "settled", ref: "Loan fee: D. Okafor", risk: false, age: "14:21" },
+        { id: "led-9014", wallet: "Club operating wallet", type: "MATCHDAY_REVENUE", dir: "credit", amount: 820000, status: "settled", ref: "Eko Arena gate share", risk: false, age: "13:56" },
+        { id: "led-9031", wallet: "Trader settlement rail", type: "MARKET_SETTLEMENT", dir: "debit", amount: 640000, status: "review", ref: "NorthBank Alpha index close", risk: true, age: "13:40" },
+        { id: "led-9048", wallet: "Creator revenue pool", type: "CREATOR_SPLIT", dir: "credit", amount: 46500, status: "pending", ref: "PitchLabTV derby package", risk: false, age: "13:18" }
+      ],
+      traders: [
+        { id: "tr-northbank", name: "NorthBank Alpha", strategy: "youth-value arbitrage", reputation: 91, volume: 1280000, open: 14, risk: "low", pnl: 8.7, status: "verified" },
+        { id: "tr-atlas", name: "Atlas Matchflow", strategy: "fixture volatility", reputation: 84, volume: 960000, open: 9, risk: "medium", pnl: 3.2, status: "watch" },
+        { id: "tr-copper", name: "Copperline Desk", strategy: "injury mispricing", reputation: 76, volume: 740000, open: 6, risk: "medium", pnl: -1.4, status: "limited" },
+        { id: "tr-harbor", name: "Harbor Nine Capital", strategy: "club index carry", reputation: 88, volume: 1540000, open: 18, risk: "low", pnl: 5.9, status: "verified" }
+      ],
+      assets: [
+        { id: "mk-u23", asset: "U23 West Africa Forward Index", price: 104.8, change: 2.4, liquidity: 720000, sentiment: "bullish", status: "open" },
+        { id: "mk-goal", asset: "Next Goal Control Basket", price: 61.2, change: 1.1, liquidity: 510000, sentiment: "stable", status: "open" },
+        { id: "mk-dm", asset: "Defensive Midfielder Demand Curve", price: 118.6, change: 4.8, liquidity: 880000, sentiment: "heated", status: "open" },
+        { id: "mk-lagos", asset: "Lagos Crown Club Performance Note", price: 99.4, change: -0.7, liquidity: 430000, sentiment: "balanced", status: "open" }
+      ],
+      creators: [
+        { id: "cr-pitchlab", handle: "PitchLabTV", niche: "tactical analysis", followers: 840000, engagement: 6.8, revenue: 46500, campaign: "Lagos derby build-up", brandSafety: 94, status: "active" },
+        { id: "cr-standside", handle: "StandSide Live", niche: "matchday culture", followers: 520000, engagement: 5.9, revenue: 31800, campaign: "Atlantic Forge away day", brandSafety: 91, status: "review" },
+        { id: "cr-scoutroom", handle: "ScoutRoom Daily", niche: "youth scouting", followers: 310000, engagement: 7.4, revenue: 22400, campaign: "U23 forward watch", brandSafety: 97, status: "active" },
+        { id: "cr-kitline", handle: "KitLine Studio", niche: "club identity", followers: 270000, engagement: 4.6, revenue: 18500, campaign: "Third kit launch", brandSafety: 89, status: "scheduled" }
+      ],
+      campaigns: [
+        { id: "camp-derby", name: "Lagos derby build-up", owner: "Lagos Crown FC", budget: 125000, deliverables: 12, status: "active", yield: 13.6 },
+        { id: "camp-u23", name: "U23 market watch", owner: "GTEX League Office", budget: 74000, deliverables: 8, status: "approvals", yield: 9.8 },
+        { id: "camp-rights", name: "Okoro media rights package", owner: "Player Office", budget: 210000, deliverables: 16, status: "negotiating", yield: 17.1 }
+      ],
+      adminOps: [
+        { id: "ops-331", type: "PAYMENT_REVIEW", severity: "high", entity: "Berlin Forge transfer escrow", status: "pending", owner: "Ops Desk 2", sla: 42 },
+        { id: "ops-337", type: "MARKET_INTEGRITY", severity: "medium", entity: "Defensive Midfielder Demand Curve", status: "investigating", owner: "Market Desk", sla: 68 },
+        { id: "ops-342", type: "KYC_REVIEW", severity: "low", entity: "StandSide Live creator payout", status: "queued", owner: "Trust Desk", sla: 112 },
+        { id: "ops-351", type: "MATCH_SIGNAL", severity: "medium", entity: "Atlantic Forge card volatility", status: "monitoring", owner: "Integrity Desk", sla: 25 }
+      ],
+      fixtures: [
+        { id: "fx-1007", league: "GTEX Premier Circuit", home: "Lagos Crown FC", away: "Atlantic Forge", minute: 37, status: "LIVE", score: "1-0", venue: "Eko Arena", momentum: 64, tags: "scout-watch" },
+        { id: "fx-1008", league: "Mediterranean Elite", home: "Cairo Union", away: "Lisbon Mariners", minute: 64, status: "LIVE", score: "2-1", venue: "Nile Gate", momentum: 71, tags: "high-pressure" },
+        { id: "fx-1011", league: "Continental North", home: "Berlin Forge", away: "Oslo Vale", minute: 12, status: "LIVE", score: "0-0", venue: "Werkstadion", momentum: 49, tags: "low-block" }
+      ],
+      events: [
+        { id: "ev-1", minute: "37:42", type: "Shot blocked", team: "Lagos Crown FC", player: "Ayo Bello", xg: 0.07, zone: "Zone 14", severity: "info" },
+        { id: "ev-2", minute: "36:58", type: "Foul committed", team: "Atlantic Forge", player: "Kojo Mensah", xg: 0, zone: "Right channel", severity: "warn" },
+        { id: "ev-3", minute: "35:21", type: "Goal", team: "Lagos Crown FC", player: "Chidi Okoro", xg: 0.32, zone: "Left half-space", severity: "gold" },
+        { id: "ev-4", minute: "33:09", type: "Tactical change", team: "Atlantic Forge", player: "Elias Hart", xg: 0, zone: "4-3-3 to 4-2-3-1", severity: "info" }
+      ],
+      tickers: []
+    };
+
+    const homeXI = [
+      ["GK", 7, 32, "1"], ["LB", 30, 12, "3"], ["LCB", 28, 26, "5"], ["RCB", 28, 39, "4"], ["RB", 31, 52, "2"],
+      ["DM", 52, 34, "6"], ["CM", 58, 22, "8"], ["AM", 64, 39, "10"], ["LW", 75, 14, "11"], ["ST", 84, 32, "9"], ["RW", 75, 51, "7"]
+    ];
+    const awayXI = [
+      ["GK", 93, 32, "1"], ["LB", 70, 52, "3"], ["LCB", 72, 39, "5"], ["RCB", 72, 26, "4"], ["RB", 69, 12, "2"],
+      ["DM", 48, 30, "6"], ["CM", 42, 43, "8"], ["AM", 31, 38, "10"], ["LW", 24, 51, "11"], ["ST", 17, 32, "9"], ["RW", 24, 13, "7"]
+    ];
+
+    function seedTickers() {
+      [
+        ["Match", "37:42 Lagos Crown pressure sequence ends with blocked shot", "info"],
+        ["Transfer", "Berlin Forge increased bid for Mateo Rivas to GTX 16.8M", "warn"],
+        ["Capital", "Escrow settled: Loan fee D. Okafor GTX 3.5M", "live"],
+        ["Trader", "U23 West Africa Forward Index +2.4 on rising scout demand", "info"],
+        ["Creator", "PitchLabTV derby package engagement running 31% above forecast", "live"],
+        ["Admin", "High severity payment review assigned to Ops Desk 2", "danger"]
+      ].forEach(item => addTicker(item[0], item[1], item[2], false));
+    }
+
+    function addTicker(channel, text, severity = "info", rerender = true) {
+      state.tickers.unshift({
+        id: `tick-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        channel,
+        text,
+        severity,
+        time: `${pad(state.now.getHours())}:${pad(state.now.getMinutes())}:${pad(state.now.getSeconds())}`
+      });
+      state.tickers = state.tickers.slice(0, 36);
+      if (rerender) renderTicker();
+    }
+
+    function statusBadge(value) {
+      const v = String(value).toLowerCase();
+      let cls = "neutral";
+      if (["live", "settled", "healthy", "open", "verified", "active", "low", "core"].includes(v)) cls = "live";
+      if (["watch", "tracked", "info", "approvals", "scheduled", "pending", "review"].includes(v)) cls = "info";
+      if (["urgent", "counter", "medium", "rival bid", "work permit", "warn", "held", "investigating", "monitoring"].includes(v)) cls = "warn";
+      if (["high", "danger", "critical", "rejected", "limited"].includes(v)) cls = "danger";
+      if (["goal", "gold", "elite", "premium"].includes(v)) cls = "gold";
+      return `<span class="badge ${cls}">${value}</span>`;
+    }
+
+    function renderNav() {
+      document.getElementById("nav").innerHTML = navItems.map(item => `
+        <button class="nav-button ${state.activeView === item.id ? "is-active" : ""}" data-view="${item.id}">
+          <span class="nav-code">${item.code}</span>
+          <span class="nav-label"><strong>${item.label}</strong><span>${item.hint}</span></span>
+          <span class="nav-count">${item.count}</span>
+        </button>
+      `).join("");
+    }
+
+    function renderTopbar() {
+      const viewName = navItems.find(item => item.id === state.activeView)?.label || "GTEX";
+      document.getElementById("windowTitle").textContent = `${viewName}: ${state.role} live desk`;
+      document.getElementById("clockText").textContent = `SYNC ${pad(state.now.getHours())}:${pad(state.now.getMinutes())}:${pad(state.now.getSeconds())} WAT`;
+      document.getElementById("marketStatus").textContent = state.running ? "MARKET OPEN" : "MARKET HELD";
+      document.getElementById("riskStatus").textContent = `RISK ${Math.round(pulse().integrityRisk)}`;
+      document.getElementById("liveToggle").textContent = state.running ? "Pause Live" : "Resume Live";
+      document.getElementById("tickerControl").textContent = state.tickerHeld ? "Release" : "Hold";
+    }
+
+    function pulse() {
+      const transferVolume = state.deals.reduce((sum, deal) => sum + deal.fee, 0) + state.transferOrders.reduce((sum, order) => sum + order.maxFee, 0);
+      const walletTotal = state.wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
+      const creatorRevenue = state.creators.reduce((sum, creator) => sum + creator.revenue, 0);
+      const adminBacklog = state.adminOps.filter(op => !["resolved", "rejected"].includes(op.status)).length;
+      return {
+        activeFixtures: state.fixtures.filter(fx => fx.status === "LIVE").length,
+        transferVolume,
+        walletSettlement: 98.4 - state.ledger.filter(entry => entry.status !== "settled").length * 1.7,
+        liquidity: state.assets.reduce((sum, asset) => sum + asset.liquidity, 0),
+        creatorRevenue,
+        adminBacklog,
+        integrityRisk: 10 + state.adminOps.filter(op => op.severity === "high").length * 7 + state.ledger.filter(entry => entry.risk).length * 4,
+        walletTotal
+      };
+    }
+
+    function viewHeader(title, subtitle, actions = "") {
+      return `
+        <div class="view-header">
+          <div>
+            <p class="eyebrow">GTEX FOOTBALL OPERATING SYSTEM</p>
+            <h1 class="view-title">${title}</h1>
+            <p class="view-subtitle">${subtitle}</p>
+          </div>
+          <div class="header-actions">${actions}</div>
+        </div>
+      `;
+    }
+
+    function metric(label, value, note, status = "") {
+      return `<div class="metric ${status}"><span>${label}</span><strong>${value}</strong><em>${note}</em></div>`;
+    }
+
+    function signalBand(items) {
+      return `<section class="signal-band">${items.map(item => metric(item[0], item[1], item[2], item[3] || "")).join("")}</section>`;
+    }
+
+    function panel(title, meta, body, extra = "") {
+      return `
+        <section class="panel ${extra}">
+          <header class="panel-header"><h2>${title}</h2><span>${meta}</span></header>
+          <div class="panel-body">${body}</div>
+        </section>
+      `;
+    }
+
+    function table(headers, rows) {
+      return `
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>${headers.map(header => `<th>${header}</th>`).join("")}</tr></thead>
+            <tbody>${rows.join("")}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderPulse() {
+      const p = pulse();
+      const clubRows = state.clubs.map(club => `
+        <tr data-select-type="club" data-select-id="${club.id}" class="${isSelected("club", club.id)}">
+          <td><strong>${club.name}</strong></td>
+          <td>${club.league}</td>
+          <td class="mono">${gtx(club.cash)}</td>
+          <td class="mono">${club.liquidity}</td>
+          <td>${statusBadge(club.ffp > 40 ? "watch" : "stable")}</td>
+        </tr>
+      `);
+      const fixtureRows = state.fixtures.map(fx => `
+        <div class="list-row ${isSelected("fixture", fx.id)}" data-select-type="fixture" data-select-id="${fx.id}">
+          <div class="row-main">
+            <p class="row-title"><span>${fx.home} ${fx.score} ${fx.away}</span>${statusBadge(fx.status)}</p>
+            <div class="row-meta"><span>${fx.league}</span><span>${fx.minute}'</span><span>${fx.venue}</span><b>Momentum ${fx.momentum}</b></div>
+          </div>
+          <span class="badge info">${fx.tags}</span>
+        </div>
+      `).join("");
+      const transferRows = state.deals.map(deal => `
+        <div class="list-row ${isSelected("deal", deal.id)}" data-select-type="deal" data-select-id="${deal.id}">
+          <div class="row-main">
+            <p class="row-title"><span>${deal.player}</span>${statusBadge(deal.status)}</p>
+            <div class="row-meta"><span>${deal.buyer} -> ${deal.seller}</span><b>${gtx(deal.fee)}</b><span>Risk ${deal.risk}</span></div>
+          </div>
+          <button class="btn" data-action="advance-deal" data-id="${deal.id}">Advance</button>
+        </div>
+      `).join("");
+      return `
+        ${viewHeader("Ecosystem Pulse", "A live control room for clubs, matches, traders, capital flows, creators, and market integrity moving together.", `
+          <button class="btn primary" data-action="inject-event">Inject Match Event</button>
+          <button class="btn" data-action="reset-world">Reset World</button>
+        `)}
+        ${signalBand([
+          ["Active fixtures", p.activeFixtures, "Live match windows"],
+          ["Transfer volume", gtx(p.transferVolume), "Open negotiation mass"],
+          ["Settlement rate", pct(p.walletSettlement), "Wallet reliability"],
+          ["Market liquidity", gtx(p.liquidity), "Trader depth"],
+          ["Creator revenue", gtx(p.creatorRevenue), "24h media yield"],
+          ["Integrity risk", p.integrityRisk, "Ops attention index", p.integrityRisk > 18 ? "status-warning" : ""]
+        ])}
+        <section class="work-grid grid-two">
+          ${panel("Global Market Board", "club liquidity", table(["Club", "League", "Cash", "Liquidity", "FFP"], clubRows), "broadcast-panel")}
+          ${panel("Matchday Event Strip", "live fixtures", `<div class="row-list">${fixtureRows}</div>`)}
+          ${panel("Transfer Activity", "deal flow", `<div class="row-list">${transferRows}</div>`)}
+          ${panel("Football Ecosystem Pulse", "operational heat", `
+            <div class="heat-grid">
+              ${heatCell("Transfers", state.transferOrders.length, "Active order books", "pulse-high")}
+              ${heatCell("Wallets", state.ledger.filter(x => x.status === "pending" || x.status === "review").length, "Pending reviews", "pulse-mid")}
+              ${heatCell("Creators", state.campaigns.length, "Campaign markets", "pulse-low")}
+              ${heatCell("Traders", state.traders.filter(x => x.status === "verified").length, "Verified desks", "pulse-high")}
+              ${heatCell("Admin SLA", Math.min(...state.adminOps.map(x => x.sla)), "Minutes to breach", "pulse-mid")}
+              ${heatCell("Scout Demand", Math.round(avg(state.players.map(x => x.demand))), "Player heat", "pulse-high")}
+            </div>
+          `)}
+        </section>
+      `;
+    }
+
+    function heatCell(label, value, note, cls) {
+      return `<div class="heat-cell ${cls}"><strong>${value}</strong><span>${label}</span><span>${note}</span></div>`;
+    }
+
+    function avg(values) {
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    }
+
+    function renderClub() {
+      const club = state.clubs[0];
+      const squad = state.players.filter(player => player.club === club.name).map(player => `
+        <tr data-select-type="player" data-select-id="${player.id}" class="${isSelected("player", player.id)}">
+          <td class="mono">#${player.no}</td>
+          <td><strong>${player.name}</strong></td>
+          <td>${player.pos}</td>
+          <td class="mono">${player.age}</td>
+          <td class="mono">${player.rating || "-"}</td>
+          <td class="mono">${player.fitness}%</td>
+          <td class="mono">${gtx(player.value)}</td>
+          <td>${statusBadge(player.status)}</td>
+        </tr>
+      `);
+      const pressure = state.players.filter(player => player.club === club.name).map(player => `
+        <div class="split-line">
+          <span>${player.name}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${player.demand}%;background:${player.demand > 80 ? "var(--amber)" : "var(--green)"}"></div></div>
+          <strong class="mono">${player.demand}</strong>
+        </div>
+      `).join("");
+      return `
+        ${viewHeader("Club HQ", "Boardroom, squad room, tactical desk, and financial pressure for a club operating inside a live football economy.", `
+          <button class="btn primary" data-action="renew-contract">Renew Contract</button>
+          <button class="btn" data-action="list-player">Transfer List</button>
+        `)}
+        ${signalBand([
+          ["Cash", gtx(club.cash), "Operating wallet"],
+          ["Transfer budget", gtx(club.transferBudget), "Approved allocation"],
+          ["Wage bill", gtx(club.wageBill), "Monthly exposure"],
+          ["Board confidence", `${club.board}/100`, "Institutional mandate"],
+          ["Fan sentiment", `${club.sentiment}/100`, "Matchday mood"],
+          ["FFP risk", `${club.ffp}/100`, "Capital discipline"]
+        ])}
+        <section class="work-grid grid-two">
+          ${panel("Squad Depth Board", "first team", table(["No", "Player", "Role", "Age", "Rate", "Fit", "Value", "State"], squad), "broadcast-panel")}
+          ${panel("Tactical Status", "in possession", `
+            <div class="formation-board">
+              ${homeXI.map(dot => `<span class="formation-dot" style="left:${dot[1]}%;top:${dot[2]}%">${dot[3]}</span>`).join("")}
+            </div>
+            <div class="mini-board" style="margin-top:8px">
+              ${miniCell("Base shape", "4-2-3-1")}
+              ${miniCell("Press height", "63")}
+              ${miniCell("Build-up bias", "Left 42")}
+            </div>
+          `)}
+          ${panel("Contract And Demand Pressure", "player market signal", `<div class="split-bars">${pressure}</div>`)}
+          ${panel("Board Objectives", "season mandate", `
+            <div class="row-list">
+              ${objective("Qualify for Continental Cup", 71, "on track")}
+              ${objective("Reduce wage-to-revenue ratio below 61%", 54, "watch")}
+              ${objective("Add U23 defensive midfielder with resale profile", 38, "active")}
+              ${objective("Protect Okoro asset value during title run", 82, "critical")}
+            </div>
+          `)}
+        </section>
+      `;
+    }
+
+    function miniCell(label, value) {
+      return `<div class="mini-cell"><span>${label}</span><strong>${value}</strong></div>`;
+    }
+
+    function objective(label, progress, stateLabel) {
+      return `
+        <div class="info-row">
+          <div class="row-title"><span>${label}</span>${statusBadge(stateLabel)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${progress}%;background:${progress > 70 ? "var(--green)" : progress > 45 ? "var(--amber)" : "var(--blue)"}"></div></div>
+        </div>
+      `;
+    }
+
+    function renderTransfers() {
+      const players = state.players.filter(player => player.team === "market" || player.status !== "core").map(player => `
+        <tr data-select-type="player" data-select-id="${player.id}" class="${isSelected("player", player.id)}">
+          <td><strong>${player.name}</strong></td>
+          <td>${player.club}</td>
+          <td>${player.pos}</td>
+          <td class="mono">${player.age}</td>
+          <td class="mono">${gtx(player.value)}</td>
+          <td class="mono">${gtx(player.wage)}</td>
+          <td class="mono">${player.form}</td>
+          <td class="mono">${player.potential}</td>
+          <td>${statusBadge(player.status)}</td>
+          <td><button class="btn" data-action="shortlist" data-id="${player.id}">Watch</button></td>
+        </tr>
+      `);
+      const orders = state.transferOrders.map(order => `
+        <div class="list-row ${isSelected("order", order.id)}" data-select-type="order" data-select-id="${order.id}">
+          <div class="row-main">
+            <p class="row-title"><span>${order.club} ${order.type} ${order.position}</span>${statusBadge(order.priority)}</p>
+            <div class="row-meta"><b>${gtx(order.maxFee)}</b><span>Wage cap ${order.wageCap ? gtx(order.wageCap) : "n/a"}</span><span>${order.expires}h expires</span><span>${order.tags}</span></div>
+          </div>
+          <button class="btn primary" data-action="match-order" data-id="${order.id}">Match</button>
+        </div>
+      `).join("");
+      const deals = state.deals.map(deal => `
+        <div class="list-row ${isSelected("deal", deal.id)}" data-select-type="deal" data-select-id="${deal.id}">
+          <div class="row-main">
+            <p class="row-title"><span>${deal.player}</span>${statusBadge(deal.status)}</p>
+            <div class="row-meta"><span>${deal.buyer}</span><span>${deal.seller}</span><b>${gtx(deal.fee)}</b><span>${deal.next}</span></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn" data-action="counter-deal" data-id="${deal.id}">Counter</button>
+            <button class="btn gold" data-action="accept-deal" data-id="${deal.id}">Accept</button>
+          </div>
+        </div>
+      `).join("");
+      return `
+        ${viewHeader("Transfer Market", "A live deal floor for player exchange, scouting pressure, rival bids, agent terms, and valuation control.", `
+          <button class="btn primary" data-action="new-rival-bid">Simulate Rival Bid</button>
+          <button class="btn" data-action="filter-urgent">Urgent Orders</button>
+        `)}
+        ${signalBand([
+          ["Open orders", state.transferOrders.filter(o => o.status !== "expired").length, "Club demand"],
+          ["Negotiations", state.deals.length, "Active deal rooms"],
+          ["Average demand", Math.round(avg(state.players.map(p => p.demand))), "Player heat"],
+          ["Deadline pressure", `${Math.min(...state.transferOrders.map(o => o.expires))}h`, "Fastest expiry"],
+          ["Rival bids", state.players.filter(p => p.status === "rival bid").length, "Contested assets"],
+          ["Escrow ready", gtx(state.wallets.find(w => w.id === "wallet-escrow").balance), "Transfer rail"]
+        ])}
+        <section class="work-grid grid-two">
+          ${panel("Player Exchange Screener", "sortable market board", table(["Player", "Club", "Pos", "Age", "Value", "Wage", "Form", "Pot", "State", "Act"], players), "broadcast-panel")}
+          ${panel("Buy And Sell Orders", "mandate board", `<div class="row-list">${orders}</div>`)}
+          ${panel("Deal Rooms", "negotiation stack", `<div class="row-list">${deals}</div>`)}
+          ${panel("Comparable Transfers", "valuation comps", `
+            <div class="row-list">
+              ${comp("Tariq Adeyemi", "RW", 21, 18600000, "Cairo Union", "+7.2 resale")}
+              ${comp("Leon Marques", "DM", 24, 15100000, "Berlin Forge", "low wage")}
+              ${comp("Niko Samed", "ST", 25, 12900000, "Lisbon Mariners", "medical watch")}
+            </div>
+          `)}
+        </section>
+      `;
+    }
+
+    function comp(name, pos, age, fee, club, note) {
+      return `<div class="list-row"><div><p class="row-title"><span>${name}</span>${statusBadge(pos)}</p><div class="row-meta"><span>${age} yrs</span><span>${club}</span><b>${gtx(fee)}</b><span>${note}</span></div></div><span class="badge neutral">comp</span></div>`;
+    }
+
+    function renderCapital() {
+      const walletNodes = state.wallets.map(wallet => `
+        <div class="capital-node ${isSelected("wallet", wallet.id)}" data-select-type="wallet" data-select-id="${wallet.id}">
+          <strong>${gtx(wallet.balance)}</strong>
+          <span>${wallet.name}</span>
+          <span>${statusBadge(wallet.status)} Risk ${wallet.risk}</span>
+        </div>
+      `).join("");
+      const ledgerRows = state.ledger.map(entry => `
+        <tr data-select-type="ledger" data-select-id="${entry.id}" class="${isSelected("ledger", entry.id)}">
+          <td class="mono">${entry.age}</td>
+          <td>${entry.wallet}</td>
+          <td>${entry.type}</td>
+          <td>${entry.dir}</td>
+          <td class="mono">${gtx(entry.amount)}</td>
+          <td>${entry.ref}</td>
+          <td>${statusBadge(entry.status)}</td>
+          <td><button class="btn" data-action="settle-ledger" data-id="${entry.id}">Settle</button></td>
+        </tr>
+      `);
+      return `
+        ${viewHeader("Wallet And Capital Systems", "Club capital, transfer escrow, trader settlement, creator revenue, sponsorship yield, and operational risk in one financial command surface.", `
+          <button class="btn primary" data-action="simulate-settlement">Simulate Settlement</button>
+          <button class="btn" data-action="export-ledger">Export CSV</button>
+        `)}
+        ${signalBand([
+          ["Total wallets", gtx(pulse().walletTotal), "Controlled balances"],
+          ["Transfer escrow", gtx(state.wallets[1].balance), "Deal liquidity"],
+          ["Monthly burn", gtx(4100000), "Operating load"],
+          ["Runway", "11.8 mo", "At current burn"],
+          ["Pending ledger", state.ledger.filter(l => l.status !== "settled").length, "Open settlements"],
+          ["Risk flags", state.ledger.filter(l => l.risk).length, "Manual review"]
+        ])}
+        <section class="work-grid grid-two">
+          ${panel("Capital Map", "wallet topology", `<div class="capital-map">${walletNodes}</div>`, "broadcast-panel")}
+          ${panel("Budget Allocation", "board approved", `
+            <div class="split-bars">
+              ${budget("Transfer budget", 72, gtx(22000000))}
+              ${budget("Wage capacity", 61, gtx(3100000))}
+              ${budget("Academy investment", 44, gtx(5800000))}
+              ${budget("Sponsorship pipeline", 68, gtx(7400000))}
+            </div>
+          `)}
+          ${panel("Ledger", "reconciled flow", table(["Time", "Wallet", "Type", "Dir", "Amount", "Reference", "State", "Act"], ledgerRows))}
+          ${panel("Sponsor Pipeline", "commercial capital", `
+            <div class="row-list">
+              ${sponsor("Aurora Air", "shirt sleeve", 2800000, "terms review")}
+              ${sponsor("NaijaTel", "training ground", 4200000, "board approved")}
+              ${sponsor("Civic Bank", "youth academy", 1600000, "legal redline")}
+            </div>
+          `)}
+        </section>
+      `;
+    }
+
+    function budget(label, width, value) {
+      return `<div class="split-line"><span>${label}</span><div class="bar-track"><div class="bar-fill" style="width:${width}%;background:${width > 70 ? "var(--green)" : "var(--amber)"}"></div></div><strong>${value}</strong></div>`;
+    }
+
+    function sponsor(name, packageName, value, status) {
+      return `<div class="list-row"><div><p class="row-title"><span>${name}</span>${statusBadge(status)}</p><div class="row-meta"><span>${packageName}</span><b>${gtx(value)}</b><span>activation tracked</span></div></div><button class="btn" data-action="approve-sponsor" data-name="${name}">Approve</button></div>`;
+    }
+
+    function renderTraders() {
+      const traderRows = state.traders.map(trader => `
+        <tr data-select-type="trader" data-select-id="${trader.id}" class="${isSelected("trader", trader.id)}">
+          <td><strong>${trader.name}</strong></td>
+          <td>${trader.strategy}</td>
+          <td class="mono">${trader.reputation}</td>
+          <td class="mono">${gtx(trader.volume)}</td>
+          <td class="mono">${trader.open}</td>
+          <td class="mono ${trader.pnl >= 0 ? "status-positive" : "status-danger"}">${trader.pnl}%</td>
+          <td>${statusBadge(trader.status)}</td>
+          <td><button class="btn" data-action="follow-trader" data-id="${trader.id}">Follow</button></td>
+        </tr>
+      `);
+      const assetRows = state.assets.map(asset => `
+        <tr data-select-type="asset" data-select-id="${asset.id}" class="${isSelected("asset", asset.id)}">
+          <td><strong>${asset.asset}</strong></td>
+          <td class="mono">${asset.price.toFixed(1)}</td>
+          <td class="mono ${asset.change >= 0 ? "status-positive" : "status-danger"}">${asset.change > 0 ? "+" : ""}${asset.change.toFixed(1)}</td>
+          <td class="mono">${gtx(asset.liquidity)}</td>
+          <td>${statusBadge(asset.sentiment)}</td>
+          <td><button class="btn primary" data-action="buy-asset" data-id="${asset.id}">Buy</button></td>
+        </tr>
+      `);
+      return `
+        ${viewHeader("Trader Marketplace", "Verified football market desks, club performance notes, player-demand indexes, liquidity windows, and mandate execution.", `
+          <button class="btn primary" data-action="price-tick">Price Tick</button>
+          <button class="btn" data-action="risk-sweep">Risk Sweep</button>
+        `)}
+        ${signalBand([
+          ["Market depth", gtx(pulse().liquidity), "Open GTEX liquidity"],
+          ["Verified desks", state.traders.filter(t => t.status === "verified").length, "Operator approved"],
+          ["30d top PnL", `${Math.max(...state.traders.map(t => t.pnl)).toFixed(1)}%`, "Trader performance"],
+          ["Open positions", state.traders.reduce((sum, t) => sum + t.open, 0), "Live exposure"],
+          ["Asset baskets", state.assets.length, "Tradable indexes"],
+          ["Volatility", "Medium", "Matchday driven"]
+        ])}
+        <section class="work-grid grid-two">
+          ${panel("Football Asset Exchange", "orderable indexes", table(["Asset", "Price", "24h", "Liquidity", "Signal", "Act"], assetRows), "broadcast-panel")}
+          ${panel("Trader Directory", "mandate capable", table(["Desk", "Strategy", "Rep", "24h Volume", "Open", "30d", "State", "Act"], traderRows))}
+          ${panel("Live Mandates", "institutional requests", `
+            <div class="row-list">
+              ${mandate("Find buyer for rotation ST", "Lisbon Mariners", "2.5% success fee", "19h")}
+              ${mandate("Source U23 left back", "Lagos Crown FC", "GTX 320K fee cap", "41h")}
+              ${mandate("Hedge matchday volatility", "Cairo Union", "low risk", "live")}
+            </div>
+          `)}
+          ${panel("Market Depth", "bid ask ladder", `
+            <div class="mini-board">
+              ${miniCell("Best bid", "104.6")}
+              ${miniCell("Mid", "104.8")}
+              ${miniCell("Best ask", "105.1")}
+              ${miniCell("Spread", "0.5")}
+              ${miniCell("Vol 1h", gtx(280000))}
+              ${miniCell("Pressure", "+8.2")}
+            </div>
+          `)}
+        </section>
+      `;
+    }
+
+    function mandate(title, club, fee, deadline) {
+      return `<div class="list-row"><div><p class="row-title"><span>${title}</span>${statusBadge(deadline === "live" ? "live" : "open")}</p><div class="row-meta"><span>${club}</span><span>${fee}</span><b>${deadline}</b></div></div><button class="btn" data-action="accept-mandate" data-name="${title}">Accept</button></div>`;
+    }
+
+    function renderCreators() {
+      const creatorRows = state.creators.map(creator => `
+        <tr data-select-type="creator" data-select-id="${creator.id}" class="${isSelected("creator", creator.id)}">
+          <td><strong>${creator.handle}</strong></td>
+          <td>${creator.niche}</td>
+          <td class="mono">${money.format(creator.followers)}</td>
+          <td class="mono">${creator.engagement}%</td>
+          <td class="mono">${gtx(creator.revenue)}</td>
+          <td class="mono">${creator.brandSafety}</td>
+          <td>${statusBadge(creator.status)}</td>
+          <td><button class="btn" data-action="boost-creator" data-id="${creator.id}">Boost</button></td>
+        </tr>
+      `);
+      const campaigns = state.campaigns.map(campaign => `
+        <div class="list-row ${isSelected("campaign", campaign.id)}" data-select-type="campaign" data-select-id="${campaign.id}">
+          <div class="row-main">
+            <p class="row-title"><span>${campaign.name}</span>${statusBadge(campaign.status)}</p>
+            <div class="row-meta"><span>${campaign.owner}</span><b>${gtx(campaign.budget)}</b><span>${campaign.deliverables} deliverables</span><span>Yield ${campaign.yield}%</span></div>
+          </div>
+          <button class="btn primary" data-action="approve-campaign" data-id="${campaign.id}">Approve</button>
+        </div>
+      `).join("");
+      return `
+        ${viewHeader("Creator Economy", "Media rights, creator campaigns, player packages, fan attention, and revenue splits connected to matchday and transfer value.", `
+          <button class="btn primary" data-action="content-drop">Content Drop</button>
+          <button class="btn" data-action="settle-creators">Settle Splits</button>
+        `)}
+        ${signalBand([
+          ["Creator revenue", gtx(pulse().creatorRevenue), "30d tracked"],
+          ["Active campaigns", state.campaigns.filter(c => c.status === "active").length, "Live activations"],
+          ["Avg engagement", `${avg(state.creators.map(c => c.engagement)).toFixed(1)}%`, "Audience quality"],
+          ["Brand safety", Math.round(avg(state.creators.map(c => c.brandSafety))), "Trust score"],
+          ["Media packages", "18", "Player and club rights"],
+          ["Pending splits", gtx(46500), "Revenue rail"]
+        ])}
+        <section class="work-grid grid-two">
+          ${panel("Creator Marketplace", "audience operators", table(["Creator", "Niche", "Reach", "Eng", "Revenue", "Safety", "State", "Act"], creatorRows), "broadcast-panel")}
+          ${panel("Campaign Board", "briefs and approvals", `<div class="row-list">${campaigns}</div>`)}
+          ${panel("Player Media Packages", "rights inventory", `
+            <div class="row-list">
+              ${mediaPackage("Okoro goal sequence rights", "Player Office", 210000, "negotiating")}
+              ${mediaPackage("Lagos Crown dressing room series", "Club Media", 148000, "active")}
+              ${mediaPackage("U23 scout reel bundle", "GTEX League Office", 96000, "approvals")}
+            </div>
+          `)}
+          ${panel("Revenue Split Ledger", "creator settlement", `
+            <div class="split-bars">
+              ${budget("Creators", 46, gtx(46500))}
+              ${budget("Club rights", 28, gtx(28400))}
+              ${budget("Player office", 18, gtx(18100))}
+              ${budget("GTEX platform", 8, gtx(8200))}
+            </div>
+          `)}
+        </section>
+      `;
+    }
+
+    function mediaPackage(name, owner, value, status) {
+      return `<div class="list-row"><div><p class="row-title"><span>${name}</span>${statusBadge(status)}</p><div class="row-meta"><span>${owner}</span><b>${gtx(value)}</b><span>rights checked</span></div></div><button class="btn" data-action="package-rights" data-name="${name}">Package</button></div>`;
+    }
+
+    function renderAdmin() {
+      const opsRows = state.adminOps.map(op => `
+        <tr data-select-type="op" data-select-id="${op.id}" class="${isSelected("op", op.id)}">
+          <td class="mono">${op.id}</td>
+          <td>${op.type}</td>
+          <td>${statusBadge(op.severity)}</td>
+          <td>${op.entity}</td>
+          <td>${op.owner}</td>
+          <td class="mono">${op.sla}m</td>
+          <td>${statusBadge(op.status)}</td>
+          <td>
+            <button class="btn" data-action="hold-op" data-id="${op.id}">Hold</button>
+            <button class="btn gold" data-action="resolve-op" data-id="${op.id}">Resolve</button>
+          </td>
+        </tr>
+      `);
+      return `
+        ${viewHeader("Admin Operations", "Integrity desk, simulation controls, market moderation, user operations, transaction audit, and platform health.", `
+          <button class="btn primary" data-action="escalate-random">Escalate Incident</button>
+          <button class="btn" data-action="run-sync">Run Sync Job</button>
+        `)}
+        ${signalBand([
+          ["Open incidents", state.adminOps.filter(o => o.status !== "resolved").length, "Ops queue"],
+          ["High severity", state.adminOps.filter(o => o.severity === "high").length, "Immediate review"],
+          ["Shortest SLA", `${Math.min(...state.adminOps.map(o => o.sla))}m`, "Time to breach"],
+          ["Market controls", "Nominal", "No halt active"],
+          ["Runtime sync", "99.98%", "Event bus health"],
+          ["Audit events", state.tickers.length, "Current session"]
+        ])}
+        <section class="work-grid grid-two">
+          ${panel("Incident Queue", "integrity and trust", table(["ID", "Type", "Severity", "Entity", "Owner", "SLA", "State", "Act"], opsRows), "broadcast-panel")}
+          ${panel("System Health", "runtime control", `
+            <div class="mini-board">
+              ${miniCell("Event bus", "99.98")}
+              ${miniCell("Wallet rail", "98.4")}
+              ${miniCell("Match feed", "live")}
+              ${miniCell("Trader API", "stable")}
+              ${miniCell("Creator jobs", "7 queued")}
+              ${miniCell("Build gate", "clean")}
+            </div>
+            <div class="notice" style="margin-top:8px">Static prototype mode: controls mutate local mock state only.</div>
+          `)}
+          ${panel("Transaction Audit", "flagged trail", `
+            <div class="row-list">
+              ${state.ledger.filter(x => x.risk || x.status !== "settled").map(entry => `
+                <div class="list-row" data-select-type="ledger" data-select-id="${entry.id}">
+                  <div><p class="row-title"><span>${entry.ref}</span>${statusBadge(entry.status)}</p><div class="row-meta"><span>${entry.wallet}</span><b>${gtx(entry.amount)}</b><span>${entry.type}</span></div></div>
+                  <button class="btn" data-action="settle-ledger" data-id="${entry.id}">Clear</button>
+                </div>
+              `).join("")}
+            </div>
+          `)}
+          ${panel("Simulation Controls", "world state", `
+            <div class="segmented">
+              <button class="btn ${state.speed === 4200 ? "is-active" : ""}" data-action="set-speed" data-speed="4200">Calm</button>
+              <button class="btn ${state.speed === 2600 ? "is-active" : ""}" data-action="set-speed" data-speed="2600">Normal</button>
+              <button class="btn ${state.speed === 1200 ? "is-active" : ""}" data-action="set-speed" data-speed="1200">Deadline</button>
+            </div>
+            <div class="row-list" style="margin-top:10px">
+              ${audit("Market price drift", "enabled", "Trader indexes mutate each tick")}
+              ${audit("Match event generator", state.running ? "live" : "held", "Weighted football events")}
+              ${audit("SLA countdown", "enabled", "Admin incidents decay over time")}
+            </div>
+          `)}
+        </section>
+      `;
+    }
+
+    function audit(label, stateLabel, note) {
+      return `<div class="info-row"><p class="row-title"><span>${label}</span>${statusBadge(stateLabel)}</p><div class="row-meta"><span>${note}</span></div></div>`;
+    }
+
+    function renderMatch() {
+      const m = state.match;
+      const playerRatings = state.players.filter(player => ["home", "away"].includes(player.team)).map(player => `
+        <tr data-select-type="player" data-select-id="${player.id}" class="${isSelected("player", player.id)}">
+          <td class="mono">#${player.no}</td>
+          <td><strong>${player.name}</strong></td>
+          <td>${player.club}</td>
+          <td>${player.pos}</td>
+          <td class="mono">${player.rating}</td>
+          <td class="mono">${player.fitness}%</td>
+          <td class="mono">${player.xg.toFixed(2)}</td>
+        </tr>
+      `);
+      return `
+        ${viewHeader("2D Match Center", "Broadcast-grade match presentation connected to club operations, player recruitment signals, and trader-market context.", `
+          <button class="btn primary" data-action="inject-goal">Inject Goal</button>
+          <button class="btn" data-action="toggle-live">${state.running ? "Pause" : "Resume"}</button>
+        `)}
+        <section class="work-grid">
+          <div class="scorebug">
+            <div class="team-score"><div class="crest" aria-hidden="true"></div><strong>${m.home}</strong><span class="score-number">${m.score.home}</span></div>
+            <div class="clock-block"><strong>${matchClock()}</strong>${statusBadge(m.status)}</div>
+            <div class="team-score away"><span class="score-number">${m.score.away}</span><strong>${m.away}</strong><div class="crest" style="background:linear-gradient(90deg,#d7b56d 0 50%,#2f6fed 50%)" aria-hidden="true"></div></div>
+          </div>
+          <div class="mini-board">
+            ${miniCell("Possession", `${m.possession.home}/${m.possession.away}`)}
+            ${miniCell("xG", `${m.xg.home.toFixed(2)} / ${m.xg.away.toFixed(2)}`)}
+            ${miniCell("Shots", `${m.shots.home} / ${m.shots.away}`)}
+            ${miniCell("Territory", `${m.territory.home}/${m.territory.away}`)}
+            ${miniCell("Venue", m.venue)}
+            ${miniCell("League", "Premier")}
+          </div>
+          <div class="match-layout">
+            ${panel("Team Operations", "Lagos Crown", `
+              <div class="row-list">
+                ${teamNote("Press trap", "Right channel bait working", "live")}
+                ${teamNote("Fatigue risk", "Bello below sprint baseline", "warn")}
+                ${teamNote("Scout lens", "Okoro value signal rising", "gold")}
+                ${teamNote("Sub window", "DM cover available", "info")}
+              </div>
+            `)}
+            <section class="panel broadcast-panel">
+              <header class="panel-header"><h2>Live Tactical Pitch</h2><span>${state.overlay} overlay</span></header>
+              <div class="pitch-shell">
+                ${renderPitch()}
+                <div class="pitch-overlay">
+                  <div class="segmented">
+                    ${["shape", "pressure", "shots", "xg", "territory", "market"].map(mode => `<button class="btn ${state.overlay === mode ? "is-active" : ""}" data-action="overlay" data-mode="${mode}">${mode}</button>`).join("")}
+                  </div>
+                  <span class="badge info">Scout lens armed</span>
+                </div>
+              </div>
+            </section>
+            ${panel("Market Hooks", "match model", `
+              <div class="mini-board">
+                ${miniCell("Home win", "64%")}
+                ${miniCell("Draw", "24%")}
+                ${miniCell("Away win", "12%")}
+                ${miniCell("Next goal", "Home +8.2")}
+                ${miniCell("Volatility", "Medium")}
+                ${miniCell("Liquidity", "Open")}
+              </div>
+              <div class="spark">${m.timeline.map(v => `<i style="height:${clamp(v / 2, 6, 30)}px;background:${v > 62 ? "var(--green)" : "var(--blue-soft)"}"></i>`).join("")}</div>
+            `)}
+            ${panel("Official Event Feed", "data provider tape", `<div class="event-feed">${state.events.map(renderEventRow).join("")}</div>`)}
+            ${panel("Player Ratings", "operational lens", table(["No", "Player", "Club", "Role", "Rate", "Fit", "xG"], playerRatings))}
+            ${panel("Momentum And Territory", "last 10 minutes", `
+              <div class="split-bars">
+                ${budget("Lagos momentum", m.momentum, `${m.momentum}`)}
+                ${budget("Atlantic counterpressure", 100 - m.momentum, `${100 - m.momentum}`)}
+                ${budget("Final third control", m.territory.home, `${m.territory.home}%`)}
+                ${budget("Market confidence", 64, "64%")}
+              </div>
+            `)}
+          </div>
+        </section>
+      `;
+    }
+
+    function teamNote(label, note, stateLabel) {
+      return `<div class="info-row"><p class="row-title"><span>${label}</span>${statusBadge(stateLabel)}</p><div class="row-meta"><span>${note}</span></div></div>`;
+    }
+
+    function renderEventRow(event) {
+      return `
+        <button class="event-row ${isSelected("event", event.id)}" data-select-type="event" data-select-id="${event.id}">
+          <span class="event-time">${event.minute}</span>
+          <span class="event-copy"><strong>${event.team} - ${event.type}</strong>${event.player} | ${event.zone} | xG ${event.xg.toFixed(2)}</span>
+          ${statusBadge(event.severity)}
+        </button>
+      `;
+    }
+
+    function matchClock() {
+      const m = state.match;
+      return `${pad(m.minute)}:${pad(m.second)}`;
+    }
+
+    function renderPitch() {
+      const m = state.match;
+      const overlay = state.overlay;
+      const players = [
+        ...homeXI.map(dot => ({ id: homePlayerId(dot[3]), number: dot[3], x: dot[1], y: dot[2], team: "home" })),
+        ...awayXI.map(dot => ({ id: awayPlayerId(dot[3]), number: dot[3], x: dot[1], y: dot[2], team: "away" }))
+      ];
+      const pressure = overlay === "pressure" || overlay === "territory" ? `
+        <rect x="50" y="0" width="25" height="64" fill="rgba(217,154,36,0.18)" class="pitch-zone" data-select-type="zone" data-select-id="middle-press"></rect>
+        <rect x="75" y="0" width="25" height="64" fill="rgba(25,169,116,0.16)" class="pitch-zone" data-select-type="zone" data-select-id="final-third"></rect>
+      ` : "";
+      const market = overlay === "market" ? `
+        <circle cx="76" cy="23" r="7" fill="none" stroke="#8fb3ff" stroke-width="0.5" opacity="0.8"></circle>
+        <text x="76" y="15" fill="#8fb3ff" font-size="2.6" text-anchor="middle" font-family="monospace">+14 VALUE</text>
+        <circle cx="53" cy="34" r="6" fill="none" stroke="#d99a24" stroke-width="0.5" opacity="0.75"></circle>
+      ` : "";
+      const shots = overlay === "shots" || overlay === "xg" ? state.events.filter(ev => ev.xg > 0).map((ev, index) => `
+        <circle cx="${index === 0 ? 78 : 82}" cy="${index === 0 ? 31 : 22}" r="${2 + ev.xg * 8}" fill="rgba(199,162,74,0.38)" stroke="#c7a24a" stroke-width="0.35" class="pitch-event" data-select-type="event" data-select-id="${ev.id}"></circle>
+      `).join("") : "";
+      const passNetwork = overlay === "shape" ? `
+        <path d="M53 34 L64 39 L76 23 L84 32 L75 51" fill="none" stroke="rgba(237,243,248,0.32)" stroke-width="0.45"></path>
+        <path d="M53 34 L58 22 L76 23" fill="none" stroke="rgba(237,243,248,0.24)" stroke-width="0.35"></path>
+      ` : "";
+      return `
+        <svg class="pitch-svg" viewBox="0 0 100 64" role="img" aria-label="Live 2D football pitch">
+          <defs>
+            <pattern id="grass" width="100" height="12" patternUnits="userSpaceOnUse">
+              <rect width="100" height="6" fill="#245f3a"></rect>
+              <rect y="6" width="100" height="6" fill="#2f7d4a"></rect>
+            </pattern>
+          </defs>
+          <rect x="0" y="0" width="100" height="64" fill="url(#grass)"></rect>
+          ${pressure}
+          <rect x="3" y="3" width="94" height="58" fill="none" stroke="rgba(237,243,248,0.82)" stroke-width="0.45"></rect>
+          <line x1="50" y1="3" x2="50" y2="61" stroke="rgba(237,243,248,0.72)" stroke-width="0.35"></line>
+          <circle cx="50" cy="32" r="8" fill="none" stroke="rgba(237,243,248,0.72)" stroke-width="0.35"></circle>
+          <circle cx="50" cy="32" r="0.6" fill="rgba(237,243,248,0.9)"></circle>
+          <rect x="3" y="18" width="14" height="28" fill="none" stroke="rgba(237,243,248,0.72)" stroke-width="0.35"></rect>
+          <rect x="83" y="18" width="14" height="28" fill="none" stroke="rgba(237,243,248,0.72)" stroke-width="0.35"></rect>
+          <rect x="3" y="25" width="5" height="14" fill="none" stroke="rgba(237,243,248,0.72)" stroke-width="0.35"></rect>
+          <rect x="92" y="25" width="5" height="14" fill="none" stroke="rgba(237,243,248,0.72)" stroke-width="0.35"></rect>
+          ${passNetwork}
+          ${shots}
+          ${market}
+          ${players.map(player => `
+            <g class="pitch-player ${isSelected("player", player.id)}" data-select-type="player" data-select-id="${player.id}">
+              <circle cx="${player.x}" cy="${player.y}" r="1.85" fill="${player.team === "home" ? "#edf3f8" : "#d7b56d"}" stroke="${player.team === "home" ? "#101316" : "#11151a"}" stroke-width="0.45"></circle>
+              <text class="pitch-label" x="${player.x}" y="${player.y}" fill="#0b0d10">${player.number}</text>
+            </g>
+          `).join("")}
+          <circle cx="${m.ball.x}" cy="${m.ball.y}" r="1.05" fill="#f2f4f6" stroke="#101316" stroke-width="0.35"></circle>
+          <circle cx="${m.ball.x}" cy="${m.ball.y}" r="3.2" fill="none" stroke="rgba(242,244,246,0.32)" stroke-width="0.35"></circle>
+        </svg>
+      `;
+    }
+
+    function homePlayerId(number) {
+      const map = { "11": "p-okoro", "9": "p-bello", "6": "p-diallo" };
+      return map[number] || `home-${number}`;
+    }
+
+    function awayPlayerId(number) {
+      const map = { "6": "p-mensah", "10": "p-hart" };
+      return map[number] || `away-${number}`;
+    }
+
+    function renderRail() {
+      const rail = document.getElementById("rail");
+      if (state.search.trim()) {
+        rail.innerHTML = renderSearchRail();
+        return;
+      }
+
+      const selected = selectedEntity();
+      if (selected) {
+        rail.innerHTML = renderInspector(selected);
+        return;
+      }
+
+      const viewRails = {
+        pulse: railPulse,
+        club: railClub,
+        transfers: railTransfers,
+        capital: railCapital,
+        traders: railTraders,
+        creators: railCreators,
+        match: railMatch,
+        admin: railAdmin
+      };
+      rail.innerHTML = viewRails[state.activeView]();
+    }
+
+    function railShell(title, subtitle, sections) {
+      return `
+        <div class="rail-title"><div><p class="eyebrow">${subtitle}</p><h2>${title}</h2></div>${statusBadge(state.running ? "live" : "held")}</div>
+        <div class="rail-stack">${sections.join("")}</div>
+      `;
+    }
+
+    function railSection(title, body) {
+      return `<section class="rail-section"><h3>${title}</h3><div class="rail-body">${body}</div></section>`;
+    }
+
+    function railPulse() {
+      return railShell("Ecosystem Intelligence", "default context", [
+        railSection("Market Movers", railRows([
+          ["Okoro value signal", "+14 since goal"],
+          ["DM demand curve", "+4.8 index"],
+          ["Creator derby traffic", "+31 forecast"]
+        ])),
+        railSection("Operational Alerts", smallRows(state.adminOps.slice(0, 3).map(op => [op.entity, `${op.sla}m SLA`, op.severity]))),
+        railSection("Pinned Ticker", tickerRail())
+      ]);
+    }
+
+    function railClub() {
+      return railShell("Club Command Stack", "Lagos Crown FC", [
+        railSection("Board Controls", railRows([
+          ["Transfer budget", gtx(22000000)],
+          ["Wage pressure", "61% capacity"],
+          ["Board confidence", "74/100"]
+        ])),
+        railSection("Immediate Decisions", actionStack([
+          ["Renew Okoro protection terms", "renew-contract"],
+          ["Open Rivas deal room", "open-rivas"],
+          ["Review Bello fatigue minutes", "review-fatigue"]
+        ])),
+        railSection("Upcoming Fixtures", smallRows(state.fixtures.map(fx => [fx.home, `${fx.score} ${fx.away}`, fx.status])))
+      ]);
+    }
+
+    function railTransfers() {
+      return railShell("Deal Intelligence", "transfer market", [
+        railSection("Deadline Pressure", smallRows(state.transferOrders.map(order => [`${order.club} ${order.position}`, `${order.expires}h`, order.priority]))),
+        railSection("Agent Desk", actionStack([
+          ["Counter Rivas wage bonus", "counter-rivas"],
+          ["Request Sato medical packet", "sato-medical"],
+          ["Walk away from high work permit risk", "walk-risk"]
+        ])),
+        railSection("Valuation Snapshot", railRows([
+          ["Median target value", gtx(16400000)],
+          ["Rival bid delta", "+GTX 1.0M"],
+          ["Escrow capacity", gtx(10300000)]
+        ]))
+      ]);
+    }
+
+    function railCapital() {
+      return railShell("Capital Warnings", "finance control", [
+        railSection("Wallet Exposure", railRows(state.wallets.map(wallet => [wallet.name, `${gtx(wallet.balance)} | risk ${wallet.risk}`]))),
+        railSection("Manual Review", smallRows(state.ledger.filter(entry => entry.status !== "settled").map(entry => [entry.ref, gtx(entry.amount), entry.status]))),
+        railSection("Actions", actionStack([
+          ["Approve creator split batch", "settle-creators"],
+          ["Hold trader settlement review", "hold-trader-settlement"],
+          ["Reforecast wage runway", "reforecast-runway"]
+        ]))
+      ]);
+    }
+
+    function railTraders() {
+      return railShell("Marketplace Control", "trader desk", [
+        railSection("Top Desks", smallRows(state.traders.map(trader => [trader.name, `${trader.pnl}% 30d`, trader.status]))),
+        railSection("Asset Heat", smallRows(state.assets.map(asset => [asset.asset, `${asset.change > 0 ? "+" : ""}${asset.change.toFixed(1)}`, asset.sentiment]))),
+        railSection("Controls", actionStack([
+          ["Open liquidity window", "open-liquidity"],
+          ["Run abnormal spike scan", "risk-sweep"],
+          ["Publish mandate update", "publish-mandate"]
+        ]))
+      ]);
+    }
+
+    function railCreators() {
+      return railShell("Creator Yield Desk", "media economy", [
+        railSection("Campaign Fit", smallRows(state.campaigns.map(campaign => [campaign.name, `${campaign.yield}% yield`, campaign.status]))),
+        railSection("Creator Watch", smallRows(state.creators.map(creator => [creator.handle, `${creator.engagement}% eng`, creator.status]))),
+        railSection("Controls", actionStack([
+          ["Approve U23 market watch", "approve-u23"],
+          ["Boost derby package", "content-drop"],
+          ["Release rights memo", "rights-memo"]
+        ]))
+      ]);
+    }
+
+    function railMatch() {
+      return railShell("Tactical Assistant", "live match", [
+        railSection("Key Events", `<div class="event-feed">${state.events.slice(0, 4).map(renderEventRow).join("")}</div>`),
+        railSection("Tactical Alerts", smallRows([
+          ["Atlantic right channel", "Repeated exposure", "warn"],
+          ["Lagos left build-up", "42% progression", "live"],
+          ["Okoro market signal", "+14 asset impact", "gold"]
+        ])),
+        railSection("Market Impact", railRows([
+          ["Home win probability", "64%"],
+          ["Next goal index", "Home +8.2"],
+          ["Liquidity window", "Open"]
+        ]))
+      ]);
+    }
+
+    function railAdmin() {
+      return railShell("Incident Queue", "admin ops", [
+        railSection("SLA Pressure", smallRows(state.adminOps.map(op => [op.entity, `${op.sla}m`, op.severity]))),
+        railSection("Platform Health", railRows([
+          ["Event bus", "99.98"],
+          ["Wallet rail", "98.4"],
+          ["Match feed", "live"],
+          ["Audit mode", "enabled"]
+        ])),
+        railSection("Admin Actions", actionStack([
+          ["Escalate payment review", "escalate-random"],
+          ["Run sync job", "run-sync"],
+          ["Freeze suspicious settlement", "hold-trader-settlement"]
+        ]))
+      ]);
+    }
+
+    function railRows(items) {
+      return items.map(item => `<div class="key-value"><span>${item[0]}</span><strong>${item[1]}</strong></div>`).join("");
+    }
+
+    function smallRows(items) {
+      return `<div class="row-list">${items.map(item => `<div class="list-row"><div><p class="row-title"><span>${item[0]}</span>${statusBadge(item[2])}</p><div class="row-meta"><span>${item[1]}</span></div></div></div>`).join("")}</div>`;
+    }
+
+    function actionStack(items) {
+      return `<div class="row-list">${items.map(item => `<button class="btn" data-action="${item[1]}">${item[0]}</button>`).join("")}</div>`;
+    }
+
+    function tickerRail() {
+      return `<div class="row-list">${state.tickers.slice(0, 5).map(tick => `<div class="info-row"><p class="row-title"><span>${tick.channel}</span>${statusBadge(tick.severity)}</p><div class="row-meta"><span>${tick.time}</span><span>${tick.text}</span></div></div>`).join("")}</div>`;
+    }
+
+    function renderSearchRail() {
+      const q = state.search.trim().toLowerCase();
+      const results = [
+        ...state.players.map(item => ({ type: "player", id: item.id, title: item.name, meta: `${item.club} | ${item.pos} | ${gtx(item.value)}` })),
+        ...state.clubs.map(item => ({ type: "club", id: item.id, title: item.name, meta: `${item.league} | cash ${gtx(item.cash)}` })),
+        ...state.wallets.map(item => ({ type: "wallet", id: item.id, title: item.name, meta: `${gtx(item.balance)} | ${item.status}` })),
+        ...state.traders.map(item => ({ type: "trader", id: item.id, title: item.name, meta: `${item.strategy} | rep ${item.reputation}` })),
+        ...state.assets.map(item => ({ type: "asset", id: item.id, title: item.asset, meta: `${item.price.toFixed(1)} | ${item.sentiment}` }))
+      ].filter(item => `${item.title} ${item.meta}`.toLowerCase().includes(q)).slice(0, 12);
+      return railShell("Global Search", `${results.length} matches`, [
+        railSection("Results", `<div class="row-list">${results.map(result => `
+          <button class="list-row" data-select-type="${result.type}" data-select-id="${result.id}">
+            <div><p class="row-title"><span>${result.title}</span>${statusBadge(result.type)}</p><div class="row-meta"><span>${result.meta}</span></div></div>
+          </button>
+        `).join("") || `<div class="notice">No entity matches the current query.</div>`}</div>`)
+      ]);
+    }
+
+    function renderInspector(entity) {
+      const { type, item } = entity;
+      const title = item.name || item.handle || item.asset || item.player || item.entity || item.ref || item.id;
+      const sections = [];
+      if (type === "player") {
+        sections.push(railSection("Player Profile", railRows([
+          ["Club", item.club],
+          ["Role", item.pos],
+          ["Age", item.age],
+          ["Value", gtx(item.value)],
+          ["Wage", gtx(item.wage)],
+          ["Scout grade", item.scout],
+          ["Demand", item.demand]
+        ])));
+        sections.push(railSection("Operational Actions", actionStack([
+          ["Add to shortlist", `shortlist:${item.id}`],
+          ["Open bid controls", `bid-player:${item.id}`],
+          ["Pin recruitment report", `pin:${type}:${item.id}`]
+        ])));
+      } else if (type === "club") {
+        sections.push(railSection("Club Finance", railRows([
+          ["League", item.league],
+          ["Cash", gtx(item.cash)],
+          ["Transfer budget", gtx(item.transferBudget)],
+          ["Wage bill", gtx(item.wageBill)],
+          ["Board", `${item.board}/100`],
+          ["FFP risk", `${item.ffp}/100`]
+        ])));
+      } else if (type === "event") {
+        sections.push(railSection("Match Incident", railRows([
+          ["Time", item.minute],
+          ["Team", item.team],
+          ["Player", item.player],
+          ["Event", item.type],
+          ["xG", item.xg.toFixed(2)],
+          ["Zone", item.zone]
+        ])));
+      } else {
+        sections.push(railSection("Entity Snapshot", Object.entries(item).slice(0, 9).map(([key, value]) => `<div class="key-value"><span>${key}</span><strong>${formatAny(value)}</strong></div>`).join("")));
+      }
+      sections.push(railSection("Context Trail", tickerRail()));
+      return railShell(title, `${type} inspector`, sections);
+    }
+
+    function formatAny(value) {
+      if (typeof value === "number") return value > 9999 ? gtx(value) : String(value);
+      if (typeof value === "boolean") return value ? "yes" : "no";
+      return String(value);
+    }
+
+    function selectedEntity() {
+      const { type, id } = state.selected;
+      if (!type || !id) return null;
+      const collections = {
+        player: state.players,
+        club: state.clubs,
+        fixture: state.fixtures,
+        event: state.events,
+        deal: state.deals,
+        order: state.transferOrders,
+        wallet: state.wallets,
+        ledger: state.ledger,
+        trader: state.traders,
+        asset: state.assets,
+        creator: state.creators,
+        campaign: state.campaigns,
+        op: state.adminOps
+      };
+      const item = collections[type]?.find(entry => entry.id === id);
+      return item ? { type, item } : null;
+    }
+
+    function isSelected(type, id) {
+      return state.selected.type === type && state.selected.id === id ? "is-selected" : "";
+    }
+
+    function renderTicker() {
+      if (state.tickerHeld) return;
+      document.getElementById("tickerTrack").innerHTML = state.tickers.slice(0, 14).map(tick => `
+        <button class="ticker-item" data-action="ticker-select" data-id="${tick.id}">
+          <span class="ticker-time">${tick.time}</span>
+          <span class="ticker-channel">${tick.channel}</span>
+          <span>${tick.text}</span>
+        </button>
+      `).join("");
+    }
+
+    function renderWorkspace() {
+      const views = {
+        pulse: renderPulse,
+        club: renderClub,
+        transfers: renderTransfers,
+        capital: renderCapital,
+        traders: renderTraders,
+        creators: renderCreators,
+        match: renderMatch,
+        admin: renderAdmin
+      };
+      document.getElementById("workspace").innerHTML = views[state.activeView]();
+    }
+
+    function render() {
+      renderNav();
+      renderTopbar();
+      renderWorkspace();
+      renderRail();
+      renderTicker();
+    }
+
+    function selectEntity(type, id) {
+      state.selected = { type, id };
+      state.search = "";
+      document.getElementById("globalSearch").value = "";
+      render();
+    }
+
+    function handleAction(action, element) {
+      if (action.includes(":")) {
+        const [base, typeOrId, id] = action.split(":");
+        if (base === "shortlist") shortlist(typeOrId);
+        if (base === "bid-player") bidPlayer(typeOrId);
+        if (base === "pin") addTicker("Pinned", `${typeOrId} ${id} pinned to operator rail`, "info");
+        render();
+        return;
+      }
+
+      switch (action) {
+        case "role":
+          state.role = element.dataset.role || state.role;
+          addTicker("Operator", `Role switched to ${state.role}`, "info");
+          break;
+        case "toggle-live":
+          state.running = !state.running;
+          addTicker("System", `Live simulation ${state.running ? "resumed" : "held"}`, state.running ? "live" : "warn");
+          break;
+        case "toggle-ticker":
+          state.tickerHeld = !state.tickerHeld;
+          break;
+        case "overlay":
+          state.overlay = element.dataset.mode || "shape";
+          break;
+        case "inject-event":
+          generateMatchEvent(true);
+          break;
+        case "inject-goal":
+          generateGoal(true);
+          break;
+        case "reset-world":
+          state.match.minute = 37;
+          state.match.second = 42;
+          state.match.score = { home: 1, away: 0 };
+          addTicker("System", "Mock world reset to comparison baseline", "info");
+          break;
+        case "shortlist":
+          shortlist(element.dataset.id);
+          break;
+        case "bid-player":
+          bidPlayer(element.dataset.id);
+          break;
+        case "match-order":
+          matchOrder(element.dataset.id);
+          break;
+        case "advance-deal":
+        case "counter-deal":
+          advanceDeal(element.dataset.id, "counter");
+          break;
+        case "accept-deal":
+          advanceDeal(element.dataset.id, "accepted");
+          break;
+        case "new-rival-bid":
+          rivalBid();
+          break;
+        case "settle-ledger":
+          settleLedger(element.dataset.id);
+          break;
+        case "simulate-settlement":
+          settleRandomLedger();
+          break;
+        case "export-ledger":
+          addTicker("Capital", "Ledger CSV generated locally for operator review", "info");
+          break;
+        case "approve-sponsor":
+          addTicker("Capital", `${element.dataset.name} sponsor package moved to board approval`, "live");
+          break;
+        case "price-tick":
+          updateMarketPrices(true);
+          break;
+        case "buy-asset":
+          buyAsset(element.dataset.id);
+          break;
+        case "follow-trader":
+          followTrader(element.dataset.id);
+          break;
+        case "risk-sweep":
+          addTicker("Trader", "Abnormal spike scan completed across four football indexes", "info");
+          break;
+        case "accept-mandate":
+          addTicker("Trader", `Mandate accepted: ${element.dataset.name}`, "live");
+          break;
+        case "boost-creator":
+          boostCreator(element.dataset.id);
+          break;
+        case "approve-campaign":
+          approveCampaign(element.dataset.id);
+          break;
+        case "content-drop":
+          contentDrop();
+          break;
+        case "settle-creators":
+          addTicker("Creator", "Creator revenue split batch queued for wallet settlement", "live");
+          break;
+        case "hold-op":
+          updateOp(element.dataset.id, "held");
+          break;
+        case "resolve-op":
+          updateOp(element.dataset.id, "resolved");
+          break;
+        case "escalate-random":
+          escalateRandom();
+          break;
+        case "run-sync":
+          addTicker("Admin", "Event bus sync job completed with 99.98 reliability", "live");
+          break;
+        case "set-speed":
+          setSpeed(Number(element.dataset.speed));
+          break;
+        case "ticker-select":
+          addTicker("Rail", "Ticker item pinned into contextual inspection trail", "info");
+          break;
+        case "renew-contract":
+          addTicker("Club HQ", "Protection terms drafted for Chidi Okoro", "gold");
+          break;
+        case "list-player":
+          addTicker("Club HQ", "Rotation player flagged for controlled market listing", "warn");
+          break;
+        default:
+          addTicker("Command", `${action.replaceAll("-", " ")} executed`, "info");
+      }
+      render();
+    }
+
+    function shortlist(id) {
+      const player = state.players.find(item => item.id === id) || state.players.find(item => item.id === state.selected.id);
+      if (!player) return;
+      player.status = "shortlist";
+      addTicker("Transfer", `${player.name} added to Lagos Crown shortlist`, "info");
+      state.selected = { type: "player", id: player.id };
+    }
+
+    function bidPlayer(id) {
+      const player = state.players.find(item => item.id === id) || state.players.find(item => item.id === state.selected.id);
+      if (!player) return;
+      player.status = "bid lodged";
+      state.deals.unshift({ id: `deal-${Date.now()}`, player: player.name, buyer: "Lagos Crown FC", seller: player.club, fee: Math.round(player.value * 0.92), status: "bid lodged", risk: player.risk, next: "Await seller response" });
+      addTicker("Transfer", `Bid lodged for ${player.name} at ${gtx(player.value * 0.92)}`, "live");
+    }
+
+    function matchOrder(id) {
+      const order = state.transferOrders.find(item => item.id === id);
+      if (!order) return;
+      order.status = "matched";
+      addTicker("Transfer", `${order.club} ${order.position} order matched to scout shortlist`, "live");
+    }
+
+    function advanceDeal(id, status) {
+      const deal = state.deals.find(item => item.id === id);
+      if (!deal) return;
+      deal.status = status === "accepted" ? "accepted" : "counter sent";
+      deal.next = status === "accepted" ? "Escrow release" : "Awaiting seller reply";
+      addTicker("Transfer", `${deal.player} deal ${deal.status} at ${gtx(deal.fee)}`, status === "accepted" ? "live" : "warn");
+    }
+
+    function rivalBid() {
+      const player = state.players.find(item => item.id === "p-rivas") || state.players[3];
+      player.status = "rival bid";
+      player.value += 600000;
+      addTicker("Transfer", `Rival bid raised ${player.name} valuation to ${gtx(player.value)}`, "warn");
+    }
+
+    function settleLedger(id) {
+      const entry = state.ledger.find(item => item.id === id);
+      if (!entry) return;
+      entry.status = "settled";
+      entry.risk = false;
+      addTicker("Capital", `${entry.ref} settled for ${gtx(entry.amount)}`, "live");
+    }
+
+    function settleRandomLedger() {
+      const entry = state.ledger.find(item => item.status !== "settled");
+      if (entry) settleLedger(entry.id);
+      else addTicker("Capital", "No unsettled ledger entries remain", "info");
+    }
+
+    function buyAsset(id) {
+      const asset = state.assets.find(item => item.id === id);
+      if (!asset) return;
+      asset.liquidity += 42000;
+      asset.change += 0.2;
+      addTicker("Trader", `Mock buy order placed on ${asset.asset}`, "live");
+      state.selected = { type: "asset", id };
+    }
+
+    function followTrader(id) {
+      const trader = state.traders.find(item => item.id === id);
+      if (!trader) return;
+      trader.status = "followed";
+      addTicker("Trader", `${trader.name} added to institutional watchlist`, "info");
+      state.selected = { type: "trader", id };
+    }
+
+    function boostCreator(id) {
+      const creator = state.creators.find(item => item.id === id);
+      if (!creator) return;
+      creator.engagement = Number((creator.engagement + 0.4).toFixed(1));
+      creator.revenue += 2800;
+      addTicker("Creator", `${creator.handle} boosted; engagement now ${creator.engagement}%`, "live");
+    }
+
+    function approveCampaign(id) {
+      const campaign = state.campaigns.find(item => item.id === id);
+      if (!campaign) return;
+      campaign.status = "active";
+      addTicker("Creator", `${campaign.name} campaign approved`, "live");
+    }
+
+    function contentDrop() {
+      const creator = state.creators[0];
+      creator.revenue += 5200;
+      creator.engagement = Number((creator.engagement + 0.6).toFixed(1));
+      addTicker("Creator", `${creator.handle} content drop beat forecast; revenue +${gtx(5200)}`, "gold");
+    }
+
+    function updateOp(id, status) {
+      const op = state.adminOps.find(item => item.id === id);
+      if (!op) return;
+      op.status = status;
+      addTicker("Admin", `${op.type} for ${op.entity} marked ${status}`, status === "resolved" ? "live" : "warn");
+    }
+
+    function escalateRandom() {
+      const op = state.adminOps.find(item => item.status !== "resolved") || state.adminOps[0];
+      op.severity = "high";
+      op.sla = Math.max(8, op.sla - 15);
+      addTicker("Admin", `${op.entity} escalated to high severity`, "danger");
+    }
+
+    function setSpeed(value) {
+      state.speed = value;
+      document.getElementById("speedSelect").value = String(value);
+      restartTimer();
+      addTicker("System", `Simulation speed set to ${value === 1200 ? "deadline" : value === 4200 ? "calm" : "normal"}`, "info");
+    }
+
+    function updateMarketPrices(forceTicker = false) {
+      state.assets.forEach(asset => {
+        const drift = (Math.random() - 0.42) * 0.8;
+        asset.price = Math.max(20, Number((asset.price + drift).toFixed(1)));
+        asset.change = Number((asset.change + drift / 2).toFixed(1));
+        asset.liquidity += Math.round((Math.random() - 0.35) * 18000);
+      });
+      if (forceTicker || Math.random() > 0.45) {
+        const asset = state.assets[Math.floor(Math.random() * state.assets.length)];
+        addTicker("Trader", `${asset.asset} ${asset.change >= 0 ? "+" : ""}${asset.change.toFixed(1)} with ${gtx(asset.liquidity)} liquidity`, asset.change > 3 ? "warn" : "info", false);
+      }
+    }
+
+    function generateGoal(selectEvent = false) {
+      const scorer = Math.random() > 0.32 ? state.players.find(p => p.id === "p-okoro") : state.players.find(p => p.id === "p-hart");
+      const teamKey = scorer.team === "home" ? "home" : "away";
+      state.match.score[teamKey] += 1;
+      state.match.shots[teamKey] += 1;
+      state.match.xg[teamKey] += 0.34;
+      scorer.rating = Number((scorer.rating + 0.6).toFixed(1));
+      scorer.xg += 0.34;
+      const ev = {
+        id: `ev-${Date.now()}`,
+        minute: matchClock(),
+        type: "Goal",
+        team: scorer.club,
+        player: scorer.name,
+        xg: 0.34,
+        zone: scorer.team === "home" ? "Left half-space" : "Central break",
+        severity: "gold"
+      };
+      state.events.unshift(ev);
+      if (selectEvent) {
+        state.selected = { type: "event", id: ev.id };
+      }
+      addTicker("Match", `${matchClock()} Goal ${scorer.club}: ${scorer.name}`, "gold", false);
+      addTicker("Trader", `Goal moved home control model to ${64 + state.match.score.home * 3}%`, "info", false);
+    }
+
+    function generateMatchEvent(force = false) {
+      const weights = [
+        ["Pass sequence", 35],
+        ["Shot", 12],
+        ["Save", 8],
+        ["Yellow card", 5],
+        ["Injury check", 4],
+        ["Goal", force ? 20 : 3],
+        ["VAR review", 2],
+        ["Tactical change", 6],
+        ["Market movement", 8],
+        ["Scout flag", 7]
+      ];
+      const type = weighted(weights);
+      if (type === "Goal") {
+        generateGoal(force);
+        return;
+      }
+      const player = state.players.filter(p => ["home", "away"].includes(p.team))[Math.floor(Math.random() * 5)];
+      const isShot = type === "Shot" || type === "Save";
+      const teamKey = player.team === "away" ? "away" : "home";
+      if (isShot) {
+        state.match.shots[teamKey] += 1;
+        state.match.xg[teamKey] += 0.05;
+        player.xg += 0.05;
+      }
+      state.match.ball = { x: clamp(player.x + (Math.random() - 0.5) * 8, 6, 94), y: clamp(player.y + (Math.random() - 0.5) * 8, 5, 59) };
+      state.match.momentum = clamp(state.match.momentum + (teamKey === "home" ? 2 : -2) + Math.round((Math.random() - 0.5) * 6), 28, 78);
+      state.match.timeline.push(state.match.momentum);
+      state.match.timeline = state.match.timeline.slice(-16);
+      const ev = {
+        id: `ev-${Date.now()}`,
+        minute: matchClock(),
+        type,
+        team: player.club,
+        player: player.name,
+        xg: isShot ? 0.05 : 0,
+        zone: ["Zone 14", "Left channel", "Right channel", "Final third", "Middle third"][Math.floor(Math.random() * 5)],
+        severity: type.includes("Yellow") || type.includes("Injury") ? "warn" : type.includes("Market") ? "info" : "live"
+      };
+      state.events.unshift(ev);
+      state.events = state.events.slice(0, 28);
+      addTicker(type.includes("Market") ? "Trader" : type.includes("Scout") ? "Transfer" : "Match", `${matchClock()} ${ev.team}: ${ev.type} by ${ev.player}`, ev.severity, false);
+    }
+
+    function weighted(items) {
+      const total = items.reduce((sum, item) => sum + item[1], 0);
+      let roll = Math.random() * total;
+      for (const item of items) {
+        roll -= item[1];
+        if (roll <= 0) return item[0];
+      }
+      return items[0][0];
+    }
+
+    function advanceFixtureMinutes() {
+      state.now = new Date(state.now.getTime() + 1000 * 24);
+      state.match.second += 24;
+      while (state.match.second >= 60) {
+        state.match.second -= 60;
+        state.match.minute += 1;
+      }
+      if (state.match.minute >= 45 && state.match.minute < 46) state.match.status = "HT SOON";
+      if (state.match.minute >= 90) state.match.status = "FT";
+      state.fixtures.forEach(fx => {
+        if (fx.status === "LIVE") fx.minute = Math.min(90, fx.minute + (Math.random() > 0.5 ? 1 : 0));
+      });
+      state.transferOrders.forEach(order => {
+        order.expires = Math.max(0, Number((order.expires - 0.1).toFixed(1)));
+        if (order.expires === 0) order.status = "expired";
+      });
+      state.adminOps.forEach(op => {
+        if (op.status !== "resolved") op.sla = Math.max(0, op.sla - 1);
+      });
+    }
+
+    function tickWorld() {
+      if (!state.running) {
+        state.now = new Date(state.now.getTime() + 1000);
+        renderTopbar();
+        return;
+      }
+      state.tick += 1;
+      advanceFixtureMinutes();
+      generateMatchEvent();
+      updateMarketPrices(false);
+      if (Math.random() > 0.72) settleRandomLedger();
+      if (Math.random() > 0.82) contentDrop();
+      if (state.tick % 3 === 0) {
+        const player = state.players[Math.floor(Math.random() * state.players.length)];
+        player.demand = clamp(player.demand + Math.round((Math.random() - 0.38) * 5), 35, 98);
+      }
+      render();
+    }
+
+    let timer = null;
+    function restartTimer() {
+      if (timer) window.clearInterval(timer);
+      timer = window.setInterval(tickWorld, state.speed);
+    }
+
+    document.addEventListener("click", event => {
+      const nav = event.target.closest("[data-view]");
+      if (nav) {
+        state.activeView = nav.dataset.view;
+        state.selected = { type: null, id: null };
+        state.search = "";
+        document.getElementById("globalSearch").value = "";
+        render();
+        document.getElementById("main").focus();
+        return;
+      }
+
+      const action = event.target.closest("[data-action]");
+      if (action) {
+        handleAction(action.dataset.action, action);
+        return;
+      }
+
+      const selectable = event.target.closest("[data-select-type][data-select-id]");
+      if (selectable) {
+        selectEntity(selectable.dataset.selectType, selectable.dataset.selectId);
+      }
+    });
+
+    document.getElementById("globalSearch").addEventListener("input", event => {
+      state.search = event.target.value;
+      renderRail();
+    });
+
+    document.getElementById("speedSelect").addEventListener("change", event => {
+      setSpeed(Number(event.target.value));
+      render();
+    });
+
+    document.addEventListener("keydown", event => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        document.getElementById("globalSearch").focus();
+      }
+    });
+
+    seedTickers();
+    render();
+    restartTimer();
+  </script>
+</body>
+</html>
