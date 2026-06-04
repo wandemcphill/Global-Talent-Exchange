@@ -896,3 +896,23 @@ Scope: rechecked the earlier admin-finance blocker after the route/contract work
 - No route rename or product contract change was made; the previous collision report appears stale or tool-side.
 - Verification passed: `python -m pytest backend\tests\admin_finance backend\tests\treasury -q --maxfail=1` passed 32/32 in 28:28 with one existing FastAPI 422 deprecation warning.
 - Verification passed: `python -m pytest backend\tests\trader backend\tests\wallets backend\tests\admin_finance backend\tests\treasury -q --maxfail=3` passed 116/116 in 56:16 with the same existing FastAPI 422 deprecation warning.
+
+## Main Handoff Update - 2026-06-04 Backend Import Cost Reduction (Tracing/OTEL)
+
+Scope: cut backend cold-import cost, the keystone verification constraint, without refactoring core systems.
+
+- Made OpenTelemetry imports lazy in `backend/app/observability/tracing.py` via a cached `_ensure_otel()` loader. Previously the OTLP HTTP exporter + FastAPI/SQLAlchemy instrumentation + `requests` were imported at module load; since `app.core.events` imports tracing and the ORM model package transitively reaches events, every test that imported any model paid this cost for telemetry it never used.
+- `configure_tracing` checks the cheap `enabled`/`exporter_endpoint` flags before `_ensure_otel()`, so the disabled path (tests/local) never attempts the OTEL import. Public API unchanged.
+- Evidence: `python -X importtime -c "import app.main"` cumulative dropped ~278s -> ~157s (-43
+## Main Handoff Update - 2026-06-04 Backend Import Cost Reduction (Tracing/OTEL)
+
+Scope: cut backend cold-import cost, the keystone verification constraint, without refactoring core systems.
+
+- Made OpenTelemetry imports lazy in `backend/app/observability/tracing.py` via a cached `_ensure_otel()` loader. Previously the OTLP HTTP exporter + FastAPI/SQLAlchemy instrumentation + `requests` were imported at module load; since `app.core.events` imports tracing and the ORM model package transitively reaches events, every test that imported any model paid this cost for telemetry it never used.
+- `configure_tracing` checks the cheap `enabled`/`exporter_endpoint` flags before `_ensure_otel()`, so the disabled path (tests/local) never attempts the OTEL import. Public API unchanged.
+- Evidence: `python -X importtime -c "import app.main"` cumulative dropped ~278s to ~157s (about -43%); OTLP exporter no longer appears in the import chain (grep count 0).
+- Verification passed: `python -m pytest tests/app/test_lifespan.py tests/backbone/test_worker_mains.py -q` -> 5 passed in 115s.
+- Verification passed: standalone import check confirmed `opentelemetry` is not loaded by importing tracing, and span/header runtime paths still work after lazy load.
+- Evidence-based scope decision: `alembic` dropped out of the top-20 cumulative cost after this change, so core `app/core/database.py` was deliberately NOT touched. Remaining deferrable leaf is `requests` (about 9%) via the three provider adapters; left alone because the clean fix risks provider-registry import side effects for diminishing return.
+- Next lever for full-suite wall time is per-test fixture/DB setup cost (paid per test), not import cost (paid once per process).
+- Worktree hygiene: pruned 27 stale/prunable worktrees (31 to 4) and checkpoint-committed the prior 881-entry dirty integration tree as aa143f6e.
