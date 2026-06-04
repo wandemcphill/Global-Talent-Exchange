@@ -6,15 +6,12 @@ from datetime import date, timedelta
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import Session
 
 import app.models as _app_models  # noqa: F401
 from app.access_control.service import AccessControlService
 from app.auth.dependencies import get_current_user, get_session
 from app.ingestion.models import Player
-from app.models.base import Base
 from app.models.club_formation import ClubFormation, ClubFormationAuditEvent
 from app.models.club_profile import ClubProfile
 from app.models.user import User, UserRole
@@ -23,20 +20,11 @@ from app.services.club_squad_sources_service import ClubSquadSourcesService
 
 
 @pytest.fixture()
-def db_session() -> Iterator[Session]:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    session = session_factory()
-    try:
-        yield session
-    finally:
-        session.close()
-        engine.dispose()
+def db_session(gtex_db_session: Session) -> Iterator[Session]:
+    # Uses the session-scoped shared schema (see tests/conftest.py::gtex_db_engine)
+    # with per-test transaction rollback, instead of rebuilding all ~567 tables on
+    # a fresh engine every test (~30s each).
+    yield gtex_db_session
 
 
 @pytest.fixture()

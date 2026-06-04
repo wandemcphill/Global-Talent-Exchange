@@ -266,3 +266,81 @@ def auth_user_factory(client, app_session_factory):
         }
 
     return create_user
+
+
+@pytest.fixture(scope="session")
+def gtex_db_engine():
+    """Session-scoped in-memory SQLite engine with the full ORM schema built once.
+
+    ``Base.metadata.create_all`` over the ~567-table GTEX schema costs ~30s of
+    real DDL execution. Historically every DB-backed unit test built it on a
+    fresh per-test engine, so schema creation alone dominated suite wall-time.
+
+    Sharing one engine for the whole pytest session means ``create_all`` runs a
+    single time; per-test isolation is provided by :func:`gtex_db_session`, which
+    wraps each test in a transaction that is rolled back on teardown. ``StaticPool``
+    keeps the in-memory database alive across connection checkouts so the schema
+    persists for the session.
+
+    Opt in from a DB-backed unit-test module by depending on ``gtex_db_session``
+    instead of creating a local engine + ``create_all`` fixture.
+    """
+    from sqlalchemy import create_engine, event
+    from sqlalchemy.pool import StaticPool
+
+    import app.models  # noqa: F401 - register every ORM model on Base.metadata
+    from app.models.base import Base
+
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    # pysqlite mismanages transaction control (it would autocommit and emit its
+    # own implicit BEGIN), which breaks the outer-transaction rollback isolation
+    # used by gtex_db_session. Disable the driver's transaction handling and let
+    # SQLAlchemy drive BEGIN explicitly. This is the documented SQLAlchemy recipe
+    # for SAVEPOINT-based test isolation on SQLite.
+    @event.listens_for(engine, "connect")
+    def _sqlite_disable_driver_transactions(dbapi_connection, connection_record):  # noqa: ANN001
+        dbapi_connection.isolation_level = None
+
+    @event.listens_for(engine, "begin")
+    def _sqlite_emit_begin(conn):  # noqa: ANN001
+        conn.exec_driver_sql("BEGIN")
+
+    Base.metadata.create_all(engine)
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture()
+def gtex_db_session(gtex_db_engine):
+    """Per-test SQLAlchemy session isolated by an outer transaction rollback.
+
+    The session joins the outer transaction using SAVEPOINTs
+    (``join_transaction_mode="create_savepoint"``), so application code under test
+    may ``commit()`` freely without ending the outer transaction. On teardown the
+    outer transaction is rolled back, leaving the shared schema and other tests'
+    data untouched.
+    """
+    from sqlalchemy.orm import Session
+
+    connection = gtex_db_engine.connect()
+    transaction = connection.begin()
+    session = Session(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+        autoflush=False,
+        expire_on_commit=False,
+    )
+    try:
+        yield session
+    finally:
+        session.close()
+        if transaction.is_active:
+            transaction.rollback()
+        connection.close()
