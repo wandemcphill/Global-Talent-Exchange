@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 import pytest
 
 from app.auth.service import AuthService
-from app.models import Base, CountryFeaturePolicy, KycStatus, LedgerEntryReason, LedgerUnit, TreasuryAuditEvent
+from app.models import CountryFeaturePolicy, KycStatus, LedgerEntryReason, LedgerUnit, TreasuryAuditEvent
 from app.models.risk_ops import AmlCase, SystemEvent
 from app.models.treasury import RateDirection, TreasuryWithdrawalStatus
 from app.models.withdrawal_review import WithdrawalReview
@@ -19,16 +17,10 @@ from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    yield gtex_db_session
 
 
 def _create_user(session, *, email: str, username: str):
