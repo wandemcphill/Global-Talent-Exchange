@@ -8,9 +8,6 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 import pytest
 
 import app.ingestion.models  # noqa: F401
@@ -22,7 +19,6 @@ from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.ingestion.models import Player
 from app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord
-from app.models.base import Base
 from app.models.treasury import PaymentMode
 from app.policies.service import PolicyService
 from app.services.runtime_control_service import RuntimeControlService
@@ -54,15 +50,10 @@ class FakeCacheBackend:
 
 
 @pytest.fixture()
-def api_context():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    session = SessionLocal()
+def api_context(gtex_db_session):
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    session = gtex_db_session
     current_user = AuthService().register_user(
         session,
         email="wallet-http@example.com",
@@ -88,8 +79,6 @@ def api_context():
 
     with TestClient(app) as client:
         yield client, session, current_user
-
-    session.close()
 
 
 def _create_player(session, *, provider_external_id: str = "player-wallet-1") -> Player:
@@ -447,7 +436,7 @@ def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabl
     _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
     _provision_withdrawable_user(session, current_user)
     _enable_automatic_withdrawals(session)
-    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.engine.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(
@@ -473,7 +462,7 @@ def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabl
 def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> None:
     client, session, current_user = api_context
     _fund_user(session, current_user, amount=Decimal("50"))
-    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.engine.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(
@@ -500,7 +489,7 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
     monkeypatch.delenv("GTE_KORAPAY_PRIVATE_KEY", raising=False)
     monkeypatch.delenv("KORAPAY_PRIVATE_KEY", raising=False)
-    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.engine.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(
@@ -532,7 +521,7 @@ def test_wallet_overview_supports_hybrid_bank_transfer_and_korapay(api_context, 
     _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
     _enable_hybrid_deposits(session)
     monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", "sk_test_launch")
-    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.engine.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(
@@ -578,7 +567,7 @@ def test_wallet_overview_marks_missing_korapay_secret_unavailable_in_production(
     monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
     monkeypatch.delenv("GTE_KORAPAY_PRIVATE_KEY", raising=False)
     monkeypatch.delenv("KORAPAY_PRIVATE_KEY", raising=False)
-    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.engine.url.database).parent)
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(
