@@ -4,9 +4,7 @@ from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import func, select
 import pytest
 
 import app.models  # noqa: F401
@@ -14,7 +12,6 @@ from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.core.events import InMemoryEventPublisher
 from app.ingestion.models import Country, Player
-from app.models.base import Base
 from app.models.club_profile import ClubProfile
 from app.models.regen import RegenProfile
 from app.models.regen_creation_order import RegenCreationOrder, RegenCreationOrderStatus
@@ -30,20 +27,10 @@ from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    db_session = SessionLocal()
-    try:
-        yield db_session
-    finally:
-        db_session.close()
-        engine.dispose()
+def session(gtex_db_session):
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    yield gtex_db_session
 
 
 def _client(
