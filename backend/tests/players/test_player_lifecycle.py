@@ -6,10 +6,8 @@ from decimal import Decimal
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_session
 from app.common.enums.contract_status import ContractStatus
@@ -18,7 +16,6 @@ from app.common.enums.transfer_window_status import TransferWindowStatus
 from app.club_identity.models.reputation import ClubReputationProfile
 from app.ingestion.models import Club as IngestionClub
 from app.ingestion.models import Competition, Match, Player, PlayerSeasonStat, Season
-from app.models.base import Base
 from app.models.club_infra import ClubFacility
 from app.models.club_profile import ClubProfile
 from app.models.notification_center import PlatformAnnouncement
@@ -77,19 +74,10 @@ from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()
-def lifecycle_session() -> Session:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+def lifecycle_session(gtex_db_session: Session) -> Session:
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    yield gtex_db_session
 
 
 @pytest.fixture()
