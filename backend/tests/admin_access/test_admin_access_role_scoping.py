@@ -5,17 +5,11 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 import pytest
 
 from backend.tests.support.secrets import TEST_PASSWORD
-import app.ingestion.models  # noqa: F401
-import app.ledger.models  # noqa: F401
-import app.models  # noqa: F401
-import app.orders.models  # noqa: F401
 from app.admin_access.router import router as admin_access_router
 from app.admin_godmode.service import (
     ADMIN_GODMODE_FILE,
@@ -31,20 +25,13 @@ from app.admin_godmode.service import (
 from app.models.admin_runtime_state import AdminRuntimeState
 from app.auth.dependencies import get_current_super_admin, get_session
 from app.auth.service import AuthService
-from app.models.base import Base
 from app.models.user import UserRole
 from app.wallets.service import WalletService
 
 
 @pytest.fixture()
-def admin_access_context(tmp_path: Path):
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+def admin_access_context(tmp_path: Path, gtex_db_session_factory):
+    SessionLocal = gtex_db_session_factory
     session = SessionLocal()
     auth = AuthService()
     super_admin = auth.ensure_admin_user(
@@ -137,15 +124,11 @@ def test_permission_catalog_exposes_finance_and_god_mode_controls(admin_access_c
     assert "manage_regen_universe" in permissions
 
 
-def test_god_mode_state_prefers_database_when_session_factory_exists(tmp_path: Path) -> None:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-
+def test_god_mode_state_prefers_database_when_session_factory_exists(
+    tmp_path: Path,
+    gtex_db_session_factory,
+) -> None:
+    SessionLocal = gtex_db_session_factory
     app = FastAPI()
     app.state.settings = SimpleNamespace(config_root=tmp_path)
     app.state.session_factory = SessionLocal
