@@ -8,8 +8,6 @@ import time
 from typing import TYPE_CHECKING
 from typing import Any
 
-import requests
-
 from app.ingestion.constants import ENV_API_SPORTS_API_KEY, ENV_API_SPORTS_BASE_URL
 from app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
 
@@ -28,6 +26,8 @@ class ApiSportsAdapter(BaseFootballProvider):
     name = "api_sports"
 
     def __init__(self, *, settings: Settings | None = None) -> None:
+        import requests
+
         self.base_url = (
             settings.api_sports_base_url
             if settings is not None

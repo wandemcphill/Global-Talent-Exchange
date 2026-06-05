@@ -916,3 +916,13 @@ Scope: cut backend cold-import cost, the keystone verification constraint, witho
 - Evidence-based scope decision: `alembic` dropped out of the top-20 cumulative cost after this change, so core `app/core/database.py` was deliberately NOT touched. Remaining deferrable leaf is `requests` (about 9%) via the three provider adapters; left alone because the clean fix risks provider-registry import side effects for diminishing return.
 - Next lever for full-suite wall time is per-test fixture/DB setup cost (paid per test), not import cost (paid once per process).
 - Worktree hygiene: pruned 27 stale/prunable worktrees (31 to 4) and checkpoint-committed the prior 881-entry dirty integration tree as aa143f6e.
+
+## Main Handoff Update - 2026-06-05 Backend Import Cost Reduction (Provider Requests)
+
+Scope: deferred third-party `requests` imports in the football provider adapters without changing provider behavior.
+
+- Made `requests` lazy in `backend/app/providers/api_sports_adapter.py`, `backend/app/providers/football_data_adapter.py`, and `backend/app/providers/sportmonks_adapter.py`; each adapter now imports it inside `__init__` immediately before `requests.Session()`.
+- Before evidence: `python -X importtime -c "import app.main"` cumulative `app.main` was `354,404,527 us`; `app.providers` was `37,499,584 us`; third-party `requests` loaded under `app.providers` with cumulative `36,380,045 us`.
+- After evidence: `python -X importtime -c "import app.main"` cumulative `app.main` is `164,645,081 us`; `app.providers` is `4,754,991 us`; third-party `requests` no longer appears in the provider import chain. Remaining `requests` text matches are only `starlette.requests` and `fastapi.requests`.
+- OpenTelemetry remains absent from the import-time search output.
+- Verification passed: `python -m pytest tests/wallets/test_payment_gateway_service.py tests/integration/test_payment_gateway.py -p no:cacheprovider -q` -> 7 passed in 164.29s.
