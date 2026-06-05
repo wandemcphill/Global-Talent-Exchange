@@ -3,9 +3,6 @@ from decimal import Decimal
 
 from fastapi import FastAPI, HTTPException
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import app.ingestion.models  # noqa: F401
 import app.market.read_models  # noqa: F401
@@ -29,23 +26,16 @@ from app.market.router import (
     list_market_players,
 )
 from app.market.service import MarketPlayerQueryService
-from app.models.base import Base
 from app.players.read_models import PlayerSummaryReadModel
 from app.services.runtime_control_service import RuntimeControlService
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    yield gtex_db_session
 
 
 def _build_market_query_service(
