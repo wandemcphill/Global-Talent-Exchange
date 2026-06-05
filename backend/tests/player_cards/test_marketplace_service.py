@@ -5,16 +5,13 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import func, select
 
 import app.models  # noqa: F401
 import app.players.read_models  # noqa: F401
 from app.core.config import get_settings
 from app.ingestion.models import Player
 from app.models.integrity import IntegrityIncident
-from app.models.base import Base
 from app.models.card_access import CardSwapExecution
 from app.models.club_profile import ClubProfile
 from app.models.player_cards import (
@@ -42,16 +39,10 @@ from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    yield gtex_db_session
 
 
 @pytest.fixture(autouse=True)
