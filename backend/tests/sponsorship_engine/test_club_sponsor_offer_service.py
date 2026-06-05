@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import app.club_identity.models.reputation  # noqa: F401
 import app.ingestion.models  # noqa: F401
@@ -18,7 +16,6 @@ from app.analytics.service import AnalyticsService
 from app.club_identity.models.reputation import ClubReputationProfile
 from app.core.config import get_settings
 from app.ingestion.models import Player
-from app.models.base import Base
 from app.models.club_infra import ClubSupporterToken
 from app.models.club_profile import ClubProfile
 from app.models.competition_participant import CompetitionParticipant
@@ -33,15 +30,13 @@ from app.sponsorship_engine.schemas import (
 )
 
 
-def _session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    return engine, SessionLocal
+class _SharedSessionScope:
+    def dispose(self) -> None:
+        """Keep existing cleanup shape while the fixture owns DB teardown."""
+
+
+def _session(session_factory: sessionmaker):
+    return _SharedSessionScope(), session_factory
 
 
 def _create_user(session, *, user_id: str, role: UserRole = UserRole.USER) -> User:
@@ -68,8 +63,8 @@ def _create_club(session, *, club_id: str, owner_user_id: str, name: str) -> Clu
     return club
 
 
-def test_sponsor_metric_eligibility_and_assignment_flow() -> None:
-    engine, SessionLocal = _session()
+def test_sponsor_metric_eligibility_and_assignment_flow(gtex_db_session_factory) -> None:
+    engine, SessionLocal = _session(gtex_db_session_factory)
     with SessionLocal() as session:
         admin = _create_user(session, user_id="admin-sponsor", role=UserRole.ADMIN)
         owner = _create_user(session, user_id="club-owner")
@@ -155,8 +150,8 @@ def test_sponsor_metric_eligibility_and_assignment_flow() -> None:
     engine.dispose()
 
 
-def test_club_sponsor_assignments_drive_placement_resolution_and_analytics() -> None:
-    engine, SessionLocal = _session()
+def test_club_sponsor_assignments_drive_placement_resolution_and_analytics(gtex_db_session_factory) -> None:
+    engine, SessionLocal = _session(gtex_db_session_factory)
     with SessionLocal() as session:
         admin = _create_user(session, user_id="admin-placement", role=UserRole.ADMIN)
         owner = _create_user(session, user_id="owner-placement")
