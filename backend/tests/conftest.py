@@ -344,3 +344,30 @@ def gtex_db_session(gtex_db_engine):
         if transaction.is_active:
             transaction.rollback()
         connection.close()
+
+
+@pytest.fixture()
+def gtex_db_session_factory(gtex_db_engine):
+    """Sessionmaker bound to the shared schema with per-test rollback isolation.
+
+    This supports tests that need a factory rather than one injected session.
+    Every session created by the returned factory joins one outer transaction via
+    SAVEPOINTs, so commits inside app code remain visible to later sessions from
+    the same factory while teardown rolls the test back to the shared schema.
+    """
+    from sqlalchemy.orm import sessionmaker
+
+    connection = gtex_db_engine.connect()
+    transaction = connection.begin()
+    factory = sessionmaker(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+        autoflush=False,
+        expire_on_commit=False,
+    )
+    try:
+        yield factory
+    finally:
+        if transaction.is_active:
+            transaction.rollback()
+        connection.close()

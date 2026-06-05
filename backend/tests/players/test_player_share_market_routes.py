@@ -5,15 +5,11 @@ from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
-from app.core.database import load_model_modules
 from app.ingestion.models import Player
 from app.market.router import router as market_router
-from app.models.base import Base
 from app.models.player_token_market import PlayerShareHolding
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
@@ -27,16 +23,13 @@ from app.wallets.funding_service import WalletFundingService
 from app.wallets.service import LedgerPosting, WalletService
 
 
-def _build_session() -> tuple[object, Session]:
-    load_model_modules()
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    return engine, session_factory()
+class _SharedSessionScope:
+    def dispose(self) -> None:
+        """Keep existing cleanup shape while the fixture owns DB teardown."""
+
+
+def _build_session(session_factory: sessionmaker[Session]) -> tuple[_SharedSessionScope, Session]:
+    return _SharedSessionScope(), session_factory()
 
 
 def _create_user(session: Session, *, user_id: str, role: UserRole = UserRole.USER) -> User:
@@ -193,8 +186,11 @@ def _build_client(
     return TestClient(app), auth_context
 
 
-def test_issue_player_share_market_for_imported_real_player_records_issue_event(monkeypatch) -> None:
-    engine, session = _build_session()
+def test_issue_player_share_market_for_imported_real_player_records_issue_event(
+    monkeypatch,
+    gtex_db_session_factory,
+) -> None:
+    engine, session = _build_session(gtex_db_session_factory)
     try:
         admin = _create_user(session, user_id="share-admin", role=UserRole.ADMIN)
         fan = _create_user(session, user_id="share-fan")
@@ -229,8 +225,11 @@ def test_issue_player_share_market_for_imported_real_player_records_issue_event(
         engine.dispose()
 
 
-def test_read_player_share_market_and_events_after_issue(monkeypatch) -> None:
-    engine, session = _build_session()
+def test_read_player_share_market_and_events_after_issue(
+    monkeypatch,
+    gtex_db_session_factory,
+) -> None:
+    engine, session = _build_session(gtex_db_session_factory)
     try:
         admin = _create_user(session, user_id="share-read-admin", role=UserRole.ADMIN)
         fan = _create_user(session, user_id="share-read-fan")
@@ -264,8 +263,11 @@ def test_read_player_share_market_and_events_after_issue(monkeypatch) -> None:
         engine.dispose()
 
 
-def test_read_player_share_market_auto_initializes_before_manual_issue(monkeypatch) -> None:
-    engine, session = _build_session()
+def test_read_player_share_market_auto_initializes_before_manual_issue(
+    monkeypatch,
+    gtex_db_session_factory,
+) -> None:
+    engine, session = _build_session(gtex_db_session_factory)
     try:
         admin = _create_user(session, user_id="share-unissued-admin", role=UserRole.ADMIN)
         fan = _create_user(session, user_id="share-unissued-fan")
@@ -291,8 +293,11 @@ def test_read_player_share_market_auto_initializes_before_manual_issue(monkeypat
         engine.dispose()
 
 
-def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> None:
-    engine, session = _build_session()
+def test_buy_player_shares_updates_market_holding_and_event_log(
+    monkeypatch,
+    gtex_db_session_factory,
+) -> None:
+    engine, session = _build_session(gtex_db_session_factory)
     try:
         admin = _create_user(session, user_id="share-buy-admin", role=UserRole.ADMIN)
         fan = _create_user(session, user_id="share-buy-fan")
@@ -337,8 +342,11 @@ def test_buy_player_shares_updates_market_holding_and_event_log(monkeypatch) -> 
         engine.dispose()
 
 
-def test_list_player_share_markets_returns_only_tradable_active_markets(monkeypatch) -> None:
-    engine, session = _build_session()
+def test_list_player_share_markets_returns_only_tradable_active_markets(
+    monkeypatch,
+    gtex_db_session_factory,
+) -> None:
+    engine, session = _build_session(gtex_db_session_factory)
     try:
         admin = _create_user(session, user_id="share-list-admin", role=UserRole.ADMIN)
         fan = _create_user(session, user_id="share-list-fan")
@@ -363,8 +371,11 @@ def test_list_player_share_markets_returns_only_tradable_active_markets(monkeypa
         engine.dispose()
 
 
-def test_buy_player_shares_requires_verified_wallet_compliance(monkeypatch) -> None:
-    engine, session = _build_session()
+def test_buy_player_shares_requires_verified_wallet_compliance(
+    monkeypatch,
+    gtex_db_session_factory,
+) -> None:
+    engine, session = _build_session(gtex_db_session_factory)
     try:
         admin = _create_user(session, user_id="share-kyc-admin", role=UserRole.ADMIN)
         fan = _create_user(session, user_id="share-kyc-fan")
@@ -392,8 +403,11 @@ def test_buy_player_shares_requires_verified_wallet_compliance(monkeypatch) -> N
         engine.dispose()
 
 
-def test_sell_player_shares_rejects_active_trading_risk_block(monkeypatch) -> None:
-    engine, session = _build_session()
+def test_sell_player_shares_rejects_active_trading_risk_block(
+    monkeypatch,
+    gtex_db_session_factory,
+) -> None:
+    engine, session = _build_session(gtex_db_session_factory)
     try:
         admin = _create_user(session, user_id="share-risk-admin", role=UserRole.ADMIN)
         fan = _create_user(session, user_id="share-risk-fan")
@@ -421,8 +435,11 @@ def test_sell_player_shares_rejects_active_trading_risk_block(monkeypatch) -> No
         engine.dispose()
 
 
-def test_market_buy_and_sell_endpoints_execute_share_trades(monkeypatch) -> None:
-    engine, session = _build_session()
+def test_market_buy_and_sell_endpoints_execute_share_trades(
+    monkeypatch,
+    gtex_db_session_factory,
+) -> None:
+    engine, session = _build_session(gtex_db_session_factory)
     try:
         admin = _create_user(session, user_id="share-market-admin", role=UserRole.ADMIN)
         fan = _create_user(session, user_id="share-market-fan")
