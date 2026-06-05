@@ -916,3 +916,22 @@ Scope: cut backend cold-import cost, the keystone verification constraint, witho
 - Evidence-based scope decision: `alembic` dropped out of the top-20 cumulative cost after this change, so core `app/core/database.py` was deliberately NOT touched. Remaining deferrable leaf is `requests` (about 9%) via the three provider adapters; left alone because the clean fix risks provider-registry import side effects for diminishing return.
 - Next lever for full-suite wall time is per-test fixture/DB setup cost (paid per test), not import cost (paid once per process).
 - Worktree hygiene: pruned 27 stale/prunable worktrees (31 to 4) and checkpoint-committed the prior 881-entry dirty integration tree as aa143f6e.
+
+## Main Handoff Update - 2026-06-05 Backend Test DB Factory Rollout
+
+Scope: started Section 6 of `CODEX_TEST_DB_FIXTURE_HANDOFF.md`, the factory-pattern phase for DB-backed tests.
+
+- Added `gtex_db_session_factory` in `backend\tests\conftest.py`, bound to the existing session-scoped `gtex_db_engine` with per-test outer transaction rollback and `join_transaction_mode="create_savepoint"`.
+- Migrated `backend\tests\players\test_player_share_market_routes.py` from local `create_engine` + full `Base.metadata.create_all(engine)` to `gtex_db_session_factory`.
+- Migrated `backend\tests\sponsorship_engine\test_club_sponsor_offer_service.py` from local `create_engine` + full `Base.metadata.create_all(engine)` to `gtex_db_session_factory`.
+- Migrated `backend\tests\admin_access\test_admin_access_role_scoping.py` from local full-schema `create_all` fixtures to `gtex_db_session_factory`, including `app.state.session_factory` coverage.
+- Skipped/reverted `backend\tests\players\test_real_player_universe_routes.py`: factory migration produced one non-mechanical score mismatch (`0.8057` vs expected `0.8457`) after 9/10 tests passed, so the file was restored per the playbook's revert-and-skip rule.
+- Skipped selective-table factory files as already cheap: `backend\tests\runtime_config\test_router.py`, `backend\tests\pundits\test_service.py`, `backend\tests\creator\test_creator_module7_contracts.py`, `backend\tests\tournaments\test_tournament_router.py`, `backend\tests\ticketing\test_router.py`, and `backend\tests\infinite_league\test_router.py`.
+- Verification passed: `python -m py_compile backend\tests\conftest.py backend\tests\players\test_player_share_market_routes.py`.
+- Verification passed: `python -m pytest tests\players\test_player_share_market_routes.py -p no:cacheprovider -q` -> 8 passed in 383.95s.
+- Verification passed: `python -m py_compile backend\tests\sponsorship_engine\test_club_sponsor_offer_service.py`.
+- Verification passed: `python -m pytest tests\sponsorship_engine\test_club_sponsor_offer_service.py -p no:cacheprovider -q` -> 2 passed in 247.15s.
+- Verification passed: `python -m py_compile backend\tests\admin_access\test_admin_access_role_scoping.py`.
+- Verification passed: `python -m pytest tests\admin_access\test_admin_access_role_scoping.py -p no:cacheprovider -q` -> 9 passed in 359.42s.
+- Commits created: `3ce71dfa` (factory fixture + player share-market prototype), `f8440fa3` (sponsorship offer service), `2e9c3101` (admin access).
+- Remaining work: many full-schema `Base.metadata.create_all(engine)` tests still exist outside the named Section 6 examples; continue one file at a time, with revert-and-skip for factory behavior drift.
