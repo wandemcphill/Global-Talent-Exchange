@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/features/match_center/data/match_gift_api.dart';
+import 'package:gte_frontend/features/match_center/models/match_engagement.dart';
 import 'package:gte_frontend/features/match_center/presentation/broadcast_package_screen.dart';
 import 'package:gte_frontend/models/competition_models.dart';
-import 'package:gte_frontend/features/match_center/models/match_monetization.dart';
 import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
 import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -25,7 +25,7 @@ void main() {
             viewStateLoader:
                 () async => buildBroadcastTestViewState().copyWith(
                   source: 'backend-live',
-                  monetization: const MatchViewerMonetization(
+                  engagement: const MatchViewerEngagement(
                     metadata: <String, Object?>{
                       'gift_recipient_user_id': 'creator-user-1',
                       'gift_recipient_label': 'Studio Kai',

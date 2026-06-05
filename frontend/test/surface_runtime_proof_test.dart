@@ -1552,6 +1552,11 @@ class _FakeHostedCompetitionApi implements HostedCompetitionApi {
       settledPrizes: 0,
       settledPlatformFee: 0,
       status: 'open',
+      settlementReadiness: HostedSettlementReadiness(
+        status: HostedSettlementReadinessStatus.syncing,
+        rawStatus: 'syncing',
+        reason: 'Surface runtime proof fixture is awaiting settlement close.',
+      ),
     );
   }
 
@@ -1844,7 +1849,6 @@ MatchViewState _routeQualifiedViewState(String matchKey, MatchViewState state) {
     segmentEndSeconds: segmentEndSeconds,
     hasMoreSegments: state.hasMoreSegments,
     nextSegmentToken: state.nextSegmentToken,
-    monetization: state.monetization,
     presentationPackage: state.presentationPackage,
   );
 }

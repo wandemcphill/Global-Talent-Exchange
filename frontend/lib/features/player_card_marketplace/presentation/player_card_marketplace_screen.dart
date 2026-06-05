@@ -1438,7 +1438,6 @@ class _TransferOperatingTile extends StatelessWidget {
   Color _stateColor(shell.GtexSurfaceState state) {
     switch (state) {
       case shell.GtexSurfaceState.confirmed:
-      case shell.GtexSurfaceState.data:
         return GteShellTheme.positive;
       case shell.GtexSurfaceState.blocked:
       case shell.GtexSurfaceState.error:
