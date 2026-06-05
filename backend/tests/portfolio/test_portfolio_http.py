@@ -4,9 +4,6 @@ from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 import pytest
 
 import app.ingestion.models  # noqa: F401
@@ -18,7 +15,6 @@ import app.value_engine.read_models  # noqa: F401
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.ingestion.models import Player
-from app.models.base import Base
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.players.read_models import PlayerSummaryReadModel
@@ -28,15 +24,10 @@ from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()
-def api_context():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    session = SessionLocal()
+def api_context(gtex_db_session):
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    session = gtex_db_session
     current_user = AuthService().register_user(
         session,
         email="portfolio-http@example.com",
@@ -59,8 +50,6 @@ def api_context():
 
     with TestClient(app) as client:
         yield client, session, current_user
-
-    session.close()
 
 
 def _create_player(session, *, provider_external_id: str = "portfolio-http-player") -> Player:
