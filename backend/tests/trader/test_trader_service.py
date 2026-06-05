@@ -4,12 +4,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.auth.service import AuthService
-from app.models import Base
 from app.models.market_topup import MarketTopupStatus
 from app.models.risk_ops import RiskActionType
 from app.models.risk_ops import AuditLog
@@ -26,16 +22,10 @@ from backend.tests.support.secrets import TEST_PASSWORD
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    yield gtex_db_session
 
 
 def _create_trader(session):
