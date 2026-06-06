@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
 import app.models  # noqa: F401
 from app.copilot.copilot_service import CreatorCopilotService
 from app.copilot.strategy_builder import CopilotStrategyBuilder
 from app.media_engine.schemas import CreatorClipRevenueAttributionRequest
-from app.models.base import Base
 from app.models.clip_variant import ClipVariant
 from app.models.highlight_share import HighlightShareExport
 from app.models.user import User
@@ -33,17 +28,6 @@ class MemoryCacheBackend:
 
     def ping(self) -> bool:
         return True
-
-
-def _create_session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    return SessionLocal()
 
 
 def _create_user(session, *, user_id: str) -> User:
@@ -113,8 +97,8 @@ def _attribute_clip(
     )
 
 
-def test_creator_copilot_service_generates_prediction_strategy_and_cached_profile() -> None:
-    session = _create_session()
+def test_creator_copilot_service_generates_prediction_strategy_and_cached_profile(gtex_db_session) -> None:
+    session = gtex_db_session
     try:
         creator = _create_user(session, user_id="creator-copilot")
         _create_export(session, user_id=creator.id, export_id="export-1", title="Debate clip one")
@@ -262,4 +246,4 @@ def test_creator_copilot_service_generates_prediction_strategy_and_cached_profil
         assert payload["action_plan"]
         assert "creator:creator-profile-copilot:strategy_profile" in cache.values
     finally:
-        session.close()
+        session.rollback()
