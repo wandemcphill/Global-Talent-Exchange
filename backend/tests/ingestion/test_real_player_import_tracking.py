@@ -3,9 +3,6 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import app.ingestion.models  # noqa: F401
 import app.ingestion.real_player_import_models  # noqa: F401
@@ -16,22 +13,13 @@ from app.ingestion.real_player_import_models import (
     RealPlayerImportStagingRecord,
 )
 from app.ingestion.real_player_import_repository import RealPlayerImportRepository
-from app.models.base import Base
 from app.providers.import_models import RealPlayerSourceItem
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
-    engine.dispose()
+def session(gtex_db_session):
+    # Shared full-schema engine with per-test rollback; avoids rebuilding 567 tables.
+    yield gtex_db_session
 
 
 def test_repository_tracks_processing_state_counters_for_import_runs(session) -> None:
