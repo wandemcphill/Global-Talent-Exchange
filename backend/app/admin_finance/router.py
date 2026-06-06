@@ -8,6 +8,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from app.core.task_queue import NullTaskQueueBackend, get_task_queue_backend
 from app.admin_finance.schemas import (
     AccountControlUpsertRequest,
     AccountControlView,
@@ -39,6 +40,7 @@ from app.models.user import User
 from app.services.runtime_control_service import RuntimeControlService
 from app.treasury.service import TreasuryConflictError
 from app.wallets.service import WalletService
+from app.workers.jobs import admin_finance_export_job
 
 router = APIRouter(prefix="/api/admin/finance", tags=["admin-finance"])
 webhook_router = APIRouter(prefix="/api/v2/integrations/payments", tags=["payments"])
@@ -70,6 +72,36 @@ def _require_admin_notes(payload: PaymentQueueActionRequest | dict | None) -> st
 
 def _queue_service(request: Request, session: Session) -> AdminFinanceService:
     return AdminFinanceService(session=session, settings=request.app.state.settings)
+
+
+def _admin_export_task_queue(request: Request):
+    task_queue = get_task_queue_backend(request.app)
+    if isinstance(task_queue, NullTaskQueueBackend):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin finance export worker queue is unavailable.",
+        )
+    return task_queue
+
+
+def _enqueue_admin_export_job(request: Request, *, actor: User, export_id: str) -> None:
+    task_queue = _admin_export_task_queue(request)
+    try:
+        task_queue.enqueue(
+            name="admin.finance.export",
+            callable_=admin_finance_export_job,
+            kwargs={"export_id": export_id, "actor_user_id": actor.id},
+            job_id=f"admin-finance-export:{export_id}",
+            timeout_seconds=300,
+            retry_intervals_seconds=(10, 30, 60),
+            owner_user_id=actor.id,
+            meta={"export_id": export_id},
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin finance export worker queue is unavailable.",
+        ) from exc
 
 
 def _ensure_live_match_hub(app):
@@ -428,17 +460,39 @@ def request_admin_export(
     session: Session = Depends(get_session),
 ) -> AdminExportStatusView:
     _require_payment_queue_permission(request, actor)
+    service = _queue_service(request, session)
     try:
-        result = _queue_service(request, session).request_admin_export(
+        result = service.request_admin_export(
             actor=actor,
             export_type=payload.export_type,
             export_format=payload.format,
             filters=payload.filters,
+            idempotency_key=payload.idempotency_key,
         )
+        enqueue_required = bool(result.get("enqueue_required"))
+        if enqueue_required:
+            _admin_export_task_queue(request)
         session.commit()
     except ValueError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except HTTPException as exc:
+        session.rollback()
+        raise exc
+    if enqueue_required:
+        try:
+            _enqueue_admin_export_job(request, actor=actor, export_id=str(result["export_id"]))
+        except HTTPException as exc:
+            try:
+                service.fail_admin_export(
+                    actor=actor,
+                    export_id=str(result["export_id"]),
+                    failure_reason=str(exc.detail),
+                )
+                session.commit()
+            except Exception:
+                session.rollback()
+            raise
     return AdminExportStatusView.model_validate(result)
 
 
@@ -452,10 +506,8 @@ def download_admin_export(
     _require_payment_queue_permission(request, actor)
     service = _queue_service(request, session)
     try:
-        result = service.complete_admin_export(actor=actor, export_id=export_id)
-        session.commit()
+        result = service.get_admin_export_status(export_id=export_id)
     except ValueError as exc:
-        session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if result.get("status") != "ready":
         return JSONResponse(
@@ -490,10 +542,8 @@ def get_admin_export_status(
 ) -> AdminExportStatusView:
     _require_payment_queue_permission(request, actor)
     try:
-        result = _queue_service(request, session).complete_admin_export(actor=actor, export_id=export_id)
-        session.commit()
+        result = _queue_service(request, session).get_admin_export_status(export_id=export_id)
     except ValueError as exc:
-        session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return AdminExportStatusView.model_validate(result)
 

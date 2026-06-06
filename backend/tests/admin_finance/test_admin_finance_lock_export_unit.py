@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from app.admin_finance import router as admin_finance_router
+from app.admin_finance.schemas import AdminExportRequest
 from app.admin_finance.service import AdminFinanceService
 from app.auth.service import AuthService
 from app.models import CountryFeaturePolicy
@@ -174,14 +175,14 @@ def test_bulk_action_and_export_status_are_audited_and_exports_materialize_artif
         export_format="csv",
         filters={"limit": 25},
     )
-    assert export["status"] == "ready"
-    assert export["download_url"].endswith(f"/exports/{export['export_id']}/download")
+    assert export["status"] == "queued"
+    assert export["download_url"] is None
     assert export["blocked_reason"] is None
     assert export["audit_reference"]
-    assert export["requested_audit_reference"] != export["audit_reference"]
+    assert export["requested_audit_reference"] == export["audit_reference"]
 
     queued_status = service.get_admin_export_status(export_id=export["export_id"])
-    assert queued_status["status"] == "ready"
+    assert queued_status["status"] == "queued"
     assert queued_status["requested_audit_reference"] == export["requested_audit_reference"]
 
     ready_status = service.complete_admin_export(actor=actor, export_id=export["export_id"])
@@ -189,7 +190,7 @@ def test_bulk_action_and_export_status_are_audited_and_exports_materialize_artif
     assert ready_status["download_url"].endswith(f"/exports/{export['export_id']}/download")
     assert ready_status["blocked_reason"] is None
     assert ready_status["requested_audit_reference"] == export["requested_audit_reference"]
-    assert ready_status["audit_reference"] == export["audit_reference"]
+    assert ready_status["audit_reference"] != export["audit_reference"]
     assert ready_status["artifact"]["row_count"] >= 1
 
     artifact = service.get_admin_export_artifact(export_id=export["export_id"])
@@ -214,6 +215,7 @@ def test_bulk_action_and_export_status_are_audited_and_exports_materialize_artif
     assert bulk_audit.payload["item_ids"] == [deposit.id]
     assert export_audit is not None
     assert export_audit.payload["status"] == "ready"
+    assert export_audit.payload["admin_user_id"] == actor.id
     assert export_audit.payload["artifact"]["content_type"] == "text/csv"
     assert deposit.reference in export_audit.payload["artifact"]["content"]
 
@@ -226,10 +228,230 @@ def test_bulk_action_and_export_status_are_audited_and_exports_materialize_artif
     )
     assert export_ready_event is not None
     assert export_ready_event.producer == "admin_finance"
-    assert export_ready_event.headers_json["audit_reference"] == export["audit_reference"]
+    assert export_ready_event.headers_json["audit_reference"] == ready_status["audit_reference"]
     assert export_ready_event.payload_json["status"] == "ready"
+    assert export_ready_event.payload_json["admin_user_id"] == actor.id
     assert export_ready_event.payload_json["artifact"]["row_count"] >= 1
     assert "content" not in export_ready_event.payload_json["artifact"]
+
+
+def test_admin_export_request_idempotency_reuses_existing_request(session) -> None:
+    treasury, _user, _deposit = _submitted_deposit(session)
+    actor = _create_user(session, email="idempotent-export-admin@example.com", username="idempotentexportadmin")
+    service = AdminFinanceService(session=session, treasury_service=treasury)
+
+    first = service.request_admin_export(
+        actor=actor,
+        export_type="payment_queue",
+        export_format="csv",
+        filters={"limit": 25},
+        idempotency_key="admin-export-idempotent-1",
+    )
+    second = service.request_admin_export(
+        actor=actor,
+        export_type="payment_queue",
+        export_format="csv",
+        filters={"limit": 25},
+        idempotency_key="admin-export-idempotent-1",
+    )
+
+    assert first["export_id"] == second["export_id"]
+    assert first["status"] == "queued"
+    assert second["status"] == "queued"
+    assert second["enqueue_required"] is False
+
+    requested_audits = session.scalars(
+        select(TreasuryAuditEvent).where(
+            TreasuryAuditEvent.resource_type == "admin_export",
+            TreasuryAuditEvent.resource_id == first["export_id"],
+            TreasuryAuditEvent.event_type == "admin.export.requested",
+        )
+    ).all()
+    assert len(requested_audits) == 1
+
+    with pytest.raises(ValueError, match="Idempotency key already used"):
+        service.request_admin_export(
+            actor=actor,
+            export_type="payment_queue",
+            export_format="csv",
+            filters={"limit": 50},
+            idempotency_key="admin-export-idempotent-1",
+        )
+
+    ready = service.complete_admin_export(actor=actor, export_id=first["export_id"])
+    third = service.request_admin_export(
+        actor=actor,
+        export_type="payment_queue",
+        export_format="csv",
+        filters={"limit": 25},
+        idempotency_key="admin-export-idempotent-1",
+    )
+
+    assert ready["status"] == "ready"
+    assert third["export_id"] == first["export_id"]
+    assert third["status"] == "ready"
+    assert third["enqueue_required"] is False
+
+
+def test_admin_export_worker_failure_is_audited_and_notified(session, monkeypatch) -> None:
+    treasury, _user, _deposit = _submitted_deposit(session)
+    actor = _create_user(session, email="failed-export-admin@example.com", username="failedexportadmin")
+    service = AdminFinanceService(session=session, treasury_service=treasury)
+    queued = service.request_admin_export(
+        actor=actor,
+        export_type="payment_queue",
+        export_format="csv",
+        filters={"limit": 25},
+    )
+
+    def _fail_artifact_build(self, **_kwargs):
+        del self
+        raise RuntimeError("artifact generator unavailable")
+
+    monkeypatch.setattr(AdminFinanceService, "_build_admin_export_artifact", _fail_artifact_build)
+
+    failed = service.complete_admin_export(actor=actor, export_id=queued["export_id"])
+
+    assert failed["status"] == "failed"
+    assert failed["download_url"] is None
+    assert failed["failure_reason"] == "artifact generator unavailable"
+    with pytest.raises(ValueError, match="Export artifact was not found"):
+        service.get_admin_export_artifact(export_id=queued["export_id"])
+
+    failed_audit = session.scalar(
+        select(TreasuryAuditEvent).where(
+            TreasuryAuditEvent.resource_type == "admin_export",
+            TreasuryAuditEvent.resource_id == queued["export_id"],
+            TreasuryAuditEvent.event_type == "admin.export.failed",
+        )
+    )
+    assert failed_audit is not None
+    assert failed_audit.payload["status"] == "failed"
+    assert failed_audit.payload["failure_reason"] == "artifact generator unavailable"
+
+    failed_event = session.scalar(
+        select(EventOutbox).where(
+            EventOutbox.event_type == "admin.export.failed",
+            EventOutbox.aggregate_type == "admin_export",
+            EventOutbox.aggregate_id == queued["export_id"],
+        )
+    )
+    assert failed_event is not None
+    assert failed_event.payload_json["status"] == "failed"
+    assert "artifact" not in failed_event.payload_json
+
+
+def test_admin_finance_export_worker_completes_queued_export(session, monkeypatch) -> None:
+    from app.workers import jobs
+
+    class _SessionContext:
+        def __enter__(self):
+            return session
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    treasury, _user, _deposit = _submitted_deposit(session)
+    actor = _create_user(session, email="worker-export-admin@example.com", username="workerexportadmin")
+    service = AdminFinanceService(session=session, treasury_service=treasury)
+    queued = service.request_admin_export(
+        actor=actor,
+        export_type="payment_queue",
+        export_format="csv",
+        filters={"limit": 25},
+    )
+    monkeypatch.setattr(
+        jobs,
+        "_TASK_CONTEXT",
+        SimpleNamespace(database=SimpleNamespace(session_factory=lambda: _SessionContext())),
+    )
+
+    result = jobs.admin_finance_export_job(export_id=queued["export_id"], actor_user_id=actor.id)
+
+    assert result["status"] == "ready"
+    assert result["download_url"].endswith(f"/exports/{queued['export_id']}/download")
+    assert service.get_admin_export_status(export_id=queued["export_id"])["status"] == "ready"
+
+
+def test_admin_export_request_route_enqueues_worker_without_materializing(monkeypatch) -> None:
+    class _FakeSession:
+        def __init__(self) -> None:
+            self.commits = 0
+            self.rollbacks = 0
+
+        def commit(self) -> None:
+            self.commits += 1
+
+        def rollback(self) -> None:
+            self.rollbacks += 1
+
+    class _FakeTaskQueue:
+        def __init__(self) -> None:
+            self.enqueued: list[dict[str, object]] = []
+
+        def enqueue(self, **kwargs):
+            self.enqueued.append(kwargs)
+            return SimpleNamespace(job_id=kwargs["job_id"])
+
+    class _FakePaymentQueueService:
+        completed = False
+
+        def request_admin_export(self, *, actor, export_type, export_format, filters, idempotency_key):
+            assert actor.id == "admin-operator"
+            assert export_type == "payment_queue"
+            assert export_format == "csv"
+            assert filters == {"limit": 25}
+            assert idempotency_key == "export-route-idempotent-1"
+            return {
+                "export_id": "EXPORT-ROUTE-QUEUED",
+                "status": "queued",
+                "export_type": "payment_queue",
+                "format": "csv",
+                "filters": filters,
+                "requested_at": "2026-06-03T00:00:00+00:00",
+                "completed_at": None,
+                "download_url": None,
+                "blocked_reason": None,
+                "failure_reason": None,
+                "audit_reference": "audit-requested",
+                "requested_audit_reference": "audit-requested",
+                "enqueue_required": True,
+            }
+
+        def complete_admin_export(self, *, actor, export_id):
+            del actor, export_id
+            self.completed = True
+            raise AssertionError("request route must not complete exports inline")
+
+    fake_queue = _FakeTaskQueue()
+    fake_service = _FakePaymentQueueService()
+    monkeypatch.setattr(admin_finance_router, "_require_payment_queue_permission", lambda request, actor: None)
+    monkeypatch.setattr(admin_finance_router, "_queue_service", lambda request, session: fake_service)
+
+    response = admin_finance_router.request_admin_export(
+        SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(settings=SimpleNamespace(), task_queue=fake_queue),
+            )
+        ),
+        AdminExportRequest(
+            export_type="payment_queue",
+            format="csv",
+            filters={"limit": 25},
+            idempotency_key="export-route-idempotent-1",
+        ),
+        SimpleNamespace(id="admin-operator"),
+        _FakeSession(),
+    )
+
+    assert response.status == "queued"
+    assert fake_service.completed is False
+    assert len(fake_queue.enqueued) == 1
+    assert fake_queue.enqueued[0]["job_id"] == "admin-finance-export:EXPORT-ROUTE-QUEUED"
+    assert fake_queue.enqueued[0]["kwargs"] == {
+        "export_id": "EXPORT-ROUTE-QUEUED",
+        "actor_user_id": "admin-operator",
+    }
 
 
 def test_fraud_export_materializes_canonical_fraud_rows_and_ready_audit(session) -> None:
@@ -250,12 +472,14 @@ def test_fraud_export_materializes_canonical_fraud_rows_and_ready_audit(session)
     session.flush()
     service = AdminFinanceService(session=session, treasury_service=treasury)
 
-    export = service.request_admin_export(
+    queued_export = service.request_admin_export(
         actor=actor,
         export_type="fraud",
         export_format="json",
         filters={},
     )
+    assert queued_export["status"] == "queued"
+    export = service.complete_admin_export(actor=actor, export_id=queued_export["export_id"])
 
     assert export["status"] == "ready"
     assert export["blocked_reason"] is None
@@ -298,12 +522,14 @@ def test_settlements_export_materializes_reward_settlement_rows(session) -> None
     session.flush()
     service = AdminFinanceService(session=session, treasury_service=treasury)
 
-    export = service.request_admin_export(
+    queued_export = service.request_admin_export(
         actor=actor,
         export_type="settlements",
         export_format="csv",
         filters={"competition_key": "competition:cup-final"},
     )
+    assert queued_export["status"] == "queued"
+    export = service.complete_admin_export(actor=actor, export_id=queued_export["export_id"])
 
     assert export["status"] == "ready"
     assert export["blocked_reason"] is None
@@ -337,12 +563,14 @@ def test_settlements_export_materializes_creator_revenue_settlement_rows(session
     session.flush()
     service = AdminFinanceService(session=session, treasury_service=treasury)
 
-    export = service.request_admin_export(
+    queued_export = service.request_admin_export(
         actor=actor,
         export_type="settlements",
         export_format="json",
         filters={"competition_id": "creator-competition-export-1"},
     )
+    assert queued_export["status"] == "queued"
+    export = service.complete_admin_export(actor=actor, export_id=queued_export["export_id"])
 
     assert export["status"] == "ready"
     assert export["blocked_reason"] is None
@@ -369,8 +597,7 @@ def test_admin_export_download_route_returns_artifact_when_ready(monkeypatch) ->
             self.rollbacks += 1
 
     class _FakePaymentQueueService:
-        def complete_admin_export(self, *, actor, export_id):
-            del actor
+        def get_admin_export_status(self, *, export_id):
             return {
                 "export_id": export_id,
                 "status": "ready",
@@ -406,7 +633,7 @@ def test_admin_export_download_route_returns_artifact_when_ready(monkeypatch) ->
     assert response.media_type == "text/csv"
     assert response.body == b"id,status\nrow-1,ready\n"
     assert response.headers["x-gtex-audit-ref"] == "audit-ready"
-    assert session.commits == 1
+    assert session.commits == 0
     assert session.rollbacks == 0
 
 
@@ -423,8 +650,7 @@ def test_admin_export_download_route_returns_blocked_state_without_generator(mon
             self.rollbacks += 1
 
     class _FakePaymentQueueService:
-        def complete_admin_export(self, *, actor, export_id):
-            del actor
+        def get_admin_export_status(self, *, export_id):
             return {
                 "export_id": export_id,
                 "status": "blocked",
@@ -453,5 +679,5 @@ def test_admin_export_download_route_returns_blocked_state_without_generator(mon
     payload = json.loads(response.body)
     assert payload["status"] == "blocked"
     assert "fraud export is blocked" in payload["blocked_reason"]
-    assert session.commits == 1
+    assert session.commits == 0
     assert session.rollbacks == 0

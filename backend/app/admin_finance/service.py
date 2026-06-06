@@ -87,6 +87,7 @@ PAYMENT_QUEUE_ACTION_LABELS = {
 ADMIN_EXPORT_EVENT_REQUESTED = "admin.export.requested"
 ADMIN_EXPORT_EVENT_READY = "admin.export.ready"
 ADMIN_EXPORT_EVENT_BLOCKED = "admin.export.blocked"
+ADMIN_EXPORT_EVENT_FAILED = "admin.export.failed"
 ADMIN_BULK_ACTION_EVENT_REQUESTED = "admin.bulk_action.requested"
 ADMIN_BULK_ACTION_EVENT_COMPLETED = "admin.bulk_action.completed"
 ADMIN_EXPORT_BLOCKED_REASON = (
@@ -805,6 +806,7 @@ class AdminFinanceService:
         export_type: str,
         export_format: str,
         filters: dict[str, object] | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         normalized_type = export_type.strip().lower()
         normalized_format = export_format.strip().lower()
@@ -812,6 +814,27 @@ class AdminFinanceService:
             raise ValueError("Export type is not supported by the admin finance export queue.")
         if normalized_format not in {"csv", "json"}:
             raise ValueError("Export format must be csv or json.")
+        normalized_filters = self._normalize_export_filters(filters or {})
+        normalized_idempotency_key = self._normalize_export_idempotency_key(idempotency_key)
+        request_fingerprint = self._admin_export_request_fingerprint(
+            export_type=normalized_type,
+            export_format=normalized_format,
+            filters=normalized_filters,
+        )
+        if normalized_idempotency_key is not None:
+            existing_event = self._find_idempotent_admin_export_request(
+                actor=actor,
+                idempotency_key=normalized_idempotency_key,
+            )
+            if existing_event is not None:
+                existing_payload = dict(existing_event.payload or {})
+                if existing_payload.get("request_fingerprint") != request_fingerprint:
+                    raise ValueError("Idempotency key already used for a different admin export request.")
+                status_payload = self.get_admin_export_status(
+                    export_id=str(existing_payload.get("export_id") or existing_event.resource_id)
+                )
+                status_payload["enqueue_required"] = False
+                return status_payload
         requested_at = datetime.now(timezone.utc)
         export_id = f"EXPORT-{requested_at.strftime('%Y%m%d')}-{uuid4().hex[:8].upper()}"
         payload = {
@@ -819,12 +842,19 @@ class AdminFinanceService:
             "status": "queued",
             "export_type": normalized_type,
             "format": normalized_format,
-            "filters": self._normalize_export_filters(filters or {}),
+            "filters": normalized_filters,
+            "idempotency_key": normalized_idempotency_key,
+            "request_fingerprint": request_fingerprint,
+            "admin_user_id": actor.id,
+            "admin_email": actor.email,
             "requested_at": requested_at.isoformat(),
             "completed_at": None,
             "download_url": None,
             "blocked_reason": None,
+            "failure_reason": None,
+            "worker_status": "queued",
             "occurred_at": requested_at.isoformat(),
+            "backend_authored": True,
         }
         payload = self._json_export_payload(payload)
         audit = self.treasury_service._audit(
@@ -839,7 +869,9 @@ class AdminFinanceService:
         payload["audit_reference"] = audit.id
         payload["requested_audit_reference"] = audit.id
         payload["audit"] = self._audit_event_payload(audit)
-        return self.complete_admin_export(actor=actor, export_id=export_id)
+        status_payload = self._admin_export_status_from_payload(export_id=export_id, event=audit, payload=payload)
+        status_payload["enqueue_required"] = True
+        return status_payload
 
     def complete_admin_export(
         self,
@@ -848,11 +880,13 @@ class AdminFinanceService:
         export_id: str,
     ) -> dict[str, object]:
         current = self.get_admin_export_status(export_id=export_id)
-        if current["status"] in {"ready", "blocked"}:
+        if current["status"] in {"ready", "blocked", "failed"}:
             return current
         completed_at = datetime.now(timezone.utc)
         persisted_current = {
-            key: value for key, value in current.items() if key not in {"artifact", "audit", "audit_reference"}
+            key: value
+            for key, value in current.items()
+            if key not in {"artifact", "audit", "audit_reference", "enqueue_required"}
         }
         try:
             artifact = self._build_admin_export_artifact(
@@ -868,8 +902,11 @@ class AdminFinanceService:
                 "completed_at": completed_at.isoformat(),
                 "download_url": f"{ADMIN_EXPORT_DOWNLOAD_BASE}/{export_id}/download",
                 "blocked_reason": None,
+                "failure_reason": None,
                 "artifact": artifact,
+                "worker_status": "completed",
                 "occurred_at": completed_at.isoformat(),
+                "backend_authored": True,
             }
             event_type = ADMIN_EXPORT_EVENT_READY
             summary = f"Prepared admin export {export_id}."
@@ -880,11 +917,31 @@ class AdminFinanceService:
                 "completed_at": completed_at.isoformat(),
                 "download_url": None,
                 "blocked_reason": str(exc) or ADMIN_EXPORT_BLOCKED_REASON,
+                "failure_reason": None,
                 "blocked_at": completed_at.isoformat(),
+                "worker_status": "blocked",
                 "occurred_at": completed_at.isoformat(),
+                "backend_authored": True,
             }
             event_type = ADMIN_EXPORT_EVENT_BLOCKED
             summary = f"Blocked admin export {export_id}: {payload['blocked_reason']}"
+        except Exception as exc:
+            logger.exception("admin_finance.export.worker_failed export_id=%s", export_id)
+            failure_reason = str(exc).strip() or exc.__class__.__name__
+            payload = {
+                **persisted_current,
+                "status": "failed",
+                "completed_at": completed_at.isoformat(),
+                "download_url": None,
+                "blocked_reason": None,
+                "failure_reason": failure_reason[:500],
+                "failed_at": completed_at.isoformat(),
+                "worker_status": "failed",
+                "occurred_at": completed_at.isoformat(),
+                "backend_authored": True,
+            }
+            event_type = ADMIN_EXPORT_EVENT_FAILED
+            summary = f"Failed admin export {export_id}: {payload['failure_reason']}"
         payload = self._json_export_payload(payload)
         audit = self.treasury_service._audit(
             self.session,
@@ -905,11 +962,64 @@ class AdminFinanceService:
         )
         return self._admin_export_status_from_payload(export_id=export_id, event=audit, payload=payload)
 
+    def fail_admin_export(
+        self,
+        *,
+        actor: User,
+        export_id: str,
+        failure_reason: str,
+    ) -> dict[str, object]:
+        current = self.get_admin_export_status(export_id=export_id)
+        if current["status"] in {"ready", "blocked", "failed"}:
+            return current
+        failed_at = datetime.now(timezone.utc)
+        persisted_current = {
+            key: value
+            for key, value in current.items()
+            if key not in {"artifact", "audit", "audit_reference", "enqueue_required"}
+        }
+        payload = {
+            **persisted_current,
+            "status": "failed",
+            "completed_at": failed_at.isoformat(),
+            "download_url": None,
+            "blocked_reason": None,
+            "failure_reason": (failure_reason.strip() or "Admin finance export worker failed.")[:500],
+            "failed_at": failed_at.isoformat(),
+            "worker_status": "failed",
+            "occurred_at": failed_at.isoformat(),
+            "backend_authored": True,
+        }
+        payload = self._json_export_payload(payload)
+        audit = self.treasury_service._audit(
+            self.session,
+            actor=actor,
+            event_type=ADMIN_EXPORT_EVENT_FAILED,
+            resource_type="admin_export",
+            resource_id=export_id,
+            summary=f"Failed admin export {export_id}: {payload['failure_reason']}"[:255],
+            payload=payload,
+        )
+        payload["audit_reference"] = audit.id
+        payload["audit"] = self._audit_event_payload(audit)
+        self._publish_admin_export_outbox_event(
+            event_type=ADMIN_EXPORT_EVENT_FAILED,
+            export_id=export_id,
+            audit=audit,
+            payload=payload,
+        )
+        return self._admin_export_status_from_payload(export_id=export_id, event=audit, payload=payload)
+
     def get_admin_export_status(self, *, export_id: str) -> dict[str, object]:
         event = self._latest_control_event(
             resource_type="admin_export",
             resource_id=export_id,
-            event_types=(ADMIN_EXPORT_EVENT_BLOCKED, ADMIN_EXPORT_EVENT_READY, ADMIN_EXPORT_EVENT_REQUESTED),
+            event_types=(
+                ADMIN_EXPORT_EVENT_FAILED,
+                ADMIN_EXPORT_EVENT_BLOCKED,
+                ADMIN_EXPORT_EVENT_READY,
+                ADMIN_EXPORT_EVENT_REQUESTED,
+            ),
         )
         if event is None:
             raise ValueError("Export request was not found.")
@@ -956,10 +1066,17 @@ class AdminFinanceService:
             "completed_at": payload.get("completed_at"),
             "download_url": payload.get("download_url"),
             "blocked_reason": payload.get("blocked_reason"),
+            "failure_reason": payload.get("failure_reason"),
             "audit_reference": event.id,
             "requested_audit_reference": payload.get("requested_audit_reference") or event.id,
             "audit": payload["audit"],
             "artifact": artifact,
+            "idempotency_key": payload.get("idempotency_key"),
+            "request_fingerprint": payload.get("request_fingerprint"),
+            "admin_user_id": payload.get("admin_user_id"),
+            "admin_email": payload.get("admin_email"),
+            "worker_status": payload.get("worker_status"),
+            "backend_authored": payload.get("backend_authored") is not False,
         }
 
     def _build_admin_export_artifact(
@@ -1673,6 +1790,57 @@ class AdminFinanceService:
             limit = ADMIN_EXPORT_DEFAULT_LIMIT
         normalized["limit"] = max(1, min(ADMIN_EXPORT_MAX_LIMIT, limit))
         return normalized
+
+    def _find_idempotent_admin_export_request(
+        self,
+        *,
+        actor: User,
+        idempotency_key: str,
+    ) -> TreasuryAuditEvent | None:
+        events = self.session.scalars(
+            select(TreasuryAuditEvent)
+            .where(
+                TreasuryAuditEvent.resource_type == "admin_export",
+                TreasuryAuditEvent.event_type == ADMIN_EXPORT_EVENT_REQUESTED,
+                TreasuryAuditEvent.actor_user_id == actor.id,
+            )
+            .order_by(TreasuryAuditEvent.created_at.desc())
+            .limit(200)
+        ).all()
+        for event in events:
+            payload = dict(event.payload or {})
+            if payload.get("idempotency_key") == idempotency_key:
+                return event
+        return None
+
+    @staticmethod
+    def _normalize_export_idempotency_key(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        if not normalized:
+            return None
+        if len(normalized) > 160:
+            raise ValueError("Admin export idempotency key must be at most 160 characters.")
+        return normalized
+
+    @staticmethod
+    def _admin_export_request_fingerprint(
+        *,
+        export_type: str,
+        export_format: str,
+        filters: dict[str, object],
+    ) -> str:
+        return json.dumps(
+            {
+                "export_type": export_type,
+                "format": export_format,
+                "filters": AdminFinanceService._json_export_payload(filters),
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
 
     def _publish_admin_export_outbox_event(
         self,

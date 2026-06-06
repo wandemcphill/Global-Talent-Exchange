@@ -230,6 +230,7 @@ class AdminExportRequest(BaseModel):
     export_type: str = Field(min_length=2, max_length=64)
     format: str = Field(default="csv", min_length=3, max_length=8)
     filters: dict[str, Any] = Field(default_factory=dict)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=160)
 
 
 class AdminExportStatusView(BaseModel):
@@ -242,6 +243,7 @@ class AdminExportStatusView(BaseModel):
     completed_at: datetime | None = None
     download_url: str | None = None
     blocked_reason: str | None = None
+    failure_reason: str | None = None
     audit_reference: str | None = None
     requested_audit_reference: str | None = None
     audit: dict[str, Any] | None = None

@@ -51,6 +51,10 @@ def wallet_topic(user_id: str) -> str:
     return f"wallet:{user_id}"
 
 
+def admin_topic(user_id: str) -> str:
+    return f"admin:{user_id}"
+
+
 def match_topic(match_id: str) -> str:
     return match_event_channel(match_id)
 
@@ -220,6 +224,15 @@ class RealtimeHub:
             if topic.startswith("wallet:"):
                 logger.warning("realtime.topic.denied topic=%s reason=wallet_scope", topic)
                 continue
+            if topic == "admin" and user_id is not None:
+                resolved.append(admin_topic(user_id))
+                continue
+            if topic.startswith("admin:") and user_id is not None and topic == admin_topic(user_id):
+                resolved.append(topic)
+                continue
+            if topic.startswith("admin:"):
+                logger.warning("realtime.topic.denied topic=%s reason=admin_scope", topic)
+                continue
             resolved.append(topic)
         return tuple(dict.fromkeys(resolved))
 
@@ -337,6 +350,45 @@ class RealtimeHub:
                     )
                 )
             return dispatches
+
+        if event.name in {"admin.export.ready", "admin.export.blocked", "admin.export.failed"}:
+            export_id = _optional_string(payload.get("export_id") or event.aggregate_id)
+            admin_user_id = _optional_string(
+                payload.get("admin_user_id") or payload.get("actor_user_id") or payload.get("requested_by_user_id")
+            )
+            if export_id is None or admin_user_id is None:
+                return []
+            artifact = payload.get("artifact")
+            artifact_payload = (
+                {key: value for key, value in artifact.items() if key != "content"}
+                if isinstance(artifact, dict)
+                else None
+            )
+            status = _optional_string(payload.get("status")) or event.name.rsplit(".", maxsplit=1)[-1]
+            data = {
+                "event_name": event.name,
+                "export_id": export_id,
+                "admin_user_id": admin_user_id,
+                "status": status,
+                "export_type": payload.get("export_type"),
+                "format": payload.get("format"),
+                "requested_at": payload.get("requested_at"),
+                "completed_at": payload.get("completed_at"),
+                "download_url": payload.get("download_url"),
+                "blocked_reason": payload.get("blocked_reason"),
+                "failure_reason": payload.get("failure_reason"),
+                "audit_reference": payload.get("audit_reference"),
+                "requested_audit_reference": payload.get("requested_audit_reference"),
+                "artifact": artifact_payload,
+                "backend_authored": True,
+            }
+            return [
+                RealtimeDispatch(
+                    type=f"admin_export_{status}",
+                    topics=(admin_topic(admin_user_id),),
+                    data=data,
+                )
+            ]
 
         if event.name == "JACKPOT_TRIGGERED":
             dispatches: list[RealtimeDispatch] = []
@@ -776,6 +828,7 @@ __all__ = [
     "RealtimeDispatch",
     "RealtimeHub",
     "RealtimeSnapshot",
+    "admin_topic",
     "commentary_topic",
     "match_topic",
     "wallet_topic",

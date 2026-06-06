@@ -15,6 +15,7 @@ from app.core.cache_namespaces import REGEN_UNIVERSE_CACHE_NAMESPACE
 from app.core.config import get_settings
 from app.core.container import build_application_context
 from app.core.response_cache import NamespacedResponseCache
+from app.admin_finance.service import AdminFinanceService
 from app.models.user import User
 from app.regen_universe.expansion_service import RegenUniverseExpansionService
 from app.treasury.service import TreasuryService
@@ -75,6 +76,37 @@ def verify_wallet_top_up_job(*, user_id: str, reference: str) -> dict[str, Any]:
     except Exception:
         logger.exception(
             "worker.wallet_top_up_verify.failed job_id=%s user_id=%s reference=%s", job_id, user_id, reference
+        )
+        raise
+
+
+def admin_finance_export_job(*, export_id: str, actor_user_id: str) -> dict[str, Any]:
+    job_id = _job_id()
+    context = _context()
+    logger.info(
+        "worker.admin_finance_export.started job_id=%s export_id=%s actor_user_id=%s",
+        job_id,
+        export_id,
+        actor_user_id,
+    )
+    try:
+        with context.database.session_factory() as session:
+            actor = session.get(User, actor_user_id)
+            if actor is None:
+                raise ValueError(f"Admin export actor {actor_user_id} was not found.")
+            payload = AdminFinanceService(session=session).complete_admin_export(
+                actor=actor,
+                export_id=export_id,
+            )
+            session.commit()
+        logger.info("worker.admin_finance_export.completed job_id=%s export_id=%s", job_id, export_id)
+        return payload
+    except Exception:
+        logger.exception(
+            "worker.admin_finance_export.failed job_id=%s export_id=%s actor_user_id=%s",
+            job_id,
+            export_id,
+            actor_user_id,
         )
         raise
 
@@ -144,6 +176,7 @@ def regen_tournament_scheduling_job(*, days_ahead: int) -> dict[str, Any]:
 
 
 __all__ = [
+    "admin_finance_export_job",
     "regen_dna_evolution_job",
     "regen_rivalry_detection_job",
     "regen_story_regeneration_job",
