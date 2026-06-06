@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -440,6 +441,101 @@ GUARDRAIL_TEST_PATTERN_MARKERS = (
     "route",
 )
 
+RULE_PREFILTER_TOKENS = {
+    "paystack-canonical-exposure": ("paystack",),
+    "noncanonical-payment-rail": (
+        "flutterwave",
+        "paypal",
+        "monnify",
+        "opay",
+        "coinbase",
+        "mobile",
+        "m-pesa",
+        "mpesa",
+        "pesa",
+        "payment",
+        "provider",
+        "checkout",
+        "gateway",
+        "rail",
+        "stripe",
+        "crypto",
+    ),
+    "unity-access-route": ("unity",),
+    "verify-unity-routes": ("unity", "verify", "render"),
+    "production-3d-route-promotion": ("3d", "match_3d", "native_match"),
+    "promoted-3d-cta": ("3d",),
+    "pseudo-3d-label": ("pseudo", "3d"),
+    "fake-production-authority-data": (
+        "fake",
+        "mock",
+        "dummy",
+        "sample",
+        "hardcoded",
+        "synthetic",
+        "client-generated",
+        "client generated",
+        "client-side",
+        "client side",
+        "local-only",
+        "local only",
+        "fallback",
+        "balance",
+        "score",
+        "bid",
+        "ranking",
+        "fixture",
+    ),
+    "fixture-mode-production-enabled": (
+        "fixture",
+        "kfixturemode",
+        "gtexfixturemode",
+        "fixturemode",
+        "enablefixturemode",
+        "enablecapitalfixtures",
+        "gtebackendmode.fixture",
+        "allowfixturemode",
+        "bool.fromenvironment",
+    ),
+    "renderer-ref-outside-authorized-zone": (
+        "unity",
+        "match_3d",
+        "scenekit",
+        "babylon",
+        "androidview",
+        "uikitview",
+        "platformviewhittestbehavior",
+        "native renderer",
+        "experimental bridge",
+    ),
+    "legacy-capital-import": ("package:gte_frontend/",),
+    "legacy-competition-import": ("package:gte_frontend/",),
+    "live-match-outside-match-center-import": ("package:gte_frontend/",),
+    "wallet-summary-read-outside-capital": ("walletsummary", "/wallets/summary"),
+    "ui-wallet-summary-read-outside-capital": ("walletsummary",),
+    "mock-wallet-fixture-state-outside-capital": ("_wallet", "_fanwallet", "_ledger", "_seed", "_topup"),
+    "mock-wallet-fixture-mutation-outside-capital": ("_capitalwallet",),
+    "extracted-capital-fixture-state-outside-capital": (
+        "_deposit",
+        "_withdrawal",
+        "_treasury",
+        "_userbank",
+        "_kyc",
+        "_dispute",
+        "_policy",
+        "_base",
+        "_session",
+        "_order",
+        "_portfolio",
+        "_seed",
+        "_liquidity",
+        "_payout",
+        "_adminbuyback",
+    ),
+    "capital-feature-direct-controller-api": ("controller.api.",),
+    "capital-fixture-direct-mock-construction": ("gtemockapi.capitalfixtures",),
+}
+
 
 def _is_guardrail_test_pattern_line(line: str) -> bool:
     normalized = line.strip().lower()
@@ -448,8 +544,16 @@ def _is_guardrail_test_pattern_line(line: str) -> bool:
     return normalized.startswith(("r'", 'r"', "r'''", 'r"""', "('", '("', "f'", 'f"', "'", '"'))
 
 
+@lru_cache(maxsize=None)
 def _to_repo_path(path: Path) -> str:
     return path.resolve().relative_to(REPO_ROOT).as_posix()
+
+
+def _line_may_match(rule: GuardrailRule, lower_line: str) -> bool:
+    tokens = RULE_PREFILTER_TOKENS.get(rule.key)
+    if tokens is None:
+        return True
+    return any(token in lower_line for token in tokens)
 
 
 def _should_skip(path: Path) -> bool:
@@ -964,7 +1068,10 @@ def scan(roots: Sequence[str] = DEFAULT_SCAN_ROOTS) -> list[GuardrailHit]:
             )
             continue
         for line_number, line in enumerate(lines, start=1):
+            lower_line = line.lower()
             for rule in RULES:
+                if not _line_may_match(rule, lower_line):
+                    continue
                 for match in rule.pattern.finditer(line):
                     classification, lane, note = _classify(repo_path, line, rule)
                     hits.append(
@@ -980,6 +1087,8 @@ def scan(roots: Sequence[str] = DEFAULT_SCAN_ROOTS) -> list[GuardrailHit]:
                         )
                     )
             for rule in ARCHITECTURE_RULES:
+                if not _line_may_match(rule, lower_line):
+                    continue
                 for match in rule.pattern.finditer(line):
                     classification, lane, note = _classify_architecture(repo_path, line, rule)
                     hits.append(
@@ -996,6 +1105,8 @@ def scan(roots: Sequence[str] = DEFAULT_SCAN_ROOTS) -> list[GuardrailHit]:
                     )
             for prefixes, rule in PATH_SCOPED_ARCHITECTURE_RULES:
                 if not repo_path.lower().startswith(prefixes):
+                    continue
+                if not _line_may_match(rule, lower_line):
                     continue
                 for match in rule.pattern.finditer(line):
                     classification, lane, note = _classify_architecture(repo_path, line, rule)

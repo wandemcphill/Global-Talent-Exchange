@@ -218,6 +218,39 @@ Risky untracked generated/media artifacts:
 - `ops.zip`
 - `frontend/assets/media/gtex_matchday_wallpaper.png`
 - `Gtex_Test_Migration/Assets/ThirdParty/OriginalFootballSimulator/Football Soccer Simulator.unitypackage`
+
+## Thread 3 CI / Quality Gates / Release Integrity - 2026-06-06
+
+Ownership lane:
+
+- `.github/workflows/**`
+- `tools/quality/**`
+- `tools/guardrails/**`
+- `tools/check_python_runtime_alignment.py`
+
+Completed work:
+
+- Hardened `.github/workflows/ci-staging.yml` so PRs and main pushes run full Flutter analyze/test, full backend pytest, generated API contract regeneration/drift checks, production guardrails, canonical acceptance, existing smoke/regression jobs, and a final merge gate.
+- Hardened `.github/workflows/deploy-production.yml` so manual production deploys are blocked behind full Flutter, full backend pytest, generated contract checks, production guardrails/deploy blockers, and live match smoke before deploy eligibility.
+- Hardened `.github/workflows/quality-gates.yml` naming and generated contract drift checks.
+- Kept KoraPay/manual-only and Unity/native-3D/pseudo-3D quarantine guardrail checks in CI.
+- Added guardrail/acceptance scan prefilters and cached path helpers in `tools/guardrails/production_guardrail_scan.py` and `tools/quality/run_gtex_canonical_acceptance.py` to keep full-production scans practical in CI without weakening rule coverage.
+
+Verification:
+
+- YAML parse of `.github/workflows/*.yml` passed with Python.
+- `tools/check_python_runtime_alignment.py` passed.
+- `py_compile` passed for Thread 3 quality/guardrail tooling.
+- `python -m pytest -q tools/guardrails -p no:cacheprovider` passed: 4 passed. Output was redirected to `backend\_out.txt`, read, and removed per thread instructions.
+- `tools/guardrails/production_guardrail_scan.py --profile canonical-production --format summary --fail-on violation` passed.
+- `tools/guardrails/production_guardrail_scan.py --root .github/workflows --format summary --fail-on violation` passed.
+- `tools/quality/run_gtex_canonical_acceptance.py --diff-base=` passed.
+- Scoped `git diff --check` passed for owned workflow/tooling/manifest paths with CRLF warnings only.
+
+Blockers / notes:
+
+- `actionlint` is not installed in this workspace, so semantic GitHub Actions lint was not run locally.
+- A subagent run of `backend/tests/ops/test_canonical_production_guards.py -q` reported existing non-workflow source expectation failures around legacy 3D documentation/canonicalization. Thread 3 did not edit backend/frontend source to repair those failures; CI now correctly gates production deploy on that blocker.
 - `Gtex_Test_Migration/tmp/builds/command-line-invocations.log`
 
 Obvious move/collision patterns:

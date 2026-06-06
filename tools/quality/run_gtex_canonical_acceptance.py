@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib import error, parse, request
@@ -120,6 +121,61 @@ FORBIDDEN_OPS_PROMOTION_RE = re.compile(
     re.IGNORECASE,
 )
 SCAN_TEXT_SUFFIXES = {".dart", ".json", ".md", ".ps1", ".py", ".sh", ".yaml", ".yml"}
+PAYMENT_RAIL_PREFILTER_TOKENS = (
+    "flutterwave",
+    "paypal",
+    "monnify",
+    "opay",
+    "coinbase",
+    "mobile",
+    "m-pesa",
+    "mpesa",
+    "payment",
+    "provider",
+    "checkout",
+    "gateway",
+    "rail",
+    "stripe",
+    "crypto",
+)
+OPS_PROMOTION_PREFILTER_TOKENS = (
+    "paystack",
+    "unity",
+    "legacy-runtime-access",
+    "verify_unity",
+    "verify-unity",
+)
+FAKE_AUTHORITY_PREFILTER_TOKENS = (
+    "fake",
+    "mock",
+    "dummy",
+    "sample",
+    "hardcoded",
+    "synthetic",
+    "client-generated",
+    "client generated",
+    "client-side",
+    "client side",
+    "local-only",
+    "local only",
+    "fallback",
+    "balance",
+    "score",
+    "bid",
+    "ranking",
+    "fixture",
+)
+FIXTURE_ACTIVATION_PREFILTER_TOKENS = (
+    "fixture",
+    "kfixturemode",
+    "gtexfixturemode",
+    "fixturemode",
+    "enablefixturemode",
+    "enablecapitalfixtures",
+    "gtebackendmode.fixture",
+    "allowfixturemode",
+    "bool.fromenvironment",
+)
 
 
 @dataclass(frozen=True)
@@ -237,8 +293,11 @@ def check_no_paystack_canonical_exposure(contract: dict[str, Any]) -> CheckResul
 def check_payment_rails_are_korapay_manual_only() -> CheckResult:
     exposed: list[str] = []
     for path, line_number, line in _iter_source_lines(PAYMENT_RAIL_SCAN_PATHS):
+        lower_line = line.lower()
+        if not _has_any_token(lower_line, PAYMENT_RAIL_PREFILTER_TOKENS):
+            continue
         if FORBIDDEN_NONCANONICAL_PAYMENT_RAIL_RE.search(line):
-            exposed.append(f"{path.relative_to(REPO_ROOT).as_posix()}:{line_number}: {line.strip()}")
+            exposed.append(f"{repo_relative_path(path)}:{line_number}: {line.strip()}")
 
     if exposed:
         return fail(
@@ -253,11 +312,15 @@ def check_payment_rails_are_korapay_manual_only() -> CheckResult:
 
 def check_ops_workflows_no_paystack_or_unity_promotion() -> CheckResult:
     exposed: list[str] = []
+    current_script_path = Path(__file__).resolve()
     for path, line_number, line in _iter_source_lines(WORKFLOW_OPS_SCAN_PATHS):
-        if path == Path(__file__).resolve():
+        if path == current_script_path:
+            continue
+        lower_line = line.lower()
+        if not _has_any_token(lower_line, OPS_PROMOTION_PREFILTER_TOKENS):
             continue
         if FORBIDDEN_OPS_PROMOTION_RE.search(line):
-            exposed.append(f"{path.relative_to(REPO_ROOT).as_posix()}:{line_number}: {line.strip()}")
+            exposed.append(f"{repo_relative_path(path)}:{line_number}: {line.strip()}")
 
     if exposed:
         return fail(
@@ -328,14 +391,23 @@ def check_no_fake_authority_or_fixture_mode() -> CheckResult:
     fake_hits: list[str] = []
     fixture_hits: list[str] = []
     for path, line_number, line in _iter_source_lines(PRODUCTION_AUTHORITY_SCAN_PATHS):
-        relative = path.relative_to(REPO_ROOT).as_posix()
-        if FORBIDDEN_FAKE_AUTHORITY_RE.search(line) and not _is_disabled_authority_reference(line):
-            fake_hits.append(f"{relative}:{line_number}: {line.strip()}")
-        if FORBIDDEN_FIXTURE_MODE_ACTIVATION_RE.search(line) and not _is_test_only_fixture_activation(
-            path,
-            line_number,
-            line,
+        lower_line = line.lower()
+        if (
+            _has_any_token(lower_line, FAKE_AUTHORITY_PREFILTER_TOKENS)
+            and FORBIDDEN_FAKE_AUTHORITY_RE.search(line)
+            and not _is_disabled_authority_reference(line)
         ):
+            relative = repo_relative_path(path)
+            fake_hits.append(f"{relative}:{line_number}: {line.strip()}")
+        if (
+            _has_any_token(
+                lower_line,
+                FIXTURE_ACTIVATION_PREFILTER_TOKENS,
+            )
+            and FORBIDDEN_FIXTURE_MODE_ACTIVATION_RE.search(line)
+            and not _is_test_only_fixture_activation(path, line_number, line)
+        ):
+            relative = repo_relative_path(path)
             fixture_hits.append(f"{relative}:{line_number}: {line.strip()}")
 
     problems = []
@@ -611,7 +683,7 @@ def _is_disabled_authority_reference(line: str) -> bool:
 
 
 def _is_test_only_fixture_activation(path: Path, line_number: int, line: str) -> bool:
-    relative = path.relative_to(REPO_ROOT).as_posix()
+    relative = repo_relative_path(path)
     if relative == "frontend/lib/app/gte_app_config.dart" and "allowFixtureMode ? GteBackendMode.fixture" in line:
         text = read_text(path)
         return "allowFixtureMode: isFlutterTestRuntime" in text
@@ -630,11 +702,21 @@ def _is_test_only_fixture_activation(path: Path, line_number: int, line: str) ->
     return ".fixture(" in prior_context or "factory " in prior_context
 
 
+@lru_cache(maxsize=None)
 def read_text(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8", errors="ignore")
     except FileNotFoundError as exc:
-        raise AcceptanceFailure(f"Missing required file: {path.relative_to(REPO_ROOT).as_posix()}") from exc
+        raise AcceptanceFailure(f"Missing required file: {repo_relative_path(path)}") from exc
+
+
+@lru_cache(maxsize=None)
+def repo_relative_path(path: Path) -> str:
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+def _has_any_token(lower_line: str, tokens: tuple[str, ...]) -> bool:
+    return any(token in lower_line for token in tokens)
 
 
 def normalize_path(path: str) -> str:

@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   quality-gates:
+    name: Generated contracts, guardrails, and changed quality
     runs-on: ubuntu-latest
     env:
       CI: "true"
@@ -37,10 +38,19 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r backend/requirements.txt black ruff detect-secrets
-      - run: python tools/check_python_runtime_alignment.py
-      - run: python tools/audit/generate_api_contract_bindings.py
-      - run: python tools/audit/check_api_contract_violations.py
-      - run: python tools/guardrails/production_guardrail_scan.py --fail-on violation
-      - run: python tools/quality/run_gtex_canonical_acceptance.py --diff-base=
-      - run: python tools/quality/run_changed_quality.py --base "$QUALITY_BASE_SHA" --head "$QUALITY_HEAD_SHA"
+      - name: Check Python runtime alignment
+        run: python tools/check_python_runtime_alignment.py
+      - name: Regenerate API contract artifacts
+        run: python tools/audit/generate_api_contract_bindings.py
+      - name: Verify generated API contract artifacts are committed
+        shell: bash
+        run: git diff --exit-code -- shared/api_contract.json frontend/lib/data/generated/gte_api_contract.g.dart
+      - name: Check frontend API contract usage
+        run: python tools/audit/check_api_contract_violations.py
+      - name: Run production guardrail scan
+        run: python tools/guardrails/production_guardrail_scan.py --profile canonical-production --fail-on violation
+      - name: Run canonical acceptance gate
+        run: python tools/quality/run_gtex_canonical_acceptance.py --diff-base=
+      - name: Run changed quality gate
+        run: python tools/quality/run_changed_quality.py --base "$QUALITY_BASE_SHA" --head "$QUALITY_HEAD_SHA"
         shell: bash
