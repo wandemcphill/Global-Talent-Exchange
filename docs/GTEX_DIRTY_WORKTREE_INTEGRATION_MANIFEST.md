@@ -476,7 +476,20 @@ Guardrail notes:
 
 Verification:
 
-- Pending in this manifest section until Thread 8 focused script syntax checks, dry-run smoke checks, load harness help/small probe checks, and `git diff --check` complete.
+- PowerShell parser checks passed for `tools/visual/capture_gtex_visual_qa.ps1`, `tools/staging/invoke_gtex_staging_smoke.ps1`, and `tools/staging/invoke_gtex_rollback_rehearsal.ps1`.
+- Python compile check passed: `C:\Python314\python.exe -m py_compile tools\load\gtex_load_probe.py`.
+- Load harness help check passed: `C:\Python314\python.exe tools\load\gtex_load_probe.py --help`.
+- Local mock staging smoke passed with route verification and relaxed local threshold: `powershell -ExecutionPolicy Bypass -File .\tools\staging\invoke_gtex_staging_smoke.ps1 -BaseUrl http://127.0.0.1:8931 -IncludeOptionalMarket -IncludeOptionalMatchCenter -MatchId qa-match -VerifyMatchCenterRoutes -MaxLatencyMs 5000 -OutputPath .\tmp\thread8_staging_smoke_pass.json`. The default `2000 ms` threshold remains documented for real staging; the local mock cold `/health` request exceeded it once in this Windows shell.
+- Local mock rollback rehearsal passed: `powershell -ExecutionPolicy Bypass -File .\tools\staging\invoke_gtex_rollback_rehearsal.ps1 -CurrentBaseUrl http://127.0.0.1:8931 -RollbackBaseUrl http://127.0.0.1:8931 -CurrentReleaseId current-qa -RollbackReleaseId rollback-qa -VerifyMatchCenterRoutes -OutputPath .\tmp\thread8_rollback.json`.
+- Local mock load probe passed: `C:\Python314\python.exe .\tools\load\gtex_load_probe.py --base-url http://127.0.0.1:8931 --match-id qa-match --require-match --requests-per-endpoint 2 --concurrency 2 --max-p95-ms 5000 --output .\tmp\thread8_load_probe_pass2.json`.
+- Local mock visual smoke passed: `powershell -ExecutionPolicy Bypass -File .\tools\visual\capture_gtex_visual_qa.ps1 -BaseUrl http://127.0.0.1:8931 -Routes '/' -Viewports 'desktop=800x600' -OutputDir .\tmp\thread8_visual_smoke -MinBytes 1000 -TimeoutSeconds 45 -SettleSeconds 0`. Manifest reported `passed=true`, PNG dimensions `800x600`, and `8423` bytes.
+- `git diff --check -- tools/visual/capture_gtex_visual_qa.ps1 tools/staging/invoke_gtex_staging_smoke.ps1 tools/staging/invoke_gtex_rollback_rehearsal.ps1 tools/load/gtex_load_probe.py Docs/GTEX_GA_QA_STAGING_LOAD_RUNBOOK.md Docs/GTEX_PRODUCTION_SIGNOFF_CHECKLIST.md Docs/GTEX_DIRTY_WORKTREE_INTEGRATION_MANIFEST.md` passed.
+- Production guardrail scan passed: `C:\Python314\python.exe tools\guardrails\production_guardrail_scan.py --include-changed --format summary --fail-on violation` returned summary `{"fixed": 5, "owned-by-thread": 17, "quarantined": 165}`.
+
+Skipped/blockers:
+
+- No real staging API/web URLs, bearer token, or backend-authored match id were provided in this thread, so verification used a local mock server only. Real staging must still run the documented commands before GA signoff.
+- The visual harness verified a local static route only. Full desktop/tablet/mobile visual QA across canonical GTEX routes remains a release-captain action once staging web is available.
 
 ## Thread 1 Core/Foundation Lane 0 Pulse - 2026-06-02
 
