@@ -3,13 +3,9 @@ from __future__ import annotations
 import json
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
 from app.media_engine.schemas import CreatorClipRevenueAttributionRequest
-from app.models.base import Base
 from app.models.highlight_share import HighlightShareExport
 from app.models.user import User
 from app.services.creator_clip_monetization_service import CreatorClipMonetizationService
@@ -36,16 +32,9 @@ class MemoryCacheBackend:
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared full-schema engine with per-test rollback; avoids rebuilding 567 tables.
+    yield gtex_db_session
 
 
 def _create_user(session, *, user_id: str, email: str, username: str) -> User:

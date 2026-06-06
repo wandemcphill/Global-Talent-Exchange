@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import app.club_identity.models.reputation  # noqa: F401
 import app.ingestion.models  # noqa: F401
 import app.models  # noqa: F401
 from app.common.enums.creator_profile_status import CreatorProfileStatus
-from app.models.base import Base
 from app.models.club_profile import ClubProfile
 from app.models.creator_profile import CreatorProfile
 from app.models.creator_provisioning import CreatorSquad
@@ -18,16 +14,9 @@ from app.services.creator_squad_service import CreatorSquadLimitError, CreatorSq
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared full-schema engine with per-test rollback; avoids rebuilding 567 tables.
+    yield gtex_db_session
 
 
 def test_creator_squad_limit_enforcement(session) -> None:
