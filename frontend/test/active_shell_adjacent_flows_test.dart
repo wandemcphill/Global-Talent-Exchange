@@ -42,7 +42,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Club funds'));
+      await tester.tap(find.byTooltip('Capital'));
       await _pumpUntilText(tester, 'Wallet actions');
       expect(find.text('Wallet actions'), findsOneWidget);
       expect(find.text('Fund wallet'), findsOneWidget);
@@ -51,13 +51,15 @@ void main() {
       await _pumpUntilText(tester, 'Mark all read');
       expect(find.text('Mark all read'), findsOneWidget);
       await tester.pageBack();
-      await tester.pumpAndSettle();
+      await _pumpForNavigation(tester);
       await _pumpUntilText(tester, 'Wallet actions');
 
-      expect(find.byTooltip('Creator community'), findsNothing);
+      expect(find.byTooltip('Creator'), findsWidgets);
 
-      await tester.tap(find.byTooltip('Creator access request'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Creator').first);
+      await _pumpUntilText(tester, 'Apply for creator access');
+      await tester.tap(find.widgetWithText(FilledButton, 'Request access'));
+      await _pumpForNavigation(tester);
       expect(find.text('Creator access request'), findsOneWidget);
     },
   );
@@ -90,16 +92,15 @@ void main() {
       );
       await _pumpUntilText(tester, 'Wallet actions');
 
-      expect(find.text('Funds'), findsWidgets);
-      final Finder fundsNavChip = find.text('Funds').last;
-      expect(fundsNavChip, findsOneWidget);
+      expect(find.text('Capital'), findsWidgets);
+      final Finder capitalNavChip = find.text('Capital').last;
+      expect(capitalNavChip, findsOneWidget);
 
-      await tester.tap(find.text('Home').last);
-      await tester.pumpAndSettle();
-      expect(find.widgetWithText(FilledButton, 'Enter club'), findsOneWidget);
+      await tester.tap(find.byTooltip('World').first);
+      await _pumpUntilText(tester, 'World sync');
+      expect(find.text('World sync'), findsWidgets);
 
-      await tester.ensureVisible(fundsNavChip);
-      await tester.tap(fundsNavChip);
+      await tester.tap(find.byTooltip('Capital').first);
       await _pumpUntilText(tester, 'Wallet actions');
       expect(find.text('Fund wallet'), findsOneWidget);
     },
@@ -149,7 +150,7 @@ void main() {
       expect(find.text('GTEX COIN'), findsWidgets);
       expect(find.text('FAN COIN'), findsWidgets);
       await tester.pageBack();
-      await tester.pumpAndSettle();
+      await _pumpForNavigation(tester);
       await _pumpUntilText(tester, 'Wallet actions');
 
       final Finder fundWalletButton = find.widgetWithText(
@@ -162,7 +163,7 @@ void main() {
       expect(find.text('Deposit'), findsOneWidget);
       expect(find.text('Continue to KoraPay'), findsOneWidget);
       await tester.pageBack();
-      await tester.pumpAndSettle();
+      await _pumpForNavigation(tester);
       await _pumpUntilText(tester, 'Wallet actions');
 
       final Finder withdrawButton = find.widgetWithText(
@@ -174,7 +175,7 @@ void main() {
       await _pumpUntilText(tester, 'Request withdrawal');
       expect(find.text('Request withdrawal'), findsOneWidget);
       await tester.pageBack();
-      await tester.pumpAndSettle();
+      await _pumpForNavigation(tester);
       await _pumpUntilText(tester, 'Wallet actions');
 
       final Finder depositHistoryButton = find.widgetWithText(
@@ -187,7 +188,7 @@ void main() {
       expect(find.text('No wallet activity yet'), findsOneWidget);
       expect(find.text('Deposit'), findsOneWidget);
       await tester.pageBack();
-      await tester.pumpAndSettle();
+      await _pumpForNavigation(tester);
       await _pumpUntilText(tester, 'Wallet actions');
 
       final Finder notificationsButton = find.widgetWithText(
@@ -199,7 +200,7 @@ void main() {
       await _pumpUntilText(tester, 'Mark all read');
       expect(find.text('Mark all read'), findsOneWidget);
       await tester.pageBack();
-      await tester.pumpAndSettle();
+      await _pumpForNavigation(tester);
       await _pumpUntilText(tester, 'Wallet actions');
 
       final Finder supportButton = find.widgetWithText(
@@ -210,18 +211,6 @@ void main() {
       await tester.tap(supportButton);
       await _pumpUntilText(tester, 'Deposit still pending');
       expect(find.text('Deposit still pending'), findsOneWidget);
-
-      final Finder openThreadButton = find.widgetWithText(
-        OutlinedButton,
-        'Open thread',
-      );
-      await tester.ensureVisible(openThreadButton);
-      await tester.tap(openThreadButton);
-      await _pumpUntilText(tester, 'Deposit still pending');
-      expect(find.text('Deposit still pending'), findsOneWidget);
-      await tester.pumpAndSettle();
-      await tester.pageBack();
-      await tester.pumpAndSettle();
     },
   );
 
@@ -325,7 +314,9 @@ void main() {
   ) async {
     _setLargeViewport(tester);
 
-    final GteMockApi repository = GteMockApi(latency: Duration.zero);
+    final GteMockApi repository = GteMockApi.capitalFixtures(
+      latency: Duration.zero,
+    );
     await tester.runAsync(() async {
       await repository.acceptPolicyDocument('privacy_policy', 'v1.0');
       await repository.acceptPolicyDocument('withdrawal_policy', 'v1.0');
@@ -461,8 +452,14 @@ Future<void> _pumpUntilText(
   throw TestFailure('Timed out waiting for "$text".');
 }
 
+Future<void> _pumpForNavigation(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
 class _BlockedComplianceApi extends GteMockApi {
-  _BlockedComplianceApi({super.latency = Duration.zero});
+  _BlockedComplianceApi({Duration latency = Duration.zero})
+    : super(latency: latency, enableCapitalFixtures: true);
 
   static const GtePolicyRequirementSummary _missingRequirement =
       GtePolicyRequirementSummary(

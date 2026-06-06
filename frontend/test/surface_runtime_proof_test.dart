@@ -280,7 +280,9 @@ void main() {
     'transfer center detail places bids through the premium live dialog',
     (WidgetTester tester) async {
       _setLargeViewport(tester);
-      final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi();
+      final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi(
+        bidResponseDelay: const Duration(milliseconds: 500),
+      );
 
       await tester.pumpWidget(
         _screenHost(
@@ -300,9 +302,13 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextField).first, '101000000');
+      await tester.enterText(find.byType(TextField).at(1), '1234');
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Submit'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(transferCenterApi.bidResponseDelay);
+      await tester.pump(const Duration(milliseconds: 250));
 
       expect(transferCenterApi.bidRequests, 1);
       expect(find.text('Bid submitted for Victor Osimhen.'), findsOneWidget);
@@ -395,6 +401,8 @@ void main() {
       final _FakeFederationsApi federationsApi = _FakeFederationsApi();
       final _FakeNationalTeamsApi nationalTeamsApi = _FakeNationalTeamsApi();
       final _FakeTransferCenterApi transferCenterApi = _FakeTransferCenterApi();
+      final _FakeHostedCompetitionApi hostedCompetitionApi =
+          _FakeHostedCompetitionApi();
       final _FakeStreamerTournamentRepository streamerRepository =
           _FakeStreamerTournamentRepository();
       final ProviderContainer container = _buildRouterContainer(
@@ -404,12 +412,15 @@ void main() {
         transferCenterApi: transferCenterApi,
         competitionHub: CompetitionHubData(
           gtexCompetitions: const <CompetitionSummary>[],
-          userCompetitions: <CompetitionSummary>[_buildUserHostedCompetition()],
-          hostedCompetitions: const <HostedCompetition>[],
+          userCompetitions: const <CompetitionSummary>[],
+          hostedCompetitions: <HostedCompetition>[
+            hostedCompetitionApi.currentCompetition,
+          ],
           streamerTournaments: <StreamerTournament>[
             streamerRepository.currentTournament,
           ],
         ),
+        hostedCompetitionApi: hostedCompetitionApi,
         streamerRepository: streamerRepository,
       );
       addTearDown(container.dispose);
@@ -447,13 +458,18 @@ void main() {
   testWidgets('user competition detail actions answer with visible feedback', (
     WidgetTester tester,
   ) async {
+    final _FakeHostedCompetitionApi hostedCompetitionApi =
+        _FakeHostedCompetitionApi();
     await tester.pumpWidget(
       _screenHost(
         child: const LiveCompetitionDetailScreen(
           family: CompetitionFamilyRoute.hosted,
-          competitionId: _SurfaceRuntimeTransport.userCompetitionId,
+          competitionId: _FakeHostedCompetitionApi.id,
         ),
         session: _hostSession(),
+        overrides: [
+          hostedCompetitionApiProvider.overrideWithValue(hostedCompetitionApi),
+        ],
       ),
     );
     await tester.pumpAndSettle();
@@ -550,10 +566,10 @@ void main() {
           child: MaterialApp.router(routerConfig: router),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpViewerRoute(tester);
 
       router.go(AppRoutes.matches);
-      await tester.pumpAndSettle();
+      await _pumpViewerRoute(tester);
 
       await tester.tap(find.widgetWithText(FilledButton, 'Open Match'));
       await _pumpViewerRoute(tester);
@@ -562,7 +578,7 @@ void main() {
       expect(find.text('Route blocked'), findsNothing);
 
       router.go(AppRoutes.matches);
-      await tester.pumpAndSettle();
+      await _pumpViewerRoute(tester);
       expect(find.text('Open Broadcast+'), findsNothing);
       expect(find.text('Open 3D'), findsNothing);
       expect(find.text('Open spectate probe'), findsNothing);
@@ -2315,7 +2331,8 @@ class _FakeNationalTeamsApi extends NationalTeamsApi {
 }
 
 class _FakeTransferCenterApi extends TransferCenterApi {
-  _FakeTransferCenterApi() : super(client: _unusedAuthedApi());
+  _FakeTransferCenterApi({this.bidResponseDelay = Duration.zero})
+    : super(client: _unusedAuthedApi());
 
   static const String listingId = 'listing-1';
 
@@ -2349,6 +2366,7 @@ class _FakeTransferCenterApi extends TransferCenterApi {
   int watchlistRequests = 0;
   int bidRequests = 0;
   int contractOfferRequests = 0;
+  final Duration bidResponseDelay;
 
   @override
   Future<List<TransferCenterListingRecord>> listListings({
@@ -2421,6 +2439,9 @@ class _FakeTransferCenterApi extends TransferCenterApi {
     required double amount,
     required String securityPin,
   }) async {
+    if (bidResponseDelay > Duration.zero) {
+      await Future<void>.delayed(bidResponseDelay);
+    }
     bidRequests += 1;
   }
 

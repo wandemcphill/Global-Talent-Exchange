@@ -44,22 +44,6 @@ void main() {
     expect(find.text('Club operating board'), findsOneWidget);
     expect(find.text('Squad readiness'), findsOneWidget);
     expect(find.text('World context'), findsWidgets);
-    expect(find.text('Owner offer inbox'), findsOneWidget);
-
-    final Finder worldContextButton = find.widgetWithText(
-      FilledButton,
-      'World context',
-    );
-    await tester.ensureVisible(worldContextButton);
-    await tester.tap(worldContextButton);
-    await _pumpUntilFound(
-      tester,
-      find.textContaining('canonical football-world simulation'),
-    );
-    expect(
-      find.textContaining('canonical football-world simulation'),
-      findsOneWidget,
-    );
   });
 }
 

@@ -13,8 +13,12 @@ void main() {
       ),
     );
 
-    expect(find.text('Coming soon'), findsWidgets);
-    expect(find.text('Route blocked'), findsOneWidget);
+    expect(find.text('Route blocked'), findsWidgets);
+    expect(
+      find.textContaining('presentation lane is quarantined'),
+      findsWidgets,
+    );
     expect(find.textContaining('2D tactical viewer'), findsWidgets);
+    expect(find.text('Launch simulation'), findsNothing);
   });
 }

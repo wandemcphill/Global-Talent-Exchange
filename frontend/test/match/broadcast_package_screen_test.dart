@@ -162,7 +162,7 @@ void main() {
 
     expect(find.text('Generated timeline blocked'), findsOneWidget);
     expect(
-      find.textContaining('synthetic or injected frame data'),
+      find.textContaining('untrusted or injected frame data'),
       findsOneWidget,
     );
     expect(find.text('2D BROADCAST'), findsNothing);

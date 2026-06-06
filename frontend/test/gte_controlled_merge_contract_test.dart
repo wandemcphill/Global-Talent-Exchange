@@ -24,10 +24,9 @@ void main() {
       final String appSource = _readSource('lib/app/gte_frontend_app.dart');
 
       expect(mainSource, contains('GteThemeController.bootstrap('));
-      expect(
-        mainSource,
-        contains('child: GtexApp(themeController: themeController),'),
-      );
+      expect(mainSource, contains('child: GtexApp('));
+      expect(mainSource, contains('themeController: themeController,'));
+      expect(mainSource, contains('authSessionStore: authSessionStore,'));
       expect(appSource, contains('GteThemeControllerScope('));
       expect(
         appSource,

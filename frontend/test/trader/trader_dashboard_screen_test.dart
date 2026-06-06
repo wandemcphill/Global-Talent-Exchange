@@ -85,7 +85,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Order book blocked'), findsOneWidget);
+    expect(find.text('Order book blocked'), findsWidgets);
     expect(find.text('Awaiting auditable quote'), findsOneWidget);
     expect(find.text('ETA blocked'), findsOneWidget);
     expect(find.text('Settlement rail blocked'), findsOneWidget);

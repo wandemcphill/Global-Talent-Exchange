@@ -40,8 +40,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Home'), findsWidgets);
-    expect(find.text('Matchday'), findsWidgets);
+    expect(find.text('World'), findsWidgets);
+    expect(find.text('Compete'), findsWidgets);
 
     final Finder marketNavChip = find.ancestor(
       of: find.text('Market').last,
