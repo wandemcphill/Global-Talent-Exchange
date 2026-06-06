@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 import pytest
 
 from app.admin_engine.schemas import AdminRewardRuleStabilityControls
@@ -12,7 +10,6 @@ from app.auth.service import AuthService
 from app.gift_engine.service import GiftEngineError, GiftEngineService
 from app.models import (
     AdminRewardRule,
-    Base,
     GiftCatalogItem,
     GiftComboEvent,
     GiftComboRule,
@@ -27,16 +24,9 @@ from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared full-schema engine with per-test rollback; avoids rebuilding 567 tables.
+    yield gtex_db_session
 
 
 def _create_user(session, *, email: str, username: str):

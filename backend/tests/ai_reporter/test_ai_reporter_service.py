@@ -4,28 +4,17 @@ from decimal import Decimal
 
 import app.models  # noqa: F401
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.ai_reporter.service import AIReporterService
 from app.ingestion.models import Player
-from app.models.base import Base
 from app.models.player_cards import PlayerCard, PlayerCardListing, PlayerCardTier
 from app.models.user import User
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared full-schema engine with per-test rollback; avoids rebuilding 567 tables.
+    yield gtex_db_session
 
 
 def test_ai_reporter_publishes_transfer_listing_once(session) -> None:
@@ -88,4 +77,3 @@ def test_ai_reporter_publishes_transfer_listing_once(session) -> None:
     assert second.generated_count == 0
     assert second.skipped_duplicate_count == 1
     assert service.list_reporter_feed(beat="transfer_listings")[0].subject_id == "listing-news"
-
