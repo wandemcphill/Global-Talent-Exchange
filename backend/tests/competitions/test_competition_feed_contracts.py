@@ -4,16 +4,14 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import Session
 
 from app.common.enums.competition_format import CompetitionFormat
 from app.common.enums.competition_start_mode import CompetitionStartMode
 from app.common.enums.competition_status import CompetitionStatus
 from app.common.enums.competition_visibility import CompetitionVisibility
 from app.common.enums.match_status import MatchStatus
-from app.models.base import Base, generate_uuid
+from app.models.base import generate_uuid
 from app.models.competition import Competition
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_participant import CompetitionParticipant
@@ -25,17 +23,9 @@ from app.services.competition_orchestrator import CompetitionOrchestrator
 
 
 @pytest.fixture
-def isolated_session() -> Session:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as session:
-        yield session
-    engine.dispose()
+def isolated_session(gtex_db_session: Session) -> Session:
+    # Shared full-schema engine with per-test rollback; avoids rebuilding 567 tables.
+    yield gtex_db_session
 
 
 def _add_competition(

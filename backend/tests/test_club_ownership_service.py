@@ -3,23 +3,13 @@ from __future__ import annotations
 from decimal import Decimal
 
 import app.models  # noqa: F401
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from app.club_ownership.schemas import ClubGovernanceProposalRequest, ClubGovernanceVoteRequest
 from app.club_ownership.service import ClubOwnershipService
-from app.models.base import Base
 from app.models.club_profile import ClubProfile
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
-
-
-def _session():
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    return engine, SessionLocal()
 
 
 def _seed_balance(session, wallet_service: WalletService, user: User, amount: Decimal) -> None:
@@ -43,8 +33,8 @@ def _seed_balance(session, wallet_service: WalletService, user: User, amount: De
     )
 
 
-def test_club_ownership_service_supports_market_governance_and_match_settlement() -> None:
-    engine, session = _session()
+def test_club_ownership_service_supports_market_governance_and_match_settlement(gtex_db_session) -> None:
+    session = gtex_db_session
     try:
         owner = User(email="owner@example.com", username="owner", password_hash="hash")
         investor = User(email="investor@example.com", username="investor", password_hash="hash")
@@ -120,5 +110,4 @@ def test_club_ownership_service_supports_market_governance_and_match_settlement(
         assert ownership.governance.fan_mandate_summary is not None
         assert ownership.token.price >= Decimal("1.0000")
     finally:
-        session.close()
-        engine.dispose()
+        session.rollback()
