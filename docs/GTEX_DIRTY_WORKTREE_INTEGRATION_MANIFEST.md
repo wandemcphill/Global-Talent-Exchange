@@ -1008,6 +1008,7 @@ Scope: stabilized only the Flutter frontend analyzer and test lane in `C:\Users\
 - Test before/after: `flutter test --no-pub --concurrency=1` went from `+810 -22` to `+832` with all tests passed.
 - Skips: 0. Legacy local match simulation tests were converted into active quarantine assertions instead of skipped coverage.
 - Verification passed: `flutter analyze --no-pub` reported no issues after the test stabilization commit.
+- Verification passed: `flutter test --no-pub --concurrency=1 --reporter=expanded` passed 832/832; one existing viral-feed hit-test warning was non-fatal and did not fail the suite.
 
 ## Thread 7 Handoff Update - 2026-06-06 Migrations / Ops / Observability / Security
 
@@ -1020,7 +1021,6 @@ Scope: backend contract truth for migration runbook state, observability probes,
 - Protected `/observability/config` with the existing production-like admin guard used by diagnostics and metrics; local/dev access remains unchanged.
 - Added observability coverage for probe metrics, boot threshold metrics, middleware probe recording, and production config-snapshot auth.
 - Verification pending in this thread entry until the focused pytest, forbidden scans, and scoped diff checks complete.
-- Verification passed: `flutter test --no-pub --concurrency=1 --reporter=expanded` passed 832/832; one existing viral-feed hit-test warning was non-fatal and did not fail the suite.
 
 ## Thread 4 Handoff Update - 2026-06-06 Money Path Hardening
 
@@ -1034,4 +1034,38 @@ Scope: wallet/payment/trader/regen creation money-path hardening on `feature/ori
 - Subagent verification also passed: wallet focused tests 3 passed, trader suite 18 passed, and regen focused test was re-run in the parent thread after a stale worker process was shut down.
 - Guard scan passed: `rg -n "paystack|crypto|bitcoin|ethereum|usdt|web3" backend/app/wallets backend/app/integrations/payments backend/app/trader backend/app/regen_creation` returned no product-code hits.
 - Test-scope forbidden-term scan found only explicit rejection/absence coverage in `backend/tests/wallets` and `backend/tests/regen`; `backend/tests/trader` was clean.
+- Blockers: none.
+
+## Thread 6 Handoff Update - 2026-06-06 Frontend Router + Realtime Consolidation
+
+Scope: canonicalized the owned Flutter router/navigation/realtime lane on `feature/original-visual-runtime` without switching branches or touching feature screens outside the Thread 6 guardrail.
+
+- Router: `frontend/lib/router/app_router.dart` remained the canonical production router; router tests confirmed canonical `/app/*`, `/matches`, and `/matches/viewer/:matchKey` behavior and confirmed legacy Unity/native-3D/pseudo-3D/broadcast/spectate/simulate match URLs remain unmounted/quarantined.
+- Navigation: replaced the old navigation-owned `GoRouter` graph in `frontend/lib/navigation/app_router.dart` with a compatibility provider that delegates to `buildGtexAppRouter`.
+- Navigation destinations: aligned `frontend/lib/navigation/app_destinations.dart` to canonical `/app/{world,market,club,compete,capital,community,creator,admin}` and `/matches` surfaces, while retaining deprecated hidden constants for old compile surfaces without mounting or exposing them in primary/quick navigation.
+- Realtime: routed `frontend/lib/features/shell/realtime/**` and `frontend/lib/features/shell/providers/gtex_realtime_providers.dart` through the shared realtime transport/state implementation, keeping shell provider names as compatibility aliases.
+- Tests: added shell realtime compatibility coverage proving the legacy shell provider import path resolves to the canonical provider instances; updated realtime backoff coverage to the shared service policy.
+- Verification passed: `dart format lib/navigation/app_router.dart lib/navigation/app_destinations.dart lib/features/shell/realtime/gtex_realtime_models.dart lib/features/shell/realtime/gtex_realtime_service.dart lib/features/shell/realtime/gtex_realtime_providers.dart lib/features/shell/providers/gtex_realtime_providers.dart test/shell/realtime/gtex_realtime_providers_test.dart test/shell/realtime/gtex_realtime_surface_hardening_test.dart`.
+- Verification passed: `flutter analyze --no-pub lib/router lib/navigation lib/features/shell/realtime lib/features/shell/providers test/router test/shell/realtime` reported no issues.
+- Verification passed: `flutter test --no-pub test/router -r expanded` passed 17/17.
+- Verification passed: `flutter test --no-pub test/shell/realtime -r expanded` passed 10/10.
+- Verification passed: production-only forbidden scan for Paystack/crypto/Unity/native-3D/pseudo-3D/match_3d in owned lib paths returned no hits.
+- Verification passed: scoped `git diff --check` for Thread 6 owned paths and the manifest returned exit code 0; console noise was CRLF normalization warnings only.
+- Blockers: none. Broader legacy navigation widget tests outside Thread 6 ownership still encode pre-canonical expectations and should be reviewed by the navigation/test owner before being used as acceptance gates.
+
+## Thread 5 Handoff Update - 2026-06-06 Admin Finance Export Worker + Realtime Event
+
+Scope: backend admin-finance export readiness, worker completion, and scoped realtime notification on `feature/original-visual-runtime`; edits stayed within Thread 5 backend ownership plus this manifest.
+
+- Export creation now records `admin.export.requested` as queued and no longer materializes artifacts inline.
+- `GET /exports/{export_id}` and `GET /exports/{export_id}/download` now read persisted export state only; download returns non-ready state without completing hidden work.
+- Added `admin_finance_export_job` in the existing RQ worker job module to complete queued exports after the request transaction commits.
+- Added idempotent export requests via `idempotency_key`; repeated matching requests reuse the original export and mismatched reuse is rejected.
+- Added terminal `admin.export.failed` audit/outbox handling for worker/generator failures, keeping blocked exports distinct from failed worker execution.
+- `admin.export.ready`, `admin.export.blocked`, and `admin.export.failed` outbox payloads remain backend-authored and strip artifact `content` before notification.
+- Realtime now maps admin export terminal events to scoped `admin:{user_id}` websocket topics and denies cross-admin topic subscription.
+- Tests added/updated for queued-until-worker behavior, route enqueueing without inline completion, idempotency, completion, failure audit/outbox notification, worker job completion, and admin export realtime scoping.
+- Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest backend/tests/admin_finance/test_admin_finance_lock_export_unit.py backend/tests/realtime/test_admin_export_realtime.py` -> 15 passed in 186.01s; `backend\_out.txt` was read and deleted.
+- Guard scan passed: `rg -n "Paystack|crypto|Unity|SceneKit|Babylon|pseudo-3D|native 3D" backend/app/admin_finance backend/app/workers backend/app/realtime backend/tests/admin_finance backend/tests/realtime` returned no hits.
+- Verification passed: scoped `git diff --check` for Thread 5 owned paths and the manifest returned exit code 0; console noise was CRLF normalization warnings only.
 - Blockers: none.

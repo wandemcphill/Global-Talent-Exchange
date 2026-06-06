@@ -193,12 +193,16 @@ void main() {
       },
     );
 
-    test('reconnects with linear backoff and degrades after retry budget', () {
+    test('reconnects with shared backoff and errors after retry budget', () {
       fakeAsync((FakeAsync async) {
         final List<_FakeWebSocketChannel> channels = <_FakeWebSocketChannel>[];
         final GtexRealtimeService service = GtexRealtimeService(
           socketUri: Uri.parse('ws://example.test/realtime/stream'),
-          reconnectDelay: const Duration(seconds: 1),
+          backoffPolicy: const GtexRealtimeBackoffPolicy(
+            initialDelay: Duration(seconds: 1),
+            maxDelay: Duration(seconds: 1),
+            multiplier: 1,
+          ),
           maxReconnectAttempts: 2,
           channelFactory: (Uri _) {
             final bool shouldFailReady = channels.isNotEmpty;
@@ -228,16 +232,15 @@ void main() {
         async.elapse(const Duration(milliseconds: 1));
         async.flushMicrotasks();
         expect(channels, hasLength(2));
-        expect(service.status, GtexRealtimeStatus.error);
+        expect(service.status, GtexRealtimeStatus.reconnecting);
 
-        async.elapse(const Duration(seconds: 2));
+        async.elapse(const Duration(seconds: 1));
         async.flushMicrotasks();
         expect(channels, hasLength(3));
 
-        async.elapse(const Duration(seconds: 2));
         async.flushMicrotasks();
 
-        expect(service.status, GtexRealtimeStatus.degraded);
+        expect(service.status, GtexRealtimeStatus.error);
         expect(
           statuses,
           containsAllInOrder(<GtexRealtimeStatus>[
@@ -245,8 +248,6 @@ void main() {
             GtexRealtimeStatus.live,
             GtexRealtimeStatus.reconnecting,
             GtexRealtimeStatus.error,
-            GtexRealtimeStatus.reconnecting,
-            GtexRealtimeStatus.degraded,
           ]),
         );
 

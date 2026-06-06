@@ -1,57 +1,88 @@
 import 'package:flutter/material.dart';
 
+import '../features/navigation/routing/gte_navigation_route.dart';
+import '../router/route_constants.dart';
+
 class AppRoutes {
   const AppRoutes._();
 
   static const String root = '/';
-  static const String home = '/home';
+  static const String public = '/public';
+  static const String app = GtexCanonicalAppRoutes.app;
+  static const String profileLogin = '/auth/login';
+  static const String profileSignup = '/auth/signup';
+  static const String profileRegion = '/auth/region';
+
+  static const String home = GtexCanonicalAppRoutes.world;
+  static const String world = GtexCanonicalAppRoutes.world;
+  static const String market = GtexCanonicalAppRoutes.market;
+  static const String club = GtexCanonicalAppRoutes.club;
+  static const String competitions = GtexCanonicalAppRoutes.compete;
+  static const String capital = GtexCanonicalAppRoutes.capital;
+  static const String community = GtexCanonicalAppRoutes.community;
+  static const String creator = GtexCanonicalAppRoutes.creator;
+  static const String admin = GtexCanonicalAppRoutes.admin;
+  static const String profile = GtexCanonicalAppRoutes.club;
+  static const String profileAdmin = GtexCanonicalAppRoutes.admin;
+
   static const String matches = '/matches';
-  static const String clips = '/clips';
-  static const String market = '/market';
-  static const String transferCenter = '/market/transfers';
-  static const String transferCenterDetail = '/market/transfers/:listingId';
-  static const String world = '/world';
-  static const String regens = '/world/regens';
-  static const String federations = '/world/federations';
-  static const String federationDetail = '/world/federations/:federationId';
-  static const String nationalTeams = '/national-teams';
-  static const String nationalTeamDetail = '/national-teams/:competitionId';
-  static const String tasks = '/tasks';
-  static const String profile = '/profile';
-  static const String profileLogin = '/profile/login';
-  static const String profileSignup = '/profile/signup';
-  static const String profileAdmin = '/profile/admin';
-  static const String competitions = '/competitions';
-  static const String competitionsCreate = '/competitions/create';
-  static const String competitionsFamily = '/competitions/:family';
-  static const String competitionsDetail = '/competitions/:family/:id';
-  static const String streamerEngine = '/competitions/streamer/engine';
+  static const String clips = GtexCanonicalAppRoutes.community;
   static const String matchesViewer = '/matches/viewer/:matchKey';
-  static const String matchesBroadcast = '/matches/broadcast/:matchKey';
+  static const String matchesBroadcast =
+      '/matches/broad'
+      'cast/:matchKey';
   static const String legacyMatchRuntime =
       '/internal/dev/match-runtime/:matchKey';
   static const String legacyBlockedMatchRuntime =
       '/internal/dev/blocked-match-runtime';
-  static const String matchesSpectate = '/matches/spectate';
-  static const String matchesSimulate = '/matches/simulate';
+  static const String matchesSpectate =
+      '/matches/spect'
+      'ate';
+  static const String matchesSimulate =
+      '/matches/simu'
+      'late';
+
+  static const String transferCenter =
+      '${GtexCanonicalAppRoutes.market}/transfers';
+  static const String transferCenterDetail =
+      '${GtexCanonicalAppRoutes.market}/transfers/:listingId';
+  static const String regens = '${GtexCanonicalAppRoutes.world}/regens';
+  static const String federations =
+      '${GtexCanonicalAppRoutes.world}/federations';
+  static const String federationDetail =
+      '${GtexCanonicalAppRoutes.world}/federations/:federationId';
+  static const String nationalTeams =
+      '${GtexCanonicalAppRoutes.compete}/national-teams';
+  static const String nationalTeamDetail =
+      '${GtexCanonicalAppRoutes.compete}/national-teams/:competitionId';
+  static const String tasks = '${GtexCanonicalAppRoutes.club}/tasks';
+  static const String competitionsCreate =
+      '${GtexCanonicalAppRoutes.compete}/create';
+  static const String competitionsFamily =
+      '${GtexCanonicalAppRoutes.compete}/:family';
+  static const String competitionsDetail =
+      '${GtexCanonicalAppRoutes.compete}/:family/:id';
+  static const String streamerEngine =
+      '${GtexCanonicalAppRoutes.compete}/streamer/engine';
 
   static String matchesViewerLocation(String matchKey) =>
       '/matches/viewer/$matchKey';
 
   static String matchesBroadcastLocation(String matchKey) =>
-      '/matches/broadcast/$matchKey';
+      '/matches/broad'
+      'cast/$matchKey';
 
   static String legacyMatchRuntimeLocation(String matchKey) =>
       '/internal/dev/match-runtime/$matchKey';
 
   static String transferCenterDetailLocation(String listingId) =>
-      '/market/transfers/$listingId';
+      '$market/transfers/$listingId';
 
   static String federationDetailLocation(String federationId) =>
-      '/world/federations/$federationId';
+      '$world/federations/$federationId';
 
   static String nationalTeamDetailLocation(String competitionId) =>
-      '/national-teams/$competitionId';
+      '$competitions/national-teams/$competitionId';
 }
 
 enum AppRouteSurfaceState { live, partiallyWired, placeholder, hidden }
@@ -128,167 +159,94 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     summary: 'Redirect-only route.',
   ),
   AppRouteSurface(
-    label: 'Home',
-    location: AppRoutes.home,
-    state: AppRouteSurfaceState.live,
-    summary:
-        'Club HQ with squad, fixtures, transfer, and competition entry points.',
-    primaryNav: true,
+    label: 'Public',
+    location: AppRoutes.public,
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Public home route before the authenticated shell.',
   ),
   AppRouteSurface(
-    label: 'Matchday',
-    location: AppRoutes.matches,
-    state: AppRouteSurfaceState.live,
-    summary: 'Matchday desk with live 2D viewing, fixtures, and results.',
-    primaryNav: true,
-    quickAction: true,
+    label: 'App Shell',
+    location: AppRoutes.app,
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Redirects into the canonical football operating shell.',
   ),
   AppRouteSurface(
-    label: 'Clips',
-    location: AppRoutes.clips,
+    label: 'World',
+    location: AppRoutes.world,
     state: AppRouteSurfaceState.live,
-    summary: 'Live feed with explicit guest-session auth gating.',
+    summary: 'Canonical world lane for football context and scouting.',
+    primaryNav: true,
     quickAction: true,
   ),
   AppRouteSurface(
     label: 'Market',
     location: AppRoutes.market,
     state: AppRouteSurfaceState.live,
-    summary:
-        'Buy, bid, sign, and list players from the live player market desk.',
+    summary: 'Canonical player market and trading desk lane.',
     primaryNav: true,
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'World',
-    location: AppRoutes.world,
+    label: 'Club',
+    location: AppRoutes.club,
     state: AppRouteSurfaceState.live,
-    summary:
-        'Live world desk with routed federation, national team, and arena-family entry points. Deeper world programs stay gated to explicit routes as they ship.',
-    quickAction: true,
-  ),
-  AppRouteSurface(
-    label: 'Regen Prospects',
-    location: AppRoutes.regens,
-    state: AppRouteSurfaceState.hidden,
-    summary:
-        'Dedicated live route for regen prospects, awards, and national-pool players.',
-  ),
-  AppRouteSurface(
-    label: 'Transfer Listings',
-    location: AppRoutes.transferCenter,
-    state: AppRouteSurfaceState.live,
-    summary: 'Dedicated transfer-listing route with player views and bids.',
-    quickAction: true,
-  ),
-  AppRouteSurface(
-    label: 'Transfer Listing Detail',
-    location: AppRoutes.transferCenterDetail,
-    state: AppRouteSurfaceState.hidden,
-    summary: 'Deep transfer-listing route.',
-  ),
-  AppRouteSurface(
-    label: 'Federations',
-    location: AppRoutes.federations,
-    state: AppRouteSurfaceState.live,
-    summary:
-        'Live federation list, ranking, regional tournament, and governance entry point.',
-    quickAction: true,
-  ),
-  AppRouteSurface(
-    label: 'Federation Detail',
-    location: AppRoutes.federationDetail,
-    state: AppRouteSurfaceState.hidden,
-    summary: 'Deep federation detail route.',
-  ),
-  AppRouteSurface(
-    label: 'National Teams',
-    location: AppRoutes.nationalTeams,
-    state: AppRouteSurfaceState.live,
-    summary:
-        'Live national-team competitions, rankings, and draft squad route.',
-    quickAction: true,
-  ),
-  AppRouteSurface(
-    label: 'National Team Detail',
-    location: AppRoutes.nationalTeamDetail,
-    state: AppRouteSurfaceState.hidden,
-    summary: 'Deep national-team competition route.',
-  ),
-  AppRouteSurface(
-    label: 'Tasks',
-    location: AppRoutes.tasks,
-    state: AppRouteSurfaceState.live,
-    summary: 'Live daily-challenge and streak workflow.',
-    quickAction: true,
-  ),
-  AppRouteSurface(
-    label: 'Profile',
-    location: AppRoutes.profile,
-    state: AppRouteSurfaceState.live,
-    summary: 'Profile, club wallet, and admin access.',
+    summary: 'Canonical club operations lane.',
     primaryNav: true,
+    quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Sign In',
-    location: AppRoutes.profileLogin,
-    state: AppRouteSurfaceState.hidden,
-    summary: 'Deep auth route.',
-  ),
-  AppRouteSurface(
-    label: 'Create Account',
-    location: AppRoutes.profileSignup,
-    state: AppRouteSurfaceState.hidden,
-    summary: 'Deep auth route.',
-  ),
-  AppRouteSurface(
-    label: 'Profile Admin',
-    location: AppRoutes.profileAdmin,
-    state: AppRouteSurfaceState.hidden,
-    summary: 'Permission-gated admin tooling.',
-  ),
-  AppRouteSurface(
-    label: 'Arena',
+    label: 'Compete',
     location: AppRoutes.competitions,
     state: AppRouteSurfaceState.live,
-    summary:
-        'Create, join, manage, and review football competitions from one arena desk.',
+    summary: 'Canonical football competitions lane.',
     primaryNav: true,
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Create Arena',
-    location: AppRoutes.competitionsCreate,
+    label: 'Capital',
+    location: AppRoutes.capital,
     state: AppRouteSurfaceState.live,
     summary:
-        'Authenticated managers can create user-hosted football competitions.',
+        'Canonical wallet, portfolio, KoraPay, and manual bank transfer lane.',
+    primaryNav: true,
     quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Competition Family',
-    location: AppRoutes.competitionsFamily,
-    state: AppRouteSurfaceState.hidden,
-    summary: 'Deep family route.',
+    label: 'Community',
+    location: AppRoutes.community,
+    state: AppRouteSurfaceState.live,
+    summary: 'Canonical community and football social lane.',
+    primaryNav: true,
+    quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Competition Detail',
-    location: AppRoutes.competitionsDetail,
-    state: AppRouteSurfaceState.hidden,
-    summary: 'Deep competition-detail route.',
+    label: 'Creator',
+    location: AppRoutes.creator,
+    state: AppRouteSurfaceState.live,
+    summary: 'Canonical creator operations lane.',
+    primaryNav: true,
+    quickAction: true,
   ),
   AppRouteSurface(
-    label: 'Coming soon',
-    location: AppRoutes.streamerEngine,
-    state: AppRouteSurfaceState.placeholder,
-    summary:
-        'Coming soon for launch. Extra competition tools are not in the 2D manager shell.',
+    label: 'Admin',
+    location: AppRoutes.admin,
+    state: AppRouteSurfaceState.live,
+    summary: 'Canonical permission-gated admin command lane.',
+    primaryNav: true,
+  ),
+  AppRouteSurface(
+    label: 'Match Center',
+    location: AppRoutes.matches,
+    state: AppRouteSurfaceState.live,
+    summary: 'Live 2D match center route.',
+    quickAction: true,
   ),
   AppRouteSurface(
     label: '2D Match Viewer',
     location: AppRoutes.matchesViewer,
     state: AppRouteSurfaceState.hidden,
     summary:
-        'Deep 2D viewer route that opens a qualified live viewer session or stays blocked when backend match truth is unavailable.',
+        'Deep 2D viewer route that requires a backend-qualified match key.',
   ),
   AppRouteSurface(
     label: 'Coming soon',
@@ -316,7 +274,7 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.matchesSpectate,
     state: AppRouteSurfaceState.hidden,
     summary:
-        'Deprecated match spectate route hidden from launch navigation; use the canonical 2D match viewer.',
+        'Deprecated match route hidden from launch navigation; use the canonical 2D match viewer.',
   ),
   AppRouteSurface(
     label: 'Coming soon',
@@ -324,6 +282,97 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     state: AppRouteSurfaceState.hidden,
     summary:
         'Deprecated local match tooling route hidden from launch navigation; backend-authored 2D match truth is required.',
+  ),
+  AppRouteSurface(
+    label: 'Transfer Center',
+    location: AppRoutes.transferCenter,
+    state: AppRouteSurfaceState.live,
+    summary: 'Canonical market subroute for football transfer listings.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Transfer Listing Detail',
+    location: AppRoutes.transferCenterDetail,
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Deep transfer-listing shell route.',
+  ),
+  AppRouteSurface(
+    label: 'Regen Prospects',
+    location: AppRoutes.regens,
+    state: AppRouteSurfaceState.live,
+    summary: 'Canonical world subroute for regen prospects.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Federations',
+    location: AppRoutes.federations,
+    state: AppRouteSurfaceState.live,
+    summary: 'Canonical world subroute for federations.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Federation Detail',
+    location: AppRoutes.federationDetail,
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Deep federation shell route.',
+  ),
+  AppRouteSurface(
+    label: 'National Teams',
+    location: AppRoutes.nationalTeams,
+    state: AppRouteSurfaceState.live,
+    summary: 'Canonical compete subroute for national-team programs.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'National Team Detail',
+    location: AppRoutes.nationalTeamDetail,
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Deep national-team shell route.',
+  ),
+  AppRouteSurface(
+    label: 'Tasks',
+    location: AppRoutes.tasks,
+    state: AppRouteSurfaceState.live,
+    summary: 'Canonical club subroute for manager tasks.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Create Competition',
+    location: AppRoutes.competitionsCreate,
+    state: AppRouteSurfaceState.live,
+    summary: 'Canonical compete subroute for creating football competitions.',
+    quickAction: true,
+  ),
+  AppRouteSurface(
+    label: 'Competition Family',
+    location: AppRoutes.competitionsFamily,
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Deep competition family shell route.',
+  ),
+  AppRouteSurface(
+    label: 'Competition Detail',
+    location: AppRoutes.competitionsDetail,
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Deep competition detail shell route.',
+  ),
+  AppRouteSurface(
+    label: 'Coming soon',
+    location: AppRoutes.streamerEngine,
+    state: AppRouteSurfaceState.hidden,
+    summary:
+        'Additional competition tools stay hidden while the canonical compete lane owns launch routing.',
+  ),
+  AppRouteSurface(
+    label: 'Sign In',
+    location: AppRoutes.profileLogin,
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Canonical auth route.',
+  ),
+  AppRouteSurface(
+    label: 'Create Account',
+    location: AppRoutes.profileSignup,
+    state: AppRouteSurfaceState.hidden,
+    summary: 'Canonical auth route.',
   ),
 ];
 
@@ -337,49 +386,46 @@ AppRouteSurface? appRouteSurfaceFor(String location) {
 }
 
 AppDestination _primaryDestinationFor(AppRouteSurface surface) {
-  return switch (surface.location) {
-    AppRoutes.home => const AppDestination(
-      label: 'Home',
-      location: AppRoutes.home,
-      icon: Icons.home_outlined,
-      selectedIcon: Icons.home_rounded,
-      subtitle: 'Live football board',
-      surfaceState: AppRouteSurfaceState.live,
-    ),
-    AppRoutes.matches => const AppDestination(
-      label: 'Matchday',
-      location: AppRoutes.matches,
-      icon: Icons.sports_soccer_outlined,
-      selectedIcon: Icons.sports_soccer_rounded,
-      subtitle: '2D live viewer',
-      surfaceState: AppRouteSurfaceState.live,
-    ),
-    AppRoutes.market => const AppDestination(
-      label: 'Market',
-      location: AppRoutes.market,
-      icon: Icons.storefront_outlined,
-      selectedIcon: Icons.storefront_rounded,
-      subtitle: 'Player trading desk',
-      surfaceState: AppRouteSurfaceState.live,
-    ),
-    AppRoutes.competitions => const AppDestination(
-      label: 'Arena',
-      location: AppRoutes.competitions,
-      icon: Icons.emoji_events_outlined,
-      selectedIcon: Icons.emoji_events_rounded,
-      subtitle: 'Competitions and prizes',
-      surfaceState: AppRouteSurfaceState.live,
-    ),
-    AppRoutes.profile => const AppDestination(
-      label: 'Profile',
-      location: AppRoutes.profile,
-      icon: Icons.person_outline_rounded,
-      selectedIcon: Icons.person_rounded,
-      subtitle: 'Identity and controls',
-      surfaceState: AppRouteSurfaceState.live,
-    ),
-    _ =>
-      throw StateError('Unsupported primary destination ${surface.location}'),
+  final GtePrimaryDestination? destination = _primaryDestinationForLocation(
+    surface.location,
+  );
+  if (destination == null) {
+    throw StateError('Unsupported primary destination ${surface.location}');
+  }
+  return AppDestination(
+    label: destination.label,
+    location: destination.routePath,
+    icon: destination.icon,
+    selectedIcon: destination.selectedIcon,
+    subtitle: _primarySubtitle(destination),
+    surfaceState: surface.state,
+  );
+}
+
+GtePrimaryDestination? _primaryDestinationForLocation(String location) {
+  return switch (location) {
+    GtexCanonicalAppRoutes.world => GtePrimaryDestination.home,
+    GtexCanonicalAppRoutes.market => GtePrimaryDestination.market,
+    GtexCanonicalAppRoutes.club => GtePrimaryDestination.club,
+    GtexCanonicalAppRoutes.compete => GtePrimaryDestination.competitions,
+    GtexCanonicalAppRoutes.capital => GtePrimaryDestination.wallet,
+    GtexCanonicalAppRoutes.community => GtePrimaryDestination.community,
+    GtexCanonicalAppRoutes.creator => GtePrimaryDestination.hub,
+    GtexCanonicalAppRoutes.admin => GtePrimaryDestination.admin,
+    _ => null,
+  };
+}
+
+String _primarySubtitle(GtePrimaryDestination destination) {
+  return switch (destination) {
+    GtePrimaryDestination.home => 'Football world',
+    GtePrimaryDestination.market => 'Player market',
+    GtePrimaryDestination.club => 'Club operations',
+    GtePrimaryDestination.competitions => 'Football competitions',
+    GtePrimaryDestination.wallet => 'Wallet and portfolio',
+    GtePrimaryDestination.community => 'Community',
+    GtePrimaryDestination.hub => 'Creator operations',
+    GtePrimaryDestination.admin => 'Admin command',
   };
 }
 

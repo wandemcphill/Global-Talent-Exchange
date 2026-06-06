@@ -2,10 +2,32 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/features/shell/providers/gtex_realtime_providers.dart'
+    as provider_compat;
 import 'package:gte_frontend/features/shell/realtime/realtime.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('provider compatibility path re-exports canonical providers', () {
+    expect(
+      provider_compat.gtexRealtimeServiceProvider,
+      same(gtexRealtimeServiceProvider),
+    );
+    expect(
+      provider_compat.gtexRealtimeStatusProvider,
+      same(gtexRealtimeStatusProvider),
+    );
+    expect(provider_compat.gtexLivePulseProvider, same(gtexLivePulseProvider));
+    expect(
+      provider_compat.gtexNotificationStreamProvider,
+      same(gtexNotificationStreamProvider),
+    );
+    expect(
+      provider_compat.gtexActivityEventStreamProvider,
+      same(gtexActivityEventStreamProvider),
+    );
+  });
 
   test('connection provider emits current status and updates', () async {
     final _FakeRealtimeClient fake = _FakeRealtimeClient(

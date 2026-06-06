@@ -1,433 +1,146 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/actions/action_pipeline.dart';
-import '../core/actions/event_service.dart';
-import '../core/theme/app_motion.dart';
-import '../features/compete/providers/competition_controller.dart';
-import '../features/compete/repositories/competition_api.dart';
-import '../data/gte_api_repository.dart';
-import '../features/compete/presentation/live_competitions_hub_screen.dart';
-import '../features/compete/providers/live_competitions_provider.dart';
-import '../features/home/home_screen.dart';
-import '../features/match_center/match_screen.dart';
-import '../features/match_center/match_viewer_route_screen.dart';
-import '../features/national_teams/national_teams_screen.dart';
-import '../features/profile/profile_admin_screen.dart';
-import '../features/profile/profile_login_screen.dart';
-import '../features/profile/profile_screen.dart';
-import '../features/profile/profile_signup_screen.dart';
-import '../features/regens/regens_screen.dart';
-import '../features/tasks/tasks_screen.dart';
-import '../features/transfer_center/transfer_center_screen.dart';
-import '../features/transfer_market/transfer_market_screen.dart';
-import '../features/viral_feed/data/viral_feed_repository.dart';
-import '../features/viral_feed/presentation/clips_blocked_screen.dart';
-import '../features/viral_feed/presentation/viral_feed_screen.dart';
-import '../features/federations/federations_hub_screen.dart';
-import '../features/world/world_screen.dart';
+import '../app/gte_app_config.dart';
+import '../data/gte_exchange_api_client.dart';
+import '../data/gte_models.dart';
+import '../features/navigation_guards/gte_navigation_guards.dart';
+import '../providers/gte_exchange_controller.dart';
+import '../router/app_router.dart' as canonical;
 import '../shared/models/auth_session.dart';
 import '../shared/providers/auth_provider.dart';
-import '../shared/widgets/app_shell_scaffold.dart';
-import '../widgets/gte_route_integrity_screen.dart';
-import '../features/compete/presentation/screens/competition_create_screen.dart';
 import 'app_destinations.dart';
 
-CompetitionFamilyRoute _competitionFamilyFromSegment(String value) {
-  switch (value.trim().toLowerCase()) {
-    case 'hosted':
-      return CompetitionFamilyRoute.hosted;
-    case 'streamer':
-      return CompetitionFamilyRoute.streamer;
-    default:
-      return CompetitionFamilyRoute.gtex;
-  }
-}
+export '../router/app_router.dart' show buildGtexAppRouter;
+
+final Provider<GteExchangeController> _navigationExchangeControllerProvider =
+    Provider<GteExchangeController>((Ref ref) {
+      final GteAppConfig config = ref.watch(appConfigProvider);
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.standard(
+          baseUrl: config.apiBaseUrl,
+          mode: config.activeShellBackendMode,
+          authSessionStore: ref.watch(authSessionStoreProvider),
+          deviceIdentityStore: ref.watch(deviceIdentityStoreProvider),
+        ),
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });
 
 final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
+  final GteAppConfig config = ref.watch(appConfigProvider);
   final AuthSession? authSession = ref.watch(authProvider);
-  final String deviceId = ref.watch(deviceIdProvider);
-  final String apiBaseUrl = ref.watch(apiBaseUrlProvider);
-  final EventService eventService = EventService.standard(
-    baseUrl: apiBaseUrl,
-    authSessionStore: ref.watch(authSessionStoreProvider),
-    deviceIdentityStore: ref.watch(deviceIdentityStoreProvider),
-    deviceId: deviceId,
+  final GteExchangeController controller = ref.watch(
+    _navigationExchangeControllerProvider,
   );
 
-  return GoRouter(
+  _syncControllerSession(controller, authSession);
+
+  final GoRouter router = canonical.buildGtexAppRouter(
     initialLocation: AppRoutes.home,
-    routes: <RouteBase>[
-      GoRoute(
-        path: AppRoutes.root,
-        redirect: (BuildContext context, GoRouterState state) => AppRoutes.home,
-      ),
-      StatefulShellRoute.indexedStack(
-        builder: (
-          BuildContext context,
-          GoRouterState state,
-          StatefulNavigationShell navigationShell,
-        ) {
-          return AppShellScaffold(navigationShell: navigationShell);
-        },
-        branches: <StatefulShellBranch>[
-          StatefulShellBranch(
-            routes: <RouteBase>[
-              GoRoute(
-                path: AppRoutes.home,
-                pageBuilder:
-                    (BuildContext context, GoRouterState state) =>
-                        const NoTransitionPage<void>(child: HomeScreen()),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: <RouteBase>[
-              GoRoute(
-                path: AppRoutes.matches,
-                pageBuilder:
-                    (BuildContext context, GoRouterState state) =>
-                        const NoTransitionPage<void>(child: MatchScreen()),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: <RouteBase>[
-              GoRoute(
-                path: AppRoutes.market,
-                pageBuilder:
-                    (BuildContext context, GoRouterState state) =>
-                        const NoTransitionPage<void>(
-                          child: TransferMarketScreen(),
-                        ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: <RouteBase>[
-              GoRoute(
-                path: AppRoutes.competitions,
-                pageBuilder:
-                    (BuildContext context, GoRouterState state) =>
-                        const NoTransitionPage<void>(
-                          child: LiveCompetitionsHubScreen(),
-                        ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: <RouteBase>[
-              GoRoute(
-                path: AppRoutes.profile,
-                pageBuilder:
-                    (BuildContext context, GoRouterState state) =>
-                        const NoTransitionPage<void>(child: ProfileScreen()),
-              ),
-            ],
-          ),
-        ],
-      ),
-      GoRoute(
-        path: AppRoutes.world,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const WorldScreen(),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.transferCenter,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const TransferCenterScreen(),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.transferCenterDetail,
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final String listingId = state.pathParameters['listingId'] ?? '';
-          return AppMotion.slidePage<void>(
-            state: state,
-            child: TransferCenterDetailScreen(listingId: listingId),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.regens,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const RegensScreen(),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.federations,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const FederationsHubScreen(),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.federationDetail,
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final String federationId =
-              state.pathParameters['federationId'] ?? '';
-          return AppMotion.slidePage<void>(
-            state: state,
-            child: FederationDetailScreen(federationId: federationId),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.nationalTeams,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const NationalTeamsScreen(),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.nationalTeamDetail,
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final String competitionId =
-              state.pathParameters['competitionId'] ?? '';
-          return AppMotion.slidePage<void>(
-            state: state,
-            child: NationalTeamCompetitionDetailScreen(
-              competitionId: competitionId,
-            ),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.tasks,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const TasksScreen(),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.clips,
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final bool canOpenClips = authSession?.isAuthenticated ?? false;
-          return AppMotion.slidePage<void>(
-            state: state,
-            child:
-                canOpenClips
-                    ? ViralFeedScreen(
-                      currentUserId: authSession?.userId,
-                      repository: ViralFeedApiRepository.standard(
-                        baseUrl: apiBaseUrl,
-                        authSession: authSession,
-                        deviceId: deviceId,
-                      ),
-                      actionDispatcher: ActionPipeline(
-                        eventService: eventService,
-                      ),
-                    )
-                    : const ClipsBlockedScreen(),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.profileLogin,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const ProfileLoginScreen(),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.profileSignup,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const ProfileSignupScreen(),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.profileAdmin,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: const ProfileAdminScreen(),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.competitionsCreate,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                AppMotion.slidePage<void>(
-                  state: state,
-                  child: _CompetitionCreateRouteScreen(
-                    baseUrl: apiBaseUrl,
-                    backendMode: ref.watch(criticalBackendModeProvider),
-                    accessToken: authSession?.accessToken,
-                    currentUserId: authSession?.userId ?? '',
-                    currentUserName: authSession?.resolvedUserName,
-                    isAuthenticated: authSession?.isAuthenticated ?? false,
-                  ),
-                ),
-      ),
-      GoRoute(
-        path: AppRoutes.streamerEngine,
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _comingSoonPage(state, title: 'Streamer tournaments'),
-      ),
-      GoRoute(
-        path: AppRoutes.competitionsFamily,
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final String family = state.pathParameters['family'] ?? 'gtex';
-          return AppMotion.slidePage<void>(
-            state: state,
-            child: LiveCompetitionsHubScreen(
-              family: _competitionFamilyFromSegment(family),
-            ),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.competitionsDetail,
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final String family = state.pathParameters['family'] ?? 'gtex';
-          final String id = state.pathParameters['id'] ?? '';
-          return AppMotion.slidePage<void>(
-            state: state,
-            child: LiveCompetitionDetailScreen(
-              family: _competitionFamilyFromSegment(family),
-              competitionId: id,
-            ),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.matchesViewer,
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final String matchKey = state.pathParameters['matchKey'] ?? '';
-          return AppMotion.slidePage<void>(
-            state: state,
-            child: MatchViewerRouteScreen(matchKey: matchKey),
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.matchesBroadcast,
-        redirect: (BuildContext context, GoRouterState state) {
-          final String matchKey = state.pathParameters['matchKey'] ?? '';
-          return matchKey.isEmpty
-              ? AppRoutes.matches
-              : AppRoutes.matchesViewerLocation(matchKey);
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.legacyMatchRuntime,
-        redirect: (BuildContext context, GoRouterState state) {
-          final String matchKey = state.pathParameters['matchKey'] ?? '';
-          return matchKey.isEmpty
-              ? AppRoutes.matches
-              : AppRoutes.matchesViewerLocation(matchKey);
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.legacyBlockedMatchRuntime,
-        redirect:
-            (BuildContext context, GoRouterState state) => AppRoutes.matches,
-      ),
-      GoRoute(
-        path: AppRoutes.matchesSpectate,
-        redirect:
-            (BuildContext context, GoRouterState state) => AppRoutes.matches,
-      ),
-      GoRoute(
-        path: AppRoutes.matchesSimulate,
-        redirect:
-            (BuildContext context, GoRouterState state) => AppRoutes.matches,
-      ),
-    ],
+    controller: controller,
+    config: config,
+    dependenciesBuilder:
+        (BuildContext context) =>
+            _navigationDependencies(ref, config, authSession),
   );
+  ref.onDispose(router.dispose);
+  return router;
 });
 
-Page<void> _comingSoonPage(GoRouterState state, {required String title}) {
-  return AppMotion.slidePage<void>(
-    state: state,
-    child: GteRouteIntegrityScreen.blocked(
-      eyebrow: 'COMING SOON',
-      title: '$title coming soon',
-      message:
-          'This route is blocked for launch while GTEX focuses on the 2D football manager experience.',
-      icon: Icons.lock_clock_outlined,
-    ),
+GteNavigationDependencies _navigationDependencies(
+  Ref ref,
+  GteAppConfig config,
+  AuthSession? authSession,
+) {
+  return GteNavigationDependencies(
+    apiBaseUrl: config.apiBaseUrl,
+    backendMode: config.activeShellBackendMode,
+    currentUserId: authSession?.userId ?? 'guest-user',
+    currentUserName: _resolvedUserName(authSession),
+    currentUserRole: authSession?.role,
+    currentClubId: authSession?.clubId,
+    currentClubName: authSession?.clubName,
+    accessToken: authSession?.accessToken,
+    isAuthenticated: authSession?.isAuthenticated ?? false,
+    onOpenLogin: (BuildContext context) async {
+      context.go(AppRoutes.profileLogin);
+      return false;
+    },
+    currentUserIdProvider: () => ref.read(authProvider)?.userId ?? 'guest-user',
+    currentUserNameProvider: () => _resolvedUserName(ref.read(authProvider)),
+    currentUserRoleProvider: () => ref.read(authProvider)?.role,
+    currentClubIdProvider: () => ref.read(authProvider)?.clubId,
+    currentClubNameProvider: () => ref.read(authProvider)?.clubName,
+    accessTokenProvider: () => ref.read(authProvider)?.accessToken,
+    isAuthenticatedProvider:
+        () => ref.read(authProvider)?.isAuthenticated ?? false,
   );
 }
 
-class _CompetitionCreateRouteScreen extends StatefulWidget {
-  const _CompetitionCreateRouteScreen({
-    required this.baseUrl,
-    required this.backendMode,
-    required this.accessToken,
-    required this.currentUserId,
-    required this.currentUserName,
-    required this.isAuthenticated,
-  });
-
-  final String baseUrl;
-  final GteBackendMode backendMode;
-  final String? accessToken;
-  final String currentUserId;
-  final String? currentUserName;
-  final bool isAuthenticated;
-
-  @override
-  State<_CompetitionCreateRouteScreen> createState() =>
-      _CompetitionCreateRouteScreenState();
+void _syncControllerSession(
+  GteExchangeController controller,
+  AuthSession? session,
+) {
+  controller.syncSession(_gteSessionFromAuthSession(session));
 }
 
-class _CompetitionCreateRouteScreenState
-    extends State<_CompetitionCreateRouteScreen> {
-  late final CompetitionController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = CompetitionController(
-      api: CompetitionApi.standard(
-        baseUrl: widget.baseUrl,
-        mode: widget.backendMode,
-        accessToken: widget.accessToken,
-      ),
-      currentUserId: widget.currentUserId,
-      currentUserName: widget.currentUserName,
-    )..startNewDraft();
+GteAuthSession? _gteSessionFromAuthSession(AuthSession? session) {
+  if (session == null || !session.isAuthenticated) {
+    return null;
   }
+  return GteAuthSession.fromJson(<String, Object?>{
+    ...session.rawJson,
+    'access_token': session.accessToken,
+    'refresh_token': session.refreshToken,
+    'session_id': session.sessionId,
+    'refresh_expires_in': session.refreshExpiresIn,
+    'permissions': session.permissions,
+    'user': _normalizedUserPayload(session),
+  });
+}
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+Map<String, Object?> _normalizedUserPayload(AuthSession session) {
+  final Object? rawUser = session.rawJson['user'];
+  final Map<String, Object?> existing =
+      rawUser is Map<String, Object?>
+          ? Map<String, Object?>.from(rawUser)
+          : rawUser is Map
+          ? Map<String, Object?>.from(
+            rawUser.map(
+              (Object? key, Object? value) =>
+                  MapEntry<String, Object?>(key.toString(), value),
+            ),
+          )
+          : <String, Object?>{};
+  return <String, Object?>{
+    ...existing,
+    'id': session.userId,
+    'email':
+        (existing['email']?.toString().trim().isNotEmpty ?? false)
+            ? existing['email']
+            : '${session.userId}@gtex.local',
+    'username':
+        (existing['username']?.toString().trim().isNotEmpty ?? false)
+            ? existing['username']
+            : (session.userName?.trim().isNotEmpty ?? false)
+            ? session.userName!.trim()
+            : session.userId,
+    'display_name':
+        session.displayName ??
+        session.userName ??
+        existing['display_name']?.toString() ??
+        'GTEX User',
+    'role': session.role,
+  };
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return CompetitionCreateScreen(
-      controller: _controller,
-      isAuthenticated: widget.isAuthenticated,
-      isCheckingHostEligibility: false,
-      hostEligible: widget.isAuthenticated,
-      onOpenLogin: () => context.push(AppRoutes.profileLogin),
-    );
+String? _resolvedUserName(AuthSession? session) {
+  final String? resolved = session?.resolvedUserName.trim();
+  if (resolved == null || resolved.isEmpty || resolved == 'Guest') {
+    return null;
   }
+  return resolved;
 }
