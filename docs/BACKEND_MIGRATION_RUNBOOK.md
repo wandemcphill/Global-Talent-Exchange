@@ -1,92 +1,127 @@
 # GTEX Backend Migration Runbook
 
+Last reviewed: 2026-06-06
+
 ## Guardrail
 
-Migration freeze is active for parallel threads. Do not create, rename, delete, rebase, or regenerate files under `backend/migrations/versions/*` unless the task explicitly requires migration work.
+Migration ownership for this production-readiness lane is verification and runbook truth. Do not create, rename, delete, rebase, or regenerate files under `backend/migrations/versions/*` unless a task explicitly assigns migration script work.
 
-This documentation lane observed the migration state but did not edit any migration files.
+This checkout does not contain `backend/alembic`. Canonical Alembic assets live under `backend/migrations`.
 
-## Merge order
+## Current Head
 
-Validate the staged merge in this order:
+Current observed migration head:
 
-1. Thread A + Thread B
-2. Club-Social isolated slice
-3. Thread C
-4. Thread D
-
-## Current coordination target
-
-Observed merge-pack revisions in this workspace:
-
-- `20260316_0012_thread_a_creator_league_core.py`
-- `20260316_0012b_creator_account_system.py`
-- `20260316_0013_merge_creator_heads.py`
-- `20260316_0014_thread_c_creator_broadcast_revenue.py`
-- `20260317_0015_thread_d_creator_fan_engagement.py`
-
-Observed on `2026-03-17`:
-
-- `python -m alembic -c backend/migrations/alembic.ini heads` -> `20260317_0015 (head)`
-- `python -m alembic -c backend/migrations/alembic.ini current` -> `20260316_0013 (mergepoint)`
-
-The migration chain is present in the repo, but the local SQLite database inspected here is not yet at head.
-
-## Inspect migration state
-
-```powershell
-python -m alembic -c backend/migrations/alembic.ini current
-python -m alembic -c backend/migrations/alembic.ini heads
-python -m alembic -c backend/migrations/alembic.ini history --verbose
+```text
+20260604_0094_club_squad_sources
 ```
 
-## Apply existing migrations
+Recent durable schema revisions:
 
-```powershell
-python -m alembic -c backend/migrations/alembic.ini upgrade head
+```text
+20260527_0091_trader_metrics_and_payment_windows
+20260531_0092_auth_trust_tables
+20260603_0093_club_formations
+20260604_0094_club_squad_sources
 ```
 
-Or use the local wrapper:
+## Inspect Migration State
+
+Run from the repository root:
 
 ```powershell
-python backend/scripts/dev.py migrate
+C:\Python314\python.exe -m alembic -c backend/migrations/alembic.ini current
+C:\Python314\python.exe -m alembic -c backend/migrations/alembic.ini heads
+C:\Python314\python.exe -m alembic -c backend/migrations/alembic.ini history --verbose
 ```
 
-If `current` still reports `20260316_0013 (mergepoint)`, do not validate Thread C or Thread D routes against the local app database until `upgrade head` succeeds.
+Expected healthy state:
 
-## Reset local SQLite demo state
+- `heads` reports a single head, `20260604_0094_club_squad_sources`.
+- `current` on an upgraded database matches that head.
+- `alembic_version` contains only the current graph head after repair migrations settle.
+
+## Empty-DB Upgrade Verification
+
+Use a disposable database. For local SQLite verification:
 
 ```powershell
-python backend/scripts/dev.py reset-db
-python backend/scripts/dev.py migrate
-python backend/scripts/dev.py rebuild-demo-market --seed 20260311
+$env:GTE_DATABASE_URL = "sqlite+pysqlite:///$(Resolve-Path backend)/.tmp_empty_upgrade.db"
+C:\Python314\python.exe -m alembic -c backend/migrations/alembic.ini upgrade head
+C:\Python314\python.exe -m alembic -c backend/migrations/alembic.ini current
+Remove-Item backend\.tmp_empty_upgrade.db -ErrorAction SilentlyContinue
 ```
 
-Use this only for disposable local SQLite work. Do not delete or rewrite migration files to recover a bad state.
-
-## Evidence-backed verification
-
-Validated from this workspace on `2026-03-17`:
+The test-backed empty-db gate is:
 
 ```powershell
-python -m pytest backend/tests/persistence/test_migrations.py -q
+C:\Python314\python.exe -m pytest -p no:cacheprovider -q backend/tests/persistence/test_migrations.py backend/tests/regen/test_regen_migrations.py
 ```
 
-Result:
+`backend/tests/persistence/test_migrations.py` creates a temporary SQLite database, upgrades it through the current graph, verifies expected contract tables, and checks the resulting Alembic version against the dynamically discovered single head.
 
-- `1 passed, 4 warnings in 24.50s`
+## App Boot Schema Check
 
-The migration verification test creates a temporary `sqlite+pysqlite` database and confirms the expected merged tables are materialized through Thread D.
+Normal app boot should keep `GTE_RUN_MIGRATION_CHECK=true` outside local one-off smoke tests. Startup readiness depends on:
 
-## SQLite caveat
+- Database connectivity.
+- Schema head consistency.
+- Redis/Kafka degradation surfaced as dependency issues when those services are intentionally absent.
 
-- The migration evidence recorded here is SQLite-backed.
-- This docs lane did not re-run Postgres or other non-SQLite migration validation.
-- `backend/.env.example` still keeps `GTE_RUN_MIGRATION_CHECK=true`, so normal app boot continues to perform a schema check.
+Only use `SKIP_SCHEMA_CHECK=true` for controlled local diagnostics where schema checks would hide an unrelated failure. Never use it for staging or production readiness.
 
-## When to stop instead of fixing
+## Rollback Runbook
 
-- `alembic heads` does not resolve to a single `20260317_0015 (head)` in the merged branch you are validating.
-- `alembic current` stays behind the expected head after an `upgrade head`.
-- A parallel thread has uncommitted changes under `backend/migrations/versions/*`.
-- You think a new migration is needed. Stop and hand that work to the merge owner instead of generating one from a parallel thread.
+Rollback is operational, not a source rewrite:
+
+1. Stop API and workers that can write to the target database.
+2. Snapshot or backup the database.
+3. Identify the current and target revisions:
+
+```powershell
+C:\Python314\python.exe -m alembic -c backend/migrations/alembic.ini current
+C:\Python314\python.exe -m alembic -c backend/migrations/alembic.ini history --verbose
+```
+
+4. For a one-step rollback in a disposable or approved environment:
+
+```powershell
+C:\Python314\python.exe -m alembic -c backend/migrations/alembic.ini downgrade -1
+```
+
+5. For a named target, downgrade explicitly:
+
+```powershell
+C:\Python314\python.exe -m alembic -c backend/migrations/alembic.ini downgrade <target_revision>
+```
+
+6. Re-run `current`, then run the focused migration tests against a restored disposable copy before re-enabling writers.
+
+If a downgrade would drop user economic data, wallet ledger data, payment rail state, auth sessions, or audit evidence, stop and use a forward repair migration instead.
+
+## Test-Credential and Secret Baseline
+
+Production-like environments must replace placeholder secrets before startup. The backend config rejects known local placeholders for:
+
+- `GTE_AUTH_SECRET`
+- `GTE_MEDIA_SIGNING_SECRET`
+
+Rotation checklist:
+
+1. Generate unique values in the secret manager.
+2. Deploy secrets before the application rollout.
+3. Restart API and workers.
+4. Confirm `/ready` and protected `/metrics` access through an admin-authenticated path.
+5. Remove old secret values from the environment.
+
+Test credentials belong only in `backend/tests/support/secrets.py` and test environment setup. Do not copy those values into `.env`, runbooks for production, staging manifests, or payment rail configuration.
+
+## When to Stop
+
+Stop and hand off to the migration owner when:
+
+- `alembic heads` reports more than one head.
+- `current` remains behind `20260604_0094_club_squad_sources` after `upgrade head`.
+- A parallel worker has uncommitted edits under `backend/migrations/versions/*`.
+- A migration touches wallet ledger, payment rails, auth, audit, or player ownership tables and the rollback would destroy authoritative records.
+- A new durable contract needs schema work but the task only assigned runbook or verification ownership.

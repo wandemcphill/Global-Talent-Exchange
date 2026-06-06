@@ -92,6 +92,11 @@ logger = logging.getLogger(__name__)
 HTTP_LATENCY_BUCKETS = (0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)
 MATCH_DURATION_BUCKETS = (15, 30, 45, 60, 90, 120, 180, 240, 300, 600, 900)
 WORKER_DURATION_BUCKETS = (0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120)
+BOOT_PHASE_DURATION_BUCKETS = (0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300)
+RUNTIME_PROBE_SLOW_THRESHOLDS_SECONDS = {
+    "health": 1.0,
+    "ready": 2.5,
+}
 
 
 def _parse_decimal(value: Any) -> Decimal:
@@ -115,6 +120,15 @@ def _parse_datetime(value: Any) -> datetime | None:
 
 def _enum_value(value: Any) -> str:
     return value.value if hasattr(value, "value") else str(value)
+
+
+def _metric_label(value: Any, *, fallback: str = "unknown") -> str:
+    label = str(_enum_value(value) if value is not None else "").strip().lower()
+    return label or fallback
+
+
+def _threshold_label(value: float) -> str:
+    return f"{max(float(value), 0.0):g}"
 
 
 @dataclass
@@ -215,6 +229,38 @@ class GTexMetrics:
             "Feed refresh latency in seconds.",
             ("feed_name", "result"),
             buckets=WORKER_DURATION_BUCKETS,
+            registry=self.registry,
+        )
+        self.runtime_probe_total = Counter(
+            "gtex_runtime_probe_total",
+            "Health and readiness probe outcomes tracked outside general HTTP traffic.",
+            ("probe", "result", "status_code"),
+            registry=self.registry,
+        )
+        self.runtime_probe_duration_seconds = Histogram(
+            "gtex_runtime_probe_duration_seconds",
+            "Health and readiness probe latency in seconds.",
+            ("probe", "result", "status_code"),
+            buckets=HTTP_LATENCY_BUCKETS,
+            registry=self.registry,
+        )
+        self.runtime_probe_slow_total = Counter(
+            "gtex_runtime_probe_slow_total",
+            "Health and readiness probes exceeding their configured latency thresholds.",
+            ("probe", "threshold_seconds"),
+            registry=self.registry,
+        )
+        self.boot_phase_duration_seconds = Histogram(
+            "gtex_boot_phase_duration_seconds",
+            "Application boot phase duration in seconds.",
+            ("phase", "result"),
+            buckets=BOOT_PHASE_DURATION_BUCKETS,
+            registry=self.registry,
+        )
+        self.boot_phase_slow_total = Counter(
+            "gtex_boot_phase_slow_total",
+            "Application boot phases exceeding their configured duration thresholds.",
+            ("phase", "result", "threshold_seconds"),
             registry=self.registry,
         )
         self.legacy_match_runtime_access_total = Counter(
@@ -396,6 +442,53 @@ class GTexMetrics:
     def record_feed_refresh(self, *, feed_name: str, result: str, duration_seconds: float) -> None:
         self.feed_refresh_total.labels(feed_name, result).inc()
         self.feed_refresh_duration_seconds.labels(feed_name, result).observe(max(float(duration_seconds), 0.0))
+
+    def record_runtime_probe(
+        self,
+        *,
+        probe: str,
+        status_code: int,
+        duration_seconds: float,
+        slow_threshold_seconds: float | None = None,
+    ) -> None:
+        normalized_probe = _metric_label(probe)
+        normalized_duration = max(float(duration_seconds), 0.0)
+        status_code_label = str(int(status_code))
+        result = "ok" if 200 <= int(status_code) < 400 else "error"
+        self.runtime_probe_total.labels(normalized_probe, result, status_code_label).inc()
+        self.runtime_probe_duration_seconds.labels(normalized_probe, result, status_code_label).observe(
+            normalized_duration
+        )
+        threshold = (
+            float(slow_threshold_seconds)
+            if slow_threshold_seconds is not None
+            else RUNTIME_PROBE_SLOW_THRESHOLDS_SECONDS.get(normalized_probe)
+        )
+        if threshold is not None:
+            threshold = max(threshold, 0.0)
+        if threshold is not None and normalized_duration > threshold:
+            self.runtime_probe_slow_total.labels(normalized_probe, _threshold_label(threshold)).inc()
+
+    def record_boot_phase(
+        self,
+        *,
+        phase: str,
+        result: str,
+        duration_seconds: float,
+        threshold_seconds: float | None = None,
+    ) -> None:
+        normalized_phase = _metric_label(phase)
+        normalized_result = _metric_label(result)
+        normalized_duration = max(float(duration_seconds), 0.0)
+        self.boot_phase_duration_seconds.labels(normalized_phase, normalized_result).observe(normalized_duration)
+        if threshold_seconds is not None:
+            threshold = max(float(threshold_seconds), 0.0)
+            if normalized_duration > threshold:
+                self.boot_phase_slow_total.labels(
+                    normalized_phase,
+                    normalized_result,
+                    _threshold_label(threshold),
+                ).inc()
 
     def record_legacy_match_runtime_access(self, *, action: str, result: str) -> None:
         self.legacy_match_runtime_access_total.labels(action, result).inc()

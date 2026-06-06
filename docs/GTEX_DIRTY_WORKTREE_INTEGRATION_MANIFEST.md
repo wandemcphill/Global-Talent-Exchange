@@ -1020,7 +1020,12 @@ Scope: backend contract truth for migration runbook state, observability probes,
 - Wired `/health` and `/ready` into dedicated probe metrics in `backend\app\observability\middleware.py` while keeping them excluded from generic HTTP request totals.
 - Protected `/observability/config` with the existing production-like admin guard used by diagnostics and metrics; local/dev access remains unchanged.
 - Added observability coverage for probe metrics, boot threshold metrics, middleware probe recording, and production config-snapshot auth.
-- Verification pending in this thread entry until the focused pytest, forbidden scans, and scoped diff checks complete.
+- Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest -p no:cacheprovider -q backend\tests\observability` -> 9 passed in 481.53s; `backend\_out.txt` was read and deleted.
+- Post-format focused rerun passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest -p no:cacheprovider -q backend\tests\observability\test_runtime_probe_metrics.py` -> 2 passed in 64.89s; `backend\_out.txt` was read and deleted.
+- Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest -p no:cacheprovider -q backend\tests\persistence\test_migrations.py backend\tests\persistence\test_wallet_ledger_hardening_migration.py backend\tests\persistence\test_competition_discovery_perf_migration.py backend\tests\regen\test_regen_migrations.py` -> 10 passed in 841.87s; `backend\_out.txt` was read and deleted.
+- Forbidden scan passed for touched backend/test/runbook files: no unsupported payment or promoted legacy-runtime product terms.
+- Manifest added-line forbidden scan passed: no new unsupported payment or promoted legacy-runtime product terms were introduced by the Thread 7 entry.
+- Scoped `git diff --check` passed for Thread 7-owned backend observability, observability tests, and runbook/manifest paths; console noise was CRLF normalization warnings only.
 
 ## Thread 4 Handoff Update - 2026-06-06 Money Path Hardening
 

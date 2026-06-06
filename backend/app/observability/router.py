@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import get_current_admin, get_session
+from app.core.health import require_internal_or_admin
 from app.core.rate_limit import ensure_api_rate_limiter
 from app.jobs.ops_jobs import OpsJobRunner
 from app.live_matches.service import ensure_live_match_hub
@@ -55,6 +56,7 @@ def _job_runner(request: Request) -> OpsJobRunner:
 @router.get("/config", response_model=ConfigSnapshotView)
 def read_config_snapshot(
     request: Request,
+    _: None = Depends(require_internal_or_admin),
     session: Session = Depends(get_session),
 ) -> ConfigSnapshotView:
     settings = request.app.state.settings

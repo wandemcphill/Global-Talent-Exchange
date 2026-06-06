@@ -21,6 +21,7 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         started_at = perf_counter()
         route = self._route_label(request)
+        runtime_probe = self._runtime_probe_label(route)
         should_record = route not in {"/health", "/ready", "/metrics"}
         if should_record:
             self.metrics.http_requests_in_progress.inc()
@@ -28,6 +29,12 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             elapsed = perf_counter() - started_at
+            if runtime_probe is not None:
+                self.metrics.record_runtime_probe(
+                    probe=runtime_probe,
+                    status_code=500,
+                    duration_seconds=elapsed,
+                )
             if should_record:
                 self.metrics.record_http_request(
                     method=request.method,
@@ -50,6 +57,12 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                 self.metrics.http_requests_in_progress.dec()
 
         elapsed = perf_counter() - started_at
+        if runtime_probe is not None:
+            self.metrics.record_runtime_probe(
+                probe=runtime_probe,
+                status_code=response.status_code,
+                duration_seconds=elapsed,
+            )
         if should_record:
             route = self._route_label(request)
             self.metrics.record_http_request(
@@ -76,3 +89,11 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         if path:
             return str(path)
         return request.url.path
+
+    @staticmethod
+    def _runtime_probe_label(route: str) -> str | None:
+        if route == "/health":
+            return "health"
+        if route == "/ready":
+            return "ready"
+        return None
