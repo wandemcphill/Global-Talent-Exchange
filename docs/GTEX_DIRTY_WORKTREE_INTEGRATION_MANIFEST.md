@@ -1102,3 +1102,19 @@ Scope: continued the backend test DB schema speedup rollout on `feature/original
 - Verification passed: scoped `git diff --check` for the migrated admin_godmode and auth service files returned exit code 0; console noise was CRLF normalization warnings only.
 - Commits created: `c2f70df2` (`perf(backend-tests): migrate admin godmode DB tests to shared schema`) and `f199c654` (`perf(backend-tests): migrate auth service DB tests to shared schema`).
 - Blocker/coordination note: this repo had multiple concurrent backend pytest workers using the shared `backend\_out.txt`; unverified auth router/frictionless fixture edits were manually unwound rather than committed. Continue remaining full-schema candidates one file at a time when the shared pytest output lane is idle.
+
+## Thread 2 Handoff Update - 2026-06-06 Backend Route Contracts + Websocket Collisions
+
+Scope: backend route/module contract tests and realtime websocket route collision coverage on `feature/original-visual-runtime`; no production backend route implementation, frontend, CI, wallet/payment/admin-finance, or regen feature logic was edited.
+
+- Updated module-registration route contract tests for canonical `/api/v2` request handling with required `X-API-Version: 2` headers while preserving explicit `410 Gone` coverage for retired/non-canonical aliases.
+- Removed the stale monolithic route sweep from `test_module_registration.py`; the split parametrized contract suite now owns broad route resolution coverage, while the original file stays focused on registration and lazy-hydration guards.
+- Adjusted app-contract expectations for canonical auth-before-not-found behavior on guarded broadcast/admin surfaces and for retired daily-challenge/streamer aliases.
+- Hardened mounted app contract fixtures so deferred startup stays patched during app construction without nested autospec patch fragility.
+- Added `backend\tests\realtime\test_websocket_route_contracts.py` proving realtime and live-match websocket route tables have no duplicate paths and that `/api/matches/{match_id}/stream`, `/matches/{match_id}/stream`, `/realtime/matches/{match_id}/stream`, and `/ws/match/{match_id}` each register once.
+- Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest backend\tests\app\test_module_registration_routes.py -p no:cacheprovider -q` -> 170 passed, 9 warnings in 499.70s; `backend\_out.txt` was read and deleted.
+- Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest backend\tests\app\test_module_registration.py -p no:cacheprovider -q` -> 4 passed in 310.79s; `backend\_out.txt` was read and deleted.
+- Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest backend\tests\app\test_module_registration_hydration.py backend\tests\app\test_module_registration_openapi.py -p no:cacheprovider -q` -> 332 passed in 438.81s; `backend\_out.txt` was read and deleted.
+- Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest backend\tests\realtime\test_websocket_route_contracts.py backend\tests\realtime\test_match_websocket_gateway.py backend\tests\realtime\test_wallet_websocket_gateway.py backend\tests\realtime\test_regen_creation_realtime.py -p no:cacheprovider -q` -> 13 passed in 52.19s; `backend\_out.txt` was read and deleted.
+- Verification passed: scoped `git diff --check` for Thread 2 owned app/realtime test paths returned exit code 0; console noise was CRLF normalization warnings only.
+- Blockers: none.

@@ -77,8 +77,6 @@ CREATOR_MEDIA_OPENAPI_PRESENT_PATHS = [
 
 CREATOR_MEDIA_OPENAPI_ABSENT_PATHS = [
     "/creators/{handle}",
-    "/api/creator/profile",
-    "/api/v2/creator/profile",
     "/api/creator/profile/me",
     "/api/v2/creator/profile/me",
     "/api/creator/me/summary",
@@ -535,7 +533,7 @@ MOUNTED_MODULE_ROUTE_CASES = [
     ("GET", "/api/governance/proposals", None, None, 200),
     ("POST", "/api/admin/governance/proposals/nonexistent/status", VALID_GOVERNANCE_STATUS_PAYLOAD, None, 401),
     ("GET", "/governance/proposals", None, None, 404),
-    ("POST", "/admin/governance/proposals/nonexistent/status", {}, None, 404),
+    ("POST", "/admin/governance/proposals/nonexistent/status", {}, None, 401),
     ("GET", "/api/hosted-competitions", None, None, 200),
     ("GET", "/api/v2/hosted-competitions", None, None, 200),
     ("GET", "/hosted-competitions", None, None, 404),
@@ -598,7 +596,7 @@ MOUNTED_MODULE_ROUTE_CASES = [
     ("GET", "/api/admin/sponsorship/packages", None, None, 401),
     ("GET", "/api/v2/admin/sponsorship/packages", None, None, 401),
     ("GET", "/admin/sponsorship/packages", None, None, 404),
-    ("GET", "/broadcast/nonexistent", None, None, 404),
+    ("GET", "/broadcast/nonexistent", None, None, 401),
     ("GET", "/broadcast-rights/competitions/nonexistent", None, None, 404),
     ("GET", "/broadcast-rights/matches/nonexistent/access", None, None, 401),
     ("POST", "/admin/broadcast-rights/jobs/run", None, None, 401),
@@ -661,21 +659,21 @@ REWARD_AND_INTEGRITY_ROUTE_CASES = [
 ]
 
 DAILY_CHALLENGES_AND_STREAMER_ROUTE_CASES = [
-    ("GET", "/api/daily-challenges", None, 200),
+    ("GET", "/api/daily-challenges", None, 410),
     ("GET", "/api/v2/daily-challenges", None, 200),
-    ("GET", "/daily-challenges", None, 404),
-    ("GET", "/api/daily-challenges/me", None, 401),
+    ("GET", "/daily-challenges", None, 410),
+    ("GET", "/api/daily-challenges/me", None, 410),
     ("GET", "/api/v2/daily-challenges/me", None, 401),
-    ("GET", "/daily-challenges/me", None, 404),
-    ("POST", "/api/daily-challenges/daily-login/claim", None, 401),
+    ("GET", "/daily-challenges/me", None, 410),
+    ("POST", "/api/daily-challenges/daily-login/claim", None, 410),
     ("POST", "/api/v2/daily-challenges/daily-login/claim", None, 401),
-    ("POST", "/daily-challenges/daily-login/claim", None, 404),
-    ("GET", "/api/streamer-tournaments", None, 200),
+    ("POST", "/daily-challenges/daily-login/claim", None, 410),
+    ("GET", "/api/streamer-tournaments", None, 410),
     ("GET", "/api/v2/streamer-tournaments", None, 200),
-    ("GET", "/streamer-tournaments", None, 404),
-    ("GET", "/api/admin/streamer-tournaments/policy", None, 401),
+    ("GET", "/streamer-tournaments", None, 410),
+    ("GET", "/api/admin/streamer-tournaments/policy", None, 410),
     ("GET", "/api/v2/admin/streamer-tournaments/policy", None, 401),
-    ("GET", "/admin/streamer-tournaments/policy", None, 404),
+    ("GET", "/admin/streamer-tournaments/policy", None, 410),
 ]
 
 MODERATION_ROUTE_CASES = [

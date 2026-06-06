@@ -13,7 +13,10 @@ def test_streamer_tournaments_api_route_does_not_force_global_lazy_hydration(
 ) -> None:
     assert mounted_app.state.modules_hydrated is False
 
-    response = mounted_app_client.get("/api/streamer-tournaments")
+    response = mounted_app_client.get(
+        "/api/v2/streamer-tournaments",
+        headers={"X-API-Version": "2"},
+    )
 
     assert response.status_code == 200
     assert mounted_app.state.modules_hydrated is False

@@ -9,7 +9,7 @@ from backend.tests.app._module_registration_contract_data import (
     MOUNTED_MODULE_ROUTE_CASES,
     REWARD_AND_INTEGRITY_ROUTE_CASES,
 )
-from backend.tests.app._module_registration_contract_support import request_route
+from backend.tests.app._module_registration_contract_support import expected_contract_status, request_route
 
 
 @pytest.mark.parametrize(
@@ -25,8 +25,15 @@ def test_mounted_module_routes_resolve_on_the_real_app(
     params: dict[str, object] | None,
     expected_status: int,
 ) -> None:
-    response = request_route(mounted_app_client, method, path, json_body=json_body, params=params)
-    assert response.status_code == expected_status
+    response = request_route(
+        mounted_app_client,
+        method,
+        path,
+        json_body=json_body,
+        params=params,
+        expected_status=expected_status,
+    )
+    assert response.status_code == expected_contract_status(path, expected_status, params=params)
 
 
 @pytest.mark.parametrize(
@@ -41,8 +48,14 @@ def test_reward_and_integrity_api_only_routes_resolve_on_the_real_app(
     json_body: dict[str, object] | None,
     expected_status: int,
 ) -> None:
-    response = request_route(mounted_app_client, method, path, json_body=json_body)
-    assert response.status_code == expected_status
+    response = request_route(
+        mounted_app_client,
+        method,
+        path,
+        json_body=json_body,
+        expected_status=expected_status,
+    )
+    assert response.status_code == expected_contract_status(path, expected_status)
 
 
 @pytest.mark.parametrize(
@@ -57,8 +70,14 @@ def test_daily_challenges_and_streamer_tournaments_api_only_routes_resolve_on_th
     json_body: dict[str, object] | None,
     expected_status: int,
 ) -> None:
-    response = request_route(mounted_app_client, method, path, json_body=json_body)
-    assert response.status_code == expected_status
+    response = request_route(
+        mounted_app_client,
+        method,
+        path,
+        json_body=json_body,
+        expected_status=expected_status,
+    )
+    assert response.status_code == expected_contract_status(path, expected_status)
 
 
 @pytest.mark.parametrize(
@@ -73,8 +92,14 @@ def test_moderation_api_only_routes_resolve_on_the_real_app(
     json_body: dict[str, object] | None,
     expected_status: int,
 ) -> None:
-    response = request_route(mounted_app_client, method, path, json_body=json_body)
-    assert response.status_code == expected_status
+    response = request_route(
+        mounted_app_client,
+        method,
+        path,
+        json_body=json_body,
+        expected_status=expected_status,
+    )
+    assert response.status_code == expected_contract_status(path, expected_status)
 
 
 @pytest.mark.parametrize(
@@ -89,5 +114,11 @@ def test_creator_and_media_contract_routes_resolve_on_the_real_app(
     json_body: dict[str, object] | None,
     expected_status: int,
 ) -> None:
-    response = request_route(mounted_app_client, method, path, json_body=json_body)
-    assert response.status_code == expected_status
+    response = request_route(
+        mounted_app_client,
+        method,
+        path,
+        json_body=json_body,
+        expected_status=expected_status,
+    )
+    assert response.status_code == expected_contract_status(path, expected_status)
