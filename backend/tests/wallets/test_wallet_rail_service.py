@@ -3,15 +3,12 @@ from __future__ import annotations
 from datetime import timedelta
 from decimal import Decimal
 
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 import pytest
 
 from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService
-from app.core.database import load_model_modules
-from app.models import AmlCase, Base, CountryFeaturePolicy, LedgerUnit
+from app.models import AmlCase, CountryFeaturePolicy, LedgerUnit
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.risk_ops import AuditLog, SystemEvent
 from app.models.treasury import PaymentMode, RateDirection
@@ -25,17 +22,9 @@ from app.wallets.rail_service import WalletRailError, WalletRailService
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    load_model_modules()
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared full-schema engine with per-test rollback; avoids rebuilding 567 tables.
+    yield gtex_db_session
 
 
 def _create_user(session):

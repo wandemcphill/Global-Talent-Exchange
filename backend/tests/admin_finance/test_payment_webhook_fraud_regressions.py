@@ -7,44 +7,25 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 import pytest
 
-import app.ingestion.models  # noqa: F401
-import app.ledger.models  # noqa: F401
-import app.models  # noqa: F401
-import app.orders.models  # noqa: F401
 from app.admin_finance.router import webhook_router
 from app.auth.dependencies import get_session
-from app.models.base import Base
 
 
 @pytest.fixture()
-def webhook_client():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    session = SessionLocal()
-
+def webhook_client(gtex_db_session):
     app = FastAPI()
     app.include_router(webhook_router)
     app.state.settings = SimpleNamespace()
 
     def override_session():
-        yield session
+        yield gtex_db_session
 
     app.dependency_overrides[get_session] = override_session
 
     with TestClient(app) as client:
         yield client
-
-    session.close()
 
 
 def test_korapay_webhook_rejects_invalid_signature_when_secret_is_configured(
