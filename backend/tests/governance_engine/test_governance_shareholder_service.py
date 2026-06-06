@@ -3,14 +3,10 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401
 from app.governance_engine.service import GovernanceEngineService
-from app.models.base import Base
 from app.models.club_profile import ClubProfile
 from app.models.creator_share_market import CreatorClubShareHolding, CreatorClubShareMarket
 from app.models.governance_engine import (
@@ -24,16 +20,9 @@ from app.models.user import User
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared full-schema engine with per-test rollback; avoids rebuilding 567 tables.
+    yield gtex_db_session
 
 
 def _create_user(session, *, user_id: str, email: str, username: str) -> User:

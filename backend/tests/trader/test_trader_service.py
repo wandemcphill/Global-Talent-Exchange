@@ -4,9 +4,10 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 
 from app.auth.service import AuthService
-from app.models.market_topup import MarketTopupStatus
+from app.models.market_topup import MarketTopup, MarketTopupStatus
 from app.models.risk_ops import RiskActionType
 from app.models.risk_ops import AuditLog
 from app.models.trader import TraderMarket, TraderOrderSide
@@ -148,6 +149,29 @@ def test_trader_metrics_block_null_reserved_balance_without_zero_fallback(sessio
         service.sync_trader_metrics(trader)
 
 
+def test_trader_balance_and_metrics_use_reserved_wallet_truth(session) -> None:
+    trader = _create_trader(session)
+    _verify_trader(session, trader)
+    service = TraderService(
+        session,
+        wallet_service=_FixedWalletService(
+            available_balance=Decimal("42.0000"),
+            reserved_balance=Decimal("7.5000"),
+            total_balance=Decimal("49.5000"),
+        ),
+    )
+
+    balance = service.balance(trader)
+    profile = service.sync_trader_metrics(trader)
+
+    assert balance["available"] == Decimal("42.0000")
+    assert balance["reserved"] == Decimal("7.5000")
+    assert balance["total"] == Decimal("49.5000")
+    assert profile.liquidity_snapshot_json["available_coin"] == "42.0000"
+    assert profile.liquidity_snapshot_json["reserved_coin"] == "7.5000"
+    assert profile.liquidity_snapshot_json["total_coin"] == "49.5000"
+
+
 def test_trader_order_creation_records_audit_reference(session) -> None:
     trader = _create_trader(session)
     _verify_trader(session, trader)
@@ -270,6 +294,60 @@ def test_trader_settlements_are_backed_by_market_topup_truth(session) -> None:
     assert settlements[0]["audit_ref"]
 
 
+def test_trader_deposits_record_only_korapay_and_manual_settlement_truth(session) -> None:
+    trader = _create_trader(session)
+    _verify_trader(session, trader)
+    service = TraderService(session)
+
+    korapay = service.initiate_deposit(
+        trader,
+        amount=Decimal("25.0000"),
+        currency="coin",
+        method="korapay",
+    )
+    manual = service.initiate_deposit(
+        trader,
+        amount=Decimal("75.0000"),
+        currency="coin",
+        method="manual",
+        proof_attachment_id="manual-proof-1",
+    )
+
+    korapay_topup = session.get(MarketTopup, korapay["id"])
+    manual_topup = session.get(MarketTopup, manual["id"])
+    settlements = {item["id"]: item for item in service.list_settlements(trader)}
+
+    assert korapay["checkout_url"] is None
+    assert korapay_topup is not None
+    assert korapay_topup.metadata_json["payment_method"] == "korapay"
+    assert settlements[korapay["id"]]["method"] == "korapay"
+    assert settlements[korapay["id"]]["amount"] == korapay_topup.net_amount
+    assert settlements[korapay["id"]]["status"] == korapay_topup.status.value
+    assert manual_topup is not None
+    assert manual_topup.metadata_json["payment_method"] == "manual"
+    assert manual_topup.metadata_json["proof_attachment_id"] == "manual-proof-1"
+    assert settlements[manual["id"]]["method"] == "manual"
+    assert settlements[manual["id"]]["amount"] == manual_topup.net_amount
+    assert settlements[manual["id"]]["status"] == manual_topup.status.value
+
+
+def test_trader_deposit_rejects_unsupported_gateway_without_creating_topup(session) -> None:
+    trader = _create_trader(session)
+    _verify_trader(session, trader)
+    service = TraderService(session)
+
+    with pytest.raises(TraderAccessError, match="KoraPay and manual bank transfer only"):
+        service.initiate_deposit(
+            trader,
+            amount=Decimal("25.0000"),
+            currency="coin",
+            method="unsupported_gateway",
+        )
+
+    topups = session.scalars(select(MarketTopup).where(MarketTopup.user_id == trader.id)).all()
+    assert topups == []
+
+
 def test_trader_korapay_withdrawal_is_blocked_and_audited(session) -> None:
     trader = _create_trader(session)
     service = TraderService(session)
@@ -346,5 +424,26 @@ class _NullReservedBalanceWalletService:
             available_balance=Decimal("10.0000"),
             reserved_balance=None,
             total_balance=Decimal("10.0000"),
+            currency=currency,
+        )
+
+
+class _FixedWalletService:
+    def __init__(
+        self,
+        *,
+        available_balance: Decimal,
+        reserved_balance: Decimal,
+        total_balance: Decimal,
+    ) -> None:
+        self.available_balance = available_balance
+        self.reserved_balance = reserved_balance
+        self.total_balance = total_balance
+
+    def get_wallet_summary(self, session, user, *, currency):
+        return SimpleNamespace(
+            available_balance=self.available_balance,
+            reserved_balance=self.reserved_balance,
+            total_balance=self.total_balance,
             currency=currency,
         )

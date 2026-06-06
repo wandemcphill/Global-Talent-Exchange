@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import hashlib
+import hmac
 import json
 from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 import pytest
 
 import app.ingestion.models  # noqa: F401
@@ -18,12 +20,15 @@ from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.ingestion.models import Player
+from app.models.fancoin_purchase_order import PurchaseOrderStatus
 from app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord
-from app.models.treasury import PaymentMode
+from app.models.risk_ops import AuditLog
+from app.models.treasury import PaymentMode, RateDirection
 from app.policies.service import PolicyService
 from app.services.runtime_control_service import RuntimeControlService
 from app.treasury.service import GTEX_PLATFORM_POSITIONING, TreasuryService
 from app.wallets.router import router
+from app.wallets.rail_service import WalletRailService
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerTransactionType, LedgerUnit
 from app.models.user import KycStatus
@@ -131,6 +136,39 @@ def _enable_automatic_deposits(session) -> None:
     settings = TreasuryService().ensure_settings(session)
     settings.deposit_mode = PaymentMode.AUTOMATIC
     session.commit()
+
+
+def _configure_korapay_purchase_settings(session) -> None:
+    settings = TreasuryService().ensure_settings(session)
+    settings.deposit_mode = PaymentMode.AUTOMATIC
+    settings.deposit_rate_value = Decimal("1000.0000")
+    settings.deposit_rate_direction = RateDirection.FIAT_PER_COIN
+    settings.min_deposit = Decimal("0.0000")
+    settings.max_deposit = Decimal("100000.0000")
+    session.commit()
+
+
+def _create_korapay_purchase_order(session, current_user, *, provider_reference: str = "korapay-webhook-ref-001"):
+    _configure_korapay_purchase_settings(session)
+    order = WalletRailService(session).create_purchase_order(
+        user=current_user,
+        settings=TreasuryService().ensure_settings(session),
+        amount=Decimal("1000.0000"),
+        input_unit="fiat",
+        provider_key="korapay",
+        source_scope="wallet",
+        unit=LedgerUnit.COIN,
+        processor_mode="automatic_gateway",
+        payout_channel="gateway",
+        provider_reference=provider_reference,
+    )
+    session.commit()
+    return order
+
+
+def _korapay_signature(payload: dict[str, object], secret: str) -> str:
+    canonical_payload = json.dumps(payload["data"], separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return hmac.new(secret.encode("utf-8"), canonical_payload, hashlib.sha256).hexdigest()
 
 
 def _enable_hybrid_deposits(session) -> None:
@@ -603,6 +641,99 @@ def test_wallet_overview_and_eligibility_block_null_cached_balance(api_context) 
 
         assert response.status_code == 503, response.text
         assert response.json()["detail"] == "Balance data unavailable — sync in progress."
+
+
+def test_korapay_provider_webhook_requires_valid_signature(api_context, monkeypatch) -> None:
+    client, session, current_user = api_context
+    secret = "wallet-webhook-signature-secret"
+    monkeypatch.setenv("GTE_KORAPAY_WEBHOOK_SECRET", secret)
+    monkeypatch.delenv("GTE_KORAPAY_WEBHOOK_SIGNATURE_OPTIONAL", raising=False)
+    order = _create_korapay_purchase_order(
+        session,
+        current_user,
+        provider_reference="korapay-webhook-signature-ref",
+    )
+    payload = {
+        "event": "charge.success",
+        "data": {
+            "id": "kora-signature-event-1",
+            "reference": order.provider_reference,
+            "amount": "1000.0000",
+            "currency": "NGN",
+            "status": "success",
+            "metadata": {"purchase_order_reference": order.reference},
+        },
+    }
+
+    missing_signature = client.post("/wallets/providers/korapay/webhook", json=payload)
+    invalid_signature = client.post(
+        "/wallets/providers/korapay/webhook",
+        json=payload,
+        headers={"x-korapay-signature": "not-the-korapay-signature"},
+    )
+    session.refresh(order)
+    wallet_service = WalletService()
+    user_account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+
+    assert missing_signature.status_code == 401
+    assert "signature header" in missing_signature.json()["detail"]
+    assert invalid_signature.status_code == 401
+    assert "signature is invalid" in invalid_signature.json()["detail"]
+    assert order.status == PurchaseOrderStatus.PROCESSING
+    assert order.ledger_transaction_id is None
+    assert wallet_service.get_balance(session, user_account) == Decimal("0.0000")
+
+
+def test_korapay_provider_webhook_duplicate_delivery_is_idempotent(api_context, monkeypatch) -> None:
+    client, session, current_user = api_context
+    secret = "wallet-webhook-idempotency-secret"
+    monkeypatch.setenv("GTE_KORAPAY_WEBHOOK_SECRET", secret)
+    monkeypatch.delenv("GTE_KORAPAY_WEBHOOK_SIGNATURE_OPTIONAL", raising=False)
+    order = _create_korapay_purchase_order(
+        session,
+        current_user,
+        provider_reference="korapay-webhook-idempotent-ref",
+    )
+    payload = {
+        "event": "charge.success",
+        "data": {
+            "id": "kora-idempotent-event-1",
+            "reference": order.provider_reference,
+            "amount": "1000.0000",
+            "currency": "NGN",
+            "status": "success",
+            "metadata": {"purchase_order_reference": order.reference},
+        },
+    }
+    headers = {"x-korapay-signature": _korapay_signature(payload, secret)}
+
+    first_delivery = client.post("/wallets/providers/korapay/webhook", json=payload, headers=headers)
+    session.refresh(order)
+    first_ledger_transaction_id = order.ledger_transaction_id
+    wallet_service = WalletService()
+    user_account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+    balance_after_first_delivery = wallet_service.get_balance(session, user_account)
+
+    second_delivery = client.post("/wallets/providers/korapay/webhook", json=payload, headers=headers)
+    session.refresh(order)
+    webhook_audits = session.scalars(
+        select(AuditLog).where(
+            AuditLog.action_key == "wallet.purchase_order.webhook",
+            AuditLog.resource_type == "purchase_order",
+            AuditLog.resource_id == order.id,
+        )
+    ).all()
+
+    assert first_delivery.status_code == 200, first_delivery.text
+    assert second_delivery.status_code == 200, second_delivery.text
+    assert first_delivery.json()["order_status"] == "settled"
+    assert second_delivery.json()["order_status"] == "settled"
+    assert order.status == PurchaseOrderStatus.SETTLED
+    assert order.provider_event_id == "kora-idempotent-event-1"
+    assert order.ledger_transaction_id == first_ledger_transaction_id
+    assert wallet_service.get_balance(session, user_account) == balance_after_first_delivery
+    assert balance_after_first_delivery == order.net_amount
+    assert len(webhook_audits) == 1
 
 
 @pytest.mark.parametrize("provider_key", ["paystack", "retired_gateway"])

@@ -455,6 +455,29 @@ Section 4 backend contract gaps remain blocked/missing until backend owners publ
 | 20 | Blocked | Formation publish server-side eligibility validation remains unconfirmed and must not be replaced by frontend-only checks. |
 | 21, 22 | Missing/risk | Regen DNA axis list and projected-value methodology enum remain unconfirmed. |
 
+## Thread 8 GA QA / Staging Dry Run / Visual + Load - 2026-06-06
+
+Scope: Thread 8-owned QA/staging/load/docs only. No product source, workflow, backend business logic, frontend routes, Unity files, or existing dirty worker files were edited in this slice.
+
+Completed work:
+
+- Added `tools/visual/capture_gtex_visual_qa.ps1` for desktop/tablet/mobile screenshot capture using Edge or Chrome headless. The tool writes `visual_qa_manifest.json` and fails on missing/tiny/invalid PNG output.
+- Added `tools/staging/invoke_gtex_staging_smoke.ps1` for read-only staging smoke across `/health`, `/ready`, `/version`, and `/diagnostics`, with optional market and match-center probes.
+- Added `tools/staging/invoke_gtex_rollback_rehearsal.ps1` for current-vs-rollback candidate smoke comparison and release-captain rollback steps.
+- Added `tools/load/gtex_load_probe.py` for stdlib HTTP load probing of market endpoints and optional backend-authored match-center endpoints, with optional websocket probing when `websocket-client` is installed.
+- Added `Docs/GTEX_GA_QA_STAGING_LOAD_RUNBOOK.md` with exact commands, pass/fail criteria, and release evidence requirements.
+- Added `Docs/GTEX_PRODUCTION_SIGNOFF_CHECKLIST.md` with per-feature production signoff gates.
+
+Guardrail notes:
+
+- KoraPay/manual bank transfer remains the only launch money rail in Thread 8 docs.
+- Visual QA defaults to canonical `/app/*` surfaces and does not include Unity/native-3D/pseudo-3D production routes.
+- Match-center load/smoke requires an existing backend-authored match id when match truth is mandatory; otherwise the tools report blocked/skipped rather than fabricating data.
+
+Verification:
+
+- Pending in this manifest section until Thread 8 focused script syntax checks, dry-run smoke checks, load harness help/small probe checks, and `git diff --check` complete.
+
 ## Thread 1 Core/Foundation Lane 0 Pulse - 2026-06-02
 
 Scope: Thread 1-owned Core/Foundation only: shared async state/renderers, shell primitives, route constants/guards, Dio/WebSocket/audit service contracts, production guardrails, and contract documentation.
@@ -985,4 +1008,30 @@ Scope: stabilized only the Flutter frontend analyzer and test lane in `C:\Users\
 - Test before/after: `flutter test --no-pub --concurrency=1` went from `+810 -22` to `+832` with all tests passed.
 - Skips: 0. Legacy local match simulation tests were converted into active quarantine assertions instead of skipped coverage.
 - Verification passed: `flutter analyze --no-pub` reported no issues after the test stabilization commit.
+
+## Thread 7 Handoff Update - 2026-06-06 Migrations / Ops / Observability / Security
+
+Scope: backend contract truth for migration runbook state, observability probes, and protected runtime snapshots.
+
+- Confirmed this checkout uses `backend\migrations`, not `backend\alembic`; no migration version files were edited.
+- Updated `Docs\BACKEND_MIGRATION_RUNBOOK.md` to current head `20260604_0094_club_squad_sources`, with empty-db upgrade verification, rollback steps, boot schema-check guidance, and secret rotation baseline.
+- Added dedicated Prometheus metrics for health/readiness probes and boot phase duration thresholds in `backend\app\observability\metrics.py`.
+- Wired `/health` and `/ready` into dedicated probe metrics in `backend\app\observability\middleware.py` while keeping them excluded from generic HTTP request totals.
+- Protected `/observability/config` with the existing production-like admin guard used by diagnostics and metrics; local/dev access remains unchanged.
+- Added observability coverage for probe metrics, boot threshold metrics, middleware probe recording, and production config-snapshot auth.
+- Verification pending in this thread entry until the focused pytest, forbidden scans, and scoped diff checks complete.
 - Verification passed: `flutter test --no-pub --concurrency=1 --reporter=expanded` passed 832/832; one existing viral-feed hit-test warning was non-fatal and did not fail the suite.
+
+## Thread 4 Handoff Update - 2026-06-06 Money Path Hardening
+
+Scope: wallet/payment/trader/regen creation money-path hardening on `feature/original-visual-runtime`; source behavior already enforced KoraPay/manual-only rails, so this pass strengthened focused regression coverage in owned tests.
+
+- Wallet/KoraPay: added wallet-route coverage proving missing or invalid `x-korapay-signature` returns `401` without crediting the purchase order, and duplicate signed KoraPay webhook delivery is idempotent with one ledger transaction and one webhook audit.
+- Payment methods: tightened gateway-method coverage so polluted runtime state containing Paystack or `crypto_fiat` is ignored; only `bank_transfer_manual` and `korapay` are exposed.
+- Trader money path: added tests proving trader balance/metrics use backend wallet reserved-balance truth without zero fallback, deposits record only `korapay`/`manual` settlement truth, and unsupported gateways create no `MarketTopup`.
+- Regen creation: widened Build-a-Son/request-son external payment rejection to include `paystack`, `crypto`, and `usdt`; regen creation remains wallet-reservation spend only.
+- Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest backend/tests/wallets/test_wallet_http.py::test_korapay_provider_webhook_requires_valid_signature backend/tests/wallets/test_wallet_http.py::test_korapay_provider_webhook_duplicate_delivery_is_idempotent backend/tests/wallets/test_payment_gateway_service.py::test_payment_gateway_methods_ignore_paystack_from_state backend/tests/trader/test_trader_service.py::test_trader_balance_and_metrics_use_reserved_wallet_truth backend/tests/trader/test_trader_service.py::test_trader_deposits_record_only_korapay_and_manual_settlement_truth backend/tests/trader/test_trader_service.py::test_trader_deposit_rejects_unsupported_gateway_without_creating_topup backend/tests/regen/test_regen_creation_orders.py::test_request_son_rejects_external_payment_methods -q` -> 12 passed in 127.68s; `backend\_out.txt` was read and deleted.
+- Subagent verification also passed: wallet focused tests 3 passed, trader suite 18 passed, and regen focused test was re-run in the parent thread after a stale worker process was shut down.
+- Guard scan passed: `rg -n "paystack|crypto|bitcoin|ethereum|usdt|web3" backend/app/wallets backend/app/integrations/payments backend/app/trader backend/app/regen_creation` returned no product-code hits.
+- Test-scope forbidden-term scan found only explicit rejection/absence coverage in `backend/tests/wallets` and `backend/tests/regen`; `backend/tests/trader` was clean.
+- Blockers: none.

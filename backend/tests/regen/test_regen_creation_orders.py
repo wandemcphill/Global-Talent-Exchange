@@ -459,7 +459,10 @@ def test_request_son_requires_exactly_three_selected_traits(session) -> None:
     assert response.status_code == 422
 
 
-@pytest.mark.parametrize("payment_method", ["korapay", "manual", "bank_transfer_manual"])
+@pytest.mark.parametrize(
+    "payment_method",
+    ["korapay", "manual", "bank_transfer_manual", "paystack", "crypto", "usdt"],
+)
 def test_request_son_rejects_external_payment_methods(session, payment_method: str) -> None:
     user = _create_user(
         session,

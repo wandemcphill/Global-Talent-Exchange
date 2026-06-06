@@ -4,12 +4,9 @@ from datetime import date, datetime, timezone
 
 import app.models  # noqa: F401
 import pytest
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
 from app.ingestion.models import Player, PlayerImageMetadata
-from app.models.base import Base
 from app.models.regen import RegenProfile
 from app.services.regen_portrait_service import RegenPortraitService
 
@@ -34,16 +31,9 @@ FACE_RECIPE_FIELDS = {
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared full-schema engine with per-test rollback; avoids rebuilding 567 tables.
+    yield gtex_db_session
 
 
 def _regen_player(session) -> tuple[Player, RegenProfile]:

@@ -67,6 +67,12 @@ def test_payment_gateway_methods_ignore_paystack_from_state(monkeypatch, tmp_pat
                         "is_live": True,
                     },
                     {
+                        "provider": "crypto_fiat",
+                        "deposits_enabled": True,
+                        "withdrawals_enabled": True,
+                        "is_live": True,
+                    },
+                    {
                         "provider": "bank_transfer_manual",
                         "deposits_enabled": True,
                         "withdrawals_enabled": True,
@@ -87,6 +93,7 @@ def test_payment_gateway_methods_ignore_paystack_from_state(monkeypatch, tmp_pat
     methods = _service(tmp_path).list_methods()
 
     assert [method.method_key for method in methods] == ["bank_transfer_manual", "korapay"]
+    assert {method.provider_key for method in methods}.isdisjoint({"paystack", "crypto_fiat"})
 
 
 def test_noncanonical_payment_method_is_rejected(
