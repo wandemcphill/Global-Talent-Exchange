@@ -3,30 +3,20 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-import app.ingestion.models  # noqa: F401
-import app.ledger.models  # noqa: F401
-import app.models  # noqa: F401
-import app.orders.models  # noqa: F401
 from backend.tests.support.secrets import TEST_PASSWORD
 from app.auth.service import AuthService
 from app.core.config import load_settings
 from app.main import _ensure_initial_admin
-from app.models.base import Base
 from app.models.user import User, UserRole
 
 
-def _session_factory() -> sessionmaker:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+def _session_factory(gtex_db_session_factory: sessionmaker) -> sessionmaker:
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    return gtex_db_session_factory
 
 
 def test_load_settings_defaults_bootstrap_admin_to_disabled(tmp_path: Path) -> None:
@@ -42,8 +32,8 @@ def test_load_settings_defaults_bootstrap_admin_to_disabled(tmp_path: Path) -> N
     assert settings.bootstrap_admin_username is None
 
 
-def test_ensure_initial_admin_is_noop_when_disabled() -> None:
-    SessionLocal = _session_factory()
+def test_ensure_initial_admin_is_noop_when_disabled(gtex_db_session_factory) -> None:
+    SessionLocal = _session_factory(gtex_db_session_factory)
     settings = SimpleNamespace(
         bootstrap_admin_enabled=False,
         bootstrap_admin_email=None,
@@ -59,8 +49,8 @@ def test_ensure_initial_admin_is_noop_when_disabled() -> None:
         assert users == []
 
 
-def test_ensure_initial_admin_creates_super_admin_when_enabled() -> None:
-    SessionLocal = _session_factory()
+def test_ensure_initial_admin_creates_super_admin_when_enabled(gtex_db_session_factory) -> None:
+    SessionLocal = _session_factory(gtex_db_session_factory)
     settings = SimpleNamespace(
         bootstrap_admin_enabled=True,
         bootstrap_admin_email="bootstrap-admin@example.com",

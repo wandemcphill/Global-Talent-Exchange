@@ -6,20 +6,12 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 import pytest
 
 from backend.tests.support.secrets import TEST_PASSWORD
-import app.ingestion.models  # noqa: F401
-import app.ledger.models  # noqa: F401
-import app.models  # noqa: F401
-import app.orders.models  # noqa: F401
 from app.admin_godmode.router import router as admin_router
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.auth.service import AuthService
-from app.models.base import Base
 from app.models.treasury import PaymentMode
 from app.models.user import KycStatus, UserRole
 from app.policies.service import PolicyService
@@ -30,14 +22,10 @@ from app.models.wallet import LedgerEntryReason, LedgerUnit
 
 
 @pytest.fixture()
-def admin_wallet_context(tmp_path: Path):
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+def admin_wallet_context(tmp_path: Path, gtex_db_session_factory):
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    SessionLocal = gtex_db_session_factory
     session = SessionLocal()
     auth = AuthService()
     admin_user = auth.register_user(

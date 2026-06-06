@@ -5,29 +5,17 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-import app.ingestion.models  # noqa: F401
-import app.ledger.models  # noqa: F401
-import app.models  # noqa: F401
-import app.orders.models  # noqa: F401
 from app.admin_godmode.router import router as admin_router
 from app.auth.dependencies import get_current_admin, get_session
 from app.auth.service import AuthService
-from app.models.base import Base
 from app.models.user import UserRole
 
 
-def test_scoped_admin_bootstrap_returns_clean_403(tmp_path: Path) -> None:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+def test_scoped_admin_bootstrap_returns_clean_403(tmp_path: Path, gtex_db_session_factory) -> None:
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    SessionLocal = gtex_db_session_factory
     session = SessionLocal()
     scoped_admin = AuthService().ensure_admin_user(
         session,
@@ -57,4 +45,3 @@ def test_scoped_admin_bootstrap_returns_clean_403(tmp_path: Path) -> None:
     assert response.json()["detail"] == "Permission view_audit_log is required for this action."
 
     session.close()
-    engine.dispose()
