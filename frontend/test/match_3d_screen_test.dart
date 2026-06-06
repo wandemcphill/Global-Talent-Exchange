@@ -47,9 +47,6 @@ void main() {
   testWidgets('3D scene builds 22 players, one ball, and fixed aspect ratio', (
     WidgetTester tester,
   ) async {
-    final CompetitionSummary competition = _buildCompetition(
-      id: 'match-3d-scene-test',
-    );
     final MatchViewState viewState =
         buildBackendAuthored3dQuarantineViewState();
 

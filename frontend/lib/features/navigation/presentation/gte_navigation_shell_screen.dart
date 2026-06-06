@@ -799,7 +799,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       case GtexSurfaceState.degraded:
         return 'Degraded';
       case GtexSurfaceState.confirmed:
-      case GtexSurfaceState.data:
         return 'Live';
       case GtexSurfaceState.reconnecting:
         return 'Reconnecting';
@@ -870,7 +869,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       case GtexSurfaceState.reconnecting:
         return 'Realtime activity is reconnecting.';
       case GtexSurfaceState.confirmed:
-      case GtexSurfaceState.data:
         return 'This module is ready for operational decisions.';
       case GtexSurfaceState.error:
         return 'This module could not load from GTEX services.';

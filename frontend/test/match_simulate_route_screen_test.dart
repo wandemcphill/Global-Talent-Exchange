@@ -11,8 +11,11 @@ void main() {
       const MaterialApp(home: MatchSimulateRouteScreen()),
     );
 
-    expect(find.text('Coming soon'), findsWidgets);
-    expect(find.text('Route blocked'), findsOneWidget);
+    expect(find.text('Route blocked'), findsWidgets);
+    expect(
+      find.textContaining('Local match tools are quarantined'),
+      findsWidgets,
+    );
     expect(find.text('Launch simulation'), findsNothing);
   });
 }

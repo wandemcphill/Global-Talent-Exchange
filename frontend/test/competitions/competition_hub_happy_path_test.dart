@@ -60,31 +60,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.dragUntilVisible(
-        find.text('Live fixture desk'),
-        find.byType(ListView).first,
-        const Offset(0, -300),
-      );
-      await tester.pumpAndSettle();
+      await _dragUntilTextVisible(tester, 'Live competition desk');
 
-      expect(find.text('Live fixture desk'), findsOneWidget);
+      expect(find.text('Live competition desk'), findsOneWidget);
       expect(find.text('GTEX Spotlight Cup'), findsWidgets);
 
-      await tester.dragUntilVisible(
-        find.text('User-created competitions'),
-        find.byType(ListView).first,
-        const Offset(0, -300),
-      );
-      await tester.pumpAndSettle();
+      await _dragUntilTextVisible(tester, 'User-created competitions');
 
       expect(find.text('User-created competitions'), findsOneWidget);
 
-      await tester.dragUntilVisible(
-        find.text('Featured now'),
-        find.byType(ListView).first,
-        const Offset(0, -300),
-      );
-      await tester.pumpAndSettle();
+      await _dragUntilTextVisible(tester, 'Featured now');
 
       expect(find.text('Featured now'), findsOneWidget);
     },
@@ -149,57 +134,23 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.dragUntilVisible(
-        find.text('Live fixture desk'),
-        find.byType(ListView).first,
-        const Offset(0, -300),
-      );
-      await tester.dragUntilVisible(
-        find.text('Arena Live League'),
-        find.byType(ListView).first,
-        const Offset(0, -200),
-      );
-      await tester.pumpAndSettle();
+      await _dragUntilTextVisible(tester, 'Live competition desk');
+      await _dragUntilTextVisible(tester, 'Arena Live League');
       expect(find.text('Arena Live League'), findsWidgets);
 
-      await tester.dragUntilVisible(
-        find.text('Up Next Creator Cup'),
-        find.byType(ListView).first,
-        const Offset(0, -200),
-      );
-      await tester.pumpAndSettle();
+      await _dragUntilTextVisible(tester, 'Up Next Creator Cup');
       expect(find.text('Up Next Creator Cup'), findsWidgets);
 
-      await tester.dragUntilVisible(
-        find.text('Recently settled'),
-        find.byType(ListView).first,
-        const Offset(0, -300),
-      );
-      await tester.pumpAndSettle();
+      await _dragUntilTextVisible(tester, 'Recently settled');
       expect(find.text('Recently settled'), findsOneWidget);
 
-      await tester.dragUntilVisible(
-        find.text('Replay Showcase Cup'),
-        find.byType(ListView).first,
-        const Offset(0, -200),
-      );
-      await tester.pumpAndSettle();
+      await _dragUntilTextVisible(tester, 'Replay Showcase Cup');
       expect(find.text('Replay Showcase Cup'), findsWidgets);
 
-      await tester.dragUntilVisible(
-        find.text('Highlight-ready competitions'),
-        find.byType(ListView).first,
-        const Offset(0, -300),
-      );
-      await tester.pumpAndSettle();
+      await _dragUntilTextVisible(tester, 'Highlight-ready competitions');
       expect(find.text('Highlight-ready competitions'), findsOneWidget);
 
-      await tester.dragUntilVisible(
-        find.text('Final Whistle Classic'),
-        find.byType(ListView).first,
-        const Offset(0, -200),
-      );
-      await tester.pumpAndSettle();
+      await _dragUntilTextVisible(tester, 'Final Whistle Classic');
       expect(find.text('Final Whistle Classic'), findsWidgets);
     },
   );
@@ -231,12 +182,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.dragUntilVisible(
-      find.text('Host your own competition'),
-      find.byType(ListView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
+    await _dragUntilTextVisible(tester, 'Host your own competition');
 
     expect(find.text('Create competition'), findsWidgets);
     expect(find.text('Request creator access to host'), findsNothing);
@@ -272,12 +218,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.dragUntilVisible(
-      find.text('Host your own competition'),
-      find.byType(ListView).first,
-      const Offset(0, -300),
-    );
-    await tester.pumpAndSettle();
+    await _dragUntilTextVisible(tester, 'Host your own competition');
 
     expect(find.text('Create competition'), findsWidgets);
     expect(find.text('Request creator access to host'), findsNothing);
@@ -287,11 +228,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Create competition'), findsWidgets);
-    await tester.scrollUntilVisible(
-      find.text('Preview & publish'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _dragUntilTextVisible(tester, 'Preview & publish');
     expect(find.text('Preview & publish'), findsOneWidget);
     expect(openedCreatorAccess, isFalse);
   });
@@ -336,4 +273,23 @@ CompetitionSummary _competition({
     createdAt: updatedAt.subtract(const Duration(days: 1)),
     updatedAt: updatedAt,
   );
+}
+
+Future<void> _dragUntilTextVisible(
+  WidgetTester tester,
+  String text, {
+  int maxDrags = 24,
+}) async {
+  final Finder textFinder = find.text(text);
+  final Finder scrollable = find.byType(Scrollable).first;
+  for (int attempt = 0; attempt < maxDrags; attempt += 1) {
+    if (textFinder.evaluate().isNotEmpty) {
+      await tester.ensureVisible(textFinder);
+      await tester.pump();
+      return;
+    }
+    await tester.drag(scrollable, const Offset(0, -500));
+    await tester.pump();
+  }
+  expect(textFinder, findsOneWidget);
 }

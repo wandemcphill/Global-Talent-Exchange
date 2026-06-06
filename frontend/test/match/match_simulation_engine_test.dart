@@ -2,123 +2,95 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/features/match_center/data/match/match_simulation_engine.dart';
 import 'package:gte_frontend/features/match_center/data/match/match_simulation_models.dart';
 import 'package:gte_frontend/features/match_center/data/match/match_value_engine.dart';
-import 'package:gte_frontend/features/match_center/models/match_event.dart';
-import 'package:gte_frontend/features/match_center/models/match_timeline_frame.dart';
-import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
-import 'package:gte_frontend/services/fairness_indicator_service.dart';
 
 void main() {
-  test('simulation stays deterministic and rewards midfield control', () {
-    final MatchSimulationRequest request = MatchSimulationRequest(
-      matchId: 'deterministic-sim',
-      seed: 19,
-      importance: MatchSimulationImportance.quickMatch,
-      homeTeam: MatchSimulationTeam(
-        id: 'home',
-        name: 'Atlas City',
-        shortName: 'ATL',
-        formation: '4-3-3',
-        primaryColorHex: '#173F7A',
-        secondaryColorHex: '#F4F7FB',
-        accentColorHex: '#F59E0B',
-        goalkeeperColorHex: '#0F172A',
-        attack: 82,
-        midfield: 78,
-        defense: 75,
-        goalkeeper: 79,
-        tactics: MatchSimulationTactics(
-          style: MatchSimulationStyle.possession,
-          pressing: MatchSimulationPressing.high,
-          tempo: MatchSimulationTempo.fast,
+  test(
+    'local match event generation is disabled for the canonical match center',
+    () {
+      final MatchSimulationRequest request = MatchSimulationRequest(
+        matchId: 'deterministic-sim',
+        seed: 19,
+        importance: MatchSimulationImportance.quickMatch,
+        homeTeam: MatchSimulationTeam(
+          id: 'home',
+          name: 'Atlas City',
+          shortName: 'ATL',
+          formation: '4-3-3',
+          primaryColorHex: '#173F7A',
+          secondaryColorHex: '#F4F7FB',
+          accentColorHex: '#F59E0B',
+          goalkeeperColorHex: '#0F172A',
+          attack: 82,
+          midfield: 78,
+          defense: 75,
+          goalkeeper: 79,
+          tactics: MatchSimulationTactics(
+            style: MatchSimulationStyle.possession,
+            pressing: MatchSimulationPressing.high,
+            tempo: MatchSimulationTempo.fast,
+          ),
+          players: <MatchSimulationPlayer>[
+            _player('home-gk', 'A. Keeper', 'GK', 74),
+            _player('home-rb', 'B. Back', 'RB', 73),
+            _player('home-cb1', 'C. Centre', 'CB', 75),
+            _player('home-cb2', 'D. Marker', 'CB', 74),
+            _player('home-lb', 'E. Fullback', 'LB', 73),
+            _player('home-dm', 'F. Shield', 'DM', 77),
+            _player('home-cm1', 'G. Progressor', 'CM', 79),
+            _player('home-cm2', 'H. Creator', 'CM', 78),
+            _player('home-rw', 'I. Winger', 'RW', 81),
+            _player('home-st', 'J. Finisher', 'ST', 84),
+            _player('home-lw', 'K. Inside', 'LW', 80),
+          ],
         ),
-        players: <MatchSimulationPlayer>[
-          _player('home-gk', 'A. Keeper', 'GK', 74),
-          _player('home-rb', 'B. Back', 'RB', 73),
-          _player('home-cb1', 'C. Centre', 'CB', 75),
-          _player('home-cb2', 'D. Marker', 'CB', 74),
-          _player('home-lb', 'E. Fullback', 'LB', 73),
-          _player('home-dm', 'F. Shield', 'DM', 77),
-          _player('home-cm1', 'G. Progressor', 'CM', 79),
-          _player('home-cm2', 'H. Creator', 'CM', 78),
-          _player('home-rw', 'I. Winger', 'RW', 81),
-          _player('home-st', 'J. Finisher', 'ST', 84),
-          _player('home-lw', 'K. Inside', 'LW', 80),
-        ],
-      ),
-      awayTeam: MatchSimulationTeam(
-        id: 'away',
-        name: 'Northbridge',
-        shortName: 'NOR',
-        formation: '4-3-3',
-        primaryColorHex: '#B42318',
-        secondaryColorHex: '#FFF3F2',
-        accentColorHex: '#FDB022',
-        goalkeeperColorHex: '#111827',
-        attack: 76,
-        midfield: 74,
-        defense: 80,
-        goalkeeper: 82,
-        tactics: MatchSimulationTactics(
-          style: MatchSimulationStyle.counter,
-          pressing: MatchSimulationPressing.low,
-          tempo: MatchSimulationTempo.medium,
+        awayTeam: MatchSimulationTeam(
+          id: 'away',
+          name: 'Northbridge',
+          shortName: 'NOR',
+          formation: '4-3-3',
+          primaryColorHex: '#B42318',
+          secondaryColorHex: '#FFF3F2',
+          accentColorHex: '#FDB022',
+          goalkeeperColorHex: '#111827',
+          attack: 76,
+          midfield: 74,
+          defense: 80,
+          goalkeeper: 82,
+          tactics: MatchSimulationTactics(
+            style: MatchSimulationStyle.counter,
+            pressing: MatchSimulationPressing.low,
+            tempo: MatchSimulationTempo.medium,
+          ),
+          players: <MatchSimulationPlayer>[
+            _player('away-gk', 'L. Stopper', 'GK', 78),
+            _player('away-rb', 'M. Back', 'RB', 77),
+            _player('away-cb1', 'N. Centre', 'CB', 79),
+            _player('away-cb2', 'O. Marker', 'CB', 78),
+            _player('away-lb', 'P. Fullback', 'LB', 76),
+            _player('away-dm', 'Q. Anchor', 'DM', 75),
+            _player('away-cm1', 'R. Carrier', 'CM', 74),
+            _player('away-cm2', 'S. Runner', 'CM', 74),
+            _player('away-rw', 'T. Outlet', 'RW', 76),
+            _player('away-st', 'U. Breaker', 'ST', 79),
+            _player('away-lw', 'V. Sprint', 'LW', 76),
+          ],
         ),
-        players: <MatchSimulationPlayer>[
-          _player('away-gk', 'L. Stopper', 'GK', 78),
-          _player('away-rb', 'M. Back', 'RB', 77),
-          _player('away-cb1', 'N. Centre', 'CB', 79),
-          _player('away-cb2', 'O. Marker', 'CB', 78),
-          _player('away-lb', 'P. Fullback', 'LB', 76),
-          _player('away-dm', 'Q. Anchor', 'DM', 75),
-          _player('away-cm1', 'R. Carrier', 'CM', 74),
-          _player('away-cm2', 'S. Runner', 'CM', 74),
-          _player('away-rw', 'T. Outlet', 'RW', 76),
-          _player('away-st', 'U. Breaker', 'ST', 79),
-          _player('away-lw', 'V. Sprint', 'LW', 76),
-        ],
-      ),
-    );
+      );
 
-    final MatchSimulationResult first = const MatchSimulationEngine().simulate(
-      request,
-    );
-    final MatchSimulationResult second = const MatchSimulationEngine().simulate(
-      request,
-    );
-
-    expect(
-      first.homeStats.possessionPct,
-      greaterThan(first.awayStats.possessionPct),
-    );
-    expect(first.homeStats.possessionPct, second.homeStats.possessionPct);
-    expect(first.homeScore, second.homeScore);
-    expect(first.awayScore, second.awayScore);
-    expect(first.timelineEvents.last.type, MatchViewerEventType.fulltime);
-    expect(first.viewState.frames, isNotEmpty);
-    expect(first.playerPerformances.first.nextValueCredits, greaterThan(0));
-    expect(first.homeStats.averageStaminaPct, lessThan(100));
-    expect(
-      first.homeStats.recoveries + first.awayStats.recoveries,
-      greaterThan(0),
-    );
-    expect(
-      first.viewState.frames.any(
-        (frame) => frame.players.any(
-          (player) =>
-              player.animationState == MatchPlayerAnimationState.shoot ||
-              player.animationState == MatchPlayerAnimationState.pass ||
-              player.animationState == MatchPlayerAnimationState.intercept ||
-              player.animationState == MatchPlayerAnimationState.recover,
+      expect(
+        () => const MatchSimulationEngine().simulate(request),
+        throwsA(
+          isA<UnsupportedError>().having(
+            (UnsupportedError error) => error.message,
+            'message',
+            contains(
+              'Local match event generation is disabled for the canonical match center',
+            ),
+          ),
         ),
-      ),
-      isTrue,
-    );
-    expect(first.viewState.fairnessIndicator.serverAuthoritative, isFalse);
-    expect(
-      FairnessIndicatorService.verify(first.viewState),
-      MatchVerificationStatus.unverified,
-    );
-  });
+      );
+    },
+  );
 
   test('value engine applies match-performance multipliers and decay', () {
     final MatchSimulationPlayer attacker = _player(
@@ -200,7 +172,7 @@ void main() {
     );
   });
 
-  test('local simulation preview exposes an unverified fairness badge', () {
+  test('local simulation preview generation is quarantined', () {
     final MatchSimulationRequest request = MatchSimulationRequest(
       matchId: 'preview-fairness',
       seed: 33,
@@ -270,16 +242,18 @@ void main() {
       ),
     );
 
-    final MatchSimulationResult result = const MatchSimulationEngine().simulate(
-      request,
+    expect(
+      () => const MatchSimulationEngine().simulate(request),
+      throwsA(
+        isA<UnsupportedError>().having(
+          (UnsupportedError error) => error.message,
+          'message',
+          contains(
+            'Local match event generation is disabled for the canonical match center',
+          ),
+        ),
+      ),
     );
-    final FairnessBadgeState badge = FairnessIndicatorService.build(
-      result.viewState,
-    );
-
-    expect(badge.status, MatchVerificationStatus.unverified);
-    expect(badge.label, 'Preview Mode');
-    expect(badge.message, contains('authoritative server'));
   });
 }
 

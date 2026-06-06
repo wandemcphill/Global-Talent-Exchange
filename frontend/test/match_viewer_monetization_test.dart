@@ -32,7 +32,6 @@ void main() {
           presentationMode: Object(),
           renderMode: Object(),
           entitlement: Object(),
-          monetizationService: Object(),
         ),
       ),
     );

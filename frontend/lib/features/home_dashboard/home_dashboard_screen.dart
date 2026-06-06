@@ -1497,7 +1497,6 @@ class _CompactStateNotice extends StatelessWidget {
       GtexSurfaceState.reconnecting => Icons.wifi_find_rounded,
       GtexSurfaceState.degraded => Icons.warning_amber_rounded,
       GtexSurfaceState.confirmed => Icons.verified_outlined,
-      GtexSurfaceState.data => Icons.dataset_outlined,
       GtexSurfaceState.error => Icons.error_outline_rounded,
     };
   }
@@ -1512,7 +1511,6 @@ class _CompactStateNotice extends StatelessWidget {
       GtexSurfaceState.reconnecting => 'Realtime reconnecting',
       GtexSurfaceState.degraded => 'Live confidence reduced',
       GtexSurfaceState.confirmed => 'Confirmed',
-      GtexSurfaceState.data => 'Backend data available',
       GtexSurfaceState.error => 'Unable to load',
     };
   }
@@ -1534,8 +1532,6 @@ class _CompactStateNotice extends StatelessWidget {
       GtexSurfaceState.degraded =>
         'Confirmed records are visible, but one live signal is delayed.',
       GtexSurfaceState.confirmed => 'The backend has confirmed this surface.',
-      GtexSurfaceState.data =>
-        'Backend-authored data is available for this surface.',
       GtexSurfaceState.error => 'Retry after the service is reachable.',
     };
   }

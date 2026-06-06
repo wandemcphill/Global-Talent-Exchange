@@ -301,7 +301,6 @@ class _SquadReadinessLaneTile extends StatelessWidget {
   Color _colorFor(GtexSurfaceState state) {
     switch (state) {
       case GtexSurfaceState.confirmed:
-      case GtexSurfaceState.data:
         return GteShellTheme.positive;
       case GtexSurfaceState.blocked:
       case GtexSurfaceState.error:
