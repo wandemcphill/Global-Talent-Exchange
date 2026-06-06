@@ -1,23 +1,12 @@
 from __future__ import annotations
 
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
 
-from app.core.database import load_model_modules
 from app.core.events import InMemoryEventPublisher
-from app.models.base import Base
 from app.models.event_backbone import EventOutbox
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
-
-
-def _build_session_factory(tmp_path):
-    database_url = f"sqlite+pysqlite:///{(tmp_path / 'wallet-events.db').as_posix()}"
-    load_model_modules()
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    Base.metadata.create_all(engine)
-    return engine, sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
 def _create_user(session, *, suffix: str = "1") -> User:
@@ -31,8 +20,8 @@ def _create_user(session, *, suffix: str = "1") -> User:
     return user
 
 
-def test_wallet_transaction_is_outboxed_and_published_after_commit(tmp_path) -> None:
-    engine, session_factory = _build_session_factory(tmp_path)
+def test_wallet_transaction_is_outboxed_and_published_after_commit(gtex_db_session_factory) -> None:
+    session_factory = gtex_db_session_factory
     publisher = InMemoryEventPublisher()
 
     with session_factory() as session:
@@ -62,4 +51,3 @@ def test_wallet_transaction_is_outboxed_and_published_after_commit(tmp_path) -> 
     assert "wallet.transaction.appended" in event_names
     assert "wallet_credit_applied" in event_names
     assert "wallet.balance.updated" in event_names
-    engine.dispose()
