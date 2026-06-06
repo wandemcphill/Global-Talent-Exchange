@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 import pytest
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
 from backend.tests.support.secrets import ALTERNATE_TEST_PASSWORD, TEST_PASSWORD, WRONG_TEST_PASSWORD
 from app.access_control.service import AccessControlService
@@ -17,23 +15,17 @@ from app.auth.service import (
     InvalidCredentialsError,
     InvalidSessionError,
 )
-from app.models import AuthSession, Base, ClubProfile, LedgerAccount, LedgerUnit, UserWallet
+from app.models import AuthSession, ClubProfile, LedgerAccount, LedgerUnit, UserWallet
 from app.models.user import PublicAccountType
 from app.schemas.club_requests import ClubCreateRequest
 from app.services.club_branding_service import ClubBrandingService
 
 
 @pytest.fixture()
-def session():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
+def session(gtex_db_session):
+    # Shared session-scoped schema (tests/conftest.py::gtex_db_engine) with
+    # per-test rollback, instead of rebuilding all ~567 tables per test.
+    yield gtex_db_session
 
 
 def test_register_user_creates_default_accounts(session) -> None:
