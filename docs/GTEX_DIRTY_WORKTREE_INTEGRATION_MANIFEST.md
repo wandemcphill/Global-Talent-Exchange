@@ -1069,3 +1069,18 @@ Scope: backend admin-finance export readiness, worker completion, and scoped rea
 - Guard scan passed: `rg -n "Paystack|crypto|Unity|SceneKit|Babylon|pseudo-3D|native 3D" backend/app/admin_finance backend/app/workers backend/app/realtime backend/tests/admin_finance backend/tests/realtime` returned no hits.
 - Verification passed: scoped `git diff --check` for Thread 5 owned paths and the manifest returned exit code 0; console noise was CRLF normalization warnings only.
 - Blockers: none.
+
+## Thread 1 Handoff Update - 2026-06-06 Backend Test-Speed / Full Suite Finishability
+
+Scope: continued the backend test DB schema speedup rollout on `feature/original-visual-runtime`; edits stayed within `backend\tests` plus this manifest, and no production code, Alembic, frontend, or workflow files were edited by this thread.
+
+- Confirmed `backend\tests\conftest.py` already provides `gtex_db_engine`, `gtex_db_session`, and `gtex_db_session_factory`; no fixture scaffold change was needed.
+- Migrated `backend\tests\admin_godmode\test_bootstrap_admin.py`, `test_router_permissions.py`, `test_payment_rails_truth.py`, and `test_withdrawal_controls.py` from local full-schema in-memory engines to `gtex_db_session_factory`.
+- Migrated `backend\tests\auth\test_auth_service.py` from a local full-schema session fixture to `gtex_db_session`.
+- Skipped selective `tables=[...]` create-all fixtures discovered by the read-only classifier because they are cheap subset schemas and outside the migration target.
+- Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest tests/admin_godmode -p no:cacheprovider -q` -> 10 passed in 220.83s; `backend\_out.txt` was read and deleted.
+- Verification passed via required `backend\_out.txt` handling after waiting for other pytest jobs to release the shared file: `C:\Python314\python.exe -m pytest tests/auth/test_auth_service.py -p no:cacheprovider -q` -> 8 passed in 138.10s; `backend\_out.txt` was read and deleted.
+- Verification passed: `C:\Python314\python.exe -m py_compile backend/tests/admin_godmode/test_bootstrap_admin.py backend/tests/admin_godmode/test_router_permissions.py backend/tests/admin_godmode/test_payment_rails_truth.py backend/tests/admin_godmode/test_withdrawal_controls.py backend/tests/auth/test_auth_service.py`.
+- Verification passed: scoped `git diff --check` for the migrated admin_godmode and auth service files returned exit code 0; console noise was CRLF normalization warnings only.
+- Commits created: `c2f70df2` (`perf(backend-tests): migrate admin godmode DB tests to shared schema`) and `f199c654` (`perf(backend-tests): migrate auth service DB tests to shared schema`).
+- Blocker/coordination note: this repo had multiple concurrent backend pytest workers using the shared `backend\_out.txt`; unverified auth router/frictionless fixture edits were manually unwound rather than committed. Continue remaining full-schema candidates one file at a time when the shared pytest output lane is idle.
