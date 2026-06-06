@@ -935,3 +935,12 @@ Scope: started Section 6 of `CODEX_TEST_DB_FIXTURE_HANDOFF.md`, the factory-patt
 - Verification passed: `python -m pytest tests\admin_access\test_admin_access_role_scoping.py -p no:cacheprovider -q` -> 9 passed in 359.42s.
 - Commits created: `3ce71dfa` (factory fixture + player share-market prototype), `f8440fa3` (sponsorship offer service), `2e9c3101` (admin access).
 - Remaining work: many full-schema `Base.metadata.create_all(engine)` tests still exist outside the named Section 6 examples; continue one file at a time, with revert-and-skip for factory behavior drift.
+## Main Handoff Update - 2026-06-05 Backend Import Cost Reduction (Provider Requests)
+
+Scope: deferred third-party `requests` imports in the football provider adapters without changing provider behavior.
+
+- Made `requests` lazy in `backend/app/providers/api_sports_adapter.py`, `backend/app/providers/football_data_adapter.py`, and `backend/app/providers/sportmonks_adapter.py`; each adapter now imports it inside `__init__` immediately before `requests.Session()`.
+- Before evidence: `python -X importtime -c "import app.main"` cumulative `app.main` was `354,404,527 us`; `app.providers` was `37,499,584 us`; third-party `requests` loaded under `app.providers` with cumulative `36,380,045 us`.
+- After evidence: `python -X importtime -c "import app.main"` cumulative `app.main` is `164,645,081 us`; `app.providers` is `4,754,991 us`; third-party `requests` no longer appears in the provider import chain. Remaining `requests` text matches are only `starlette.requests` and `fastapi.requests`.
+- OpenTelemetry remains absent from the import-time search output.
+- Verification passed: `python -m pytest tests/wallets/test_payment_gateway_service.py tests/integration/test_payment_gateway.py -p no:cacheprovider -q` -> 7 passed in 164.29s.

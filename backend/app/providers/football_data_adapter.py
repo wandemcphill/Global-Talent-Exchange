@@ -7,8 +7,6 @@ import time
 from typing import TYPE_CHECKING
 from typing import Any
 
-import requests
-
 from app.ingestion.constants import ENV_FOOTBALL_DATA_API_KEY, ENV_FOOTBALL_DATA_BASE_URL
 from app.ingestion.schemas import ProviderHealthSnapshot, RecentUpdateFeed
 
@@ -23,6 +21,8 @@ class FootballDataAdapter(BaseFootballProvider):
     name = "football_data"
 
     def __init__(self, *, settings: Settings | None = None) -> None:
+        import requests
+
         self.base_url = (
             settings.football_data_base_url
             if settings is not None
