@@ -5,9 +5,6 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 import app.ingestion.models  # noqa: F401
 import app.market.read_models  # noqa: F401
@@ -18,20 +15,15 @@ from app.ingestion.models import Player
 from app.market.projections import MarketSummaryProjector
 from app.market.router import router
 from app.market.service import MarketEngine
-from app.models.base import Base
 from app.players.read_models import PlayerSummaryReadModel
 from app.value_engine.read_models import PlayerValueSnapshotRecord
 
 
 @pytest.fixture()
-def pricing_api():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+def pricing_api(gtex_db_session_factory):
+    # Shared session-scoped schema with per-test rollback, instead of rebuilding
+    # the full ORM metadata for every test in this module.
+    SessionLocal = gtex_db_session_factory
     session = SessionLocal()
 
     app = FastAPI()
