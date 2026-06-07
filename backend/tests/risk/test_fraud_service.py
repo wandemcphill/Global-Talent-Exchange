@@ -2,12 +2,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
 
-from app.core.database import load_model_modules
 from app.core.events import InMemoryEventPublisher
-from app.models.base import Base
 from app.models.risk_ops import FraudCase, SystemEvent
 from app.models.treasury import RateDirection
 from app.models.user import User
@@ -16,14 +13,6 @@ from app.risk.fraud_service import FraudDetectionService
 from app.treasury.service import TreasuryService
 from app.wallets.rail_service import WalletRailService
 from app.wallets.service import LedgerPosting, WalletService
-
-
-def _build_session_factory(tmp_path):
-    database_url = f"sqlite+pysqlite:///{(tmp_path / 'fraud-service.db').as_posix()}"
-    load_model_modules()
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
-    Base.metadata.create_all(engine)
-    return engine, sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
 def _create_user(session, *, suffix: str = "1") -> User:
@@ -46,8 +35,8 @@ def _configure_treasury(session) -> None:
     session.flush()
 
 
-def test_fraud_service_creates_case_and_alert_for_large_wallet_movement(tmp_path) -> None:
-    engine, session_factory = _build_session_factory(tmp_path)
+def test_fraud_service_creates_case_and_alert_for_large_wallet_movement(gtex_db_session_factory) -> None:
+    session_factory = gtex_db_session_factory
     publisher = InMemoryEventPublisher()
     publisher.subscribe(
         FraudDetectionService(
@@ -79,11 +68,12 @@ def test_fraud_service_creates_case_and_alert_for_large_wallet_movement(tmp_path
     assert any(case.fraud_type == "large_wallet_movement" for case in fraud_cases)
     assert len(system_events) >= 1
     assert any(event.name == "risk.fraud.detected" for event in publisher.published_events)
-    engine.dispose()
 
 
-def test_fraud_service_flags_duplicate_deposit_candidate_from_purchase_order_reference_reuse(tmp_path) -> None:
-    engine, session_factory = _build_session_factory(tmp_path)
+def test_fraud_service_flags_duplicate_deposit_candidate_from_purchase_order_reference_reuse(
+    gtex_db_session_factory,
+) -> None:
+    session_factory = gtex_db_session_factory
     publisher = InMemoryEventPublisher()
     publisher.subscribe(
         FraudDetectionService(
@@ -136,11 +126,12 @@ def test_fraud_service_flags_duplicate_deposit_candidate_from_purchase_order_ref
     assert fraud_case is not None
     assert fraud_case.metadata_json["external_reference"] == "dup-deposit-candidate-ref"
     assert fraud_case.metadata_json["purchase_order_count"] == 2
-    engine.dispose()
 
 
-def test_fraud_service_flags_duplicate_deposit_replay_when_reference_credits_twice(tmp_path) -> None:
-    engine, session_factory = _build_session_factory(tmp_path)
+def test_fraud_service_flags_duplicate_deposit_replay_when_reference_credits_twice(
+    gtex_db_session_factory,
+) -> None:
+    session_factory = gtex_db_session_factory
     publisher = InMemoryEventPublisher()
     publisher.subscribe(
         FraudDetectionService(
@@ -206,4 +197,3 @@ def test_fraud_service_flags_duplicate_deposit_replay_when_reference_credits_twi
     assert replay_case is not None
     assert replay_case.metadata_json["external_reference"] == "dup-deposit-replay-ref"
     assert replay_case.metadata_json["duplicate_transaction_count"] == 2
-    engine.dispose()
