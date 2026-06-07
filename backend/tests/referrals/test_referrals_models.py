@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from alembic import command
 from sqlalchemy import create_engine, inspect
-from sqlalchemy.orm import sessionmaker
 import pytest
 
 from app.core.database import build_alembic_config
@@ -88,50 +87,42 @@ def test_share_code_generation_supports_vanity_and_generated_codes() -> None:
     assert generated_code.code != vanity_code.code
 
 
-def test_referral_reward_ledger_is_append_only() -> None:
-    engine = create_engine("sqlite+pysqlite:///:memory:", connect_args={"check_same_thread": False})
-    Base.metadata.create_all(engine)
-    session_local = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+def test_referral_reward_ledger_is_append_only(gtex_db_session) -> None:
+    reward = ReferralReward(
+        id="reward-1",
+        reward_key="event-1:points:user-1",
+        referred_user_id="user-2",
+        beneficiary_user_id="user-1",
+        trigger_event_type="verification_completed",
+        reward_type="points",
+        status="approved",
+        reward_amount=100,
+        reward_unit="points",
+        reward_payload_json={},
+    )
+    gtex_db_session.add(reward)
+    gtex_db_session.commit()
 
-    try:
-        with session_local() as session:
-            reward = ReferralReward(
-                id="reward-1",
-                reward_key="event-1:points:user-1",
-                referred_user_id="user-2",
-                beneficiary_user_id="user-1",
-                trigger_event_type="verification_completed",
-                reward_type="points",
-                status="approved",
-                reward_amount=100,
-                reward_unit="points",
-                reward_payload_json={},
-            )
-            session.add(reward)
-            session.commit()
+    entry = ReferralRewardLedger(
+        entry_key="reward-1:created",
+        reward_id="reward-1",
+        entry_type="reward_created",
+        amount=100,
+        unit="points",
+        status_after="approved",
+        reference_id="reward-1",
+        payload_json={"community_growth": True},
+    )
+    gtex_db_session.add(entry)
+    gtex_db_session.commit()
 
-            entry = ReferralRewardLedger(
-                entry_key="reward-1:created",
-                reward_id="reward-1",
-                entry_type="reward_created",
-                amount=100,
-                unit="points",
-                status_after="approved",
-                reference_id="reward-1",
-                payload_json={"community_growth": True},
-            )
-            session.add(entry)
-            session.commit()
+    entry.payload_json = {"community_growth": False}
+    with pytest.raises(ValueError, match="append-only"):
+        gtex_db_session.commit()
+    gtex_db_session.rollback()
 
-            entry.payload_json = {"community_growth": False}
-            with pytest.raises(ValueError, match="append-only"):
-                session.commit()
-            session.rollback()
-
-            persisted = session.get(ReferralRewardLedger, entry.id)
-            assert persisted is not None
-            session.delete(persisted)
-            with pytest.raises(ValueError, match="append-only"):
-                session.commit()
-    finally:
-        engine.dispose()
+    persisted = gtex_db_session.get(ReferralRewardLedger, entry.id)
+    assert persisted is not None
+    gtex_db_session.delete(persisted)
+    with pytest.raises(ValueError, match="append-only"):
+        gtex_db_session.commit()
