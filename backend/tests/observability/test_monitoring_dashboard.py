@@ -6,16 +6,12 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from backend.tests.support.secrets import TEST_PASSWORD_HASH
 from app.auth.dependencies import get_current_admin, get_session
-from app.core.database import load_model_modules
 from app.core.events import InMemoryEventPublisher
 from app.live_matches.service import ensure_live_match_hub
 from app.models.event_backbone import CompetitionQueueRecord, EventOutbox
-from app.models.base import Base
 from app.models.risk_ops import AuditLog
 from app.models.treasury import TreasuryAuditEvent
 from app.models.user import User, UserRole
@@ -52,16 +48,8 @@ class _HealthyCacheBackend:
             cls._store.pop(key, None)
 
 
-def test_monitoring_dashboard_reports_transaction_and_fraud_signals(tmp_path) -> None:
-    database_path = tmp_path / "monitoring-dashboard.db"
-    load_model_modules()
-    engine = create_engine(
-        f"sqlite+pysqlite:///{database_path.as_posix()}",
-        connect_args={"check_same_thread": False},
-    )
-    Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-
+def test_monitoring_dashboard_reports_transaction_and_fraud_signals(gtex_db_session_factory) -> None:
+    session_factory = gtex_db_session_factory
     publisher = InMemoryEventPublisher()
     alert_system = AlertSystem()
     realtime = RealtimeHub()
@@ -137,19 +125,9 @@ def test_monitoring_dashboard_reports_transaction_and_fraud_signals(tmp_path) ->
     assert body["fraud"]["open_fraud_cases"] >= 1
     assert "large_wallet_movement" in body["alerts"]["by_type"]
 
-    engine.dispose()
 
-
-def test_platform_infra_dashboard_reports_runtime_contracts(tmp_path) -> None:
-    database_path = tmp_path / "platform-infra-dashboard.db"
-    load_model_modules()
-    engine = create_engine(
-        f"sqlite+pysqlite:///{database_path.as_posix()}",
-        connect_args={"check_same_thread": False},
-    )
-    Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-
+def test_platform_infra_dashboard_reports_runtime_contracts(gtex_db_session_factory) -> None:
+    session_factory = gtex_db_session_factory
     with session_factory() as session:
         admin = User(
             email="platform-infra-admin@example.com",
@@ -330,8 +308,6 @@ def test_platform_infra_dashboard_reports_runtime_contracts(tmp_path) -> None:
     assert body["audit"]["treasury_audit_events_24h"] == 1
     assert body["audit"]["blocked_rate_limit_events_24h"] == 1
     assert body["audit"]["top_actions"]["api.rate_limited"] == 1
-
-    engine.dispose()
 
 
 def test_live_match_center_dashboard_and_alert_rules_cover_p6_failure_modes() -> None:
