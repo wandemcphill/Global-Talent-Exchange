@@ -77,6 +77,12 @@ Coordinator scope: this document tracks production readiness, worker ownership, 
 
 No fake fixture mode, production workaround, route promotion, payment-rail change, generated contract staging, or source behavior edit was introduced by this validation pass.
 
+## Stage 2B Backend Test-Speed Follow-up - 2026-06-08
+
+| Gate / shard | Change | Result | Evidence | Coordinator note |
+| --- | --- | --- | --- | --- |
+| Backend wallet service shared fixture migration | `backend/tests/wallets/test_wallet_service.py` now uses the shared `gtex_db_session` rollback fixture instead of a file-local migrated SQLite template plus per-test DB copy; multi-session atomic transaction tests use `gtex_db_session_factory`. | PASS / SLOW, improved focused execution | `test_request_payout_holds_total_and_tracks_fee`: 1 passed in 190.02s pytest time / 281.4s wall after migration, versus prior tracker evidence of 305.99s pytest time / 392.25s wall. `test_append_transaction_requires_balanced_postings`: 1 passed in 183.94s. Atomic transaction service pair: 2 passed in 178.01s. | This is a real speed improvement for focused wallet execution, but not a full fix. Collection remains slow: 23 tests collected in 102.03s pytest time / 216.7s wall after migration. Keep wallet service on the backend test-speed blocker list until import/collection cost is reduced. |
+
 ## Hard Launch Blockers
 
 | Blocker | Owner | Acceptance |

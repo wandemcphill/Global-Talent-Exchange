@@ -1230,3 +1230,14 @@ Scope: validation matrix and CI-gate hardening only on `feature/original-visual-
 - Direct Dart PASS: `C:\flutter\bin\cache\dart-sdk\bin\dart.exe --packages=.dart_tool\package_config.json test\market\market_invariants_test.dart` -> 3 passed in 73.6s wall, confirming the isolated pure-Dart market invariant tests are healthy without Flutter CLI.
 - Blockers: full backend suite remains unproven, full Flutter analyze/test remains blocked by Flutter CLI startup, and several small backend shards are green but too slow to trust as fast CI gates without further test-speed work.
 - Coordination note: no `backend\_out.txt` was used or deleted by this pass; validation logs were outside the repo or sidecar-owned temp paths only.
+
+## Stage 2B Coordinator Update - 2026-06-08 Wallet Test-Speed
+
+Scope: backend wallet service test-speed only. No production wallet behavior, payment rails, generated contracts, frontend source, route mounts, or legacy runtime surfaces were changed.
+
+- Replaced the file-local migrated SQLite template and per-test DB copy in `backend\tests\wallets\test_wallet_service.py` with the shared `gtex_db_session` rollback fixture from `backend\tests\conftest.py`.
+- Verification passed: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\wallets\test_wallet_service.py --collect-only` -> 23 tests collected in 102.03s pytest time / 216.7s wall.
+- Verification passed: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\wallets\test_wallet_service.py::test_append_transaction_requires_balanced_postings` -> 1 passed in 183.94s pytest time.
+- Verification passed: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\wallets\test_wallet_service.py::test_request_payout_holds_total_and_tracks_fee` -> 1 passed in 190.02s pytest time / 281.4s wall, improving from prior tracked 305.99s pytest time / 392.25s wall.
+- Verification passed: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\wallets\test_wallet_service.py::test_wallet_transaction_service_rolls_back_unbalanced_transaction backend\tests\wallets\test_wallet_service.py::test_wallet_transaction_service_reuses_idempotency_key_across_atomic_calls` -> 2 passed in 178.01s pytest time.
+- Blocker: wallet service collection/import remains slow and the full file has not been rerun; this patch is a measurable focused execution improvement, not the complete backend test-speed fix.

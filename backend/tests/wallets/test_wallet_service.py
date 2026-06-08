@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from decimal import Decimal
 import json
-from shutil import copyfile
 
-from sqlalchemy import create_engine, func, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func, select
 import pytest
 
 from app.auth.service import AuthService
-from app.core.database import ensure_database_schema_current
 from app.models import LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit, PaymentStatus
-from app.models.wallet import LedgerBalanceProjection, LedgerTransaction, LedgerTransactionStatus
+from app.models.wallet import LedgerAccount, LedgerBalanceProjection, LedgerTransaction, LedgerTransactionStatus
 from app.wallets.service import (
     InsufficientBalanceError,
     LedgerError,
@@ -45,30 +42,10 @@ class FakeCacheBackend:
         return True
 
 
-@pytest.fixture(scope="session")
-def migrated_wallet_service_db(tmp_path_factory):
-    db_path = tmp_path_factory.mktemp("wallet-service-db") / "template.db"
-    engine = create_engine(
-        f"sqlite+pysqlite:///{db_path.as_posix()}",
-        connect_args={"check_same_thread": False},
-    )
-    ensure_database_schema_current(engine)
-    engine.dispose()
-    return db_path
-
-
 @pytest.fixture()
-def session(tmp_path, migrated_wallet_service_db):
-    db_path = tmp_path / "wallet-service.db"
-    copyfile(migrated_wallet_service_db, db_path)
-    engine = create_engine(
-        f"sqlite+pysqlite:///{db_path.as_posix()}",
-        connect_args={"check_same_thread": False},
-    )
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as db_session:
-        yield db_session
-    engine.dispose()
+def session(gtex_db_session):
+    # Shared full-schema engine with per-test rollback; avoids per-file migration/copy setup.
+    yield gtex_db_session
 
 
 def _create_user(session):
@@ -611,100 +588,110 @@ def test_convert_wallet_units_moves_value_across_coin_and_credit_wallets(session
     assert service.get_balance(session, platform_credit) == Decimal("-100.0000")
 
 
-def test_wallet_transaction_service_rolls_back_unbalanced_transaction(session) -> None:
-    user = _create_user(session)
+def test_wallet_transaction_service_rolls_back_unbalanced_transaction(gtex_db_session_factory) -> None:
+    SessionLocal = gtex_db_session_factory
+    with SessionLocal() as session:
+        user = _create_user(session)
+        service = WalletService()
+        user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+        platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
+        session.commit()
+        user_account_id = user_account.id
+        platform_account_id = platform_account.id
+
     service = WalletService()
-    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
-    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
-    session.commit()
-    SessionLocal = sessionmaker(bind=session.get_bind(), autoflush=False, expire_on_commit=False)
     transaction_service = WalletTransactionService(session_factory=SessionLocal, wallet_service=service)
 
     with pytest.raises(UnbalancedTransactionError, match="must net to zero"):
         transaction_service.post_transaction(
             postings=[
-                WalletTransactionPosting(wallet_id=user_account.id, amount=Decimal("-10")),
-                WalletTransactionPosting(wallet_id=platform_account.id, amount=Decimal("5")),
+                WalletTransactionPosting(wallet_id=user_account_id, amount=Decimal("-10")),
+                WalletTransactionPosting(wallet_id=platform_account_id, amount=Decimal("5")),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
             reference="atomic-unbalanced",
         )
 
-    session.expire_all()
-
-    assert (
-        session.scalar(
-            select(func.count())
-            .select_from(LedgerTransaction)
-            .where(LedgerTransaction.reference == "atomic-unbalanced")
+    with SessionLocal() as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(LedgerTransaction)
+                .where(LedgerTransaction.reference == "atomic-unbalanced")
+            )
+            == 0
         )
-        == 0
-    )
-    assert (
-        session.scalar(
-            select(func.count()).select_from(LedgerEntry).where(LedgerEntry.reference == "atomic-unbalanced")
+        assert (
+            session.scalar(
+                select(func.count()).select_from(LedgerEntry).where(LedgerEntry.reference == "atomic-unbalanced")
+            )
+            == 0
         )
-        == 0
-    )
 
 
-def test_wallet_transaction_service_reuses_idempotency_key_across_atomic_calls(session) -> None:
-    user = _create_user(session)
+def test_wallet_transaction_service_reuses_idempotency_key_across_atomic_calls(gtex_db_session_factory) -> None:
+    SessionLocal = gtex_db_session_factory
     cache_backend = FakeCacheBackend()
-    service = WalletService(cache_backend=cache_backend)
-    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
-    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
-    SessionLocal = sessionmaker(bind=session.get_bind(), autoflush=False, expire_on_commit=False)
     transaction_service = WalletTransactionService(
         session_factory=SessionLocal,
         wallet_service=WalletService(cache_backend=cache_backend),
     )
 
-    service.append_transaction(
-        session,
-        postings=[
-            LedgerPosting(account=user_account, amount=Decimal("20")),
-            LedgerPosting(account=platform_account, amount=Decimal("-20")),
-        ],
-        reason=LedgerEntryReason.ADJUSTMENT,
-        reference="seed-atomic-idempotent",
-        actor=user,
-    )
-    session.commit()
+    with SessionLocal() as session:
+        user = _create_user(session)
+        service = WalletService(cache_backend=cache_backend)
+        user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+        platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
+        service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=user_account, amount=Decimal("20")),
+                LedgerPosting(account=platform_account, amount=Decimal("-20")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference="seed-atomic-idempotent",
+            actor=user,
+        )
+        session.commit()
+        user_id = user.id
+        user_account_id = user_account.id
+        platform_account_id = platform_account.id
 
     first = transaction_service.post_transaction(
         postings=[
-            WalletTransactionPosting(wallet_id=user_account.id, amount=Decimal("-4")),
-            WalletTransactionPosting(wallet_id=platform_account.id, amount=Decimal("4")),
+            WalletTransactionPosting(wallet_id=user_account_id, amount=Decimal("-4")),
+            WalletTransactionPosting(wallet_id=platform_account_id, amount=Decimal("4")),
         ],
         reason=LedgerEntryReason.TRADE_SETTLEMENT,
         reference="atomic-idempotent",
-        actor_user_id=user.id,
+        actor_user_id=user_id,
         idempotency_key="wallet-atomic-idempotent",
     )
     second = transaction_service.post_transaction(
         postings=[
-            WalletTransactionPosting(wallet_id=user_account.id, amount=Decimal("-4")),
-            WalletTransactionPosting(wallet_id=platform_account.id, amount=Decimal("4")),
+            WalletTransactionPosting(wallet_id=user_account_id, amount=Decimal("-4")),
+            WalletTransactionPosting(wallet_id=platform_account_id, amount=Decimal("4")),
         ],
         reason=LedgerEntryReason.TRADE_SETTLEMENT,
         reference="atomic-idempotent",
-        actor_user_id=user.id,
+        actor_user_id=user_id,
         idempotency_key="wallet-atomic-idempotent",
     )
 
-    session.expire_all()
-
-    assert first.transaction_id == second.transaction_id
-    assert service.get_balance(session, user_account) == Decimal("16.0000")
-    assert (
-        session.scalar(
-            select(func.count())
-            .select_from(LedgerTransaction)
-            .where(LedgerTransaction.idempotency_key == "wallet-atomic-idempotent")
+    with SessionLocal() as session:
+        service = WalletService(cache_backend=cache_backend)
+        user_account = session.get(LedgerAccount, user_account_id)
+        assert user_account is not None
+        assert first.transaction_id == second.transaction_id
+        assert service.get_balance(session, user_account) == Decimal("16.0000")
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(LedgerTransaction)
+                .where(LedgerTransaction.idempotency_key == "wallet-atomic-idempotent")
+            )
+            == 1
         )
-        == 1
-    )
 
 
 def test_request_payout_holds_total_and_tracks_fee(session) -> None:
