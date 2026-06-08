@@ -1250,3 +1250,13 @@ Scope: backend competitions test harness speed only. No production competition b
 - Verification passed: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\competitions\test_competitions_models.py::test_creation_service_builds_linked_competition_aggregate` -> 1 passed in 18.90s pytest time.
 - Blocker unchanged for client-backed route tests: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\competitions\test_competition_launch_rules.py::test_user_competition_cannot_use_gtex_name` timed out after 364.2s; the owned pytest process was stopped.
 - Handoff: this patch removes accidental full-app setup from non-app competitions tests, but client-backed competition route tests still need deeper startup/runtime speed work or shard splitting.
+
+## Stage 2D Coordinator Probe - 2026-06-08 Competition Route Canonicalization
+
+Scope: diagnosis only. No source files, route contracts, production behavior, payment rails, generated contracts, frontend source, or legacy runtime surfaces were changed.
+
+- Timed the shared competition app startup path with a temp log outside the repo. With the shared-style Alembic migration check, imports plus `create_app` reached `TestClient` setup at roughly 167s, then did not enter `TestClient` before the bounded 180s timeout.
+- Timed a test-harness alternative using ORM `Base.metadata.create_all` plus `run_migration_check=False`: app startup reached `TestClient` and `/health` returned 200 in roughly 186s.
+- Timed a realistic competition create request under that faster harness: raw `/api/competitions` returned 410 from the API contract guard, proving the legacy path is no longer a valid route-test target.
+- Timed canonical `/api/v2/competitions`: without `X-API-Version: 2` it returned 400 from the contract guard; with the version header it reached auth and returned 401 when no test auth override was installed.
+- Handoff: the next competition route-test lane must canonicalize client-backed tests to `/api/v2/...`, add `X-API-Version: 2`, preserve the existing test auth override/default user behavior, and adjust assertions for v2 envelopes where needed. Startup optimization alone will not make the stale `/api/competitions` tests production-ready.
