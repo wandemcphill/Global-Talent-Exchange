@@ -40,6 +40,8 @@ from app.models.wallet import (
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 COIN_TO_CREDIT_RATE = Decimal("100.0000")
+WITHDRAWAL_FEE_BPS = 1000
+WITHDRAWAL_MINIMUM_FEE = Decimal("0.0000")
 DEFAULT_BALANCE_CACHE_TTL_SECONDS = 300
 DEFAULT_WALLET_SUMMARY_CACHE_TTL_SECONDS = 60
 BALANCE_UNAVAILABLE_MESSAGE = "Balance data unavailable — sync in progress."
@@ -164,7 +166,9 @@ class WalletLedgerPage:
 @dataclass(frozen=True, slots=True)
 class WithdrawalRequestResult:
     payout_request: PayoutRequest
+    gross_amount: Decimal
     fee_amount: Decimal
+    net_amount: Decimal
     total_debit: Decimal
     source_scope: str
 
@@ -1010,7 +1014,7 @@ class WalletService:
                 continue
             if request.status in {PayoutStatus.REJECTED, PayoutStatus.FAILED}:
                 continue
-            reserved_or_paid += self._normalize_amount(request.amount)
+            reserved_or_paid += self._payout_total_debit(request)
         remaining = rewards_total - reserved_or_paid
         if remaining < Decimal("0.0000"):
             remaining = Decimal("0.0000")
@@ -1030,14 +1034,14 @@ class WalletService:
         destination_reference: str,
         unit: LedgerUnit = LedgerUnit.COIN,
         source_scope: str = "trade",
-        withdrawal_fee_bps: int = 1000,
-        minimum_fee: Decimal = Decimal("5.0000"),
+        withdrawal_fee_bps: int = WITHDRAWAL_FEE_BPS,
+        minimum_fee: Decimal = WITHDRAWAL_MINIMUM_FEE,
         actor: User | None = None,
         notes: str | None = None,
         extra_meta: dict[str, object] | None = None,
     ) -> WithdrawalRequestResult:
-        normalized_amount = self._normalize_amount(amount)
-        if normalized_amount <= Decimal("0.0000"):
+        gross_amount = self._normalize_amount(amount)
+        if gross_amount <= Decimal("0.0000"):
             raise LedgerError("Withdrawal amount must be positive.")
         if source_scope not in {"trade", "competition", "user_hosted_gift", "gtex_competition_gift", "national_reward"}:
             raise LedgerError(
@@ -1048,26 +1052,23 @@ class WalletService:
         escrow_account = self.get_user_escrow_account(session, user, unit)
         net_tag = LedgerSourceTag.ADMIN_ADJUSTMENT
         fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN
-        fee_amount = self._normalize_amount(
-            max(
-                (normalized_amount * Decimal(withdrawal_fee_bps) / Decimal(10_000)), self._normalize_amount(minimum_fee)
-            )
-        )
-        total_debit = self._normalize_amount(normalized_amount + fee_amount)
+        fee_amount = self._withdrawal_fee_for_gross(gross_amount)
+        net_amount = self._normalize_amount(gross_amount - fee_amount)
+        total_debit = gross_amount
         available_balance = self.get_balance(session, user_account)
         if available_balance < total_debit:
-            raise InsufficientBalanceError("Available balance is lower than the requested withdrawal plus fee.")
+            raise InsufficientBalanceError("Available balance is lower than the requested withdrawal.")
         if source_scope == "competition":
             reward_balance = self.competition_reward_withdrawable_balance(session, user, unit)
-            if reward_balance < normalized_amount:
+            if reward_balance < total_debit:
                 raise InsufficientBalanceError(
                     "Competition reward balance is lower than the requested e-game withdrawal."
                 )
 
         reference = f"payout-request:{generate_uuid()}"
         postings = [
-            LedgerPosting(account=user_account, amount=-normalized_amount, source_tag=net_tag),
-            LedgerPosting(account=escrow_account, amount=normalized_amount, source_tag=net_tag),
+            LedgerPosting(account=user_account, amount=-net_amount, source_tag=net_tag),
+            LedgerPosting(account=escrow_account, amount=net_amount, source_tag=net_tag),
         ]
         if fee_amount > Decimal("0.0000"):
             postings.extend(
@@ -1090,16 +1091,23 @@ class WalletService:
                 "withdrawal": {
                     "source_scope": source_scope,
                     "destination_reference": destination_reference.strip(),
+                    "gross_amount": str(gross_amount),
                     "fee_amount": str(fee_amount),
+                    "net_amount": str(net_amount),
                     "total_debit": str(total_debit),
+                    "fee_bps": WITHDRAWAL_FEE_BPS,
                 }
             },
         )
         meta = {
             "source_scope": source_scope,
+            "gross_amount": str(gross_amount),
             "fee_amount": str(fee_amount),
+            "net_amount": str(net_amount),
             "total_debit": str(total_debit),
-            "requested_net_amount": str(normalized_amount),
+            "requested_gross_amount": str(gross_amount),
+            "requested_net_amount": str(net_amount),
+            "fee_bps": WITHDRAWAL_FEE_BPS,
             "destination_reference": destination_reference,
             "user_notes": notes or "",
         }
@@ -1108,7 +1116,7 @@ class WalletService:
         payout_request = PayoutRequest(
             user_id=user.id,
             account_id=user_account.id,
-            amount=normalized_amount,
+            amount=net_amount,
             unit=unit,
             status=PayoutStatus.REQUESTED,
             destination_reference=destination_reference.strip(),
@@ -1126,9 +1134,12 @@ class WalletService:
                     "user_id": user.id,
                     "source_scope": source_scope,
                     "unit": unit.value,
-                    "amount": str(normalized_amount),
+                    "amount": str(net_amount),
+                    "gross_amount": str(gross_amount),
                     "fee_amount": str(fee_amount),
+                    "net_amount": str(net_amount),
                     "total_debit": str(total_debit),
+                    "fee_bps": WITHDRAWAL_FEE_BPS,
                 },
                 aggregate_id=payout_request.id,
                 aggregate_type="payout_request",
@@ -1138,7 +1149,12 @@ class WalletService:
             durable=True,
         )
         return WithdrawalRequestResult(
-            payout_request=payout_request, fee_amount=fee_amount, total_debit=total_debit, source_scope=source_scope
+            payout_request=payout_request,
+            gross_amount=gross_amount,
+            fee_amount=fee_amount,
+            net_amount=net_amount,
+            total_debit=total_debit,
+            source_scope=source_scope,
         )
 
     def complete_payout_request(
@@ -1186,7 +1202,9 @@ class WalletService:
                 "withdrawal": {
                     "payout_request_id": payout_request.id,
                     "action": "settle",
+                    "gross_amount": str(total_debit),
                     "fee_amount": str(fee_amount),
+                    "net_amount": str(net_amount),
                     "total_debit": str(total_debit),
                 }
             },
@@ -1245,7 +1263,9 @@ class WalletService:
                     "payout_request_id": payout_request.id,
                     "action": "release",
                     "failure_reason": failure_reason or "",
+                    "gross_amount": str(total_debit),
                     "fee_amount": str(fee_amount),
+                    "net_amount": str(net_amount),
                     "total_debit": str(total_debit),
                 }
             },
@@ -1265,6 +1285,19 @@ class WalletService:
             except json.JSONDecodeError:
                 return {"raw_notes": raw}
         return {"raw_notes": raw}
+
+    def _payout_total_debit(self, payout_request: PayoutRequest) -> Decimal:
+        meta = self._parse_payout_meta(payout_request.notes)
+        try:
+            if meta.get("total_debit") is not None:
+                return self._normalize_amount(meta.get("total_debit"))
+            fee_amount = self._normalize_amount(meta.get("fee_amount", Decimal("0.0000")))
+        except (TypeError, ValueError):
+            fee_amount = Decimal("0.0000")
+        return self._normalize_amount(Decimal(payout_request.amount or 0) + fee_amount)
+
+    def _withdrawal_fee_for_gross(self, gross_amount: Decimal) -> Decimal:
+        return self._normalize_amount(gross_amount * Decimal(WITHDRAWAL_FEE_BPS) / Decimal(10_000))
 
     def _transfer_bid_reservation_metadata(
         self,
@@ -1761,14 +1794,15 @@ class WalletService:
             PayoutStatus.HELD,
             PayoutStatus.PROCESSING,
         )
-        amount = session.scalar(
-            select(func.coalesce(func.sum(PayoutRequest.amount), 0)).where(
+        requests = session.scalars(
+            select(PayoutRequest).where(
                 PayoutRequest.user_id == user.id,
                 PayoutRequest.unit == currency,
                 PayoutRequest.status.in_(pending_statuses),
             )
-        )
-        return self._normalize_amount(amount or Decimal("0.0000"))
+        ).all()
+        amount = sum((self._payout_total_debit(request) for request in requests), Decimal("0.0000"))
+        return self._normalize_amount(amount)
 
     def _wallet_lock_reasons(
         self,

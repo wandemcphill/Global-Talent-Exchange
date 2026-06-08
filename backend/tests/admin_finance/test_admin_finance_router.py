@@ -403,6 +403,8 @@ def test_control_tower_cash_rails_whitelist_canonical_payment_methods(
     )._cash_rail_summary()
 
     assert payload["payment_methods"] == ["Manual bank transfer", "KoraPay"]
+    assert payload["withdrawal_mode"] == "manual"
+    assert payload["automatic_withdrawals_enabled"] is False
     assert {
         "Apple Pay",
         "Cards",
@@ -704,6 +706,10 @@ def test_payment_queue_withdrawal_action_uses_real_treasury_row_and_audit(client
     assert payload["item"]["queue"] == "approved"
     assert payload["item"]["processor_mode"] == "manual_bank_transfer"
     assert payload["item"]["payout_channel"] == "bank_transfer"
+    assert Decimal(str(payload["item"]["amount_coin"])) == Decimal("25.0000")
+    assert Decimal(str(payload["item"]["fee_amount"])) == Decimal("2.5000")
+    assert Decimal(str(payload["item"]["net_amount"])) == Decimal("22.5000")
+    assert Decimal(str(payload["item"]["total_debit"])) == Decimal("25.0000")
     assert payload["item"]["notes"]["admin"] == admin_notes
     assert payload["audit"]["reference"] == f"withdrawal:{withdrawal_id}"
     assert payload["audit"]["resource_type"] == "treasury_withdrawal"
@@ -726,6 +732,11 @@ def test_payment_queue_withdrawal_action_uses_real_treasury_row_and_audit(client
     assert audit.payload["status"] == TreasuryWithdrawalStatus.APPROVED.value
     assert audit.payload["previous"] == TreasuryWithdrawalStatus.PENDING_REVIEW.value
     assert audit.payload["notes"] == admin_notes
+    assert audit.payload["gross_amount"] == "25.0000"
+    assert audit.payload["fee_amount"] == "2.5000"
+    assert audit.payload["net_amount"] == "22.5000"
+    assert audit.payload["processor_mode"] == "manual_bank_transfer"
+    assert audit.payload["payout_channel"] == "bank_transfer"
 
 
 def test_payment_queue_bid_counter_records_audit_only_review(monkeypatch) -> None:

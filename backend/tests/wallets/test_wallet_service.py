@@ -559,15 +559,15 @@ def test_get_wallet_summary_derives_pending_withdrawal_balance_from_backend_payo
 
     summary = service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
 
-    assert summary.available_balance == Decimal("75.0000")
-    assert summary.reserved_balance == Decimal("25.0000")
-    assert summary.locked_balance == Decimal("25.0000")
+    assert summary.available_balance == Decimal("80.0000")
+    assert summary.reserved_balance == Decimal("20.0000")
+    assert summary.locked_balance == Decimal("20.0000")
     assert summary.pending_withdrawal_balance == Decimal("20.0000")
     assert len(summary.lock_reasons) == 1
     reason = summary.lock_reasons[0]
     assert reason.code == "withdrawal_hold"
     assert reason.label == "Withdrawal holds"
-    assert reason.amount == Decimal("25.0000")
+    assert reason.amount == Decimal("20.0000")
     assert reason.currency == LedgerUnit.COIN
     assert reason.source == "withdrawal"
 
@@ -739,9 +739,11 @@ def test_request_payout_holds_total_and_tracks_fee(session) -> None:
         select(LedgerEntry).where(LedgerEntry.transaction_id == result.payout_request.hold_transaction_id)
     ).all()
     assert result.fee_amount == Decimal("2.0000")
-    assert result.total_debit == Decimal("22.0000")
-    assert service.get_balance(session, user_account) == Decimal("78.0000")
-    assert service.get_balance(session, escrow_account) == Decimal("22.0000")
+    assert result.net_amount == Decimal("18.0000")
+    assert result.total_debit == Decimal("20.0000")
+    assert result.payout_request.amount == Decimal("18.0000")
+    assert service.get_balance(session, user_account) == Decimal("80.0000")
+    assert service.get_balance(session, escrow_account) == Decimal("20.0000")
     assert {entry.transaction_type for entry in hold_entries} == {LedgerTransactionType.WITHDRAWAL}
     assert sum(
         entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT
@@ -750,8 +752,8 @@ def test_request_payout_holds_total_and_tracks_fee(session) -> None:
         entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN
     ) == Decimal("0.0000")
     assert sorted(entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT) == [
-        Decimal("-20.0000"),
-        Decimal("20.0000"),
+        Decimal("-18.0000"),
+        Decimal("18.0000"),
     ]
     assert sorted(
         entry.amount for entry in hold_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN
@@ -796,8 +798,8 @@ def test_complete_payout_request_tags_only_fee_entries_as_fee_burn(session) -> N
     assert sorted(
         entry.amount for entry in settlement_entries if entry.source_tag == LedgerSourceTag.ADMIN_ADJUSTMENT
     ) == [
-        Decimal("-20.0000"),
-        Decimal("20.0000"),
+        Decimal("-18.0000"),
+        Decimal("18.0000"),
     ]
     assert sorted(
         entry.amount for entry in settlement_entries if entry.source_tag == LedgerSourceTag.WITHDRAWAL_FEE_BURN
@@ -833,6 +835,42 @@ def test_request_competition_payout_requires_reward_balance(session) -> None:
             source_scope="competition",
             actor=user,
         )
+
+
+def test_request_competition_payout_reserves_gross_reward_and_net_payout(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    user_account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform_account = service.ensure_platform_account(session, LedgerUnit.COIN)
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("50")),
+            LedgerPosting(account=platform_account, amount=Decimal("-50")),
+        ],
+        reason=LedgerEntryReason.COMPETITION_REWARD,
+        reference="seed-competition-reward",
+        actor=user,
+    )
+
+    result = service.request_payout(
+        session,
+        user=user,
+        amount=Decimal("20"),
+        destination_reference="bank:reward",
+        withdrawal_fee_bps=1000,
+        minimum_fee=Decimal("0.0000"),
+        source_scope="competition",
+        actor=user,
+    )
+    session.commit()
+
+    assert result.gross_amount == Decimal("20.0000")
+    assert result.fee_amount == Decimal("2.0000")
+    assert result.net_amount == Decimal("18.0000")
+    assert result.total_debit == Decimal("20.0000")
+    assert result.payout_request.amount == Decimal("18.0000")
+    assert service.competition_reward_withdrawable_balance(session, user) == Decimal("30.0000")
 
 
 def test_request_payout_rejects_unknown_source_scope(session) -> None:

@@ -1118,3 +1118,115 @@ Scope: backend route/module contract tests and realtime websocket route collisio
 - Verification passed via required `backend\_out.txt` handling: `C:\Python314\python.exe -m pytest backend\tests\realtime\test_websocket_route_contracts.py backend\tests\realtime\test_match_websocket_gateway.py backend\tests\realtime\test_wallet_websocket_gateway.py backend\tests\realtime\test_regen_creation_realtime.py -p no:cacheprovider -q` -> 13 passed in 52.19s; `backend\_out.txt` was read and deleted.
 - Verification passed: scoped `git diff --check` for Thread 2 owned app/realtime test paths returned exit code 0; console noise was CRLF normalization warnings only.
 - Blockers: none.
+
+## Withdrawal Policy Handoff Update - 2026-06-07 Wallet Fee + Audit
+
+Scope: wallet withdrawal fee enforcement and admin/audit visibility on `feature/original-visual-runtime`; edits stayed in wallet/treasury/admin finance services, focused tests, capital wallet/payout Flutter models/screens, and this manifest.
+
+- Server withdrawal policy now treats user-entered withdrawal `amount` as the gross wallet debit and applies an exact 10% fee with no product-facing minimum; net payout is `gross - fee`, and total wallet hold/debit remains gross.
+- Wallet request, completion, release, pending-balance, reward-withdrawable, quote, receipt, and overview paths now carry backend-authored `gross_amount`, `fee_amount`, `net_amount`, `total_debit`, `fee_bps`, and `source_scope`.
+- Treasury withdrawal creation stores manual-bank-transfer payout truth, fiat payout from net amount, and audit metadata with gross/fee/net/source/rail details.
+- Admin finance queue/export payloads expose explicit gross, fee, net, and total debit; cash-rail summary no longer reports automatic withdrawals as enabled.
+- Flutter capital withdrawal quote/receipt/history and admin withdrawal DTOs now expose gross/fee/net/total debit, and the admin command review trail no longer renders an ambiguous single withdrawal amount.
+- Frontend payout fixtures were aligned to 10% fee policy and manual bank-transfer withdrawals; gateway withdrawal labels/options were removed from the scoped production UI.
+- Verification passed: direct Dart formatter `C:\flutter\bin\cache\dart-sdk\bin\dart.exe --disable-dart-dev format frontend/lib/data/gte_models.dart frontend/lib/features/capital/payouts/data/capital_payout_fixture_store.dart frontend/lib/features/capital/wallet/presentation/gte_withdrawal_flow_screen.dart frontend/lib/screens/admin/admin_command_center_screen.dart`.
+- Verification passed: scoped forbidden scans for Paystack/crypto and Unity/native-3D/pseudo-3D returned no product-code hits; the only scoped `automatic_gateway` hit is the existing KoraPay deposit helper in `backend/app/wallets/router.py`.
+- Verification passed: scoped `git diff --check` for touched backend/frontend withdrawal paths returned exit code 0; console noise was CRLF normalization warnings only.
+- Blocker: focused backend pytest collected but stalled before executing tests, including a single isolated wallet-service test; `backend\_out.txt` was read/deleted after each attempt and no Python process was left running.
+- Blocker: focused Flutter tests from `frontend` also exceeded the shell timeout, including the single `test/wallet_api_route_transport_test.dart`; no Dart/Flutter test runner was left running.
+
+## Thread D Handoff Update - 2026-06-07 Ops Guard Fix
+
+Scope: ops guard test stabilization only; no production route, payment, backend business-logic, or frontend source files were edited.
+
+- Updated `backend\tests\ops\test_canonical_production_guards.py` so the removed `/internal/dev/native-match-runtime` destination is treated as the expected canonical state, while `/internal/dev/match-runtime` remains hidden/quarantined and `/matches/3d` plus `/matches/native-3d` remain banned.
+- Aligned the match-center verifier expectation with canonical `/api/v2/match-viewer/{match_key}` route errors.
+- Tightened the forbidden-route verifier fixture to include the full canonical `/api/v2` match-center route set before injecting quarantined route fragments, so the test now proves quarantine rejection rather than passing on a missing-route failure.
+- Verification passed with lane-specific output because `backend\_out.txt` already existed and was left untouched: `C:\Python314\python.exe -m pytest -p no:cacheprovider -q backend\tests\ops\test_canonical_production_guards.py` -> 16 passed in 14.35s; `backend\_out_thread_d.txt` was read and deleted.
+- Verification passed: `C:\Python314\python.exe tools\guardrails\production_guardrail_scan.py --root backend/tests/ops --format summary --fail-on violation` -> only quarantined guard-test hits, no violations.
+- Verification passed: `git diff --check -- backend\tests\ops\test_canonical_production_guards.py`; console noise was the existing LF-to-CRLF normalization warning only.
+- Blockers: none for Thread D.
+
+## Thread 3 Handoff Update - 2026-06-07 Creator Scope Lock
+
+Scope: Creator frontend feature scope lock and frontend contract gate alignment only; backend source and shared JSON contract were read but not edited.
+
+- Creator repository now uses backend-mounted Module 7 contracts for profile, campaigns, campaign detail/create, clips/submit, wallet, withdrawal, settlements, and moderation under `/api/v2/creator/*`.
+- Creator repository preserves backend `state`/`status`, `blocked_reason`, `degraded_reason`, `gap_reasons`, and `audit_reference` instead of flattening missing data into local success.
+- Creator withdrawals now require backend wallet availability plus a payout destination before posting; otherwise they return blocked states without mutating.
+- Creator DTOs now parse canonical nested wallet balances, backend withdrawal availability, optional/partial settlements, moderation inbox status fields, and audit-reference naming.
+- Creator Studio surface now classifies campaigns, sponsored clips, wallet/withdrawals, settlements, moderation, analytics, and referrals. Referrals are explicitly blocked on this surface until a creator-scoped referral dashboard contract is mounted.
+- Creator canonical surface now adds settlement and referral readiness rows using backend payload fields and degraded/blocked language for missing data.
+- Added the missing `/api/v2/creator/{profile,campaigns,clips,wallet,settlements,moderation}` and mutation path self-aliases to `frontend\lib\data\generated\gte_api_contract.g.dart` so the existing frontend request gate accepts backend-mounted Creator contracts. `shared\api_contract.json` remains pre-existing dirty from the contract lane and was not edited here.
+- Verification passed: `C:\flutter\bin\cache\dart-sdk\bin\dart.exe analyze` on touched Creator files, generated contract map, and focused creator tests -> no issues found.
+- Verification passed: `C:\flutter\bin\flutter.bat test --no-pub test\creator\creator_repository_test.dart -r expanded --concurrency=1` -> 5 passed.
+- Verification passed: `C:\flutter\bin\flutter.bat test --no-pub test\creator\creator_dtos_test.dart -r expanded --concurrency=1` -> 5 passed.
+- Verification passed: `C:\flutter\bin\flutter.bat test --no-pub test\creator\creator_module_surface_test.dart -r expanded --concurrency=1` -> 3 passed.
+- Verification passed: `C:\flutter\bin\flutter.bat test --no-pub test\creator\creator_canonical_surface_test.dart -r expanded --concurrency=1` -> 3 passed.
+- Verification passed: `C:\Python314\python.exe tools\guardrails\production_guardrail_scan.py --root frontend/lib/features/creator --root frontend/test/creator --root frontend/lib/data/generated/gte_api_contract.g.dart --format summary --fail-on violation` -> no violations.
+- Verification passed: scoped forbidden text scan for Paystack/crypto/Unity/native-3D/pseudo-3D/fake authority terms in touched Creator/generated paths returned no hits.
+- Verification passed: `git diff --check -- frontend\lib\features\creator frontend\test\creator frontend\lib\data\generated\gte_api_contract.g.dart`; console noise was CRLF normalization warnings only.
+- Blocker: full `flutter test --no-pub test\creator -r expanded` and `flutter analyze --no-pub lib\features\creator test\creator` timed out in this busy worktree before individual focused tests were run. Stuck GTEX `flutter_tester`/analyzer processes from this lane were cleaned up; unrelated build/test processes in other workspaces were left alone.
+
+## Thread B Handoff Update - 2026-06-07 Flutter Harness Recovery
+
+Scope: Flutter analyzer/test measurability only. No production behavior was changed; edits only split pure model/helper imports so a market invariant test can run without loading Riverpod/fixture transport, and added the already-locked `package:test` dependency as a direct dev dependency.
+
+- Isolated a reliable smaller command: from `frontend`, `C:\flutter\bin\cache\dart-sdk\bin\dart.exe --packages=.dart_tool\package_config.json test\market\market_invariants_test.dart` passed 3/3 in 33519 ms.
+- `flutter analyze --no-pub` remains non-measurable: bounded run printed only `Analyzing frontend...`, timed out, and was killed after 206812 ms with exit 124.
+- `flutter test test\market\market_invariants_test.dart --reporter expanded --no-pub` executed the 3 market tests and printed `All tests passed!`, but the Flutter process did not terminate; bounded wrapper killed it after 187635 ms with exit 124.
+- Shorter Flutter test bootstrap repeat timed out after 88435 ms while child process `PowerShell.exe -ExecutionPolicy Bypass -NoProfile -Command "Unblock-File -Path 'C:\flutter\bin\internal\update_engine_version.ps1'; & 'C:\flutter\bin\internal\update_engine_version.ps1'; exit $LASTEXITCODE;"` was still active.
+- `flutter --version` also timed out after 86164 ms in the same `C:\flutter\bin\internal\update_engine_version.ps1` bootstrap path, proving the current blocker is Flutter CLI/toolchain startup, not GTEX market test assertions.
+- `dart pub get --offline` was required after a failed Flutter pub-get attempt removed `.dart_tool`; it completed in 41312 ms and changed `test 1.30.0` from transitive to direct dev dependency in `pubspec.lock`.
+- Verification passed: `dart format frontend\lib\features\shared\data\gte_json_support.dart frontend\lib\features\shared\data\gte_feature_support.dart frontend\lib\features\transfer_center\transfer_center_models.dart frontend\lib\features\transfer_center\live_transfer_center_provider.dart frontend\lib\features\market\presentation\widgets\market_models.dart frontend\test\market\market_invariants_test.dart`.
+- Verification passed: scoped `git diff --check` for Thread B-owned frontend paths returned exit code 0; console noise was CRLF normalization warnings only.
+- Blocker: Flutter CLI cannot be trusted until the `C:\flutter\bin\internal\update_engine_version.ps1` bootstrap hang is fixed or bypassed in CI/local validation. Use the direct Dart market command above as the temporary targeted harness for this isolated pure-Dart test group.
+
+## Thread 5 Handoff Update - 2026-06-07 Compete Scope Lock
+
+Scope: Compete / competition route classification and validation hardening only; no wallet, payment, match-runtime, legacy runtime surface, or generated contract artifacts were edited.
+
+- Classified launch-ready frontend competition routes as discovery, create, detail, join/enrollment, share, and world-super-cup discovery alias.
+- Classified frontend fixture, standings, result, bracket, and rounds paths as backend-authored data contracts consumed inside competition surfaces, not standalone production routes.
+- Fixed the `/competitions/streamer/{id}` parser alias so it resolves to the same streamer tournament detail route as `/streamer-tournaments/{id}`; the registry already renders streamer tournament list/detail as blocked coming-soon surfaces.
+- Backend contract route audit confirmed `/api/competitions/{competition_id}/fixtures`, `/standings`, `/rounds`, and `/bracket` return stateful envelopes through the competition contract router; segment routes also expose join, publish, fixtures, standings, rounds, match events, and result submission.
+- Competition test timeout cause: full `backend\tests\competitions` currently exceeds the bounded verification window because of harness/runtime throughput, not a reproduced assertion failure. The 55-test shard timed out after 600s with no flushed output; collect-only completed with 55 tests in 39.31s pytest time, while representative single tests passed but each took about 170s.
+- Verification passed: `C:\Python314\python.exe -m pytest backend\tests\competitions\test_backend_contract_routes.py::test_competition_backend_contract_routes_return_stateful_envelopes -p no:cacheprovider -vv` -> 1 passed in 169.90s.
+- Verification passed: `C:\Python314\python.exe -m pytest backend\tests\competitions\test_competition_feed_contracts.py::test_prelaunch_contracts_are_explicit_and_do_not_return_placeholder_rows -p no:cacheprovider -vv` -> 1 passed in 172.01s.
+- Verification passed: `flutter test --no-pub test\compete\competition_route_scope_lock_test.dart -r expanded --concurrency=1` -> 3 passed.
+- Verification passed: `flutter test --no-pub test\compete\competition_bracket_widgets_test.dart test\compete\competition_settlement_readiness_test.dart -r expanded --concurrency=1` -> 7 passed.
+- Blocker: the full backend competition shard remains unfit as a short acceptance gate until the backend test-speed lane reduces startup/fixture cost or the shard is split into smaller verified batches.
+
+## Stage 2A Thread 4 Handoff Update - 2026-06-07 Community Scope Lock
+
+Scope: Community production honesty and settlement-safety classification. Edits stayed in Community/Social frontend models, surfaces, and tests plus this manifest; no backend behavior, generated API contract, payment rails, route mounts, or legacy runtime surfaces were changed.
+
+- Classified production Community surface states: discussions and authenticated chat render backend-backed/empty states; fan hubs are partial because only current-club/follow context is available; reports, reactions, and Community gifting are blocked unless a backend payload exists.
+- Tightened `CommunityDigest` and `LiveThreadMessage` parsing so missing backend-authored count fields now throw parsing errors instead of rendering zero.
+- Removed local digest count rewriting after watchlist/thread/DM mutations; the screen now reloads backend digest/list truth after writes rather than inventing counts from local state.
+- Confirmed `CommunityApi.standard` uses live mode through `gteProductionBackendMode`; fixture fallback remains confined to explicit fixture mode. Added a Flutter-bound test asserting live backend errors do not fixture-fallback.
+- Gifting classification: backend `gift_engine` is settlement-backed through wallet ledger postings, spending controls, rake/net split, notifications, and persisted `gift_transactions`; the Community surface remains blocked because it has no gift ledger target/catalog payload.
+- API contract inspection confirmed canonical `/api/v2/community/**`, `/api/v2/gift-engine/**`, `/api/v2/moderation/**`, `/api/v2/matches/{match_id}/reactions`, and sponsorship routes exist in `shared\api_contract.json`; no contract regeneration was performed.
+- Verification passed: `C:\flutter\bin\cache\dart-sdk\bin\dart.exe --disable-dart-dev format frontend\lib\models\community_models.dart frontend\lib\features\community\presentation\community_canonical_surface.dart frontend\lib\features\social\social_screen.dart frontend\test\community\community_canonical_surface_test.dart frontend\test\social\community_screen_test.dart frontend\test\social\community_api_test.dart frontend\test\community\community_models_test.dart`.
+- Verification passed: from `frontend`, `C:\flutter\bin\cache\dart-sdk\bin\dart.exe --packages=.dart_tool\package_config.json test\community\community_models_test.dart` -> 2 passed in 31685 ms.
+- Verification passed: scoped `git diff --check` for Stage 2A Thread 4-owned frontend paths returned exit code 0; console noise was CRLF normalization warnings only.
+- Verification passed: scoped forbidden-term scan for Paystack/crypto and Unity/native-3D/pseudo-3D/original-visual-runtime terms returned no hits in owned files.
+- Blocker: Flutter test shard `flutter test test\community\community_canonical_surface_test.dart test\social\community_api_test.dart --reporter expanded --no-pub` hit `Error: The Dart compiler exited unexpectedly` while loading the widget test and did not exit; bounded wrapper killed it after 176708 ms.
+- Blocker: focused backend gift-engine pytest `C:\Python314\python.exe -m pytest -p no:cacheprovider -q backend\tests\gift_engine\test_gift_engine_router.py` produced no output after 424103 ms; the owned Python process was stopped and empty `backend\_out.txt` was deleted.
+
+## Thread 2 Handoff Update - 2026-06-07 Stage 2A Full Validation / CI Gate
+
+Scope: validation matrix and CI-gate hardening only on `feature/original-visual-runtime`; no product behavior, generated contracts, backend source, Flutter source, route promotion, payment rails, or fixture fake mode was edited.
+
+- Updated `Docs/GTEX_PRODUCTION_READINESS_TRACKER.md` with a Stage 2A Full Validation / CI Gate matrix.
+- Backend sidecar PASS: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\ops\test_canonical_production_guards.py` -> 16 passed in 61.31s wall, no warnings emitted.
+- Backend sidecar PASS: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\realtime\test_websocket_route_contracts.py backend\tests\realtime\test_match_websocket_gateway.py backend\tests\realtime\test_wallet_websocket_gateway.py backend\tests\realtime\test_regen_creation_realtime.py` -> 13 passed in 220.96s wall, no warnings emitted.
+- Backend local PASS/SLOW: `C:\Python314\python.exe -m pytest backend\tests\app\test_module_registration.py -q -p no:cacheprovider` -> 4 passed in 289.12s pytest time / 352.08s wall.
+- Backend local PASS/SLOW: `C:\Python314\python.exe -m pytest backend\tests\wallets\test_wallet_service.py --collect-only -q -p no:cacheprovider` -> 23 tests collected in 64.04s pytest time / 115.96s wall.
+- Backend local PASS/SLOW: `C:\Python314\python.exe -m pytest backend\tests\wallets\test_wallet_service.py::test_request_payout_holds_total_and_tracks_fee -q -p no:cacheprovider` -> 1 passed in 305.99s pytest time / 392.25s wall.
+- Flutter sidecar FAIL/TIMEOUT: `flutter --version` from `frontend` was killed at 90.2s with no stdout/stderr while stuck in `dart.exe` / `dartvm.exe` running `C:\flutter\bin\cache\flutter_tools.snapshot --version`.
+- Flutter coordinator repeat FAIL/TIMEOUT: `C:\flutter\bin\flutter.bat --version` from `frontend` was killed at 102.18s with no stdout/stderr while stuck in `flutter_tools.snapshot --version`.
+- Flutter analyzer gate was intentionally skipped after `flutter --version` proved the Flutter CLI bootstrap was not reliable.
+- Direct Dart PASS: `C:\flutter\bin\cache\dart-sdk\bin\dart.exe --packages=.dart_tool\package_config.json test\market\market_invariants_test.dart` -> 3 passed in 73.6s wall, confirming the isolated pure-Dart market invariant tests are healthy without Flutter CLI.
+- Blockers: full backend suite remains unproven, full Flutter analyze/test remains blocked by Flutter CLI startup, and several small backend shards are green but too slow to trust as fast CI gates without further test-speed work.
+- Coordination note: no `backend\_out.txt` was used or deleted by this pass; validation logs were outside the repo or sidecar-owned temp paths only.

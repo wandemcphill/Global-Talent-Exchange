@@ -2785,6 +2785,9 @@ class GteAdminWithdrawal {
     required this.status,
     required this.amountCoin,
     required this.amountFiat,
+    required this.feeAmount,
+    required this.netAmount,
+    required this.totalDebit,
     required this.currencyCode,
     required this.bankName,
     required this.bankAccountNumber,
@@ -2807,6 +2810,9 @@ class GteAdminWithdrawal {
   final GteWithdrawalStatus status;
   final double amountCoin;
   final double amountFiat;
+  final double feeAmount;
+  final double netAmount;
+  final double totalDebit;
   final String currencyCode;
   final String bankName;
   final String bankAccountNumber;
@@ -2828,14 +2834,33 @@ class GteAdminWithdrawal {
       value,
       label: 'admin withdrawal',
     );
+    final double amountCoin = GteJson.number(json, <String>[
+      'amount_coin',
+      'amountCoin',
+    ]);
+    final double feeAmount = GteJson.number(json, <String>[
+      'fee_amount',
+      'feeAmount',
+    ]);
+    final double fallbackNetAmount =
+        amountCoin > feeAmount ? amountCoin - feeAmount : 0;
     return GteAdminWithdrawal(
       id: GteJson.string(json, <String>['id']),
       reference: GteJson.string(json, <String>['reference']),
       status: _withdrawalStatusFromString(
         GteJson.string(json, <String>['status'], fallback: 'pending_review'),
       ),
-      amountCoin: GteJson.number(json, <String>['amount_coin', 'amountCoin']),
+      amountCoin: amountCoin,
       amountFiat: GteJson.number(json, <String>['amount_fiat', 'amountFiat']),
+      feeAmount: feeAmount,
+      netAmount: GteJson.number(json, <String>[
+        'net_amount',
+        'netAmount',
+      ], fallback: fallbackNetAmount),
+      totalDebit: GteJson.number(json, <String>[
+        'total_debit',
+        'totalDebit',
+      ], fallback: amountCoin),
       currencyCode: GteJson.string(json, <String>[
         'currency_code',
         'currencyCode',

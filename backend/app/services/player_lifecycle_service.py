@@ -835,6 +835,13 @@ class PlayerLifecycleService:
         ledger_transfer_bid_id = self._transfer_bid_wallet_ledger_id(bid)
         reference = str(reservation.get("reference") or self._transfer_bid_reservation_reference(ledger_transfer_bid_id))
         wallet_service = WalletService()
+        active_reserved = wallet_service.get_transfer_bid_reserved_amount(
+            self.session,
+            user=owner,
+            transfer_bid_id=ledger_transfer_bid_id,
+            unit=LedgerUnit.COIN,
+        )
+        require_full_reservation = reservation.get("status") == "reserved" and active_reserved <= Decimal("0.0000")
         try:
             wallet_service.settle_transfer_bid_reservation(
                 self.session,
@@ -850,7 +857,7 @@ class PlayerLifecycleService:
                 buying_club_id=bid.buying_club_id,
                 selling_club_id=bid.selling_club_id,
                 source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-                require_full_reservation=reservation.get("status") == "reserved",
+                require_full_reservation=require_full_reservation,
             )
         except InsufficientBalanceError as exc:
             raise PlayerLifecycleValidationError(
@@ -858,10 +865,14 @@ class PlayerLifecycleService:
             ) from exc
 
         seller_owner = self._transfer_bid_seller_owner(bid)
+        settled_reserved = min(amount, active_reserved)
+        settled_available = self._normalize_wallet_amount(amount - settled_reserved)
         updates = {
             "status": "settled",
             "settled_on": settled_on.isoformat(),
             "settlement_amount_gtex_coin": str(amount),
+            "settled_reserved_gtex_coin": str(settled_reserved),
+            "settled_available_gtex_coin": str(settled_available),
             "seller_owner_user_id": seller_owner.id if seller_owner is not None else None,
         }
         self._set_transfer_bid_wallet_reservation(bid, updates)

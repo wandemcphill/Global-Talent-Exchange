@@ -1038,7 +1038,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             notes: 'Bank payout review must use canonical withdrawal status.',
             auditTrail: <String>[
               'User ID: ${withdrawal.userId}',
-              'Amount: ${gteFormatCompetitionAmount(withdrawal.amountCoin, 'coin')} -> ${gteFormatFiat(withdrawal.amountFiat, currency: withdrawal.currencyCode)}',
+              'Gross: ${gteFormatCompetitionAmount(withdrawal.amountCoin, 'coin')}',
+              'Fee: ${gteFormatCompetitionAmount(withdrawal.feeAmount, 'coin')}',
+              'Net: ${gteFormatCompetitionAmount(withdrawal.netAmount, 'coin')} -> ${gteFormatFiat(withdrawal.amountFiat, currency: withdrawal.currencyCode)}',
+              'Total debit: ${gteFormatCompetitionAmount(withdrawal.totalDebit, 'coin')}',
               'Bank: ${withdrawal.bankName}',
               'Account: ${withdrawal.bankAccountName}',
               ..._timeline(<MapEntry<String, DateTime?>>[
@@ -2866,7 +2869,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           const _SectionHeader(
             title: 'Treasury settings',
             subtitle:
-                'Control whether funding and payouts are manual, automatic, or hybrid, and keep limits clear.',
+                'Control funding rails, manual payout routing, and clear limits.',
           ),
           if (settings == null)
             const SizedBox.shrink()
@@ -3136,29 +3139,17 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: controls.processorMode,
+              value: 'manual_bank_transfer',
               decoration: const InputDecoration(
                 labelText: 'Primary payout processor',
               ),
               items: const <DropdownMenuItem<String>>[
                 DropdownMenuItem<String>(
-                  value: 'automatic_gateway',
-                  child: Text('KoraPay checkout'),
-                ),
-                DropdownMenuItem<String>(
                   value: 'manual_bank_transfer',
                   child: Text('Manual bank transfer'),
                 ),
               ],
-              onChanged: (String? value) {
-                if (value != null) {
-                  setState(() {
-                    _withdrawalControls = controls.copyWith(
-                      processorMode: value,
-                    );
-                  });
-                }
-              },
+              onChanged: null,
             ),
             SwitchListTile.adaptive(
               value: controls.depositsViaBankTransfer,
@@ -3173,16 +3164,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
               },
             ),
             SwitchListTile.adaptive(
-              value: controls.payoutsViaBankTransfer,
+              value: true,
               contentPadding: EdgeInsets.zero,
               title: const Text('Manual bank transfer for payouts'),
-              onChanged: (bool value) {
-                setState(() {
-                  _withdrawalControls = controls.copyWith(
-                    payoutsViaBankTransfer: value,
-                  );
-                });
-              },
+              onChanged: null,
             ),
             SwitchListTile.adaptive(
               value: controls.tradeWithdrawalsEnabled,

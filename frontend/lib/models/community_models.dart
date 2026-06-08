@@ -14,29 +14,27 @@ class CommunityDigest {
   final int unreadHintCount;
 
   factory CommunityDigest.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'community digest');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'community digest',
+    );
     return CommunityDigest(
-      watchlistCount: GteJson.integer(
-        json,
-        <String>['watchlist_count', 'watchlistCount'],
-        fallback: 0,
-      ),
-      liveThreadCount: GteJson.integer(
-        json,
-        <String>['live_thread_count', 'liveThreadCount'],
-        fallback: 0,
-      ),
-      privateThreadCount: GteJson.integer(
-        json,
-        <String>['private_thread_count', 'privateThreadCount'],
-        fallback: 0,
-      ),
-      unreadHintCount: GteJson.integer(
-        json,
-        <String>['unread_hint_count', 'unreadHintCount'],
-        fallback: 0,
-      ),
+      watchlistCount: GteJson.requiredInteger(json, <String>[
+        'watchlist_count',
+        'watchlistCount',
+      ]),
+      liveThreadCount: GteJson.requiredInteger(json, <String>[
+        'live_thread_count',
+        'liveThreadCount',
+      ]),
+      privateThreadCount: GteJson.requiredInteger(json, <String>[
+        'private_thread_count',
+        'privateThreadCount',
+      ]),
+      unreadHintCount: GteJson.requiredInteger(json, <String>[
+        'unread_hint_count',
+        'unreadHintCount',
+      ]),
     );
   }
 }
@@ -65,26 +63,37 @@ class CommunityWatchlistItem {
   final DateTime updatedAt;
 
   factory CommunityWatchlistItem.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'watchlist item');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'watchlist item',
+    );
     return CommunityWatchlistItem(
       id: GteJson.string(json, <String>['id']),
-      competitionKey:
-          GteJson.string(json, <String>['competition_key', 'competitionKey']),
-      competitionTitle: GteJson.string(
-          json, <String>['competition_title', 'competitionTitle']),
-      competitionType: GteJson.string(
-          json, <String>['competition_type', 'competitionType'],
-          fallback: 'general'),
-      notifyOnStory: GteJson.boolean(
-          json, <String>['notify_on_story', 'notifyOnStory'],
-          fallback: true),
-      notifyOnLaunch: GteJson.boolean(
-          json, <String>['notify_on_launch', 'notifyOnLaunch'],
-          fallback: true),
+      competitionKey: GteJson.string(json, <String>[
+        'competition_key',
+        'competitionKey',
+      ]),
+      competitionTitle: GteJson.string(json, <String>[
+        'competition_title',
+        'competitionTitle',
+      ]),
+      competitionType: GteJson.string(json, <String>[
+        'competition_type',
+        'competitionType',
+      ], fallback: 'general'),
+      notifyOnStory: GteJson.boolean(json, <String>[
+        'notify_on_story',
+        'notifyOnStory',
+      ], fallback: true),
+      notifyOnLaunch: GteJson.boolean(json, <String>[
+        'notify_on_launch',
+        'notifyOnLaunch',
+      ], fallback: true),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
     );
@@ -119,23 +128,30 @@ class LiveThread {
   final DateTime updatedAt;
 
   factory LiveThread.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'live thread');
+    final Map<String, Object?> json = GteJson.map(value, label: 'live thread');
     return LiveThread(
       id: GteJson.string(json, <String>['id']),
       threadKey: GteJson.string(json, <String>['thread_key', 'threadKey']),
-      competitionKey: GteJson.stringOrNull(
-          json, <String>['competition_key', 'competitionKey']),
+      competitionKey: GteJson.stringOrNull(json, <String>[
+        'competition_key',
+        'competitionKey',
+      ]),
       title: GteJson.string(json, <String>['title']),
-      createdByUserId:
-          GteJson.stringOrNull(json, <String>['created_by_user_id', 'createdByUserId']),
+      createdByUserId: GteJson.stringOrNull(json, <String>[
+        'created_by_user_id',
+        'createdByUserId',
+      ]),
       status: GteJson.string(json, <String>['status'], fallback: 'open'),
       pinned: GteJson.boolean(json, <String>['pinned'], fallback: false),
-      lastMessageAt: GteJson.dateTimeOrNull(
-          json, <String>['last_message_at', 'lastMessageAt']),
+      lastMessageAt: GteJson.dateTimeOrNull(json, <String>[
+        'last_message_at',
+        'lastMessageAt',
+      ]),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
     );
@@ -166,22 +182,35 @@ class LiveThreadMessage {
   final Map<String, Object?> metadata;
 
   factory LiveThreadMessage.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'live thread message');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'live thread message',
+    );
     return LiveThreadMessage(
       id: GteJson.string(json, <String>['id']),
       threadId: GteJson.string(json, <String>['thread_id', 'threadId']),
-      authorUserId:
-          GteJson.string(json, <String>['author_user_id', 'authorUserId']),
+      authorUserId: GteJson.string(json, <String>[
+        'author_user_id',
+        'authorUserId',
+      ]),
       body: GteJson.string(json, <String>['body']),
-      visibility:
-          GteJson.string(json, <String>['visibility'], fallback: 'public'),
-      likeCount: GteJson.integer(json, <String>['like_count', 'likeCount'], fallback: 0),
-      replyCount: GteJson.integer(json, <String>['reply_count', 'replyCount'], fallback: 0),
+      visibility: GteJson.string(json, <String>[
+        'visibility',
+      ], fallback: 'public'),
+      likeCount: GteJson.requiredInteger(json, <String>[
+        'like_count',
+        'likeCount',
+      ]),
+      replyCount: GteJson.requiredInteger(json, <String>[
+        'reply_count',
+        'replyCount',
+      ]),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
     );
   }
 }
@@ -206,20 +235,28 @@ class PrivateMessageParticipant {
   final Map<String, Object?> metadata;
 
   factory PrivateMessageParticipant.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'private message participant');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'private message participant',
+    );
     return PrivateMessageParticipant(
       id: GteJson.string(json, <String>['id']),
       threadId: GteJson.string(json, <String>['thread_id', 'threadId']),
       userId: GteJson.string(json, <String>['user_id', 'userId']),
-      isMuted:
-          GteJson.boolean(json, <String>['is_muted', 'isMuted'], fallback: false),
-      lastReadAt: GteJson.dateTimeOrNull(
-          json, <String>['last_read_at', 'lastReadAt']),
+      isMuted: GteJson.boolean(json, <String>[
+        'is_muted',
+        'isMuted',
+      ], fallback: false),
+      lastReadAt: GteJson.dateTimeOrNull(json, <String>[
+        'last_read_at',
+        'lastReadAt',
+      ]),
       joinedAt: GteJson.dateTime(json, <String>['joined_at', 'joinedAt']),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
     );
   }
 }
@@ -250,27 +287,33 @@ class PrivateMessageThread {
   final List<PrivateMessageParticipant> participants;
 
   factory PrivateMessageThread.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'private thread');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'private thread',
+    );
     return PrivateMessageThread(
       id: GteJson.string(json, <String>['id']),
       threadKey: GteJson.string(json, <String>['thread_key', 'threadKey']),
-      createdByUserId:
-          GteJson.string(json, <String>['created_by_user_id', 'createdByUserId']),
+      createdByUserId: GteJson.string(json, <String>[
+        'created_by_user_id',
+        'createdByUserId',
+      ]),
       status: GteJson.string(json, <String>['status'], fallback: 'open'),
       subject: GteJson.string(json, <String>['subject'], fallback: ''),
-      lastMessageAt: GteJson.dateTimeOrNull(
-          json, <String>['last_message_at', 'lastMessageAt']),
+      lastMessageAt: GteJson.dateTimeOrNull(json, <String>[
+        'last_message_at',
+        'lastMessageAt',
+      ]),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       updatedAt: GteJson.dateTime(json, <String>['updated_at', 'updatedAt']),
-      participants: GteJson.typedList(
-        json,
-        <String>['participants'],
-        PrivateMessageParticipant.fromJson,
-      ),
+      participants: GteJson.typedList(json, <String>[
+        'participants',
+      ], PrivateMessageParticipant.fromJson),
     );
   }
 }
@@ -293,18 +336,24 @@ class PrivateMessage {
   final Map<String, Object?> metadata;
 
   factory PrivateMessage.fromJson(Object? value) {
-    final Map<String, Object?> json =
-        GteJson.map(value, label: 'private message');
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'private message',
+    );
     return PrivateMessage(
       id: GteJson.string(json, <String>['id']),
       threadId: GteJson.string(json, <String>['thread_id', 'threadId']),
-      senderUserId:
-          GteJson.string(json, <String>['sender_user_id', 'senderUserId']),
+      senderUserId: GteJson.string(json, <String>[
+        'sender_user_id',
+        'senderUserId',
+      ]),
       body: GteJson.string(json, <String>['body']),
       createdAt: GteJson.dateTime(json, <String>['created_at', 'createdAt']),
       metadata: GteJson.map(
-          json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
-          fallback: const <String, Object?>{}),
+        json,
+        keys: <String>['metadata_json', 'metadataJson', 'metadata'],
+        fallback: const <String, Object?>{},
+      ),
     );
   }
 }

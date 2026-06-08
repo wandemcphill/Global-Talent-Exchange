@@ -97,6 +97,10 @@ void main() {
               message: 'Backend available balance is missing.',
               blockedReason: 'creator.wallet.available_balance_missing',
             ),
+            settlements: CreatorSurfaceState<List<SettlementDto>>.degraded(
+              data: const <SettlementDto>[],
+              message: 'Creator settlements contract is partial.',
+            ),
             moderation:
                 CreatorSurfaceState<List<ModerationInboxItemDto>>.degraded(
                   data: const <ModerationInboxItemDto>[],
@@ -112,7 +116,12 @@ void main() {
     expect(find.text('Campaigns'), findsOneWidget);
     expect(find.text('Degraded'), findsWidgets);
     expect(find.text('Sponsored clips'), findsOneWidget);
+    expect(find.text('Settlements'), findsOneWidget);
     expect(find.text('Moderation inbox'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -700));
+    await tester.pumpAndSettle();
+    expect(find.text('Referrals'), findsWidgets);
+    expect(find.text('Referral dashboard blocked'), findsOneWidget);
   });
 }
 

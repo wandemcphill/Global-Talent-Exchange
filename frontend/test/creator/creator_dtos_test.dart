@@ -19,6 +19,55 @@ void main() {
     },
   );
 
+  test(
+    'creator wallet parses canonical nested balance and withdrawal flag',
+    () {
+      final CreatorWalletDto wallet = CreatorWalletDto.fromFinanceJson(
+        const <String, Object?>{
+          'state': 'confirmed',
+          'balance': <String, Object?>{
+            'available': '75.50',
+            'reserved': '4.25',
+            'currency': 'credits',
+          },
+          'pending_settlements': 2,
+          'withdrawal_available': true,
+        },
+      );
+
+      expect(wallet.balance?.available, 75.5);
+      expect(wallet.balance?.reserved, 4.25);
+      expect(wallet.pendingSettlements, 2);
+      expect(wallet.withdrawalAvailable, isTrue);
+      expect(wallet.canWithdraw(25), isTrue);
+    },
+  );
+
+  test('creator settlements and moderation keep partial backend truth', () {
+    final SettlementDto settlement =
+        SettlementDto.fromJson(const <String, Object?>{
+          'id': 'settlement-1',
+          'status': 'pending',
+          'currency': 'credits',
+          'amount': null,
+          'degraded_reason': 'wallet transaction missing',
+        });
+    final ModerationInboxItemDto moderation =
+        ModerationInboxItemDto.fromJson(const <String, Object?>{
+          'id': 'clip:clip-1',
+          'item_type': 'sponsored_clip',
+          'item_id': 'clip-1',
+          'status': 'degraded',
+          'moderation_status': 'flagged',
+          'note': 'Rights proof missing.',
+        });
+
+    expect(settlement.amount, isNull);
+    expect(settlement.degradedReason, 'wallet transaction missing');
+    expect(moderation.status, ClipModerationStatus.flagged);
+    expect(moderation.reason, 'Rights proof missing.');
+  });
+
   test('clip moderation states expose creator labels and actions', () {
     final Map<String, List<Object?>> expectations = <String, List<Object?>>{
       'pending': <Object?>[

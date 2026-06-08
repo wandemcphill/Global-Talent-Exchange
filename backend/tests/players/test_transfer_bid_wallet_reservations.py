@@ -1249,6 +1249,8 @@ def test_accepted_bid_settles_reserved_balance_first_then_available_shortfall(
     assert seller_summary.available_balance == Decimal("300.0000")
     assert reservation["status"] == "settled"
     assert Decimal(str(reservation["settlement_amount_gtex_coin"])) == Decimal("300.0000")
+    assert Decimal(str(reservation["settled_reserved_gtex_coin"])) == Decimal("175.0000")
+    assert Decimal(str(reservation["settled_available_gtex_coin"])) == Decimal("125.0000")
 
 
 def test_future_accepted_bid_keeps_wallet_reserved_until_transfer_activates(

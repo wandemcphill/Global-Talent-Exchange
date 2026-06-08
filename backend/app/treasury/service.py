@@ -34,7 +34,13 @@ from app.models.risk_ops import RiskSeverity, SystemEventSeverity
 from app.models.user import KycStatus, User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit, PayoutRequest, PayoutStatus
 from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
-from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.wallets.service import (
+    WITHDRAWAL_FEE_BPS,
+    WITHDRAWAL_MINIMUM_FEE,
+    InsufficientBalanceError,
+    LedgerPosting,
+    WalletService,
+)
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 DEFAULT_WHATSAPP = "+2347000000000"
@@ -777,9 +783,8 @@ class TreasuryService:
         notes: str | None = None,
     ) -> TreasuryWithdrawalRequest:
         settings = self.ensure_settings(session)
-        use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
-        processor_mode = "manual_bank_transfer" if use_manual_payout else "automatic_gateway"
-        payout_channel = "bank_transfer" if use_manual_payout else "gateway"
+        processor_mode = "manual_bank_transfer"
+        payout_channel = "bank_transfer"
 
         try:
             RiskOpsService(session).assert_withdrawal_allowed(user.id)
@@ -810,7 +815,6 @@ class TreasuryService:
             rate_value=rate_value,
             rate_direction=settings.withdrawal_rate_direction,
         )
-        commissions = self._commission_settings()
         try:
             result = self.wallet_service.request_payout(
                 session,
@@ -819,8 +823,8 @@ class TreasuryService:
                 destination_reference=f"bank:{bank_account.id}",
                 unit=LedgerUnit.COIN,
                 source_scope=source_scope,
-                withdrawal_fee_bps=int(commissions.get("withdrawal_fee_bps", 1000) or 1000),
-                minimum_fee=Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000")),
+                withdrawal_fee_bps=WITHDRAWAL_FEE_BPS,
+                minimum_fee=WITHDRAWAL_MINIMUM_FEE,
                 actor=user,
                 notes=notes,
                 extra_meta={
@@ -840,11 +844,14 @@ class TreasuryService:
         except InsufficientBalanceError as exc:
             raise TreasuryConflictError(str(exc)) from exc
 
-        reference = self._generate_reference(session, prefix="WDL", model=TreasuryWithdrawalRequest)
-        processor_mode = (
-            "manual_bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "automatic_gateway"
+        net_amount = result.payout_request.amount
+        amount_fiat, _ = self._compute_amounts(
+            amount=net_amount,
+            input_unit="coin",
+            rate_value=rate_value,
+            rate_direction=settings.withdrawal_rate_direction,
         )
-        payout_channel = "bank_transfer" if settings.withdrawal_mode == PaymentMode.MANUAL else "gateway"
+        reference = self._generate_reference(session, prefix="WDL", model=TreasuryWithdrawalRequest)
         withdrawal = TreasuryWithdrawalRequest(
             payout_request_id=result.payout_request.id,
             user_id=user.id,
@@ -854,7 +861,7 @@ class TreasuryService:
             amount_coin=amount_coin,
             amount_fiat=amount_fiat,
             fee_amount=result.fee_amount,
-            net_amount=result.payout_request.amount,
+            net_amount=net_amount,
             currency_code=settings.currency_code,
             rate_value=rate_value,
             rate_direction=settings.withdrawal_rate_direction,
@@ -880,7 +887,18 @@ class TreasuryService:
         result.payout_request.status = PayoutStatus.REVIEWING
         session.flush()
         self._flag_withdrawal_risk(session, withdrawal)
-        self.track_event(session, "withdrawal_requested", user=user, metadata={"withdrawal_id": withdrawal.id})
+        self.track_event(
+            session,
+            "withdrawal_requested",
+            user=user,
+            metadata={
+                "withdrawal_id": withdrawal.id,
+                "gross_amount": str(withdrawal.amount_coin),
+                "fee_amount": str(withdrawal.fee_amount),
+                "net_amount": str(withdrawal.net_amount),
+                "source_scope": withdrawal.source_scope,
+            },
+        )
         self.create_notification(
             session,
             user=user,
@@ -1005,7 +1023,17 @@ class TreasuryService:
             resource_type="treasury_withdrawal",
             resource_id=request.id,
             summary=f"Changed withdrawal {request.reference} to {status.value}.",
-            payload={"status": status.value, "previous": previous.value, "notes": admin_notes or ""},
+            payload={
+                "status": status.value,
+                "previous": previous.value,
+                "notes": admin_notes or "",
+                "gross_amount": str(request.amount_coin),
+                "fee_amount": str(request.fee_amount),
+                "net_amount": str(request.net_amount),
+                "source_scope": request.source_scope,
+                "processor_mode": request.processor_mode,
+                "payout_channel": request.payout_channel,
+            },
         )
         user = session.get(User, request.user_id)
         if user is not None:

@@ -69,7 +69,14 @@ from app.wallets.funding_service import (
     WalletFundingService,
 )
 from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
-from app.wallets.service import BALANCE_UNAVAILABLE_MESSAGE, LedgerError, WalletBalanceUnavailableError, WalletService
+from app.wallets.service import (
+    BALANCE_UNAVAILABLE_MESSAGE,
+    WITHDRAWAL_FEE_BPS,
+    WITHDRAWAL_MINIMUM_FEE,
+    LedgerError,
+    WalletBalanceUnavailableError,
+    WalletService,
+)
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
 from app.wallets.providers.registry import get_live_provider_adapter
 from app.models.wallet import LedgerEntry, LedgerUnit, PayoutRequest
@@ -243,11 +250,11 @@ def _build_withdrawal_view(
         fee_amount = Decimal(str(meta.get("fee_amount", "0.0000")))
     net_amount = Decimal(withdrawal.net_amount or 0)
     if net_amount <= Decimal("0.0000"):
-        net_amount = Decimal(str(meta.get("requested_net_amount", gross_amount)))
+        net_amount = Decimal(str(meta.get("requested_net_amount", gross_amount - fee_amount)))
     source_scope = str(withdrawal.source_scope or meta.get("source_scope", "trade"))
     processor_mode = str(withdrawal.processor_mode or meta.get("processor_mode", "manual_bank_transfer"))
     payout_channel = str(withdrawal.payout_channel or meta.get("payout_channel", "bank_transfer"))
-    total_debit = gross_amount + fee_amount
+    total_debit = gross_amount
     if meta.get("total_debit") is not None:
         total_debit = Decimal(str(meta.get("total_debit")))
     legal_disclosures = meta.get("legal_disclosures")
@@ -303,17 +310,14 @@ def _build_withdrawal_quote(
     treasury = _build_treasury_service(request)
     settings = treasury.ensure_settings(session)
     eligibility = treasury.get_withdrawal_eligibility(session, current_user)
-    commissions = _commission_settings(request)
-    fee_bps = int(commissions.get("withdrawal_fee_bps", 1000) or 1000)
-    minimum_fee = Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000"))
-    fee_amount = max((Decimal(amount_coin) * Decimal(fee_bps) / Decimal(10000)), minimum_fee).quantize(
-        Decimal("0.0001")
-    )
+    fee_bps = WITHDRAWAL_FEE_BPS
+    minimum_fee = WITHDRAWAL_MINIMUM_FEE
     gross_amount = Decimal(amount_coin).quantize(Decimal("0.0001"))
-    total_debit = (gross_amount + fee_amount).quantize(Decimal("0.0001"))
-    use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
-    payout_channel = "bank_transfer" if use_manual_payout else "gateway"
-    processor_mode = "manual_bank_transfer" if use_manual_payout else "automatic_gateway"
+    fee_amount = (gross_amount * Decimal(fee_bps) / Decimal(10000)).quantize(Decimal("0.0001"))
+    net_amount = (gross_amount - fee_amount).quantize(Decimal("0.0001"))
+    total_debit = gross_amount
+    payout_channel = "bank_transfer"
+    processor_mode = "manual_bank_transfer"
     blocked_reason = None
     controls = _withdrawal_controls(request)
     if source_scope == WithdrawalSourceScope.COMPETITION and not bool(controls.get("egame_withdrawals_enabled", False)):
@@ -326,16 +330,20 @@ def _build_withdrawal_quote(
         blocked_reason = eligibility.policy_block_reason or "Withdrawal policy requirements are not satisfied."
     elif gross_amount > eligibility.withdrawable_now:
         blocked_reason = "Withdrawal amount exceeds available withdrawable balance."
+    elif source_scope == WithdrawalSourceScope.COMPETITION:
+        reward_balance = treasury.wallet_service.competition_reward_withdrawable_balance(session, current_user)
+        if reward_balance < total_debit:
+            blocked_reason = "Competition reward balance is lower than the requested e-game withdrawal."
     rate_value = Decimal(settings.withdrawal_rate_value)
     estimated_fiat = (
-        gross_amount * rate_value
+        net_amount * rate_value
         if settings.withdrawal_rate_direction.value == "fiat_per_coin"
-        else gross_amount / rate_value
+        else net_amount / rate_value
     )
     return WithdrawalQuoteView(
         gross_amount=gross_amount,
         fee_amount=fee_amount,
-        net_amount=gross_amount,
+        net_amount=net_amount,
         total_debit=total_debit,
         source_scope=source_scope,
         currency_code=settings.currency_code,
@@ -431,9 +439,9 @@ def _build_withdrawal_policy_snapshot(request: Request | None) -> dict[str, obje
     controls = _withdrawal_controls(request)
     return {
         "policy_enforced": bool(controls),
-        "processor_mode": str(controls.get("processor_mode", "manual_bank_transfer")),
+        "processor_mode": "manual_bank_transfer",
         "deposits_via_bank_transfer": bool(controls.get("deposits_via_bank_transfer", True)),
-        "payouts_via_bank_transfer": bool(controls.get("payouts_via_bank_transfer", True)),
+        "payouts_via_bank_transfer": True,
         "egame_withdrawals_enabled": bool(controls.get("egame_withdrawals_enabled", False)),
         "trade_withdrawals_enabled": bool(controls.get("trade_withdrawals_enabled", True)),
     }
@@ -510,10 +518,7 @@ def _resolved_deposit_mode(
 
 
 def _selected_payout_mode(policy: dict[str, object]) -> str:
-    processor_mode = str(policy.get("processor_mode", "manual_bank_transfer"))
-    if processor_mode == "manual_bank_transfer" or bool(policy.get("payouts_via_bank_transfer", True)):
-        return "bank_transfer"
-    return "gateway"
+    return "bank_transfer"
 
 
 def _join_human_labels(labels: list[str]) -> str:
@@ -834,11 +839,7 @@ def get_wallet_adaptive_overview(
         request=request,
     )
     deposit_mode = _resolved_deposit_mode(request=request, settings=settings, policy=policy)
-    payout_mode = (
-        "bank_transfer"
-        if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
-        else _selected_payout_mode(policy)
-    )
+    payout_mode = _selected_payout_mode(policy)
     overview["competition_reward_balance"] = service.competition_reward_balance(session, current_user)
     overview["competition_reward_withdrawable_balance"] = service.competition_reward_withdrawable_balance(
         session, current_user
@@ -922,11 +923,7 @@ def get_wallet_overview(
         request=request,
     )
     deposit_mode = _resolved_deposit_mode(request=request, settings=settings, policy=policy)
-    withdrawal_mode = (
-        "bank_transfer"
-        if settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
-        else _selected_payout_mode(policy)
-    )
+    withdrawal_mode = _selected_payout_mode(policy)
     try:
         summary = _require_financial_summary_available(
             wallet_service.get_wallet_summary(session, current_user, currency=LedgerUnit.COIN)

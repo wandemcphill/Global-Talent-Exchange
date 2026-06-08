@@ -304,7 +304,7 @@ def test_internal_legacy_3d_references_are_documented_and_canonicalized() -> Non
 
     app_destinations = _text("frontend/lib/navigation/app_destinations.dart").lower()
     assert "/internal/dev/match-runtime" in app_destinations
-    assert "/internal/dev/native-match-runtime" in app_destinations
+    assert "/internal/dev/native-match-runtime" not in app_destinations
     assert "deprecated match rendering route quarantined behind internal builds" in app_destinations
     assert "/matches/3d" not in app_destinations
     assert "/matches/native-3d" not in app_destinations
@@ -334,10 +334,11 @@ def test_match_center_verifier_rejects_quarantined_legacy_runtime_routes(
 
     openapi = {
         "paths": {
-            "/api/match-viewer/{match_key}": {"get": {}},
-            "/api/match-viewer/{match_key}/session": {"get": {}},
-            "/api/matches/live/active": {"get": {}},
-            "/api/matches/{match_id}/spectate": {"post": {}},
+            "/api/v2/match-viewer/{match_key}": {"get": {}},
+            "/api/v2/match-viewer/{match_key}/session": {"get": {}},
+            "/api/v2/matches/live/active": {"get": {}},
+            "/api/v2/matches/{match_id}/spectate": {"post": {}},
+            "/api/v2/matches/{match_id}/commentary/stream": {"get": {}},
             forbidden_route: {"post": {}},
         }
     }
@@ -370,7 +371,7 @@ def test_match_center_verifier_requires_canonical_2d_and_realtime_routes(
     with pytest.raises(module.RenderMatchCenterRouteVerificationError) as excinfo:
         module.verify_match_center_routes("https://api.example.test")
 
-    assert "/api/match-viewer/{match_key}" in str(excinfo.value)
+    assert "/api/v2/match-viewer/{match_key}" in str(excinfo.value)
 
 
 def test_production_guardrail_scanner_has_no_unquarantined_violations() -> None:

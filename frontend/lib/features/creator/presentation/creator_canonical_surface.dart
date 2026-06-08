@@ -173,6 +173,20 @@ class CreatorCanonicalSurface extends StatelessWidget {
               icon: Icons.smart_display_outlined,
             ),
             _CanonicalReadinessRow(
+              title: 'Settlements',
+              state:
+                  currentFinance == null
+                      ? 'Settlement totals wait for finance sync.'
+                      : !currentFinance.hasCompleteBackendPayload
+                      ? 'Settlement totals stay degraded until backend finance payload is complete.'
+                      : 'Withdrawal and settlement totals are sourced from finance payload.',
+              evidence:
+                  currentFinance == null
+                      ? 'No settlement payload'
+                      : 'Net withdrawn ${gteFormatCompetitionAmount(currentFinance.totalWithdrawnNet, currentFinance.currency)}, pending ${gteFormatCompetitionAmount(currentFinance.pendingWithdrawals, currentFinance.currency)}',
+              icon: Icons.receipt_long_outlined,
+            ),
+            _CanonicalReadinessRow(
               title: 'Audience',
               state:
                   _hasAudiencePayload(profile)
@@ -183,6 +197,18 @@ class CreatorCanonicalSurface extends StatelessWidget {
                       ? '${profile.stats.communityInvites} invites, ${profile.stats.qualifiedReferrals} qualified joins'
                       : 'Audience payload empty',
               icon: Icons.groups_2_outlined,
+            ),
+            _CanonicalReadinessRow(
+              title: 'Referrals',
+              state:
+                  _hasReferralPayload(profile, currentFinance)
+                      ? 'Referral attribution is backed by creator/referral payload fields.'
+                      : 'Referral actions stay blocked until backend referral metrics are returned.',
+              evidence:
+                  _hasReferralPayload(profile, currentFinance)
+                      ? '${profile.stats.qualifiedReferrals} qualified referrals, ${currentFinance?.attributedSignups ?? 0} attributed signups'
+                      : 'Referral payload empty',
+              icon: Icons.link_outlined,
             ),
             _CanonicalReadinessRow(
               title: 'Moderation',
@@ -211,6 +237,16 @@ class CreatorCanonicalSurface extends StatelessWidget {
     return profile.stats.communityInvites > 0 ||
         profile.stats.qualifiedReferrals > 0 ||
         profile.stats.contestParticipants > 0;
+  }
+
+  bool _hasReferralPayload(
+    CreatorProfile profile,
+    CreatorFinanceSummary? finance,
+  ) {
+    return profile.stats.communityInvites > 0 ||
+        profile.stats.qualifiedReferrals > 0 ||
+        (finance?.attributedSignups ?? 0) > 0 ||
+        (finance?.qualifiedJoins ?? 0) > 0;
   }
 }
 

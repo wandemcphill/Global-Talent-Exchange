@@ -5,6 +5,9 @@ import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/capital/settlement/data/capital_treasury_fixture_store.dart';
 import 'package:gte_frontend/features/capital/wallet/data/capital_wallet_fixture_store.dart';
 
+const int _withdrawalFeeBps = 1000;
+const double _withdrawalMinimumFee = 0;
+
 class CapitalPayoutFixtureStore {
   CapitalPayoutFixtureStore.seeded({
     required CapitalWalletFixtureStore wallet,
@@ -56,19 +59,18 @@ class CapitalPayoutFixtureStore {
       now: now,
       missingPolicies: missingPolicies,
     );
-    const int feeBps = 1000;
-    const double minimumFee = 5;
-    final double feeAmount = math.max(
-      request.amountCoin * feeBps.toDouble() / 10000,
-      minimumFee,
-    );
-    final double totalDebit = request.amountCoin + feeAmount;
     final GteTreasurySettings settings = _treasury.settings;
+    final double feeAmount = _withdrawalFeeAmount(request.amountCoin);
+    final double netAmount = _withdrawalNetAmount(
+      grossAmount: request.amountCoin,
+      feeAmount: feeAmount,
+    );
+    final double totalDebit = request.amountCoin;
     final double rateValue = settings.withdrawalRateValue;
-    final double estimatedFiat =
-        settings.withdrawalRateDirection == GteRateDirection.fiatPerCoin
-            ? request.amountCoin * rateValue
-            : request.amountCoin / math.max(rateValue, 0.0001);
+    final double estimatedFiat = _withdrawalFiatPayout(
+      netAmount: netAmount,
+      settings: settings,
+    );
     String? blockedReason;
     if (eligibility.policyBlocked) {
       blockedReason =
@@ -84,20 +86,17 @@ class CapitalPayoutFixtureStore {
     return GteWithdrawalQuote(
       grossAmount: request.amountCoin,
       feeAmount: feeAmount,
-      netAmount: request.amountCoin,
+      netAmount: netAmount,
       totalDebit: totalDebit,
       sourceScope: request.sourceScope,
       currencyCode: settings.currencyCode,
       rateValue: rateValue,
       rateDirection: settings.withdrawalRateDirection,
       estimatedFiatPayout: estimatedFiat,
-      processorMode:
-          settings.withdrawalMode == GtePaymentMode.automatic
-              ? 'automatic_gateway'
-              : 'manual_bank_transfer',
+      processorMode: 'manual_bank_transfer',
       payoutChannel: 'bank_transfer',
-      feeBps: feeBps,
-      minimumFee: minimumFee,
+      feeBps: _withdrawalFeeBps,
+      minimumFee: _withdrawalMinimumFee,
       eligibility: eligibility,
       blockedReason: blockedReason,
     );
@@ -123,17 +122,14 @@ class CapitalPayoutFixtureStore {
       withdrawal: withdrawal,
       grossAmount: withdrawal.amountCoin,
       feeAmount: withdrawal.feeAmount,
-      netAmount: withdrawal.amountCoin,
+      netAmount: _withdrawalNetAmount(
+        grossAmount: withdrawal.amountCoin,
+        feeAmount: withdrawal.feeAmount,
+      ),
       totalDebit: withdrawal.totalDebit,
       sourceScope: 'trade',
-      processorMode:
-          _treasury.settings.withdrawalMode == GtePaymentMode.automatic
-              ? 'automatic_gateway'
-              : 'manual_bank_transfer',
-      payoutChannel:
-          _treasury.settings.withdrawalMode == GtePaymentMode.automatic
-              ? 'gateway'
-              : 'bank_transfer',
+      processorMode: 'manual_bank_transfer',
+      payoutChannel: 'bank_transfer',
     );
   }
 
@@ -164,12 +160,15 @@ class CapitalPayoutFixtureStore {
     );
     final GteTreasurySettings settings = _treasury.settings;
     final double rateValue = settings.withdrawalRateValue;
-    final bool fiatPerCoin =
-        settings.withdrawalRateDirection == GteRateDirection.fiatPerCoin;
-    final double amountFiat =
-        fiatPerCoin
-            ? request.amountCoin * rateValue
-            : request.amountCoin / math.max(rateValue, 0.0001);
+    final double feeAmount = _withdrawalFeeAmount(request.amountCoin);
+    final double netAmount = _withdrawalNetAmount(
+      grossAmount: request.amountCoin,
+      feeAmount: feeAmount,
+    );
+    final double amountFiat = _withdrawalFiatPayout(
+      netAmount: netAmount,
+      settings: settings,
+    );
     final String reference = 'WDR-${++withdrawalSequence}';
     final GteTreasuryWithdrawalRequest withdrawal =
         GteTreasuryWithdrawalRequest(
@@ -189,7 +188,7 @@ class CapitalPayoutFixtureStore {
           bankCode: bank.bankCode,
           kycStatusSnapshot: _wallet.kycStatusLabel,
           kycTierSnapshot: _wallet.kycStatusLabel,
-          feeAmount: 0,
+          feeAmount: feeAmount,
           totalDebit: request.amountCoin,
           notes: request.notes,
           createdAt: createdAt,
@@ -243,6 +242,12 @@ class CapitalPayoutFixtureStore {
             status: withdrawal.status,
             amountCoin: withdrawal.amountCoin,
             amountFiat: withdrawal.amountFiat,
+            feeAmount: withdrawal.feeAmount,
+            netAmount: _withdrawalNetAmount(
+              grossAmount: withdrawal.amountCoin,
+              feeAmount: withdrawal.feeAmount,
+            ),
+            totalDebit: withdrawal.totalDebit,
             currencyCode: withdrawal.currencyCode,
             bankName: withdrawal.bankName,
             bankAccountNumber: withdrawal.bankAccountNumber,
@@ -458,7 +463,7 @@ class CapitalPayoutFixtureStore {
           status: GteWithdrawalStatus.processing,
           unit: GteLedgerUnit.coin,
           amountCoin: 120,
-          amountFiat: 105600,
+          amountFiat: 95040,
           currencyCode: 'NGN',
           rateValue: 880,
           rateDirection: GteRateDirection.fiatPerCoin,
@@ -468,7 +473,7 @@ class CapitalPayoutFixtureStore {
           bankCode: 'ZENITH',
           kycStatusSnapshot: 'partial_verified_no_id',
           kycTierSnapshot: 'partial_verified_no_id',
-          feeAmount: 0,
+          feeAmount: 12,
           totalDebit: 120,
           notes: 'Weekly payout',
           createdAt: DateTime.utc(2026, 3, 11, 7),
@@ -486,6 +491,27 @@ bool _isActiveWithdrawal(GteTreasuryWithdrawalRequest withdrawal) {
   return withdrawal.status == GteWithdrawalStatus.pendingReview ||
       withdrawal.status == GteWithdrawalStatus.processing ||
       withdrawal.status == GteWithdrawalStatus.approved;
+}
+
+double _withdrawalFeeAmount(double grossAmount) {
+  return grossAmount * _withdrawalFeeBps.toDouble() / 10000;
+}
+
+double _withdrawalNetAmount({
+  required double grossAmount,
+  required double feeAmount,
+}) {
+  return math.max(0, grossAmount - feeAmount);
+}
+
+double _withdrawalFiatPayout({
+  required double netAmount,
+  required GteTreasurySettings settings,
+}) {
+  final double rateValue = settings.withdrawalRateValue;
+  return settings.withdrawalRateDirection == GteRateDirection.fiatPerCoin
+      ? netAmount * rateValue
+      : netAmount / math.max(rateValue, 0.0001);
 }
 
 GteWithdrawalStatus _withdrawalStatusFromString(String value) {

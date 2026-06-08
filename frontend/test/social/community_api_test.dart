@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 import 'package:gte_frontend/data/community_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
@@ -31,6 +31,35 @@ void main() {
     expect(metadata['realtime_topic'], 'community.watchlist');
     expect(metadata['audit_schema'], 'community.surface.v1');
   });
+
+  test(
+    'community api live mode does not fixture-fallback on backend errors',
+    () {
+      final CommunityApi api = CommunityApi.standard(
+        baseUrl: 'https://example.test',
+        accessToken: 'token-1',
+        mode: GteBackendMode.live,
+        transport: _FailingTransport(),
+      );
+
+      expect(
+        api.fetchDigest(),
+        throwsA(
+          isA<GteApiException>()
+              .having(
+                (GteApiException error) => error.type,
+                'type',
+                GteApiErrorType.unavailable,
+              )
+              .having(
+                (GteApiException error) => error.statusCode,
+                'statusCode',
+                503,
+              ),
+        ),
+      );
+    },
+  );
 }
 
 class _CaptureTransport implements GteTransport {
@@ -52,6 +81,16 @@ class _CaptureTransport implements GteTransport {
         'created_at': DateTime.utc(2026, 1, 1).toIso8601String(),
         'updated_at': DateTime.utc(2026, 1, 1).toIso8601String(),
       },
+    );
+  }
+}
+
+class _FailingTransport implements GteTransport {
+  @override
+  Future<GteTransportResponse> send(GteTransportRequest request) async {
+    return const GteTransportResponse(
+      statusCode: 503,
+      body: <String, Object?>{'detail': 'community unavailable'},
     );
   }
 }

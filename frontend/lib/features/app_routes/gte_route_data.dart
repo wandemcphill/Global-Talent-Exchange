@@ -1407,10 +1407,11 @@ class GteAppRouteParser {
         );
       }
       if (segments.length == 3) {
-        if (segments[1] == 'hosted' ||
-            segments[1] == 'gtex' ||
-            segments[1] == 'streamer') {
+        if (segments[1] == 'hosted' || segments[1] == 'gtex') {
           return CompetitionDetailRouteData(competitionId: segments[2]);
+        }
+        if (segments[1] == 'streamer') {
+          return StreamerTournamentDetailRouteData(tournamentId: segments[2]);
         }
         final String competitionId = segments[1];
         if (segments[2] == 'join') {

@@ -651,19 +651,23 @@ class _GteWithdrawalRequestScreenState
                     runSpacing: 12,
                     children: <Widget>[
                       _QuoteMetric(
-                        label: 'Gross',
+                        label: 'Gross debit',
                         value: gteFormatCredits(_quote!.grossAmount),
                       ),
                       _QuoteMetric(
-                        label: 'Fee',
+                        label: 'Fee (10%)',
                         value: gteFormatCredits(_quote!.feeAmount),
+                      ),
+                      _QuoteMetric(
+                        label: 'Net payout',
+                        value: gteFormatCredits(_quote!.netAmount),
                       ),
                       _QuoteMetric(
                         label: 'Total debit',
                         value: gteFormatCredits(_quote!.totalDebit),
                       ),
                       _QuoteMetric(
-                        label: 'Est. payout',
+                        label: 'Est. fiat payout',
                         value: gteFormatFiat(
                           _quote!.estimatedFiatPayout,
                           currency: _quote!.currencyCode,
@@ -896,12 +900,16 @@ class _GteWithdrawalReceiptScreenState
                         runSpacing: 12,
                         children: <Widget>[
                           _QuoteMetric(
-                            label: 'Gross',
+                            label: 'Gross debit',
                             value: gteFormatCredits(receipt.grossAmount),
                           ),
                           _QuoteMetric(
-                            label: 'Fee',
+                            label: 'Fee (10%)',
                             value: gteFormatCredits(receipt.feeAmount),
+                          ),
+                          _QuoteMetric(
+                            label: 'Net payout',
+                            value: gteFormatCredits(receipt.netAmount),
                           ),
                           _QuoteMetric(
                             label: 'Total debit',
@@ -1075,6 +1083,7 @@ class _GteWithdrawalHistoryScreenState
               itemBuilder: (BuildContext context, int index) {
                 final GteTreasuryWithdrawalRequest withdrawal =
                     withdrawals[index];
+                final double netPayout = _withdrawalNetPayout(withdrawal);
                 return GteSurfacePanel(
                   accentColor: _withdrawalTone(withdrawal.status),
                   child: Column(
@@ -1095,9 +1104,34 @@ class _GteWithdrawalHistoryScreenState
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        '${gteFormatCredits(withdrawal.amountCoin)} - ${gteFormatFiat(withdrawal.amountFiat, currency: withdrawal.currencyCode)}',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: <Widget>[
+                          _QuoteMetric(
+                            label: 'Gross debit',
+                            value: gteFormatCredits(withdrawal.amountCoin),
+                          ),
+                          _QuoteMetric(
+                            label: 'Fee (10%)',
+                            value: gteFormatCredits(withdrawal.feeAmount),
+                          ),
+                          _QuoteMetric(
+                            label: 'Net payout',
+                            value: gteFormatCredits(netPayout),
+                          ),
+                          _QuoteMetric(
+                            label: 'Total debit',
+                            value: gteFormatCredits(withdrawal.totalDebit),
+                          ),
+                          _QuoteMetric(
+                            label: 'Fiat payout',
+                            value: gteFormatFiat(
+                              withdrawal.amountFiat,
+                              currency: withdrawal.currencyCode,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -1204,6 +1238,11 @@ bool _isBackendPendingCountry(String? countryCode) {
       normalized == 'backend_pending' ||
       normalized == 'unknown' ||
       normalized == 'unavailable';
+}
+
+double _withdrawalNetPayout(GteTreasuryWithdrawalRequest withdrawal) {
+  final double netPayout = withdrawal.amountCoin - withdrawal.feeAmount;
+  return netPayout < 0 ? 0 : netPayout;
 }
 
 class _QuoteMetric extends StatelessWidget {

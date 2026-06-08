@@ -70,6 +70,7 @@ class CreatorSurfaceState<T> {
 
   bool get isBlocked => state == GtexSurfaceState.blocked;
   bool get isDegraded => state == GtexSurfaceState.degraded;
+  bool get isConfirmed => state == GtexSurfaceState.confirmed;
   bool get hasData => data != null;
 }
 
@@ -339,6 +340,8 @@ class CampaignPerformanceDto {
       settlementAmount: _numberOrNull(json, const <String>[
         'settlement_amount',
         'settlementAmount',
+        'payout_earned',
+        'payoutEarned',
       ]),
     );
   }
@@ -409,6 +412,8 @@ class CampaignDto {
       auditRef: GteJson.stringOrNull(json, const <String>[
         'audit_ref',
         'auditRef',
+        'audit_reference',
+        'auditReference',
       ]),
     );
   }
@@ -589,19 +594,37 @@ class WalletBalanceDto {
 
   static WalletBalanceDto? fromJsonOrNull(Object? value) {
     final Map<String, Object?> json = GteJson.map(value);
-    final bool hasAvailableKey = _containsAnyKey(json, const <String>[
-      'available',
-      'available_balance',
-      'availableBalance',
-      'wallet_available_balance',
-      'walletAvailableBalance',
-      'wallet_available_credit',
-      'walletAvailableCredit',
-    ]);
+    final Map<String, Object?> source =
+        _containsAnyKey(json, const <String>['balance'])
+            ? GteJson.map(
+              json,
+              keys: const <String>['balance'],
+              fallback: const <String, Object?>{},
+            )
+            : json;
+    final bool hasAvailableKey =
+        _containsAnyKey(json, const <String>[
+          'available',
+          'available_balance',
+          'availableBalance',
+          'wallet_available_balance',
+          'walletAvailableBalance',
+          'wallet_available_credit',
+          'walletAvailableCredit',
+        ]) ||
+        _containsAnyKey(source, const <String>[
+          'available',
+          'available_balance',
+          'availableBalance',
+          'wallet_available_balance',
+          'walletAvailableBalance',
+          'wallet_available_credit',
+          'walletAvailableCredit',
+        ]);
     if (!hasAvailableKey) {
       return null;
     }
-    final double? available = _numberOrNull(json, const <String>[
+    final double? available = _numberOrNull(source, const <String>[
       'available',
       'available_balance',
       'availableBalance',
@@ -615,19 +638,19 @@ class WalletBalanceDto {
     }
     return WalletBalanceDto(
       available: available,
-      reserved: _numberOrNull(json, const <String>[
+      reserved: _numberOrNull(source, const <String>[
         'reserved',
         'reserved_balance',
         'reservedBalance',
         'wallet_reserved_balance',
         'walletReservedBalance',
       ]),
-      currency: GteJson.string(json, const <String>[
+      currency: GteJson.string(source, const <String>[
         'currency',
         'wallet_currency',
         'walletCurrency',
       ], fallback: 'credits'),
-      lastSyncedAt: GteJson.dateTimeOrNull(json, const <String>[
+      lastSyncedAt: GteJson.dateTimeOrNull(source, const <String>[
         'last_synced_at',
         'lastSyncedAt',
       ]),
@@ -692,6 +715,7 @@ class CreatorWalletDto {
   const CreatorWalletDto({
     required this.balance,
     required this.pendingSettlements,
+    this.withdrawalAvailable = false,
     this.recentTransactions = const <WalletTransactionDto>[],
   });
 
@@ -705,6 +729,10 @@ class CreatorWalletDto {
         'pending_withdrawals',
         'pendingWithdrawals',
       ]),
+      withdrawalAvailable: GteJson.boolean(json, const <String>[
+        'withdrawal_available',
+        'withdrawalAvailable',
+      ]),
       recentTransactions: GteJson.typedList<WalletTransactionDto>(
         json,
         const <String>['recent_transactions', 'recentTransactions'],
@@ -715,6 +743,7 @@ class CreatorWalletDto {
 
   final WalletBalanceDto? balance;
   final int pendingSettlements;
+  final bool withdrawalAvailable;
   final List<WalletTransactionDto> recentTransactions;
 
   GtexSurfaceState get surfaceState {
@@ -728,7 +757,9 @@ class CreatorWalletDto {
     if (currentBalance == null) {
       return false;
     }
-    return amount > 0 && amount <= currentBalance.available;
+    return withdrawalAvailable &&
+        amount > 0 &&
+        amount <= currentBalance.available;
   }
 }
 
@@ -736,8 +767,11 @@ class SettlementDto {
   const SettlementDto({
     required this.id,
     required this.status,
-    required this.amount,
     required this.currency,
+    this.amount,
+    this.campaignId,
+    this.walletTransactionId,
+    this.degradedReason,
     this.auditRef,
   });
 
@@ -746,21 +780,38 @@ class SettlementDto {
     return SettlementDto(
       id: GteJson.string(json, const <String>['id', 'settlement_id']),
       status: GteJson.string(json, const <String>['status']),
-      amount: GteJson.requiredNumber(json, const <String>['amount']),
+      amount: _numberOrNull(json, const <String>['amount']),
       currency: GteJson.string(json, const <String>[
         'currency',
       ], fallback: 'credits'),
+      campaignId: GteJson.stringOrNull(json, const <String>[
+        'campaign_id',
+        'campaignId',
+      ]),
+      walletTransactionId: GteJson.stringOrNull(json, const <String>[
+        'wallet_transaction_id',
+        'walletTransactionId',
+      ]),
+      degradedReason: GteJson.stringOrNull(json, const <String>[
+        'degraded_reason',
+        'degradedReason',
+      ]),
       auditRef: GteJson.stringOrNull(json, const <String>[
         'audit_ref',
         'auditRef',
+        'audit_reference',
+        'auditReference',
       ]),
     );
   }
 
   final String id;
   final String status;
-  final double amount;
   final String currency;
+  final double? amount;
+  final String? campaignId;
+  final String? walletTransactionId;
+  final String? degradedReason;
   final String? auditRef;
 }
 
@@ -786,19 +837,30 @@ class ModerationInboxItemDto {
       clip: clip,
       status: ClipModerationStatusX.parse(
         GteJson.value(json, const <String>[
+          'moderation_status',
+          'moderationStatus',
           'status',
           'moderation_state',
           'moderationState',
         ]),
       ),
-      reason: GteJson.stringOrNull(json, const <String>['reason']),
+      reason: GteJson.stringOrNull(json, const <String>[
+        'reason',
+        'note',
+        'degraded_reason',
+        'blocked_reason',
+      ]),
       updatedAt: GteJson.dateTimeOrNull(json, const <String>[
         'updated_at',
         'updatedAt',
+        'created_at',
+        'createdAt',
       ]),
       auditRef: GteJson.stringOrNull(json, const <String>[
         'audit_ref',
         'auditRef',
+        'audit_reference',
+        'auditReference',
       ]),
     );
   }
@@ -875,20 +937,27 @@ class CreatorWithdrawalRequest {
     required this.currency,
     required this.method,
     required this.auditRef,
+    this.destinationReference,
+    this.notes,
   });
 
   final double amount;
   final String currency;
   final String method;
   final String auditRef;
+  final String? destinationReference;
+  final String? notes;
 
   bool get hasAuditRef => auditRef.trim().isNotEmpty;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'amount': amount,
-      'currency': currency,
       'method': method,
+      'unit': _ledgerUnit(currency),
+      if ((destinationReference ?? '').trim().isNotEmpty)
+        'destination_reference': destinationReference,
+      if ((notes ?? '').trim().isNotEmpty) 'notes': notes,
       'audit_ref': auditRef,
       'audit_event': 'creator.withdrawal.requested',
     };
@@ -905,9 +974,24 @@ class CreatorWithdrawalReceiptDto {
   factory CreatorWithdrawalReceiptDto.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value);
     return CreatorWithdrawalReceiptDto(
-      id: GteJson.string(json, const <String>['id', 'withdrawal_id']),
-      status: GteJson.string(json, const <String>['status']),
-      auditRef: GteJson.string(json, const <String>['audit_ref', 'auditRef']),
+      id: GteJson.string(json, const <String>[
+        'id',
+        'withdrawal_id',
+        'withdrawalId',
+        'payout_request_id',
+        'payoutRequestId',
+      ]),
+      status: GteJson.string(json, const <String>[
+        'status',
+        'action_state',
+        'actionState',
+      ]),
+      auditRef: GteJson.string(json, const <String>[
+        'audit_ref',
+        'auditRef',
+        'audit_reference',
+        'auditReference',
+      ]),
     );
   }
 
@@ -961,4 +1045,9 @@ double? _numberOrNull(Map<String, Object?> json, List<String> keys) {
 
 String _normalized(Object? value) {
   return value?.toString().trim().toLowerCase().replaceAll('-', '_') ?? '';
+}
+
+String _ledgerUnit(String value) {
+  final String normalized = value.trim().toLowerCase();
+  return normalized == 'credits' ? 'credit' : normalized;
 }

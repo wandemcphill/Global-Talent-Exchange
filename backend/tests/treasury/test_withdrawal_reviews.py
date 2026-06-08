@@ -127,6 +127,11 @@ def test_withdrawal_review_creates_review_and_audit(session) -> None:
     )
     session.commit()
 
+    assert withdrawal.amount_coin == Decimal("10.0000")
+    assert withdrawal.fee_amount == Decimal("1.0000")
+    assert withdrawal.net_amount == Decimal("9.0000")
+    assert withdrawal.amount_fiat == Decimal("9.0000")
+
     reviewed = treasury.review_withdrawal_status(
         session,
         actor=admin,
@@ -145,6 +150,7 @@ def test_withdrawal_review_creates_review_and_audit(session) -> None:
     assert review is not None
     assert review.status_from == TreasuryWithdrawalStatus.PENDING_REVIEW.value
     assert review.status_to == TreasuryWithdrawalStatus.APPROVED.value
+    assert review.gross_amount == Decimal("10.0000")
     assert review.fee_amount == withdrawal.fee_amount
     assert review.net_amount == withdrawal.net_amount
     assert review.notes == "approved"
@@ -157,6 +163,12 @@ def test_withdrawal_review_creates_review_and_audit(session) -> None:
     assert audit.payload["status"] == TreasuryWithdrawalStatus.APPROVED.value
     assert audit.payload["previous"] == TreasuryWithdrawalStatus.PENDING_REVIEW.value
     assert audit.payload["notes"] == "approved"
+    assert audit.payload["gross_amount"] == "10.0000"
+    assert audit.payload["fee_amount"] == "1.0000"
+    assert audit.payload["net_amount"] == "9.0000"
+    assert audit.payload["source_scope"] == "trade"
+    assert audit.payload["processor_mode"] == "manual_bank_transfer"
+    assert audit.payload["payout_channel"] == "bank_transfer"
 
 
 def test_admin_lock_blocks_withdrawal_review_by_other_admin(session) -> None:

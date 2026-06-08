@@ -52,6 +52,12 @@ creatorWalletProvider = StreamProvider<CreatorSurfaceState<CreatorWalletDto>>((
   yield await ref.watch(creatorRepositoryProvider).getWallet();
 });
 
+final StreamProvider<CreatorSurfaceState<List<SettlementDto>>>
+creatorSettlementsProvider =
+    StreamProvider<CreatorSurfaceState<List<SettlementDto>>>((Ref ref) async* {
+      yield await ref.watch(creatorRepositoryProvider).getSettlements();
+    });
+
 final StreamProvider<CreatorSurfaceState<List<ModerationInboxItemDto>>>
 creatorModerationProvider =
     StreamProvider<CreatorSurfaceState<List<ModerationInboxItemDto>>>((

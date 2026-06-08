@@ -133,27 +133,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
-  CommunityDigest _copyDigest({
-    int? watchlistCount,
-    int? liveThreadCount,
-    int? privateThreadCount,
-  }) {
-    final CommunityDigest baseline =
-        _digest ??
-        CommunityDigest(
-          watchlistCount: _watchlist.length,
-          liveThreadCount: _liveThreads.length,
-          privateThreadCount: _privateThreads.length,
-          unreadHintCount: 0,
-        );
-    return CommunityDigest(
-      watchlistCount: watchlistCount ?? baseline.watchlistCount,
-      liveThreadCount: liveThreadCount ?? baseline.liveThreadCount,
-      privateThreadCount: privateThreadCount ?? baseline.privateThreadCount,
-      unreadHintCount: baseline.unreadHintCount,
-    );
-  }
-
   Future<void> _addWatchlist() async {
     final _WatchlistDraft? draft = await _showWatchlistDialog();
     if (draft == null) {
@@ -163,7 +142,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       _isMutating = true;
     });
     try {
-      final CommunityWatchlistItem item = await _api.addWatchlist(
+      await _api.addWatchlist(
         competitionKey: draft.competitionKey,
         competitionTitle: draft.competitionTitle,
         competitionType: draft.competitionType,
@@ -171,10 +150,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _watchlist = <CommunityWatchlistItem>[item, ..._watchlist];
-        _digest = _copyDigest(watchlistCount: _watchlist.length);
-      });
+      await _load();
       AppFeedback.showSuccess(
         context,
         'Added ${draft.competitionTitle} to your community watchlist.',
@@ -202,15 +178,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _watchlist = _watchlist
-            .where(
-              (CommunityWatchlistItem existing) =>
-                  existing.competitionKey != item.competitionKey,
-            )
-            .toList(growable: false);
-        _digest = _copyDigest(watchlistCount: _watchlist.length);
-      });
+      await _load();
       AppFeedback.showSuccess(
         context,
         'Removed ${item.competitionTitle} from your watchlist.',
@@ -246,10 +214,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _liveThreads = <LiveThread>[thread, ..._liveThreads];
-        _digest = _copyDigest(liveThreadCount: _liveThreads.length);
-      });
+      await _load();
       AppFeedback.showSuccess(context, 'Opened live thread "${draft.title}".');
       await _openLiveThread(thread);
     } catch (error) {
@@ -283,10 +248,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _privateThreads = <PrivateMessageThread>[thread, ..._privateThreads];
-        _digest = _copyDigest(privateThreadCount: _privateThreads.length);
-      });
+      await _load();
       AppFeedback.showSuccess(
         context,
         'Opened direct thread "${draft.subjectLabel}".',

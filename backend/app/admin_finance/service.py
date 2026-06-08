@@ -1148,10 +1148,12 @@ class AdminFinanceService:
             "status",
             "user_id",
             "user_email",
+            "gross_amount",
             "amount_coin",
             "amount_fiat",
             "fee_amount",
             "net_amount",
+            "total_debit",
             "currency_code",
             "source_scope",
             "processor_mode",
@@ -1179,10 +1181,12 @@ class AdminFinanceService:
                     "status": self._enum_value(withdrawal.status),
                     "user_id": withdrawal.user_id,
                     "user_email": user.email,
+                    "gross_amount": withdrawal.amount_coin,
                     "amount_coin": withdrawal.amount_coin,
                     "amount_fiat": withdrawal.amount_fiat,
                     "fee_amount": withdrawal.fee_amount,
                     "net_amount": withdrawal.net_amount,
+                    "total_debit": withdrawal.total_debit,
                     "currency_code": withdrawal.currency_code,
                     "source_scope": withdrawal.source_scope,
                     "processor_mode": withdrawal.processor_mode,
@@ -1268,6 +1272,10 @@ class AdminFinanceService:
             "user_email",
             "amount_fiat",
             "amount_coin",
+            "gross_amount",
+            "fee_amount",
+            "net_amount",
+            "total_debit",
             "currency_code",
             "created_at",
             "submitted_at",
@@ -1297,6 +1305,10 @@ class AdminFinanceService:
                         "user_email": user.email,
                         "amount_fiat": deposit.amount_fiat,
                         "amount_coin": deposit.amount_coin,
+                        "gross_amount": None,
+                        "fee_amount": None,
+                        "net_amount": None,
+                        "total_debit": None,
                         "currency_code": deposit.currency_code,
                         "created_at": deposit.created_at,
                         "submitted_at": deposit.submitted_at,
@@ -1328,6 +1340,10 @@ class AdminFinanceService:
                         "user_email": user.email,
                         "amount_fiat": withdrawal.amount_fiat,
                         "amount_coin": withdrawal.amount_coin,
+                        "gross_amount": withdrawal.amount_coin,
+                        "fee_amount": withdrawal.fee_amount,
+                        "net_amount": withdrawal.net_amount,
+                        "total_debit": withdrawal.total_debit,
                         "currency_code": withdrawal.currency_code,
                         "created_at": withdrawal.created_at,
                         "submitted_at": None,
@@ -2951,11 +2967,7 @@ class AdminFinanceService:
             "deposit_mode": (
                 settings.deposit_mode.value if hasattr(settings.deposit_mode, "value") else str(settings.deposit_mode)
             ),
-            "withdrawal_mode": (
-                settings.withdrawal_mode.value
-                if hasattr(settings.withdrawal_mode, "value")
-                else str(settings.withdrawal_mode)
-            ),
+            "withdrawal_mode": "manual",
             "currency_code": settings.currency_code,
             "min_withdrawal": self._amount(settings.min_withdrawal),
             "max_withdrawal": self._amount(settings.max_withdrawal),
@@ -2964,8 +2976,7 @@ class AdminFinanceService:
             "pending_kyc": self._count_pending_kyc(),
             "automatic_deposits_enabled": getattr(settings.deposit_mode, "value", str(settings.deposit_mode))
             in {"automatic", "hybrid"},
-            "automatic_withdrawals_enabled": getattr(settings.withdrawal_mode, "value", str(settings.withdrawal_mode))
-            in {"automatic", "hybrid"},
+            "automatic_withdrawals_enabled": False,
         }
 
     def _canonical_cash_rail_payment_methods(self) -> list[str]:

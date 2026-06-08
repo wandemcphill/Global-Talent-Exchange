@@ -1,6 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
-import 'package:gte_frontend/features/market/market.dart';
+import 'package:gte_frontend/features/market/presentation/widgets/market_models.dart';
 
 void main() {
   test('market access roles match owner manager scout invariants', () {

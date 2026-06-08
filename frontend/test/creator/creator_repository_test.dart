@@ -6,13 +6,14 @@ import 'package:gte_frontend/features/shell/domain/gtex_surface_state.dart';
 
 void main() {
   test(
-    'repository uses existing creator contracts and degrades campaign truth',
+    'repository uses canonical creator contracts and preserves states',
     () async {
       final _PathTransport transport = _PathTransport(
         <String, GteTransportResponse>{
-          'GET /api/v2/creators/me/summary': const GteTransportResponse(
+          'GET /api/v2/creator/profile': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
+              'state': 'confirmed',
               'profile': <String, Object?>{
                 'creator_id': 'creator-1',
                 'display_name': 'Creator One',
@@ -20,22 +21,46 @@ void main() {
               },
             },
           ),
-          'GET /api/v2/creators/me/competitions': const GteTransportResponse(
+          'GET /api/v2/creator/campaigns': const GteTransportResponse(
             statusCode: 200,
-            body: <Object?>[
-              <String, Object?>{
-                'competition_id': 'competition-1',
-                'title': 'Sunday Cup',
-              },
-            ],
+            body: <String, Object?>{'state': 'empty', 'campaigns': <Object?>[]},
           ),
-          'GET /api/v2/creators/me/finance': const GteTransportResponse(
+          'GET /api/v2/creator/wallet': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
-              'currency': 'credits',
-              'wallet_available_balance': '125.50',
-              'pending_withdrawals': 1,
+              'state': 'confirmed',
+              'balance': <String, Object?>{
+                'currency': 'credits',
+                'available': '125.50',
+                'reserved': '5.00',
+              },
+              'pending_settlements': 1,
+              'withdrawal_available': true,
             },
+          ),
+          'GET /api/v2/creator/clips': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{'state': 'empty', 'clips': <Object?>[]},
+          ),
+          'GET /api/v2/creator/settlements': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'state': 'degraded',
+              'degraded_reason': 'settlement wallet transaction missing',
+              'settlements': <Object?>[
+                <String, Object?>{
+                  'id': 'settlement-1',
+                  'status': 'pending',
+                  'currency': 'credits',
+                  'amount': null,
+                  'degraded_reason': 'wallet transaction missing',
+                },
+              ],
+            },
+          ),
+          'GET /api/v2/creator/moderation': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{'state': 'empty', 'items': <Object?>[]},
           ),
         },
       );
@@ -47,20 +72,32 @@ void main() {
           await repository.getCampaigns();
       final CreatorSurfaceState<CreatorWalletDto> wallet =
           await repository.getWallet();
+      final CreatorSurfaceState<List<SponsoredClipDto>> clips =
+          await repository.getClips();
+      final CreatorSurfaceState<List<SettlementDto>> settlements =
+          await repository.getSettlements();
+      final CreatorSurfaceState<List<ModerationInboxItemDto>> moderation =
+          await repository.getModerationInbox();
 
       expect(profile.state, GtexSurfaceState.confirmed);
       expect(profile.data?.displayName, 'Creator One');
-      expect(campaigns.state, GtexSurfaceState.degraded);
-      expect(campaigns.data?.single.title, 'Sunday Cup');
-      expect(campaigns.message, contains('Module 7 campaign contract'));
+      expect(campaigns.state, GtexSurfaceState.empty);
       expect(wallet.state, GtexSurfaceState.confirmed);
       expect(wallet.data?.balance?.available, 125.5);
+      expect(wallet.data?.withdrawalAvailable, isTrue);
+      expect(clips.state, GtexSurfaceState.empty);
+      expect(settlements.state, GtexSurfaceState.degraded);
+      expect(settlements.data?.single.amount, isNull);
+      expect(moderation.state, GtexSurfaceState.empty);
       expect(
         transport.requests,
         containsAll(<String>[
-          'GET /api/v2/creators/me/summary',
-          'GET /api/v2/creators/me/competitions',
-          'GET /api/v2/creators/me/finance',
+          'GET /api/v2/creator/profile',
+          'GET /api/v2/creator/campaigns',
+          'GET /api/v2/creator/wallet',
+          'GET /api/v2/creator/clips',
+          'GET /api/v2/creator/settlements',
+          'GET /api/v2/creator/moderation',
         ]),
       );
     },
@@ -71,11 +108,14 @@ void main() {
     () async {
       final CreatorApiRepository repository = _repository(
         _PathTransport(<String, GteTransportResponse>{
-          'GET /api/v2/creators/me/finance': const GteTransportResponse(
+          'GET /api/v2/creator/wallet': const GteTransportResponse(
             statusCode: 200,
             body: <String, Object?>{
-              'currency': 'credits',
-              'wallet_available_balance': 50,
+              'balance': <String, Object?>{
+                'currency': 'credits',
+                'available': 50,
+              },
+              'withdrawal_available': true,
             },
           ),
         }),
@@ -97,6 +137,93 @@ void main() {
         'creator.withdrawal.exceeds_available_balance',
       );
       expect(result.auditRef, 'audit-withdrawal-2');
+    },
+  );
+
+  test(
+    'repository blocks withdrawal without payout destination before mutation',
+    () async {
+      final _PathTransport transport = _PathTransport(
+        <String, GteTransportResponse>{
+          'GET /api/v2/creator/wallet': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'balance': <String, Object?>{
+                'currency': 'credits',
+                'available': 100,
+              },
+              'withdrawal_available': true,
+            },
+          ),
+        },
+      );
+      final CreatorApiRepository repository = _repository(transport);
+
+      final CreatorSurfaceState<CreatorWithdrawalReceiptDto> result =
+          await repository.requestWithdrawal(
+            const CreatorWithdrawalRequest(
+              amount: 25,
+              currency: 'credits',
+              method: 'bank_transfer',
+              auditRef: 'audit-withdrawal-3',
+            ),
+          );
+
+      expect(result.state, GtexSurfaceState.blocked);
+      expect(result.blockedReason, 'creator.withdrawal.destination_missing');
+      expect(
+        transport.requests,
+        isNot(contains('POST /api/v2/creator/wallet/withdraw')),
+      );
+    },
+  );
+
+  test(
+    'repository posts withdrawal only when backend can authorize it',
+    () async {
+      final _PathTransport transport = _PathTransport(
+        <String, GteTransportResponse>{
+          'GET /api/v2/creator/wallet': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'balance': <String, Object?>{
+                'currency': 'credits',
+                'available': 100,
+              },
+              'withdrawal_available': true,
+            },
+          ),
+          'POST /api/v2/creator/wallet/withdraw': const GteTransportResponse(
+            statusCode: 201,
+            body: <String, Object?>{
+              'state': 'confirmed',
+              'withdrawal_id': 'withdrawal-1',
+              'action_state': 'completed',
+              'audit_reference': 'audit-backend-1',
+            },
+          ),
+        },
+      );
+      final CreatorApiRepository repository = _repository(transport);
+
+      final CreatorSurfaceState<CreatorWithdrawalReceiptDto> result =
+          await repository.requestWithdrawal(
+            const CreatorWithdrawalRequest(
+              amount: 25,
+              currency: 'credits',
+              method: 'bank_transfer',
+              destinationReference: 'bank-destination-1',
+              auditRef: 'audit-withdrawal-4',
+            ),
+          );
+
+      expect(result.state, GtexSurfaceState.confirmed);
+      expect(result.data?.id, 'withdrawal-1');
+      expect(result.auditRef, 'audit-backend-1');
+      expect(
+        transport.requests,
+        contains('POST /api/v2/creator/wallet/withdraw'),
+      );
     },
   );
 

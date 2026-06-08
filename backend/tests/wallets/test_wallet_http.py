@@ -289,8 +289,6 @@ def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
         amount=Decimal("50"),
         destination_reference="bank:test-wallet-ledger",
         unit=LedgerUnit.COIN,
-        withdrawal_fee_bps=0,
-        minimum_fee=Decimal("0.0000"),
         actor=current_user,
     )
     session.commit()
@@ -302,7 +300,7 @@ def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
     assert set(payload) == {"page", "page_size", "total", "items"}
     assert payload["page"] == 1
     assert payload["page_size"] == 3
-    assert payload["total"] == 3
+    assert payload["total"] == 5
     assert len(payload["items"]) == 3
     assert set(payload["items"][0]) == {
         "id",
@@ -318,8 +316,7 @@ def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
         "description",
         "created_at",
     }
-    assert all(item["reason"] == "withdrawal_hold" for item in payload["items"][:2])
-    assert payload["items"][2]["reason"] == "adjustment"
+    assert all(item["reason"] == "withdrawal_hold" for item in payload["items"])
 
 
 def test_api_wallet_accounts_and_payment_event_contracts(api_context) -> None:
@@ -412,26 +409,27 @@ def test_create_trade_withdrawal_request_reserves_balance(api_context) -> None:
     assert payload["source_scope"] == "trade"
     assert payload["status"] == "pending_review"
     assert payload["processor_mode"] == "manual_bank_transfer"
-    assert Decimal(str(payload["fee_amount"])) == Decimal("5.0000")
-    assert Decimal(str(payload["total_debit"])) == Decimal("25.0000")
+    assert Decimal(str(payload["fee_amount"])) == Decimal("2.0000")
+    assert Decimal(str(payload["net_amount"])) == Decimal("18.0000")
+    assert Decimal(str(payload["total_debit"])) == Decimal("20.0000")
 
     overview_response = client.get("/api/wallets/overview")
     assert overview_response.status_code == 200, overview_response.text
     overview = overview_response.json()
-    assert Decimal(str(overview["available_balance"])) == Decimal("75.0000")
-    assert Decimal(str(overview["reserved_balance"])) == Decimal("25.0000")
-    assert Decimal(str(overview["locked_balance"])) == Decimal("25.0000")
+    assert Decimal(str(overview["available_balance"])) == Decimal("80.0000")
+    assert Decimal(str(overview["reserved_balance"])) == Decimal("20.0000")
+    assert Decimal(str(overview["locked_balance"])) == Decimal("20.0000")
     assert Decimal(str(overview["pending_withdrawal_balance"])) == Decimal("20.0000")
     assert Decimal(str(overview["pending_withdrawals"])) == Decimal("20.0000")
     assert len(overview["lock_reasons"]) == 1
     lock_reason = overview["lock_reasons"][0]
     assert lock_reason["code"] == "withdrawal_hold"
     assert lock_reason["label"] == "Withdrawal holds"
-    assert Decimal(str(lock_reason["amount"])) == Decimal("25.0000")
+    assert Decimal(str(lock_reason["amount"])) == Decimal("20.0000")
     assert lock_reason["currency"] == "coin"
     assert lock_reason["source"] == "withdrawal"
     assert str(lock_reason["reference"]).startswith("payout-request:")
-    assert lock_reason["message"] == "Withdrawal holds: 25.0000 coin"
+    assert lock_reason["message"] == "Withdrawal holds: 20.0000 coin"
 
 
 def test_create_competition_withdrawal_request_is_blocked_by_default(api_context) -> None:
@@ -449,6 +447,56 @@ def test_create_competition_withdrawal_request_is_blocked_by_default(api_context
 
     assert response.status_code == 409
     assert "e-game reward withdrawals" in response.json()["detail"].lower()
+
+
+def test_create_competition_withdrawal_request_applies_reward_fee_policy(api_context) -> None:
+    client, session, current_user = api_context
+    _provision_withdrawable_user(session, current_user)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.engine.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"manual_bank_transfer","deposits_via_bank_transfer":true,"payouts_via_bank_transfer":true}}',
+        encoding="utf-8",
+    )
+    wallet_service = WalletService()
+    user_account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+    wallet_service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=Decimal("50")),
+            LedgerPosting(account=platform_account, amount=Decimal("-50")),
+        ],
+        reason=LedgerEntryReason.COMPETITION_REWARD,
+        reference="wallet-http-competition-reward",
+        actor=current_user,
+    )
+    session.commit()
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={
+            "amount_coin": "20.0000",
+            "source_scope": "competition",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["source_scope"] == "competition"
+    assert payload["processor_mode"] == "manual_bank_transfer"
+    assert payload["payout_channel"] == "bank_transfer"
+    assert Decimal(str(payload["amount_coin"])) == Decimal("20.0000")
+    assert Decimal(str(payload["fee_amount"])) == Decimal("2.0000")
+    assert Decimal(str(payload["net_amount"])) == Decimal("18.0000")
+    assert Decimal(str(payload["total_debit"])) == Decimal("20.0000")
+
+    adaptive_response = client.get("/api/wallets/adaptive-overview")
+    assert adaptive_response.status_code == 200, adaptive_response.text
+    adaptive = adaptive_response.json()
+    assert Decimal(str(adaptive["competition_reward_balance"])) == Decimal("50.0000")
+    assert Decimal(str(adaptive["competition_reward_withdrawable_balance"])) == Decimal("30.0000")
 
 
 def test_create_trade_withdrawal_request_requires_bank_account_details(api_context) -> None:
@@ -469,7 +517,7 @@ def test_create_trade_withdrawal_request_requires_bank_account_details(api_conte
     assert "bank account details are required" in response.json()["detail"].lower()
 
 
-def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabled(api_context) -> None:
+def test_create_trade_withdrawal_request_stays_manual_when_gateway_mode_enabled(api_context) -> None:
     client, session, current_user = api_context
     _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
     _provision_withdrawable_user(session, current_user)
@@ -478,7 +526,7 @@ def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabl
     state_path = admin_godmode_state_path(client.app.state.settings.config_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(
-        '{"commissions":{"withdrawal_fee_bps":1000,"minimum_withdrawal_fee_credits":"5.0000"},"withdrawal_controls":{"egame_withdrawals_enabled":false,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":false,"trade_withdrawals_enabled":true,"processor_mode":"manual_bank_transfer","deposits_via_bank_transfer":true,"payouts_via_bank_transfer":true}}',
         encoding="utf-8",
     )
 
@@ -493,8 +541,8 @@ def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabl
     assert response.status_code == 201
     payload = response.json()
     assert payload["status"] == "pending_review"
-    assert payload["processor_mode"] == "automatic_gateway"
-    assert payload["payout_channel"] == "gateway"
+    assert payload["processor_mode"] == "manual_bank_transfer"
+    assert payload["payout_channel"] == "bank_transfer"
 
 
 def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> None:
@@ -823,8 +871,9 @@ def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None
     assert quote_response.status_code == 200, quote_response.text
     quote_payload = quote_response.json()
     assert Decimal(str(quote_payload["gross_amount"])) == Decimal("20.0000")
-    assert Decimal(str(quote_payload["fee_amount"])) == Decimal("5.0000")
-    assert Decimal(str(quote_payload["total_debit"])) == Decimal("25.0000")
+    assert Decimal(str(quote_payload["fee_amount"])) == Decimal("2.0000")
+    assert Decimal(str(quote_payload["net_amount"])) == Decimal("18.0000")
+    assert Decimal(str(quote_payload["total_debit"])) == Decimal("20.0000")
 
     response = client.post(
         "/api/wallets/withdrawals",
@@ -834,7 +883,8 @@ def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None
     payload = response.json()
     assert payload["source_scope"] == "trade"
     assert payload["processor_mode"] == "manual_bank_transfer"
-    assert Decimal(str(payload["fee_amount"])) == Decimal("5.0000")
+    assert Decimal(str(payload["fee_amount"])) == Decimal("2.0000")
+    assert Decimal(str(payload["net_amount"])) == Decimal("18.0000")
     assert payload["platform_positioning"] == GTEX_PLATFORM_POSITIONING
     assert payload["legal_disclosures"] == [
         "No guaranteed profit.",
@@ -848,6 +898,7 @@ def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None
     receipt = receipt_response.json()
     assert receipt["withdrawal"]["id"] == payload["id"]
     assert Decimal(str(receipt["gross_amount"])) == Decimal("20.0000")
-    assert Decimal(str(receipt["fee_amount"])) == Decimal("5.0000")
-    assert Decimal(str(receipt["total_debit"])) == Decimal("25.0000")
+    assert Decimal(str(receipt["fee_amount"])) == Decimal("2.0000")
+    assert Decimal(str(receipt["net_amount"])) == Decimal("18.0000")
+    assert Decimal(str(receipt["total_debit"])) == Decimal("20.0000")
     assert receipt["platform_positioning"] == GTEX_PLATFORM_POSITIONING

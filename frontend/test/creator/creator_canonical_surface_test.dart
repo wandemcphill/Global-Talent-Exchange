@@ -56,11 +56,15 @@ void main() {
         find.textContaining('3 monetized clips, 1200 views'),
         findsOneWidget,
       );
+      expect(find.text('Settlements'), findsOneWidget);
+      expect(find.textContaining('Net withdrawn 195 GTC'), findsOneWidget);
       expect(find.text('Audience'), findsOneWidget);
       expect(
         find.textContaining('12 invites, 5 qualified joins'),
         findsOneWidget,
       );
+      expect(find.text('Referrals'), findsOneWidget);
+      expect(find.textContaining('5 qualified referrals'), findsOneWidget);
       expect(find.text('Moderation'), findsOneWidget);
       expect(find.textContaining('Pending withdrawals 40 GTC'), findsOneWidget);
     },
@@ -111,6 +115,10 @@ void main() {
       expect(find.textContaining('Finance payload is partial'), findsOneWidget);
       expect(find.text('Wallet payload missing'), findsOneWidget);
       expect(find.text('Clip metrics missing'), findsOneWidget);
+      expect(
+        find.textContaining('Settlement totals stay degraded'),
+        findsOneWidget,
+      );
     },
   );
 }

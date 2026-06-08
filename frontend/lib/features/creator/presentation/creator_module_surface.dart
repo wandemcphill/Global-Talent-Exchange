@@ -12,6 +12,7 @@ class CreatorStudioScreen extends StatelessWidget {
     required this.clips,
     required this.analytics,
     required this.wallet,
+    required this.settlements,
     required this.moderation,
   });
 
@@ -20,6 +21,7 @@ class CreatorStudioScreen extends StatelessWidget {
   final CreatorSurfaceState<List<SponsoredClipDto>> clips;
   final CreatorSurfaceState<CreatorAnalyticsDto> analytics;
   final CreatorSurfaceState<CreatorWalletDto> wallet;
+  final CreatorSurfaceState<List<SettlementDto>> settlements;
   final CreatorSurfaceState<List<ModerationInboxItemDto>> moderation;
 
   @override
@@ -59,11 +61,28 @@ class CreatorStudioScreen extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _ContractPanel(
+          title: 'Settlements',
+          state: settlements.state,
+          message: settlements.message,
+          value: _settlementLabel(settlements.data),
+          icon: Icons.receipt_long_outlined,
+        ),
+        const SizedBox(height: 12),
+        _ContractPanel(
           title: 'Audience analytics',
           state: analytics.state,
           message: analytics.message,
           value: _analyticsLabel(analytics.data),
           icon: Icons.groups_2_outlined,
+        ),
+        const SizedBox(height: 12),
+        _ContractPanel(
+          title: 'Referrals',
+          state: GtexSurfaceState.blocked,
+          message:
+              'Creator referral actions stay blocked on this surface until a creator-scoped referral dashboard contract is mounted.',
+          value: 'Referral dashboard blocked',
+          icon: Icons.link_outlined,
         ),
         const SizedBox(height: 12),
         _QuickNavGrid(
@@ -72,6 +91,8 @@ class CreatorStudioScreen extends StatelessWidget {
             _QuickNavItem(Icons.smart_display_outlined, 'Clips'),
             _QuickNavItem(Icons.analytics_outlined, 'Analytics'),
             _QuickNavItem(Icons.account_balance_wallet_outlined, 'Wallet'),
+            _QuickNavItem(Icons.receipt_long_outlined, 'Settlements'),
+            _QuickNavItem(Icons.link_outlined, 'Referrals'),
           ],
         ),
       ],
@@ -88,6 +109,20 @@ class CreatorStudioScreen extends StatelessWidget {
     }
     return '$views views';
   }
+
+  String _settlementLabel(List<SettlementDto>? value) {
+    if (value == null) {
+      return 'settlements unavailable';
+    }
+    if (value.isEmpty) {
+      return '0 settlements';
+    }
+    final int degraded =
+        value.where((SettlementDto item) => item.degradedReason != null).length;
+    return degraded == 0
+        ? '${value.length} settlements'
+        : '${value.length} settlements / $degraded degraded';
+  }
 }
 
 class CreatorWalletCard extends StatelessWidget {
@@ -100,6 +135,7 @@ class CreatorWalletCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final CreatorWalletDto? data = wallet.data;
     final WalletBalanceDto? balance = data?.balance;
+    final bool withdrawalAvailable = data?.withdrawalAvailable ?? false;
     if (wallet.isBlocked || balance == null) {
       return _ContractPanel(
         title: 'Creator wallet blocked',
@@ -139,11 +175,20 @@ class CreatorWalletCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text('Pending settlements ${data?.pendingSettlements ?? 0}'),
+          const SizedBox(height: 4),
+          Text(
+            withdrawalAvailable
+                ? 'Withdrawals are available only through backend payout review.'
+                : 'Withdrawals blocked until backend confirms payout availability.',
+          ),
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: onWithdraw,
+            onPressed:
+                withdrawalAvailable && onWithdraw != null ? onWithdraw : null,
             icon: const Icon(Icons.payments_outlined),
-            label: const Text('Withdraw'),
+            label: Text(
+              withdrawalAvailable ? 'Request withdrawal' : 'Withdrawal blocked',
+            ),
           ),
         ],
       ),

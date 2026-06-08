@@ -1,5 +1,5 @@
-import 'package:gte_frontend/features/shared/data/gte_feature_support.dart';
-import 'package:gte_frontend/features/transfer_center/live_transfer_center_provider.dart';
+import 'package:gte_frontend/features/shared/data/gte_json_support.dart';
+import 'package:gte_frontend/features/transfer_center/transfer_center_models.dart';
 
 enum MarketAccessLevel { owner, manager, scout, guest, suspended, blocked }
 

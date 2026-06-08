@@ -19,6 +19,7 @@ import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/features/match_center/models/match_view_state.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
 import 'package:gte_frontend/navigation/app_router.dart';
+import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
@@ -27,7 +28,7 @@ import 'support/gtex_match_broadcast_fixture.dart';
 
 void main() {
   testWidgets(
-    'router mounts live 2D routes, redirects retired match lanes, and profile admin',
+    'router mounts live 2D routes, quarantines retired match lanes, and profile admin',
     (WidgetTester tester) async {
       final ProviderContainer container = _buildContainer(
         session: const AuthSession(
@@ -58,40 +59,39 @@ void main() {
 
       router.go(AppRoutes.matchesBroadcastLocation('live-match-001'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('match-center-scorebug')), findsWidgets);
-      expect(find.byKey(const Key('match-center-pitch-shell')), findsWidgets);
-      expect(find.text('Broadcast package coming soon'), findsNothing);
+      expect(find.byKey(const Key('match-center-scorebug')), findsNothing);
+      expect(find.byKey(const Key('match-center-pitch-shell')), findsNothing);
+      expect(find.text('Route unavailable'), findsOneWidget);
 
       router.go(AppRoutes.legacyMatchRuntimeLocation('live-match-001'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('match-center-scorebug')), findsWidgets);
-      expect(find.byKey(const Key('match-center-pitch-shell')), findsWidgets);
-      expect(find.text('Route blocked'), findsNothing);
+      expect(find.byKey(const Key('match-center-scorebug')), findsNothing);
+      expect(find.byKey(const Key('match-center-pitch-shell')), findsNothing);
+      expect(find.text('Route unavailable'), findsOneWidget);
 
       router.go(AppRoutes.legacyBlockedMatchRuntime);
       await tester.pumpAndSettle();
-      expect(find.text('Fixtures'), findsOneWidget);
-      expect(find.text('Route blocked'), findsNothing);
+      expect(find.text('Route unavailable'), findsOneWidget);
 
       router.go(AppRoutes.matchesSpectate);
       await tester.pumpAndSettle();
-      expect(find.text('Fixtures'), findsOneWidget);
-      expect(find.text('Spectate mode coming soon'), findsNothing);
+      expect(find.text('Route unavailable'), findsOneWidget);
 
       router.go(AppRoutes.matchesSimulate);
       await tester.pumpAndSettle();
-      expect(find.text('Fixtures'), findsOneWidget);
-      expect(find.text('Match simulation tools coming soon'), findsNothing);
+      expect(find.text('Route unavailable'), findsOneWidget);
 
       router.go(AppRoutes.streamerEngine);
       await tester.pumpAndSettle();
-      expect(find.text('Streamer tournaments coming soon'), findsOneWidget);
+      expect(find.byType(GteExchangeShellScreen), findsOneWidget);
+      expect(find.text('Streamer tournaments coming soon'), findsNothing);
+      expect(find.text('Route unavailable'), findsNothing);
 
       router.go(AppRoutes.profileAdmin);
       await tester.pumpAndSettle();
-      expect(find.text('Admin command center'), findsOneWidget);
-      expect(find.text('Open command center'), findsOneWidget);
-      expect(find.text('Regenerate Portrait'), findsOneWidget);
+      expect(find.byType(GteExchangeShellScreen), findsOneWidget);
+      expect(find.text('Admin'), findsWidgets);
+      expect(find.text('Route unavailable'), findsNothing);
     },
   );
 
@@ -120,7 +120,7 @@ void main() {
   });
 
   testWidgets(
-    'guest sessions see clips route as blocked instead of mounting the live feed',
+    'guest sessions reach the canonical community shell through the clips alias',
     (WidgetTester tester) async {
       final ProviderContainer container = _buildContainer(session: null);
       addTearDown(container.dispose);
@@ -137,8 +137,9 @@ void main() {
       router.go(AppRoutes.clips);
       await tester.pumpAndSettle();
 
-      expect(find.text('Clips are blocked'), findsOneWidget);
-      expect(find.text('Sign in'), findsOneWidget);
+      expect(find.byType(GteExchangeShellScreen), findsOneWidget);
+      expect(find.text('Community'), findsWidgets);
+      expect(find.text('Clips are blocked'), findsNothing);
     },
   );
 }

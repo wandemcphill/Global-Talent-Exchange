@@ -152,7 +152,9 @@ void main() {
       expect(find.text('Community canonical surface'), findsOneWidget);
       expect(find.text('Public reader'), findsOneWidget);
       expect(
-        find.text('Direct chat is locked until a live token is present.'),
+        find.text(
+          'BLOCKED: direct chat is locked until a live token is present.',
+        ),
         findsOneWidget,
       );
       expect(find.text('Transfer room collab'), findsNothing);

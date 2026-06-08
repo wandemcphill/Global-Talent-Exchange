@@ -80,7 +80,7 @@ void main() {
     expect(find.text('Gifting'), findsOneWidget);
     expect(
       find.text(
-        'Gift actions remain settlement-gated until a gift ledger payload is loaded.',
+        'BLOCKED: gift actions require backend gift ledger target and catalog payloads before settlement.',
       ),
       findsOneWidget,
     );
@@ -109,7 +109,7 @@ void main() {
     expect(find.text('Role: '), findsOneWidget);
     expect(find.text('Public reader'), findsOneWidget);
     expect(
-      find.text('Gift actions are locked for public readers.'),
+      find.text('BLOCKED: gift actions are locked for public readers.'),
       findsOneWidget,
     );
     expect(find.textContaining('community.gifting'), findsOneWidget);

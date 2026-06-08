@@ -149,7 +149,7 @@ class MarketApiService {
     }
     final Object? payload = await _requestDirect(
       'POST',
-      '/api/transfer-market/bid/$bidId/withdraw',
+      '/api/v2/transfer-market/bid/$bidId/withdraw',
       body: request.toJson(),
       auth: true,
     );

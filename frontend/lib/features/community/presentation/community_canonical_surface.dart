@@ -101,8 +101,8 @@ class CommunityCanonicalSurface extends StatelessWidget {
               title: 'Discussions',
               state:
                   liveThreads.isEmpty
-                      ? 'No live discussion threads returned yet.'
-                      : '${liveThreads.length} live discussion thread${liveThreads.length == 1 ? '' : 's'} loaded.',
+                      ? 'BACKEND-BACKED EMPTY: no live discussion threads returned yet.'
+                      : 'BACKEND-BACKED: ${liveThreads.length} live discussion thread${liveThreads.length == 1 ? '' : 's'} loaded.',
               evidence:
                   liveThreads.isEmpty
                       ? 'Thread list empty'
@@ -116,10 +116,10 @@ class CommunityCanonicalSurface extends StatelessWidget {
               title: 'Chat',
               state:
                   !hasLiveToken
-                      ? 'Direct chat is locked until a live token is present.'
+                      ? 'BLOCKED: direct chat is locked until a live token is present.'
                       : privateThreads.isEmpty
-                      ? 'No private message threads returned yet.'
-                      : '${privateThreads.length} direct thread${privateThreads.length == 1 ? '' : 's'} loaded.',
+                      ? 'BACKEND-BACKED EMPTY: no private message threads returned yet.'
+                      : 'BACKEND-BACKED: ${privateThreads.length} direct thread${privateThreads.length == 1 ? '' : 's'} loaded.',
               evidence:
                   !hasLiveToken
                       ? 'Authenticated token missing'
@@ -140,8 +140,8 @@ class CommunityCanonicalSurface extends StatelessWidget {
               title: 'Fan hubs',
               state:
                   (currentClubId?.trim().isNotEmpty ?? false)
-                      ? 'Fan hub context is attached to the current club.'
-                      : 'No fan hub context was supplied to this surface.',
+                      ? 'PARTIAL: current club context is attached; fan hub activity counts are not loaded.'
+                      : 'BLOCKED: no fan hub context was supplied to this surface.',
               evidence:
                   watchlist.isEmpty
                       ? 'Watchlist empty'
@@ -153,8 +153,8 @@ class CommunityCanonicalSurface extends StatelessWidget {
               title: 'Reports',
               state:
                   loadError == null
-                      ? 'Report queue scaffold is visible; report counts require moderation payloads.'
-                      : 'Report queue is degraded until community sync recovers.',
+                      ? 'BLOCKED: report actions and counts are not wired to a community moderation payload.'
+                      : 'DEGRADED: report actions and counts stay blocked until community sync recovers.',
               evidence:
                   loadError == null ? 'No report count payload' : loadError!,
               realtimeTopic: 'community.reports',
@@ -164,8 +164,8 @@ class CommunityCanonicalSurface extends StatelessWidget {
               title: 'Reactions',
               state:
                   currentDigest == null
-                      ? 'Reaction aggregates are not returned for public digest.'
-                      : 'Reaction scaffold is ready for aggregate payloads.',
+                      ? 'BLOCKED: reaction actions and aggregates are not returned for public digest.'
+                      : 'BLOCKED: digest is loaded, but no reaction aggregate payload is present.',
               evidence:
                   currentDigest == null
                       ? 'Digest unavailable'
@@ -177,8 +177,8 @@ class CommunityCanonicalSurface extends StatelessWidget {
               title: 'Gifting',
               state:
                   hasLiveToken
-                      ? 'Gift actions remain settlement-gated until a gift ledger payload is loaded.'
-                      : 'Gift actions are locked for public readers.',
+                      ? 'BLOCKED: gift actions require backend gift ledger target and catalog payloads before settlement.'
+                      : 'BLOCKED: gift actions are locked for public readers.',
               evidence: 'No gift ledger payload',
               realtimeTopic: 'community.gifting',
               icon: Icons.card_giftcard_outlined,
