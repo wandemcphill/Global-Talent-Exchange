@@ -1241,3 +1241,12 @@ Scope: backend wallet service test-speed only. No production wallet behavior, pa
 - Verification passed: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\wallets\test_wallet_service.py::test_request_payout_holds_total_and_tracks_fee` -> 1 passed in 190.02s pytest time / 281.4s wall, improving from prior tracked 305.99s pytest time / 392.25s wall.
 - Verification passed: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\wallets\test_wallet_service.py::test_wallet_transaction_service_rolls_back_unbalanced_transaction backend\tests\wallets\test_wallet_service.py::test_wallet_transaction_service_reuses_idempotency_key_across_atomic_calls` -> 2 passed in 178.01s pytest time.
 - Blocker: wallet service collection/import remains slow and the full file has not been rerun; this patch is a measurable focused execution improvement, not the complete backend test-speed fix.
+
+## Stage 2C Coordinator Update - 2026-06-08 Competitions Test-Speed
+
+Scope: backend competitions test harness speed only. No production competition behavior, route contracts, wallet/payment code, generated contracts, frontend source, or legacy runtime surfaces were changed.
+
+- Narrowed the autouse auth override in `backend\tests\competitions\conftest.py` so it only loads the shared GTEX app/session fixtures for tests that request the shared `app` or `client` fixtures.
+- Verification passed: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\competitions\test_competitions_models.py::test_creation_service_builds_linked_competition_aggregate` -> 1 passed in 18.90s pytest time.
+- Blocker unchanged for client-backed route tests: `C:\Python314\python.exe -B -m pytest -p no:cacheprovider -q backend\tests\competitions\test_competition_launch_rules.py::test_user_competition_cannot_use_gtex_name` timed out after 364.2s; the owned pytest process was stopped.
+- Handoff: this patch removes accidental full-app setup from non-app competitions tests, but client-backed competition route tests still need deeper startup/runtime speed work or shard splitting.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi import Request
+from pytest import FixtureRequest
 
 from app.auth.dependencies import get_current_user
 from app.auth.security import TokenError, decode_access_token
@@ -9,7 +10,13 @@ from app.models.user import KycStatus, User, UserRole
 
 
 @pytest.fixture(autouse=True)
-def _authenticated_competition_routes(app, app_session_factory):
+def _authenticated_competition_routes(request: FixtureRequest):
+    if "app" not in request.fixturenames and "client" not in request.fixturenames:
+        yield
+        return
+
+    app = request.getfixturevalue("app")
+    app_session_factory = request.getfixturevalue("app_session_factory")
     user_id = "competition-test-user"
 
     with app_session_factory() as session:
