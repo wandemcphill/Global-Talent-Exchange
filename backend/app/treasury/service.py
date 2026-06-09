@@ -1575,6 +1575,7 @@ class TreasuryService:
             resource_id=resource_id,
             summary=summary,
             payload=payload,
+            created_at=utcnow(),
         )
         session.add(audit)
         session.flush()

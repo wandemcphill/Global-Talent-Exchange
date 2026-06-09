@@ -139,6 +139,7 @@ python -m pytest -p no:cacheprovider -q backend/tests/live_matches backend/tests
 - Treasury withdrawal reinstatement safety was hardened before this manifest: released rejected/cancelled withdrawals must create a new request to re-reserve funds.
 - Production guardrail and canonical acceptance scans passed immediately before this item-1 integration pass.
 - Competition route tests were modernized to canonical `/api/v2/...` paths with token-backed fixtures and a seeded owned club entrant; `backend/tests/competitions/test_competition_launch_rules.py` passed 3/3 on 2026-06-09. This shard is no longer a blocker for the current route-modernization lane.
+- Treasury audit events now stamp application-time `created_at`, which fixed payment-queue reinstate audit ordering in admin finance. `backend/tests/admin_finance/test_admin_finance_router.py` passed 16/16 on 2026-06-09.
 
 ## Worker Handoffs - 2026-06-01
 
