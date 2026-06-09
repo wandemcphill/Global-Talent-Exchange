@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from backend.tests.competitions.api_helpers import api_error_detail, api_headers, api_payload, api_v2_path
+
 
 def _base_payload(**overrides):
     payload = {
@@ -20,13 +22,13 @@ def _base_payload(**overrides):
 
 
 def _error_detail(response):
-    payload = response.json()
-    return payload.get("detail") or payload.get("message")
+    return api_error_detail(response)
 
 
 def test_user_competition_cannot_use_gtex_name(client) -> None:
     response = client.post(
-        "/api/competitions",
+        api_v2_path("/api/competitions"),
+        headers=api_headers(),
         json=_base_payload(name="GTEX Weekend Cup"),
     )
 
@@ -36,8 +38,8 @@ def test_user_competition_cannot_use_gtex_name(client) -> None:
 
 def test_admin_can_create_free_gtex_competition(client, competition_admin_headers) -> None:
     response = client.post(
-        "/api/admin/competitions",
-        headers=competition_admin_headers,
+        api_v2_path("/api/admin/competitions"),
+        headers=api_headers(competition_admin_headers),
         json=_base_payload(
             name="GTEX Official Cup",
             host_type="GTEX_HOSTED",
@@ -47,7 +49,7 @@ def test_admin_can_create_free_gtex_competition(client, competition_admin_header
     )
 
     assert response.status_code == 201, response.text
-    payload = response.json()
+    payload = api_payload(response)
     assert payload["host_type"] == "gtex_hosted"
     assert float(payload["entry_fee"]) == 0.0
     assert payload["currency"] == "coin"
@@ -55,7 +57,8 @@ def test_admin_can_create_free_gtex_competition(client, competition_admin_header
 
 def test_passcode_and_start_lock_join_rules(client, competition_admin_headers, auth_user_factory) -> None:
     create_response = client.post(
-        "/api/competitions",
+        api_v2_path("/api/competitions"),
+        headers=api_headers(),
         json=_base_payload(
             name="Private Manager Cup",
             entry_fee="0.00",
@@ -63,33 +66,34 @@ def test_passcode_and_start_lock_join_rules(client, competition_admin_headers, a
         ),
     )
     assert create_response.status_code == 201, create_response.text
-    competition_id = create_response.json()["id"]
+    competition_id = api_payload(create_response)["id"]
     publish = client.post(
-        f"/api/competitions/{competition_id}/publish",
-        headers=competition_admin_headers,
+        api_v2_path(f"/api/competitions/{competition_id}/publish"),
+        headers=api_headers(competition_admin_headers),
         json={"open_for_join": True},
     )
     assert publish.status_code == 200, publish.text
     entrant = auth_user_factory(suffix="passcode-entrant")
 
     missing_passcode = client.post(
-        f"/api/competitions/{competition_id}/join",
-        headers=entrant["headers"],
-        json={"user_id": entrant["user_id"]},
+        api_v2_path(f"/api/competitions/{competition_id}/join"),
+        headers=api_headers(entrant["headers"]),
+        json={"user_id": entrant["user_id"], "club_name": entrant["club_name"]},
     )
-    assert missing_passcode.status_code == 409
+    assert missing_passcode.status_code == 409, missing_passcode.text
     assert _error_detail(missing_passcode) == "passcode_required"
 
     joined = client.post(
-        f"/api/competitions/{competition_id}/join",
-        headers=entrant["headers"],
-        json={"user_id": entrant["user_id"], "passcode": "locker-room"},
+        api_v2_path(f"/api/competitions/{competition_id}/join"),
+        headers=api_headers(entrant["headers"]),
+        json={"user_id": entrant["user_id"], "club_name": entrant["club_name"], "passcode": "locker-room"},
     )
     assert joined.status_code == 200, joined.text
-    assert joined.json()["participant_count"] == 1
+    assert api_payload(joined)["participant_count"] == 1
 
     late_response = client.post(
-        "/api/competitions",
+        api_v2_path("/api/competitions"),
+        headers=api_headers(),
         json=_base_payload(
             name="Started Manager Cup",
             entry_fee="0.00",
@@ -97,19 +101,19 @@ def test_passcode_and_start_lock_join_rules(client, competition_admin_headers, a
         ),
     )
     assert late_response.status_code == 201, late_response.text
-    late_id = late_response.json()["id"]
+    late_id = api_payload(late_response)["id"]
     publish_late = client.post(
-        f"/api/competitions/{late_id}/publish",
-        headers=competition_admin_headers,
+        api_v2_path(f"/api/competitions/{late_id}/publish"),
+        headers=api_headers(competition_admin_headers),
         json={"open_for_join": True},
     )
     assert publish_late.status_code == 200, publish_late.text
     late_entrant = auth_user_factory(suffix="late-entrant")
 
     blocked = client.post(
-        f"/api/competitions/{late_id}/join",
-        headers=late_entrant["headers"],
-        json={"user_id": late_entrant["user_id"]},
+        api_v2_path(f"/api/competitions/{late_id}/join"),
+        headers=api_headers(late_entrant["headers"]),
+        json={"user_id": late_entrant["user_id"], "club_name": late_entrant["club_name"]},
     )
     assert blocked.status_code == 409
     assert _error_detail(blocked) == "competition_started"

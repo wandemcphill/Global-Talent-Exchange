@@ -1,6 +1,6 @@
 # GTEX Dirty Worktree Integration Manifest
 
-Date: 2026-06-01
+Date: 2026-06-09
 
 Purpose: stabilize the current canonicalization worktree before deeper feature expansion. The repository has many concurrent worker changes, so integration must be lane-based, test-gated, and non-destructive.
 
@@ -138,6 +138,7 @@ python -m pytest -p no:cacheprovider -q backend/tests/live_matches backend/tests
 - Visible dirty status reduced from about 1902 entries to 771 source-level entries.
 - Treasury withdrawal reinstatement safety was hardened before this manifest: released rejected/cancelled withdrawals must create a new request to re-reserve funds.
 - Production guardrail and canonical acceptance scans passed immediately before this item-1 integration pass.
+- Competition route tests were modernized to canonical `/api/v2/...` paths with token-backed fixtures and a seeded owned club entrant; `backend/tests/competitions/test_competition_launch_rules.py` passed 3/3 on 2026-06-09. This shard is no longer a blocker for the current route-modernization lane.
 
 ## Worker Handoffs - 2026-06-01
 
