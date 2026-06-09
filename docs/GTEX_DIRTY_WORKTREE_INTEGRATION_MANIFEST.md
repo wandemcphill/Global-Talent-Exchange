@@ -140,6 +140,7 @@ python -m pytest -p no:cacheprovider -q backend/tests/live_matches backend/tests
 - Production guardrail and canonical acceptance scans passed immediately before this item-1 integration pass.
 - Competition route tests were modernized to canonical `/api/v2/...` paths with token-backed fixtures and a seeded owned club entrant; `backend/tests/competitions/test_competition_launch_rules.py` passed 3/3 on 2026-06-09. This shard is no longer a blocker for the current route-modernization lane.
 - Treasury audit events now stamp application-time `created_at`, which fixed payment-queue reinstate audit ordering in admin finance. `backend/tests/admin_finance/test_admin_finance_router.py` passed 16/16 on 2026-06-09.
+- Wallet overview now carries the admin withdrawal `processor_mode` through to the money-path truth check, so gateway/manual rail status reflects the active policy instead of defaulting to manual. Focused wallet overview cases passed 2/2, and the broader money-path shard `backend\tests\treasury backend\tests\admin_finance backend\tests\wallets backend\tests\integration\test_payment_gateway.py` passed 111/111 on 2026-06-09.
 
 ## Worker Handoffs - 2026-06-01
 

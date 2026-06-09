@@ -437,9 +437,12 @@ def _commission_settings(request: Request | None) -> dict[str, object]:
 
 def _build_withdrawal_policy_snapshot(request: Request | None) -> dict[str, object]:
     controls = _withdrawal_controls(request)
+    processor_mode = str(controls.get("processor_mode", "manual_bank_transfer")).strip().lower()
+    if processor_mode not in {"automatic_gateway", "manual_bank_transfer"}:
+        processor_mode = "manual_bank_transfer"
     return {
         "policy_enforced": bool(controls),
-        "processor_mode": "manual_bank_transfer",
+        "processor_mode": processor_mode,
         "deposits_via_bank_transfer": bool(controls.get("deposits_via_bank_transfer", True)),
         "payouts_via_bank_transfer": True,
         "egame_withdrawals_enabled": bool(controls.get("egame_withdrawals_enabled", False)),
