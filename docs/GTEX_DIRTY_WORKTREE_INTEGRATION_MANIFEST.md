@@ -146,6 +146,7 @@ python -m pytest -p no:cacheprovider -q backend/tests/live_matches backend/tests
 - The competitions hub streamer route panel now opens the live streamer tournament engine, and `frontend/test/competitions/competition_hub_happy_path_test.dart` proves the route handoff. Keep that with the competition hub route-panel batch.
 - GoRouter now owns both `/streamer-tournaments` and legacy `/competitions/streamer` aliases, and `frontend/test/active_shell_route_mount_test.dart` proves both mount `StreamerTournamentEngineScreen` instead of falling through to route unavailable. Keep those aliases with the router/harness batch and leave the shell competition destination model unchanged unless a product lane explicitly needs a streamer shell tab.
 - The direct feature router catalog is also mounted now: `frontend/test/active_shell_route_mount_test.dart` proves `/player-cards`, `/player-cards/inventory`, `/competitions/gtex`, `/competitions/create`, `/competitions/streamer`, `/creator-share-market/clubs/:clubId`, and `/admin/creator-share-market/control` resolve to live screens through the router, not just the shell. Keep the catalog-driven feature routes grouped with the same router/harness batch.
+- The regens hero lineage map action now opens `RegenWorldScreen`, and `frontend/test/regens/regens_screen_test.dart` proves the hop. Keep that with the regens discovery batch and do not leave dead button chrome behind when a canonical screen already exists.
 
 ## Worker Handoffs - 2026-06-01
 

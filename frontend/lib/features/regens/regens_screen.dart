@@ -6,6 +6,7 @@ import '../../core/app_feedback.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../features/app_routes/gte_route_data.dart';
 import '../../features/build_a_son/build_a_son.dart';
+import '../../features/regen_world/presentation/regen_world_screen.dart';
 import '../../models/regen_creation_models.dart';
 import '../../models/regen_universe_models.dart';
 import '../../shared/models/data_source_status.dart';
@@ -44,6 +45,7 @@ class RegensScreen extends ConsumerWidget {
                     authenticated: authenticated,
                     onOpenBuildASon:
                         authenticated ? () => _openBuildASon(context) : null,
+                    onOpenLineageMap: () => _openRegenWorld(context),
                   ),
                   const SizedBox(height: spacingMD),
                   _RegenWorldDiscoveryPanel(data: data),
@@ -96,11 +98,13 @@ class _Hero extends StatelessWidget {
     required this.data,
     required this.authenticated,
     this.onOpenBuildASon,
+    this.onOpenLineageMap,
   });
 
   final RegenUniverseHubData data;
   final bool authenticated;
   final VoidCallback? onOpenBuildASon;
+  final VoidCallback? onOpenLineageMap;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +145,7 @@ class _Hero extends StatelessWidget {
           label: const Text('Build-a-Son'),
         ),
         OutlinedButton.icon(
-          onPressed: null,
+          onPressed: onOpenLineageMap,
           icon: const Icon(Icons.account_tree_rounded),
           label: const Text('Lineage map'),
         ),
@@ -160,6 +164,15 @@ void _openBuildASon(BuildContext context) {
     MaterialPageRoute<void>(
       settings: const RouteSettings(name: '/world/regens/build-a-son'),
       builder: (BuildContext context) => const BuildASonScreen(),
+    ),
+  );
+}
+
+void _openRegenWorld(BuildContext context) {
+  Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      settings: const RouteSettings(name: '/world/regen-world'),
+      builder: (BuildContext context) => const RegenWorldScreen(),
     ),
   );
 }

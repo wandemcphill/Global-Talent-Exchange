@@ -74,6 +74,20 @@ void main() {
     );
   });
 
+  testWidgets('lineage map opens the Regen World surface', (
+    WidgetTester tester,
+  ) async {
+    await _pumpRegensScreen(tester, _sampleHubData());
+
+    expect(find.text('Lineage map'), findsOneWidget);
+
+    await tester.tap(find.text('Lineage map'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Regen World'), findsWidgets);
+    expect(find.text('Discover Regen Talent'), findsOneWidget);
+  });
+
   testWidgets('regen world marks incomplete backend records as sync states', (
     WidgetTester tester,
   ) async {
