@@ -655,7 +655,7 @@ class _GteWithdrawalRequestScreenState
                         value: gteFormatCredits(_quote!.grossAmount),
                       ),
                       _QuoteMetric(
-                        label: 'Fee (10%)',
+                        label: _withdrawalFeeLabelFromBps(_quote!.feeBps),
                         value: gteFormatCredits(_quote!.feeAmount),
                       ),
                       _QuoteMetric(
@@ -904,7 +904,10 @@ class _GteWithdrawalReceiptScreenState
                             value: gteFormatCredits(receipt.grossAmount),
                           ),
                           _QuoteMetric(
-                            label: 'Fee (10%)',
+                            label: _withdrawalFeeLabelFromAmount(
+                              receipt.grossAmount,
+                              receipt.feeAmount,
+                            ),
                             value: gteFormatCredits(receipt.feeAmount),
                           ),
                           _QuoteMetric(
@@ -1113,7 +1116,10 @@ class _GteWithdrawalHistoryScreenState
                             value: gteFormatCredits(withdrawal.amountCoin),
                           ),
                           _QuoteMetric(
-                            label: 'Fee (10%)',
+                            label: _withdrawalFeeLabelFromAmount(
+                              withdrawal.amountCoin,
+                              withdrawal.feeAmount,
+                            ),
                             value: gteFormatCredits(withdrawal.feeAmount),
                           ),
                           _QuoteMetric(
@@ -1223,6 +1229,27 @@ String? _withdrawalEligibilityBlockReason(
     return 'Wait for the current withdrawal review to clear before opening another request.';
   }
   return 'No funds are currently available to withdraw.';
+}
+
+String _withdrawalFeeLabelFromBps(int feeBps) {
+  final double percent = feeBps / 100.0;
+  final String formatted =
+      percent == percent.roundToDouble()
+          ? percent.toStringAsFixed(0)
+          : percent.toStringAsFixed(1);
+  return 'Fee ($formatted%)';
+}
+
+String _withdrawalFeeLabelFromAmount(double grossAmount, double feeAmount) {
+  if (grossAmount <= 0 || feeAmount < 0) {
+    return 'Fee';
+  }
+  final double percent = (feeAmount / grossAmount) * 100.0;
+  final String formatted =
+      percent == percent.roundToDouble()
+          ? percent.toStringAsFixed(0)
+          : percent.toStringAsFixed(1);
+  return 'Fee ($formatted%)';
 }
 
 String _countryLabel(String? countryCode) {

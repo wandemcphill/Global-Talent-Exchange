@@ -115,5 +115,22 @@ void main() {
       expect(state.degraded, isTrue);
       expect(state.degradedReasons, contains('missing_rounds'));
     });
+
+    test('maps settlement-ready lifecycle aliases to completed', () {
+      final CompetitionLifecycleState readyState =
+          CompetitionLifecycleState.fromJson(<String, Object?>{
+            'status': 'settlement_ready',
+            'blocked_reason': null,
+          });
+      final CompetitionLifecycleState awaitingState =
+          CompetitionLifecycleState.fromJson(<String, Object?>{
+            'status': 'awaiting_settlement',
+          });
+
+      expect(readyState.stage, CompetitionLifecycleStage.completed);
+      expect(readyState.isTerminal, isTrue);
+      expect(awaitingState.stage, CompetitionLifecycleStage.completed);
+      expect(awaitingState.isTerminal, isTrue);
+    });
   });
 }

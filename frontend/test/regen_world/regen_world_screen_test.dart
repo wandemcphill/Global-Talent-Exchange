@@ -92,6 +92,42 @@ void main() {
     );
   });
 
+  testWidgets('surfaces pending requested sons as blocked entries', (
+    WidgetTester tester,
+  ) async {
+    await _pumpRegenWorld(
+      tester,
+      data: _hubData(
+        creationOrders: <RegenCreationOrder>[
+          RegenCreationOrder(
+            id: 'order-pending-1',
+            userId: 'owner-1',
+            requestType: 'son',
+            amountCoin: 200,
+            currency: 'GTC',
+            paymentMethod: 'wallet',
+            status: 'pending_payment',
+            requestedName: 'Ayo Adeyemi',
+            requestedCountryCode: 'NG',
+            requestedPosition: 'CAM',
+            createdAt: DateTime.utc(2026, 6, 1, 9),
+            updatedAt: DateTime.utc(2026, 6, 1, 9, 30),
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Ayo Adeyemi'), findsOneWidget);
+    expect(find.text('Payment pending'), findsWidgets);
+
+    await tester.tap(find.text('Ayo Adeyemi'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Backend truth blocked'), findsWidgets);
+    expect(find.textContaining('Missing backend fields:'), findsOneWidget);
+    expect(find.text('Requested Son'), findsWidgets);
+  });
+
   testWidgets('uses reusable loading and error panels', (
     WidgetTester tester,
   ) async {
@@ -224,6 +260,7 @@ RegenUniverseHubData _missingFieldsHubData() {
 RegenUniverseHubData _hubData({
   List<RegenRisingStar> risingStars = const <RegenRisingStar>[],
   List<NationalRegenSeed> nationalRegens = const <NationalRegenSeed>[],
+  List<RegenCreationOrder> creationOrders = const <RegenCreationOrder>[],
   List<String> degradedFeeds = const <String>[],
 }) {
   return RegenUniverseHubData(
@@ -240,7 +277,7 @@ RegenUniverseHubData _hubData({
       globalPeakRating: 0,
       trackedAchievements: <String>[],
     ),
-    creationOrders: const <RegenCreationOrder>[],
+    creationOrders: creationOrders,
     degradedFeeds: degradedFeeds,
   );
 }

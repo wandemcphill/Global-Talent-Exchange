@@ -27,48 +27,46 @@ void main() {
     );
   });
 
-  testWidgets(
-    'creator surface renders backend finance and audience readiness',
-    (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: CreatorCanonicalSurface(
-              profile: _profile(),
-              finance: _finance(),
-              isAuthenticated: true,
-              hasApprovedCreatorAccess: true,
-              syncedAt: DateTime.utc(2026, 6),
-            ),
+  testWidgets('creator surface renders backend finance and audience readiness', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CreatorCanonicalSurface(
+            profile: _profile(),
+            finance: _finance(),
+            isAuthenticated: true,
+            hasApprovedCreatorAccess: true,
+            syncedAt: DateTime.utc(2026, 6),
           ),
         ),
-      );
+      ),
+    );
 
-      expect(find.text('Creator canonical surface'), findsOneWidget);
-      expect(find.text('Wallet'), findsOneWidget);
-      expect(
-        find.textContaining('Wallet balances are sourced'),
-        findsOneWidget,
-      );
-      expect(find.textContaining('250 GTC'), findsOneWidget);
-      expect(find.text('Sponsored clips'), findsOneWidget);
-      expect(
-        find.textContaining('3 monetized clips, 1200 views'),
-        findsOneWidget,
-      );
-      expect(find.text('Settlements'), findsOneWidget);
-      expect(find.textContaining('Net withdrawn 195 GTC'), findsOneWidget);
-      expect(find.text('Audience'), findsOneWidget);
-      expect(
-        find.textContaining('12 invites, 5 qualified joins'),
-        findsOneWidget,
-      );
-      expect(find.text('Referrals'), findsOneWidget);
-      expect(find.textContaining('5 qualified referrals'), findsOneWidget);
-      expect(find.text('Moderation'), findsOneWidget);
-      expect(find.textContaining('Pending withdrawals 40 GTC'), findsOneWidget);
-    },
-  );
+    expect(find.text('Creator canonical surface'), findsOneWidget);
+    expect(find.text('Wallet'), findsOneWidget);
+    expect(find.textContaining('Wallet balances are sourced'), findsOneWidget);
+    expect(find.textContaining('250 GTC'), findsOneWidget);
+    expect(find.text('Sponsored clips'), findsOneWidget);
+    expect(
+      find.textContaining('3 monetized clips, 1200 views'),
+      findsOneWidget,
+    );
+    expect(find.text('Settlements'), findsOneWidget);
+    expect(find.textContaining('Net withdrawn 195 GTC'), findsOneWidget);
+    expect(find.text('Audience'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Audience stats are backed by creator summary fields: 12 community invites, 5 qualified referrals, 44 contest participants.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Referrals'), findsOneWidget);
+    expect(find.textContaining('5 qualified referrals'), findsOneWidget);
+    expect(find.text('Moderation'), findsOneWidget);
+    expect(find.textContaining('Pending withdrawals 40 GTC'), findsOneWidget);
+  });
 
   testWidgets(
     'creator surface marks missing finance payload without local values',
@@ -111,7 +109,12 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('share code is waiting'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Profile payload is present, but the backend share code field is empty.',
+        ),
+        findsOneWidget,
+      );
       expect(find.textContaining('Finance payload is partial'), findsOneWidget);
       expect(find.text('Wallet payload missing'), findsOneWidget);
       expect(find.text('Clip metrics missing'), findsOneWidget);
@@ -121,9 +124,59 @@ void main() {
       );
     },
   );
+
+  testWidgets('creator surface keeps zero audience counts as backend truth', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CreatorCanonicalSurface(
+            profile: _profile(
+              shareCode: '',
+              stats: const CreatorStats(
+                communityInvites: 0,
+                qualifiedReferrals: 0,
+                creatorCompetitions: 0,
+                contestParticipants: 0,
+              ),
+            ),
+            finance: null,
+            isAuthenticated: true,
+            hasApprovedCreatorAccess: true,
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.textContaining(
+        '0 community invites, 0 qualified referrals, 0 contest participants.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'Referral attribution is visible from creator stats, but finance attribution payload is still missing.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('qualifiedReferrals=0; finance payload missing'),
+      findsOneWidget,
+    );
+  });
 }
 
-CreatorProfile _profile({String shareCode = 'LAGOS'}) {
+CreatorProfile _profile({
+  String shareCode = 'LAGOS',
+  CreatorStats stats = const CreatorStats(
+    communityInvites: 12,
+    qualifiedReferrals: 5,
+    creatorCompetitions: 2,
+    contestParticipants: 44,
+  ),
+}) {
   return CreatorProfile(
     creatorId: 'creator-1',
     userId: 'user-1',
@@ -137,12 +190,7 @@ CreatorProfile _profile({String shareCode = 'LAGOS'}) {
     bio: 'Creator studio profile',
     communityTag: 'lagos',
     profileLink: 'https://gtex.test/creator/lagos',
-    stats: const CreatorStats(
-      communityInvites: 12,
-      qualifiedReferrals: 5,
-      creatorCompetitions: 2,
-      contestParticipants: 44,
-    ),
+    stats: stats,
     growthSummary: const CreatorGrowthSummary(
       growthHeadline: 'Growing',
       growthDetail: 'Backend growth payload',

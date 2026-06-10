@@ -466,7 +466,7 @@ class RealtimeHub:
             if match_id is None:
                 return []
             commentary = _optional_string(
-                payload.get("commentary") or payload.get("description") or payload.get("source_commentary")
+                _payload_value(payload, "commentary", "description", "source_commentary")
             )
             stats = _payload_mapping(payload, "stats")
             xg = _payload_mapping(payload, "xg")
@@ -492,12 +492,28 @@ class RealtimeHub:
             degraded = bool(payload.get("degraded")) or any(
                 item.get("severity") in {"degraded", "syncing", "empty"} for item in missing_data
             )
-            score_fields_present = _payload_has_value(payload, "home_score") and _payload_has_value(
+            score_fields_present = _score_side_value(payload, "home") is not None and _score_side_value(
                 payload,
-                "away_score",
+                "away",
+            ) is not None
+            clock_field_present = _payload_has_value(
+                payload,
+                "clock",
+                "clock_label",
+                "clockLabel",
+                "match_clock",
+                "matchClock",
             )
-            clock_field_present = _payload_has_value(payload, "clock")
-            minute_field_present = _payload_has_value(payload, "minute")
+            minute_field_present = _payload_has_value(
+                payload,
+                "minute",
+                "current_minute",
+                "currentMinute",
+                "clock_minute",
+                "clockMinute",
+                "elapsed_minute",
+                "elapsedMinute",
+            )
             commentary_present = commentary is not None
             score_authoritative = (
                 bool(payload.get("score_authoritative", score_fields_present)) and score_fields_present
@@ -513,13 +529,29 @@ class RealtimeHub:
                 "match_id": match_id,
                 "channel": match_topic(match_id),
                 "event_id": payload.get("event_id"),
-                "minute": payload.get("minute"),
+                "minute": _payload_value(
+                    payload,
+                    "minute",
+                    "current_minute",
+                    "currentMinute",
+                    "clock_minute",
+                    "clockMinute",
+                    "elapsed_minute",
+                    "elapsedMinute",
+                ),
                 "event_type": payload.get("event_type"),
                 "source_event_type": payload.get("source_event_type"),
-                "home_score": payload.get("home_score"),
-                "away_score": payload.get("away_score"),
+                "home_score": _score_side_value(payload, "home"),
+                "away_score": _score_side_value(payload, "away"),
                 "status": payload.get("status") or payload.get("result_status"),
-                "clock": payload.get("clock"),
+                "clock": _payload_value(
+                    payload,
+                    "clock",
+                    "clock_label",
+                    "clockLabel",
+                    "match_clock",
+                    "matchClock",
+                ),
                 "team_id": payload.get("team_id"),
                 "team_name": payload.get("team") or payload.get("team_name"),
                 "player_id": payload.get("player_id"),
@@ -660,15 +692,45 @@ def _optional_string(value: Any) -> str | None:
     return resolved or None
 
 
-def _payload_has_value(payload: dict[str, Any], key: str) -> bool:
-    if key not in payload:
-        return False
-    value = payload.get(key)
+def _payload_has_value(payload: dict[str, Any], key: str, *aliases: str) -> bool:
+    value = _payload_value(payload, key, *aliases)
     if value is None:
         return False
     if isinstance(value, str) and not value.strip():
         return False
     return True
+
+
+def _payload_value(payload: dict[str, Any], key: str, *aliases: str) -> Any | None:
+    metadata = payload.get("metadata")
+    sources = [payload]
+    if isinstance(metadata, dict):
+        sources.append(metadata)
+    for source in sources:
+        for candidate_key in (key, *aliases):
+            if candidate_key in source:
+                return source.get(candidate_key)
+    return None
+
+
+def _score_side_value(payload: dict[str, Any], side: str) -> Any | None:
+    direct = _payload_value(payload, f"{side}_score", f"{side}Score")
+    if direct is not None:
+        return direct
+
+    score = _payload_mapping(payload, "score", "scoreboard", "score_board")
+    if not isinstance(score, dict):
+        return None
+
+    for candidate_key in (side, f"{side}_score", f"{side}Score"):
+        if candidate_key not in score:
+            continue
+        value = score.get(candidate_key)
+        if isinstance(value, dict):
+            nested = value.get("score") or value.get("goals") or value.get("value")
+            return nested
+        return value
+    return None
 
 
 def _payload_mapping(payload: dict[str, Any], key: str, *aliases: str) -> dict[str, Any] | None:
@@ -714,7 +776,10 @@ def _match_missing_data(
         if isinstance(raw_missing_data, list)
         else []
     )
-    if not (_payload_has_value(payload, "home_score") and _payload_has_value(payload, "away_score")):
+    if not (
+        _score_side_value(payload, "home") is not None
+        and _score_side_value(payload, "away") is not None
+    ):
         _append_missing_data_once(
             missing_data,
             code="missing_authoritative_score",
@@ -722,7 +787,16 @@ def _match_missing_data(
             severity="blocked",
             message="The realtime match event did not include an authoritative scoreline.",
         )
-    if not _payload_has_value(payload, "minute"):
+    if not _payload_has_value(
+        payload,
+        "minute",
+        "current_minute",
+        "currentMinute",
+        "clock_minute",
+        "clockMinute",
+        "elapsed_minute",
+        "elapsedMinute",
+    ):
         _append_missing_data_once(
             missing_data,
             code="missing_authoritative_minute",
@@ -730,7 +804,14 @@ def _match_missing_data(
             severity="blocked",
             message="The realtime match event did not include an authoritative match minute.",
         )
-    if not _payload_has_value(payload, "clock"):
+    if not _payload_has_value(
+        payload,
+        "clock",
+        "clock_label",
+        "clockLabel",
+        "match_clock",
+        "matchClock",
+    ):
         _append_missing_data_once(
             missing_data,
             code="missing_authoritative_clock",

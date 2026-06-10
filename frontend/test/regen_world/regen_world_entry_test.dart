@@ -306,6 +306,46 @@ void main() {
     expect(entry.missingFields, contains('market access'));
     expect(entry.truthState, RegenWorldTruthState.degraded);
   });
+
+  test('surfaces pending requested sons as blocked backend truth', () {
+    final List<RegenWorldEntry> entries = buildRegenWorldEntries(
+      _hubData(
+        creationOrders: <RegenCreationOrder>[
+          RegenCreationOrder(
+            id: 'order-pending-1',
+            userId: 'owner-1',
+            requestType: 'son',
+            amountCoin: 200,
+            currency: 'GTC',
+            paymentMethod: 'wallet',
+            status: 'pending_payment',
+            requestedName: 'Ayo Adeyemi',
+            requestedCountryCode: 'NG',
+            requestedPosition: 'CAM',
+            createdAt: DateTime.utc(2026, 6, 1, 9),
+            updatedAt: DateTime.utc(2026, 6, 1, 9, 30),
+          ),
+        ],
+      ),
+    );
+
+    expect(entries, hasLength(1));
+    final RegenWorldEntry entry = entries.single;
+    expect(entry.id, 'order-pending-1');
+    expect(entry.name, 'Ayo Adeyemi');
+    expect(entry.position, 'CAM');
+    expect(entry.nationality, 'NG');
+    expect(entry.generationDisplay, 'Generation not published');
+    expect(entry.projectedValueLabel, 'Projected value not published');
+    expect(
+      entry.badges,
+      containsAll(<String>['Requested Son', 'Payment pending']),
+    );
+    expect(entry.truthState, RegenWorldTruthState.blocked);
+    expect(entry.missingFieldsSummary, contains('potential'));
+    expect(entry.missingFieldsSummary, contains('current rating'));
+    expect(entry.missingFieldsSummary, contains('DNA'));
+  });
 }
 
 RegenUniverseHubData _hubData({

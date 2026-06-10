@@ -77,6 +77,12 @@ void main() {
     expect(find.textContaining('cup-1:live'), findsOneWidget);
     expect(find.text('Chat'), findsOneWidget);
     expect(find.textContaining('Scout chat'), findsOneWidget);
+    expect(
+      find.text(
+        'BACKEND-BACKED: fan hub context is attached with 1 watchlist item.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Gifting'), findsOneWidget);
     expect(
       find.text(
@@ -113,5 +119,50 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('community.gifting'), findsOneWidget);
+  });
+
+  testWidgets('community surface keeps loading distinct from empty', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: CommunityCanonicalSurface(
+            isAuthenticated: true,
+            hasLiveToken: true,
+            isLoading: true,
+            isMutating: false,
+            watchlist: <CommunityWatchlistItem>[],
+            liveThreads: <LiveThread>[],
+            privateThreads: <PrivateMessageThread>[],
+            currentClubId: 'club-1',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Syncing backend payloads'), findsOneWidget);
+    expect(
+      find.text(
+        'SYNCING: live discussion threads are still loading from backend.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'SYNCING: private message threads are still loading from backend.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'SYNCING: fan hub context is attached and watchlist counts are still loading.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('SYNCING: reaction aggregates are still loading.'),
+      findsOneWidget,
+    );
   });
 }

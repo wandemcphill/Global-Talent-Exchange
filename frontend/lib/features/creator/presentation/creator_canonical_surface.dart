@@ -93,7 +93,7 @@ class CreatorCanonicalSurface extends StatelessWidget {
                   label: 'Status',
                   value:
                       profile.status.trim().isEmpty
-                          ? 'Backend status pending'
+                          ? 'Backend status unavailable'
                           : profile.status,
                 ),
                 _CanonicalPill(
@@ -113,11 +113,11 @@ class CreatorCanonicalSurface extends StatelessWidget {
               title: 'Studio',
               state:
                   profile.shareCode.trim().isEmpty
-                      ? 'Profile is live, share code is waiting on backend provisioning.'
+                      ? 'Profile payload is present, but the backend share code field is empty.'
                       : 'Profile identity and share code are loaded from backend.',
               evidence:
                   profile.shareCode.trim().isEmpty
-                      ? 'No share-code payload returned'
+                      ? 'Share code is empty in the backend profile payload'
                       : 'Share code ${profile.shareCode}',
               icon: Icons.dashboard_customize_outlined,
             ),
@@ -125,7 +125,7 @@ class CreatorCanonicalSurface extends StatelessWidget {
               title: 'Campaigns',
               state:
                   profile.competitions.isEmpty
-                      ? 'No campaign payload returned yet.'
+                      ? 'BACKEND-BACKED EMPTY: the creator profile returned no campaigns.'
                       : '${profile.competitions.length} backend campaign${profile.competitions.length == 1 ? '' : 's'} loaded.',
               evidence:
                   profile.competitions.isEmpty
@@ -189,25 +189,28 @@ class CreatorCanonicalSurface extends StatelessWidget {
             _CanonicalReadinessRow(
               title: 'Audience',
               state:
-                  _hasAudiencePayload(profile)
-                      ? 'Audience counts are backed by creator summary fields.'
-                      : 'Audience counts are not returned yet.',
+                  'Audience stats are backed by creator summary fields: '
+                  '${profile.stats.communityInvites} community invite${profile.stats.communityInvites == 1 ? '' : 's'}, '
+                  '${profile.stats.qualifiedReferrals} qualified referral${profile.stats.qualifiedReferrals == 1 ? '' : 's'}, '
+                  '${profile.stats.contestParticipants} contest participant${profile.stats.contestParticipants == 1 ? '' : 's'}.',
               evidence:
-                  _hasAudiencePayload(profile)
-                      ? '${profile.stats.communityInvites} invites, ${profile.stats.qualifiedReferrals} qualified joins'
-                      : 'Audience payload empty',
+                  'communityInvites=${profile.stats.communityInvites}, '
+                  'qualifiedReferrals=${profile.stats.qualifiedReferrals}, '
+                  'contestParticipants=${profile.stats.contestParticipants}',
               icon: Icons.groups_2_outlined,
             ),
             _CanonicalReadinessRow(
               title: 'Referrals',
               state:
-                  _hasReferralPayload(profile, currentFinance)
-                      ? 'Referral attribution is backed by creator/referral payload fields.'
-                      : 'Referral actions stay blocked until backend referral metrics are returned.',
+                  currentFinance == null
+                      ? 'Referral attribution is visible from creator stats, but finance attribution payload is still missing.'
+                      : currentFinance.hasCompleteBackendPayload
+                      ? 'Referral attribution is backed by creator and finance payload fields.'
+                      : 'Referral attribution is partially loaded from finance payload and remains provisional.',
               evidence:
-                  _hasReferralPayload(profile, currentFinance)
-                      ? '${profile.stats.qualifiedReferrals} qualified referrals, ${currentFinance?.attributedSignups ?? 0} attributed signups'
-                      : 'Referral payload empty',
+                  currentFinance == null
+                      ? 'qualifiedReferrals=${profile.stats.qualifiedReferrals}; finance payload missing'
+                      : 'qualifiedReferrals=${profile.stats.qualifiedReferrals}, attributedSignups=${currentFinance.attributedSignups}, qualifiedJoins=${currentFinance.qualifiedJoins}',
               icon: Icons.link_outlined,
             ),
             _CanonicalReadinessRow(
@@ -231,22 +234,6 @@ class CreatorCanonicalSurface extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  bool _hasAudiencePayload(CreatorProfile profile) {
-    return profile.stats.communityInvites > 0 ||
-        profile.stats.qualifiedReferrals > 0 ||
-        profile.stats.contestParticipants > 0;
-  }
-
-  bool _hasReferralPayload(
-    CreatorProfile profile,
-    CreatorFinanceSummary? finance,
-  ) {
-    return profile.stats.communityInvites > 0 ||
-        profile.stats.qualifiedReferrals > 0 ||
-        (finance?.attributedSignups ?? 0) > 0 ||
-        (finance?.qualifiedJoins ?? 0) > 0;
   }
 }
 

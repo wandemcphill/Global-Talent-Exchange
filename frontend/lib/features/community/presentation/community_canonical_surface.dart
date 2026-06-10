@@ -84,10 +84,10 @@ class CommunityCanonicalSurface extends StatelessWidget {
                   label: 'Realtime',
                   value:
                       isLoading
-                          ? 'Syncing'
+                          ? 'Syncing backend payloads'
                           : isMutating
                           ? 'Mutation in flight'
-                          : 'Ready for stream attach',
+                          : 'Backend sync idle',
                 ),
                 _CommunityPill(
                   icon: Icons.receipt_long_outlined,
@@ -100,12 +100,18 @@ class CommunityCanonicalSurface extends StatelessWidget {
             _CommunityReadinessRow(
               title: 'Discussions',
               state:
-                  liveThreads.isEmpty
-                      ? 'BACKEND-BACKED EMPTY: no live discussion threads returned yet.'
+                  isLoading && liveThreads.isEmpty
+                      ? 'SYNCING: live discussion threads are still loading from backend.'
+                      : liveThreads.isEmpty
+                      ? 'BACKEND-BACKED EMPTY: no live discussion threads returned.'
+                      : isLoading
+                      ? 'SYNCING: ${liveThreads.length} live discussion thread${liveThreads.length == 1 ? '' : 's'} are attached while the refresh is in flight.'
                       : 'BACKEND-BACKED: ${liveThreads.length} live discussion thread${liveThreads.length == 1 ? '' : 's'} loaded.',
               evidence:
                   liveThreads.isEmpty
-                      ? 'Thread list empty'
+                      ? (isLoading
+                          ? 'Awaiting community.live_threads'
+                          : 'Thread list empty')
                       : liveThreads
                           .map((LiveThread item) => item.threadKey)
                           .join(', '),
@@ -117,14 +123,20 @@ class CommunityCanonicalSurface extends StatelessWidget {
               state:
                   !hasLiveToken
                       ? 'BLOCKED: direct chat is locked until a live token is present.'
+                      : isLoading && privateThreads.isEmpty
+                      ? 'SYNCING: private message threads are still loading from backend.'
                       : privateThreads.isEmpty
-                      ? 'BACKEND-BACKED EMPTY: no private message threads returned yet.'
+                      ? 'BACKEND-BACKED EMPTY: no private message threads returned.'
+                      : isLoading
+                      ? 'SYNCING: ${privateThreads.length} direct thread${privateThreads.length == 1 ? '' : 's'} are attached while the refresh is in flight.'
                       : 'BACKEND-BACKED: ${privateThreads.length} direct thread${privateThreads.length == 1 ? '' : 's'} loaded.',
               evidence:
                   !hasLiveToken
                       ? 'Authenticated token missing'
                       : privateThreads.isEmpty
-                      ? 'Private thread list empty'
+                      ? (isLoading
+                          ? 'Awaiting community.private_messages'
+                          : 'Private thread list empty')
                       : privateThreads
                           .map(
                             (PrivateMessageThread item) =>
@@ -140,19 +152,29 @@ class CommunityCanonicalSurface extends StatelessWidget {
               title: 'Fan hubs',
               state:
                   (currentClubId?.trim().isNotEmpty ?? false)
-                      ? 'PARTIAL: current club context is attached; fan hub activity counts are not loaded.'
+                      ? isLoading
+                          ? 'SYNCING: fan hub context is attached and watchlist counts are still loading.'
+                          : currentDigest == null
+                          ? 'BACKEND-BACKED: fan hub context is attached, but no digest payload was returned.'
+                          : currentDigest.watchlistCount != watchlist.length
+                          ? 'DEGRADED: digest reports ${currentDigest.watchlistCount} watchlist item${currentDigest.watchlistCount == 1 ? '' : 's'}, but the list payload returned ${watchlist.length}.'
+                          : watchlist.isEmpty
+                          ? 'BACKEND-BACKED EMPTY: fan hub context is attached and the watchlist is empty.'
+                          : 'BACKEND-BACKED: fan hub context is attached with ${watchlist.length} watchlist item${watchlist.length == 1 ? '' : 's'}.'
                       : 'BLOCKED: no fan hub context was supplied to this surface.',
               evidence:
-                  watchlist.isEmpty
-                      ? 'Watchlist empty'
-                      : '${watchlist.length} watchlist item${watchlist.length == 1 ? '' : 's'} loaded',
+                  currentDigest == null
+                      ? 'Digest payload missing'
+                      : 'Digest watchlistCount=${currentDigest.watchlistCount}, watchlist length=${watchlist.length}',
               realtimeTopic: 'community.fan_hubs',
               icon: Icons.groups_2_outlined,
             ),
             _CommunityReadinessRow(
               title: 'Reports',
               state:
-                  loadError == null
+                  isLoading
+                      ? 'SYNCING: report actions and counts are waiting on a moderation payload.'
+                      : loadError == null
                       ? 'BLOCKED: report actions and counts are not wired to a community moderation payload.'
                       : 'DEGRADED: report actions and counts stay blocked until community sync recovers.',
               evidence:
@@ -163,13 +185,15 @@ class CommunityCanonicalSurface extends StatelessWidget {
             _CommunityReadinessRow(
               title: 'Reactions',
               state:
-                  currentDigest == null
+                  isLoading
+                      ? 'SYNCING: reaction aggregates are still loading.'
+                      : currentDigest == null
                       ? 'BLOCKED: reaction actions and aggregates are not returned for public digest.'
                       : 'BLOCKED: digest is loaded, but no reaction aggregate payload is present.',
               evidence:
                   currentDigest == null
                       ? 'Digest unavailable'
-                      : '${currentDigest.unreadHintCount} unread hints; no reaction count payload',
+                      : 'digest unreadHintCount=${currentDigest.unreadHintCount}; no reaction count payload',
               realtimeTopic: 'community.reactions',
               icon: Icons.add_reaction_outlined,
             ),

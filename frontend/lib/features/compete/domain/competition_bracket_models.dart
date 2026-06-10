@@ -734,6 +734,10 @@ CompetitionLifecycleStage competitionLifecycleStageFromString(Object? value) {
     case 'completed':
     case 'complete':
     case 'final':
+    case 'settlementready':
+    case 'settlement_ready':
+    case 'awaitingsettlement':
+    case 'awaiting_settlement':
       return CompetitionLifecycleStage.completed;
     case 'cancelled':
     case 'canceled':

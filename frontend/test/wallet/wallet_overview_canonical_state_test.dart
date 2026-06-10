@@ -236,6 +236,86 @@ void main() {
     expect(submitButton, findsOneWidget);
     expect(tester.widget<FilledButton>(submitButton).onPressed, isNull);
   });
+
+  testWidgets('withdrawal quote labels fee percentage from backend fee bps', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final GteExchangeController controller = _authenticatedController(
+      _WithdrawalFeeLabelApi(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteWithdrawalRequestScreen(
+          controller: controller,
+          eligibility: const GteWithdrawalEligibility(
+            availableBalance: 1200,
+            withdrawableNow: 900,
+            remainingAllowance: 900,
+            nextEligibleAt: null,
+            kycStatus: GteKycStatus.fullyVerified,
+            requiresKyc: false,
+            requiresBankAccount: false,
+            pendingWithdrawals: 0,
+            countryCode: 'NG',
+            countryWithdrawalsEnabled: true,
+            policyBlocked: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is TextField &&
+            widget.decoration?.labelText == 'Amount (Transfer Balance)',
+      ),
+      '200',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Preview quote'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Withdrawal quote'), findsOneWidget);
+    expect(find.text('Fee (12.5%)'), findsOneWidget);
+    expect(find.text('25 GTEX Coin'), findsOneWidget);
+  });
+
+  testWidgets('withdrawal history labels fee percentage from backend amounts', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final GteExchangeController controller = _authenticatedController(
+      _WithdrawalFeeLabelApi(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteWithdrawalHistoryScreen(controller: controller),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Withdrawal history'), findsOneWidget);
+    expect(find.text('Fee (12.5%)'), findsOneWidget);
+    expect(find.text('25 GTEX Coin'), findsOneWidget);
+  });
 }
 
 class _WalletRestrictionApi extends GteMockApi {
@@ -332,6 +412,76 @@ class _WalletRestrictionApi extends GteMockApi {
       countryWithdrawalsEnabled: true,
       policyBlocked: false,
     );
+  }
+}
+
+class _WithdrawalFeeLabelApi extends _WalletRestrictionApi {
+  @override
+  Future<GteWithdrawalQuote> fetchWithdrawalQuote(
+    GteWithdrawalQuoteRequest request,
+  ) async {
+    return GteWithdrawalQuote(
+      grossAmount: 200,
+      feeAmount: 25,
+      netAmount: 175,
+      totalDebit: 225,
+      sourceScope: request.sourceScope,
+      currencyCode: 'GTC',
+      rateValue: 2,
+      rateDirection: GteRateDirection.fiatPerCoin,
+      estimatedFiatPayout: 400,
+      processorMode: 'manual',
+      payoutChannel: 'bank_transfer',
+      feeBps: 1250,
+      minimumFee: 0,
+      eligibility: const GteWithdrawalEligibility(
+        availableBalance: 1200,
+        withdrawableNow: 900,
+        remainingAllowance: 900,
+        nextEligibleAt: null,
+        kycStatus: GteKycStatus.fullyVerified,
+        requiresKyc: false,
+        requiresBankAccount: false,
+        pendingWithdrawals: 0,
+        countryCode: 'NG',
+        countryWithdrawalsEnabled: true,
+        policyBlocked: false,
+      ),
+    );
+  }
+
+  @override
+  Future<List<GteTreasuryWithdrawalRequest>> listWithdrawalRequests() async {
+    return <GteTreasuryWithdrawalRequest>[
+      GteTreasuryWithdrawalRequest(
+        id: 'withdrawal-1',
+        payoutRequestId: 'payout-1',
+        reference: 'withdrawal-ref-1',
+        status: GteWithdrawalStatus.paid,
+        unit: GteLedgerUnit.coin,
+        amountCoin: 200,
+        amountFiat: 400,
+        currencyCode: 'NGN',
+        rateValue: 2,
+        rateDirection: GteRateDirection.fiatPerCoin,
+        bankName: 'Zenith Bank',
+        bankAccountNumber: '1234567890',
+        bankAccountName: 'Fixture Trader',
+        bankCode: '057',
+        kycStatusSnapshot: 'fully_verified',
+        kycTierSnapshot: 'tier_2',
+        feeAmount: 25,
+        totalDebit: 225,
+        notes: null,
+        createdAt: DateTime.utc(2026, 6, 1, 12),
+        reviewedAt: DateTime.utc(2026, 6, 1, 12, 5),
+        approvedAt: DateTime.utc(2026, 6, 1, 12, 6),
+        processedAt: DateTime.utc(2026, 6, 1, 12, 8),
+        paidAt: DateTime.utc(2026, 6, 1, 12, 10),
+        rejectedAt: null,
+        cancelledAt: null,
+      ),
+    ];
   }
 }
 

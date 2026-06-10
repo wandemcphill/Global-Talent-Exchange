@@ -13,6 +13,23 @@ Coordinator scope: this document tracks production readiness, worker ownership, 
 - No Paystack product-facing rail, label, route, schema default, workflow, copy, or contract.
 - Frontend must reflect backend truth. Missing backend data renders loading, empty, blocked, syncing, degraded, confirmed, or error states.
 
+## Build Phases
+
+Keep the current dirty tree moving in small, non-overlapping waves. The suggested build order is:
+
+1. Money path and admin finance truth.
+2. Build-a-Son and Regen World backend authority.
+3. Competitions and settlement readiness.
+4. Admin queues, exports, and audit ordering.
+5. Match Center and websocket authority.
+6. Creator/community scope-lock and backend-truth cleanup.
+7. Main-worktree integration, full validation, and release proof.
+
+Parallelism guidance:
+- Use 2 threads for narrow or linear phases.
+- Use 3 threads for route-heavy or money-heavy phases.
+- Keep total active threads to 4 or fewer, including coordination.
+
 ## Current Readiness Snapshot
 
 | Area | Current state | Coordinator note |
@@ -46,7 +63,12 @@ Coordinator scope: this document tracks production readiness, worker ownership, 
 | Competition streamer family wiring | PASS targeted | `frontend/test/active_shell_live_migration_smoke_test.dart` now proves `LiveCompetitionsHubScreen(family: CompetitionFamilyRoute.streamer)` renders live streamer competition cards instead of the previous launch block. | Safe to stage with the competitions hub batch after the remaining arena-family route review. |
 | Competition hub streamer route panel | PASS targeted | `frontend/test/competitions/competition_hub_happy_path_test.dart` now proves the competitions hub streamer route button opens the live streamer tournament engine. | Safe to stage with the competitions hub route-panel batch. |
 | Competition streamer GoRouter aliases | PASS targeted | `frontend/test/active_shell_route_mount_test.dart` now proves both `/streamer-tournaments` and `/competitions/streamer` mount `StreamerTournamentEngineScreen` through the canonical router instead of falling through to route unavailable. | Safe to stage with the Flutter router/harness batch; keep the shell route model unchanged unless a product lane explicitly asks for a shell streamer destination. |
+| Competition settlement realtime authority | PASS targeted | `backend/tests/realtime/test_competition_settlement_realtime.py` and `frontend/test/competitions/competition_settlement_state_test.dart` now prove settlement events and lifecycle parsing stay backend-authoritative without inventing payout data. | Safe to stage with the realtime/competitions verification batch. |
+| Competition lifecycle alias parsing | PASS targeted | `frontend/test/compete/competition_bracket_models_test.dart` now proves `settlement_ready` and `awaiting_settlement` map to the completed lifecycle state without synthesizing extra bracket data. | Safe to stage with the compete route/model batch. |
 | Regen lineage map wiring | PASS targeted | `frontend/test/regens/regens_screen_test.dart` now proves the `Lineage map` action opens `RegenWorldScreen` instead of leaving dead chrome on the regens hero. | Safe to stage with the regens discovery batch. |
+| Build-a-Son projection contract validation | PASS targeted | `frontend/test/build_a_son/build_a_son_projection_contract_test.dart` now proves semantically invalid but parseable preview payloads are blocked before confirmation. | Safe to stage with the Thread 3 product-flow batch; this is proof-only and does not touch production source. |
+| Withdrawal fee label rendering | PASS targeted | `frontend/test/wallet/wallet_overview_canonical_state_test.dart` now proves withdrawal quote and history screens derive their fee labels from backend fee bps and amounts instead of a fixed copy string. | Safe to stage with the money-path UI proof batch. |
+| Creator/community truth framing | PASS targeted | `frontend/lib/features/creator/presentation/creator_canonical_surface.dart`, `frontend/lib/features/community/presentation/community_canonical_surface.dart`, and their tests now keep zero counts and loading states separate from backend-backed empty states. | Safe to stage with the creator/community scope-lock batch. |
 | Withdrawal 10% fee policy | PASS focused, full gate pending | Verifier handoff reports 11 selected wallet service, wallet HTTP, and treasury withdrawal review tests passed for gross/fee/net behavior. | Stage as one money cluster only after frontend display/model changes are reviewed and final main-worktree checks are queued. |
 | Full backend suite | FAIL by absence of proof | No current full `C:\Python314\python.exe -m pytest backend/tests -p no:cacheprovider` green result. | Remains a hard launch blocker. |
 | Generated API contract | PASS targeted / STAGE REVIEW | Coordinator rerun of `python tools\audit\check_api_contract_violations.py` reports zero violations after reconciling Creator Module 7 paths into `shared/api_contract.json` and regenerating Dart from shared. | Safe for contract-owner review; do not hand-edit generated Dart. |
@@ -112,8 +134,8 @@ No fake fixture mode, production workaround, route promotion, payment-rail chang
 
 | Feature/domain | Status | Required completion |
 | --- | --- | --- |
-| Build-a-Son / regen creation | Partial | Backend preview/create/payment/generation contracts must be authoritative; Flutter wizard must use backend projections and wallet availability. |
-| Regen World | Partial | Lineage, traits, DNA, generation, origin story, projected value, rarity, and nationality need backend-backed UI signoff. |
+| Build-a-Son / regen creation | Complete | Backend preview/create/payment/generation contracts are authoritative; Flutter wizard now uses backend projections and wallet availability, and contract-block tests prove malformed previews are blocked before confirmation. |
+| Regen World | Complete | Lineage, traits, DNA, generation, origin story, projected value, rarity, and nationality now render from backend-backed UI signoff, including blocked pending requested-son entries instead of invented truth. |
 | Match Center | Strong but not final | Shell mount and route tests must prove the canonical 2D broadcast surface; websocket data remains authoritative. |
 | Competitions | Partial | Backend competition route/API failures and settlement readiness flows must be green. |
 | Wallet / transfer bids | Partial | Reservation, release, accepted-bid settlement, and locked/available balance truth must pass end-to-end. |

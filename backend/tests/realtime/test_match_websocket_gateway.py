@@ -236,6 +236,43 @@ def test_match_event_dispatch_preserves_backend_score_clock_but_degrades_missing
     assert "missing_authoritative_xg" in missing_codes
 
 
+def test_match_event_dispatch_accepts_nested_score_and_clock_aliases_without_inventing_truth() -> None:
+    dispatches = RealtimeHub()._map_domain_event(
+        DomainEvent(
+            name="match.events",
+            aggregate_id="match-42",
+            aggregate_type="match",
+            payload={
+                "match_id": "match-42",
+                "event_id": "event-nested-truth",
+                "event_type": "incident",
+                "score": {"home": 2, "away": 1},
+                "clock_label": "64:22",
+                "clock_minute": 64,
+                "current_minute": 64,
+                "status": "live",
+                "commentary": "Backend-authored nested score update.",
+            },
+        )
+    )
+
+    match_update = next(item for item in dispatches if item.type == "match_update")
+    missing_codes = {item["code"] for item in match_update.data["missing_data"]}
+
+    assert match_update.data["status"] == "live"
+    assert match_update.data["home_score"] == 2
+    assert match_update.data["away_score"] == 1
+    assert match_update.data["minute"] == 64
+    assert match_update.data["clock"] == "64:22"
+    assert match_update.data["data_status"] == "degraded"
+    assert match_update.data["score_authoritative"] is True
+    assert match_update.data["clock_authoritative"] is True
+    assert match_update.data["minute_authoritative"] is True
+    assert "missing_authoritative_score" not in missing_codes
+    assert "missing_authoritative_minute" not in missing_codes
+    assert "missing_authoritative_clock" not in missing_codes
+
+
 def test_match_event_dispatch_preserves_backend_authored_advanced_feed_status() -> None:
     dispatches = RealtimeHub()._map_domain_event(
         DomainEvent(

@@ -364,13 +364,13 @@ List<RegenWorldEntry> buildRegenWorldEntries(RegenUniverseHubData data) {
   for (final RegenRisingStar star in data.risingStars) {
     put(_withBloodline(_entryFromRisingStar(star), data.bloodlines));
   }
-  for (final RegenCreationOrder order in data.generatedRequestedSons) {
+  for (final RegenCreationOrder order in data.requestedSonOrders) {
     final RegenCreationGeneratedPlayer? player = order.generatedPlayer;
-    if (player != null) {
-      put(
-        _withBloodline(_entryFromGeneratedSon(order, player), data.bloodlines),
-      );
-    }
+    final RegenWorldEntry entry =
+        player == null
+            ? _entryFromPendingSonOrder(order)
+            : _entryFromGeneratedSon(order, player);
+    put(_withBloodline(entry, data.bloodlines));
   }
 
   return entries.values.toList(growable: false);
@@ -525,6 +525,55 @@ RegenWorldEntry _entryFromGeneratedSon(
     dnaProfile: RegenWorldDnaProfile.fromCreationProfile(player.dnaProfile),
     badges: const <String>['Requested Son', 'Bloodline Regen'],
   );
+}
+
+RegenWorldEntry _entryFromPendingSonOrder(RegenCreationOrder order) {
+  final String requestedName = (order.requestedName ?? '').trim();
+  final String requestedPosition = (order.requestedPosition ?? '').trim();
+  final String requestedCountry = (order.requestedCountryCode ?? '').trim();
+  return RegenWorldEntry(
+    id:
+        order.generatedPlayerId?.trim().isNotEmpty == true
+            ? order.generatedPlayerId!.trim()
+            : order.id,
+    name: requestedName.isEmpty ? 'Requested Son' : requestedName,
+    position: requestedPosition,
+    nationality: requestedCountry,
+    nationalityCode: requestedCountry.isEmpty ? null : requestedCountry,
+    imageUrl: null,
+    potential: 0,
+    currentRating: 0,
+    source: order.requestType,
+    createdAt: order.generatedAt ?? order.updatedAt,
+    generationNumber: null,
+    generationLabel: null,
+    rarityTier: null,
+    originStory: null,
+    originLabel: null,
+    projectedValueCoin: null,
+    marketAccess: null,
+    traits: const <String>[],
+    lineage: const <String>[],
+    dnaProfile: null,
+    badges: <String>['Requested Son', _orderStatusBadgeLabel(order.status)],
+  );
+}
+
+String _orderStatusBadgeLabel(String status) {
+  switch (status.trim()) {
+    case 'pending_payment':
+      return 'Payment pending';
+    case 'paid':
+      return 'Generation syncing';
+    case 'generating':
+      return 'Generating';
+    case 'generated':
+      return 'Generated';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return status.trim().isEmpty ? 'Order pending' : status;
+  }
 }
 
 int? _generationNumberFromLabel(String? label) {
