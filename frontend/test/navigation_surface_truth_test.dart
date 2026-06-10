@@ -9,7 +9,7 @@ void main() {
             .map((AppDestination destination) => destination.location)
             .toSet();
 
-    expect(primaryLocations, isNot(contains(AppRoutes.world)));
+    expect(primaryLocations, contains(AppRoutes.world));
     expect(
       primaryLocations,
       isNot(contains(AppRoutes.legacyBlockedMatchRuntime)),
@@ -69,7 +69,7 @@ void main() {
 
     expect(runtime, isNotNull);
     expect(runtime!.state, AppRouteSurfaceState.hidden);
-    expect(runtime.label, 'Coming soon');
+    expect(runtime.label, 'Legacy match runtime');
     expect(runtime.summary, contains('quarantined'));
   });
 

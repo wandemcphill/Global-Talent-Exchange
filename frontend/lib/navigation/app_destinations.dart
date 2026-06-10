@@ -249,35 +249,35 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
         'Deep 2D viewer route that requires a backend-qualified match key.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: 'Legacy match broadcast',
     location: AppRoutes.matchesBroadcast,
     state: AppRouteSurfaceState.hidden,
     summary:
         'Deprecated match package route hidden from launch navigation; use the canonical 2D match viewer.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: 'Legacy match runtime',
     location: AppRoutes.legacyMatchRuntime,
     state: AppRouteSurfaceState.hidden,
     summary:
         'Deprecated match rendering route quarantined behind internal builds.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: 'Legacy blocked runtime',
     location: AppRoutes.legacyBlockedMatchRuntime,
     state: AppRouteSurfaceState.hidden,
     summary:
         'Deprecated match rendering route quarantined behind internal builds.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: 'Legacy match spectate',
     location: AppRoutes.matchesSpectate,
     state: AppRouteSurfaceState.hidden,
     summary:
         'Deprecated match route hidden from launch navigation; use the canonical 2D match viewer.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: 'Legacy match simulate',
     location: AppRoutes.matchesSimulate,
     state: AppRouteSurfaceState.hidden,
     summary:
@@ -356,11 +356,11 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     summary: 'Deep competition detail shell route.',
   ),
   AppRouteSurface(
-    label: 'Coming soon',
+    label: 'Streamer tournament engine',
     location: AppRoutes.streamerEngine,
     state: AppRouteSurfaceState.hidden,
     summary:
-        'Additional competition tools stay hidden while the canonical compete lane owns launch routing.',
+        'Hidden competition engine route used by direct links and internal launch tooling.',
   ),
   AppRouteSurface(
     label: 'Sign In',

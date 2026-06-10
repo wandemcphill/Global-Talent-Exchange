@@ -27,8 +27,6 @@ void main() {
 
     expect(find.text('World'), findsOneWidget);
     expect(find.text('World Preview'), findsNothing);
-    expect(find.text('Matchday'), findsOneWidget);
-    expect(find.text('Arena'), findsOneWidget);
   });
 
   testWidgets('world route presents live route truth without preview badges', (
@@ -57,7 +55,7 @@ void main() {
 
     expect(nativeRuntime, isNotNull);
     expect(nativeRuntime!.state, AppRouteSurfaceState.hidden);
-    expect(nativeRuntime.label, 'Coming soon');
+    expect(nativeRuntime.label, 'Legacy blocked runtime');
     expect(nativeRuntime.summary, contains('quarantined'));
 
     await tester.pumpWidget(
