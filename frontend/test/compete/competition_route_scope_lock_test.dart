@@ -96,13 +96,14 @@ void main() {
     );
 
     testWidgets(
-      'blocks streamer tournament renderers until backend truth lands',
+      'renders streamer tournament engine routes',
       (WidgetTester tester) async {
         await tester.pumpWidget(
           _routeHost(const StreamerTournamentsListRouteData()),
         );
-        expect(find.text('Streamer tournaments coming soon'), findsOneWidget);
-        expect(find.text('COMING SOON'), findsOneWidget);
+        await tester.pumpAndSettle();
+        expect(find.text('Streamer tournament engine'), findsOneWidget);
+        expect(find.text('Streamer tournaments coming soon'), findsNothing);
 
         await tester.pumpWidget(
           _routeHost(
@@ -111,11 +112,9 @@ void main() {
             ),
           ),
         );
-        expect(
-          find.text('Streamer tournament detail coming soon'),
-          findsOneWidget,
-        );
-        expect(find.text('COMING SOON'), findsOneWidget);
+        await tester.pumpAndSettle();
+        expect(find.text('Streamer tournament engine'), findsOneWidget);
+        expect(find.text('Streamer tournament detail coming soon'), findsNothing);
       },
     );
   });

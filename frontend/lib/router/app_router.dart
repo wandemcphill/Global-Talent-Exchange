@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/features/app_routes/gte_app_route_registry.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/shell/presentation/gtex_public_home_screen.dart';
@@ -74,35 +75,11 @@ GoRouter buildGtexAppRouter({
                   child: GteSignupScreen(controller: controller),
                 ),
       ),
-      GoRoute(
-        path: '/matches',
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                _buildFeatureRoutePage(
-                  context: context,
-                  state: state,
-                  route: const LiveMatchHubRouteData(),
-                  dependencies: dependenciesBuilder(context),
-                ),
+      ..._buildLegacyCompetitionAliasRoutes(
+        dependenciesBuilder: dependenciesBuilder,
       ),
-      GoRoute(
-        path: '/matches/viewer/:matchKey',
-        pageBuilder: (BuildContext context, GoRouterState state) {
-          final String? matchKey = state.pathParameters['matchKey'];
-          if (matchKey == null || matchKey.trim().isEmpty) {
-            return _buildUnavailablePage(
-              state: state,
-              message:
-                  'The requested match center route is missing a match key.',
-            );
-          }
-          return _buildFeatureRoutePage(
-            context: context,
-            state: state,
-            route: LiveMatchViewerRouteData(matchKey: matchKey),
-            dependencies: dependenciesBuilder(context),
-          );
-        },
+      ..._buildRegisteredFeatureRoutes(
+        dependenciesBuilder: dependenciesBuilder,
       ),
       ..._buildCanonicalAppRoutes(controller: controller, config: config),
     ],
@@ -168,6 +145,171 @@ List<RouteBase> _buildCanonicalAppRoutes({
         );
       })
       .toList(growable: false);
+}
+
+List<RouteBase> _buildLegacyCompetitionAliasRoutes({
+  required GteNavigationDependencies Function(BuildContext context)
+  dependenciesBuilder,
+}) {
+  return <RouteBase>[
+    GoRoute(
+      path: '/competitions/gtex',
+      pageBuilder:
+          (BuildContext context, GoRouterState state) => _buildFeatureRoutePage(
+            context: context,
+            state: state,
+            route: CompetitionsDiscoveryRouteData(highlight: 'gtex'),
+            dependencies: dependenciesBuilder(context),
+          ),
+    ),
+    GoRoute(
+      path: '/competitions/hosted',
+      pageBuilder:
+          (BuildContext context, GoRouterState state) => _buildFeatureRoutePage(
+            context: context,
+            state: state,
+            route: CompetitionsDiscoveryRouteData(highlight: 'hosted'),
+            dependencies: dependenciesBuilder(context),
+          ),
+    ),
+    GoRoute(
+      path: '/competitions/streamer',
+      pageBuilder:
+          (BuildContext context, GoRouterState state) => _buildFeatureRoutePage(
+            context: context,
+            state: state,
+            route: const StreamerTournamentsListRouteData(),
+            dependencies: dependenciesBuilder(context),
+          ),
+    ),
+    GoRoute(
+      path: '/competitions/gtex/:competitionId',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final String? competitionId = state.pathParameters['competitionId'];
+        if (competitionId == null || competitionId.trim().isEmpty) {
+          return _buildUnavailablePage(
+            state: state,
+            message:
+                'The requested competition route is missing a competition id.',
+          );
+        }
+        return _buildFeatureRoutePage(
+          context: context,
+          state: state,
+          route: CompetitionDetailRouteData(competitionId: competitionId),
+          dependencies: dependenciesBuilder(context),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/competitions/hosted/:competitionId',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final String? competitionId = state.pathParameters['competitionId'];
+        if (competitionId == null || competitionId.trim().isEmpty) {
+          return _buildUnavailablePage(
+            state: state,
+            message:
+                'The requested competition route is missing a competition id.',
+          );
+        }
+        return _buildFeatureRoutePage(
+          context: context,
+          state: state,
+          route: CompetitionDetailRouteData(competitionId: competitionId),
+          dependencies: dependenciesBuilder(context),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/competitions/streamer/:tournamentId',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final String? tournamentId = state.pathParameters['tournamentId'];
+        if (tournamentId == null || tournamentId.trim().isEmpty) {
+          return _buildUnavailablePage(
+            state: state,
+            message:
+                'The requested streamer tournament route is missing a tournament id.',
+          );
+        }
+        return _buildFeatureRoutePage(
+          context: context,
+          state: state,
+          route: StreamerTournamentDetailRouteData(tournamentId: tournamentId),
+          dependencies: dependenciesBuilder(context),
+        );
+      },
+    ),
+  ];
+}
+
+List<RouteBase> _buildRegisteredFeatureRoutes({
+  required GteNavigationDependencies Function(BuildContext context)
+  dependenciesBuilder,
+}) {
+  final List<GteAppRouteRegistration> registrations = GteAppRouteCatalog
+    .registrations
+    .toList(growable: false)..sort(_compareRouteRegistrationSpecificity);
+  return registrations
+      .map(
+        (GteAppRouteRegistration registration) => GoRoute(
+          path: registration.path,
+          pageBuilder: (BuildContext context, GoRouterState state) {
+            final GteAppRouteData? route = GteNavigationHelpers.parseDeepLink(
+              state.uri.toString(),
+            );
+            if (route == null) {
+              return _buildUnavailablePage(
+                state: state,
+                message:
+                    'The requested route is not registered in the GTEX router.',
+              );
+            }
+            return _buildFeatureRoutePage(
+              context: context,
+              state: state,
+              route: route,
+              dependencies: dependenciesBuilder(context),
+            );
+          },
+        ),
+      )
+      .toList(growable: false);
+}
+
+int _compareRouteRegistrationSpecificity(
+  GteAppRouteRegistration left,
+  GteAppRouteRegistration right,
+) {
+  final int leftParams = _routeParameterCount(left.path);
+  final int rightParams = _routeParameterCount(right.path);
+  if (leftParams != rightParams) {
+    return leftParams.compareTo(rightParams);
+  }
+
+  final int leftSegments = _routeSegmentCount(left.path);
+  final int rightSegments = _routeSegmentCount(right.path);
+  if (leftSegments != rightSegments) {
+    return rightSegments.compareTo(leftSegments);
+  }
+
+  final int leftStaticSegments = leftSegments - leftParams;
+  final int rightStaticSegments = rightSegments - rightParams;
+  if (leftStaticSegments != rightStaticSegments) {
+    return rightStaticSegments.compareTo(leftStaticSegments);
+  }
+
+  return left.path.compareTo(right.path);
+}
+
+int _routeParameterCount(String path) {
+  return path
+      .split('/')
+      .where((String segment) => segment.startsWith(':'))
+      .length;
+}
+
+int _routeSegmentCount(String path) {
+  return path.split('/').where((String segment) => segment.isNotEmpty).length;
 }
 
 Page<void> _buildFeatureRoutePage({
@@ -245,12 +387,16 @@ String? _canonicalPathForLegacyReference(String path) {
       path.startsWith('/player-cards/')) {
     return const GteNavigationRoute.market().path;
   }
+  if (path == '/streamer-tournaments' ||
+      path.startsWith('/streamer-tournaments/') ||
+      path == '/competitions/streamer' ||
+      path.startsWith('/competitions/streamer/')) {
+    return path;
+  }
   if (path == '/competitions' ||
       path.startsWith('/competitions/') ||
       path == '/national-team' ||
-      path.startsWith('/national-team/') ||
-      path == '/streamer-tournaments' ||
-      path.startsWith('/streamer-tournaments/')) {
+      path.startsWith('/national-team/')) {
     return const GteNavigationRoute.competitions().path;
   }
   if (path == '/news') {

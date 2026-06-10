@@ -5,6 +5,7 @@ import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/compete/presentation/live_competitions_hub_screen.dart';
 import 'package:gte_frontend/features/compete/providers/live_competitions_provider.dart';
+import 'package:gte_frontend/features/compete/domain/streamer_tournament_engine_models.dart';
 import 'package:gte_frontend/features/match_center/live_match_overview_provider.dart';
 import 'package:gte_frontend/features/match_center/match_screen.dart';
 import 'package:gte_frontend/features/profile/profile_admin_screen.dart';
@@ -132,6 +133,42 @@ void main() {
     expect(find.text('GTEX Spotlight Cup'), findsOneWidget);
     expect(find.text('View detail'), findsOneWidget);
   });
+
+  testWidgets(
+    'competition hub renders live streamer competition family listing',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appConfigProvider.overrideWithValue(_testAppConfig),
+            competitionHubProvider.overrideWith((Ref ref) async {
+              return CompetitionHubData(
+                gtexCompetitions: const <CompetitionSummary>[],
+                hostedCompetitions: const [],
+                streamerTournaments: <StreamerTournament>[
+                  _sampleStreamerTournament(),
+                ],
+              );
+            }),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: LiveCompetitionsHubScreen(
+                family: CompetitionFamilyRoute.streamer,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await _scrollTo(tester, find.text('Streamer Sprint Series'));
+      expect(find.text('Streamer Sprint Series'), findsOneWidget);
+      expect(find.text('View detail'), findsOneWidget);
+      expect(find.text('Streamer competitions coming soon'), findsNothing);
+    },
+  );
 
   testWidgets('world screen renders live regen summary', (
     WidgetTester tester,
@@ -329,6 +366,45 @@ CompetitionSummary _sampleCompetition() {
     createdAt: DateTime.utc(2026, 1, 1),
     updatedAt: DateTime.utc(2026, 1, 1),
   );
+}
+
+StreamerTournament _sampleStreamerTournament() {
+  return StreamerTournament.fromJson(<String, Object?>{
+    'id': 'streamer-1',
+    'host_user_id': 'host-1',
+    'creator_profile_id': 'profile-1',
+    'creator_club_id': 'club-1',
+    'season_id': 'season-1',
+    'linked_competition_id': null,
+    'playoff_source_competition_id': null,
+    'slug': 'streamer-sprint-series',
+    'title': 'Streamer Sprint Series',
+    'description': 'Creator-hosted streamer tournament',
+    'tournament_type': 'elimination',
+    'status': 'open',
+    'approval_status': 'approved',
+    'max_participants': 8,
+    'requires_admin_approval': false,
+    'high_reward_flag': false,
+    'starts_at': '2026-06-10T12:00:00Z',
+    'ends_at': null,
+    'submitted_at': '2026-06-09T12:00:00Z',
+    'approved_at': '2026-06-09T13:00:00Z',
+    'rejected_at': null,
+    'completed_at': null,
+    'approved_by_user_id': 'admin-1',
+    'rejected_by_user_id': null,
+    'submission_notes': null,
+    'approval_notes': null,
+    'entry_rules_json': <String, Object?>{},
+    'metadata_json': <String, Object?>{},
+    'rewards': const <Object?>[],
+    'invites': const <Object?>[],
+    'entries': <Object?>[
+      <String, Object?>{'user_id': 'user-1', 'status': 'joined'},
+    ],
+    'open_risk_signals': const <Object?>[],
+  });
 }
 
 Future<void> _scrollTo(WidgetTester tester, Finder finder) async {

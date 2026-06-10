@@ -268,7 +268,10 @@ class _GteCompetitionsHubScreenState extends State<GteCompetitionsHubScreen>
               if (widget.navigationDependencies != null) ...<Widget>[
                 const SizedBox(height: 20),
                 _ArenaRoutePanel(
-                  onOpenStreamerTournaments: () {},
+                  onOpenStreamerTournaments:
+                      () => _openFeatureRoute(
+                        const StreamerTournamentsListRouteData(),
+                      ),
                   onOpenNationsCup:
                       () => _openFeatureRoute(
                         const NationalTeamCompetitionsRouteData(),
@@ -944,9 +947,9 @@ class _ArenaRoutePanel extends StatelessWidget {
             runSpacing: 12,
             children: <Widget>[
               FilledButton.tonalIcon(
-                onPressed: null,
-                icon: const Icon(Icons.insights_outlined),
-                label: const Text('Fan predictions (live match only)'),
+                onPressed: onOpenStreamerTournaments,
+                icon: const Icon(Icons.ondemand_video_outlined),
+                label: const Text('Streamer tournaments'),
               ),
               FilledButton.tonalIcon(
                 onPressed: onOpenNationsCup,
@@ -967,7 +970,7 @@ class _ArenaRoutePanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
+            'Streamer tournaments open the live tournament engine. Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/compete/providers/competition_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/features/compete/presentation/gte_competitions_hub_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/streamer_tournament_engine_screen.dart';
 import 'package:gte_frontend/features/compete/domain/competition_hub_destination.dart';
+import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_type.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -232,6 +235,45 @@ void main() {
     expect(find.text('Preview & publish'), findsOneWidget);
     expect(openedCreatorAccess, isFalse);
   });
+
+  testWidgets(
+    'arena route panel opens streamer tournaments engine',
+    (WidgetTester tester) async {
+      final CompetitionController controller = CompetitionController(
+        api: CompetitionApi.fixture(),
+        currentUserId: 'fixture-user',
+        currentUserName: 'Fixture Trader',
+      );
+      await controller.bootstrap();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteCompetitionsHubScreen(
+            controller: controller,
+            currentDestination: CompetitionHubDestination.overview,
+            onDestinationChanged: (_) {},
+            navigationDependencies: const GteNavigationDependencies(
+              apiBaseUrl: 'https://example.test',
+              backendMode: GteBackendMode.fixture,
+              currentUserId: 'fixture-user',
+              currentUserName: 'Fixture Trader',
+              accessToken: 'token-123',
+              isAuthenticated: true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _dragUntilTextVisible(tester, 'Streamer tournaments');
+      expect(find.text('Streamer tournaments'), findsWidgets);
+      await tester.tap(find.widgetWithText(FilledButton, 'Streamer tournaments'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(StreamerTournamentEngineScreen), findsOneWidget);
+    },
+  );
 }
 
 CompetitionSummary _competition({

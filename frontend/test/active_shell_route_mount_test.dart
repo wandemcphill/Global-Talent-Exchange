@@ -6,10 +6,16 @@ import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/features/match_center/live_match_session.dart';
 import 'package:gte_frontend/features/compete/providers/live_competitions_provider.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_create_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/screens/competition_discovery_screen.dart';
+import 'package:gte_frontend/features/compete/presentation/streamer_tournament_engine_screen.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/match_center/live_match_viewer_route_support.dart';
 import 'package:gte_frontend/features/profile/live_profile_provider.dart';
 import 'package:gte_frontend/features/compete/domain/streamer_tournament_engine_models.dart';
+import 'package:gte_frontend/features/capital/liquidity/creator_share_market/presentation/creator_share_market_admin_control_screen.dart';
+import 'package:gte_frontend/features/capital/liquidity/creator_share_market/presentation/creator_share_market_screen.dart';
+import 'package:gte_frontend/features/player_card_marketplace/presentation/player_card_marketplace_screen.dart';
 import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
 import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
 import 'package:gte_frontend/features/world/live_world_provider.dart';
@@ -85,6 +91,46 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(GteExchangeShellScreen), findsOneWidget);
       expect(find.text('Streamer tournaments coming soon'), findsNothing);
+      expect(find.text('Route unavailable'), findsNothing);
+
+      router.go('/streamer-tournaments');
+      await tester.pumpAndSettle();
+      expect(find.byType(StreamerTournamentEngineScreen), findsOneWidget);
+      expect(find.text('Route unavailable'), findsNothing);
+
+      router.go('/competitions/streamer');
+      await tester.pumpAndSettle();
+      expect(find.byType(StreamerTournamentEngineScreen), findsOneWidget);
+      expect(find.text('Route unavailable'), findsNothing);
+
+      router.go('/player-cards');
+      await tester.pumpAndSettle();
+      expect(find.byType(PlayerCardMarketplaceScreen), findsOneWidget);
+      expect(find.text('Route unavailable'), findsNothing);
+
+      router.go('/player-cards/inventory');
+      await tester.pumpAndSettle();
+      expect(find.byType(PlayerCardMarketplaceScreen), findsOneWidget);
+      expect(find.text('Route unavailable'), findsNothing);
+
+      router.go('/competitions/gtex');
+      await tester.pumpAndSettle();
+      expect(find.byType(CompetitionDiscoveryScreen), findsOneWidget);
+      expect(find.text('Route unavailable'), findsNothing);
+
+      router.go('/competitions/create');
+      await tester.pumpAndSettle();
+      expect(find.byType(CompetitionCreateScreen), findsOneWidget);
+      expect(find.text('Route unavailable'), findsNothing);
+
+      router.go('/creator-share-market/clubs/royal-lagos-fc');
+      await tester.pumpAndSettle();
+      expect(find.byType(CreatorShareMarketScreen), findsOneWidget);
+      expect(find.text('Route unavailable'), findsNothing);
+
+      router.go('/admin/creator-share-market/control');
+      await tester.pumpAndSettle();
+      expect(find.byType(CreatorShareMarketAdminControlScreen), findsOneWidget);
       expect(find.text('Route unavailable'), findsNothing);
 
       router.go(AppRoutes.profileAdmin);

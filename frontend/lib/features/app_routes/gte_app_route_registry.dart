@@ -278,10 +278,14 @@ class GteAppRouteRegistry {
       return MatchViewerRouteScreen(matchKey: route.matchKey);
     }
     if (route is StreamerTournamentsListRouteData) {
-      return _launchComingSoonScreen('Streamer tournaments');
+      return _buildStreamerTournamentsListScreen(context, liveDependencies);
     }
     if (route is StreamerTournamentDetailRouteData) {
-      return _launchComingSoonScreen('Streamer tournament detail');
+      return _buildStreamerTournamentDetailScreen(
+        context,
+        liveDependencies,
+        route,
+      );
     }
     if (route is FanPredictionMatchRouteData) {
       return _buildFanPredictionMatchScreen(context, liveDependencies, route);
@@ -296,10 +300,17 @@ class GteAppRouteRegistry {
       return _buildPlayerCardsInventoryScreen(context, liveDependencies);
     }
     if (route is CreatorShareMarketClubRouteData) {
-      return _launchComingSoonScreen('Club share market');
+      return _buildCreatorShareMarketClubScreen(
+        context,
+        liveDependencies,
+        route,
+      );
     }
     if (route is CreatorShareMarketAdminControlRouteData) {
-      return _launchComingSoonScreen('Share market admin controls');
+      return _buildCreatorShareMarketAdminControlScreen(
+        context,
+        liveDependencies,
+      );
     }
     if (route is ClubSaleMarketListingsRouteData) {
       return _buildClubSaleMarketListingsScreen(context, liveDependencies);
@@ -364,7 +375,10 @@ class GteAppRouteRegistry {
       );
     }
     if (route is BroadcastDeskRouteData) {
-      return _launchComingSoonScreen('Coming soon');
+      return GteLiveMatchHubRouteScreen(
+        dependencies: liveDependencies,
+        clubName: liveDependencies.currentClubName ?? 'GTEX Matchday',
+      );
     }
     if (route is GtexJackpotRouteData) {
       return _buildGtexJackpotScreen(context, liveDependencies);
@@ -373,13 +387,16 @@ class GteAppRouteRegistry {
       return _buildClubAiAssistantScreen(context, liveDependencies, route);
     }
     if (route is CreatorStadiumClubRouteData) {
-      return _launchComingSoonScreen('Coming soon');
+      return _buildCreatorStadiumClubScreen(context, liveDependencies, route);
     }
     if (route is CreatorStadiumMatchRouteData) {
-      return _launchComingSoonScreen('Coming soon');
+      return _buildCreatorStadiumMatchScreen(context, liveDependencies, route);
     }
     if (route is CreatorStadiumAdminControlRouteData) {
-      return _launchComingSoonScreen('Coming soon');
+      return _buildCreatorStadiumAdminControlScreen(
+        context,
+        liveDependencies,
+      );
     }
     if (route is CreatorLeagueFinancialReportRouteData) {
       return _buildCreatorLeagueFinancialReportScreen(
@@ -768,16 +785,6 @@ class _RouteLoadingScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-Widget _launchComingSoonScreen(String title) {
-  return GteRouteIntegrityScreen.blocked(
-    eyebrow: 'COMING SOON',
-    title: '$title coming soon',
-    message:
-        'This route is blocked for launch while GTEX focuses on the 2D football manager experience.',
-    icon: Icons.lock_clock_outlined,
-  );
 }
 
 class _RouteStateScreen extends StatelessWidget {

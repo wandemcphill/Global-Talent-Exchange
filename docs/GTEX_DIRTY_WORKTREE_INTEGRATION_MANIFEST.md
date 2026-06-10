@@ -1,6 +1,6 @@
 # GTEX Dirty Worktree Integration Manifest
 
-Date: 2026-06-09
+Date: 2026-06-10
 
 Purpose: stabilize the current canonicalization worktree before deeper feature expansion. The repository has many concurrent worker changes, so integration must be lane-based, test-gated, and non-destructive.
 
@@ -141,6 +141,11 @@ python -m pytest -p no:cacheprovider -q backend/tests/live_matches backend/tests
 - Competition route tests were modernized to canonical `/api/v2/...` paths with token-backed fixtures and a seeded owned club entrant; `backend/tests/competitions/test_competition_launch_rules.py` passed 3/3 on 2026-06-09. This shard is no longer a blocker for the current route-modernization lane.
 - Treasury audit events now stamp application-time `created_at`, which fixed payment-queue reinstate audit ordering in admin finance. `backend/tests/admin_finance/test_admin_finance_router.py` passed 16/16 on 2026-06-09.
 - Wallet overview now carries the admin withdrawal `processor_mode` through to the money-path truth check, so gateway/manual rail status reflects the active policy instead of defaulting to manual. Focused wallet overview cases passed 2/2, and the broader money-path shard `backend\tests\treasury backend\tests\admin_finance backend\tests\wallets backend\tests\integration\test_payment_gateway.py` passed 111/111 on 2026-06-09.
+- Creator-share club/admin routes now mount canonical screens instead of the launch placeholder, and `frontend/test/gte_feature_routing_test.dart` plus `frontend/test/compete/competition_route_scope_lock_test.dart` are green for the route-mount batch. Keep these route changes grouped with the surrounding Flutter route/product-flow files during staging.
+- The competitions hub streamer family branch is now live too: `frontend/test/active_shell_live_migration_smoke_test.dart` proves `LiveCompetitionsHubScreen(family: CompetitionFamilyRoute.streamer)` renders streamer tournament cards instead of a launch block. Keep that with the competitions hub family batch.
+- The competitions hub streamer route panel now opens the live streamer tournament engine, and `frontend/test/competitions/competition_hub_happy_path_test.dart` proves the route handoff. Keep that with the competition hub route-panel batch.
+- GoRouter now owns both `/streamer-tournaments` and legacy `/competitions/streamer` aliases, and `frontend/test/active_shell_route_mount_test.dart` proves both mount `StreamerTournamentEngineScreen` instead of falling through to route unavailable. Keep those aliases with the router/harness batch and leave the shell competition destination model unchanged unless a product lane explicitly needs a streamer shell tab.
+- The direct feature router catalog is also mounted now: `frontend/test/active_shell_route_mount_test.dart` proves `/player-cards`, `/player-cards/inventory`, `/competitions/gtex`, `/competitions/create`, `/competitions/streamer`, `/creator-share-market/clubs/:clubId`, and `/admin/creator-share-market/control` resolve to live screens through the router, not just the shell. Keep the catalog-driven feature routes grouped with the same router/harness batch.
 
 ## Worker Handoffs - 2026-06-01
 

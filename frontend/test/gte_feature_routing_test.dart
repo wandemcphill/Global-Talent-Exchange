@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/features/compete/providers/competition_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
@@ -10,15 +11,19 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/app_routes/gte_app_route_registry.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_hub/presentation/club_hub_screen.dart';
 import 'package:gte_frontend/features/compete/presentation/gte_compete_bracket_screen.dart';
 import 'package:gte_frontend/features/compete/domain/competition_hub_destination.dart';
 import 'package:gte_frontend/features/home_dashboard/home_dashboard_screen.dart';
+import 'package:gte_frontend/features/match_center/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/features/capital/liquidity/creator_share_market/creator_share_market.dart';
+import 'package:gte_frontend/features/capital/settlement/creator_stadium_monetization/creator_stadium_monetization.dart';
 import 'package:gte_frontend/screens/gte_market_players_screen.dart';
 import 'package:http/http.dart' as http;
 
@@ -210,7 +215,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      _RouteLauncherHost(
+      _routeScreenHost(
         dependencies: _dependencies(
           isAuthenticated: true,
           isAdmin: true,
@@ -218,19 +223,68 @@ void main() {
           clubName: null,
         ),
         route: const CreatorShareMarketAdminControlRouteData(),
-        label: 'Open control',
       ),
     );
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Open control'));
-    await _pumpUntilText(tester, 'Share market admin controls coming soon');
-
-    expect(
-      find.text('Share market admin controls coming soon'),
-      findsOneWidget,
-    );
-    expect(find.text('Club selection required'), findsNothing);
+    expect(find.byType(CreatorShareMarketAdminControlScreen), findsOneWidget);
+    final CreatorShareMarketAdminControlScreen screen =
+        tester.widget<CreatorShareMarketAdminControlScreen>(
+          find.byType(CreatorShareMarketAdminControlScreen),
+        );
+    expect(screen.currentUserRole, 'admin');
+    expect(screen.accessToken, 'token-123');
   });
+
+  testWidgets(
+    'route placeholders now render canonical broadcast and stadium screens',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        _routeScreenHost(
+          dependencies: _dependencies(isAuthenticated: true),
+          route: const BroadcastDeskRouteData(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Matchday desk'), findsOneWidget);
+      expect(find.text('Coming soon'), findsNothing);
+
+      await tester.pumpWidget(
+        _routeScreenHost(
+          dependencies: _dependencies(
+            isAuthenticated: true,
+            clubId: 'ibadan-lions',
+            clubName: 'Ibadan Lions FC',
+          ),
+          route: const CreatorStadiumClubRouteData(
+            clubId: 'ibadan-lions',
+            clubName: 'Ibadan Lions FC',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Creator Stadium'), findsOneWidget);
+      expect(find.text('Coming soon'), findsNothing);
+
+      await tester.pumpWidget(
+        _routeScreenHost(
+          dependencies: _dependencies(
+            isAuthenticated: true,
+            isAdmin: true,
+            clubId: null,
+            clubName: null,
+          ),
+          route: const CreatorStadiumAdminControlRouteData(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Creator Stadium Control'), findsOneWidget);
+      expect(find.text('Coming soon'), findsNothing);
+    },
+  );
 
   testWidgets(
     'navigation shell uses the canonical session club instead of the royal lagos fallback',
@@ -601,10 +655,15 @@ void main() {
       final Finder creatorSharesButton = find.text('Creator shares');
       await tester.ensureVisible(creatorSharesButton);
       await tester.tap(creatorSharesButton);
-      await _pumpUntilText(tester, 'Club share market coming soon');
+      await tester.pumpAndSettle();
 
-      expect(find.text('Club share market coming soon'), findsOneWidget);
-      expect(find.text('Club selection required'), findsNothing);
+      expect(find.byType(CreatorShareMarketScreen), findsOneWidget);
+      final CreatorShareMarketScreen screen = tester.widget<
+        CreatorShareMarketScreen
+      >(find.byType(CreatorShareMarketScreen));
+      expect(screen.clubId, 'ibadan-lions');
+      expect(screen.clubName, 'Ibadan Lions FC');
+      expect(screen.currentClubId, 'ibadan-lions');
     },
   );
 
@@ -824,6 +883,22 @@ class _RouteLauncherHost extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _routeScreenHost({
+  required GteNavigationDependencies dependencies,
+  required GteAppRouteData route,
+}) {
+  final GteAppRouteRegistry registry = GteAppRouteRegistry(
+    dependencies: dependencies,
+  );
+  return ProviderScope(
+    child: MaterialApp(
+      home: Builder(
+        builder: (BuildContext context) => registry.buildScreen(context, route),
+      ),
+    ),
+  );
 }
 
 Future<void> _pumpUntilText(
