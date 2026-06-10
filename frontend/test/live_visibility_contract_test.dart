@@ -11,6 +11,7 @@ import 'package:gte_frontend/features/federations/live_federations_provider.dart
 import 'package:gte_frontend/features/national_teams/live_national_teams_provider.dart';
 import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
 import 'package:gte_frontend/features/transfer_center/live_transfer_center_provider.dart';
+import 'package:gte_frontend/features/transfer_center/transfer_center_models.dart';
 import 'package:gte_frontend/features/world/live_world_provider.dart';
 import 'package:gte_frontend/shared/models/auth_session.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';

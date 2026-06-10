@@ -133,6 +133,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
+  void _showSuccessMessage(String message) {
+    AppFeedback.showSuccess(context, message);
+  }
+
+  void _showErrorMessage(String message) {
+    AppFeedback.showError(context, message);
+  }
+
   Future<void> _addWatchlist() async {
     final _WatchlistDraft? draft = await _showWatchlistDialog();
     if (draft == null) {
@@ -151,15 +159,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
         return;
       }
       await _load();
-      AppFeedback.showSuccess(
-        context,
+      _showSuccessMessage(
         'Added ${draft.competitionTitle} to your community watchlist.',
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      AppFeedback.showError(context, AppFeedback.messageFor(error));
+      _showErrorMessage(AppFeedback.messageFor(error));
     } finally {
       if (mounted) {
         setState(() {
@@ -179,15 +186,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
         return;
       }
       await _load();
-      AppFeedback.showSuccess(
-        context,
+      _showSuccessMessage(
         'Removed ${item.competitionTitle} from your watchlist.',
       );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      AppFeedback.showError(context, AppFeedback.messageFor(error));
+      _showErrorMessage(AppFeedback.messageFor(error));
     } finally {
       if (mounted) {
         setState(() {
@@ -215,13 +221,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
         return;
       }
       await _load();
-      AppFeedback.showSuccess(context, 'Opened live thread "${draft.title}".');
+      _showSuccessMessage('Opened live thread "${draft.title}".');
       await _openLiveThread(thread);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      AppFeedback.showError(context, AppFeedback.messageFor(error));
+      _showErrorMessage(AppFeedback.messageFor(error));
     } finally {
       if (mounted) {
         setState(() {
@@ -249,16 +255,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
         return;
       }
       await _load();
-      AppFeedback.showSuccess(
-        context,
-        'Opened direct thread "${draft.subjectLabel}".',
-      );
+      _showSuccessMessage('Opened direct thread "${draft.subjectLabel}".');
       await _openPrivateThread(thread);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      AppFeedback.showError(context, AppFeedback.messageFor(error));
+      _showErrorMessage(AppFeedback.messageFor(error));
     } finally {
       if (mounted) {
         setState(() {

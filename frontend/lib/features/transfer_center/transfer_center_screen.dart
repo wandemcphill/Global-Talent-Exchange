@@ -15,6 +15,7 @@ import '../../widgets/gte_state_panel.dart';
 import '../shared/data/feature_telemetry.dart';
 import '../shared/data/gte_feature_support.dart';
 import 'live_transfer_center_provider.dart';
+import 'transfer_center_models.dart';
 
 class TransferCenterScreen extends ConsumerStatefulWidget {
   const TransferCenterScreen({super.key});

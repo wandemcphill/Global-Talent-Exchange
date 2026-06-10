@@ -195,12 +195,17 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.textContaining('share code is waiting on backend provisioning'),
+          find.textContaining(
+            'Profile payload is present, but the backend share code field is empty.',
+          ),
           findsOneWidget,
-          reason: 'Missing share code should show "awaiting provisioning", not invented code.',
+          reason:
+              'Missing share code should stay grounded in backend truth, not invent a code.',
         );
         expect(
-          find.textContaining('No share-code payload returned'),
+          find.textContaining(
+            'Share code is empty in the backend profile payload',
+          ),
           findsOneWidget,
         );
       },
