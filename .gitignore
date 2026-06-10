@@ -27,6 +27,12 @@ fm2023.csv.zip
 node_modules/
 Gtex_Test_Migration/tmp/gtex-live-bootstrap.json
 
+# Local generated GTEX pitch assets
+Docs/GTEX_App_Flow.html
+Docs/GTEX_Investor_Pitch.html
+Docs/GTEX_Investor_Pitch.pdf
+tools/generate_gtex_investor_pitch.py
+
 # Unity generated output
 Gtex_Test_Migration/.vs/
 Gtex_Test_Migration/.vsconfig
