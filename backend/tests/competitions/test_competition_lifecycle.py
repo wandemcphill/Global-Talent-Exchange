@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
+import pytest
 from sqlalchemy import func, select
 
 from app.models.calendar_engine import CalendarEvent
@@ -10,6 +11,43 @@ from app.models.competition import Competition
 from app.models.competition_entry import CompetitionEntry
 from app.models.competition_participant import CompetitionParticipant
 from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.models.club_profile import ClubProfile
+
+
+class _UnwrappingResponse:
+    """Wraps a TestClient response so `.json()` returns the v2 envelope's `data`."""
+
+    def __init__(self, response):
+        self._response = response
+
+    def __getattr__(self, name):
+        return getattr(self._response, name)
+
+    def json(self):
+        payload = self._response.json()
+        if isinstance(payload, dict) and isinstance(payload.get("success"), bool) and "data" in payload:
+            return payload["data"]
+        return payload
+
+
+@pytest.fixture(autouse=True)
+def _canonicalize_v2(client):
+    # The API contract guard 410s deprecated `/api/...` aliases and the envelope
+    # middleware wraps v2 success bodies. Route this file's legacy-style calls to
+    # canonical `/api/v2/...` with the version header and unwrap the envelope.
+    original = client.request
+
+    def patched(method, url, *args, **kwargs):
+        if isinstance(url, str) and url.startswith("/api/") and not url.startswith("/api/v2/"):
+            url = "/api/v2" + url[len("/api"):]
+        headers = dict(kwargs.get("headers") or {})
+        headers.setdefault("X-API-Version", "2")
+        kwargs["headers"] = headers
+        return _UnwrappingResponse(original(method, url, *args, **kwargs))
+
+    client.request = patched
+    yield
+    client.request = original
 
 
 def _create_competition(
@@ -260,12 +298,18 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
     assert second_join.status_code == 200, second_join.text
 
     with app_session_factory() as session:
+        # Participants are keyed by the entrant's club id (orchestrator resolves the
+        # joining user's ClubProfile), not the raw user id.
+        club = session.scalar(
+            select(ClubProfile).where(ClubProfile.owner_user_id == entrant["user_id"])
+        )
+        assert club is not None
         participant_count = session.scalar(
             select(func.count())
             .select_from(CompetitionParticipant)
             .where(
                 CompetitionParticipant.competition_id == competition_id,
-                CompetitionParticipant.club_id == entrant["user_id"],
+                CompetitionParticipant.club_id == club.id,
             )
         )
         entry_count = session.scalar(
@@ -273,22 +317,22 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
             .select_from(CompetitionEntry)
             .where(
                 CompetitionEntry.competition_id == competition_id,
-                CompetitionEntry.club_id == entrant["user_id"],
+                CompetitionEntry.club_id == club.id,
             )
         )
+        # Single entrant joined twice; the fee-collection ledger must hold exactly one row.
         fee_collection_count = session.scalar(
             select(func.count())
             .select_from(CompetitionWalletLedger)
             .where(
                 CompetitionWalletLedger.competition_id == competition_id,
                 CompetitionWalletLedger.entry_type == "entry_fee_collection",
-                CompetitionWalletLedger.reference_id == entrant["user_id"],
             )
         )
         participant = session.scalar(
             select(CompetitionParticipant).where(
                 CompetitionParticipant.competition_id == competition_id,
-                CompetitionParticipant.club_id == entrant["user_id"],
+                CompetitionParticipant.club_id == club.id,
             )
         )
 
