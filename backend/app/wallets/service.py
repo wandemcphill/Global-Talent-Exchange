@@ -42,6 +42,24 @@ AMOUNT_QUANTUM = Decimal("0.0001")
 COIN_TO_CREDIT_RATE = Decimal("100.0000")
 WITHDRAWAL_FEE_BPS = 1000
 WITHDRAWAL_MINIMUM_FEE = Decimal("0.0000")
+
+
+def resolve_withdrawal_fee_bps() -> int:
+    try:
+        from app.core.config import get_settings
+
+        return int(get_settings().withdrawal_fee_bps)
+    except Exception:
+        return WITHDRAWAL_FEE_BPS
+
+
+def resolve_withdrawal_minimum_fee() -> Decimal:
+    try:
+        from app.core.config import get_settings
+
+        return Decimal(get_settings().withdrawal_minimum_fee)
+    except Exception:
+        return WITHDRAWAL_MINIMUM_FEE
 DEFAULT_BALANCE_CACHE_TTL_SECONDS = 300
 DEFAULT_WALLET_SUMMARY_CACHE_TTL_SECONDS = 60
 BALANCE_UNAVAILABLE_MESSAGE = "Balance data unavailable — sync in progress."
@@ -1095,7 +1113,7 @@ class WalletService:
                     "fee_amount": str(fee_amount),
                     "net_amount": str(net_amount),
                     "total_debit": str(total_debit),
-                    "fee_bps": WITHDRAWAL_FEE_BPS,
+                    "fee_bps": resolve_withdrawal_fee_bps(),
                 }
             },
         )
@@ -1107,7 +1125,7 @@ class WalletService:
             "total_debit": str(total_debit),
             "requested_gross_amount": str(gross_amount),
             "requested_net_amount": str(net_amount),
-            "fee_bps": WITHDRAWAL_FEE_BPS,
+            "fee_bps": resolve_withdrawal_fee_bps(),
             "destination_reference": destination_reference,
             "user_notes": notes or "",
         }
@@ -1139,7 +1157,7 @@ class WalletService:
                     "fee_amount": str(fee_amount),
                     "net_amount": str(net_amount),
                     "total_debit": str(total_debit),
-                    "fee_bps": WITHDRAWAL_FEE_BPS,
+                    "fee_bps": resolve_withdrawal_fee_bps(),
                 },
                 aggregate_id=payout_request.id,
                 aggregate_type="payout_request",
@@ -1297,7 +1315,8 @@ class WalletService:
         return self._normalize_amount(Decimal(payout_request.amount or 0) + fee_amount)
 
     def _withdrawal_fee_for_gross(self, gross_amount: Decimal) -> Decimal:
-        return self._normalize_amount(gross_amount * Decimal(WITHDRAWAL_FEE_BPS) / Decimal(10_000))
+        fee = gross_amount * Decimal(resolve_withdrawal_fee_bps()) / Decimal(10_000)
+        return self._normalize_amount(max(fee, resolve_withdrawal_minimum_fee()))
 
     def _transfer_bid_reservation_metadata(
         self,

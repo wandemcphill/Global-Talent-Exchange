@@ -56,6 +56,42 @@ def _create_market(session) -> TraderMarket:
     return market
 
 
+def _fund_coins(session, user, amount: Decimal) -> None:
+    from app.models.wallet import LedgerEntryReason, LedgerUnit
+    from app.wallets.service import LedgerPosting, WalletService
+
+    svc = WalletService()
+    available = svc.get_user_account(session, user, LedgerUnit.COIN)
+    clearing = svc.ensure_deposit_clearing_account(session, LedgerUnit.COIN)
+    svc.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=clearing, amount=-Decimal(amount)),
+            LedgerPosting(account=available, amount=Decimal(amount)),
+        ],
+        reason=LedgerEntryReason.DEPOSIT,
+        reference=f"test-fund-{user.id}",
+        description="Test coin funding",
+        actor=user,
+    )
+    session.flush()
+
+
+def _fund_units(session, user, market_id: str, quantity: Decimal) -> None:
+    from app.wallets.service import WalletService
+
+    WalletService().credit_position_units(
+        session,
+        user=user,
+        player_id=f"trader:{market_id}",
+        quantity=Decimal(quantity),
+        reference=f"test-units-{user.id}",
+        description="Test unit funding",
+        external_reference=f"test-units-{user.id}",
+    )
+    session.flush()
+
+
 def _verify_trader(session, trader):
     trader.kyc_status = KycStatus.VERIFIED
     service = TraderService(session)
@@ -177,6 +213,7 @@ def test_trader_order_creation_records_audit_reference(session) -> None:
     _verify_trader(session, trader)
     market = _create_market(session)
     service = TraderService(session)
+    _fund_coins(session, trader, Decimal("100.0000"))
 
     order = service.place_order(
         trader,
@@ -222,6 +259,8 @@ def test_trader_order_book_aggregates_open_orders_from_backend(session) -> None:
     _verify_trader(session, trader)
     market = _create_market(session)
     service = TraderService(session)
+    _fund_coins(session, trader, Decimal("100.0000"))
+    _fund_units(session, trader, market.id, Decimal("1.0000"))
     service.place_order(
         trader,
         market_id=market.id,
@@ -256,6 +295,7 @@ def test_trader_dispute_contract_is_audited_without_inventing_resolution(session
     _verify_trader(session, trader)
     market = _create_market(session)
     service = TraderService(session)
+    _fund_coins(session, trader, Decimal("100.0000"))
     order = service.place_order(
         trader,
         market_id=market.id,
@@ -272,6 +312,74 @@ def test_trader_dispute_contract_is_audited_without_inventing_resolution(session
     assert dispute["audit_ref"] == dispute["id"]
     assert service.list_disputes(trader)[0]["id"] == dispute["id"]
     assert service.get_dispute(trader, dispute_id=dispute["id"])["reason"] == "Settlement proof mismatch."
+
+
+def test_trader_orders_cross_and_settle_between_counterparties(session) -> None:
+    from app.models.trader import TraderOrderStatus
+    from app.models.wallet import LedgerUnit
+    from app.wallets.service import WalletService
+
+    seller = _create_trader(session)
+    _verify_trader(session, seller)
+    buyer = AuthService().register_user(
+        session,
+        email="buyer@example.com",
+        username="buyer",
+        password=TEST_PASSWORD,
+        display_name="Buyer",
+        account_type=PublicAccountType.COIN_TRADER,
+    )
+    buyer.kyc_status = KycStatus.VERIFIED
+    TraderService(session).ensure_profile(
+        buyer,
+        trading_alias="gtex-buyer",
+        preferred_currency="USD",
+        trading_experience="beginner",
+        interests=["GTEX"],
+        wallet_label="GTEX Trading Wallet",
+    )
+    session.flush()
+    market = _create_market(session)
+    service = TraderService(session)
+
+    _fund_units(session, seller, market.id, Decimal("5.0000"))
+    _fund_coins(session, buyer, Decimal("100.0000"))
+
+    resting = service.place_order(
+        seller, market_id=market.id, side=TraderOrderSide.SELL,
+        quantity=Decimal("5.0000"), limit_price=Decimal("2.0000"),
+    )
+    assert resting.status == TraderOrderStatus.OPEN
+
+    taker = service.place_order(
+        buyer, market_id=market.id, side=TraderOrderSide.BUY,
+        quantity=Decimal("3.0000"), limit_price=Decimal("2.5000"),
+    )
+
+    session.refresh(resting)
+    assert taker.status == TraderOrderStatus.FILLED
+    assert taker.filled_quantity == Decimal("3.0000")
+    assert taker.average_fill_price == Decimal("2.0000")
+    assert resting.status == TraderOrderStatus.PARTIALLY_FILLED
+    assert resting.filled_quantity == Decimal("3.0000")
+
+    wallet = WalletService()
+    # Buyer paid 3 * 2.0000 = 6.0000 (price improvement on 2.5000 cap refunded).
+    buyer_summary = wallet.get_wallet_summary(session, buyer, currency=LedgerUnit.COIN)
+    assert buyer_summary.available_balance == Decimal("94.0000")
+    assert buyer_summary.reserved_balance == Decimal("0.0000")
+    assert wallet.get_available_position_quantity(session, buyer, f"trader:{market.id}") == Decimal("3.0000")
+
+    # Seller received 6.0000 net of 0.50% fee (0.0300) = 5.9700; 2 units still reserved on the book.
+    seller_summary = wallet.get_wallet_summary(session, seller, currency=LedgerUnit.COIN)
+    assert seller_summary.available_balance == Decimal("5.9700")
+    assert wallet.get_reserved_position_quantity(session, seller, f"trader:{market.id}") == Decimal("2.0000")
+
+    trades = service.list_trades(buyer)
+    assert len(trades) == 1
+    assert trades[0].quantity == Decimal("3.0000")
+    assert trades[0].price == Decimal("2.0000")
+    assert trades[0].fee_amount == Decimal("0.0300")
 
 
 def test_trader_settlements_are_backed_by_market_topup_truth(session) -> None:

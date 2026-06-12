@@ -25,6 +25,7 @@ class TraderOrderSide(StrEnum):
 
 class TraderOrderStatus(StrEnum):
     OPEN = "open"
+    PARTIALLY_FILLED = "partially_filled"
     FILLED = "filled"
     CANCELLED = "cancelled"
 
@@ -137,8 +138,40 @@ class TraderOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=TraderOrderStatus.OPEN.value,
     )
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    filled_quantity: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000"
+    )
+    average_fill_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     limit_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class TraderTrade(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "trader_trades"
+    __table_args__ = (
+        Index("ix_trader_trades_market_created", "market_id", "created_at"),
+        Index("ix_trader_trades_buy_order", "buy_order_id"),
+        Index("ix_trader_trades_sell_order", "sell_order_id"),
+    )
+
+    market_id: Mapped[str] = mapped_column(String(36), ForeignKey("trader_markets.id", ondelete="CASCADE"), nullable=False)
+    buy_order_id: Mapped[str] = mapped_column(String(36), ForeignKey("trader_orders.id", ondelete="CASCADE"), nullable=False)
+    sell_order_id: Mapped[str] = mapped_column(String(36), ForeignKey("trader_orders.id", ondelete="CASCADE"), nullable=False)
+    buyer_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    seller_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    notional: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    fee_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000")
+    taker_side: Mapped[TraderOrderSide] = mapped_column(
+        Enum(
+            TraderOrderSide,
+            name="trader_trade_taker_side",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+    )
 
 
 class TraderP2POffer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -201,5 +234,6 @@ __all__ = [
     "TraderProfile",
     "TraderSecurity",
     "TraderSecurityEvent",
+    "TraderTrade",
     "TraderWatchlist",
 ]

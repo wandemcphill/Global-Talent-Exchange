@@ -76,6 +76,8 @@ from app.wallets.service import (
     LedgerError,
     WalletBalanceUnavailableError,
     WalletService,
+    resolve_withdrawal_fee_bps,
+    resolve_withdrawal_minimum_fee,
 )
 from app.wallets.rail_service import WalletRailError, WalletRailConflictError, WalletRailService
 from app.wallets.providers.registry import get_live_provider_adapter
@@ -310,10 +312,13 @@ def _build_withdrawal_quote(
     treasury = _build_treasury_service(request)
     settings = treasury.ensure_settings(session)
     eligibility = treasury.get_withdrawal_eligibility(session, current_user)
-    fee_bps = WITHDRAWAL_FEE_BPS
-    minimum_fee = WITHDRAWAL_MINIMUM_FEE
+    fee_bps = resolve_withdrawal_fee_bps()
+    minimum_fee = resolve_withdrawal_minimum_fee()
     gross_amount = Decimal(amount_coin).quantize(Decimal("0.0001"))
-    fee_amount = (gross_amount * Decimal(fee_bps) / Decimal(10000)).quantize(Decimal("0.0001"))
+    fee_amount = max(
+        (gross_amount * Decimal(fee_bps) / Decimal(10000)).quantize(Decimal("0.0001")),
+        Decimal(minimum_fee),
+    )
     net_amount = (gross_amount - fee_amount).quantize(Decimal("0.0001"))
     total_debit = gross_amount
     payout_channel = "bank_transfer"

@@ -61,10 +61,29 @@ class TraderOrderView(BaseModel):
     side: TraderOrderSide
     status: TraderOrderStatus
     quantity: Decimal
+    filled_quantity: Decimal = Decimal("0")
+    average_fill_price: Decimal | None = None
     limit_price: Decimal | None
     created_at: datetime
     updated_at: datetime
     audit_ref: str | None = None
+
+
+class TraderTradeView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    market_id: str
+    buy_order_id: str
+    sell_order_id: str
+    buyer_user_id: str
+    seller_user_id: str
+    quantity: Decimal
+    price: Decimal
+    notional: Decimal
+    fee_amount: Decimal
+    taker_side: TraderOrderSide
+    created_at: datetime
 
 
 class TraderP2POfferCreateRequest(BaseModel):

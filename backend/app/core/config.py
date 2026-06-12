@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from decimal import Decimal
 from functools import lru_cache
 import os
 from pathlib import Path
@@ -70,6 +71,8 @@ class SettingsSource(BaseModel):
         default=True,
         validation_alias="GTE_DISTRIBUTED_RATE_LIMIT_ENABLED",
     )
+    withdrawal_fee_bps: int = Field(default=1000, ge=0, le=10_000, validation_alias="GTE_WITHDRAWAL_FEE_BPS")
+    withdrawal_minimum_fee: Decimal = Field(default=Decimal("0.0000"), ge=0, validation_alias="GTE_WITHDRAWAL_MINIMUM_FEE")
     api_rate_limit_per_minute: int = Field(default=100, validation_alias="GTE_API_RATE_LIMIT_PER_MINUTE")
     auth_rate_limit_per_minute: int = Field(default=10, validation_alias="GTE_AUTH_RATE_LIMIT_PER_MINUTE")
     market_rate_limit_per_minute: int = Field(default=40, validation_alias="GTE_MARKET_RATE_LIMIT_PER_MINUTE")

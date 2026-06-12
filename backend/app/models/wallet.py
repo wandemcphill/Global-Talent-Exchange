@@ -88,6 +88,9 @@ class LedgerSourceTag(StrEnum):
     ADMIN_ADJUSTMENT = "admin_adjustment"
     HIGHLIGHT_DOWNLOAD_SPEND = "highlight_download_spend"
     CREATOR_CLIP_REVENUE = "creator_clip_revenue"
+    TRADER_ORDER_BUY = "trader_order_buy"
+    TRADER_ORDER_SELL = "trader_order_sell"
+    TRADER_TRADE_FEE = "trader_trade_fee"
 
 
 class PaymentProvider(StrEnum):

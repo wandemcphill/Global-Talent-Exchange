@@ -11,7 +11,7 @@ import secrets
 import struct
 import time
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.base import utcnow
@@ -29,8 +29,10 @@ from app.models.trader import (
     TraderProfile,
     TraderSecurity,
     TraderSecurityEvent,
+    TraderTrade,
     TraderWatchlist,
 )
+from app.trader.matching import TraderMatchingEngine
 from app.models.user import PublicAccountType, User
 from app.models.wallet import LedgerUnit
 from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
@@ -331,8 +333,10 @@ class TraderService:
 
     def cancel_order(self, user: User, *, order_id: str) -> TraderOrder:
         order = self.get_order(user, order_id=order_id)
-        if order.status != TraderOrderStatus.OPEN:
-            raise TraderAccessError("Only open trader orders can be cancelled.")
+        if order.status not in {TraderOrderStatus.OPEN, TraderOrderStatus.PARTIALLY_FILLED}:
+            raise TraderAccessError("Only open or partially filled trader orders can be cancelled.")
+        market = self._require_market(order.market_id)
+        self._matching_engine().release_remaining_reservation(user, order, market)
         order.status = TraderOrderStatus.CANCELLED
         self.session.flush()
         order.audit_ref = self._record_audit(
@@ -388,9 +392,24 @@ class TraderService:
         self, user: User, *, market_id: str, side: TraderOrderSide, quantity: Decimal, limit_price: Decimal | None
     ) -> TraderOrder:
         self.assert_trader_approved_for_trading(user)
-        self._require_market(market_id)
+        market = self._require_market(market_id)
+        if side is TraderOrderSide.CONVERT:
+            raise TraderAccessError("Convert orders are not supported on the matching market.")
         order = TraderOrder(user_id=user.id, market_id=market_id, side=side, quantity=quantity, limit_price=limit_price)
         self.session.add(order)
+        self.session.flush()
+
+        engine = self._matching_engine()
+        engine.reserve_for_order(user, order, market)
+        trades = engine.match(user, order, market)
+        if order.status not in {TraderOrderStatus.FILLED} and limit_price is None:
+            # Market orders never rest on the book; release any unmatched remainder.
+            engine.release_remaining_reservation(user, order, market)
+            order.status = (
+                TraderOrderStatus.FILLED
+                if Decimal(order.filled_quantity) > Decimal("0.0000")
+                else TraderOrderStatus.CANCELLED
+            )
         self.session.flush()
         self.sync_trader_metrics(user)
         order.audit_ref = self._record_audit(
@@ -404,9 +423,24 @@ class TraderService:
                 "side": side.value,
                 "quantity": str(quantity),
                 "limit_price": str(limit_price) if limit_price is not None else None,
+                "filled_quantity": str(order.filled_quantity),
+                "trade_count": len(trades),
             },
         )
         return order
+
+    def _matching_engine(self) -> "TraderMatchingEngine":
+        return TraderMatchingEngine(self.session, self.wallet_service or WalletService())
+
+    def list_trades(self, user: User, *, limit: int = 50) -> list[TraderTrade]:
+        self.assert_trader(user)
+        stmt = (
+            select(TraderTrade)
+            .where(or_(TraderTrade.buyer_user_id == user.id, TraderTrade.seller_user_id == user.id))
+            .order_by(TraderTrade.created_at.desc())
+            .limit(max(1, min(limit, 200)))
+        )
+        return list(self.session.scalars(stmt).all())
 
     def list_disputes(self, user: User) -> list[dict[str, object]]:
         self.assert_trader(user)
