@@ -660,7 +660,7 @@ class CreatorModule7ContractService:
         result = self.wallet_service.request_payout(
             self.session,
             user=actor,
-            amount=payload.amount,
+            amount=total_debit,
             unit=payload.unit,
             destination_reference=payload.destination_reference,
             source_scope="user_hosted_gift",

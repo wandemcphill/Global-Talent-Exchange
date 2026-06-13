@@ -19,7 +19,7 @@ from app.models.access_control import (
 )
 from app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
 from app.db import get_session
-from app.ingestion.models import Country, Player, PlayerVerification
+from app.ingestion.models import Country, Player, PlayerImageMetadata, PlayerVerification
 from app.models.base import Base
 from app.models.club_branding_asset import ClubBrandingAsset
 from app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
@@ -117,6 +117,7 @@ def session() -> Iterator[Session]:
             ClubShowcaseSnapshot.__table__,
             Country.__table__,
             Player.__table__,
+            PlayerImageMetadata.__table__,
             PlayerVerification.__table__,
             PlayerCardTier.__table__,
             PlayerCard.__table__,

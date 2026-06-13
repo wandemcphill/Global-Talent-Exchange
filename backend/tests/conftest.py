@@ -148,14 +148,18 @@ def bootstrap_admin_headers(client, app_session_factory):
         session.commit()
 
     response = client.post(
-        "/auth/login",
+        "/api/v2/auth/login",
+        headers={"X-API-Version": "2"},
         json={
             "email": os.environ["GTE_BOOTSTRAP_ADMIN_EMAIL"],
             "password": os.environ["GTE_BOOTSTRAP_ADMIN_PASSWORD"],
         },
     )
     assert response.status_code == 200, response.text
-    token = response.json()["access_token"]
+    payload = response.json()
+    if isinstance(payload, dict) and isinstance(payload.get("success"), bool) and "data" in payload:
+        payload = payload["data"]
+    token = payload["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -288,9 +292,10 @@ def gtex_db_engine():
     from sqlalchemy import create_engine, event
     from sqlalchemy.pool import StaticPool
 
-    import app.models  # noqa: F401 - register every ORM model on Base.metadata
+    from app.core.database import load_model_modules
     from app.models.base import Base
 
+    load_model_modules()
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},

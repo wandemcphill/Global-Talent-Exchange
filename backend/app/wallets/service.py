@@ -1070,7 +1070,11 @@ class WalletService:
         escrow_account = self.get_user_escrow_account(session, user, unit)
         net_tag = LedgerSourceTag.ADMIN_ADJUSTMENT
         fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN
-        fee_amount = self._withdrawal_fee_for_gross(gross_amount)
+        fee_amount = self._withdrawal_fee_for_gross(
+            gross_amount,
+            fee_bps=withdrawal_fee_bps,
+            minimum_fee=minimum_fee,
+        )
         net_amount = self._normalize_amount(gross_amount - fee_amount)
         total_debit = gross_amount
         available_balance = self.get_balance(session, user_account)
@@ -1113,7 +1117,7 @@ class WalletService:
                     "fee_amount": str(fee_amount),
                     "net_amount": str(net_amount),
                     "total_debit": str(total_debit),
-                    "fee_bps": resolve_withdrawal_fee_bps(),
+                    "fee_bps": withdrawal_fee_bps,
                 }
             },
         )
@@ -1125,7 +1129,7 @@ class WalletService:
             "total_debit": str(total_debit),
             "requested_gross_amount": str(gross_amount),
             "requested_net_amount": str(net_amount),
-            "fee_bps": resolve_withdrawal_fee_bps(),
+            "fee_bps": withdrawal_fee_bps,
             "destination_reference": destination_reference,
             "user_notes": notes or "",
         }
@@ -1157,7 +1161,7 @@ class WalletService:
                     "fee_amount": str(fee_amount),
                     "net_amount": str(net_amount),
                     "total_debit": str(total_debit),
-                    "fee_bps": resolve_withdrawal_fee_bps(),
+                    "fee_bps": withdrawal_fee_bps,
                 },
                 aggregate_id=payout_request.id,
                 aggregate_type="payout_request",
@@ -1314,9 +1318,17 @@ class WalletService:
             fee_amount = Decimal("0.0000")
         return self._normalize_amount(Decimal(payout_request.amount or 0) + fee_amount)
 
-    def _withdrawal_fee_for_gross(self, gross_amount: Decimal) -> Decimal:
-        fee = gross_amount * Decimal(resolve_withdrawal_fee_bps()) / Decimal(10_000)
-        return self._normalize_amount(max(fee, resolve_withdrawal_minimum_fee()))
+    def _withdrawal_fee_for_gross(
+        self,
+        gross_amount: Decimal,
+        *,
+        fee_bps: int | None = None,
+        minimum_fee: Decimal | None = None,
+    ) -> Decimal:
+        resolved_fee_bps = resolve_withdrawal_fee_bps() if fee_bps is None else int(fee_bps)
+        resolved_minimum_fee = resolve_withdrawal_minimum_fee() if minimum_fee is None else Decimal(str(minimum_fee))
+        fee = gross_amount * Decimal(resolved_fee_bps) / Decimal(10_000)
+        return self._normalize_amount(max(fee, resolved_minimum_fee))
 
     def _transfer_bid_reservation_metadata(
         self,
