@@ -11,10 +11,13 @@ services:
     envVars:
       - key: WEB_CONCURRENCY
         value: "4"
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
       - key: GTE_REDIS_URL
         fromService:
           type: redis
@@ -58,10 +61,13 @@ services:
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.workers.rq_worker_main"
     envVars:
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
       - key: GTE_REDIS_URL
         fromService:
           type: redis
@@ -97,10 +103,13 @@ services:
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.backbone.simulation_worker_main"
     envVars:
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
       - key: GTE_REDIS_URL
         fromService:
           type: redis
@@ -134,10 +143,13 @@ services:
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.backbone.outbox_relay_main"
     envVars:
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
       - key: GTE_REDIS_URL
         fromService:
           type: redis
@@ -171,10 +183,13 @@ services:
     buildCommand: "cd services/player-ingestion && npm ci"
     startCommand: "cd services/player-ingestion && npm run migrate && npm start"
     envVars:
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
       - key: GTE_REDIS_URL
         fromService:
           type: redis
@@ -244,8 +259,6 @@ services:
     plan: standard
     ipAllowList: []
 
-databases:
-  - name: gtex-postgres
-    region: frankfurt
-    plan: basic-1gb
-    ipAllowList: []
+# NOTE: PostgreSQL is hosted on Supabase, not Render. There is no Render-managed
+# `databases:` block. Each service receives the Supabase connection string via the
+# DATABASE_URL env var (sync: false — set manually in the Render dashboard).
