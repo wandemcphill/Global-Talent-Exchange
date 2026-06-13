@@ -324,10 +324,10 @@ class SystemStatusService:
     @staticmethod
     def _redis_check(request: Request) -> ServiceCheck:
         settings = getattr(request.app.state, "settings", get_settings())
-        if not settings.redis_url:
+        if not settings.redis_enabled or not settings.redis_url:
             return ServiceCheck(
                 status="skipped",
-                detail="Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+                detail="Redis is disabled (REDIS_ENABLED=false); cache, rate limiting, and queue fan-out use in-process fallbacks.",
             )
         cache_backend = getattr(request.app.state, "cache_backend", None)
         if cache_backend is None:

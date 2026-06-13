@@ -256,14 +256,14 @@ def test_app_startup_registers_core_routes_and_health_endpoints(app_and_engine) 
     assert health_payload["checks"]["database"] == {"status": "ok", "detail": None}
     assert health_payload["checks"]["redis"] == {
         "status": "skipped",
-        "detail": "Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+        "detail": "Redis is disabled (REDIS_ENABLED=false); cache, rate limiting, and queue fan-out use in-process fallbacks.",
     }
     assert health_payload["checks"]["kafka"] == {
         "status": "skipped",
         "detail": "Kafka brokers are not configured; event streaming is running in local fallback mode.",
     }
     assert health_payload["runtime_mode"] == "degraded"
-    assert any("Redis is not configured" in reason for reason in health_payload["mode_reasons"])
+    assert any("Redis is disabled" in reason or "Redis is not configured" in reason for reason in health_payload["mode_reasons"])
     assert any("Kafka brokers are not configured" in reason for reason in health_payload["mode_reasons"])
     assert ready_response.status_code == 200
     ready_payload = ready_response.json()
@@ -272,7 +272,7 @@ def test_app_startup_registers_core_routes_and_health_endpoints(app_and_engine) 
     assert ready_payload["checks"]["database"] == {"status": "ok", "detail": None}
     assert ready_payload["checks"]["redis"] == {
         "status": "skipped",
-        "detail": "Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+        "detail": "Redis is disabled (REDIS_ENABLED=false); cache, rate limiting, and queue fan-out use in-process fallbacks.",
     }
     assert ready_payload["checks"]["kafka"] == {
         "status": "skipped",
@@ -383,7 +383,7 @@ def test_ready_returns_service_unavailable_when_database_check_fails(app_and_eng
     assert payload["checks"]["database"] == {"status": "error", "detail": "db offline"}
     assert payload["checks"]["redis"] == {
         "status": "skipped",
-        "detail": "Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+        "detail": "Redis is disabled (REDIS_ENABLED=false); cache, rate limiting, and queue fan-out use in-process fallbacks.",
     }
     assert payload["checks"]["kafka"] == {
         "status": "skipped",
@@ -434,7 +434,7 @@ def test_app_startup_and_ready_skip_schema_smoke_when_env_enabled(app_and_engine
     assert payload["checks"]["database"] == {"status": "ok", "detail": None}
     assert payload["checks"]["redis"] == {
         "status": "skipped",
-        "detail": "Redis is not configured; distributed cache, rate limiting, and queue-backed fan-out are unavailable.",
+        "detail": "Redis is disabled (REDIS_ENABLED=false); cache, rate limiting, and queue fan-out use in-process fallbacks.",
     }
     assert payload["checks"]["kafka"] == {
         "status": "skipped",

@@ -1,6 +1,6 @@
 "use strict";
 
-const { resolveAndStoreImage, uploadRemoteImage } = require("./images");
+const { resolvePlayerImage } = require("./imageResolver");
 const logger = require("./logger");
 const repository = require("./repository");
 const { stableHash } = require("./hash");
@@ -79,23 +79,23 @@ async function upgradeRemoteFallbackImages({ limit = 2000 } = {}) {
   for (const row of rows) {
     try {
       const playerId = Number(row.provider_external_id);
-      const uploaded = await uploadRemoteImage(row.source_url, playerId, "sportmonks");
+      const resolved = resolvePlayerImage({ playerId });
       await repository.upsertAppPlayerImageMetadata({
         appPlayerId: row.app_player_id,
         playerId,
-        imageUrl: uploaded.secure_url,
-        storageKey: uploaded.public_id,
+        imageUrl: resolved.imageUrl,
+        storageKey: resolved.storageKey,
         rightsCleared: true,
       });
       await db.query(
         `
           UPDATE players
           SET image_url = $1,
-              image_source = 'sportmonks',
+              image_source = 'cloudinary_derived',
               updated_at = NOW()
           WHERE player_id = $2
         `,
-        [uploaded.secure_url, playerId],
+        [resolved.imageUrl, playerId],
       );
       summary.upgraded += 1;
     } catch (error) {
@@ -170,8 +170,8 @@ async function runBackfill({ limit = 2000, upgradeRemote = false } = {}) {
         continue;
       }
 
-      const image = await resolveAndStoreImage(player, { allowAiFallback: false });
-      if (!image.imageUrl || !image.rightsCleared) {
+      const image = resolvePlayerImage(player);
+      if (!image.rightsCleared) {
         summary.skippedNoImage += 1;
         logger.warn("marketplace player image not rights-cleared", {
           event: "marketplace_image_backfill_skipped",

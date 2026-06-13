@@ -2,7 +2,7 @@
 
 const config = require("./config");
 const { stableHash } = require("./hash");
-const { resolveAndStoreImage } = require("./images");
+const { resolvePlayerImage } = require("./imageResolver");
 const logger = require("./logger");
 const { applyPlayerInfluence } = require("./matchInfluence");
 const { captureException } = require("./observability");
@@ -130,7 +130,7 @@ async function processPlayer(job) {
     return { status: "unchanged" };
   }
 
-  const image = await resolvePlayerImage(player, existing);
+  const image = resolvePlayerImageWithCache(player, existing);
   if (!image.imageUrl && !player.isRegen) {
     await regenQueue.add("generate-regen", {
       basePlayerId: player.playerId,
@@ -202,7 +202,7 @@ async function processPlayer(job) {
 
 async function processRegen(job) {
   const player = generateRegen(job.data || {});
-  const image = await resolveAndStoreImage(player, { allowAiFallback: true });
+  const image = resolvePlayerImage(player);
   const changed = await repository.upsertPlayer({
     ...player,
     imageUrl: image.imageUrl,
@@ -221,24 +221,23 @@ async function processRegen(job) {
   return { status: changed ? "created" : "noop" };
 }
 
-async function resolvePlayerImage(player, existing) {
+function resolvePlayerImageWithCache(player, existing) {
   const existingSource = String(existing?.image_source || "");
-  const shouldResolve =
-    !existing?.image_url ||
-    existingSource === "missing" ||
-    existingSource.includes("remote_fallback") ||
-    (player.sportmonksImageUrl && existingSource !== "sportmonks");
+  const alreadyCloudinary =
+    existing?.image_url &&
+    existingSource === "cloudinary_derived" &&
+    existing.image_url;
 
-  if (shouldResolve) {
-    return resolveAndStoreImage(player, { allowAiFallback: Boolean(player.isRegen) });
+  if (alreadyCloudinary) {
+    return {
+      imageUrl: existing.image_url,
+      storageKey: existing.storage_key || null,
+      imageSource: existing.image_source,
+      rightsCleared: existing.rights_cleared,
+    };
   }
 
-  return {
-    imageUrl: existing.image_url,
-    storageKey: null,
-    imageSource: existing.image_source,
-    rightsCleared: existing.rights_cleared,
-  };
+  return resolvePlayerImage(player);
 }
 
 function withSourceHash(player) {
