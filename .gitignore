@@ -64,3 +64,6 @@ frontend/android/unityExport/
 /.tmp*
 /tmp/
 Gtex_Test_Migration/tmp/
+
+# Ephemeral phase evidence logs (N30-N50)
+/.runtime/
