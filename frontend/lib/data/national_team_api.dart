@@ -75,7 +75,7 @@ class NationalTeamApi {
   }) async {
     final Object? payload = await client.request(
       'GET',
-      _nationalAlias('/api/national/countries'),
+      _nationalAlias('/api/market/nationalities'),
       query: <String, Object?>{
         if (competitionId != null && competitionId.trim().isNotEmpty)
           'competition_id': competitionId.trim(),
@@ -95,7 +95,7 @@ class NationalTeamApi {
   }) async {
     final Object? payload = await client.request(
       'GET',
-      _nationalAlias('/api/national/teams'),
+      _nationalAlias('/api/market/national-teams'),
       query: <String, Object?>{
         if (competitionId != null && competitionId.trim().isNotEmpty)
           'competition_id': competitionId.trim(),

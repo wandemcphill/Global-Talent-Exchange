@@ -418,6 +418,7 @@ class _GtexNationalTeamRentalScreenV2State
                 ]).toUpperCase(),
             countryName: _mapText(row, const <String>[
               'country_name',
+              'display_name',
               'name',
               'label',
             ], fallback: 'Country not returned'),
@@ -469,6 +470,7 @@ class _GtexNationalTeamRentalScreenV2State
             name: _mapText(row, const <String>[
               'name',
               'team_name',
+              'display_name',
               'country_name',
             ], fallback: 'Team not returned'),
             ageBand: _mapText(row, const <String>[
