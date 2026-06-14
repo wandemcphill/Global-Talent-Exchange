@@ -79,8 +79,27 @@ function databaseSslDefault() {
   );
 }
 
+// Strip libpq sslmode/ssl query params from the connection string. Newer
+// node-postgres (pg >= 8.11) maps sslmode=require -> verify-full, which rejects
+// Supabase's pooler certificate chain ("self-signed certificate in certificate
+// chain"). We manage TLS explicitly via the pg `ssl` option instead, so these
+// params must not override it.
+function sanitizeDatabaseUrl(url) {
+  if (!url) {
+    return url;
+  }
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("sslmode");
+    parsed.searchParams.delete("ssl");
+    return parsed.toString();
+  } catch (_) {
+    return url;
+  }
+}
+
 module.exports = {
-  databaseUrl: required("DATABASE_URL"),
+  databaseUrl: sanitizeDatabaseUrl(required("DATABASE_URL")),
   databaseSsl: boolEnv("DATABASE_SSL", databaseSslDefault()),
   redisEnabled: boolEnv("REDIS_ENABLED", false),
   redisUrl: env("REDIS_URL") || env("GTE_REDIS_URL") || null,

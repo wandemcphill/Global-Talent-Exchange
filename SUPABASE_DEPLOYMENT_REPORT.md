@@ -51,4 +51,14 @@ postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/p
 points at a `db.*.supabase.co` direct host or is missing `sslmode`, so this mistake
 is caught before the migration step.
 
+## Node ingestion service — TLS handling
+
+`node-postgres` (pg ≥ 8.11) maps `sslmode=require` in the connection string to
+`verify-full`, which rejects Supabase's pooler certificate chain with
+`self-signed certificate in certificate chain`. The ingestion service therefore
+**strips `sslmode`/`ssl` query params** from `DATABASE_URL` (`config.sanitizeDatabaseUrl`)
+and manages TLS explicitly via the pg `ssl: { rejectUnauthorized: false }` option —
+encrypted, without CA chain verification. The Python backend (psycopg) is
+unaffected; it already treats `sslmode=require` as encrypt-without-verify.
+
 ## Verdict: SUPABASE READY (via Session pooler)
