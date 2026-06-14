@@ -24,8 +24,31 @@ preserved. Handles Supabase direct (`db.<ref>.supabase.co:5432`) and pooler
 
 ## Real migration command
 ```sh
-DATABASE_URL="postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres?sslmode=require" \
+DATABASE_URL="postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require" \
   alembic -c migrations/alembic.ini upgrade head
 ```
 
-## Verdict: SUPABASE READY
+## ⚠️ Connection host: use the pooler, NOT the direct host
+
+Render's network egress is **IPv4-only**. Supabase's **direct** host
+`db.<ref>.supabase.co` now publishes **only an IPv6 (AAAA) record**, so Render
+cannot reach it — `alembic upgrade head` fails with
+`psycopg.OperationalError: ... Network is unreachable` against an IPv6 address.
+
+**Use the Supabase Session pooler** (Supabase dashboard → Connect → Session
+pooler), which has an IPv4 address:
+
+```
+postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+- host: `aws-0-<region>.pooler.supabase.com` (IPv4) — not `db.<ref>.supabase.co`
+- user: `postgres.<ref>` (dot + project ref), not bare `postgres`
+- Session pooler (port **5432**) — supports migrations and persistent connections.
+  Transaction pooler (6543) rejects psycopg3 prepared statements; avoid it here.
+
+`ops/render/production-preflight.sh` now **hard-fails the deploy** if `DATABASE_URL`
+points at a `db.*.supabase.co` direct host or is missing `sslmode`, so this mistake
+is caught before the migration step.
+
+## Verdict: SUPABASE READY (via Session pooler)
