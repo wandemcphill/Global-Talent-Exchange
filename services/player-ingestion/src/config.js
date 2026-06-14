@@ -82,7 +82,8 @@ function databaseSslDefault() {
 module.exports = {
   databaseUrl: required("DATABASE_URL"),
   databaseSsl: boolEnv("DATABASE_SSL", databaseSslDefault()),
-  redisUrl: requiredAny(["REDIS_URL", "GTE_REDIS_URL"]),
+  redisEnabled: boolEnv("REDIS_ENABLED", false),
+  redisUrl: env("REDIS_URL") || env("GTE_REDIS_URL") || null,
   sportmonks: {
     baseUrl: env("SPORTMONKS_BASE_URL", "https://api.sportmonks.com/v3/football").replace(
       /\/+$/,

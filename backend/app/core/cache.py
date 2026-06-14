@@ -93,6 +93,8 @@ class RedisCacheBackend:
 
 def build_cache_backend(redis_url: str | None = None, *, settings: Settings | None = None) -> CacheBackend:
     resolved_settings = settings or get_settings()
+    if not resolved_settings.redis_enabled:
+        return NullCacheBackend()
     resolved_url = redis_url or resolved_settings.redis_url
     if not resolved_url:
         return NullCacheBackend()

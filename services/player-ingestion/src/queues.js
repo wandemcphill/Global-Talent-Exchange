@@ -4,6 +4,12 @@ const { Queue, Worker: BullWorker } = require("bullmq");
 const IORedis = require("ioredis");
 const config = require("./config");
 
+if (!config.redisUrl) {
+  throw new Error(
+    "Player ingestion worker requires Redis. Set REDIS_URL (or GTE_REDIS_URL) and REDIS_ENABLED=true.",
+  );
+}
+
 const connection = new IORedis(config.redisUrl, {
   maxRetriesPerRequest: null,
 });

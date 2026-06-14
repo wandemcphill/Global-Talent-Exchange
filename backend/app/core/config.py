@@ -50,7 +50,12 @@ class SettingsSource(BaseModel):
     phase_marker: str = Field(default="phase-8", validation_alias="GTE_PHASE_MARKER")
     config_root_override: str | None = Field(default=None, validation_alias="GTE_CONFIG_DIR")
     database_read_url: str | None = Field(default=None, validation_alias="GTE_DATABASE_READ_URL")
-    redis_url: str | None = Field(default=None, validation_alias="GTE_REDIS_URL")
+    redis_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("REDIS_ENABLED", "GTE_REDIS_ENABLED")
+    )
+    redis_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("REDIS_URL", "GTE_REDIS_URL")
+    )
     redis_event_channel: str = Field(default="gtex.events", validation_alias="GTE_REDIS_EVENT_CHANNEL")
     redis_realtime_channel: str = Field(default="gtex.realtime", validation_alias="GTE_REDIS_REALTIME_CHANNEL")
     api_cache_enabled: bool = Field(default=True, validation_alias="GTE_API_CACHE_ENABLED")
@@ -755,6 +760,7 @@ class Settings:
     config_root: Path
     database_url: str
     database_read_url: str
+    redis_enabled: bool
     redis_url: str | None
     redis_event_channel: str
     redis_realtime_channel: str
@@ -2048,7 +2054,8 @@ def load_settings(
         config_root=resolved_config_root,
         database_url=database_url,
         database_read_url=resolve_database_read_url(resolved_environ, default_database_url=database_url),
-        redis_url=source.redis_url,
+        redis_enabled=source.redis_enabled,
+        redis_url=source.redis_url if source.redis_enabled else None,
         redis_event_channel=source.redis_event_channel,
         redis_realtime_channel=source.redis_realtime_channel,
         api_cache_enabled=source.api_cache_enabled,
