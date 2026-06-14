@@ -20,8 +20,8 @@ TREASURY_SECRET_ENV_KEYS = (
     "TREASURY_ACCOUNT_NUMBER",
 )
 
-_KORAPAY_PUBLIC_LIVE_PREFIX = "pk_" + "live_"
-_KORAPAY_SECRET_LIVE_PREFIX = "sk_" + "live_"
+_KORAPAY_PUBLIC_LIVE_PREFIX = "pk_" + "live_"  # pragma: allowlist secret
+_KORAPAY_SECRET_LIVE_PREFIX = "sk_" + "live_"  # pragma: allowlist secret
 LIVE_SECRET_PATTERNS = (
     re.compile(rf"\b{re.escape(_KORAPAY_PUBLIC_LIVE_PREFIX)}[A-Za-z0-9]{{12,}}\b"),
     re.compile(rf"\b{re.escape(_KORAPAY_SECRET_LIVE_PREFIX)}[A-Za-z0-9]{{12,}}\b"),
