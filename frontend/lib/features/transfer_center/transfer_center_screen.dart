@@ -53,7 +53,7 @@ class _TransferCenterScreenState extends ConsumerState<TransferCenterScreen> {
     );
     final bool authenticated = ref.watch(isAuthenticatedProvider);
     return AppPageLayout(
-      title: 'Transfer Hub',
+      title: 'Transfer Center',
       subtitle:
           'Live listings, bid stacks, watchlists, and negotiation context from the backend transfer authority.',
       trailing: DataSourceBadge(
