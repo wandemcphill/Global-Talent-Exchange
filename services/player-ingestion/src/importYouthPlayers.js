@@ -4,7 +4,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const db = require("./db");
 const { stableHash } = require("./hash");
-const { uploadRemoteImage } = require("./images");
+const { resolvePlayerImage } = require("./imageResolver");
 const logger = require("./logger");
 const repository = require("./repository");
 const { SportmonksClient, normalizePlayer } = require("./sportmonks");
@@ -173,35 +173,17 @@ async function existingAppPlayerImage(playerId) {
   return result.rows[0] || null;
 }
 
-async function storePortrait(player, existing) {
-  if (existing?.source_url && existing?.storage_key) {
+function storePortrait(player, existing) {
+  if (existing?.storage_key) {
     return {
-      imageUrl: existing.source_url,
+      imageUrl: existing.source_url || null,
       storageKey: existing.storage_key,
-      imageSource: "sportmonks",
+      imageSource: "cloudinary_derived",
       rightsCleared: true,
       reused: true,
     };
   }
-  if (!player.sportmonksImageUrl) {
-    return {
-      imageUrl: null,
-      storageKey: null,
-      imageSource: "missing",
-      rightsCleared: false,
-      reused: false,
-    };
-  }
-  const uploaded = await withRetry(`portrait:${player.playerId}`, () =>
-    uploadRemoteImage(player.sportmonksImageUrl, player.playerId, "sportmonks"),
-  );
-  return {
-    imageUrl: uploaded.secure_url,
-    storageKey: uploaded.public_id,
-    imageSource: "sportmonks",
-    rightsCleared: true,
-    reused: false,
-  };
+  return { ...resolvePlayerImage(player), reused: false };
 }
 
 async function importYouthPlayer(player, report) {

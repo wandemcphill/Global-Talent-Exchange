@@ -246,6 +246,8 @@ class _GtexNationalTeamRentalScreenV2State
       final List<GtexRentalPlayerView> playerViews = pool.items
           .map(_rentalPlayerView)
           .toList(growable: false);
+      final List<GtexRentalCountryView> poolCountries =
+          _countryViewsFromPool(pool);
       final List<String> diagnostics = <String>[
         ...pool.warnings.take(3),
         if (pool.failedCount > pool.warnings.length)
@@ -259,6 +261,9 @@ class _GtexNationalTeamRentalScreenV2State
       setState(() {
         _teams = teamViews;
         _players = playerViews;
+        if (poolCountries.isNotEmpty) {
+          _countries = poolCountries;
+        }
         _poolWarning =
             pool.partial || pool.failedCount > 0
                 ? 'Loaded ${playerViews.length} valid rental players. ${pool.failedCount} records need repair.'
@@ -418,6 +423,7 @@ class _GtexNationalTeamRentalScreenV2State
                 ]).toUpperCase(),
             countryName: _mapText(row, const <String>[
               'country_name',
+              'display_name',
               'name',
               'label',
             ], fallback: 'Country not returned'),
@@ -469,6 +475,7 @@ class _GtexNationalTeamRentalScreenV2State
             name: _mapText(row, const <String>[
               'name',
               'team_name',
+              'display_name',
               'country_name',
             ], fallback: 'Team not returned'),
             ageBand: _mapText(row, const <String>[
@@ -537,6 +544,42 @@ class _GtexNationalTeamRentalScreenV2State
     return player.rentalEligible
         ? 'Backend eligible for the selected national-team rental pool.'
         : 'Backend eligibility is unavailable.';
+  }
+
+  // Derives country options from the backend rental-pool authority.
+  // Merges any already-loaded authority countries with countries discovered
+  // inside pool items, so the selector always reflects pool reality.
+  List<GtexRentalCountryView> _countryViewsFromPool(
+    NationalTeamRentalPlayerCollection pool,
+  ) {
+    final Map<String, GtexRentalCountryView> byCode =
+        <String, GtexRentalCountryView>{
+      for (final GtexRentalCountryView c in _countries) c.countryCode: c,
+    };
+    for (final NationalTeamRentalPlayer player in pool.items) {
+      final String code = (player.countryCode ?? '').trim().toUpperCase();
+      if (code.isEmpty || byCode.containsKey(code)) {
+        continue;
+      }
+      byCode[code] = GtexRentalCountryView(
+        countryCode: code,
+        countryName:
+            player.nationality?.trim().isNotEmpty == true
+                ? player.nationality!
+                : 'Backend authority',
+        confederation: 'Backend authority',
+        eligiblePlayers: 0,
+        rentalBudgetLabel: 'Backend authority',
+        flagEmoji: '',
+      );
+    }
+    final List<GtexRentalCountryView> countries =
+        byCode.values.toList(growable: false);
+    countries.sort(
+      (GtexRentalCountryView left, GtexRentalCountryView right) =>
+          left.countryName.compareTo(right.countryName),
+    );
+    return countries;
   }
 
   GtexRentalCountryView? _countryForCode(String? countryCode) {

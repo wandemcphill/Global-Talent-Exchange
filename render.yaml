@@ -4,22 +4,25 @@ services:
     type: web
     runtime: python
     region: frankfurt
-    plan: standard
+    plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     preDeployCommand: "bash ops/render/production-preflight.sh && cd backend && alembic -c migrations/alembic.ini upgrade head"
     startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-2} --timeout 180 --graceful-timeout 120"
     envVars:
       - key: WEB_CONCURRENCY
         value: "4"
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      # Manual Render Redis instance connection string (rediss://...).
+      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
+      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        fromService:
-          type: redis
-          name: gtex-cache
-          property: connectionString
+        sync: false
       - key: GTE_APP_ENV
         value: production
       - key: GTE_RUN_MIGRATION_CHECK
@@ -72,31 +75,31 @@ services:
     type: worker
     runtime: python
     region: frankfurt
-    plan: standard
+    plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.workers.rq_worker_main"
     envVars:
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      # Manual Render Redis instance connection string (rediss://...).
+      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
+      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        fromService:
-          type: redis
-          name: gtex-cache
-          property: connectionString
+        sync: false
       - key: GTE_APP_ENV
         value: production
+      # Must be set to the SAME value as gtex-api's GTE_AUTH_SECRET /
+      # GTE_MEDIA_SIGNING_SECRET (sync: false on every service so Blueprint never
+      # overwrites them). Mismatched values will break cross-service auth.
       - key: GTE_AUTH_SECRET
-        fromService:
-          type: web
-          name: gtex-api
-          envVarKey: GTE_AUTH_SECRET
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
-        fromService:
-          type: web
-          name: gtex-api
-          envVarKey: GTE_MEDIA_SIGNING_SECRET
+        sync: false
       - key: GTE_RUN_MIGRATION_CHECK
         value: "true"
       - key: GTE_INGESTION_PROVIDER
@@ -111,31 +114,31 @@ services:
     type: worker
     runtime: python
     region: frankfurt
-    plan: standard
+    plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.backbone.simulation_worker_main"
     envVars:
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      # Manual Render Redis instance connection string (rediss://...).
+      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
+      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        fromService:
-          type: redis
-          name: gtex-cache
-          property: connectionString
+        sync: false
       - key: GTE_APP_ENV
         value: production
+      # Must be set to the SAME value as gtex-api's GTE_AUTH_SECRET /
+      # GTE_MEDIA_SIGNING_SECRET (sync: false on every service so Blueprint never
+      # overwrites them). Mismatched values will break cross-service auth.
       - key: GTE_AUTH_SECRET
-        fromService:
-          type: web
-          name: gtex-api
-          envVarKey: GTE_AUTH_SECRET
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
-        fromService:
-          type: web
-          name: gtex-api
-          envVarKey: GTE_MEDIA_SIGNING_SECRET
+        sync: false
       - key: GTE_RUN_MIGRATION_CHECK
         value: "true"
       - key: GTE_INGESTION_PROVIDER
@@ -148,31 +151,31 @@ services:
     type: worker
     runtime: python
     region: frankfurt
-    plan: standard
+    plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.backbone.outbox_relay_main"
     envVars:
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      # Manual Render Redis instance connection string (rediss://...).
+      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
+      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        fromService:
-          type: redis
-          name: gtex-cache
-          property: connectionString
+        sync: false
       - key: GTE_APP_ENV
         value: production
+      # Must be set to the SAME value as gtex-api's GTE_AUTH_SECRET /
+      # GTE_MEDIA_SIGNING_SECRET (sync: false on every service so Blueprint never
+      # overwrites them). Mismatched values will break cross-service auth.
       - key: GTE_AUTH_SECRET
-        fromService:
-          type: web
-          name: gtex-api
-          envVarKey: GTE_AUTH_SECRET
+        sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
-        fromService:
-          type: web
-          name: gtex-api
-          envVarKey: GTE_MEDIA_SIGNING_SECRET
+        sync: false
       - key: GTE_RUN_MIGRATION_CHECK
         value: "true"
       - key: GTE_INGESTION_PROVIDER
@@ -185,19 +188,22 @@ services:
     type: worker
     runtime: node
     region: frankfurt
-    plan: standard
+    plan: starter
     buildCommand: "cd services/player-ingestion && npm ci"
     startCommand: "cd services/player-ingestion && npm run migrate && npm start"
     envVars:
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      # Set manually in the Render dashboard. GTEX no longer provisions a
+      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
-        fromDatabase:
-          name: gtex-postgres
-          property: connectionString
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      # Manual Render Redis instance connection string (rediss://...).
+      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
+      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        fromService:
-          type: redis
-          name: gtex-cache
-          property: connectionString
+        sync: false
       - key: DATABASE_SSL
         value: "true"
       - key: SPORTMONKS_BASE_URL
@@ -255,15 +261,10 @@ services:
       - key: SEASON_TRANSFER_WINDOWS
         value: "2026-01-01:2026-01-31,2026-08-01:2026-08-31"
 
-  # 🔴 Redis
-  - type: keyvalue
-    name: gtex-cache
-    region: frankfurt
-    plan: standard
-    ipAllowList: []
-
-databases:
-  - name: gtex-postgres
-    region: frankfurt
-    plan: basic-1gb
-    ipAllowList: []
+# NOTE: NO Blueprint-managed paid resources.
+# - PostgreSQL is hosted on Supabase (no `databases:` block).
+# - Redis is a MANUALLY-created Render Redis/Key-Value instance (no `keyvalue`
+#   service block). Blueprint therefore never provisions, recreates, or re-plans
+#   Redis. Services consume it via GTE_REDIS_URL (sync: false), set in the dashboard.
+# All connection strings and secrets use `sync: false` so Blueprint cannot
+# overwrite dashboard-managed values on deploy.

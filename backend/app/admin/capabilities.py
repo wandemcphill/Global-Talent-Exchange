@@ -8,7 +8,6 @@ from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 
-from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
 from app.auth.dependencies import get_current_admin
 from app.models.user import User, UserRole
 from app.wallets.service import WalletService
@@ -64,6 +63,10 @@ def require_admin_capability(capability: AdminCapability) -> Callable[..., User]
 
 
 def assert_admin_capability(request: Request, actor: User, capability: AdminCapability | str) -> None:
+    # Imported locally to avoid an import cycle (admin_godmode.service ->
+    # admin_godmode.router -> admin.capabilities) at module load time.
+    from app.admin_godmode.service import PermissionDeniedError
+
     resolved_capability = capability.value if isinstance(capability, AdminCapability) else str(capability)
     if actor.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
         raise HTTPException(
@@ -141,6 +144,8 @@ def note_admin_read(request: Request, action_key: str, **metadata: Any) -> None:
 
 
 def _admin_godmode_service(request: Request) -> AdminGodModeService:
+    from app.admin_godmode.service import AdminGodModeService
+
     publisher = getattr(request.app.state, "event_publisher", None)
     return AdminGodModeService(
         wallet_service=WalletService(

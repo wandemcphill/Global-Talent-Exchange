@@ -8,7 +8,7 @@ from time import perf_counter
 from typing import Any, Callable
 
 from fastapi import APIRouter, FastAPI
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, APIWebSocketRoute
 
 from app.core.api_contract import register_versioned_route_aliases
 from app.core.container import ApplicationContext
@@ -16,6 +16,9 @@ from app.core.container import ApplicationContext
 ModuleHook = Callable[[FastAPI, ApplicationContext], None]
 HookReference = ModuleHook | str
 RouterTransform = Callable[[APIRouter], APIRouter]
+
+# (path, sorted-methods) tuple; WebSocket routes use the sentinel ("WEBSOCKET",).
+_Fingerprint = tuple[str, tuple[str, ...]]
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +66,9 @@ class DomainModule:
 
 def register_domain_modules(app: FastAPI, modules: Iterable[DomainModule]) -> None:
     seen_module_names: set[str] = set()
-    registered_routes = _route_fingerprints(app.routes)
+    # Maps fingerprint → True (canonical) | False (alias).
+    # Routes already present in app before module registration are always canonical.
+    registered: dict[_Fingerprint, bool] = {fp: True for fp in _route_fingerprints(app.routes)}
     loaded_module_names: set[str] = set(getattr(app.state, "loaded_domain_module_names", set()))
 
     for module in modules:
@@ -79,18 +84,66 @@ def register_domain_modules(app: FastAPI, modules: Iterable[DomainModule]) -> No
             app.state.loaded_domain_module_names = loaded_module_names
             continue
 
+        # A module whose router was produced by a transform (_with_api_only /
+        # _with_api_alias) generates *alias* copies of routes on /api/* paths.
+        # A module with no transform mounts its routes as-is — those are always
+        # canonical, even if their paths happen to start with /api/.
+        module_is_alias_source = module.router_transform is not None
+
         module_routes = _route_fingerprints(router.routes)
-        collisions = module_routes & registered_routes
+        collisions = module_routes & registered.keys()
         if collisions:
-            collision_labels = ", ".join(
-                f"{'/'.join(methods)} {path}"
-                for path, methods in sorted(collisions, key=lambda item: (item[0], item[1]))
-            )
-            raise ValueError(f"Router collision detected for module '{module.name}': {collision_labels}")
+            fatal: set[_Fingerprint] = set()
+            # Alias routes in app that a canonical incoming route must replace.
+            to_replace: set[_Fingerprint] = set()
+
+            for fp in collisions:
+                path, _ = fp
+                existing_is_canonical = registered[fp]
+                new_is_canonical = not module_is_alias_source
+
+                if not _is_alias_path(path):
+                    # Bare-path collision is always a double-registration bug.
+                    fatal.add(fp)
+                    continue
+
+                if not existing_is_canonical and new_is_canonical:
+                    # Canonical incoming route supersedes an alias already in app.
+                    # Remove the stale alias so the canonical can take its place.
+                    to_replace.add(fp)
+                # canonical > alias: drop incoming alias (existing canonical wins).
+                # alias > alias:     drop incoming alias (first alias wins).
+                # Both fall through to _drop_colliding_routes below.
+
+            if fatal:
+                collision_labels = ", ".join(
+                    f"{'/'.join(methods)} {path}"
+                    for path, methods in sorted(fatal, key=lambda item: (item[0], item[1]))
+                )
+                raise ValueError(f"Router collision detected for module '{module.name}': {collision_labels}")
+
+            if to_replace:
+                _remove_routes_from_app(app, to_replace)
+                for fp in to_replace:
+                    del registered[fp]
+                logger.debug(
+                    "app.routes.canonical_supersede module=%s replaced_aliases=%d",
+                    module.name,
+                    len(to_replace),
+                )
+
+            _drop_colliding_routes(router, set(registered.keys()))
+            module_routes = _route_fingerprints(router.routes)
 
         app.include_router(router)
         register_versioned_route_aliases(app, router.routes)
-        registered_routes.update(module_routes)
+
+        # Tag every newly registered fingerprint as canonical or alias.
+        # Transform-produced /api/* routes are aliases; everything else is canonical.
+        for fp in module_routes:
+            path, _ = fp
+            registered[fp] = not (module_is_alias_source and _is_alias_path(path))
+
         loaded_module_names.add(module.name)
         app.state.loaded_domain_module_names = loaded_module_names
 
@@ -225,12 +278,49 @@ def _record_hook_profile(
     )
 
 
-def _route_fingerprints(routes: Iterable[object]) -> set[tuple[str, tuple[str, ...]]]:
-    fingerprints: set[tuple[str, tuple[str, ...]]] = set()
-    for route in routes:
-        if not isinstance(route, APIRoute):
+def _is_alias_path(path: str) -> bool:
+    return path == "/api" or path.startswith("/api/")
+
+
+def _remove_routes_from_app(app: FastAPI, fingerprints: set[_Fingerprint]) -> None:
+    """Remove specific routes from the live app route table (e.g. to evict stale aliases)."""
+    kept: list[object] = []
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            fp: _Fingerprint = (route.path, tuple(sorted(route.methods or ())))
+        elif isinstance(route, APIWebSocketRoute):
+            fp = (route.path, ("WEBSOCKET",))
+        else:
+            kept.append(route)
             continue
-        fingerprints.add((route.path, tuple(sorted(route.methods or ()))))
+        if fp not in fingerprints:
+            kept.append(route)
+    app.routes[:] = kept
+
+
+def _drop_colliding_routes(router: APIRouter, registered_routes: set[_Fingerprint]) -> None:
+    kept: list[object] = []
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            fingerprint: _Fingerprint = (route.path, tuple(sorted(route.methods or ())))
+        elif isinstance(route, APIWebSocketRoute):
+            fingerprint = (route.path, ("WEBSOCKET",))
+        else:
+            kept.append(route)
+            continue
+        if fingerprint in registered_routes and _is_alias_path(route.path):
+            continue
+        kept.append(route)
+    router.routes[:] = kept
+
+
+def _route_fingerprints(routes: Iterable[object]) -> set[_Fingerprint]:
+    fingerprints: set[_Fingerprint] = set()
+    for route in routes:
+        if isinstance(route, APIRoute):
+            fingerprints.add((route.path, tuple(sorted(route.methods or ()))))
+        elif isinstance(route, APIWebSocketRoute):
+            fingerprints.add((route.path, ("WEBSOCKET",)))
     return fingerprints
 
 

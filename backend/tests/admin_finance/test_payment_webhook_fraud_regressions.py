@@ -44,6 +44,32 @@ def webhook_client():
     session.close()
 
 
+def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
+    webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Paystack is permanently blocked (410) before any signature check runs."""
+    monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
+    monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
+
+    response = webhook_client.post(
+        "/integrations/payments/paystack/webhook",
+        headers={"x-paystack-signature": "invalid-signature"},
+        json={
+            "event": "charge.success",
+            "data": {
+                "id": 9002,
+                "reference": "ps_live_ref_webhook",
+                "amount": 900000,
+                "currency": "NGN",
+                "status": "success",
+            },
+        },
+    )
+
+    assert response.status_code == 410, response.text
+    assert "paystack is unavailable" in response.json()["detail"].lower()
+
+
 def test_paystack_webhook_is_gone_even_when_stale_secret_is_configured(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

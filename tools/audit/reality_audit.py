@@ -20,8 +20,8 @@ TREASURY_SECRET_ENV_KEYS = (
     "TREASURY_ACCOUNT_NUMBER",
 )
 
-_KORAPAY_PUBLIC_LIVE_PREFIX = "pk_" + "live_"
-_KORAPAY_SECRET_LIVE_PREFIX = "sk_" + "live_"
+_KORAPAY_PUBLIC_LIVE_PREFIX = "pk_" + "live_"  # pragma: allowlist secret
+_KORAPAY_SECRET_LIVE_PREFIX = "sk_" + "live_"  # pragma: allowlist secret
 LIVE_SECRET_PATTERNS = (
     re.compile(rf"\b{re.escape(_KORAPAY_PUBLIC_LIVE_PREFIX)}[A-Za-z0-9]{{12,}}\b"),
     re.compile(rf"\b{re.escape(_KORAPAY_SECRET_LIVE_PREFIX)}[A-Za-z0-9]{{12,}}\b"),
@@ -137,6 +137,10 @@ def _secret_failures() -> list[str]:
     python_matches = _python_secret_scan(_current_secret_scan_files())
     if python_matches:
         return ["live secret-like value found in current worktree: " + "; ".join(python_matches[:5])]
+    # Python scan above already covered all tracked/untracked files in the scan scope.
+    # rg is a second pass for defence-in-depth; skip gracefully when not installed.
+    if shutil.which("rg") is None:
+        return []
     matches, error = _run_rg_secret_scan(
         CURRENT_SECRET_SCAN_ROOTS,
         timeout=_scan_timeout("GTE_REALITY_AUDIT_CURRENT_TIMEOUT_SECONDS", 30),
@@ -349,12 +353,35 @@ def _local_generated_secret_failures() -> list[str]:
     roots = [relative_root for relative_root in LOCAL_SECRET_SCAN_ROOTS if (REPO_ROOT / relative_root).exists()]
     if not roots:
         return []
+    python_matches = _python_secret_scan(_local_generated_scan_files(roots))
+    if python_matches:
+        return ["live secret-like value found in local generated/cache files: " + "; ".join(python_matches[:5])]
+    # Python scan above already covered every text file under the local roots.
+    # rg is a second pass for defence-in-depth; skip gracefully when not installed.
+    if shutil.which("rg") is None:
+        return []
     matches, error = _run_rg_secret_scan(roots, timeout=45)
     if error:
         return [f"could not scan local generated/cache files for live secrets: {error}"]
     if not matches:
         return []
     return ["live secret-like value found in local generated/cache files: " + "; ".join(matches[:5])]
+
+
+def _local_generated_scan_files(roots: list[str]) -> list[Path]:
+    # Walks the generated/cache roots directly; unlike _current_secret_scan_files
+    # these roots ARE the generated dirs, so no generated-dir exclusion applies.
+    files: list[Path] = []
+    for relative_root in roots:
+        for path in (REPO_ROOT / relative_root).rglob("*"):
+            if path.suffix.lower() not in TEXT_SUFFIXES:
+                continue
+            try:
+                if path.is_file() and path.stat().st_size <= 2_000_000:
+                    files.append(path)
+            except OSError:
+                continue
+    return files
 
 
 def _run_rg_secret_scan(roots: tuple[str, ...] | list[str], *, timeout: int) -> tuple[list[str], str | None]:

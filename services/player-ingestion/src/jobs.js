@@ -2,7 +2,7 @@
 
 const config = require("./config");
 const { stableHash } = require("./hash");
-const { resolveAndStoreImage } = require("./images");
+const { resolvePlayerImage: deriveCloudinaryImage } = require("./imageResolver");
 const { safeJobId } = require("./jobIds");
 const logger = require("./logger");
 const { applyPlayerInfluence } = require("./matchInfluence");
@@ -203,7 +203,7 @@ async function processPlayer(job) {
 
 async function processRegen(job) {
   const player = generateRegen(job.data || {});
-  const image = await resolveAndStoreImage(player, { allowAiFallback: true });
+  const image = deriveCloudinaryImage(player);
   const changed = await repository.upsertPlayer({
     ...player,
     imageUrl: image.imageUrl,
@@ -231,7 +231,7 @@ async function resolvePlayerImage(player, existing) {
     (player.sportmonksImageUrl && existingSource !== "sportmonks");
 
   if (shouldResolve) {
-    return resolveAndStoreImage(player, { allowAiFallback: Boolean(player.isRegen) });
+    return deriveCloudinaryImage(player);
   }
 
   return {
