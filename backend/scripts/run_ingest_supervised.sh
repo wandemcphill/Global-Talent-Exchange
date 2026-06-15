@@ -20,8 +20,7 @@ MAX_ATTEMPTS="${MAX_ATTEMPTS:-200}"
 BACKOFF_START="${BACKOFF_START:-15}" # seconds; grows then caps
 BACKOFF_MAX="${BACKOFF_MAX:-120}"
 
-# Leagues covered by the active SportMonks plan. Süper Lig (Turkey) is omitted
-# until coverage returns; re-add  --league "Super Lig"  once confirmed.
+# Leagues covered by the active SportMonks plan (Growth trial covers all 7).
 LEAGUES=(
   --league "Premier League"
   --league "La Liga"
@@ -29,6 +28,7 @@ LEAGUES=(
   --league "Ligue 1"
   --league "Bundesliga"
   --league "Eredivisie"
+  --league "Super Lig"
 )
 
 attempt=0
