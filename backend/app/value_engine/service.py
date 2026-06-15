@@ -55,7 +55,6 @@ from app.value_engine.read_models import (
 )
 from app.value_engine.scoring import ValueEngine, credits_from_real_world_value
 
-
 POSITION_BASE_VALUES_EUR = {
     "goalkeeper": 8_000_000.0,
     "defender": 12_000_000.0,
@@ -64,7 +63,12 @@ POSITION_BASE_VALUES_EUR = {
 }
 REFERENCE_MARKET_VALUE_SIGNAL_TYPES = {"reference_market_value_eur", "market_value_eur"}
 CURRENT_CREDITS_SIGNAL_TYPES = {"current_credits", "credits"}
-MID_PRICE_SIGNAL_TYPES = {"market_mid_price_credits", "mid_price_credits", "snapshot_mid_price_credits", "index_price_credits"}
+MID_PRICE_SIGNAL_TYPES = {
+    "market_mid_price_credits",
+    "mid_price_credits",
+    "snapshot_mid_price_credits",
+    "index_price_credits",
+}
 BID_PRICE_SIGNAL_TYPES = {"best_bid_price_credits", "best_bid_credits", "bid_price_credits"}
 ASK_PRICE_SIGNAL_TYPES = {"best_ask_price_credits", "best_ask_credits", "ask_price_credits", "listing_price_credits"}
 LAST_TRADE_PRICE_SIGNAL_TYPES = {"last_trade_price_credits", "last_sale_price_credits", "recent_trade_price_credits"}
@@ -97,11 +101,20 @@ SCOUTING_SIGNAL_ALIASES = {
     "suspicious_scouting_activity": {"suspicious_scouting_activity"},
 }
 EGAME_SIGNAL_ALIASES = {
-    "selection_count": {"egame_selection_count", "competition_selection_count", "selection_count", "fantasy_selection_count"},
+    "selection_count": {
+        "egame_selection_count",
+        "competition_selection_count",
+        "selection_count",
+        "fantasy_selection_count",
+    },
     "captain_count": {"egame_captain_count", "captain_count", "boost_selection_count"},
     "contest_win_count": {"egame_contest_win_count", "contest_win_count", "creator_competition_win_count"},
     "spotlight_count": {"egame_spotlight_count", "spotlight_count", "featured_competition_count"},
-    "featured_performance_count": {"egame_featured_performance_count", "featured_performance_count", "platform_spotlight_performance"},
+    "featured_performance_count": {
+        "egame_featured_performance_count",
+        "featured_performance_count",
+        "platform_spotlight_performance",
+    },
     "suspicious_selection_count": {"suspicious_egame_selection_count", "suspicious_selection_count"},
     "suspicious_contest_count": {"suspicious_egame_contest_count", "suspicious_contest_count"},
     "suspicious_spotlight_count": {"suspicious_egame_spotlight_count", "suspicious_spotlight_count"},
@@ -236,14 +249,10 @@ class IngestionValueSnapshotRepository:
             reference_market_value_eur=reference_market_value_eur,
             current_credits=current_credits,
             previous_ftv_credits=(
-                previous_snapshot.football_truth_value_credits
-                if previous_snapshot is not None
-                else current_credits
+                previous_snapshot.football_truth_value_credits if previous_snapshot is not None else current_credits
             ),
             previous_pcv_credits=(
-                previous_snapshot.target_credits
-                if previous_snapshot is not None
-                else current_credits
+                previous_snapshot.target_credits if previous_snapshot is not None else current_credits
             ),
             previous_gsi_score=self._previous_global_scouting_index(previous_snapshot),
             liquidity_band=self._resolve_liquidity_band(
@@ -385,10 +394,10 @@ class IngestionValueSnapshotRepository:
             )
 
         base_value = POSITION_BASE_VALUES_EUR[self._position_bucket(player)]
-        appearances = (season_stat.appearances if season_stat is not None and season_stat.appearances is not None else 0)
-        goals = (season_stat.goals if season_stat is not None and season_stat.goals is not None else 0)
-        assists = (season_stat.assists if season_stat is not None and season_stat.assists is not None else 0)
-        minutes = (season_stat.minutes if season_stat is not None and season_stat.minutes is not None else 0)
+        appearances = season_stat.appearances if season_stat is not None and season_stat.appearances is not None else 0
+        goals = season_stat.goals if season_stat is not None and season_stat.goals is not None else 0
+        assists = season_stat.assists if season_stat is not None and season_stat.assists is not None else 0
+        minutes = season_stat.minutes if season_stat is not None and season_stat.minutes is not None else 0
         rating = 6.5
         if season_stat is not None and season_stat.average_rating is not None:
             rating = season_stat.average_rating
@@ -484,9 +493,13 @@ class IngestionValueSnapshotRepository:
         reference_market_value_eur: float,
         as_of: datetime,
     ) -> ReferenceValueContext:
-        weighting = self.settings.value_engine_weighting if self.settings is not None else get_settings().value_engine_weighting
+        weighting = (
+            self.settings.value_engine_weighting if self.settings is not None else get_settings().value_engine_weighting
+        )
         stale_days_threshold = weighting.reference_stale_days
-        explicit_value_signal = self._latest_signal(player.market_signals, REFERENCE_MARKET_VALUE_SIGNAL_TYPES, as_of=as_of)
+        explicit_value_signal = self._latest_signal(
+            player.market_signals, REFERENCE_MARKET_VALUE_SIGNAL_TYPES, as_of=as_of
+        )
         if explicit_value_signal is not None and explicit_value_signal.score > 0:
             staleness_days = max((as_of - _coerce_utc(explicit_value_signal.as_of)).days, 0)
             confidence_tier = "direct_verified_reference"
@@ -509,9 +522,7 @@ class IngestionValueSnapshotRepository:
                 staleness_anchor = _coerce_utc(player.last_synced_at) if player.last_synced_at is not None else as_of
                 staleness_days = max((as_of - staleness_anchor).days, 0)
                 confidence_tier = (
-                    "direct_verified_reference"
-                    if staleness_days < stale_days_threshold
-                    else "inferred_reference"
+                    "direct_verified_reference" if staleness_days < stale_days_threshold else "inferred_reference"
                 )
                 confidence_score = 86.0 if confidence_tier == "direct_verified_reference" else 66.0
                 return ReferenceValueContext(
@@ -527,7 +538,9 @@ class IngestionValueSnapshotRepository:
         if player.market_value_eur is not None and player.market_value_eur > 0:
             staleness_anchor = _coerce_utc(player.last_synced_at) if player.last_synced_at is not None else as_of
             staleness_days = max((as_of - staleness_anchor).days, 0)
-            confidence_tier = "direct_verified_reference" if staleness_days < stale_days_threshold else "inferred_reference"
+            confidence_tier = (
+                "direct_verified_reference" if staleness_days < stale_days_threshold else "inferred_reference"
+            )
             confidence_score = 82.0 if confidence_tier == "direct_verified_reference" else 64.0
             return ReferenceValueContext(
                 market_value_eur=round(player.market_value_eur, 2),
@@ -563,7 +576,9 @@ class IngestionValueSnapshotRepository:
         as_of: datetime,
     ) -> PlayerProfileContext:
         current_competition = player.current_competition
-        internal_league = current_competition.internal_league if current_competition is not None else player.internal_league
+        internal_league = (
+            current_competition.internal_league if current_competition is not None else player.internal_league
+        )
         competition_strength = None
         if current_competition is not None and current_competition.competition_strength is not None:
             competition_strength = float(current_competition.competition_strength)
@@ -582,7 +597,9 @@ class IngestionValueSnapshotRepository:
         minutes_played = season_stat.minutes if season_stat is not None and season_stat.minutes is not None else 0
         goals = season_stat.goals if season_stat is not None and season_stat.goals is not None else 0
         assists = season_stat.assists if season_stat is not None and season_stat.assists is not None else 0
-        clean_sheets = season_stat.clean_sheets if season_stat is not None and season_stat.clean_sheets is not None else 0
+        clean_sheets = (
+            season_stat.clean_sheets if season_stat is not None and season_stat.clean_sheets is not None else 0
+        )
         saves = season_stat.saves if season_stat is not None and season_stat.saves is not None else 0
         if player_window is not None:
             minutes_played = max(minutes_played, player_window.total_minutes)
@@ -596,7 +613,11 @@ class IngestionValueSnapshotRepository:
             club_tier=(current_competition.name if current_competition is not None else None),
             competition_tier=(internal_league.code if internal_league is not None else None),
             competition_strength=competition_strength,
-            club_prestige=float(player.current_club.popularity_score) if player.current_club is not None and player.current_club.popularity_score is not None else 50.0,
+            club_prestige=(
+                float(player.current_club.popularity_score)
+                if player.current_club is not None and player.current_club.popularity_score is not None
+                else 50.0
+            ),
             continental_visibility=float(internal_league.visibility_weight) if internal_league is not None else 1.0,
             appearances=appearances,
             starts=starts,
@@ -609,7 +630,14 @@ class IngestionValueSnapshotRepository:
             captaincy_flag=False,
             leadership_flag=False,
             injury_absence_days=injury_absence_days,
-            transfer_interest_score=float(self._latest_signal_score(player.market_signals, {"transfer_interest_score", "transfer_room_adds", "transfer_room_interest"}, as_of=as_of) or 0.0),
+            transfer_interest_score=float(
+                self._latest_signal_score(
+                    player.market_signals,
+                    {"transfer_interest_score", "transfer_room_adds", "transfer_room_interest"},
+                    as_of=as_of,
+                )
+                or 0.0
+            ),
             profile_completeness_score=float(player.profile_completeness_score or 55.0),
             player_class=self._player_class(player=player, season_stat=season_stat, as_of=as_of),
         )
@@ -624,7 +652,11 @@ class IngestionValueSnapshotRepository:
         previous_snapshot: PlayerValueSnapshotRecord | None,
     ):
         adapter = RealPlayerValuationAdapter(
-            config=self.settings.value_engine_weighting if self.settings is not None else get_settings().value_engine_weighting
+            config=(
+                self.settings.value_engine_weighting
+                if self.settings is not None
+                else get_settings().value_engine_weighting
+            )
         )
         return adapter.build(
             player=player,
@@ -665,8 +697,12 @@ class IngestionValueSnapshotRepository:
                     occurred_at=datetime.combine(event.occurred_on, datetime.min.time(), tzinfo=UTC),
                     from_club=str(details.get("selling_club_name") or details.get("from_club") or "Unknown"),
                     to_club=str(details.get("buying_club_name") or details.get("to_club") or "Unknown"),
-                    from_competition=str(details.get("from_competition")) if details.get("from_competition") is not None else None,
-                    to_competition=str(details.get("to_competition")) if details.get("to_competition") is not None else None,
+                    from_competition=(
+                        str(details.get("from_competition")) if details.get("from_competition") is not None else None
+                    ),
+                    to_competition=(
+                        str(details.get("to_competition")) if details.get("to_competition") is not None else None
+                    ),
                     reported_fee_eur=reported_fee_eur,
                     status=status,
                 )
@@ -821,16 +857,8 @@ class IngestionValueSnapshotRepository:
             if signal.score <= 0:
                 continue
             notes_payload = self._parse_market_signal_notes(signal.notes)
-            seller_user_id = str(
-                notes_payload.get("seller_user_id")
-                or notes_payload.get("seller_id")
-                or ""
-            ).strip()
-            buyer_user_id = str(
-                notes_payload.get("buyer_user_id")
-                or notes_payload.get("buyer_id")
-                or ""
-            ).strip()
+            seller_user_id = str(notes_payload.get("seller_user_id") or notes_payload.get("seller_id") or "").strip()
+            buyer_user_id = str(notes_payload.get("buyer_user_id") or notes_payload.get("buyer_id") or "").strip()
             if not seller_user_id or not buyer_user_id:
                 continue
             quantity = self._coerce_trade_quantity(notes_payload.get("quantity"))
@@ -935,13 +963,21 @@ class IngestionValueSnapshotRepository:
             name=match.competition.name if match.competition is not None else "Unknown Competition",
             stage=stage,
             season=match.season.label if match.season is not None else None,
-            country=match.competition.country.name if match.competition is not None and match.competition.country is not None else None,
+            country=(
+                match.competition.country.name
+                if match.competition is not None and match.competition.country is not None
+                else None
+            ),
         )
         team_id = team.id if team is not None else (stat.club_id or player.current_club_id or "")
-        team_name = team.name if team is not None else (player.current_club.name if player.current_club is not None else "")
+        team_name = (
+            team.name if team is not None else (player.current_club.name if player.current_club is not None else "")
+        )
         opponent_id = opponent.id if opponent is not None else ""
         opponent_name = opponent.name if opponent is not None else ""
-        big_moment = goals >= 2 or assists >= 2 or (won_match and "final" in stage.lower() and (goals > 0 or assists > 0))
+        big_moment = (
+            goals >= 2 or assists >= 2 or (won_match and "final" in stage.lower() and (goals > 0 or assists > 0))
+        )
 
         return NormalizedMatchEvent(
             source=stat.source_provider,
@@ -1268,7 +1304,9 @@ class IngestionValueEngineBridge:
                 settings=resolved_settings,
                 snapshot_type=snapshot_type,
             )
-            resolved_player_ids = list(player_ids) if player_ids is not None else list(repository.list_player_ids(snapshot_time))
+            resolved_player_ids = (
+                list(player_ids) if player_ids is not None else list(repository.list_player_ids(snapshot_time))
+            )
             run_record.candidate_count = len(resolved_player_ids)
             try:
                 snapshots = ValueSnapshotJob(
@@ -1435,11 +1473,7 @@ class IngestionValueEngineBridge:
         return record
 
     def list_run_history(self, session: Session, limit: int = 20) -> list[PlayerValueRunRecord]:
-        statement = (
-            select(PlayerValueRunRecord)
-            .order_by(PlayerValueRunRecord.created_at.desc())
-            .limit(limit)
-        )
+        statement = select(PlayerValueRunRecord).order_by(PlayerValueRunRecord.created_at.desc()).limit(limit)
         return list(session.scalars(statement))
 
     def list_candidates(self, session: Session, limit: int = 100) -> list[PlayerValueRecomputeCandidateRecord]:
@@ -1456,16 +1490,16 @@ class IngestionValueEngineBridge:
 
     def list_admin_audits(self, session: Session, limit: int = 50) -> list[PlayerValueAdminAuditRecord]:
         statement = (
-            select(PlayerValueAdminAuditRecord)
-            .order_by(PlayerValueAdminAuditRecord.created_at.desc())
-            .limit(limit)
+            select(PlayerValueAdminAuditRecord).order_by(PlayerValueAdminAuditRecord.created_at.desc()).limit(limit)
         )
         return list(session.scalars(statement))
 
     def inspect_player(self, session: Session, player_id: str) -> dict[str, object]:
         latest_snapshot = ValueSnapshotQueryService(session).get_latest(player_id)
         candidate = session.scalar(
-            select(PlayerValueRecomputeCandidateRecord).where(PlayerValueRecomputeCandidateRecord.player_id == player_id)
+            select(PlayerValueRecomputeCandidateRecord).where(
+                PlayerValueRecomputeCandidateRecord.player_id == player_id
+            )
         )
         history = ValueSnapshotQueryService(session).list_history(player_id=player_id, limit=20)
         daily_closes = ValueSnapshotQueryService(session).list_daily_closes(player_id=player_id, limit=14)
@@ -1641,7 +1675,9 @@ class IngestionValueEngineBridge:
             if isinstance(player_id, str) and player_id and price is not None:
                 signal = MarketSignal(
                     source_provider="value_engine_event_bridge",
-                    provider_external_id=str(payload.get("execution_id") or payload.get("offer_id") or f"{player_id}:{now.isoformat()}"),
+                    provider_external_id=str(
+                        payload.get("execution_id") or payload.get("offer_id") or f"{player_id}:{now.isoformat()}"
+                    ),
                     player_id=player_id,
                     signal_type="trade_print_price_credits",
                     score=float(price),
@@ -1689,30 +1725,22 @@ class ValueSnapshotQueryService:
         statement = select(PlayerValueSnapshotRecord).where(PlayerValueSnapshotRecord.player_id == player_id)
         if snapshot_type is not None:
             statement = statement.where(PlayerValueSnapshotRecord.snapshot_type == snapshot_type)
-        statement = (
-            statement
-            .order_by(
-                PlayerValueSnapshotRecord.as_of.desc(),
-                PlayerValueSnapshotRecord.created_at.desc(),
-                PlayerValueSnapshotRecord.id.desc(),
-            )
-            .limit(1)
-        )
+        statement = statement.order_by(
+            PlayerValueSnapshotRecord.as_of.desc(),
+            PlayerValueSnapshotRecord.created_at.desc(),
+            PlayerValueSnapshotRecord.id.desc(),
+        ).limit(1)
         return self.session.scalar(statement)
 
     def list_latest(self, limit: int = 50, *, snapshot_type: str | None = None) -> list[PlayerValueSnapshotRecord]:
         statement = select(PlayerValueSnapshotRecord)
         if snapshot_type is not None:
             statement = statement.where(PlayerValueSnapshotRecord.snapshot_type == snapshot_type)
-        statement = (
-            statement
-            .order_by(
-                PlayerValueSnapshotRecord.as_of.desc(),
-                PlayerValueSnapshotRecord.created_at.desc(),
-                PlayerValueSnapshotRecord.id.desc(),
-            )
-            .limit(limit)
-        )
+        statement = statement.order_by(
+            PlayerValueSnapshotRecord.as_of.desc(),
+            PlayerValueSnapshotRecord.created_at.desc(),
+            PlayerValueSnapshotRecord.id.desc(),
+        ).limit(limit)
         return list(self.session.scalars(statement))
 
     def list_history(
@@ -1725,15 +1753,11 @@ class ValueSnapshotQueryService:
         statement = select(PlayerValueSnapshotRecord).where(PlayerValueSnapshotRecord.player_id == player_id)
         if snapshot_type is not None:
             statement = statement.where(PlayerValueSnapshotRecord.snapshot_type == snapshot_type)
-        statement = (
-            statement
-            .order_by(
-                PlayerValueSnapshotRecord.as_of.desc(),
-                PlayerValueSnapshotRecord.created_at.desc(),
-                PlayerValueSnapshotRecord.id.desc(),
-            )
-            .limit(limit)
-        )
+        statement = statement.order_by(
+            PlayerValueSnapshotRecord.as_of.desc(),
+            PlayerValueSnapshotRecord.created_at.desc(),
+            PlayerValueSnapshotRecord.id.desc(),
+        ).limit(limit)
         return list(self.session.scalars(statement))
 
     def list_daily_closes(self, *, player_id: str, limit: int = 30) -> list[PlayerValueDailyCloseRecord]:

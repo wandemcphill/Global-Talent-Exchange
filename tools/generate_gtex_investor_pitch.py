@@ -24,7 +24,6 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-
 OUTPUT = Path("Docs/GTEX_Investor_Pitch.pdf")
 THREED_ILLUSTRATION = Path(r"C:\Users\ayomc\Downloads\ChatGPT Image May 3, 2026, 07_45_41 PM.png")
 
@@ -219,10 +218,38 @@ def _section_header(text):
 def _problem_diagram():
     d = Drawing(720, 170)
     boxes = [
-        (10, 55, 150, 70, "Fragmented football economy", "Scouting, wallets, content, competitions, and admin actions live in disconnected tools."),
-        (185, 55, 150, 70, "No single source of truth", "Balances, reserved funds, bids, and payouts are often hard to explain to the user."),
-        (360, 55, 150, 70, "Low engagement loops", "Fans and creators need a live, broadcast-grade surface to stay active."),
-        (535, 55, 175, 70, "Manual ops overhead", "Admins need queues, audits, approvals, and retries instead of spreadsheets."),
+        (
+            10,
+            55,
+            150,
+            70,
+            "Fragmented football economy",
+            "Scouting, wallets, content, competitions, and admin actions live in disconnected tools.",
+        ),
+        (
+            185,
+            55,
+            150,
+            70,
+            "No single source of truth",
+            "Balances, reserved funds, bids, and payouts are often hard to explain to the user.",
+        ),
+        (
+            360,
+            55,
+            150,
+            70,
+            "Low engagement loops",
+            "Fans and creators need a live, broadcast-grade surface to stay active.",
+        ),
+        (
+            535,
+            55,
+            175,
+            70,
+            "Manual ops overhead",
+            "Admins need queues, audits, approvals, and retries instead of spreadsheets.",
+        ),
     ]
     for x, y, w, h, title, body in boxes:
         d.add(Rect(x, y, w, h, rx=8, ry=8, fillColor=COLORS["mist"], strokeColor=COLORS["navy_2"], strokeWidth=1))
@@ -267,7 +294,16 @@ def _feature_bars():
     bars.categoryAxis.labels.dy = -8
     bars.categoryAxis.labels.fontSize = 8
     bars.barWidth = 24
-    d.add(String(5, 190, "Feature stack and readiness by module", fontName="Helvetica-Bold", fontSize=12, fillColor=COLORS["navy"]))
+    d.add(
+        String(
+            5,
+            190,
+            "Feature stack and readiness by module",
+            fontName="Helvetica-Bold",
+            fontSize=12,
+            fillColor=COLORS["navy"],
+        )
+    )
     d.add(bars)
     return d
 
@@ -302,7 +338,7 @@ def _line_chart():
     chart.height = 150
     chart.width = 600
     chart.data = [
-        [1.2, 4.8, 14.7],   # Base revenue, USD M
+        [1.2, 4.8, 14.7],  # Base revenue, USD M
         [8.0, 28.0, 92.0],  # GMV, USD M
     ]
     chart.categoryAxis.categoryNames = ["Year 1", "Year 2", "Year 3"]
@@ -321,7 +357,16 @@ def _line_chart():
     chart.lines[1].symbol = makeMarker("Square")
     chart.lines[0].symbol.size = 6
     chart.lines[1].symbol.size = 6
-    d.add(String(5, 190, "Illustrative 3-year base case: revenue and GMV growth", fontName="Helvetica-Bold", fontSize=12, fillColor=COLORS["navy"]))
+    d.add(
+        String(
+            5,
+            190,
+            "Illustrative 3-year base case: revenue and GMV growth",
+            fontName="Helvetica-Bold",
+            fontSize=12,
+            fillColor=COLORS["navy"],
+        )
+    )
     d.add(chart)
     return d
 
@@ -407,11 +452,22 @@ def build_pdf(output: Path = OUTPUT) -> Path:
     story.append(Spacer(1, 0.08 * inch))
     story.append(
         Table(
-            [[
-                Paragraph("<b>Problem</b><br/>Football discovery, engagement, and financial operations are fragmented across tools.", styles["Body"]),
-                Paragraph("<b>Solution</b><br/>GTEX unifies wallet, market, match center, competitions, creators, and admin into one platform.", styles["Body"]),
-                Paragraph("<b>Business model</b><br/>Transaction fees, market commissions, competition fees, creation fees, creator monetization, and premium admin tools.", styles["Body"]),
-            ]],
+            [
+                [
+                    Paragraph(
+                        "<b>Problem</b><br/>Football discovery, engagement, and financial operations are fragmented across tools.",
+                        styles["Body"],
+                    ),
+                    Paragraph(
+                        "<b>Solution</b><br/>GTEX unifies wallet, market, match center, competitions, creators, and admin into one platform.",
+                        styles["Body"],
+                    ),
+                    Paragraph(
+                        "<b>Business model</b><br/>Transaction fees, market commissions, competition fees, creation fees, creator monetization, and premium admin tools.",
+                        styles["Body"],
+                    ),
+                ]
+            ],
             colWidths=[3.0 * inch, 3.0 * inch, 3.0 * inch],
             style=TableStyle(
                 [
@@ -451,7 +507,10 @@ def build_pdf(output: Path = OUTPUT) -> Path:
     story.append(Spacer(1, 0.15 * inch))
     problem_rows = [
         ["Pain point", "What it costs the market"],
-        ["Fragmented discovery", "Scouts, owners, and fans use disconnected tools, so talent and opportunity are missed."],
+        [
+            "Fragmented discovery",
+            "Scouts, owners, and fans use disconnected tools, so talent and opportunity are missed.",
+        ],
         ["Opaque finance", "Wallet, transfer, and payout truth is hard to explain and easy to dispute."],
         ["Weak retention", "Football apps often lack a daily operating loop beyond watching scores."],
         ["Manual admin burden", "Approvals, disputes, settlement, and reconciliation consume staff time."],
@@ -486,13 +545,41 @@ def build_pdf(output: Path = OUTPUT) -> Path:
     story.append(Spacer(1, 0.16 * inch))
     product_rows = [
         ["Feature", "What it does", "Why it matters"],
-        ["Wallet", "Available, reserved, locked, pending balances with clear ledger states", "Makes money movement understandable and auditable"],
-        ["Transfer Market", "Live listings, bids, counters, reservations, settlement", "Creates transaction frequency and network effects"],
-        ["2D Match Center", "Broadcast-style match viewing with score, commentary, stats, and overlays", "Drives retention and daily engagement"],
-        ["Build-a-Son", "Regeneration and player creation flow with backend-derived projections", "Creates premium creation revenue and emotional attachment"],
-        ["Competitions", "Bracket/league lifecycle with entry and payout flows", "Generates event-driven monetization and repeat play"],
-        ["Creator / Community", "Content and creator monetization surface with admin oversight", "Adds another monetized engagement loop"],
-        ["Admin Command Center", "Queues, approvals, exports, audits, and operator controls", "Keeps the platform safe at scale"],
+        [
+            "Wallet",
+            "Available, reserved, locked, pending balances with clear ledger states",
+            "Makes money movement understandable and auditable",
+        ],
+        [
+            "Transfer Market",
+            "Live listings, bids, counters, reservations, settlement",
+            "Creates transaction frequency and network effects",
+        ],
+        [
+            "2D Match Center",
+            "Broadcast-style match viewing with score, commentary, stats, and overlays",
+            "Drives retention and daily engagement",
+        ],
+        [
+            "Build-a-Son",
+            "Regeneration and player creation flow with backend-derived projections",
+            "Creates premium creation revenue and emotional attachment",
+        ],
+        [
+            "Competitions",
+            "Bracket/league lifecycle with entry and payout flows",
+            "Generates event-driven monetization and repeat play",
+        ],
+        [
+            "Creator / Community",
+            "Content and creator monetization surface with admin oversight",
+            "Adds another monetized engagement loop",
+        ],
+        [
+            "Admin Command Center",
+            "Queues, approvals, exports, audits, and operator controls",
+            "Keeps the platform safe at scale",
+        ],
     ]
     story.append(
         Table(
@@ -522,25 +609,34 @@ def build_pdf(output: Path = OUTPUT) -> Path:
     story.append(Spacer(1, 0.12 * inch))
     story.append(
         Table(
-            [[
-                _pie_chart(
-                    "Illustrative 2028 revenue mix",
-                    ["Transfer fees", "Wallet / payout fees", "Competition fees", "Build-a-Son", "Creator share", "Premium ops"],
-                    [35, 20, 15, 12, 10, 8],
-                    x=45,
-                ),
-                Paragraph(
-                    "<b>How GTEX makes money</b><br/><br/>"
-                    "1. Transfer market commissions on player transactions.<br/>"
-                    "2. Wallet and withdrawal spreads/fees where permitted.<br/>"
-                    "3. Build-a-Son creation fees and premium progression upgrades.<br/>"
-                    "4. Competition entry and hosting fees.<br/>"
-                    "5. Creator monetization and content revenue share.<br/>"
-                    "6. Premium admin, club, and operator tooling.<br/><br/>"
-                    "<b>Logic:</b> each feature creates either a transaction, an upgrade, or a premium workflow. That gives GTEX multiple non-overlapping revenue streams and reduces dependence on one monetization mode.",
-                    styles["Body"],
-                ),
-            ]],
+            [
+                [
+                    _pie_chart(
+                        "Illustrative 2028 revenue mix",
+                        [
+                            "Transfer fees",
+                            "Wallet / payout fees",
+                            "Competition fees",
+                            "Build-a-Son",
+                            "Creator share",
+                            "Premium ops",
+                        ],
+                        [35, 20, 15, 12, 10, 8],
+                        x=45,
+                    ),
+                    Paragraph(
+                        "<b>How GTEX makes money</b><br/><br/>"
+                        "1. Transfer market commissions on player transactions.<br/>"
+                        "2. Wallet and withdrawal spreads/fees where permitted.<br/>"
+                        "3. Build-a-Son creation fees and premium progression upgrades.<br/>"
+                        "4. Competition entry and hosting fees.<br/>"
+                        "5. Creator monetization and content revenue share.<br/>"
+                        "6. Premium admin, club, and operator tooling.<br/><br/>"
+                        "<b>Logic:</b> each feature creates either a transaction, an upgrade, or a premium workflow. That gives GTEX multiple non-overlapping revenue streams and reduces dependence on one monetization mode.",
+                        styles["Body"],
+                    ),
+                ]
+            ],
             colWidths=[3.5 * inch, 5.3 * inch],
             style=TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]),
         )
@@ -622,20 +718,22 @@ def build_pdf(output: Path = OUTPUT) -> Path:
     story.append(Spacer(1, 0.12 * inch))
     story.append(
         Table(
-            [[
-                _three_d_revenue_pie(),
-                Paragraph(
-                    "<b>How the 3D layer makes money</b><br/><br/>"
-                    "• <b>Season pass / battle pass:</b> unlocks ranked seasons, cosmetics, and premium progression.<br/>"
-                    "• <b>Cosmetics:</b> kits, boots, stadium themes, celebrations, commentary packs, and avatar items.<br/>"
-                    "• <b>Streamer tournaments:</b> entry fees, featured brackets, spectator boosts, and sponsored showmatches.<br/>"
-                    "• <b>Creator monetization:</b> revenue share from streamed 3D clips, highlights, and event sponsorships.<br/>"
-                    "• <b>Marketplace fees:</b> trade fees on collectible items, player skins, and season badges.<br/>"
-                    "• <b>Ads and sponsorships:</b> branded overlays, stadium boards, and season sponsorship packages.<br/><br/>"
-                    "<b>Why it works:</b> gamers spend for status and progression, streamers spend for audience hooks, and sponsors pay for repeat live attention. The 3D layer monetizes entertainment while the core GTEX economy monetizes football transactions.",
-                    styles["Body"],
-                ),
-            ]],
+            [
+                [
+                    _three_d_revenue_pie(),
+                    Paragraph(
+                        "<b>How the 3D layer makes money</b><br/><br/>"
+                        "• <b>Season pass / battle pass:</b> unlocks ranked seasons, cosmetics, and premium progression.<br/>"
+                        "• <b>Cosmetics:</b> kits, boots, stadium themes, celebrations, commentary packs, and avatar items.<br/>"
+                        "• <b>Streamer tournaments:</b> entry fees, featured brackets, spectator boosts, and sponsored showmatches.<br/>"
+                        "• <b>Creator monetization:</b> revenue share from streamed 3D clips, highlights, and event sponsorships.<br/>"
+                        "• <b>Marketplace fees:</b> trade fees on collectible items, player skins, and season badges.<br/>"
+                        "• <b>Ads and sponsorships:</b> branded overlays, stadium boards, and season sponsorship packages.<br/><br/>"
+                        "<b>Why it works:</b> gamers spend for status and progression, streamers spend for audience hooks, and sponsors pay for repeat live attention. The 3D layer monetizes entertainment while the core GTEX economy monetizes football transactions.",
+                        styles["Body"],
+                    ),
+                ]
+            ],
             colWidths=[3.2 * inch, 5.5 * inch],
             style=TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]),
         )
@@ -677,19 +775,21 @@ def build_pdf(output: Path = OUTPUT) -> Path:
     story.append(Spacer(1, 0.12 * inch))
     story.append(
         Table(
-            [[
-                _use_of_funds_pie(),
-                Paragraph(
-                    "<b>Why GTEX can win</b><br/><br/>"
-                    "• The product has a strong system moat: wallet, market, competition, match center, and creator loops reinforce one another.<br/>"
-                    "• Backend-authored truth keeps balances, bids, and results auditable.<br/>"
-                    "• The 2D broadcast Match Center creates daily engagement without needing expensive simulation-heavy infrastructure.<br/>"
-                    "• Admin command centers and queues reduce operational friction as volume grows.<br/><br/>"
-                    "<b>Use of a $2.5M seed:</b> finish product depth, harden money paths, add analytics/observability, and fund launch acquisition.<br/><br/>"
-                    "This is an illustrative deck, not audited financial advice. Real outcomes depend on product execution, market timing, and regulatory compliance.",
-                    styles["Body"],
-                ),
-            ]],
+            [
+                [
+                    _use_of_funds_pie(),
+                    Paragraph(
+                        "<b>Why GTEX can win</b><br/><br/>"
+                        "• The product has a strong system moat: wallet, market, competition, match center, and creator loops reinforce one another.<br/>"
+                        "• Backend-authored truth keeps balances, bids, and results auditable.<br/>"
+                        "• The 2D broadcast Match Center creates daily engagement without needing expensive simulation-heavy infrastructure.<br/>"
+                        "• Admin command centers and queues reduce operational friction as volume grows.<br/><br/>"
+                        "<b>Use of a $2.5M seed:</b> finish product depth, harden money paths, add analytics/observability, and fund launch acquisition.<br/><br/>"
+                        "This is an illustrative deck, not audited financial advice. Real outcomes depend on product execution, market timing, and regulatory compliance.",
+                        styles["Body"],
+                    ),
+                ]
+            ],
             colWidths=[3.2 * inch, 5.6 * inch],
             style=TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]),
         )
@@ -697,7 +797,11 @@ def build_pdf(output: Path = OUTPUT) -> Path:
     story.append(Spacer(1, 0.1 * inch))
     final_rows = [
         ["Investor ask", "Use of funds", "Milestone target"],
-        ["$2.5M seed", "Product + growth + ops + compliance", "Launch-ready GTEX with monetized transaction rails and a trusted 2D match center"],
+        [
+            "$2.5M seed",
+            "Product + growth + ops + compliance",
+            "Launch-ready GTEX with monetized transaction rails and a trusted 2D match center",
+        ],
     ]
     story.append(
         Table(

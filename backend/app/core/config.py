@@ -50,12 +50,8 @@ class SettingsSource(BaseModel):
     phase_marker: str = Field(default="phase-8", validation_alias="GTE_PHASE_MARKER")
     config_root_override: str | None = Field(default=None, validation_alias="GTE_CONFIG_DIR")
     database_read_url: str | None = Field(default=None, validation_alias="GTE_DATABASE_READ_URL")
-    redis_enabled: bool = Field(
-        default=False, validation_alias=AliasChoices("REDIS_ENABLED", "GTE_REDIS_ENABLED")
-    )
-    redis_url: str | None = Field(
-        default=None, validation_alias=AliasChoices("REDIS_URL", "GTE_REDIS_URL")
-    )
+    redis_enabled: bool = Field(default=False, validation_alias=AliasChoices("REDIS_ENABLED", "GTE_REDIS_ENABLED"))
+    redis_url: str | None = Field(default=None, validation_alias=AliasChoices("REDIS_URL", "GTE_REDIS_URL"))
     redis_event_channel: str = Field(default="gtex.events", validation_alias="GTE_REDIS_EVENT_CHANNEL")
     redis_realtime_channel: str = Field(default="gtex.realtime", validation_alias="GTE_REDIS_REALTIME_CHANNEL")
     api_cache_enabled: bool = Field(default=True, validation_alias="GTE_API_CACHE_ENABLED")
