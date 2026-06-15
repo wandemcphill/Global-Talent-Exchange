@@ -76,12 +76,14 @@ def _with_api_alias(router: APIRouter) -> APIRouter:
     wrapped_router = APIRouter()
     wrapped_router.include_router(router)
     wrapped_router.include_router(router, prefix="/api")
+    wrapped_router.include_router(router, prefix="/api/v2")
     return wrapped_router
 
 
 def _with_api_only(router: APIRouter) -> APIRouter:
     wrapped_router = APIRouter()
     wrapped_router.include_router(router, prefix="/api")
+    wrapped_router.include_router(router, prefix="/api/v2")
     return wrapped_router
 
 

@@ -806,6 +806,8 @@ def signup_trader(
 
 
 @legacy_router.post("/login", response_model=TokenResponse)
+@api_router.post("/login", response_model=TokenResponse)
+@api_v2_router.post("/login", response_model=TokenResponse)
 def login_user(
     payload: LoginRequest,
     session: Session = Depends(get_session),

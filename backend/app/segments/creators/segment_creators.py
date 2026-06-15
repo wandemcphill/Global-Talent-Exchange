@@ -32,11 +32,14 @@ from app.models.treasury import TreasuryWithdrawalRequest, TreasuryWithdrawalSta
 from app.models.wallet import LedgerUnit, PayoutRequest
 from app.wallets.service import WalletService
 
-router = APIRouter(prefix="/api/creators", tags=["creators"])
-alias_router = APIRouter(prefix="/creators", tags=["creators"])
+# Endpoints are declared on prefix-less base routers so the same route set can be
+# mounted under multiple namespaces. `_base_router` carries the full creators
+# surface; `_alias_subset` carries only the bare `/creators/...` aliases.
+_base_router = APIRouter(tags=["creators"])
+_alias_subset = APIRouter(tags=["creators"])
 
 
-@router.post("/profile", response_model=CreatorProfileView, status_code=status.HTTP_201_CREATED)
+@_base_router.post("/profile", response_model=CreatorProfileView, status_code=status.HTTP_201_CREATED)
 def create_creator_profile(
     payload: CreatorProfileCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -55,7 +58,7 @@ def create_creator_profile(
         raise _to_http_error(exc) from exc
 
 
-@router.patch("/profile", response_model=CreatorProfileView)
+@_base_router.patch("/profile", response_model=CreatorProfileView)
 def update_creator_profile(
     payload: CreatorProfileUpdateRequest,
     current_user: User = Depends(get_current_user),
@@ -74,7 +77,7 @@ def update_creator_profile(
         raise _to_http_error(exc) from exc
 
 
-@router.get("/profile/me", response_model=CreatorProfileView)
+@_base_router.get("/profile/me", response_model=CreatorProfileView)
 def get_my_creator_profile(
     current_user: User = Depends(get_current_user),
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
@@ -85,7 +88,7 @@ def get_my_creator_profile(
         raise _to_http_error(exc) from exc
 
 
-@router.get("/me/summary", response_model=CreatorSummaryView)
+@_base_router.get("/me/summary", response_model=CreatorSummaryView)
 def get_my_creator_summary(
     current_user: User = Depends(get_current_user),
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
@@ -96,7 +99,7 @@ def get_my_creator_summary(
         raise _to_http_error(exc) from exc
 
 
-@router.get("/me/competitions", response_model=list[CreatorCompetitionView])
+@_base_router.get("/me/competitions", response_model=list[CreatorCompetitionView])
 def get_my_creator_competitions(
     current_user: User = Depends(get_current_user),
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
@@ -108,7 +111,7 @@ def get_my_creator_competitions(
     return [CreatorCompetitionView.model_validate(competition) for competition in competitions]
 
 
-@router.get("/me/finance", response_model=CreatorFinanceSummaryView)
+@_base_router.get("/me/finance", response_model=CreatorFinanceSummaryView)
 def get_my_creator_finance(
     current_user: User = Depends(get_current_user),
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
@@ -202,8 +205,8 @@ def get_my_creator_finance(
     )
 
 
-@router.get("/me/insights", response_model=CreatorInsightsView)
-@alias_router.get("/me/insights", response_model=CreatorInsightsView)
+@_base_router.get("/me/insights", response_model=CreatorInsightsView)
+@_alias_subset.get("/me/insights", response_model=CreatorInsightsView)
 def get_my_creator_insights(
     current_user: User = Depends(get_current_user),
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
@@ -221,8 +224,8 @@ def get_my_creator_insights(
     )
 
 
-@router.post("/me/copilot/analyze", response_model=CreatorCopilotAnalysisView)
-@alias_router.post("/me/copilot/analyze", response_model=CreatorCopilotAnalysisView)
+@_base_router.post("/me/copilot/analyze", response_model=CreatorCopilotAnalysisView)
+@_alias_subset.post("/me/copilot/analyze", response_model=CreatorCopilotAnalysisView)
 def analyze_my_creator_draft(
     payload: CreatorCopilotDraftRequest,
     current_user: User = Depends(get_current_user),
@@ -242,7 +245,7 @@ def analyze_my_creator_draft(
     )
 
 
-@router.get("/{handle}", response_model=CreatorProfileView)
+@_base_router.get("/{handle}", response_model=CreatorProfileView)
 def get_creator_profile(
     handle: str,
     orchestrator: ReferralOrchestrator = Depends(get_referral_orchestrator),
@@ -261,3 +264,14 @@ def _to_http_error(exc: ReferralActionError) -> HTTPException:
     elif reason in {"creator_handle_taken", "creator_profile_exists"}:
         status_code = status.HTTP_409_CONFLICT
     return HTTPException(status_code=status_code, detail=reason)
+
+
+# Mount the full creators surface under both /api/creators and /api/v2/creators,
+# and the bare-alias subset under /creators. The /api/v2 mirror matches /api/creators
+# route-for-route, so the contract's present/absent split holds for both namespaces.
+router = APIRouter(prefix="/api/creators", tags=["creators"])
+router.include_router(_base_router)
+api_v2_router = APIRouter(prefix="/api/v2/creators", tags=["creators"])
+api_v2_router.include_router(_base_router)
+alias_router = APIRouter(prefix="/creators", tags=["creators"])
+alias_router.include_router(_alias_subset)

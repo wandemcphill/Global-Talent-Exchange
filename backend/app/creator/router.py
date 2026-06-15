@@ -34,6 +34,7 @@ from app.schemas.creator_share_market import (
     CreatorClubSharePurchaseView,
 )
 from app.segments.creators.segment_creators import alias_router as legacy_creator_alias_router
+from app.segments.creators.segment_creators import api_v2_router as legacy_creator_api_v2_router
 from app.segments.creators.segment_creators import router as legacy_creator_router
 from app.services.creator_application_service import (
     CreatorApplicationConflictError,
@@ -516,6 +517,7 @@ def update_creator_fan_share_market_control(
 
 router = APIRouter()
 router.include_router(legacy_creator_router)
+router.include_router(legacy_creator_api_v2_router)
 router.include_router(legacy_creator_alias_router)
 router.include_router(creator_router)
 router.include_router(admin_router)
@@ -524,6 +526,12 @@ api_router = APIRouter(prefix="/api")
 api_router.include_router(creator_router)
 api_router.include_router(admin_router)
 router.include_router(api_router)
+
+# Mirror the /api/creator and /api/admin/creator surfaces under /api/v2.
+api_v2_router = APIRouter(prefix="/api/v2")
+api_v2_router.include_router(creator_router)
+api_v2_router.include_router(admin_router)
+router.include_router(api_v2_router)
 
 
 __all__ = ["router"]

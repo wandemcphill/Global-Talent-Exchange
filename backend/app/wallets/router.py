@@ -1740,3 +1740,13 @@ api_router.include_router(wallet_router, generate_unique_id_function=_api_operat
 api_router.include_router(public_wallet_router, generate_unique_id_function=_api_operation_id)
 api_router.include_router(portfolio_router, generate_unique_id_function=_api_operation_id)
 router.include_router(api_router)
+
+# Mirror the /api wallet, order, and portfolio surfaces under /api/v2 so clients
+# can target the versioned namespace. orders_legacy_router carries the unprefixed
+# order paths (/orders/...), yielding /api/v2/orders/... under this mount.
+api_v2_router = APIRouter(prefix="/api/v2")
+api_v2_router.include_router(wallet_router, generate_unique_id_function=_api_operation_id)
+api_v2_router.include_router(public_wallet_router, generate_unique_id_function=_api_operation_id)
+api_v2_router.include_router(portfolio_router, generate_unique_id_function=_api_operation_id)
+api_v2_router.include_router(orders_legacy_router, generate_unique_id_function=_api_operation_id)
+router.include_router(api_v2_router)
