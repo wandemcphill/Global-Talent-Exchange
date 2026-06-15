@@ -11,7 +11,8 @@ from app.segments.clubs.segment_clubs import router as clubs_router
 router = APIRouter()
 router.include_router(clubs_router)
 router.include_router(club_sale_market_router)
-router.include_router(reputation_router)
+router.include_router(reputation_router, prefix="/api")
+router.include_router(reputation_router, prefix="/api/v2")
 router.include_router(dynasty_router)
 router.include_router(trophies_router)
 

@@ -39,7 +39,7 @@ def session() -> Iterator[Session]:
 @pytest.fixture()
 def client(session: Session) -> Iterator[TestClient]:
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(router, prefix="/api")
 
     def override_session() -> Iterator[Session]:
         yield session

@@ -15,7 +15,7 @@ from app.club_identity.reputation.schemas import (
 from app.club_identity.reputation.service import ClubReputationQueryService
 from app.db import get_session
 
-router = APIRouter(prefix="/api", tags=["club-reputation"])
+router = APIRouter(tags=["club-reputation"])
 
 
 @router.get("/clubs/{club_id}/reputation", response_model=ClubReputationView)
