@@ -1397,6 +1397,16 @@ class RealPlayerIngestionService:
         as_of: datetime,
     ) -> tuple[Player, str, bool]:
         player: Player | None = session.get(Player, match.player_id) if match.player_id is not None else None
+        if player is None:
+            # Identity matcher missed an already-ingested row; fall back to the unique
+            # provider key so re-runs UPDATE instead of re-INSERTing (which violates
+            # uq_ingestion_players_provider_external_id and crashes the whole run).
+            player = session.scalars(
+                select(Player).where(
+                    Player.source_provider == payload.source_name,
+                    Player.provider_external_id == payload.source_player_key,
+                )
+            ).one_or_none()
         was_real_player = bool(player.is_real_player) if player is not None else False
         if player is None:
             player = Player(
