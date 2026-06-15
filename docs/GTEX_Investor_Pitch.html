@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GTEX — Investor Pitch 2026</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B1F33;--navy2:#112B45;--teal:#24B7A5;--teal2:#56D4C2;
+  --gold:#E1B95A;--gold2:#F3D98C;--green:#5CBB79;--mist:#EAF0F6;
+  --slate:#496073;--ink:#102030;--paper:#fff;
+  --bg:#F7F9FB;--card:#fff;--border:#E2E8EE;--text:#102030;--muted:#6B7F92;
+  --r:12px;
+}
+@media(prefers-color-scheme:dark){
+  :root{--bg:#0D1824;--card:#152231;--border:#243344;--text:#EAF0F6;--muted:#7FA0B8}
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.deck-wrap{width:100%;max-width:820px}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.brand{font-size:14px;font-weight:600;color:var(--teal);letter-spacing:.04em}
+.slide-counter{font-size:12px;color:var(--muted)}
+.progress-bar{height:3px;background:var(--border);border-radius:2px;margin-bottom:20px;overflow:hidden}
+.progress-fill{height:100%;background:var(--teal);border-radius:2px;transition:width .4s ease}
+.slide{display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:36px 40px 32px}
+.slide.active{display:block;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.slide-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.slide-title{font-size:26px;font-weight:700;color:var(--text);margin-bottom:6px;line-height:1.2}
+.slide-sub{font-size:14px;color:var(--muted);margin-bottom:24px;line-height:1.65;max-width:640px}
+.nav{display:flex;align-items:center;justify-content:space-between;margin-top:20px;padding-top:18px;border-top:1px solid var(--border)}
+.nav-btn{font-size:13px;font-weight:500;padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;transition:background .15s,border-color .15s}
+.nav-btn:hover{background:var(--mist);border-color:var(--teal)}
+.nav-btn:disabled{opacity:.3;cursor:default}
+.dots{display:flex;gap:7px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--border);cursor:pointer;transition:background .2s,transform .2s}
+.dot:hover{background:var(--teal2);transform:scale(1.2)}
+.dot.active{background:var(--teal);transform:scale(1.15)}
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.metric-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px 14px;text-align:center}
+.metric-val{font-size:24px;font-weight:700;color:var(--teal);line-height:1.1}
+.metric-lbl{font-size:11px;color:var(--muted);margin-top:5px;font-weight:500}
+.metric-note{font-size:10px;color:var(--muted);margin-top:2px;opacity:.8}
+.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:22px}
+.sum-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px}
+.sum-card h3{font-size:12px;font-weight:600;color:var(--teal);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.sum-card p{font-size:12px;color:var(--muted);line-height:1.55}
+.thesis{border-left:3px solid var(--teal);padding:12px 16px;background:var(--bg);border-radius:0 10px 10px 0;font-size:13px;color:var(--muted);line-height:1.65}
+.thesis strong{color:var(--text);font-weight:600}
+.problem-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.prob{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px}
+.prob h3{font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px}
+.prob p{font-size:12px;color:var(--muted);line-height:1.55}
+.module-bars{display:flex;flex-direction:column;gap:9px;margin-bottom:20px}
+.mbar-row{display:flex;align-items:center;gap:12px}
+.mbar-name{width:130px;font-size:12px;color:var(--muted);flex-shrink:0}
+.mbar-track{flex:1;height:9px;background:var(--bg);border-radius:5px;overflow:hidden;border:1px solid var(--border)}
+.mbar-fill{height:100%;border-radius:5px}
+.mbar-pct{width:32px;text-align:right;font-size:12px;font-weight:600;color:var(--text)}
+.prod-detail{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pd{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.pd h3{font-size:11px;font-weight:600;color:var(--teal);margin-bottom:3px}
+.pd p{font-size:11px;color:var(--muted);line-height:1.5}
+.mono-layout{display:grid;grid-template-columns:200px 1fr;gap:24px;align-items:start;margin-bottom:18px}
+.chart-wrap{position:relative;width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.legend span{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.legend-sq{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.stream-list{display:flex;flex-direction:column;gap:6px}
+.stream{display:flex;justify-content:space-between;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px}
+.stream-name{font-size:12px;color:var(--text);font-weight:500}
+.stream-meta{text-align:right}
+.stream-rev{font-size:12px;font-weight:600;color:var(--teal)}
+.stream-fee{font-size:10px;color:var(--muted);margin-top:1px}
+.proj-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px;table-layout:fixed}
+.proj-table th{padding:10px 12px;text-align:left;font-weight:600;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.04em}
+.proj-table td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text)}
+.proj-table td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.proj-table tr:last-child td{border-bottom:none}
+.highlight-row td{color:var(--teal);font-weight:600;background:rgba(36,183,165,.05)}
+.tdc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+.tdc{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px}
+.tdc-name{font-size:11px;font-weight:600;color:var(--text);margin-bottom:3px}
+.tdc-rev{font-size:15px;font-weight:700;color:var(--teal);margin-bottom:4px}
+.tdc-desc{font-size:11px;color:var(--muted);line-height:1.45}
+.funds-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+.fund{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 10px;text-align:center}
+.fund-pct{font-size:22px;font-weight:700;color:var(--teal)}
+.fund-lbl{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4}
+.moat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
+.moat{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px}
+.moat h3{font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px}
+.moat p{font-size:11px;color:var(--muted);line-height:1.55}
+.ask-banner{background:var(--navy);border-radius:10px;padding:18px 22px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.ask-left h2{font-size:16px;font-weight:700;color:#fff}
+.ask-left p{font-size:12px;color:#7FAABB;margin-top:4px}
+.ask-right{font-size:32px;font-weight:700;color:var(--teal)}
+.disclaimer{font-size:10px;color:var(--muted);line-height:1.5}
+kbd{font-size:10px;background:var(--border);color:var(--muted);padding:2px 6px;border-radius:4px;font-family:monospace}
+@media(max-width:600px){
+  .metrics-grid{grid-template-columns:repeat(2,1fr)}
+  .summary-grid{grid-template-columns:1fr}
+  .problem-grid{grid-template-columns:1fr}
+  .tdc-grid{grid-template-columns:1fr 1fr}
+  .funds-row{grid-template-columns:repeat(3,1fr)}
+  .moat-grid{grid-template-columns:1fr}
+  .mono-layout{grid-template-columns:1fr}
+  .slide{padding:22px 18px 20px}
+}
+</style>
+</head>
+<body>
+<div class="deck-wrap">
+  <div class="topbar">
+    <div class="brand">GTEX · Global Talent Exchange</div>
+    <div class="slide-counter" id="counter">1 / 7</div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="progress" style="width:14.3%"></div></div>
+
+  <!-- Slide 1: Cover -->
+  <div class="slide active" id="s0">
+    <div class="slide-label">Investor pitch · 2026</div>
+    <div class="slide-title">GTEX — Football Economy OS</div>
+    <div class="slide-sub">A football economy operating system: wallet, transfer market, 2D broadcast match center, competitions, creator monetization, and admin controls — unified in one backend-authored platform.</div>
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-val">$14.7M</div><div class="metric-lbl">3-year revenue</div><div class="metric-note">Base case</div></div>
+      <div class="metric-card"><div class="metric-val">$92M</div><div class="metric-lbl">3-year GMV</div><div class="metric-note">Transfer + wallet + events</div></div>
+      <div class="metric-card"><div class="metric-val">4.8%</div><div class="metric-lbl">Blended take rate</div><div class="metric-note">Year 3</div></div>
+      <div class="metric-card"><div class="metric-val">$2.5M</div><div class="metric-lbl">Seed ask</div><div class="metric-note">Launch-ready</div></div>
+    </div>
+    <div class="summary-grid">
+      <div class="sum-card"><h3>Problem</h3><p>Football discovery, engagement, and financial operations are fragmented across disconnected tools with no common source of truth.</p></div>
+      <div class="sum-card"><h3>Solution</h3><p>GTEX unifies wallet, market, match center, competitions, creators, and admin into one backend-authoritative platform.</p></div>
+      <div class="sum-card"><h3>Business model</h3><p>Transaction fees, market commissions, competition fees, creation fees, creator monetization, and premium admin tooling.</p></div>
+    </div>
+    <div class="thesis"><strong>Investment thesis:</strong> GTEX turns football engagement into transaction volume. Every wallet action, transfer, competition entry, and creator payout becomes a revenue event with full auditability and compounding retention loops.</div>
+  </div>
+
+  <!-- Slide 2: Problem -->
+  <div class="slide" id="s1">
+    <div class="slide-label">Slide 2 of 7</div>
+    <div class="slide-title">The problem GTEX solves</div>
+    <div class="slide-sub">Football discovery, finance, and operations are broken across siloed products. GTEX replaces all of them with a single auditable system.</div>
+    <div class="problem-grid">
+      <div class="prob"><h3>Fragmented football economy</h3><p>Scouting, wallets, content, competitions, and admin actions live in disconnected tools with no common source of truth or cross-product audit trail.</p></div>
+      <div class="prob"><h3>Opaque finance</h3><p>Wallet balances, reserved funds, transfer bids, and creator payouts are hard to explain and easy to dispute without a backend-authored ledger layer.</p></div>
+      <div class="prob"><h3>Weak retention loops</h3><p>Football apps often lack a daily operating loop beyond score-watching. Engagement drops between fixtures, seasons, and transfer windows.</p></div>
+      <div class="prob"><h3>Manual ops overhead</h3><p>Approvals, dispute resolution, settlement, and export reconciliation consume staff time that should be automated by queues and audit trails.</p></div>
+    </div>
+    <div class="thesis"><strong>GTEX answer:</strong> one backend-authored system where every event — bid, payout, match tick, creator post — produces auditable state. Ops teams get queues, not spreadsheets. Users get real-time truth.</div>
+  </div>
+
+  <!-- Slide 3: Product -->
+  <div class="slide" id="s2">
+    <div class="slide-label">Slide 3 of 7</div>
+    <div class="slide-title">Product stack and readiness</div>
+    <div class="slide-sub">Seven modules, all on a shared backend engine. Each is production-ready or near-complete.</div>
+    <div class="module-bars" id="mbars"></div>
+    <div class="prod-detail">
+      <div class="pd"><h3>Wallet</h3><p>Available, reserved, locked, and pending balances with clear ledger states and KYC-gated withdrawals.</p></div>
+      <div class="pd"><h3>Transfer market</h3><p>Live listings, bids, counters, reservations, and settlement — backend-authoritative price truth at every step.</p></div>
+      <div class="pd"><h3>2D match center</h3><p>Broadcast-style match viewing with score, commentary, stats, timeline, and real-time overlays. No simulation licence needed.</p></div>
+      <div class="pd"><h3>Competitions</h3><p>Bracket and league lifecycle with entry fees, payout flows, and streamer tournament bracket support.</p></div>
+    </div>
+  </div>
+
+  <!-- Slide 4: Monetization -->
+  <div class="slide" id="s3">
+    <div class="slide-label">Slide 4 of 7</div>
+    <div class="slide-title">Monetization engine</div>
+    <div class="slide-sub">Six non-overlapping revenue streams that compound on the same user base without cannibalizing each other.</div>
+    <div class="mono-layout">
+      <div>
+        <div class="legend" id="rev-legend"></div>
+        <div class="chart-wrap" style="height:190px"><canvas id="revChart" role="img" aria-label="Doughnut chart showing 2028 revenue mix: Transfer 35%, Wallet 20%, Competitions 15%, Build-a-Son 12%, Creator 10%, Admin 8%">Revenue mix: Transfer 35%, Wallet 20%, Competitions 15%, Build-a-Son 12%, Creator 10%, Admin 8%.</canvas></div>
+      </div>
+      <div class="stream-list">
+        <div class="stream"><span class="stream-name">Transfer market</span><div class="stream-meta"><div class="stream-rev">$3.2M / yr</div><div class="stream-fee">4% commission on GMV</div></div></div>
+        <div class="stream"><span class="stream-name">Wallet / payouts</span><div class="stream-meta"><div class="stream-rev">$1.8M / yr</div><div class="stream-fee">1% net spread / withdrawal fee</div></div></div>
+        <div class="stream"><span class="stream-name">Competitions</span><div class="stream-meta"><div class="stream-rev">$2.4M / yr</div><div class="stream-fee">Entry + hosted event fees</div></div></div>
+        <div class="stream"><span class="stream-name">Build-a-Son</span><div class="stream-meta"><div class="stream-rev">$1.7M / yr</div><div class="stream-fee">Fixed creation fee + upgrade upsell</div></div></div>
+        <div class="stream"><span class="stream-name">Creator monetization</span><div class="stream-meta"><div class="stream-rev">$1.4M / yr</div><div class="stream-fee">Platform share on clip revenue</div></div></div>
+        <div class="stream"><span class="stream-name">Premium admin / ops</span><div class="stream-meta"><div class="stream-rev">$4.2M / yr</div><div class="stream-fee">B2B dashboard licensing</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 5: Financials -->
+  <div class="slide" id="s4">
+    <div class="slide-label">Slide 5 of 7</div>
+    <div class="slide-title">Growth and financial outlook</div>
+    <div class="slide-sub">Base case: revenue scales faster than MAU because transaction activity, competition volume, and creator payouts compound across the same customers.</div>
+    <div class="legend"><span><span class="legend-sq" style="background:#24B7A5"></span>Revenue ($M)</span><span><span class="legend-sq" style="background:#E1B95A;border:1.5px dashed #E1B95A"></span>GMV ($M)</span></div>
+    <div class="chart-wrap" style="height:200px;margin-bottom:18px"><canvas id="growthChart" role="img" aria-label="Line chart of 3-year base case: revenue Y1 $1.2M Y2 $4.8M Y3 $14.7M; GMV Y1 $8M Y2 $28M Y3 $92M">Revenue: Y1 $1.2M, Y2 $4.8M, Y3 $14.7M. GMV: Y1 $8M, Y2 $28M, Y3 $92M.</canvas></div>
+    <table class="proj-table">
+      <thead><tr><th>Metric</th><th>Year 1</th><th>Year 2</th><th>Year 3</th></tr></thead>
+      <tbody>
+        <tr><td>MAU</td><td>250k</td><td>750k</td><td>1.8M</td></tr>
+        <tr><td>Transacting MAU</td><td>30k</td><td>135k</td><td>396k</td></tr>
+        <tr class="highlight-row"><td>GMV</td><td>$8.0M</td><td>$28.0M</td><td>$92.0M</td></tr>
+        <tr><td>Blended take rate</td><td>4.5%</td><td>4.6%</td><td>4.8%</td></tr>
+        <tr class="highlight-row"><td>Revenue</td><td>$1.2M</td><td>$4.8M</td><td>$14.7M</td></tr>
+        <tr><td>EBITDA margin</td><td>-12%</td><td>14%</td><td>33%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Slide 6: 3D Future -->
+  <div class="slide" id="s5">
+    <div class="slide-label">Slide 6 of 7</div>
+    <div class="slide-title">Future: 3D match engine and gamer monetization</div>
+    <div class="slide-sub">A premium 3D match layer sits on top of the existing football economy as an expansion for gamers, streamers, and esports leagues — not a replacement for it.</div>
+    <div class="tdc-grid">
+      <div class="tdc"><div class="tdc-name">Season / battle pass</div><div class="tdc-rev">$1.8M / yr</div><div class="tdc-desc">$9.99–$19.99 per season. Ranked play, cosmetics, premium progression.</div></div>
+      <div class="tdc"><div class="tdc-name">Cosmetics</div><div class="tdc-rev">$2.6M / yr</div><div class="tdc-desc">Kits, boots, stadium themes, avatar items — $2–$25 microtransactions.</div></div>
+      <div class="tdc"><div class="tdc-name">Streamer tournaments</div><div class="tdc-rev">$1.9M / yr</div><div class="tdc-desc">Entry fees, sponsored showmatches, spectator boosts, featured brackets.</div></div>
+      <div class="tdc"><div class="tdc-name">Ads and sponsorships</div><div class="tdc-rev">$2.4M / yr</div><div class="tdc-desc">Branded overlays, stadium boards, season sponsorship packages.</div></div>
+      <div class="tdc"><div class="tdc-name">UGC clip revenue</div><div class="tdc-rev">$1.1M / yr</div><div class="tdc-desc">Platform share on monetized clips, highlights, and event streams.</div></div>
+      <div class="tdc"><div class="tdc-name">Marketplace fees</div><div class="tdc-rev">$1.5M / yr</div><div class="tdc-desc">2–8% fee on trades of collectibles, player skins, and season badges.</div></div>
+    </div>
+    <div class="thesis"><strong>Why it works:</strong> gamers spend for status and progression, streamers spend for audience hooks, sponsors pay for repeat live attention. The 3D layer monetizes entertainment while the core GTEX economy monetizes football transactions — two compounding loops, one platform.</div>
+  </div>
+
+  <!-- Slide 7: Funds + Moat -->
+  <div class="slide" id="s6">
+    <div class="slide-label">Slide 7 of 7</div>
+    <div class="slide-title">Use of funds and competitive moat</div>
+    <div class="slide-sub">A $2.5M seed round funds launch readiness, growth, and operational hardening across five allocation buckets.</div>
+    <div class="funds-row">
+      <div class="fund"><div class="fund-pct">40%</div><div class="fund-lbl">Product &amp; engineering</div></div>
+      <div class="fund"><div class="fund-pct">25%</div><div class="fund-lbl">Growth</div></div>
+      <div class="fund"><div class="fund-pct">15%</div><div class="fund-lbl">Ops &amp; compliance</div></div>
+      <div class="fund"><div class="fund-pct">10%</div><div class="fund-lbl">Liquidity</div></div>
+      <div class="fund"><div class="fund-pct">10%</div><div class="fund-lbl">Data &amp; infra</div></div>
+    </div>
+    <div class="moat-grid">
+      <div class="moat"><h3>System moat</h3><p>Wallet, market, competition, match center, and creator loops reinforce each other — high switching cost once a user is embedded across multiple modules.</p></div>
+      <div class="moat"><h3>Backend truth</h3><p>Balances, bids, and results are backend-authored and auditable. Cannot be spoofed or disputed by the client layer.</p></div>
+      <div class="moat"><h3>2D match center</h3><p>Broadcast-grade daily engagement without expensive simulation infrastructure or licensing deals with data providers.</p></div>
+      <div class="moat"><h3>Admin command center</h3><p>Queues, approvals, exports, and audits scale operational capacity without headcount, which improves unit economics over time.</p></div>
+    </div>
+    <div class="ask-banner">
+      <div class="ask-left"><h2>Seed round — open</h2><p>Finish product depth · harden money paths · fund launch acquisition</p></div>
+      <div class="ask-right">$2.5M</div>
+    </div>
+    <div class="disclaimer">Illustrative deck. Not audited financial advice. Real outcomes depend on product execution, market timing, and regulatory compliance.</div>
+  </div>
+
+  <div class="nav">
+    <button class="nav-btn" id="prev" disabled onclick="move(-1)">&#8592; Prev</button>
+    <div class="dots" id="dotrow"></div>
+    <button class="nav-btn" id="next" onclick="move(1)">Next &#8594;</button>
+  </div>
+  <div style="text-align:center;margin-top:10px;font-size:11px;color:var(--muted)">Navigate with <kbd>←</kbd> <kbd>→</kbd> arrow keys</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const SLIDES=7;let cur=0;
+const slides=document.querySelectorAll('.slide');
+const prog=document.getElementById('progress');
+const counter=document.getElementById('counter');
+const prevBtn=document.getElementById('prev');
+const nextBtn=document.getElementById('next');
+const dotrow=document.getElementById('dotrow');
+for(let i=0;i<SLIDES;i++){
+  const d=document.createElement('div');
+  d.className='dot'+(i===0?' active':'');
+  d.setAttribute('aria-label','Go to slide '+(i+1));
+  d.onclick=()=>goTo(i);
+  dotrow.appendChild(d);
+}
+function goTo(n){
+  slides[cur].classList.remove('active');
+  dotrow.children[cur].classList.remove('active');
+  cur=n;
+  slides[cur].classList.add('active');
+  dotrow.children[cur].classList.add('active');
+  prog.style.width=((cur+1)/SLIDES*100)+'%';
+  counter.textContent=(cur+1)+' / '+SLIDES;
+  prevBtn.disabled=cur===0;
+  nextBtn.disabled=cur===SLIDES-1;
+  if(cur===2&&!window._mb)buildMbars();
+  if(cur===3&&!window._rv)buildRevChart();
+  if(cur===4&&!window._gr)buildGrowthChart();
+}
+function move(d){goTo(Math.max(0,Math.min(SLIDES-1,cur+d)))}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')move(1);if(e.key==='ArrowLeft')move(-1)});
+
+function buildMbars(){
+  window._mb=true;
+  const modules=[
+    ['Wallet',92,'#24B7A5'],['Transfer market',88,'#E1B95A'],
+    ['2D match center',86,'#5CBB79'],['Competitions',84,'#24B7A5'],
+    ['Build-a-Son',81,'#E1B95A'],['Creator / community',78,'#5CBB79'],
+    ['Admin command center',76,'#496073']
+  ];
+  const c=document.getElementById('mbars');
+  c.innerHTML=modules.map(([name,pct,color])=>`<div class="mbar-row"><div class="mbar-name">${name}</div><div class="mbar-track"><div class="mbar-fill" style="width:${pct}%;background:${color}"></div></div><div class="mbar-pct">${pct}%</div></div>`).join('');
+}
+
+function buildRevChart(){
+  window._rv=true;
+  const colors=['#24B7A5','#E1B95A','#5CBB79','#112B45','#56D4C2','#496073'];
+  const labels=['Transfer 35%','Wallet 20%','Competitions 15%','Build-a-Son 12%','Creator 10%','Admin 8%'];
+  const data=[35,20,15,12,10,8];
+  const leg=document.getElementById('rev-legend');
+  leg.innerHTML=labels.map((l,i)=>`<span><span class="legend-sq" style="background:${colors[i]}"></span>${l}</span>`).join('');
+  new Chart(document.getElementById('revChart'),{
+    type:'doughnut',
+    data:{labels,datasets:[{data,backgroundColor:colors,borderWidth:2,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'60%'}
+  });
+}
+
+function buildGrowthChart(){
+  window._gr=true;
+  new Chart(document.getElementById('growthChart'),{
+    type:'line',
+    data:{
+      labels:['Year 1','Year 2','Year 3'],
+      datasets:[
+        {label:'Revenue ($M)',data:[1.2,4.8,14.7],borderColor:'#24B7A5',backgroundColor:'rgba(36,183,165,.08)',pointBackgroundColor:'#24B7A5',pointRadius:6,tension:.35,fill:true,borderWidth:2.5},
+        {label:'GMV ($M)',data:[8,28,92],borderColor:'#E1B95A',backgroundColor:'rgba(225,185,90,.06)',pointBackgroundColor:'#E1B95A',pointRadius:6,pointStyle:'rectRot',tension:.35,fill:true,borderWidth:2.5,borderDash:[6,3]}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        y:{grid:{color:'rgba(0,0,0,.05)'},ticks:{callback:v=>'$'+v+'M',font:{size:11}},border:{display:false}},
+        x:{grid:{display:false},ticks:{font:{size:11}},border:{display:false}}
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>

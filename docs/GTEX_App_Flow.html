@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GTEX — App Flow</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0B1F33;--navy2:#112B45;--teal:#24B7A5;--teal2:#56D4C2;
+  --gold:#E1B95A;--green:#5CBB79;--slate:#496073;--mist:#EAF0F6;
+  --red:#E46D6D;--purple:#8B7FD4;
+  --bg:#F4F7FA;--card:#fff;--border:#DDE4EC;--text:#102030;--muted:#607080;
+  --r:14px;--phone-w:320px;--phone-h:580px;
+}
+@media(prefers-color-scheme:dark){
+  :root{--bg:#0D1824;--card:#152231;--border:#243344;--text:#EAF0F6;--muted:#7FA0B8}
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:32px 20px 60px}
+h1{font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px}
+.top-sub{font-size:13px;color:var(--muted);margin-bottom:28px}
+.stage{display:flex;align-items:flex-start;gap:32px;margin-bottom:48px;width:100%;max-width:960px}
+.stage:nth-child(even){flex-direction:row-reverse}
+.phone-wrap{position:relative;flex-shrink:0}
+.phone{width:var(--phone-w);height:var(--phone-h);background:var(--navy);border-radius:32px;overflow:hidden;position:relative;border:6px solid #1C3350;box-shadow:0 24px 60px rgba(0,0,0,.25)}
+.status-bar{height:28px;background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0}
+.status-bar span{font-size:10px;color:rgba(255,255,255,.7);font-weight:500}
+.screen-body{flex:1;overflow:hidden;position:relative}
+.nav-bar{position:absolute;bottom:0;left:0;right:0;height:60px;background:rgba(11,31,51,.95);display:flex;align-items:center;justify-content:space-around;border-top:1px solid rgba(255,255,255,.08)}
+.nav-icon{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:6px 10px;border-radius:10px}
+.nav-icon span{font-size:9px;color:rgba(255,255,255,.45)}
+.nav-icon.active span{color:var(--teal)}
+.nav-icon svg{opacity:.45}
+.nav-icon.active svg{opacity:1}
+.info{flex:1;display:flex;flex-direction:column;justify-content:center;max-width:420px}
+.stage:nth-child(even) .info{align-items:flex-end;text-align:right}
+.step-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(36,183,165,.12);color:var(--teal);font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px;margin-bottom:12px;border:1px solid rgba(36,183,165,.25)}
+.info h2{font-size:20px;font-weight:700;color:var(--text);margin-bottom:8px;line-height:1.25}
+.info p{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:16px}
+.flow-tags{display:flex;flex-wrap:wrap;gap:6px}
+.stage:nth-child(even) .flow-tags{justify-content:flex-end}
+.tag{font-size:11px;padding:3px 10px;border-radius:6px;font-weight:500;border:1px solid var(--border);color:var(--muted);background:var(--bg)}
+.connector{display:flex;justify-content:center;margin:-20px 0 -20px;position:relative;z-index:10}
+.connector-line{width:2px;height:48px;background:linear-gradient(to bottom,var(--teal),rgba(36,183,165,.15));margin:0 auto}
+
+/* ── shared phone chrome helpers ── */
+.ph-header{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between}
+.ph-title{font-size:15px;font-weight:700;color:#fff}
+.ph-sub{font-size:10px;color:rgba(255,255,255,.5)}
+.ph-badge{font-size:9px;padding:2px 7px;border-radius:8px;font-weight:600}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;margin-right:4px}
+.scroll-body{padding:0 14px 70px;overflow:hidden}
+.card-block{background:rgba(255,255,255,.06);border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid rgba(255,255,255,.08)}
+.card-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card-label{font-size:10px;color:rgba(255,255,255,.5);margin-bottom:2px}
+.card-val{font-size:13px;font-weight:700;color:#fff}
+.card-val.teal{color:var(--teal)}
+.card-val.gold{color:var(--gold)}
+.card-val.green{color:var(--green)}
+.card-val.red{color:var(--red)}
+.pill-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pill{font-size:9px;padding:2px 8px;border-radius:6px;font-weight:600}
+.pill-teal{background:rgba(36,183,165,.2);color:var(--teal)}
+.pill-gold{background:rgba(225,185,90,.2);color:var(--gold)}
+.pill-green{background:rgba(92,187,121,.2);color:var(--green)}
+.pill-red{background:rgba(228,109,109,.2);color:var(--red)}
+.pill-purple{background:rgba(139,127,212,.2);color:var(--purple)}
+.mini-bar{height:4px;border-radius:2px;background:rgba(255,255,255,.1);margin-top:6px;overflow:hidden}
+.mini-bar-fill{height:100%;border-radius:2px}
+.player-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.player-row:last-child{border-bottom:none}
+.avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.player-name{font-size:11px;font-weight:600;color:#fff}
+.player-pos{font-size:9px;color:rgba(255,255,255,.45)}
+.player-val{font-size:11px;font-weight:700;margin-left:auto}
+.match-score{display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 0}
+.club-name{font-size:10px;color:rgba(255,255,255,.5);text-align:center}
+.score-block{font-size:28px;font-weight:800;color:#fff;min-width:36px;text-align:center}
+.score-sep{font-size:14px;color:rgba(255,255,255,.3);padding:0 4px}
+.match-time{font-size:9px;background:rgba(36,183,165,.2);color:var(--teal);padding:2px 8px;border-radius:10px;font-weight:600;text-align:center;margin:0 auto 10px;display:table}
+.timeline-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:10px;color:rgba(255,255,255,.55)}
+.timeline-row .min{width:22px;text-align:right;font-weight:600;color:var(--teal);font-size:9px}
+.timeline-row .evt{flex:1}
+.pitch{width:100%;height:90px;background:linear-gradient(180deg,#1a472a 0%,#1e5c35 50%,#1a472a 100%);border-radius:8px;margin-bottom:10px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08)}
+.pitch::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent,transparent 32px,rgba(255,255,255,.04) 32px,rgba(255,255,255,.04) 33px)}
+.pitch-line{position:absolute;background:rgba(255,255,255,.15)}
+.player-dot{position:absolute;width:8px;height:8px;border-radius:50%;transform:translate(-50%,-50%)}
+.wallet-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px}
+.wallet-row:last-child{border-bottom:none}
+.w-left{color:rgba(255,255,255,.6)}
+.w-right{font-weight:700;color:#fff}
+.w-right.teal{color:var(--teal)}
+.w-right.gold{color:var(--gold)}
+.btn-block{background:var(--teal);border-radius:10px;padding:10px;text-align:center;font-size:11px;font-weight:700;color:#fff;margin-top:8px}
+.btn-ghost{border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:8px;text-align:center;font-size:10px;color:rgba(255,255,255,.6);margin-top:6px}
+.section-label{font-size:9px;font-weight:600;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.08em;margin:10px 0 6px}
+.notch{width:100px;height:20px;background:rgba(0,0,0,.6);border-radius:0 0 14px 14px;margin:0 auto}
+.regen-card{border-radius:12px;padding:12px;margin-bottom:8px;border:1px solid rgba(255,255,255,.1)}
+.regen-name{font-size:12px;font-weight:700;color:#fff;margin-bottom:2px}
+.regen-attrs{display:flex;gap:8px;margin-top:8px}
+.attr{text-align:center}
+.attr-val{font-size:13px;font-weight:700;color:var(--teal)}
+.attr-lbl{font-size:8px;color:rgba(255,255,255,.4)}
+.admin-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(255,255,255,.04);border-radius:8px;margin-bottom:6px;border:1px solid rgba(255,255,255,.06)}
+.admin-label{font-size:10px;color:rgba(255,255,255,.7);font-weight:500}
+.admin-val{font-size:10px;font-weight:700}
+</style>
+</head>
+<body>
+
+<h1>GTEX — How the app works</h1>
+<p class="top-sub">Screen-by-screen flow through the football economy operating system</p>
+
+<!-- ── 1. ONBOARDING ── -->
+<div class="stage">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="background:var(--navy);height:100%;display:flex;flex-direction:column">
+        <div class="status-bar"><span>9:41</span><span>●●●●</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px">
+          <div style="width:64px;height:64px;background:var(--teal);border-radius:18px;display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none"><circle cx="18" cy="12" r="6" fill="#fff"/><path d="M6 30c0-6.627 5.373-12 12-12s12 5.373 12 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:6px">GTEX</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:32px;text-align:center">Global Talent Exchange</div>
+          <div style="width:100%">
+            <div style="background:var(--teal);border-radius:12px;padding:12px;text-align:center;font-size:13px;font-weight:700;color:#fff;margin-bottom:10px">Create account</div>
+            <div style="border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:11px;text-align:center;font-size:12px;color:rgba(255,255,255,.6)">Sign in</div>
+          </div>
+          <div style="margin-top:28px;font-size:10px;color:rgba(255,255,255,.3);text-align:center">Football Manager · Trader · Creator</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    <div class="step-pill">Step 1 — Onboarding</div>
+    <h2>Pick your lane, build your identity</h2>
+    <p>Users sign up as a Football Manager, Coin Trader, or Creator. Each account type unlocks a different set of modules and personalises the home dashboard from day one.</p>
+    <div class="flow-tags">
+      <span class="tag">Football Manager</span><span class="tag">Coin Trader</span><span class="tag">Creator</span><span class="tag">KYC gated</span>
+    </div>
+  </div>
+</div>
+
+<div class="connector"><div class="connector-line"></div></div>
+
+<!-- ── 2. HOME DASHBOARD ── -->
+<div class="stage">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="background:var(--navy2);height:100%;display:flex;flex-direction:column">
+        <div class="status-bar"><span>9:41</span><span>●●●●</span></div>
+        <div class="ph-header">
+          <div>
+            <div class="ph-title">Good evening, Ade ⚡</div>
+            <div class="ph-sub">Football Manager · FC Horizon</div>
+          </div>
+          <div style="width:32px;height:32px;background:var(--teal);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">A</div>
+        </div>
+        <div class="scroll-body">
+          <!-- ticker -->
+          <div style="background:rgba(225,185,90,.1);border:1px solid rgba(225,185,90,.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:10px;color:var(--gold);overflow:hidden;white-space:nowrap">
+            ⚡ M. Salah bid accepted · R. Kimmich listed ₦2.1M · GTEX Cup Final tonight
+          </div>
+          <!-- quick stats -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+            <div class="card-block" style="text-align:center;padding:8px 6px">
+              <div class="card-label">Wallet</div>
+              <div class="card-val teal" style="font-size:15px">₦840k</div>
+            </div>
+            <div class="card-block" style="text-align:center;padding:8px 6px">
+              <div class="card-label">Active bids</div>
+              <div class="card-val gold" style="font-size:15px">3</div>
+            </div>
+            <div class="card-block" style="text-align:center;padding:8px 6px">
+              <div class="card-label">Squad</div>
+              <div class="card-val" style="font-size:15px">17</div>
+            </div>
+          </div>
+          <!-- live match pill -->
+          <div class="card-block" style="border-color:rgba(36,183,165,.3)">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <span class="live-dot"></span>
+              <span style="font-size:9px;font-weight:700;color:var(--green)">LIVE NOW</span>
+            </div>
+            <div style="font-size:11px;color:#fff;font-weight:600">FC Horizon vs Apex United</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:2px">Premier Cup · 63′</div>
+            <div style="text-align:center;background:var(--teal);border-radius:8px;padding:6px;margin-top:8px;font-size:10px;font-weight:700;color:#fff">Watch match →</div>
+          </div>
+          <!-- tasks -->
+          <div class="section-label">Your tasks</div>
+          <div class="card-block">
+            <div style="font-size:10px;color:rgba(255,255,255,.6);margin-bottom:4px">Counter incoming bid on Dembélé</div>
+            <div class="pill-row"><span class="pill pill-gold">Transfer market</span><span class="pill pill-teal">Action needed</span></div>
+          </div>
+          <div class="card-block">
+            <div style="font-size:10px;color:rgba(255,255,255,.6);margin-bottom:4px">Set formation before next fixture</div>
+            <div class="pill-row"><span class="pill pill-purple">Club ops</span></div>
+          </div>
+        </div>
+        <div class="nav-bar">
+          <div class="nav-icon active"><svg width="16" height="16" fill="none" stroke="#24B7A5" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 12L12 3l9 9"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span style="color:var(--teal)">Home</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><path d="M15 15l6 6"/></svg><span>Market</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Club</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span>Compete</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span>Capital</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    <div class="step-pill">Step 2 — Home</div>
+    <h2>Personalised dashboard with live context</h2>
+    <p>The home screen adapts to your role. A Manager sees wallet balance, active bids, squad count, live match status, and pending tasks. Every widget is backend-authored — no stale cached state.</p>
+    <div class="flow-tags">
+      <span class="tag">Live ticker</span><span class="tag">Task queue</span><span class="tag">Match widget</span><span class="tag">Quick stats</span>
+    </div>
+  </div>
+</div>
+
+<div class="connector"><div class="connector-line"></div></div>
+
+<!-- ── 3. TRANSFER MARKET ── -->
+<div class="stage">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="background:var(--navy);height:100%;display:flex;flex-direction:column">
+        <div class="status-bar"><span>9:41</span><span>●●●●</span></div>
+        <div class="ph-header">
+          <div>
+            <div class="ph-title">Transfer market</div>
+            <div class="ph-sub">247 players listed · 3 your bids</div>
+          </div>
+          <div style="font-size:9px;background:rgba(36,183,165,.15);color:var(--teal);padding:3px 9px;border-radius:8px;font-weight:600;border:1px solid rgba(36,183,165,.3)">LIVE</div>
+        </div>
+        <div class="scroll-body">
+          <div style="display:flex;gap:6px;margin-bottom:10px">
+            <div style="flex:1;background:rgba(255,255,255,.06);border-radius:8px;padding:7px 10px;font-size:10px;color:rgba(255,255,255,.5)">🔍 Search players…</div>
+            <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:7px 10px;font-size:10px;color:rgba(255,255,255,.5)">≡</div>
+          </div>
+          <div class="pill-row" style="margin-bottom:10px">
+            <span class="pill pill-teal" style="background:var(--teal);color:#fff">All</span>
+            <span class="pill" style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.5)">GK</span>
+            <span class="pill" style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.5)">DEF</span>
+            <span class="pill" style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.5)">MID</span>
+            <span class="pill" style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.5)">FWD</span>
+          </div>
+          <!-- player cards -->
+          <div class="card-block">
+            <div class="player-row" style="border:none;padding:0 0 8px">
+              <div class="avatar" style="background:rgba(36,183,165,.2);color:var(--teal)">MS</div>
+              <div><div class="player-name">M. Salah</div><div class="player-pos">RW · LVP · 94 OVR</div></div>
+              <div style="text-align:right"><div class="player-val gold">₦4.2M</div><div style="font-size:8px;color:rgba(255,255,255,.35)">12 bids</div></div>
+            </div>
+            <div class="mini-bar"><div class="mini-bar-fill" style="width:85%;background:var(--gold)"></div></div>
+            <div class="btn-block" style="margin-top:8px;padding:7px;font-size:10px">Place bid</div>
+          </div>
+          <div class="card-block">
+            <div class="player-row" style="border:none;padding:0 0 8px">
+              <div class="avatar" style="background:rgba(139,127,212,.2);color:var(--purple)">RK</div>
+              <div><div class="player-name">R. Kimmich</div><div class="player-pos">CDM · BYN · 91 OVR</div></div>
+              <div style="text-align:right"><div class="player-val teal">₦2.1M</div><div style="font-size:8px;color:rgba(255,255,255,.35)">4 bids</div></div>
+            </div>
+            <div class="mini-bar"><div class="mini-bar-fill" style="width:55%;background:var(--teal)"></div></div>
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <div class="btn-block" style="flex:1;padding:7px;font-size:10px">Bid ₦2.3M</div>
+              <div class="btn-ghost" style="flex:1;margin:0;padding:7px;font-size:10px">Counter</div>
+            </div>
+          </div>
+          <div class="card-block">
+            <div class="player-row" style="border:none;padding:0">
+              <div class="avatar" style="background:rgba(92,187,121,.2);color:var(--green)">VP</div>
+              <div><div class="player-name">V. Popoola</div><div class="player-pos">ST · GTEX Regen · 87 OVR</div></div>
+              <div style="text-align:right"><div class="player-val green">₦890k</div><div style="font-size:8px;color:rgba(255,255,255,.35)">1 bid</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="nav-bar">
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 12L12 3l9 9"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span>Home</span></div>
+          <div class="nav-icon active"><svg width="16" height="16" fill="none" stroke="#24B7A5" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><path d="M15 15l6 6"/></svg><span style="color:var(--teal)">Market</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Club</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span>Compete</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span>Capital</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    <div class="step-pill">Step 3 — Transfer market</div>
+    <h2>Live player listings, bids, and counters</h2>
+    <p>Every listing is backend-authoritative. Placing a bid reserves funds from your wallet immediately. Sellers see incoming bids in real-time and can accept, reject, or counter. Settlement is automatic on acceptance.</p>
+    <div class="flow-tags">
+      <span class="tag">Live listings</span><span class="tag">Bid &amp; counter</span><span class="tag">Fund reservation</span><span class="tag">Auto-settlement</span>
+    </div>
+  </div>
+</div>
+
+<div class="connector"><div class="connector-line"></div></div>
+
+<!-- ── 4. LIVE MATCH CENTER ── -->
+<div class="stage">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="background:#0D1F0E;height:100%;display:flex;flex-direction:column">
+        <div class="status-bar" style="background:rgba(0,0,0,.4)"><span>9:41</span><span style="color:var(--green)">⬤ LIVE 63′</span></div>
+        <div style="padding:10px 14px 4px;display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:10px;color:rgba(255,255,255,.5)">Premier Cup · SF</div>
+          <div style="font-size:9px;background:rgba(228,109,109,.2);color:var(--red);padding:2px 8px;border-radius:6px;font-weight:600">REC</div>
+        </div>
+        <div class="match-score">
+          <div style="text-align:center;width:90px"><div class="club-name">FC Horizon</div><div class="score-block">2</div></div>
+          <div class="score-sep">–</div>
+          <div style="text-align:center;width:90px"><div class="score-block">1</div><div class="club-name">Apex United</div></div>
+        </div>
+        <div class="match-time">63′ · 2nd half</div>
+        <!-- 2D pitch -->
+        <div class="pitch" style="margin:0 14px 10px">
+          <div class="pitch-line" style="left:50%;top:0;bottom:0;width:1px"></div>
+          <div class="pitch-line" style="left:20%;top:25%;bottom:25%;width:1px;opacity:.4"></div>
+          <div class="pitch-line" style="right:20%;top:25%;bottom:25%;width:1px;opacity:.4"></div>
+          <div style="position:absolute;left:50%;top:50%;width:24px;height:24px;border:1px solid rgba(255,255,255,.15);border-radius:50%;transform:translate(-50%,-50%)"></div>
+          <!-- players home -->
+          <div class="player-dot" style="background:var(--teal);left:25%;top:50%"></div>
+          <div class="player-dot" style="background:var(--teal);left:38%;top:30%"></div>
+          <div class="player-dot" style="background:var(--teal);left:38%;top:70%"></div>
+          <div class="player-dot" style="background:var(--teal);left:55%;top:50%"></div>
+          <div class="player-dot" style="background:var(--teal);left:68%;top:42%"></div>
+          <!-- players away -->
+          <div class="player-dot" style="background:var(--gold);right:25%;top:50%;left:auto"></div>
+          <div class="player-dot" style="background:var(--gold);right:38%;top:30%;left:auto"></div>
+          <div class="player-dot" style="background:var(--gold);right:38%;top:70%;left:auto"></div>
+          <div class="player-dot" style="background:var(--gold);right:55%;top:50%;left:auto"></div>
+          <!-- ball -->
+          <div style="position:absolute;left:62%;top:45%;width:7px;height:7px;border-radius:50%;background:#fff;transform:translate(-50%,-50%)"></div>
+        </div>
+        <!-- timeline events -->
+        <div style="padding:0 14px;flex:1;overflow:hidden">
+          <div class="section-label">Match events</div>
+          <div class="timeline-row"><span class="min">63′</span><span class="evt">⚡ Salah — shot on target</span></div>
+          <div class="timeline-row"><span class="min">58′</span><span class="evt">🟡 Yellow card · Apex #4</span></div>
+          <div class="timeline-row"><span class="min">47′</span><span class="evt">⚽ Goal — V. Popoola (FC Horizon)</span></div>
+          <div class="timeline-row"><span class="min">38′</span><span class="evt">⚽ Goal — Apex (pen.)</span></div>
+          <div class="timeline-row"><span class="min">12′</span><span class="evt">⚽ Goal — Salah · assist Kimmich</span></div>
+        </div>
+        <div style="padding:10px 14px 14px;display:flex;gap:8px">
+          <div style="flex:1;background:rgba(36,183,165,.15);border:1px solid rgba(36,183,165,.3);border-radius:10px;padding:8px;text-align:center;font-size:10px;font-weight:600;color:var(--teal)">Stats</div>
+          <div style="flex:1;background:rgba(255,255,255,.06);border-radius:10px;padding:8px;text-align:center;font-size:10px;color:rgba(255,255,255,.5)">Lineups</div>
+          <div style="flex:1;background:rgba(255,255,255,.06);border-radius:10px;padding:8px;text-align:center;font-size:10px;color:rgba(255,255,255,.5)">Gift ⭐</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    <div class="step-pill">Step 4 — 2D match center</div>
+    <h2>Broadcast-grade live match with real-time events</h2>
+    <p>The 2D pitch updates every second from the backend match engine. Scoreboard, player positions, and event timeline are all backend-authored. Fans can gift players during live matches — every gift is a micro-transaction tied to the match session.</p>
+    <div class="flow-tags">
+      <span class="tag">Live 2D pitch</span><span class="tag">Event timeline</span><span class="tag">In-match gifting</span><span class="tag">Stats &amp; lineups</span>
+    </div>
+  </div>
+</div>
+
+<div class="connector"><div class="connector-line"></div></div>
+
+<!-- ── 5. CLUB HUB ── -->
+<div class="stage">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="background:var(--navy2);height:100%;display:flex;flex-direction:column">
+        <div class="status-bar"><span>9:41</span><span>●●●●</span></div>
+        <div class="ph-header">
+          <div>
+            <div class="ph-title">FC Horizon</div>
+            <div class="ph-sub">17 players · 4th in Premier Cup</div>
+          </div>
+          <div style="font-size:9px;background:rgba(225,185,90,.15);color:var(--gold);padding:3px 9px;border-radius:8px;border:1px solid rgba(225,185,90,.25);font-weight:600">⭐ Elite</div>
+        </div>
+        <div class="scroll-body">
+          <!-- formation card -->
+          <div class="card-block" style="margin-bottom:8px">
+            <div class="card-row">
+              <div><div class="card-label">Formation</div><div class="card-val">4-3-3</div></div>
+              <div><div class="card-label">Avg OVR</div><div class="card-val teal">88.4</div></div>
+              <div><div class="card-label">Morale</div><div class="card-val green">High</div></div>
+            </div>
+          </div>
+          <div class="section-label">Squad</div>
+          <div class="card-block">
+            <div class="player-row">
+              <div class="avatar" style="background:rgba(36,183,165,.2);color:var(--teal)">MS</div>
+              <div><div class="player-name">M. Salah</div><div class="player-pos">RW · 94 OVR · Contract 2yr</div></div>
+              <span class="pill pill-teal">First XI</span>
+            </div>
+            <div class="player-row">
+              <div class="avatar" style="background:rgba(139,127,212,.2);color:var(--purple)">RK</div>
+              <div><div class="player-name">R. Kimmich</div><div class="player-pos">CDM · 91 OVR · Contract 1yr</div></div>
+              <span class="pill pill-gold">Negotiate</span>
+            </div>
+            <div class="player-row">
+              <div class="avatar" style="background:rgba(92,187,121,.2);color:var(--green)">VP</div>
+              <div><div class="player-name">V. Popoola</div><div class="player-pos">ST · 87 OVR · Regen</div></div>
+              <span class="pill pill-teal">First XI</span>
+            </div>
+            <div class="player-row" style="border:none">
+              <div class="avatar" style="background:rgba(228,109,109,.2);color:var(--red)">TA</div>
+              <div><div class="player-name">T. Adeola</div><div class="player-pos">CAM · 85 OVR · On loan</div></div>
+              <span class="pill pill-red">List</span>
+            </div>
+          </div>
+          <div class="section-label">Club identity</div>
+          <div style="display:flex;gap:6px">
+            <div class="card-block" style="flex:1;text-align:center;padding:10px 6px">
+              <div style="font-size:18px;margin-bottom:3px">🏆</div>
+              <div style="font-size:9px;color:rgba(255,255,255,.45)">2 trophies</div>
+            </div>
+            <div class="card-block" style="flex:1;text-align:center;padding:10px 6px">
+              <div style="font-size:18px;margin-bottom:3px">⭐</div>
+              <div style="font-size:9px;color:rgba(255,255,255,.45)">92 rep.</div>
+            </div>
+            <div class="card-block" style="flex:1;text-align:center;padding:10px 6px">
+              <div style="font-size:18px;margin-bottom:3px">🎽</div>
+              <div style="font-size:9px;color:rgba(255,255,255,.45)">Kit editor</div>
+            </div>
+          </div>
+        </div>
+        <div class="nav-bar">
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 12L12 3l9 9"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span>Home</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><path d="M15 15l6 6"/></svg><span>Market</span></div>
+          <div class="nav-icon active"><svg width="16" height="16" fill="none" stroke="#24B7A5" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span style="color:var(--teal)">Club</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span>Compete</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span>Capital</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    <div class="step-pill">Step 5 — Club hub</div>
+    <h2>Manage your squad, identity, and formation</h2>
+    <p>The club hub shows every player's contract status, rating, and role. Managers can set formations, list players for transfer, negotiate contracts, and customise their kit and badge from one place.</p>
+    <div class="flow-tags">
+      <span class="tag">Squad management</span><span class="tag">Formation</span><span class="tag">Contract state</span><span class="tag">Kit editor</span><span class="tag">Trophy cabinet</span>
+    </div>
+  </div>
+</div>
+
+<div class="connector"><div class="connector-line"></div></div>
+
+<!-- ── 6. BUILD-A-SON / REGEN ── -->
+<div class="stage">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="background:var(--navy);height:100%;display:flex;flex-direction:column">
+        <div class="status-bar"><span>9:41</span><span>●●●●</span></div>
+        <div class="ph-header">
+          <div>
+            <div class="ph-title">Build-a-Son</div>
+            <div class="ph-sub">Regen &amp; player creation</div>
+          </div>
+          <div style="font-size:9px;background:rgba(139,127,212,.15);color:var(--purple);padding:3px 9px;border-radius:8px;border:1px solid rgba(139,127,212,.3);font-weight:600">Premium</div>
+        </div>
+        <div class="scroll-body">
+          <div class="section-label">Your regens</div>
+          <div class="regen-card" style="background:linear-gradient(135deg,rgba(139,127,212,.15),rgba(36,183,165,.1))">
+            <div class="regen-name">Tobi Adekunle Jr.</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.45)">ST · Gen 2 · Inherits Salah traits</div>
+            <div class="regen-attrs">
+              <div class="attr"><div class="attr-val">91</div><div class="attr-lbl">Pace</div></div>
+              <div class="attr"><div class="attr-val">88</div><div class="attr-lbl">Finish</div></div>
+              <div class="attr"><div class="attr-val">84</div><div class="attr-lbl">Dribble</div></div>
+              <div class="attr"><div class="attr-val">79</div><div class="attr-lbl">Strength</div></div>
+            </div>
+            <div class="pill-row" style="margin-top:8px"><span class="pill pill-purple">Gen 2</span><span class="pill pill-teal">Ready age 18</span></div>
+          </div>
+          <div class="regen-card" style="background:rgba(255,255,255,.04)">
+            <div class="regen-name">Emeka Horizon III</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.45)">CAM · Gen 3 · Kimmich + custom</div>
+            <div class="regen-attrs">
+              <div class="attr"><div class="attr-val">86</div><div class="attr-lbl">Vision</div></div>
+              <div class="attr"><div class="attr-val">89</div><div class="attr-lbl">Pass</div></div>
+              <div class="attr"><div class="attr-val">85</div><div class="attr-lbl">Tackling</div></div>
+              <div class="attr"><div class="attr-val">78</div><div class="attr-lbl">Aerial</div></div>
+            </div>
+            <div class="pill-row" style="margin-top:8px"><span class="pill pill-gold">Developing · age 14</span></div>
+          </div>
+          <div class="btn-block" style="margin-top:6px">+ Create new regen — ₦150k</div>
+          <div class="section-label" style="margin-top:12px">Creation slots</div>
+          <div class="card-block">
+            <div class="card-row">
+              <div><div class="card-label">Slots used</div><div class="card-val">2 / 5</div></div>
+              <div><div class="card-label">Next unlock</div><div class="card-val teal">₦80k</div></div>
+            </div>
+            <div class="mini-bar" style="margin-top:8px"><div class="mini-bar-fill" style="width:40%;background:var(--purple)"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    <div class="step-pill">Step 6 — Build-a-Son</div>
+    <h2>Create and develop next-generation players</h2>
+    <p>Managers pay a creation fee to build a regen player who inherits traits from a real or existing squad player. Attributes are backend-derived based on lineage, position, and a randomised development curve. Regens mature over seasons — creating a long-term emotional attachment to your club.</p>
+    <div class="flow-tags">
+      <span class="tag">Player creation</span><span class="tag">Trait inheritance</span><span class="tag">Development arc</span><span class="tag">Creation fee</span><span class="tag">Upgrade upsells</span>
+    </div>
+  </div>
+</div>
+
+<div class="connector"><div class="connector-line"></div></div>
+
+<!-- ── 7. WALLET / CAPITAL ── -->
+<div class="stage">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="background:var(--navy2);height:100%;display:flex;flex-direction:column">
+        <div class="status-bar"><span>9:41</span><span>●●●●</span></div>
+        <div class="ph-header">
+          <div>
+            <div class="ph-title">My wallet</div>
+            <div class="ph-sub">KYC verified · All rails active</div>
+          </div>
+          <div style="font-size:9px;background:rgba(92,187,121,.15);color:var(--green);padding:3px 9px;border-radius:8px;border:1px solid rgba(92,187,121,.3);font-weight:600">✓ Verified</div>
+        </div>
+        <div class="scroll-body">
+          <!-- balance card -->
+          <div style="background:var(--navy);border-radius:14px;padding:16px;margin-bottom:10px;border:1px solid rgba(36,183,165,.2)">
+            <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">Available balance</div>
+            <div style="font-size:28px;font-weight:800;color:#fff">₦840,000</div>
+            <div style="display:flex;gap:16px;margin-top:10px">
+              <div><div style="font-size:9px;color:rgba(255,255,255,.4)">Reserved</div><div style="font-size:12px;font-weight:600;color:var(--gold)">₦210,000</div></div>
+              <div><div style="font-size:9px;color:rgba(255,255,255,.4)">Pending</div><div style="font-size:12px;font-weight:600;color:rgba(255,255,255,.5)">₦0</div></div>
+              <div><div style="font-size:9px;color:rgba(255,255,255,.4)">Total</div><div style="font-size:12px;font-weight:600;color:#fff">₦1,050,000</div></div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:10px">
+            <div class="btn-block" style="flex:1;padding:9px;font-size:10px">Deposit</div>
+            <div class="btn-ghost" style="flex:1;padding:9px;font-size:10px;margin:0">Withdraw</div>
+          </div>
+          <div class="section-label">Recent transactions</div>
+          <div class="card-block">
+            <div class="wallet-row"><span class="w-left">Bid reserved · Kimmich</span><span class="w-right gold">-₦210k</span></div>
+            <div class="wallet-row"><span class="w-left">Transfer sale · Mbappé</span><span class="w-right teal">+₦3.4M</span></div>
+            <div class="wallet-row"><span class="w-left">Regen creation fee</span><span class="w-right red" style="color:var(--red)">-₦150k</span></div>
+            <div class="wallet-row"><span class="w-left">Competition payout</span><span class="w-right teal">+₦500k</span></div>
+            <div class="wallet-row" style="border:none"><span class="w-left">Deposit · KoraPay</span><span class="w-right teal">+₦1.0M</span></div>
+          </div>
+        </div>
+        <div class="nav-bar">
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 12L12 3l9 9"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span>Home</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><path d="M15 15l6 6"/></svg><span>Market</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Club</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span>Compete</span></div>
+          <div class="nav-icon active"><svg width="16" height="16" fill="none" stroke="#24B7A5" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span style="color:var(--teal)">Capital</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    <div class="step-pill">Step 7 — Wallet</div>
+    <h2>Transparent balance with every ledger state visible</h2>
+    <p>The wallet shows available, reserved, pending, and total balances separately — so users always know exactly what's locked in active bids vs what they can spend. Deposits via KoraPay or bank transfer. Withdrawals are KYC-gated and audited end to end.</p>
+    <div class="flow-tags">
+      <span class="tag">Available vs reserved</span><span class="tag">KoraPay deposit</span><span class="tag">KYC withdrawal</span><span class="tag">Full ledger audit</span>
+    </div>
+  </div>
+</div>
+
+<div class="connector"><div class="connector-line"></div></div>
+
+<!-- ── 8. COMPETITIONS ── -->
+<div class="stage">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="background:var(--navy);height:100%;display:flex;flex-direction:column">
+        <div class="status-bar"><span>9:41</span><span>●●●●</span></div>
+        <div class="ph-header">
+          <div>
+            <div class="ph-title">Competitions</div>
+            <div class="ph-sub">GTEX · Hosted · Streamer</div>
+          </div>
+        </div>
+        <div class="scroll-body">
+          <!-- featured -->
+          <div style="background:linear-gradient(135deg,var(--navy2),rgba(36,183,165,.15));border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid rgba(36,183,165,.25)">
+            <div style="font-size:9px;color:var(--teal);font-weight:600;margin-bottom:4px">⭐ FEATURED</div>
+            <div style="font-size:14px;font-weight:700;color:#fff">GTEX World Super Cup</div>
+            <div style="font-size:10px;color:rgba(255,255,255,.5);margin:3px 0 10px">64 clubs · ₦5M prize pool · SF stage</div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+              <div><div style="font-size:8px;color:rgba(255,255,255,.4)">Entry</div><div style="font-size:12px;font-weight:700;color:#fff">₦250k</div></div>
+              <div><div style="font-size:8px;color:rgba(255,255,255,.4)">Prize</div><div style="font-size:12px;font-weight:700;color:var(--gold)">₦5M</div></div>
+              <div><div style="font-size:8px;color:rgba(255,255,255,.4)">Spots left</div><div style="font-size:12px;font-weight:700;color:var(--green)">8</div></div>
+            </div>
+            <div class="btn-block" style="padding:9px;font-size:11px">Enter competition</div>
+          </div>
+          <div class="section-label">Open now</div>
+          <div class="card-block">
+            <div class="card-row">
+              <div><div class="card-val" style="font-size:12px">Lagos Derby Cup</div><div class="card-label">Hosted · 16 clubs · ₦50k entry</div></div>
+              <span class="pill pill-green">Open</span>
+            </div>
+          </div>
+          <div class="card-block">
+            <div class="card-row">
+              <div><div class="card-val" style="font-size:12px">Streamer Showdown S3</div><div class="card-label">Streamer · ₦200k prize</div></div>
+              <span class="pill pill-purple">Live</span>
+            </div>
+          </div>
+          <div class="card-block">
+            <div class="card-row">
+              <div><div class="card-val" style="font-size:12px">West Africa League</div><div class="card-label">GTEX · Season 4</div></div>
+              <span class="pill pill-gold">Qualify</span>
+            </div>
+          </div>
+        </div>
+        <div class="nav-bar">
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><path d="M3 12L12 3l9 9"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span>Home</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="9" cy="9" r="6"/><path d="M15 15l6 6"/></svg><span>Market</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Club</span></div>
+          <div class="nav-icon active"><svg width="16" height="16" fill="none" stroke="#24B7A5" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span style="color:var(--teal)">Compete</span></div>
+          <div class="nav-icon"><svg width="16" height="16" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span>Capital</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    <div class="step-pill">Step 8 — Competitions</div>
+    <h2>Enter, host, or stream tournaments with prize pools</h2>
+    <p>Three competition lanes: GTEX-run official leagues, user-hosted tournaments (any manager can create one), and streamer showdowns. Entry fees are taken from the wallet, payouts are distributed automatically on completion, and the entire bracket lifecycle is backend-managed.</p>
+    <div class="flow-tags">
+      <span class="tag">GTEX official</span><span class="tag">User-hosted</span><span class="tag">Streamer lane</span><span class="tag">Auto-payout</span>
+    </div>
+  </div>
+</div>
+
+<div class="connector"><div class="connector-line"></div></div>
+
+<!-- ── 9. ADMIN ── -->
+<div class="stage">
+  <div class="phone-wrap">
+    <div class="phone">
+      <div style="background:var(--navy);height:100%;display:flex;flex-direction:column">
+        <div class="status-bar"><span>9:41</span><span>●●●●</span></div>
+        <div class="ph-header">
+          <div>
+            <div class="ph-title">Admin command center</div>
+            <div class="ph-sub">Operator view</div>
+          </div>
+          <div style="font-size:9px;background:rgba(228,109,109,.15);color:var(--red);padding:3px 9px;border-radius:8px;border:1px solid rgba(228,109,109,.3);font-weight:600">🔒 Admin</div>
+        </div>
+        <div class="scroll-body">
+          <!-- queue summary -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+            <div class="card-block" style="text-align:center;padding:8px 4px">
+              <div class="card-val gold" style="font-size:16px">14</div>
+              <div class="card-label">Approvals</div>
+            </div>
+            <div class="card-block" style="text-align:center;padding:8px 4px">
+              <div class="card-val red" style="color:var(--red);font-size:16px">3</div>
+              <div class="card-label">Disputes</div>
+            </div>
+            <div class="card-block" style="text-align:center;padding:8px 4px">
+              <div class="card-val teal" style="font-size:16px">₦12M</div>
+              <div class="card-label">Settled today</div>
+            </div>
+          </div>
+          <div class="section-label">Pending approvals</div>
+          <div class="admin-row">
+            <div><div class="admin-label">Withdrawal · ₦2.4M · User #4421</div><div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:2px">KYC verified · Manual review</div></div>
+            <div style="display:flex;gap:4px"><div style="font-size:9px;background:rgba(92,187,121,.2);color:var(--green);padding:3px 8px;border-radius:5px;font-weight:600">✓</div><div style="font-size:9px;background:rgba(228,109,109,.2);color:var(--red);padding:3px 8px;border-radius:5px;font-weight:600">✗</div></div>
+          </div>
+          <div class="admin-row">
+            <div><div class="admin-label">Competition payout · ₦500k</div><div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:2px">Lagos Derby Cup · final</div></div>
+            <div style="display:flex;gap:4px"><div style="font-size:9px;background:rgba(92,187,121,.2);color:var(--green);padding:3px 8px;border-radius:5px;font-weight:600">✓</div><div style="font-size:9px;background:rgba(228,109,109,.2);color:var(--red);padding:3px 8px;border-radius:5px;font-weight:600">✗</div></div>
+          </div>
+          <div class="section-label">Platform health</div>
+          <div class="card-block">
+            <div class="wallet-row"><span class="w-left">Active sessions</span><span class="w-right teal">1,204</span></div>
+            <div class="wallet-row"><span class="w-left">Match events/sec</span><span class="w-right">142</span></div>
+            <div class="wallet-row"><span class="w-left">Wallet queue</span><span class="w-right green">0 blocked</span></div>
+            <div class="wallet-row" style="border:none"><span class="w-left">Export queue</span><span class="w-right gold">2 pending</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="info">
+    <div class="step-pill">Step 9 — Admin</div>
+    <h2>Operator queues, approvals, and platform health</h2>
+    <p>Admins see withdrawal approval queues, dispute resolution, competition payout triggers, and live platform health metrics — all from the same command center. Every approval is logged to an immutable audit trail. No action is taken client-side; all state changes are backend-written.</p>
+    <div class="flow-tags">
+      <span class="tag">Approval queue</span><span class="tag">Dispute resolution</span><span class="tag">Audit log</span><span class="tag">Platform health</span><span class="tag">Export &amp; reports</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
