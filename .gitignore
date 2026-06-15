@@ -55,3 +55,6 @@ frontend/android/unityExport/
 /.tmp*
 /tmp/
 Gtex_Test_Migration/tmp/
+
+# Genesis runtime secrets (N55)
+.runtime/

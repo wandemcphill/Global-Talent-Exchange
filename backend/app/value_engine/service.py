@@ -379,7 +379,7 @@ class IngestionValueSnapshotRepository:
         explicit_value = self._real_life_reference_market_value(player=player, as_of=as_of)
         if explicit_value is not None and explicit_value > 0:
             return round(explicit_value, 2)
-        if player.is_real_player:
+        if player.is_real_player and not self._allow_real_player_heuristic_pricing():
             raise ValueError(
                 f"Real player '{player.full_name}' is missing an imported real-life market reference value."
             )
@@ -412,6 +412,13 @@ class IngestionValueSnapshotRepository:
             multiplier += min(player_window.big_moment_count, 5) * 0.05
 
         return round(max(base_value * multiplier, 5_000_000.0), 2)
+
+    def _allow_real_player_heuristic_pricing(self) -> bool:
+        # When enabled, real players that lack an imported market reference value fall back
+        # to the same statistical estimator used for synthetic players (tagged low-confidence
+        # heuristic_profile_baseline) instead of blocking the row with missing_pricing_snapshot.
+        settings = self.settings if self.settings is not None else get_settings()
+        return bool(settings.real_player_pricing_allow_heuristic_fallback)
 
     def _real_life_reference_market_value(self, *, player: Player, as_of: datetime) -> float | None:
         explicit_value = self._latest_signal_score(
@@ -532,7 +539,7 @@ class IngestionValueSnapshotRepository:
                 blended_with_profile_baseline=confidence_tier != "direct_verified_reference",
             )
 
-        if player.is_real_player:
+        if player.is_real_player and not self._allow_real_player_heuristic_pricing():
             raise ValueError(
                 f"Real player '{player.full_name}' is missing an imported real-life market reference value."
             )

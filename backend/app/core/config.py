@@ -158,6 +158,10 @@ class SettingsSource(BaseModel):
         default=False,
         validation_alias="GTE_REAL_PLAYER_MAPPING_AUTO_CREATE_MISSING_ENTITIES",
     )
+    real_player_pricing_allow_heuristic_fallback: bool = Field(
+        default=False,
+        validation_alias="GTE_REAL_PLAYER_PRICING_ALLOW_HEURISTIC_FALLBACK",
+    )
     provider_timeout_seconds: int = Field(default=20, validation_alias="GTE_PROVIDER_TIMEOUT_SECONDS")
     football_data_base_url: str = Field(
         default="https://api.football-data.org/v4",
@@ -804,6 +808,7 @@ class Settings:
     bootstrap_admin_display_name: str | None
     default_ingestion_provider: str
     real_player_mapping_auto_create_missing_entities: bool
+    real_player_pricing_allow_heuristic_fallback: bool
     provider_timeout_seconds: int
     football_data_base_url: str
     football_data_api_key: str | None
@@ -2098,6 +2103,7 @@ def load_settings(
         bootstrap_admin_display_name=_normalized_optional_setting(source.bootstrap_admin_display_name),
         default_ingestion_provider=source.default_ingestion_provider,
         real_player_mapping_auto_create_missing_entities=source.real_player_mapping_auto_create_missing_entities,
+        real_player_pricing_allow_heuristic_fallback=source.real_player_pricing_allow_heuristic_fallback,
         provider_timeout_seconds=source.provider_timeout_seconds,
         football_data_base_url=source.football_data_base_url,
         football_data_api_key=source.football_data_api_key,

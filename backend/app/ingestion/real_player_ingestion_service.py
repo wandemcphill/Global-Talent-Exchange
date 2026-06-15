@@ -1134,7 +1134,11 @@ class RealPlayerIngestionService:
         as_of: datetime,
         sample_payload: dict[str, object],
     ) -> CanonicalReferenceResolution:
-        if self.mapping_resolver is None or self.strict_canonical_mapping_service is None:
+        if (
+            self.mapping_resolver is None
+            or self.strict_canonical_mapping_service is None
+            or self.canonical_mapping_service is None
+        ):
             raise RealPlayerIngestionError("Mapping resolver is not configured.")
         resolver_resolution = self.mapping_resolver.resolve_country(
             session,
@@ -1153,6 +1157,24 @@ class RealPlayerIngestionService:
                 "resolver_confidence": resolver_resolution.confidence_score,
             },
         )
+        if (
+            resolver_resolution.status == "unresolved"
+            and self.settings.real_player_mapping_auto_create_missing_entities
+        ):
+            # The deterministic resolver only binds to pre-seeded canonical countries.
+            # Fall back to the permissive canonical service so player nationalities that
+            # are not yet seeded auto-create a canonical country instead of silently
+            # skipping the whole player (country_blocked). Mirrors the club fallback below.
+            fallback_resolution = self.canonical_mapping_service.resolve_country(
+                session,
+                source_name=payload.source_name,
+                provider_external_id=payload.nationality_code,
+                name=payload.nationality,
+                as_of=as_of,
+                sample_payload=sample_payload,
+            )
+            if fallback_resolution.status != "unresolved":
+                return fallback_resolution
         return self._persist_mapping_resolution(
             session=session,
             reference=reference,
