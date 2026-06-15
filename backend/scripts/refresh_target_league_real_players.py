@@ -1144,8 +1144,8 @@ def _verification_snapshot(session_factory) -> dict[str, Any]:
                     count(*) as total_profiles,
                     sum(
                         case
-                            when json_extract(metadata_json, '$.photo_url') is not null
-                                or json_extract(metadata_json, '$.image.source_url') is not null
+                            when metadata_json ->> 'photo_url' is not null
+                                or metadata_json -> 'image' ->> 'source_url' is not null
                             then 1
                             else 0
                         end
