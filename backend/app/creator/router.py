@@ -191,7 +191,9 @@ def list_creator_card_listings(
     return [CreatorCardListingView.model_validate(item) for item in listings]
 
 
-@creator_router.post("/cards/{creator_card_id}/list", response_model=CreatorCardListingView, status_code=status.HTTP_201_CREATED)
+@creator_router.post(
+    "/cards/{creator_card_id}/list", response_model=CreatorCardListingView, status_code=status.HTTP_201_CREATED
+)
 def create_creator_card_listing(
     creator_card_id: str,
     payload: CreatorCardListingCreateRequest,
@@ -251,7 +253,9 @@ def swap_creator_cards(
     return CreatorCardSwapView.model_validate(swap)
 
 
-@creator_router.post("/cards/{creator_card_id}/loan", response_model=CreatorCardLoanView, status_code=status.HTTP_201_CREATED)
+@creator_router.post(
+    "/cards/{creator_card_id}/loan", response_model=CreatorCardLoanView, status_code=status.HTTP_201_CREATED
+)
 def loan_creator_card(
     creator_card_id: str,
     payload: CreatorCardLoanCreateRequest,
@@ -306,7 +310,9 @@ def get_creator_club_fan_share_market(
     return CreatorClubShareMarketView.model_validate(service.serialize_market(market, viewer=current_user))
 
 
-@creator_router.post("/clubs/{club_id}/fan-share-market", response_model=CreatorClubShareMarketView, status_code=status.HTTP_201_CREATED)
+@creator_router.post(
+    "/clubs/{club_id}/fan-share-market", response_model=CreatorClubShareMarketView, status_code=status.HTTP_201_CREATED
+)
 def issue_creator_club_fan_shares(
     club_id: str,
     payload: CreatorClubShareMarketIssueRequest,
@@ -330,7 +336,11 @@ def issue_creator_club_fan_shares(
     return CreatorClubShareMarketView.model_validate(service.serialize_market(market, viewer=current_user))
 
 
-@creator_router.post("/clubs/{club_id}/fan-share-market/purchase", response_model=CreatorClubSharePurchaseView, status_code=status.HTTP_201_CREATED)
+@creator_router.post(
+    "/clubs/{club_id}/fan-share-market/purchase",
+    response_model=CreatorClubSharePurchaseView,
+    status_code=status.HTTP_201_CREATED,
+)
 def purchase_creator_club_fan_shares(
     club_id: str,
     payload: CreatorClubSharePurchaseRequest,
@@ -363,7 +373,9 @@ def get_my_creator_club_fan_share_holding(
     return CreatorClubShareHoldingView.model_validate(service.serialize_holding(holding))
 
 
-@creator_router.get("/clubs/{club_id}/fan-share-market/distributions", response_model=list[CreatorClubShareDistributionView])
+@creator_router.get(
+    "/clubs/{club_id}/fan-share-market/distributions", response_model=list[CreatorClubShareDistributionView]
+)
 def list_creator_club_fan_share_distributions(
     club_id: str,
     current_user: User = Depends(get_current_user),
