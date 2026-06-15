@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 import json
 from typing import Sequence
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
@@ -16,7 +16,6 @@ from app.ingestion.models import (
     Competition,
     CompetitionContext,
     InjuryStatus,
-    InternalLeague,
     Match,
     MarketSignal,
     NormalizedAwardEvent,
