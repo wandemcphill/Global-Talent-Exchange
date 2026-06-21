@@ -125,10 +125,7 @@ class SportMonksAdapter(BaseFootballProvider):
         resolved_season_id = season_id or self._default_season_id(competition_id)
         if not resolved_season_id:
             return []
-        response = self._get(
-            f"/teams/seasons/{resolved_season_id}",
-            params={"include": "country;venue"},
-        )
+        response = self._get(f"/teams/seasons/{resolved_season_id}")
         return [self._transform_club(item) for item in response.get("data") or []]
 
     def fetch_players(self, club_id: str, season_id: str | None = None) -> list[dict[str, Any]]:
