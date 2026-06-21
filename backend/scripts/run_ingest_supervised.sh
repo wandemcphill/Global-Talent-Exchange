@@ -15,9 +15,9 @@ set -a; . ./.env; set +a
 STATE_PATH="tmp/seven-league-refresh/state.json"
 REPORT_PATH="tmp/seven-league-report.json"
 LOG="tmp/ingest-supervised.log"
-PAUSE_MS="${PAUSE_MS:-750}"          # ease connection pressure between club writes
+PAUSE_MS="${PAUSE_MS:-1500}"         # ease connection + rate-limit pressure between club writes
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-200}"
-BACKOFF_START="${BACKOFF_START:-15}" # seconds; grows then caps
+BACKOFF_START="${BACKOFF_START:-30}" # seconds; grows then caps (longer to let rate limit recover)
 BACKOFF_MAX="${BACKOFF_MAX:-120}"
 
 # Leagues covered by the active SportMonks plan (Growth trial covers all 7).

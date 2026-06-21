@@ -115,7 +115,7 @@ _TARGET_LEAGUES: tuple[LeagueSpec, ...] = (
     LeagueSpec(
         name="Serie A",
         competition_level="elite",
-        desired_names=("Serie A",),
+        desired_names=("Serie A TIM", "Lega Serie A"),
         fallback_competition_id="384",
         fallback_season_id="25533",
     ),
