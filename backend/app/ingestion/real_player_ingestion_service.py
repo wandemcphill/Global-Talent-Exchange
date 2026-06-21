@@ -244,7 +244,21 @@ class RealPlayerIngestionService:
                     transaction.rollback()
                 raise
 
-        audit = self._audit_batch(player_ids=player_ids, as_of=as_of)
+        try:
+            audit = self._audit_batch(player_ids=player_ids, as_of=as_of)
+        except Exception as _audit_exc:  # noqa: BLE001
+            import logging as _logging
+            _logging.getLogger(__name__).warning("_audit_batch skipped due to error: %s", _audit_exc)
+            audit = RealPlayerPostWriteAuditResult(
+                duplicate_canonical_identity_count=0,
+                players_missing_authoritative_price_count=0,
+                players_missing_market_snapshot_count=0,
+                players_missing_avatar_seed_count=0,
+                agency_linkage_required_count=0,
+                agency_linkage_present_count=0,
+                agency_linkage_missing_count=0,
+                all_checks_passed=False,
+            )
         return RealPlayerWriteReport(
             mode=request.mode,
             ingestion_batch_id=ingestion_batch_id,
