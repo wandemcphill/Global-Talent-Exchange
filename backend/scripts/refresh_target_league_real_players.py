@@ -101,9 +101,13 @@ _TARGET_LEAGUES: tuple[LeagueSpec, ...] = (
     LeagueSpec(
         name="Premier League",
         competition_level="elite",
-        desired_names=("Premier League",),
+        # "Premier League" name collides across countries (England id 8 plus
+        # ids 486/806); resolve by explicit id so name matching can't pick the
+        # wrong country's empty season.
+        desired_names=(),
+        competition_id="8",
         fallback_competition_id="8",
-        fallback_season_id="25583",
+        fallback_season_id="28083",
     ),
     LeagueSpec(
         name="Pro League",
@@ -116,6 +120,10 @@ _TARGET_LEAGUES: tuple[LeagueSpec, ...] = (
         name="La Liga",
         competition_level="elite",
         desired_names=("La Liga",),
+        competition_id="564",
+        # Live current season (27965) has no squads yet; pin to 25659 (20 clubs)
+        # until the new season populates.
+        season_id="25659",
         fallback_competition_id="564",
         fallback_season_id="25659",
     ),
