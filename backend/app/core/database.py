@@ -127,6 +127,12 @@ def create_database_engine(database_url: str | None = None) -> Engine:
                 minimum=1,
             )
         engine_kwargs["pool_pre_ping"] = True
+        # Cap pool size to avoid exhausting the Supabase session-mode pooler
+        # (limit: 30 connections shared across all workers).  With WEB_CONCURRENCY=2
+        # and two engines per worker: 3 × 2 engines × 2 workers = 12 base + 4 overflow
+        # headroom = well under 30.
+        engine_kwargs["pool_size"] = _get_int_env("GTE_DB_POOL_SIZE", 3, minimum=1)
+        engine_kwargs["max_overflow"] = _get_int_env("GTE_DB_MAX_OVERFLOW", 2, minimum=0)
     return create_engine(resolved_url, **engine_kwargs)
 
 
