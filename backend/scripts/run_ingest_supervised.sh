@@ -20,7 +20,7 @@ MAX_ATTEMPTS="${MAX_ATTEMPTS:-200}"
 BACKOFF_START="${BACKOFF_START:-30}" # seconds; grows then caps (longer to let rate limit recover)
 BACKOFF_MAX="${BACKOFF_MAX:-120}"
 
-# Leagues covered by the active SportMonks plan (Growth trial covers all 7).
+# Leagues covered by the active SportMonks plan.
 LEAGUES=(
   --league "Premier League"
   --league "La Liga"
@@ -29,6 +29,14 @@ LEAGUES=(
   --league "Bundesliga"
   --league "Eredivisie"
   --league "Super Lig"
+  --league "Championship"
+  # Added N65: Spain 2nd, Czech / Brazil / Argentina / Austria 1st divisions.
+  # Brazil resolves by explicit id (648) — its SportMonks name "Serie A" collides with Italy's.
+  --league "La Liga 2"
+  --league "Chance Liga"
+  --league "Brasileiro Serie A"
+  --league "Liga Profesional de Futbol"
+  --league "Admiral Bundesliga"
 )
 
 attempt=0

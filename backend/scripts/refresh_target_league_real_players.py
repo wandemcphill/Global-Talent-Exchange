@@ -88,6 +88,13 @@ class LeagueSpec:
     country_id: str | None = None
     target_club_names: tuple[str, ...] = ()
     manual_league_key: str | None = None
+    # Explicit SportMonks league id. When set, resolution skips name matching
+    # entirely — required for leagues whose name collides across countries
+    # (e.g. Brazil "Serie A" id 648 vs Italy "Serie A" id 384).
+    competition_id: str | None = None
+    # Explicit SportMonks season id. When set, overrides the live currentSeason —
+    # needed when the current season has no squads yet (e.g. Austria off-season).
+    season_id: str | None = None
 
 
 _TARGET_LEAGUES: tuple[LeagueSpec, ...] = (
@@ -146,6 +153,51 @@ _TARGET_LEAGUES: tuple[LeagueSpec, ...] = (
         desired_names=("Championship",),
         fallback_competition_id="9",
         fallback_season_id="25648",
+    ),
+    LeagueSpec(
+        name="La Liga 2",
+        competition_level="second_tier",
+        desired_names=("La Liga 2", "LaLiga2", "Segunda Division"),
+        competition_id="567",
+        fallback_competition_id="567",
+        fallback_season_id="25673",
+    ),
+    LeagueSpec(
+        name="Chance Liga",
+        competition_level="top_flight",
+        desired_names=("Chance Liga", "Fortuna Liga"),
+        competition_id="262",
+        fallback_competition_id="262",
+        fallback_season_id="27984",
+    ),
+    LeagueSpec(
+        name="Brasileiro Serie A",
+        competition_level="top_flight",
+        # SportMonks calls this "Serie A" (id 648) — collides with Italy's
+        # Serie A (id 384); resolve by explicit id, never by name.
+        desired_names=(),
+        competition_id="648",
+        fallback_competition_id="648",
+        fallback_season_id="26763",
+    ),
+    LeagueSpec(
+        name="Liga Profesional de Futbol",
+        competition_level="top_flight",
+        desired_names=("Liga Profesional de Futbol", "Liga Profesional"),
+        competition_id="636",
+        fallback_competition_id="636",
+        fallback_season_id="26808",
+    ),
+    LeagueSpec(
+        name="Admiral Bundesliga",
+        competition_level="top_flight",
+        desired_names=("Admiral Bundesliga",),
+        competition_id="181",
+        # Current season (28003, 2025/26) has no squads yet; pin to the prior
+        # season (25653) which has clubs until 2025/26 populates.
+        season_id="25653",
+        fallback_competition_id="181",
+        fallback_season_id="25653",
     ),
     LeagueSpec(
         name="Premiership",
@@ -877,10 +929,14 @@ def _club_state_key(*, league_key: str, club_id: str) -> str:
 
 def _resolve_league_targets(adapter: SportMonksAdapter, specs: tuple[LeagueSpec, ...]) -> list[dict[str, Any]]:
     competitions_by_name = {}
+    competitions_by_id: dict[str, dict[str, Any]] = {}
     for competition in _provider_call("fetch competitions", adapter.fetch_competitions):
         competition_name = _fold_text(competition.get("name"))
         if competition_name:
             competitions_by_name[competition_name] = competition
+        competition_pk = _required_text(competition.get("id"))
+        if competition_pk:
+            competitions_by_id[competition_pk] = competition
 
     resolved: list[dict[str, Any]] = []
     for spec in specs:
@@ -889,15 +945,21 @@ def _resolve_league_targets(adapter: SportMonksAdapter, specs: tuple[LeagueSpec,
             continue
 
         competition = None
-        for desired_name in spec.desired_names:
-            competition = competitions_by_name.get(_fold_text(desired_name))
-            if competition is not None:
-                break
+        if spec.competition_id:
+            # Explicit id wins — bypass name matching to avoid cross-country collisions.
+            competition = competitions_by_id.get(spec.competition_id)
+        else:
+            for desired_name in spec.desired_names:
+                competition = competitions_by_name.get(_fold_text(desired_name))
+                if competition is not None:
+                    break
         competition_id = _required_text(
-            (competition or {}).get("id") or spec.fallback_competition_id,
+            (competition or {}).get("id") or spec.competition_id or spec.fallback_competition_id,
         )
         season_id = _required_text(
-            ((competition or {}).get("currentSeason") or {}).get("id") or spec.fallback_season_id,
+            spec.season_id
+            or ((competition or {}).get("currentSeason") or {}).get("id")
+            or spec.fallback_season_id,
         )
         clubs = [
             {"id": _required_text(club.get("id")), "name": _required_text(club.get("name"))}
