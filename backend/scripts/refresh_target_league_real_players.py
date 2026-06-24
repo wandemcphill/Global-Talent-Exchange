@@ -112,7 +112,10 @@ _TARGET_LEAGUES: tuple[LeagueSpec, ...] = (
     LeagueSpec(
         name="Pro League",
         competition_level="top_flight",
-        desired_names=("Pro League",),
+        # "Pro League" name collides (Belgium id 208 vs id 944); pin by id so
+        # the resolver can't pick the wrong competition's season.
+        desired_names=(),
+        competition_id="208",
         fallback_competition_id="208",
         fallback_season_id="25600",
     ),
