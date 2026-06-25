@@ -133,6 +133,14 @@ def create_database_engine(database_url: str | None = None) -> Engine:
         # headroom = well under 30.
         engine_kwargs["pool_size"] = _get_int_env("GTE_DB_POOL_SIZE", 3, minimum=1)
         engine_kwargs["max_overflow"] = _get_int_env("GTE_DB_MAX_OVERFLOW", 2, minimum=0)
+        # Disable psycopg3 server-side prepared statements.  The Supabase
+        # transaction-mode pooler (port 6543) routes each transaction to a
+        # potentially different physical backend, so a prepared statement
+        # ("_pg3_N") created on one backend is absent on the next -> psycopg
+        # raises InvalidSqlStatementName.  prepare_threshold=None makes psycopg
+        # never auto-prepare, which is required for transaction-pooled Postgres.
+        if "psycopg" in resolved_url and "prepare_threshold" not in resolved_engine_url.query:
+            connect_args["prepare_threshold"] = None
     return create_engine(resolved_url, **engine_kwargs)
 
 
