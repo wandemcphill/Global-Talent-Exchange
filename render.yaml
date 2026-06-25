@@ -44,7 +44,7 @@ services:
       - key: GTE_KORAPAY_WEBHOOK_SECRET
         sync: false
       - key: GTE_KORAPAY_NOTIFICATION_URL
-        value: https://gtex-api.onrender.com/api/webhooks/korapay
+        value: https://gtex-api-cijn.onrender.com/api/webhooks/korapay
       - key: GTE_ENABLE_PAYSTACK
         value: "false"
       - key: TREASURY_BANK_NAME
@@ -66,7 +66,7 @@ services:
     staticPublishPath: "frontend/build/web"
     envVars:
       - key: GTE_API_BASE_URL
-        value: https://gtex-api.onrender.com
+        value: https://gtex-api-cijn.onrender.com
       - key: GTE_BACKEND_MODE
         value: live
 
