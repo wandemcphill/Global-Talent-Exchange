@@ -146,7 +146,18 @@ def _build_plan(player: Player, policy: dict[str, Any]) -> IssuancePlan:
     )
 
 
-def _base_query(args: argparse.Namespace):
+def _base_query(args: argparse.Namespace, policy: dict[str, Any] | None = None):
+    # The candidate set is driven by the policy's eligibility gates so the same
+    # issuer can serve real players and GTEX-native regens. When the policy does
+    # not require real players (regen policy), regens (is_real_player=false) are
+    # admitted into the candidate set; the per-player eligibility checks still
+    # enforce country + club/competition context.
+    require_real_player = True
+    if policy is not None:
+        require_real_player = bool(policy.get("eligibility", {}).get("require_real_player", True))
+    candidate_filters = [Player.is_tradable.is_(True)]
+    if require_real_player:
+        candidate_filters.append(Player.is_real_player.is_(True))
     stmt = (
         select(Player)
         .options(
@@ -157,7 +168,7 @@ def _base_query(args: argparse.Namespace):
             selectinload(Player.supply_tier),
             selectinload(Player.liquidity_band),
         )
-        .where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
+        .where(*candidate_filters)
         .order_by(Player.updated_at.desc(), Player.id.asc())
     )
     value = (args.cohort_value or "").strip()
@@ -251,7 +262,7 @@ def issue_markets(args: argparse.Namespace) -> dict[str, Any]:
         "failed": [],
     }
     with session_factory() as session:
-        players = list(session.scalars(_base_query(args).limit(limit)).all())
+        players = list(session.scalars(_base_query(args, policy).limit(limit)).all())
         service = PlayerTokenMarketService(session)
         for player in players:
             try:
