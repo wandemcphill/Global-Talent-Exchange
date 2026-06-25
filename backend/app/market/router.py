@@ -642,8 +642,16 @@ def withdraw_trade_intent(
 api_router = APIRouter(prefix="/api")
 api_router.include_router(router)
 
+# Mount under /api/v2 as well.  The market module is registered without
+# with_api_alias=True (its combined_router pre-builds the /api mount), so it
+# would otherwise miss the /api/v2 alias that every versioned client expects
+# (e.g. the Transfer Hub calls /api/v2/market/players) -> 404.
+api_v2_router = APIRouter(prefix="/api/v2")
+api_v2_router.include_router(router)
+
 combined_router = APIRouter(tags=["market"])
 combined_router.include_router(router)
 combined_router.include_router(api_router)
+combined_router.include_router(api_v2_router)
 
 router = combined_router
