@@ -57,6 +57,12 @@ services:
         value: "false"
       - key: GTE_TASK_QUEUE_ENABLED
         value: "true"
+      # Cache the full tradable-player record set in-process for this many
+      # seconds. The market listing query loads all ~30k players + relationships
+      # per request (filtering/sorting happen in Python); caching turns that into
+      # one load per TTL. 0 disables (default outside production).
+      - key: GTE_MARKET_RECORDS_CACHE_TTL_SECONDS
+        value: "300"
 
   # 🎨 Web
   - name: gtex-web

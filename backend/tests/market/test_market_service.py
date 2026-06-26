@@ -43,6 +43,10 @@ from app.market.router import (
     list_market_nationalities,
     list_market_players,
 )
+from app.market.repositories import (
+    SqlAlchemyMarketPlayerRepository,
+    clear_market_records_cache,
+)
 from app.market.service import MarketPlayerQueryService
 from app.models.base import Base
 from app.models.transfer_market import TransferListing
@@ -1123,3 +1127,89 @@ def test_market_player_list_rejects_invalid_sort(session) -> None:
 
     assert exc_info.value.status_code == 400
     assert "sort must be one of" in exc_info.value.detail
+
+
+def _new_tradable_player(player_id: str, full_name: str) -> Player:
+    return Player(
+        id=player_id,
+        source_provider="synthetic",
+        provider_external_id=player_id,
+        country_id="country-ng",
+        current_club_id="club-alpha",
+        current_competition_id="competition-prem",
+        supply_tier_id="tier-elite",
+        liquidity_band_id="liquidity-1",
+        full_name=full_name,
+        first_name=full_name.split(" ")[0],
+        last_name=full_name.split(" ")[-1],
+        short_name=full_name,
+        position="Forward",
+        normalized_position="forward",
+        date_of_birth=date(2002, 2, 2),
+        preferred_foot="right",
+        shirt_number=21,
+        height_cm=180,
+        weight_kg=75,
+        market_value_eur=10_000_000.0,
+        is_tradable=True,
+    )
+
+
+def test_player_records_cache_serves_within_ttl(session, monkeypatch) -> None:
+    monkeypatch.setenv("GTE_MARKET_RECORDS_CACHE_TTL_SECONDS", "300")
+    clear_market_records_cache()
+    try:
+        _seed_market_player_catalog(session)
+        session.commit()
+
+        repository = SqlAlchemyMarketPlayerRepository(session)
+        first = repository.list_player_records()
+        assert len(first) == 4
+
+        # A write within the TTL window must NOT be observed (cache hit).
+        session.add(_new_tradable_player("player-5", "Zed Newman"))
+        session.commit()
+        cached = repository.list_player_records()
+        assert len(cached) == 4
+
+        # Clearing the cache forces a reload that now sees the new player.
+        clear_market_records_cache()
+        reloaded = repository.list_player_records()
+        assert len(reloaded) == 5
+    finally:
+        clear_market_records_cache()
+
+
+def test_list_players_uses_cached_records_across_sessions(monkeypatch) -> None:
+    monkeypatch.setenv("GTE_MARKET_RECORDS_CACHE_TTL_SECONDS", "300")
+    clear_market_records_cache()
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    try:
+        # Session A populates the process cache, then is closed.
+        with SessionLocal() as session_a:
+            _seed_market_player_catalog(session_a)
+            session_a.commit()
+            first = _build_market_query_service(session_a).list_players(sort="current_value")
+            first_ids = [item.player_id for item in first.items]
+        assert first_ids
+
+        # Session B must reuse the cached (now detached) records through the full
+        # filter/sort/build path without raising DetachedInstanceError, and must
+        # produce identical results.
+        with SessionLocal() as session_b:
+            service_b = _build_market_query_service(session_b)
+            again = service_b.list_players(sort="current_value")
+            assert [item.player_id for item in again.items] == first_ids
+            # Exercise derived-value sort + search + availability on cached records.
+            assert service_b.list_players(sort="trend_score").items
+            assert service_b.list_players(search="Ayo").items
+            assert service_b.browse_catalog().total == len(first_ids)
+    finally:
+        clear_market_records_cache()
+        engine.dispose()

@@ -3,15 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
+import os
+import time
 from threading import RLock
 from typing import Protocol
+from weakref import WeakKeyDictionary
 
 from redis import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import select
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, selectinload
 
-from app.ingestion.models import Competition, Player
+from app.ingestion.models import Club, Competition, Player
 from app.market.models import (
     Listing,
     ListingStatus,
@@ -28,6 +32,42 @@ from app.value_engine.read_models import PlayerValueSnapshotRecord
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Process-level TTL cache for the full tradable-player record set.
+#
+# list_player_records() is the hot path behind /market/players and
+# /market/browse/catalog.  Filtering, sorting and pagination all happen in
+# Python on the returned records (the predicates depend on multi-source
+# fallbacks -- manual price overrides, summary read-models, snapshot JSON --
+# that cannot be expressed in SQL), so the query loads *all* ~30k tradable
+# players with their relationships on every request (~50s, OOMs small dynos).
+#
+# Caching the loaded records turns that into one load per TTL while preserving
+# the exact in-Python semantics.  Safe to reuse across sessions because the
+# session factory sets expire_on_commit=False and every relationship the
+# downstream code touches is eager-loaded, so detached records stay readable.
+#
+# Keyed by the bound Engine via a WeakKeyDictionary: distinct test engines get
+# distinct entries (no cross-test pollution) and entries evict with the engine.
+# Disabled by default (ttl 0); production opts in via
+# GTE_MARKET_RECORDS_CACHE_TTL_SECONDS so the test suite keeps fresh-read
+# semantics unless a test explicitly enables it.
+_RECORDS_CACHE: "WeakKeyDictionary[Engine, tuple[float, list[MarketPlayerRecord]]]" = WeakKeyDictionary()
+_RECORDS_CACHE_LOCK = RLock()
+
+
+def _records_cache_ttl_seconds() -> float:
+    raw = os.environ.get("GTE_MARKET_RECORDS_CACHE_TTL_SECONDS", "0")
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def clear_market_records_cache() -> None:
+    """Drop all cached player-record sets (used by tests and on demand)."""
+    with _RECORDS_CACHE_LOCK:
+        _RECORDS_CACHE.clear()
 
 
 class MarketRepository(Protocol):
@@ -365,12 +405,34 @@ class SqlAlchemyMarketPlayerRepository:
     session: Session
 
     def list_player_records(self) -> list[MarketPlayerRecord]:
+        ttl = _records_cache_ttl_seconds()
+        if ttl <= 0:
+            return self._load_player_records()
+
+        bind = self.session.get_bind()
+        if not isinstance(bind, Engine):
+            # Connection-bound sessions (e.g. nested transactions) skip the
+            # process cache; correctness over the marginal speedup.
+            return self._load_player_records()
+
+        now = time.monotonic()
+        with _RECORDS_CACHE_LOCK:
+            cached = _RECORDS_CACHE.get(bind)
+            if cached is not None and (now - cached[0]) < ttl:
+                return cached[1]
+
+        records = self._load_player_records()
+        with _RECORDS_CACHE_LOCK:
+            _RECORDS_CACHE[bind] = (time.monotonic(), records)
+        return records
+
+    def _load_player_records(self) -> list[MarketPlayerRecord]:
         players = list(
             self.session.scalars(
                 select(Player)
                 .options(
                       selectinload(Player.country),
-                      selectinload(Player.current_club),
+                      selectinload(Player.current_club).selectinload(Club.country),
                       selectinload(Player.current_competition).selectinload(Competition.country),
                       selectinload(Player.current_competition).selectinload(Competition.internal_league),
                       selectinload(Player.internal_league),
