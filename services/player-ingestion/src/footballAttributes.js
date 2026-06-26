@@ -26,6 +26,22 @@ const PERSONALITIES = [
   "balanced",
 ];
 
+// Weighted fallback pool for when a real position is unavailable: roughly a
+// real squad shape (~10% GK, ~30% each outfield) instead of a flat 25% per
+// bucket, which over-produced goalkeepers.
+const FALLBACK_POSITION_POOL = [
+  "GK",
+  "DF",
+  "DF",
+  "DF",
+  "MF",
+  "MF",
+  "MF",
+  "FW",
+  "FW",
+  "FW",
+];
+
 const POSITION_GROUPS = {
   goalkeeper: "GK",
   keeper: "GK",
@@ -45,7 +61,7 @@ const POSITION_GROUPS = {
 
 function deriveAttributes(player) {
   const seed = numericSeed(player.playerId || player.name || Date.now());
-  const position = normalizePosition(player.position) || pickBySeed(["GK", "DF", "MF", "FW"], seed);
+  const position = normalizePosition(player.position) || pickBySeed(FALLBACK_POSITION_POOL, seed);
   const age = clampInt(player.age || 24, 15, 45);
   const youngUpside = age <= 21 ? 8 : age >= 31 ? -4 : 2;
   const base = clampInt(52 + (seed % 31) + (player.isRegen ? -2 : 0), 45, 88);
@@ -76,7 +92,7 @@ function deriveAttributes(player) {
 }
 
 function generateRegenAttributes(seed, age) {
-  const position = pickBySeed(["GK", "DF", "MF", "FW"], seed);
+  const position = pickBySeed(FALLBACK_POSITION_POOL, seed);
   const overall = clampInt(45 + (seed % 26), 45, 70);
   const potential = clampInt(Math.max(70 + (shifted(seed, 5) % 26), overall + 8), 70, 95);
   return {

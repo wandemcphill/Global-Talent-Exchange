@@ -111,8 +111,14 @@ class SportmonksClient {
   }
 
   async fetchPlayersForTeam(teamId) {
+    // Position/detailedPosition MUST be nested under `player.` on the squads
+    // endpoint. As bare includes they attach to the squad row, not the player,
+    // so item.player.position is empty -> normalizePosition() returns null and
+    // deriveAttributes() falls back to a uniform random GK/DF/MF/FW pick (the
+    // cause of ~25% goalkeepers and wrong real-player positions).
     const payload = await this.request(`/squads/teams/${teamId}`, {
-      include: "player.country;player.nationality;player.city;position;detailedPosition",
+      include:
+        "player.country;player.nationality;player.city;player.position;player.detailedposition",
     });
     return (payload.data || []).map((item) => normalizeSquadPlayer(item, teamId));
   }
