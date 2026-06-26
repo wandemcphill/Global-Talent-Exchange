@@ -39,7 +39,7 @@ class _GtexPlayerMarketRedesignScreenState
   String? _selectedLeague;
   String? _selectedDivision;
   String? _selectedClub;
-  String _selectedAvailability = 'transfer';
+  String _selectedAvailability = 'all';
   String? _selectedPlayerId;
   GtexMarketBasketState _basketState = const GtexMarketBasketState(
     <String, GtexMarketPlayerView>{},
@@ -291,7 +291,7 @@ class _GtexPlayerMarketRedesignScreenState
       _selectedLeague = null;
       _selectedDivision = null;
       _selectedClub = null;
-      _selectedAvailability = 'transfer';
+      _selectedAvailability = 'all';
       _selectedPlayerId = null;
       _searchController.clear();
       _positionController.clear();

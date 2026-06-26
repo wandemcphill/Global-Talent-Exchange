@@ -235,6 +235,7 @@ class _AvailabilitySection extends StatelessWidget {
   final ValueChanged<String> onSelected;
 
   static const List<_AvailabilityOption> _options = <_AvailabilityOption>[
+    _AvailabilityOption('all', 'All players', Icons.groups_outlined),
     _AvailabilityOption('transfer', 'Transfer listed', Icons.sync_alt),
     _AvailabilityOption('loan', 'Loan listed', Icons.schedule_outlined),
     _AvailabilityOption('swap', 'Swap listed', Icons.swap_horiz),
