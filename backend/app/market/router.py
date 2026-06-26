@@ -392,15 +392,38 @@ def get_market_ticker(
 
 @router.get("/movers", response_model=MarketMoversView)
 def get_market_movers(
+    request: Request,
     limit: int = Query(default=5, ge=1, le=25),
     service: MarketPlayerQueryService = Depends(get_market_player_query_service),
 ) -> MarketMoversView:
+    # Movers scans every tradable player's pricing snapshot (a hot-cache lookup
+    # per player), so it is expensive on a cold cache. Serve from the shared
+    # player-markets response cache when available -- it is invalidated whenever
+    # a market changes, so cached movers stay consistent.
+    settings = get_optional_app_settings(request.app)
+    if settings is not None and settings.api_cache_enabled:
+        cached_payload = get_response_cache(request.app).get_json(
+            namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+        )
+        if cached_payload is not None:
+            return MarketMoversView.model_validate(cached_payload)
     try:
         result = service.get_market_movers(limit=limit)
     except MarketError as exc:
         raise_market_http_exception(exc)
 
-    return MarketMoversView.model_validate(result)
+    response = MarketMoversView.model_validate(result)
+    if settings is not None and settings.api_cache_enabled:
+        get_response_cache(request.app).set_json(
+            namespace=PLAYER_MARKETS_CACHE_NAMESPACE,
+            route=request.url.path,
+            request=request,
+            payload=response.model_dump(mode="json"),
+            ttl_seconds=settings.player_markets_cache_ttl_seconds,
+        )
+    return response
 
 
 @router.post("/buy", response_model=CreatorTradeView | PlayerSharePurchaseView, status_code=status.HTTP_201_CREATED)
