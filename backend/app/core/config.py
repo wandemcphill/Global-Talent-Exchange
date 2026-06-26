@@ -56,7 +56,7 @@ class SettingsSource(BaseModel):
     redis_realtime_channel: str = Field(default="gtex.realtime", validation_alias="GTE_REDIS_REALTIME_CHANNEL")
     api_cache_enabled: bool = Field(default=True, validation_alias="GTE_API_CACHE_ENABLED")
     player_markets_cache_ttl_seconds: int = Field(
-        default=30,
+        default=300,
         validation_alias="GTE_PLAYER_MARKETS_CACHE_TTL_SECONDS",
     )
     competitions_cache_ttl_seconds: int = Field(
@@ -2060,7 +2060,7 @@ def load_settings(
         redis_event_channel=source.redis_event_channel,
         redis_realtime_channel=source.redis_realtime_channel,
         api_cache_enabled=source.api_cache_enabled,
-        player_markets_cache_ttl_seconds=max(5, min(30, source.player_markets_cache_ttl_seconds)),
+        player_markets_cache_ttl_seconds=max(5, min(600, source.player_markets_cache_ttl_seconds)),
         competitions_cache_ttl_seconds=max(5, min(30, source.competitions_cache_ttl_seconds)),
         regen_universe_cache_ttl_seconds=max(5, min(30, source.regen_universe_cache_ttl_seconds)),
         distributed_rate_limit_enabled=source.distributed_rate_limit_enabled,
