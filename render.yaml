@@ -63,6 +63,10 @@ services:
       # one load per TTL. 0 disables (default outside production).
       - key: GTE_MARKET_RECORDS_CACHE_TTL_SECONDS
         value: "300"
+      # Kafka is not provisioned in production. Empty → viral clip ingestion
+      # silently skips startup instead of logging NoBrokersAvailable tracebacks.
+      - key: GTE_KAFKA_BROKERS
+        value: ""
 
   # 🎨 Web
   - name: gtex-web
