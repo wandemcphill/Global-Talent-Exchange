@@ -267,6 +267,41 @@ services:
       - key: SEASON_TRANSFER_WINDOWS
         value: "2026-01-01:2026-01-31,2026-08-01:2026-08-31"
 
+  # 🧑‍🤝‍🧑 Real-player ingest (cron job)
+  # Ingests real players for leagues that still need them (the original 6 top
+  # leagues are already populated). Runs on Render's stable network so the
+  # supervised refresh can complete — a laptop session cannot (slow EU-pooler
+  # throughput + dropped connections). Writes are DB-idempotent, so the
+  # schedule can re-run safely; trigger manually from the dashboard for a
+  # one-off backfill.
+  - name: gtex-realplayer-ingest
+    type: cronjob
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 3 * * *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-realplayer-ingest.sh"
+    envVars:
+      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
+      - key: DATABASE_URL
+        sync: false
+      # SportMonks v3 token (same value as gtex-player-ingestion-worker).
+      - key: SPORTMONKS_API_TOKEN
+        sync: false
+      - key: SPORTMONKS_BASE_URL
+        value: https://api.sportmonks.com/v3/football
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_INGESTION_PROVIDER
+        value: sportmonks
+      # Same values as gtex-api (cross-service auth). Optional — the script
+      # falls back to local-dev secrets for this CLI path if unset.
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
 # NOTE: NO Blueprint-managed paid resources.
 # - PostgreSQL is hosted on Supabase (no `databases:` block).
 # - Redis is a MANUALLY-created Render Redis/Key-Value instance (no `keyvalue`
