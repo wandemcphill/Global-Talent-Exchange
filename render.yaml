@@ -275,7 +275,7 @@ services:
   # schedule can re-run safely; trigger manually from the dashboard for a
   # one-off backfill.
   - name: gtex-realplayer-ingest
-    type: cronjob
+    type: cron
     runtime: python
     region: frankfurt
     plan: starter
