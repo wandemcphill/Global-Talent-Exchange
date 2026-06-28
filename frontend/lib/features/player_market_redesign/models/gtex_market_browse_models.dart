@@ -131,6 +131,16 @@ class GtexMarketPlayerView {
           : GtexMarketFormatters.euros(marketValueEur);
   String get internalPriceLabel => GtexMarketFormatters.credits(price);
   String get ageLabel => age == null || age! <= 0 ? 'Age TBC' : 'Age $age';
+  String? get heightLabel =>
+      raw.heightCm == null || raw.heightCm! <= 0 ? null : '${raw.heightCm} cm';
+  String? get footLabel {
+    final String? foot = raw.preferredFoot?.trim();
+    if (foot == null || foot.isEmpty) {
+      return null;
+    }
+    return foot[0].toUpperCase() + foot.substring(1).toLowerCase();
+  }
+  List<String> get secondaryPositions => raw.secondaryPositions;
   int? get gsiScore => globalScoutingIndex?.round();
   String? get gsiLabel =>
       globalScoutingIndex == null

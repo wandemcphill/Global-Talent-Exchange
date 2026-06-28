@@ -142,6 +142,9 @@ class GtexMarketPlayerGrid extends StatelessWidget {
                       gsiTrendLabel: player.gsiTrendLabel,
                       ratingLabel: player.ratingLabel,
                       ageLabel: player.ageLabel,
+                      heightLabel: player.heightLabel,
+                      footLabel: player.footLabel,
+                      secondaryPositions: player.secondaryPositions,
                       badges: <Widget>[
                         GtexStatusChip(
                           label: player.availabilityTypeLabel,

@@ -79,6 +79,7 @@ from app.models.club_ownership import (
 )
 from app.models.club_identity_theme import ClubIdentityTheme
 from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_squad_tier import ClubSquadTierMembership
 from app.models.club_lifecycle import (
     ClubEligibilityFlag,
     ClubLifecycleAuditEvent,
@@ -804,6 +805,7 @@ __all__ = [
     "ClubEligibilityFlag",
     "ClubLifecycleAuditEvent",
     "ClubLifecycleState",
+    "ClubSquadTierMembership",
     "ClubOperatingStatus",
     "ClubReadinessStatus",
     "ClubRegistrationSlot",

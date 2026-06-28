@@ -47,12 +47,12 @@ class _GteLoginScreenState extends State<GteLoginScreen> {
         return GtexFocusFlowScaffold(
           title:
               widget.controller.isAuthenticated
-                  ? 'GTEX session active'
-                  : 'Enter the football operating system',
+                  ? "You're signed in"
+                  : 'Welcome back',
           subtitle:
               widget.controller.isAuthenticated
-                  ? 'Your live account is connected. Continue into the club, market, wallet, and competition command surface.'
-                  : 'One secure sign-in opens club ownership, player trading, national rentals, creator tools, wallet operations, and admin access where your role allows it.',
+                  ? "You're signed in. Jump back into your club, the market, your wallet, and competitions."
+                  : 'One sign-in for your club, transfers, national rentals, creator tools, and wallet.',
           maxWidth: 1180,
           accent: GtexColors.pitch,
           child:
@@ -189,7 +189,7 @@ class _AuthStory extends StatelessWidget {
         ),
         const SizedBox(height: GtexSpacing.xl),
         Text(
-          'Own a club. Trade football assets. Read the world as it moves.',
+          'Own a club. Sign the stars. Win it all.',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
             color: GtexColors.text,
             fontWeight: FontWeight.w900,
@@ -198,7 +198,7 @@ class _AuthStory extends StatelessWidget {
         ),
         const SizedBox(height: GtexSpacing.md),
         Text(
-          'The login surface now matches the GTEX command-center language: market, club, wallet, competitions, regens, news, creator, and admin all enter through one role-aware account.',
+          'Your club, transfers, wallet, competitions, regens, and news — all from one account.',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: GtexColors.textSecondary,
             height: 1.45,
@@ -275,7 +275,7 @@ class _LoginForm extends StatelessWidget {
   Widget build(BuildContext context) {
     return GtexPanel(
       title: 'Sign in',
-      subtitle: 'Role-aware access for managers, creators, and admins.',
+      subtitle: 'Sign in to your club, market, and wallet.',
       accent: GtexColors.pitch,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

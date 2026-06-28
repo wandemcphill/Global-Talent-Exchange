@@ -198,6 +198,7 @@ class MarketPlayerListItemView(BaseModel):
     player_id: str
     player_name: str
     position: str | None
+    secondary_positions: list[str] = Field(default_factory=list)
     nationality: str | None
     nationality_code: str | None
     current_club_id: str | None
@@ -208,6 +209,8 @@ class MarketPlayerListItemView(BaseModel):
     current_division_id: str | None
     current_division_name: str | None
     age: int | None
+    height_cm: int | None = None
+    preferred_foot: str | None = None
     market_value_eur: float | None = None
     current_value_credits: float | None
     movement_pct: float | None
@@ -276,6 +279,7 @@ class MarketPlayerIdentityView(BaseModel):
     short_name: str | None
     position: str | None
     normalized_position: str | None
+    secondary_positions: list[str] = Field(default_factory=list)
     nationality: str | None
     nationality_code: str | None
     age: int | None
@@ -337,6 +341,19 @@ class MarketPlayerTrendProfileView(BaseModel):
     temporary_form_boost: float = 0.0
 
 
+class MarketPlayerAttributesView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    overall: int
+    potential: int
+    pace: int
+    shooting: int
+    passing: int
+    dribbling: int
+    defending: int
+    physical: int
+
+
 class MarketPlayerDetailView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -345,6 +362,7 @@ class MarketPlayerDetailView(BaseModel):
     market_profile: MarketPlayerMarketProfileView
     value: MarketPlayerValueProfileView
     trend: MarketPlayerTrendProfileView
+    attributes: MarketPlayerAttributesView
 
 
 class MarketPlayerHistoryPointView(BaseModel):

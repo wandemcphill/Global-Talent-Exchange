@@ -28,6 +28,8 @@ import 'package:gte_frontend/screens/gte_signup_screen.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/screens/gtex_public_landing_screen_v2.dart';
 import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
+import 'package:gte_frontend/screens/manager_market_screen.dart';
+import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
 import 'package:gte_frontend/screens/match/gtex_match_center_screen_v2.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
 import 'package:gte_frontend/screens/profile/gtex_live_profile_screen.dart';
@@ -520,6 +522,35 @@ List<RouteBase> _buildLegacyAliasRoutes({
       redirect:
           (BuildContext context, GoRouterState state) =>
               const NationalTeamCompetitionsRouteData().toUri().toString(),
+    ),
+    GoRoute(
+      path: '/players/:playerId/profile',
+      pageBuilder:
+          (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: GtexFmPlayerProfileScreen(
+              playerId: state.pathParameters['playerId']?.trim() ?? '',
+              baseUrl: config.apiBaseUrl,
+              backendMode: config.activeShellBackendMode,
+            ),
+          ),
+    ),
+    GoRoute(
+      path: '/managers',
+      redirect: (BuildContext context, GoRouterState state) => '/coaches',
+    ),
+    GoRoute(
+      path: '/coaches',
+      pageBuilder:
+          (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: ManagerMarketScreen(
+              baseUrl: config.apiBaseUrl,
+              accessToken: controller.accessToken ?? '',
+              isAdmin: controller.isAdmin,
+              onOpenAdmin: () => context.go('/admin'),
+            ),
+          ),
     ),
     GoRoute(
       path: '/streamer-tournaments',
@@ -1019,6 +1050,7 @@ Page<void> _landingPage({
       onSignup: () => _openSignup(context, controller),
       onLogin: () => _openLogin(context, controller),
       onCreatorSignup: () => _openCreatorAccess(context, controller),
+      onTraderSignup: () => context.go(gtexTraderSignupRoute),
       onExploreMarket: () => context.go(const GteNavigationRoute.market().path),
     ),
   );

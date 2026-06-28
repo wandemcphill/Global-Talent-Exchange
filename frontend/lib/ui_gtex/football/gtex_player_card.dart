@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../components/gtex_action_button.dart';
@@ -49,6 +47,10 @@ class GtexPlayerCard extends StatelessWidget {
     this.ownerLabel,
     this.contractLabel,
     this.potentialLabel,
+    this.heightLabel,
+    this.footLabel,
+    this.secondaryPositions = const <String>[],
+    this.salaryLabel,
     this.isSelected = false,
     this.onTap,
     this.onAddToShortlist,
@@ -67,6 +69,10 @@ class GtexPlayerCard extends StatelessWidget {
   final String? gsiTrendLabel;
   final String? ratingLabel;
   final String? ageLabel;
+  final String? heightLabel;
+  final String? footLabel;
+  final List<String> secondaryPositions;
+  final String? salaryLabel;
   final String? countryCode;
   final String? rarityLabel;
   final String? marketHeatLabel;
@@ -169,6 +175,10 @@ class GtexPlayerCard extends StatelessWidget {
           ownerLabel: ownerLabel,
           contractLabel: contractLabel,
           potentialLabel: potentialLabel,
+          heightLabel: heightLabel,
+          footLabel: footLabel,
+          secondaryPositions: secondaryPositions,
+          salaryLabel: salaryLabel,
           isSelected: isSelected,
           onTap: onTap,
           onAddToShortlist: onAddToShortlist,
@@ -215,6 +225,10 @@ class _FullPlayerCard extends StatelessWidget {
     this.ownerLabel,
     this.contractLabel,
     this.potentialLabel,
+    this.heightLabel,
+    this.footLabel,
+    this.secondaryPositions = const <String>[],
+    this.salaryLabel,
     this.onTap,
     this.onAddToShortlist,
     this.onBuyNow,
@@ -231,6 +245,10 @@ class _FullPlayerCard extends StatelessWidget {
   final String? gsiTrendLabel;
   final String? ratingLabel;
   final String? ageLabel;
+  final String? heightLabel;
+  final String? footLabel;
+  final List<String> secondaryPositions;
+  final String? salaryLabel;
   final String? countryCode;
   final String? rarityLabel;
   final String? marketHeatLabel;
@@ -357,16 +375,10 @@ class _FullPlayerCard extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: GtexSpacing.sm),
-                              Text(
-                                position.toUpperCase(),
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.labelLarge?.copyWith(
-                                  color: positionAccent,
-                                  fontFamily: 'Barlow',
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.6,
-                                ),
+                              _PositionRail(
+                                primary: position,
+                                secondary: secondaryPositions,
+                                accent: positionAccent,
                               ),
                               Text(
                                 name,
@@ -392,6 +404,11 @@ class _FullPlayerCard extends StatelessWidget {
                                   color: GtexColors.textSecondary,
                                   fontFamily: 'DM Sans',
                                 ),
+                              ),
+                              const SizedBox(height: GtexSpacing.xxs),
+                              _BioRail(
+                                heightLabel: heightLabel,
+                                footLabel: footLabel,
                               ),
                             ],
                           ),
@@ -480,11 +497,114 @@ class _FullPlayerCard extends StatelessWidget {
 
   List<String> get _footerSignals {
     return <String>[
+      if (salaryLabel != null && salaryLabel!.trim().isNotEmpty) salaryLabel!,
       if (ownerLabel != null && ownerLabel!.trim().isNotEmpty) ownerLabel!,
       if (contractLabel != null && contractLabel!.trim().isNotEmpty)
         contractLabel!,
       ...chemistryLinks.where((String item) => item.trim().isNotEmpty).take(2),
     ];
+  }
+}
+
+class _PositionRail extends StatelessWidget {
+  const _PositionRail({
+    required this.primary,
+    required this.secondary,
+    required this.accent,
+  });
+
+  final String primary;
+  final List<String> secondary;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<String> extras = secondary
+        .where((String item) => item.trim().isNotEmpty)
+        .take(3)
+        .toList(growable: false);
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        Text(
+          primary.toUpperCase(),
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: accent,
+            fontFamily: 'Barlow',
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.6,
+          ),
+        ),
+        ...extras.map(
+          (String pos) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),
+              border: Border.all(color: GtexColors.surfaceBorder),
+            ),
+            child: Text(
+              pos.toUpperCase(),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: GtexColors.textSecondary,
+                fontFamily: 'Barlow',
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BioRail extends StatelessWidget {
+  const _BioRail({this.heightLabel, this.footLabel});
+
+  final String? heightLabel;
+  final String? footLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final String height =
+        (heightLabel == null || heightLabel!.trim().isEmpty)
+            ? '—'
+            : heightLabel!.trim();
+    final String foot =
+        (footLabel == null || footLabel!.trim().isEmpty)
+            ? '—'
+            : footLabel!.trim();
+    final TextStyle? labelStyle = Theme.of(context).textTheme.labelSmall
+        ?.copyWith(
+          color: GtexColors.textTertiary,
+          fontFamily: 'Barlow',
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        );
+    final TextStyle? valueStyle = Theme.of(context).textTheme.labelSmall
+        ?.copyWith(
+          color: GtexColors.textSecondary,
+          fontFamily: 'DM Sans',
+          fontWeight: FontWeight.w700,
+        );
+    return Row(
+      children: <Widget>[
+        Text('HEIGHT ', style: labelStyle),
+        Text(height, style: valueStyle),
+        const SizedBox(width: GtexSpacing.sm),
+        Text('FOOT ', style: labelStyle),
+        Flexible(
+          child: Text(
+            foot,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: valueStyle,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -934,13 +1054,6 @@ class _PlayerAvatarFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String initials =
-        name
-            .split(RegExp(r'\s+'))
-            .where((String part) => part.isNotEmpty)
-            .take(2)
-            .map((String part) => part.substring(0, 1).toUpperCase())
-            .join();
     final String code =
         countryCode.trim().isEmpty ? 'GTEX' : countryCode.toUpperCase();
     return Tooltip(
@@ -952,17 +1065,7 @@ class _PlayerAvatarFallback extends StatelessWidget {
         fit: StackFit.expand,
         children: <Widget>[
           CustomPaint(
-            painter:
-                isRegen
-                    ? _GeometricRegenAvatarPainter(accent, name)
-                    : _FootballCardPitchPainter(accent),
-          ),
-          Center(
-            child: Icon(
-              isRegen ? Icons.hub_rounded : Icons.person_rounded,
-              size: 38,
-              color: GtexColors.textPrimary.withValues(alpha: 0.86),
-            ),
+            painter: _FmSilhouettePainter(accent: accent, regenTint: isRegen),
           ),
           Positioned(
             left: 8,
@@ -982,24 +1085,10 @@ class _PlayerAvatarFallback extends StatelessWidget {
             top: 8,
             child: Text(
               code.length > 4 ? code.substring(0, 4) : code,
-              style: TextStyle(
+              style: const TextStyle(
                 color: GtexColors.textSecondary,
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 8,
-            child: Text(
-              initials.isEmpty ? 'GT' : initials,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: GtexColors.textPrimary,
-                fontFamily: 'JetBrains Mono',
-                fontWeight: FontWeight.w900,
               ),
             ),
           ),
@@ -1271,72 +1360,39 @@ class _RatingPill extends StatelessWidget {
   }
 }
 
-class _FootballCardPitchPainter extends CustomPainter {
-  const _FootballCardPitchPainter(this.accent);
+class _FmSilhouettePainter extends CustomPainter {
+  const _FmSilhouettePainter({required this.accent, required this.regenTint});
 
   final Color accent;
+  final bool regenTint;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint line =
-        Paint()
-          ..color = accent.withValues(alpha: 0.18)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1;
-    final Rect pitch = Offset.zero & size;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(pitch.deflate(8), const Radius.circular(999)),
-      line,
+    final double w = size.width;
+    final double h = size.height;
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = GtexColors.surfaceOverlay,
     );
-    canvas.drawLine(
-      Offset(size.width / 2, 8),
-      Offset(size.width / 2, size.height - 8),
-      line,
-    );
-    canvas.drawCircle(
-      Offset(size.width / 2, size.height / 2),
-      size.shortestSide * 0.18,
-      line,
-    );
+
+    const Color base = Color(0xFF8A95A1);
+    final Color silhouette =
+        regenTint ? (Color.lerp(base, accent, 0.35) ?? base) : base;
+    final Paint fill = Paint()
+      ..color = silhouette
+      ..isAntiAlias = true;
+
+    final Path body =
+        Path()
+          ..moveTo(w * 0.10, h)
+          ..cubicTo(w * 0.12, h * 0.70, w * 0.30, h * 0.62, w * 0.50, h * 0.62)
+          ..cubicTo(w * 0.70, h * 0.62, w * 0.88, h * 0.70, w * 0.90, h)
+          ..close();
+    canvas.drawPath(body, fill);
+    canvas.drawCircle(Offset(w * 0.5, h * 0.36), w * 0.19, fill);
   }
 
   @override
-  bool shouldRepaint(covariant _FootballCardPitchPainter oldDelegate) =>
-      oldDelegate.accent != accent;
-}
-
-class _GeometricRegenAvatarPainter extends CustomPainter {
-  const _GeometricRegenAvatarPainter(this.accent, this.seed);
-
-  final Color accent;
-  final String seed;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final int hash = seed.codeUnits.fold<int>(0, (int a, int b) => a + b);
-    final Paint fill = Paint()..color = accent.withValues(alpha: 0.18);
-    final Paint stroke =
-        Paint()
-          ..color = accent.withValues(alpha: 0.42)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2;
-    final Offset center = Offset(size.width / 2, size.height / 2);
-    for (int i = 0; i < 6; i += 1) {
-      final double radius = size.shortestSide * (0.18 + (i * 0.045));
-      final double angle = (hash + i * 47) * math.pi / 180;
-      final Offset offset = Offset(math.cos(angle), math.sin(angle)) * radius;
-      canvas.drawCircle(center + offset, radius * 0.62, fill);
-      canvas.drawCircle(center + offset, radius * 0.62, stroke);
-    }
-    canvas.drawCircle(center, size.shortestSide * 0.36, stroke);
-    canvas.drawLine(
-      Offset(size.width * 0.22, size.height * 0.72),
-      Offset(size.width * 0.78, size.height * 0.28),
-      stroke,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _GeometricRegenAvatarPainter oldDelegate) =>
-      oldDelegate.accent != accent || oldDelegate.seed != seed;
+  bool shouldRepaint(covariant _FmSilhouettePainter oldDelegate) =>
+      oldDelegate.accent != accent || oldDelegate.regenTint != regenTint;
 }

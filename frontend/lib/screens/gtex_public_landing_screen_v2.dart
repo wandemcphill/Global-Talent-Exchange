@@ -8,12 +8,14 @@ class GtexPublicLandingRouteScreenV2 extends StatelessWidget {
     this.onSignup,
     this.onLogin,
     this.onCreatorSignup,
+    this.onTraderSignup,
     this.onExploreMarket,
   });
 
   final VoidCallback? onSignup;
   final VoidCallback? onLogin;
   final VoidCallback? onCreatorSignup;
+  final VoidCallback? onTraderSignup;
   final VoidCallback? onExploreMarket;
 
   @override
@@ -22,6 +24,7 @@ class GtexPublicLandingRouteScreenV2 extends StatelessWidget {
       onSignup: onSignup,
       onLogin: onLogin,
       onCreatorSignup: onCreatorSignup,
+      onTraderSignup: onTraderSignup,
       onExploreMarket: onExploreMarket,
     );
   }

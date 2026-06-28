@@ -741,6 +741,7 @@ class MarketPlayerListItem:
     player_id: str
     player_name: str
     position: str | None
+    secondary_positions: list[str]
     nationality: str | None
     nationality_code: str | None
     current_club_id: str | None
@@ -751,6 +752,8 @@ class MarketPlayerListItem:
     current_division_id: str | None
     current_division_name: str | None
     age: int | None
+    height_cm: int | None
+    preferred_foot: str | None
     market_value_eur: float | None
     current_value_credits: float | None
     movement_pct: float | None
@@ -815,6 +818,7 @@ class MarketPlayerIdentity:
     short_name: str | None
     position: str | None
     normalized_position: str | None
+    secondary_positions: list[str]
     nationality: str | None
     nationality_code: str | None
     age: int | None
@@ -880,6 +884,73 @@ class MarketPlayerDetail:
     market_profile: MarketPlayerMarketProfile
     value: MarketPlayerValueProfile
     trend: MarketPlayerTrendProfile
+    attributes: "MarketPlayerAttributes"
+
+
+@dataclass(frozen=True, slots=True)
+class MarketPlayerAttributes:
+    overall: int
+    potential: int
+    pace: int
+    shooting: int
+    passing: int
+    dribbling: int
+    defending: int
+    physical: int
+
+
+_ATTRIBUTE_ARCHETYPES: dict[str, dict[str, int]] = {
+    "GK": {"pace": 44, "shooting": 18, "passing": 58, "dribbling": 32, "defending": 78, "physical": 72},
+    "DF": {"pace": 62, "shooting": 34, "passing": 58, "dribbling": 50, "defending": 75, "physical": 76},
+    "MF": {"pace": 66, "shooting": 58, "passing": 75, "dribbling": 72, "defending": 60, "physical": 68},
+    "FW": {"pace": 76, "shooting": 75, "passing": 62, "dribbling": 74, "defending": 35, "physical": 68},
+}
+
+_ATTRIBUTE_KEYS: tuple[str, ...] = ("pace", "shooting", "passing", "dribbling", "defending", "physical")
+
+
+def _attribute_bucket(position: str | None) -> str:
+    text = (position or "").strip().lower()
+    if not text:
+        return "MF"
+    if "goal" in text or text in {"gk", "g"}:
+        return "GK"
+    if any(token in text for token in ("back", "def", "cb", "rb", "lb", "wb")):
+        return "DF"
+    if any(token in text for token in ("forward", "strik", "wing", "att", "cf", "st", "fw")):
+        return "FW"
+    return "MF"
+
+
+def derive_player_attributes(player: Player, overall: int | None) -> MarketPlayerAttributes:
+    """Derive the 6 FIFA-style stats from GSI + position archetype, preferring any
+    values stored in dna_profile. Mirrors services/player-ingestion footballAttributes."""
+    base_overall = int(max(1, min(99, overall if overall and overall > 0 else 60)))
+    archetype = _ATTRIBUTE_ARCHETYPES[_attribute_bucket(player.normalized_position or player.position)]
+    dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+    archetype_mean = sum(archetype.values()) / len(archetype)
+    shift = round((base_overall - archetype_mean) * 0.6)
+
+    def _stat(name: str) -> int:
+        stored = dna.get(name)
+        if isinstance(stored, (int, float)) and stored > 0:
+            value = float(stored)
+            if value <= 1:
+                value *= 100
+            return int(max(1, min(99, round(value))))
+        return int(max(1, min(99, archetype[name] + shift)))
+
+    stored_potential = dna.get("potential")
+    if isinstance(stored_potential, (int, float)) and stored_potential > 0:
+        potential = int(max(base_overall, min(99, round(float(stored_potential)))))
+    else:
+        potential = int(min(99, base_overall + 6))
+
+    return MarketPlayerAttributes(
+        overall=base_overall,
+        potential=potential,
+        **{name: _stat(name) for name in _ATTRIBUTE_KEYS},
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1124,6 +1195,7 @@ class MarketPlayerQueryService:
                 short_name=player.short_name,
                 position=player.position,
                 normalized_position=player.normalized_position,
+                secondary_positions=list(player.secondary_positions_json or []),
                 nationality=player.country.name if player.country is not None else None,
                 nationality_code=self._nationality_code(record),
                 age=self._player_age(player.date_of_birth),
@@ -1180,6 +1252,10 @@ class MarketPlayerQueryService:
                 recommendation_priority_delta=real_world_impact.recommendation_priority_delta,
                 market_buzz_score=real_world_impact.market_buzz_score,
                 temporary_form_boost=real_world_impact.gameplay_effect_total,
+            ),
+            attributes=derive_player_attributes(
+                player,
+                self._coerce_int(self._global_scouting_index(record)),
             ),
         )
 
@@ -1542,6 +1618,7 @@ class MarketPlayerQueryService:
             player_id=record.player.id,
             player_name=record.player.full_name,
             position=record.player.normalized_position or record.player.position,
+            secondary_positions=list(record.player.secondary_positions_json or []),
             nationality=record.player.country.name if record.player.country is not None else None,
             nationality_code=self._nationality_code(record),
             current_club_id=self._catalog_club_id(record),
@@ -1552,6 +1629,8 @@ class MarketPlayerQueryService:
             current_division_id=self._current_division_id(record),
             current_division_name=self._current_division_name(record),
             age=self._player_age(record.player.date_of_birth),
+            height_cm=record.player.height_cm,
+            preferred_foot=record.player.preferred_foot,
             market_value_eur=self._real_world_market_value_eur(record),
             current_value_credits=self._current_value_credits(record),
             movement_pct=self._movement_pct(record),

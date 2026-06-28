@@ -430,6 +430,9 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     short_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
     position: Mapped[str | None] = mapped_column(String(64), nullable=True)
     normalized_position: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    secondary_positions_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     height_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     weight_kg: Mapped[int | None] = mapped_column(Integer, nullable=True)

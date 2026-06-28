@@ -10,7 +10,7 @@ import '../../../widgets/gte_state_panel.dart';
 import '../../../widgets/gte_surface_panel.dart';
 import '../../../widgets/gtex_branding.dart';
 import '../../../shared/widgets/gtex_premium_panels.dart';
-import '../../../widgets/football_player_card.dart';
+import '../../../ui_gtex/football/gtex_player_card.dart';
 import '../../../widgets/player_card_avatar.dart';
 import '../../shared/data/gte_feature_support.dart';
 import '../data/player_card_marketplace_models.dart';
@@ -416,37 +416,52 @@ class _PlayerCardMarketplaceScreenState
             );
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: FootballPlayerCard(
-                playerName: player.playerName,
-                avatar: player.avatar,
-                imageUrl: player.imageUrl,
-                tierLabel:
-                    player.cardSupplyTotal > 0
-                        ? '${player.cardSupplyTotal} cards'
-                        : 'Tradable player',
-                position: player.position,
-                clubName: player.currentClubName,
-                nationalityCode: player.nationalityCode,
-                valueLabel:
-                    player.latestValueCredits == null
-                        ? null
-                        : gteFormatCredits(player.latestValueCredits!),
-                attributes: <String>[
-                  if (player.cardSupplyTotal > 0) 'Cards issued',
-                  if (player.currentClubName != null) 'Club profile',
-                ],
-                actions: <Widget>[
-                  if (sale != null)
-                    FilledButton(
-                      onPressed:
-                          !_hasAuth
-                              ? widget.onOpenLogin
-                              : () => _showBuySaleDialog(context, sale),
-                      child: const Text('Buy Now'),
-                    ),
-                  FilledButton.tonal(
-                    onPressed: () => widget.onOpenPlayer?.call(player.playerId),
-                    child: const Text('View Player'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  GtexPlayerCard(
+                    name: player.playerName,
+                    position: player.position ?? '—',
+                    clubName: player.currentClubName ?? '—',
+                    nationality: player.nationalityCode ?? '—',
+                    countryCode: player.nationalityCode,
+                    priceLabel:
+                        player.latestValueCredits == null
+                            ? 'Unpriced'
+                            : gteFormatCredits(player.latestValueCredits!),
+                    imageUrl: player.imageUrl,
+                    ratingLabel: player.gsiScore?.toString(),
+                    gsiTierLabel: player.gsiTierLabel,
+                    rarityLabel:
+                        player.cardSupplyTotal > 0
+                            ? '${player.cardSupplyTotal} cards'
+                            : 'Tradable',
+                    scale: GtexPlayerCardScale.compact,
+                    onTap: () => widget.onOpenPlayer?.call(player.playerId),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: <Widget>[
+                      if (sale != null) ...<Widget>[
+                        Expanded(
+                          child: FilledButton(
+                            onPressed:
+                                !_hasAuth
+                                    ? widget.onOpenLogin
+                                    : () => _showBuySaleDialog(context, sale),
+                            child: const Text('Buy Now'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: FilledButton.tonal(
+                          onPressed:
+                              () => widget.onOpenPlayer?.call(player.playerId),
+                          child: const Text('View Player'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -519,22 +534,33 @@ class _PlayerCardMarketplaceScreenState
           .map(
             (PlayerCardListing listing) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: FootballPlayerCard(
-                playerName: listing.playerName,
-                avatar: listing.avatar,
-                imageUrl: listing.imageUrl,
-                tierLabel: listing.tierName,
-                position: listing.tierCode,
-                valueLabel: gteFormatCredits(listing.pricePerCardCredits),
-                attributes: <String>[
-                  '${listing.quantity} listed',
-                  listing.status.toUpperCase(),
-                ],
-                actions: <Widget>[
-                  FilledButton.tonal(
-                    onPressed:
-                        () => _controller.cancelSaleListing(listing.listingId),
-                    child: const Text('Remove Listing'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  GtexPlayerCard(
+                    name: listing.playerName,
+                    position: listing.tierCode,
+                    clubName: listing.tierName,
+                    nationality: '—',
+                    priceLabel: gteFormatCredits(listing.pricePerCardCredits),
+                    imageUrl: listing.imageUrl,
+                    rarityLabel: '${listing.quantity} listed',
+                    marketHeatLabel: listing.status.toUpperCase(),
+                    scale: GtexPlayerCardScale.compact,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: FilledButton.tonal(
+                          onPressed:
+                              () => _controller.cancelSaleListing(
+                                listing.listingId,
+                              ),
+                          child: const Text('Remove Listing'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

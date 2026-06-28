@@ -225,6 +225,9 @@ class GteMarketPlayerListItem {
     this.currentDivisionId,
     this.currentDivisionName,
     this.age,
+    this.heightCm,
+    this.preferredFoot,
+    this.secondaryPositions = const <String>[],
     this.marketValueEur,
     required this.currentValueCredits,
     required this.movementPct,
@@ -267,6 +270,9 @@ class GteMarketPlayerListItem {
   final String? currentDivisionId;
   final String? currentDivisionName;
   final int? age;
+  final int? heightCm;
+  final String? preferredFoot;
+  final List<String> secondaryPositions;
   final double? marketValueEur;
   final double? currentValueCredits;
   final double? movementPct;
@@ -366,6 +372,16 @@ class GteMarketPlayerListItem {
         'currentDivisionName',
       ]),
       age: _nullableInteger(json, <String>['age']),
+      heightCm: _nullableInteger(json, <String>['height_cm', 'heightCm']),
+      preferredFoot: GteJson.stringOrNull(json, <String>[
+        'preferred_foot',
+        'preferredFoot',
+      ]),
+      secondaryPositions: GteJson.typedList(
+        json,
+        <String>['secondary_positions', 'secondaryPositions'],
+        (Object? entry) => entry?.toString() ?? '',
+      ).where((String entry) => entry.trim().isNotEmpty).toList(growable: false),
       marketValueEur: _nullableNumber(json, <String>[
         'market_value_eur',
         'marketValueEur',
@@ -753,6 +769,7 @@ class GteMarketPlayerIdentity {
     required this.shortName,
     required this.position,
     required this.normalizedPosition,
+    this.secondaryPositions = const <String>[],
     required this.nationality,
     required this.nationalityCode,
     required this.age,
@@ -775,6 +792,7 @@ class GteMarketPlayerIdentity {
   final String? shortName;
   final String? position;
   final String? normalizedPosition;
+  final List<String> secondaryPositions;
   final String? nationality;
   final String? nationalityCode;
   final int age;
@@ -811,6 +829,11 @@ class GteMarketPlayerIdentity {
         'normalized_position',
         'normalizedPosition',
       ]),
+      secondaryPositions: GteJson.typedList(
+        json,
+        <String>['secondary_positions', 'secondaryPositions'],
+        (Object? entry) => entry?.toString() ?? '',
+      ).where((String entry) => entry.trim().isNotEmpty).toList(growable: false),
       nationality: GteJson.stringOrNull(json, <String>['nationality']),
       nationalityCode: GteJson.stringOrNull(json, <String>[
         'nationality_code',
@@ -1137,6 +1160,55 @@ class GteMarketPlayerTrend {
   }
 }
 
+class GteMarketPlayerAttributes {
+  const GteMarketPlayerAttributes({
+    this.overall = 0,
+    this.potential = 0,
+    this.pace = 0,
+    this.shooting = 0,
+    this.passing = 0,
+    this.dribbling = 0,
+    this.defending = 0,
+    this.physical = 0,
+  });
+
+  final int overall;
+  final int potential;
+  final int pace;
+  final int shooting;
+  final int passing;
+  final int dribbling;
+  final int defending;
+  final int physical;
+
+  factory GteMarketPlayerAttributes.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'market player attributes',
+    );
+    int read(String key) => GteJson.integer(json, <String>[key], fallback: 0);
+    return GteMarketPlayerAttributes(
+      overall: read('overall'),
+      potential: read('potential'),
+      pace: read('pace'),
+      shooting: read('shooting'),
+      passing: read('passing'),
+      dribbling: read('dribbling'),
+      defending: read('defending'),
+      physical: read('physical'),
+    );
+  }
+
+  List<MapEntry<String, int>> get sixStats => <MapEntry<String, int>>[
+    MapEntry<String, int>('Pace', pace),
+    MapEntry<String, int>('Shooting', shooting),
+    MapEntry<String, int>('Passing', passing),
+    MapEntry<String, int>('Dribbling', dribbling),
+    MapEntry<String, int>('Defending', defending),
+    MapEntry<String, int>('Physical', physical),
+  ];
+}
+
 class GteMarketPlayerDetailView {
   const GteMarketPlayerDetailView({
     required this.playerId,
@@ -1144,6 +1216,7 @@ class GteMarketPlayerDetailView {
     required this.marketProfile,
     required this.value,
     required this.trend,
+    this.attributes = const GteMarketPlayerAttributes(),
   });
 
   final String playerId;
@@ -1151,6 +1224,7 @@ class GteMarketPlayerDetailView {
   final GteMarketPlayerMarketProfile marketProfile;
   final GteMarketPlayerValue value;
   final GteMarketPlayerTrend trend;
+  final GteMarketPlayerAttributes attributes;
 
   factory GteMarketPlayerDetailView.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -1171,6 +1245,10 @@ class GteMarketPlayerDetailView {
       ),
       trend: GteMarketPlayerTrend.fromJson(
         GteJson.value(json, <String>['trend']) ?? const <String, Object?>{},
+      ),
+      attributes: GteMarketPlayerAttributes.fromJson(
+        GteJson.value(json, <String>['attributes']) ??
+            const <String, Object?>{},
       ),
     );
   }

@@ -1442,6 +1442,7 @@ class RealPlayerIngestionService:
         player.current_competition_id = competition.id if competition is not None else None
         player.position = normalized.primary_position
         player.normalized_position = normalized.normalized_position
+        player.secondary_positions_json = list(normalized.secondary_positions)
         player.date_of_birth = normalized.date_of_birth
         player.height_cm = normalized.identity.height_cm
         player.weight_kg = payload.weight_kg

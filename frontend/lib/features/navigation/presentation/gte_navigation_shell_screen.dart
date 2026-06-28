@@ -30,7 +30,7 @@ import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.da
 import 'package:gte_frontend/features/social/social_screen.dart';
 import 'package:gte_frontend/features/world/widgets/football_world_pulse_widgets.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
-import 'package:gte_frontend/screens/gte_exchange_player_detail_screen.dart';
+import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
 import 'package:gte_frontend/screens/gte_market_players_screen_v2.dart';
 import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
@@ -1368,12 +1368,10 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder:
-            (BuildContext context) => GteExchangePlayerDetailScreen(
-              controller: widget.controller,
+            (BuildContext context) => GtexFmPlayerProfileScreen(
               playerId: playerId,
-              onRequireLogin: () {
-                _openLogin(targetRoute: _route);
-              },
+              baseUrl: widget.apiBaseUrl,
+              backendMode: widget.backendMode,
             ),
       ),
     );

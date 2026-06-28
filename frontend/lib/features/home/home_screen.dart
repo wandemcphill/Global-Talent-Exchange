@@ -95,6 +95,8 @@ class HomeScreen extends ConsumerWidget {
               builder:
                   (BuildContext context, WorldAggregateData data) =>
                       _WorldPulsePanel(world: data),
+              authenticated: authenticated,
+              onSignIn: () => context.push(AppRoutes.profileLogin),
             );
             final Widget centerStack = Column(
               children: <Widget>[
@@ -113,6 +115,8 @@ class HomeScreen extends ConsumerWidget {
                   builder:
                       (BuildContext context, CompetitionHubData data) =>
                           _CompetitionPanel(data: data),
+                  authenticated: authenticated,
+                  onSignIn: () => context.push(AppRoutes.profileLogin),
                 ),
                 const SizedBox(height: 16),
                 _LiveModule<MarketDashboardData>(
@@ -123,6 +127,8 @@ class HomeScreen extends ConsumerWidget {
                   builder:
                       (BuildContext context, MarketDashboardData data) =>
                           _MarketPanel(data: data),
+                  authenticated: authenticated,
+                  onSignIn: () => context.push(AppRoutes.profileLogin),
                 ),
                 const SizedBox(height: 16),
                 _QuickActionsPanel(
@@ -134,11 +140,23 @@ class HomeScreen extends ConsumerWidget {
             );
             final Widget rightStack = Column(
               children: <Widget>[
-                _WalletPanel(marketValue: marketValue),
+                _WalletPanel(
+                  marketValue: marketValue,
+                  authenticated: authenticated,
+                  onSignIn: () => context.push(AppRoutes.profileLogin),
+                ),
                 const SizedBox(height: 16),
-                _RankingPanel(worldValue: worldValue),
+                _RankingPanel(
+                  worldValue: worldValue,
+                  authenticated: authenticated,
+                  onSignIn: () => context.push(AppRoutes.profileLogin),
+                ),
                 const SizedBox(height: 16),
-                _TaskPanel(tasksValue: tasksValue),
+                _TaskPanel(
+                  tasksValue: tasksValue,
+                  authenticated: authenticated,
+                  onSignIn: () => context.push(AppRoutes.profileLogin),
+                ),
               ],
             );
 
@@ -417,7 +435,7 @@ class _TransferTicker extends StatelessWidget {
           const SizedBox(width: 10),
           Text(
             error
-                ? 'BLOCKED'
+                ? 'OFFLINE'
                 : loading
                 ? 'LOADING'
                 : 'TRANSFER TICKER',
@@ -761,6 +779,38 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
+/// Shared empty/error renderer for the home panels.
+///
+/// Guests see an inviting "sign in to unlock" teaser (the feature is gated, not
+/// broken); signed-in members hitting a genuine failure see a soft, retryable
+/// notice — never an alarming red "blocked" wall.
+Widget _memberGateOrError({
+  required bool authenticated,
+  required VoidCallback? onSignIn,
+  required String feature,
+  required String invite,
+  required Color accent,
+  required Object error,
+}) {
+  if (!authenticated) {
+    return GteStatePanel(
+      eyebrow: 'MEMBERS',
+      title: 'Sign in to unlock $feature',
+      message: invite,
+      icon: Icons.lock_open_rounded,
+      accentColor: accent,
+      actionLabel: onSignIn == null ? null : 'Sign in',
+      onAction: onSignIn,
+    );
+  }
+  return GteStatePanel(
+    title: "We couldn't load $feature",
+    message: AppFeedback.messageFor(error),
+    icon: Icons.refresh_rounded,
+    accentColor: _GtexCommandColors.accentAmber,
+  );
+}
+
 class _LiveModule<T> extends StatelessWidget {
   const _LiveModule({
     required this.value,
@@ -768,6 +818,8 @@ class _LiveModule<T> extends StatelessWidget {
     required this.subtitle,
     required this.accent,
     required this.builder,
+    required this.authenticated,
+    this.onSignIn,
   });
 
   final AsyncValue<T> value;
@@ -775,19 +827,27 @@ class _LiveModule<T> extends StatelessWidget {
   final String subtitle;
   final Color accent;
   final Widget Function(BuildContext context, T data) builder;
+  final bool authenticated;
+  final VoidCallback? onSignIn;
 
   @override
   Widget build(BuildContext context) {
+    final _StatusBadge errorBadge =
+        authenticated
+            ? const _StatusBadge(
+              label: 'OFFLINE',
+              color: _GtexCommandColors.accentAmber,
+            )
+            : _StatusBadge(label: 'MEMBERS', color: accent);
     return _CommandPanel(
       title: title,
       subtitle: subtitle,
-      accent: value.hasError ? _GtexCommandColors.accentRed : accent,
+      accent: value.hasError && authenticated
+          ? _GtexCommandColors.accentAmber
+          : accent,
       trailing:
           value.hasError
-              ? const _StatusBadge(
-                label: 'BLOCKED',
-                color: _GtexCommandColors.accentRed,
-              )
+              ? errorBadge
               : value.isLoading
               ? const _StatusBadge(
                 label: 'LOADING',
@@ -802,16 +862,18 @@ class _LiveModule<T> extends StatelessWidget {
         loading:
             () => GteStatePanel(
               title: 'Loading $title',
-              message: 'Waiting for live backend authority.',
+              message: 'Just a moment…',
               isLoading: true,
               accentColor: _GtexCommandColors.accentBlue,
             ),
         error:
-            (Object error, StackTrace stackTrace) => GteStatePanel(
-              title: '$title blocked',
-              message: AppFeedback.messageFor(error),
-              icon: Icons.error_outline_rounded,
-              accentColor: _GtexCommandColors.accentRed,
+            (Object error, StackTrace stackTrace) => _memberGateOrError(
+              authenticated: authenticated,
+              onSignIn: onSignIn,
+              feature: title.toLowerCase(),
+              invite: subtitle,
+              accent: accent,
+              error: error,
             ),
       ),
     );
@@ -1129,9 +1191,15 @@ class _ClubReadinessPanel extends StatelessWidget {
 }
 
 class _WalletPanel extends StatelessWidget {
-  const _WalletPanel({required this.marketValue});
+  const _WalletPanel({
+    required this.marketValue,
+    required this.authenticated,
+    this.onSignIn,
+  });
 
   final AsyncValue<MarketDashboardData> marketValue;
+  final bool authenticated;
+  final VoidCallback? onSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -1186,11 +1254,14 @@ class _WalletPanel extends StatelessWidget {
               accentColor: _GtexCommandColors.accentBlue,
             ),
         error:
-            (Object error, StackTrace stackTrace) => GteStatePanel(
-              title: 'Wallet blocked',
-              message: AppFeedback.messageFor(error),
-              icon: Icons.error_outline_rounded,
-              accentColor: _GtexCommandColors.accentRed,
+            (Object error, StackTrace stackTrace) => _memberGateOrError(
+              authenticated: authenticated,
+              onSignIn: onSignIn,
+              feature: 'your wallet',
+              invite:
+                  'See your GTC and Fan Coin balances, trades, and signings.',
+              accent: _GtexCommandColors.accentPrimary,
+              error: error,
             ),
       ),
     );
@@ -1198,9 +1269,15 @@ class _WalletPanel extends StatelessWidget {
 }
 
 class _RankingPanel extends StatelessWidget {
-  const _RankingPanel({required this.worldValue});
+  const _RankingPanel({
+    required this.worldValue,
+    required this.authenticated,
+    this.onSignIn,
+  });
 
   final AsyncValue<WorldAggregateData> worldValue;
+  final bool authenticated;
+  final VoidCallback? onSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -1258,11 +1335,14 @@ class _RankingPanel extends StatelessWidget {
               accentColor: _GtexCommandColors.accentBlue,
             ),
         error:
-            (Object error, StackTrace stackTrace) => GteStatePanel(
-              title: 'Rankings blocked',
-              message: AppFeedback.messageFor(error),
-              icon: Icons.error_outline_rounded,
-              accentColor: _GtexCommandColors.accentRed,
+            (Object error, StackTrace stackTrace) => _memberGateOrError(
+              authenticated: authenticated,
+              onSignIn: onSignIn,
+              feature: 'the leaderboard',
+              invite:
+                  'Track the hall of fame, rising stars, and club rankings.',
+              accent: _GtexCommandColors.accentViolet,
+              error: error,
             ),
       ),
     );
@@ -1270,9 +1350,15 @@ class _RankingPanel extends StatelessWidget {
 }
 
 class _TaskPanel extends StatelessWidget {
-  const _TaskPanel({required this.tasksValue});
+  const _TaskPanel({
+    required this.tasksValue,
+    required this.authenticated,
+    this.onSignIn,
+  });
 
   final AsyncValue<LiveTasksData> tasksValue;
+  final bool authenticated;
+  final VoidCallback? onSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -1308,11 +1394,13 @@ class _TaskPanel extends StatelessWidget {
               accentColor: _GtexCommandColors.accentBlue,
             ),
         error:
-            (Object error, StackTrace stackTrace) => GteStatePanel(
-              title: 'Command rhythm blocked',
-              message: AppFeedback.messageFor(error),
-              icon: Icons.error_outline_rounded,
-              accentColor: _GtexCommandColors.accentRed,
+            (Object error, StackTrace stackTrace) => _memberGateOrError(
+              authenticated: authenticated,
+              onSignIn: onSignIn,
+              feature: 'daily challenges',
+              invite: 'Play daily challenges and claim rewards every day.',
+              accent: _GtexCommandColors.accentAmber,
+              error: error,
             ),
       ),
     );
@@ -1412,7 +1500,7 @@ class _RouteLaunchButton extends StatelessWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${surface.label} is visible in the route map but remains blocked until its live backend is mounted.',
+                '${surface.label} is coming soon.',
               ),
             ),
           );
@@ -1561,15 +1649,15 @@ _PersonaCopy _copyForPersona(
   switch (persona) {
     case _HomePersona.guest:
       return const _PersonaCopy(
-        title: 'Guest football economy desk',
+        title: 'Welcome to GTEX',
         subtitle:
-            'Browse live scores, clubs, markets, regens, and news. Trading, gifting, renting, and club operations unlock after sign-in.',
-        badge: 'GUEST DESK',
-        headline: 'WATCH THE MARKET BEFORE YOU OPERATE',
+            'Browse live scores, clubs, players, and news for free. Sign in to sign players, play matches, trade, and run your own club.',
+        badge: 'GUEST',
+        headline: 'YOUR CLUB. YOUR PLAYERS. YOUR GAME.',
         body:
-            'Guests can read the football economy. Account-only actions stay blocked until backend identity is present.',
+            'Take a look around. When you\'re ready, create a free account to start building your club.',
         primaryAction:
-            'Create an account to buy players, rent national squads, trade coins, gift reactions, and build a club.',
+            'Create a free account to sign players, rent national squads, trade coins, gift reactions, and build your club.',
         capabilities: <String>[
           'Read clubs',
           'View markets',
@@ -1737,6 +1825,11 @@ List<_QuickActionSpec> _actionsForPersona(_HomePersona persona) {
           location: AppRoutes.transferCenter,
           label: 'Sign players',
           icon: Icons.storefront_rounded,
+        ),
+        _QuickActionSpec(
+          location: AppRoutes.coaches,
+          label: 'Hire coaches',
+          icon: Icons.sports_rounded,
         ),
         _QuickActionSpec(
           location: AppRoutes.matches,
