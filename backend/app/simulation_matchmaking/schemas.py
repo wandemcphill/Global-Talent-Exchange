@@ -143,10 +143,28 @@ class MatchSimulationBridgeView(CommonSchema):
     match_engine_request: MatchSimulationRequest
 
 
+class LiveSessionBridgeView(CommonSchema):
+    """Wiring for a real-time head-to-head live match (the tick-based engine).
+
+    Present only when the pairing is human-vs-human and resolves to LIVE mode:
+    the live session is created up front, each user is bound to a side, and the
+    client opens the live viewer at `session_route` with `your_side`.
+    """
+
+    match_id: str
+    session_route: str
+    your_side: str
+    home_user_id: str
+    away_user_id: str
+    home_name: str
+    away_name: str
+
+
 class QuickGameResponse(CommonSchema):
     match_id: str
     live_match_key: str | None = None
     viewer_route: str | None = None
+    live_session: LiveSessionBridgeView | None = None
     opponent: SimulationGameProfileView
     match_context: MatchContextView
     simulation_bridge: MatchSimulationBridgeView

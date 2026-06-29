@@ -33,6 +33,7 @@ from app.models.fast_match import (
 from app.models.user import User
 from app.models.wallet import LedgerUnit
 from app.services.match_timeline_service import MatchTimelineService
+from app.live_match.service import get_live_match_engine
 from app.simulation_matchmaking.schemas import (
     AvailabilityStatus,
     BotClubProfile,
@@ -41,6 +42,7 @@ from app.simulation_matchmaking.schemas import (
     HostedCompetitionPreviewRequest,
     HostedCompetitionPreviewResponse,
     HostedCompetitionType,
+    LiveSessionBridgeView,
     MatchContextView,
     MatchSimulationBridgeView,
     MarketplaceFeedbackHooksView,
@@ -192,7 +194,22 @@ class SimulationMatchmakingService:
         settlement_status: str | None = None
         result_label: str | None = None
 
-        if actor is not None and session is not None:
+        # Head-to-head against another human in LIVE mode → spin up the real-time
+        # tick engine and let the match actually play out, instead of pre-computing
+        # and settling the result up front. Bot / async pairings keep the one-shot
+        # settle path unchanged. (Settlement-on-finish for live H2H is a follow-up.)
+        live_session_view: LiveSessionBridgeView | None = None
+        is_live_head_to_head = (
+            queue_source == "player" and recommended_mode is SimulationExecutionMode.LIVE
+        )
+        if is_live_head_to_head:
+            live_session_view = self._create_live_session(
+                match_id=match_id,
+                home=requester,
+                away=best.profile,
+            )
+
+        if actor is not None and session is not None and not is_live_head_to_head:
             entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
             quote = EconomyService(session).quote_match_entry(
                 payment_unit=FAST_MATCH_CURRENCY,
@@ -275,6 +292,7 @@ class SimulationMatchmakingService:
             match_id=match_id,
             live_match_key=live_match_key,
             viewer_route=f"/api/match-viewer/{live_match_key}",
+            live_session=live_session_view,
             opponent=best.profile,
             match_context=MatchContextView(
                 type=context_type,
@@ -827,6 +845,39 @@ class SimulationMatchmakingService:
         if entitlement.free_eligibility_exhausted:
             return "free_run_exhausted"
         return "free_run_active"
+
+    def _create_live_session(
+        self,
+        *,
+        match_id: str,
+        home: SimulationGameProfileView,
+        away: SimulationGameProfileView,
+    ) -> LiveSessionBridgeView:
+        """Create the real-time live-match session and bind each user to a side."""
+        engine = get_live_match_engine()
+        engine.create(
+            match_id=match_id,
+            home_id=home.club_id,
+            away_id=away.club_id,
+            home_name=home.club_name,
+            away_name=away.club_name,
+            home_overall=self._clamp_rating(home.squad_strength),
+            away_overall=self._clamp_rating(away.squad_strength),
+            home_formation=self._formation_for_style(home.tactical_profile.style),
+            away_formation=self._formation_for_style(away.tactical_profile.style),
+            home_user_id=home.user_id,
+            away_user_id=away.user_id,
+        )
+        # The requester is always the home side in this pairing.
+        return LiveSessionBridgeView(
+            match_id=match_id,
+            session_route=f"/api/live-match/sessions/{match_id}",
+            your_side="home",
+            home_user_id=home.user_id,
+            away_user_id=away.user_id,
+            home_name=home.club_name,
+            away_name=away.club_name,
+        )
 
     def _build_match_engine_request(
         self,

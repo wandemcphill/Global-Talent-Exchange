@@ -14,8 +14,11 @@ follow-up. The engine logic here is store-agnostic.
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from math import ceil
 from random import Random
 from typing import Any
 
@@ -70,9 +73,21 @@ class LiveMatchSession:
     events: list[dict[str, Any]] = field(default_factory=list)
     halftime_ready: set[str] = field(default_factory=set)
     halftime_deadline: datetime | None = None
+    # Controlling users — only the owner of a side may change its tactics / mark ready.
+    home_user_id: str | None = None
+    away_user_id: str | None = None
 
     def tactics_for(self, side: str) -> LiveTeamTactics:
         return self.home_tactics if side == "home" else self.away_tactics
+
+    def side_for_user(self, user_id: str | None) -> str | None:
+        if user_id is None:
+            return None
+        if self.home_user_id is not None and user_id == self.home_user_id:
+            return "home"
+        if self.away_user_id is not None and user_id == self.away_user_id:
+            return "away"
+        return None
 
 
 class LiveMatchEngine:
@@ -93,6 +108,8 @@ class LiveMatchEngine:
         away_overall: int,
         home_formation: str = "4-3-3",
         away_formation: str = "4-3-3",
+        home_user_id: str | None = None,
+        away_user_id: str | None = None,
     ) -> LiveMatchSession:
         seed = abs(hash((match_id, home_id, away_id))) % (2**31)
         session = LiveMatchSession(
@@ -106,9 +123,30 @@ class LiveMatchEngine:
             rng_seed=seed,
             home_tactics=LiveTeamTactics(formation=home_formation),
             away_tactics=LiveTeamTactics(formation=away_formation),
+            home_user_id=home_user_id,
+            away_user_id=away_user_id,
         )
         self.store.put(session)
+        self.store.mark_active(match_id)
         return session
+
+    def resolve_owned_side(self, *, match_id: str, user_id: str | None, side: str | None = None) -> str:
+        """Map a user to the side they control, enforcing ownership when owners are set.
+
+        If the session has no owners recorded (e.g. local/dev sessions created
+        without users), fall back to the explicit `side` argument.
+        """
+        session = self.get(match_id)
+        if session.home_user_id is None and session.away_user_id is None:
+            if side not in {"home", "away"}:
+                raise LiveMatchError("side must be 'home' or 'away'.")
+            return side
+        owned = session.side_for_user(user_id)
+        if owned is None:
+            raise LiveMatchError("You do not control a team in this match.")
+        if side is not None and side != owned:
+            raise LiveMatchError("You can only change tactics for your own team.")
+        return owned
 
     def get(self, match_id: str) -> LiveMatchSession:
         session = self.store.get(match_id)
@@ -128,7 +166,27 @@ class LiveMatchEngine:
     ) -> LiveMatchSession:
         if side not in {"home", "away"}:
             raise LiveMatchError("side must be 'home' or 'away'.")
-        session = self.get(match_id)
+        with self.store.lock(match_id):
+            session = self.get(match_id)
+            return self._apply_tactics(
+                session,
+                side=side,
+                formation=formation,
+                mentality=mentality,
+                pressing=pressing,
+                tempo=tempo,
+            )
+
+    def _apply_tactics(
+        self,
+        session: LiveMatchSession,
+        *,
+        side: str,
+        formation: str | None,
+        mentality: str | None,
+        pressing: int | None,
+        tempo: int | None,
+    ) -> LiveMatchSession:
         tactics = session.tactics_for(side)
         if formation is not None:
             tactics.formation = formation
@@ -157,43 +215,47 @@ class LiveMatchEngine:
     def mark_halftime_ready(self, *, match_id: str, side: str) -> LiveMatchSession:
         if side not in {"home", "away"}:
             raise LiveMatchError("side must be 'home' or 'away'.")
-        session = self.get(match_id)
-        if session.phase != "half_time":
-            return session
-        session.halftime_ready.add(side)
-        if {"home", "away"}.issubset(session.halftime_ready):
-            self._resume_second_half(session)
-        self.store.put(session)
-        return session
-
-    def tick(self, match_id: str) -> LiveMatchSession:
-        """Advance the match by one minute (driver: a worker on an interval, or poll)."""
-        session = self.get(match_id)
-        if session.phase == "full_time":
-            return session
-        if session.phase == "pre_match":
-            session.phase = "first_half"
-        if session.phase == "half_time":
-            # Auto-resume when the countdown elapses; otherwise wait.
-            if session.halftime_deadline is not None and _utcnow() >= session.halftime_deadline:
+        with self.store.lock(match_id):
+            session = self.get(match_id)
+            if session.phase != "half_time":
+                return session
+            session.halftime_ready.add(side)
+            if {"home", "away"}.issubset(session.halftime_ready):
                 self._resume_second_half(session)
             self.store.put(session)
             return session
 
-        session.minute += 1
-        self._simulate_minute(session)
+    def tick(self, match_id: str) -> LiveMatchSession:
+        """Advance the match by one minute (driver: the server ticker, or a poll)."""
+        with self.store.lock(match_id):
+            session = self.get(match_id)
+            if session.phase == "full_time":
+                return session
+            if session.phase == "pre_match":
+                session.phase = "first_half"
+            if session.phase == "half_time":
+                # Auto-resume when the countdown elapses; otherwise wait.
+                if session.halftime_deadline is not None and _utcnow() >= session.halftime_deadline:
+                    self._resume_second_half(session)
+                self.store.put(session)
+                return session
 
-        if session.minute >= HALFTIME_MINUTE and session.phase == "first_half":
-            session.phase = "half_time"
-            session.halftime_ready.clear()
-            session.halftime_deadline = _utcnow() + timedelta(seconds=HALFTIME_SECONDS)
-            session.events.append({"minute": session.minute, "type": "half_time"})
-        elif session.minute >= FULL_TIME_MINUTE:
-            session.phase = "full_time"
-            session.events.append({"minute": session.minute, "type": "full_time"})
+            session.minute += 1
+            self._simulate_minute(session)
 
-        self.store.put(session)
-        return session
+            if session.minute >= HALFTIME_MINUTE and session.phase == "first_half":
+                session.phase = "half_time"
+                session.halftime_ready.clear()
+                session.halftime_deadline = _utcnow() + timedelta(seconds=HALFTIME_SECONDS)
+                session.events.append({"minute": session.minute, "type": "half_time"})
+            elif session.minute >= FULL_TIME_MINUTE:
+                session.phase = "full_time"
+                session.events.append({"minute": session.minute, "type": "full_time"})
+
+            self.store.put(session)
+            if session.phase == "full_time":
+                self.store.mark_finished(match_id)
+            return session
 
     # ---- internals --------------------------------------------------------
 
@@ -241,11 +303,49 @@ class LiveMatchEngine:
             )
 
 
+def session_public_state(session: LiveMatchSession) -> dict[str, Any]:
+    """Json-safe read-model used by both the REST view and the ticker broadcast."""
+    remaining: int | None = None
+    if session.phase == "half_time" and session.halftime_deadline is not None:
+        delta = (session.halftime_deadline - _utcnow()).total_seconds()
+        remaining = max(0, ceil(delta))
+    return {
+        "match_id": session.match_id,
+        "minute": session.minute,
+        "phase": session.phase,
+        "home_name": session.home_name,
+        "away_name": session.away_name,
+        "home_score": session.home_score,
+        "away_score": session.away_score,
+        "home_tactics": _tactics_state(session.home_tactics),
+        "away_tactics": _tactics_state(session.away_tactics),
+        "halftime_seconds_remaining": remaining,
+        "halftime_ready": sorted(session.halftime_ready),
+        "events": list(session.events[-40:]),
+    }
+
+
+def _tactics_state(tactics: LiveTeamTactics) -> dict[str, Any]:
+    return {
+        "formation": tactics.formation,
+        "mentality": tactics.mentality,
+        "pressing": tactics.pressing,
+        "tempo": tactics.tempo,
+    }
+
+
 class LiveMatchStore:
-    """In-process session store. Swap for a Redis/DB-backed store in production."""
+    """In-process session store. Swap for a Redis/DB-backed store in production.
+
+    The store also owns the *active session registry* (which matches the server
+    ticker should advance) and a per-match lock so concurrent tick/tactics
+    mutations don't clobber each other. The in-process variant runs single-worker,
+    so the lock is a no-op and the registry is a plain set.
+    """
 
     def __init__(self) -> None:
         self._sessions: dict[str, LiveMatchSession] = {}
+        self._active: set[str] = set()
 
     def get(self, match_id: str) -> LiveMatchSession | None:
         return self._sessions.get(match_id)
@@ -253,11 +353,45 @@ class LiveMatchStore:
     def put(self, session: LiveMatchSession) -> None:
         self._sessions[session.match_id] = session
 
+    def mark_active(self, match_id: str) -> None:
+        self._active.add(match_id)
 
-# Module-level singletons (per worker process).
-_STORE = LiveMatchStore()
-_ENGINE = LiveMatchEngine(_STORE)
+    def mark_finished(self, match_id: str) -> None:
+        self._active.discard(match_id)
+
+    def active_ids(self) -> list[str]:
+        return list(self._active)
+
+    @contextlib.contextmanager
+    def lock(self, match_id: str) -> Iterator[None]:
+        yield
+
+
+# Lazily-built per-process singleton, picked from settings (Redis vs in-process).
+_ENGINE: LiveMatchEngine | None = None
+
+
+def build_live_match_store() -> LiveMatchStore:
+    """Pick a Redis-backed shared store when configured, else in-process."""
+    try:
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        redis_url = settings.redis_url if settings.redis_enabled else None
+    except Exception:  # pragma: no cover - settings unavailable (standalone use)
+        redis_url = None
+    if redis_url:
+        try:
+            from app.live_match.store import RedisLiveMatchStore
+
+            return RedisLiveMatchStore(redis_url)
+        except Exception:  # pragma: no cover - redis import/connect failure
+            pass
+    return LiveMatchStore()
 
 
 def get_live_match_engine() -> LiveMatchEngine:
+    global _ENGINE
+    if _ENGINE is None:
+        _ENGINE = LiveMatchEngine(build_live_match_store())
     return _ENGINE

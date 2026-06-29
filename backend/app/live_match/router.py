@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from math import ceil
-
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.dependencies import get_current_user
@@ -10,7 +7,6 @@ from app.live_match.schemas import (
     CreateLiveMatchRequest,
     HalftimeReadyRequest,
     LiveMatchSessionView,
-    LiveTeamTacticsView,
     SetLiveTacticsRequest,
 )
 from app.live_match.service import (
@@ -18,6 +14,7 @@ from app.live_match.service import (
     LiveMatchError,
     LiveMatchSession,
     get_live_match_engine,
+    session_public_state,
 )
 from app.models.user import User
 
@@ -32,34 +29,10 @@ def _raise(exc: LiveMatchError) -> None:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
-def _tactics_view(session: LiveMatchSession, side: str) -> LiveTeamTacticsView:
-    tactics = session.tactics_for(side)
-    return LiveTeamTacticsView(
-        formation=tactics.formation,
-        mentality=tactics.mentality,
-        pressing=tactics.pressing,
-        tempo=tactics.tempo,
-    )
-
-
-def _view(session: LiveMatchSession) -> LiveMatchSessionView:
-    remaining: int | None = None
-    if session.phase == "half_time" and session.halftime_deadline is not None:
-        delta = (session.halftime_deadline - datetime.now(tz=timezone.utc)).total_seconds()
-        remaining = max(0, ceil(delta))
+def _view(session: LiveMatchSession, *, user_id: str | None = None) -> LiveMatchSessionView:
     return LiveMatchSessionView(
-        match_id=session.match_id,
-        minute=session.minute,
-        phase=session.phase,
-        home_name=session.home_name,
-        away_name=session.away_name,
-        home_score=session.home_score,
-        away_score=session.away_score,
-        home_tactics=_tactics_view(session, "home"),
-        away_tactics=_tactics_view(session, "away"),
-        halftime_seconds_remaining=remaining,
-        halftime_ready=sorted(session.halftime_ready),
-        events=list(session.events[-40:]),
+        **session_public_state(session),
+        your_side=session.side_for_user(user_id),
     )
 
 
@@ -79,17 +52,20 @@ def create_session(
         away_overall=payload.away_overall,
         home_formation=payload.home_formation,
         away_formation=payload.away_formation,
+        home_user_id=payload.home_user_id,
+        away_user_id=payload.away_user_id,
     )
-    return _view(session)
+    return _view(session, user_id=current_user.id)
 
 
 @router.get("/sessions/{match_id}", response_model=LiveMatchSessionView)
 def get_session(
     match_id: str,
     engine: LiveMatchEngine = Depends(_engine),
+    current_user: User = Depends(get_current_user),
 ) -> LiveMatchSessionView:
     try:
-        return _view(engine.get(match_id))
+        return _view(engine.get(match_id), user_id=current_user.id)
     except LiveMatchError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -113,15 +89,17 @@ def set_tactics(
     current_user: User = Depends(get_current_user),
 ) -> LiveMatchSessionView:
     try:
+        side = engine.resolve_owned_side(match_id=match_id, user_id=current_user.id, side=payload.side)
         return _view(
             engine.set_tactics(
                 match_id=match_id,
-                side=payload.side,
+                side=side,
                 formation=payload.formation,
                 mentality=payload.mentality,
                 pressing=payload.pressing,
                 tempo=payload.tempo,
-            )
+            ),
+            user_id=current_user.id,
         )
     except LiveMatchError as exc:
         _raise(exc)
@@ -136,7 +114,8 @@ def halftime_ready(
     current_user: User = Depends(get_current_user),
 ) -> LiveMatchSessionView:
     try:
-        return _view(engine.mark_halftime_ready(match_id=match_id, side=payload.side))
+        side = engine.resolve_owned_side(match_id=match_id, user_id=current_user.id, side=payload.side)
+        return _view(engine.mark_halftime_ready(match_id=match_id, side=side), user_id=current_user.id)
     except LiveMatchError as exc:
         _raise(exc)
         raise

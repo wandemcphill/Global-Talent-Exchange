@@ -70,13 +70,28 @@ scoreboard polling read-only state, a **non-disruptive tactics sheet** (formatio
 applies to your side only — never pauses the match or touches the opponent), and a **halftime
 overlay** (countdown + Done + "n/2 ready").
 
-**Remaining increments (needed to run head-to-head in prod):**
-- **Inc 2 — shared store + ticker:** the session store is in-process (per worker). Back it with
-  Redis/DB and add a server-side ticker (a worker advancing active sessions every N seconds +
-  broadcasting via `MatchRoomManager`) so clients only READ. Without this, multi-worker prod
-  won't share sessions and matches won't auto-advance.
-- **Inc 4 — matchmaking integration:** on a head-to-head pairing, create the session, assign each
-  user their `side` (home/away), ownership-gate `tactics`/`halftime` to the controlling user,
-  and route the viewer with `matchId` + `side`.
-- **Inc 5 — replace/branch the one-shot path** for head-to-head live matches (competitions/
-  settlement keep the one-shot engine).
+**Inc 2 — shared store + ticker (DONE, verified):** `app/live_match/store.py` adds
+`RedisLiveMatchStore` — a Redis-backed session store (JSON-serialized sessions, an `active`
+registry set, and a short-lived per-match lock so concurrent tick/tactics writes don't clobber).
+`build_live_match_store()` picks it when `redis_enabled`/`redis_url` are set, else the in-process
+store. `app/live_match/ticker.py` adds `LiveMatchTicker` — a daemon thread (bound via the
+`live_match` module's startup/shutdown hooks) that advances every active session one minute per
+interval and publishes each new state onto the same `match:{id}:events` Redis channel
+`MatchRoomManager` already subscribes to, so spectator websockets fan it out. Leader election (a
+short Redis lease) ensures only one process advances a match; without Redis the lone dev process
+is always leader and clients poll GET. Clients now only READ — they never drive the clock.
+
+**Inc 4 — matchmaking integration (DONE, verified):** `LiveMatchSession` now carries
+`home_user_id`/`away_user_id`; `engine.resolve_owned_side()` maps a user to the side they control
+and the `tactics`/`halftime` endpoints are **ownership-gated** (a user can only change their own
+team; `side` is inferred from the user). The session view returns `your_side`. In
+`simulation_matchmaking`, a **human-vs-human pairing that resolves to LIVE mode** now creates the
+live session up front (binding each user to a side) and returns a `live_session` bridge
+(`match_id` + `session_route` + `your_side`) **instead of** pre-computing and settling the result.
+Bot / async pairings keep the one-shot settle path unchanged.
+
+**Remaining increment:**
+- **Inc 5 — settlement-on-finish for live H2H:** when a live session reaches `full_time`, record
+  the `FastMatchSession`/entitlement settlement from the live result (the one-shot path already
+  does this for bot/async). Competitions keep the one-shot engine. This is the settlement-sensitive
+  piece deliberately deferred from Inc 4.
