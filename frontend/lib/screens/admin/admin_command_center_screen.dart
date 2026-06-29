@@ -1006,6 +1006,422 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     }
   }
 
+  Future<void> _showJackpotAdminDialog() async {
+    final GteAuthedApi? api = widget.authedApi;
+    if (api == null) {
+      AppFeedback.showError(context, 'Admin session is not connected.');
+      return;
+    }
+    Map<String, dynamic> runtime;
+    try {
+      runtime = await api.getMap('/api/admin/jackpot/runtime');
+    } catch (error) {
+      if (mounted) {
+        AppFeedback.showError(context, error);
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        bool busy = false;
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setLocal) {
+            Future<void> refresh() async {
+              final Map<String, dynamic> latest =
+                  await api.getMap('/api/admin/jackpot/runtime');
+              setLocal(() => runtime = latest);
+            }
+
+            Future<void> run(Future<void> Function() action, String success) async {
+              setLocal(() => busy = true);
+              try {
+                await action();
+                await refresh();
+                if (dialogContext.mounted) {
+                  AppFeedback.showSuccess(dialogContext, success);
+                }
+              } catch (error) {
+                if (dialogContext.mounted) {
+                  AppFeedback.showError(dialogContext, error);
+                }
+              } finally {
+                setLocal(() => busy = false);
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('Jackpot control'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _jackpotMetric('Current balance', runtime['balance']),
+                    _jackpotMetric('Round', runtime['round_number']),
+                    _jackpotMetric('Status', runtime['status']),
+                    _jackpotMetric('Participants', runtime['participant_count']),
+                    _jackpotMetric('Trigger threshold', runtime['threshold_amount']),
+                    _jackpotMetric('Probability cap', runtime['probability_cap']),
+                    _jackpotMetric('Contribution rate', runtime['contribution_rate']),
+                    _jackpotMetric('Distribution', runtime['distribution_mode']),
+                    _jackpotMetric('Failsafe (hours)', runtime['failsafe_hours']),
+                    if (busy) ...<Widget>[
+                      const SizedBox(height: 12),
+                      const LinearProgressIndicator(),
+                    ],
+                  ],
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: busy ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Close'),
+                ),
+                TextButton(
+                  onPressed: busy
+                      ? null
+                      : () async {
+                          final ({double balance, String reason})? input =
+                              await _promptJackpotBalance(dialogContext);
+                          if (input == null) {
+                            return;
+                          }
+                          await run(
+                            () => api.request(
+                              'PATCH',
+                              '/api/admin/jackpot/balance',
+                              body: <String, Object?>{
+                                'balance': input.balance,
+                                if (input.reason.isNotEmpty) 'reason': input.reason,
+                              },
+                            ),
+                            'Jackpot balance updated.',
+                          );
+                        },
+                  child: const Text('Set balance'),
+                ),
+                TextButton(
+                  onPressed: busy
+                      ? null
+                      : () async {
+                          final Map<String, Object?>? settings =
+                              await _promptJackpotSettings(dialogContext, runtime);
+                          if (settings == null) {
+                            return;
+                          }
+                          await run(
+                            () => api.post(
+                              '/api/admin/jackpot/runtime',
+                              body: settings,
+                            ),
+                            'Jackpot runtime settings saved.',
+                          );
+                        },
+                  child: const Text('Edit settings'),
+                ),
+                FilledButton(
+                  onPressed: busy
+                      ? null
+                      : () async {
+                          final bool ok = await _confirmDialog(
+                            dialogContext,
+                            title: 'Trigger jackpot round?',
+                            message:
+                                'This settles the current round now and pays out winners. This cannot be undone.',
+                            confirmLabel: 'Trigger now',
+                          );
+                          if (!ok) {
+                            return;
+                          }
+                          await run(
+                            () async {
+                              await api.post('/api/admin/jackpot/trigger');
+                            },
+                            'Jackpot round triggered.',
+                          );
+                        },
+                  child: const Text('Trigger round'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _jackpotMetric(String label, Object? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Text(label, style: const TextStyle(color: Colors.white70)),
+          Text(
+            value?.toString() ?? '—',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _confirmDialog(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) async {
+    final bool? result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(confirmLabel),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
+  Future<({double balance, String reason})?> _promptJackpotBalance(
+    BuildContext context,
+  ) async {
+    final TextEditingController balanceController = TextEditingController();
+    final TextEditingController reasonController = TextEditingController();
+    final ({double balance, String reason})? result =
+        await showDialog<({double balance, String reason})>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Set jackpot balance'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: balanceController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'New balance',
+                  hintText: 'e.g. 25000',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: reasonController,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Reason',
+                  hintText: 'Shown in the audit trail',
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final double? parsed =
+                    double.tryParse(balanceController.text.trim());
+                if (parsed == null || parsed < 0) {
+                  AppFeedback.showError(
+                    dialogContext,
+                    'Enter a valid non-negative balance.',
+                  );
+                  return;
+                }
+                Navigator.of(dialogContext).pop(
+                  (balance: parsed, reason: reasonController.text.trim()),
+                );
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    balanceController.dispose();
+    reasonController.dispose();
+    return result;
+  }
+
+  Future<Map<String, Object?>?> _promptJackpotSettings(
+    BuildContext context,
+    Map<String, dynamic> current,
+  ) async {
+    String text(String key) => (current[key]?.toString() ?? '');
+    final TextEditingController threshold =
+        TextEditingController(text: text('threshold_amount'));
+    final TextEditingController probabilityLimit =
+        TextEditingController(text: text('probability_limit'));
+    final TextEditingController probabilityCap =
+        TextEditingController(text: text('probability_cap'));
+    final TextEditingController failsafeHours =
+        TextEditingController(text: text('failsafe_hours'));
+    final TextEditingController contributionRate =
+        TextEditingController(text: text('contribution_rate'));
+    final TextEditingController topSplit =
+        TextEditingController(text: text('top_split_percent'));
+    final TextEditingController minActivity =
+        TextEditingController(text: text('min_activity_score'));
+    String distribution = (current['distribution_mode']?.toString() ?? 'single_winner');
+    const List<String> modes = <String>[
+      'single_winner',
+      'top_split',
+      'activity_weighted',
+    ];
+    if (!modes.contains(distribution)) {
+      distribution = modes.first;
+    }
+
+    Widget numberField(String label, TextEditingController controller) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(labelText: label),
+        ),
+      );
+    }
+
+    final Map<String, Object?>? result = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setLocal) {
+            return AlertDialog(
+              title: const Text('Edit jackpot runtime'),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      numberField('Trigger threshold', threshold),
+                      numberField('Probability limit', probabilityLimit),
+                      numberField('Probability cap (0-1)', probabilityCap),
+                      numberField('Contribution rate (0-1)', contributionRate),
+                      numberField('Top split percent (0-1)', topSplit),
+                      numberField('Min activity score', minActivity),
+                      numberField('Failsafe hours', failsafeHours),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue: distribution,
+                        decoration:
+                            const InputDecoration(labelText: 'Distribution mode'),
+                        items: modes
+                            .map(
+                              (String mode) => DropdownMenuItem<String>(
+                                value: mode,
+                                child: Text(mode.replaceAll('_', ' ')),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (String? value) {
+                          if (value != null) {
+                            setLocal(() => distribution = value);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final double? thr = double.tryParse(threshold.text.trim());
+                    final double? pLimit =
+                        double.tryParse(probabilityLimit.text.trim());
+                    final double? pCap =
+                        double.tryParse(probabilityCap.text.trim());
+                    final double? cRate =
+                        double.tryParse(contributionRate.text.trim());
+                    final double? split = double.tryParse(topSplit.text.trim());
+                    final double? activity =
+                        double.tryParse(minActivity.text.trim());
+                    final int? hours = int.tryParse(failsafeHours.text.trim());
+                    if (thr == null ||
+                        thr <= 0 ||
+                        pLimit == null ||
+                        pLimit <= 0 ||
+                        pCap == null ||
+                        pCap <= 0 ||
+                        pCap > 1 ||
+                        cRate == null ||
+                        cRate <= 0 ||
+                        cRate > 1 ||
+                        split == null ||
+                        split <= 0 ||
+                        split > 1 ||
+                        activity == null ||
+                        activity <= 0 ||
+                        hours == null ||
+                        hours < 1) {
+                      AppFeedback.showError(
+                        dialogContext,
+                        'Check the values: rates/caps must be between 0 and 1, '
+                        'amounts positive, failsafe at least 1 hour.',
+                      );
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(<String, Object?>{
+                      'threshold_amount': thr,
+                      'probability_limit': pLimit,
+                      'probability_cap': pCap,
+                      'contribution_rate': cRate,
+                      'top_split_percent': split,
+                      'min_activity_score': activity,
+                      'failsafe_hours': hours,
+                      'distribution_mode': distribution,
+                    });
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    for (final TextEditingController controller in <TextEditingController>[
+      threshold,
+      probabilityLimit,
+      probabilityCap,
+      failsafeHours,
+      contributionRate,
+      topSplit,
+      minActivity,
+    ]) {
+      controller.dispose();
+    }
+    return result;
+  }
+
   Future<void> _runDepositAction(
     GteAdminDeposit deposit,
     _DepositAdminAction action,
@@ -1553,9 +1969,14 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 icon: Icons.podcasts_outlined,
                 route: const BroadcastDeskRouteData(),
               ),
+              FilledButton.tonalIcon(
+                onPressed: () => _showJackpotAdminDialog(),
+                icon: const Icon(Icons.celebration_outlined),
+                label: const Text('Jackpot control'),
+              ),
               _buildRouteLauncher(
                 context: context,
-                label: 'GTEX jackpot',
+                label: 'GTEX jackpot (public)',
                 icon: Icons.celebration_outlined,
                 route: const GtexJackpotRouteData(),
               ),

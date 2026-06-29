@@ -40,6 +40,18 @@ used by Transfer Hub + rental/market redesigns. Retire `FootballPlayerCard`, cor
 - Deferred to Track B: potential (POT) + secondary_positions data plumbing.
 - Decision: layout approved via mockups v1/v2.
 
+## Track B — LINEUP/FORMATION — DONE (2026-06-29)
+- [x] **Seam fix**: `team_factory` derives the employed coach's formation (mentality/tactics → 4-3-3 /
+      4-4-2 / 4-5-1 / 5-3-2) and plays it, falling back to 4-3-3 only if the squad can't fill it
+      (never breaks a match). Replaces the hardcoded `formation="4-3-3"`.
+- [x] **Persist owner lineup**: `ClubMatchPlan` model + migration `0105` + `app/lineups` service/router
+      (`GET`/`PUT /clubs/{id}/lineup`, formation validated to sum 10), ownership-gated.
+- [x] **Match consumption**: `team_factory._resolve_lineup` = saved exact XI (if all 11 eligible) →
+      saved formation → coach formation → 4-3-3, each with fallback.
+- [x] **Frontend editor**: `ClubLineupRepository` + `GtexLineupEditorScreen` (formation chips +
+      tap-to-assign slots + auto-fill + save); `/lineup` route; club-owner "Set lineup" quick action.
+- Migration 0105 written, NOT applied. Editor needs device verification (tap-to-assign/save).
+
 ## Track B — Backend gaps (design locked)
 - [ ] **Real-player multi-position** — add `secondary_positions_json` to `ingestion_players`,
       populate on re-ingest, expose on read API.
@@ -147,6 +159,40 @@ used by Transfer Hub + rental/market redesigns. Retire `FootballPlayerCard`, cor
 - ⚠️ Jackpot **"≥3 drops/day"** explicit cadence — only a 6h failsafe found; confirm/add a guaranteed 3×/day schedule.
 - ⚠️ Jackpot **"must be actively playing to win"** — eligibility is contribution + `is_active` based; confirm it requires recent gameplay specifically.
 - Coaches free-to-acquire (also in Track B).
+
+## Admin command-centre audit (2026-06-29)
+Live `/admin` route = `AdminCommandCenterScreen` (v1, 2687 lines) — **backend-wired**
+(authedApi). Surfaces: trade queue, payment rails, withdrawals, deposits, ops readiness,
+launch gates, and launchers → trust-ops, launch-control, matchday-economy, coin-traders,
+notifications. Plus wired admin screens: trust ops, matchday economy, coin-trader, notification
+matrix, create-son (regen).
+
+**Parity gaps found (backend feature → no functional UI):**
+- ⚠️ **Jackpot admin** — backend `app/gtex` has `/admin/jackpot/runtime|balance|trigger`. UI panel
+  (`gtex_jackpot_admin_panel`) + `GtexAdminJackpotScreenV2` exist but are **orphaned demos** (no-arg
+  constructors, static `gtex_admin_command_models` data, 1 ref each = self). Not reachable, not live-wired.
+- ⚠️ **Ban user** — backend `POST /admin/ban-user` (`AdminBanUserRequest`: user_id, reason,
+  deactivate/freeze_wallet/block_trading/block_withdrawals/manual_review). **Zero UI** (only in the
+  generated contract). This is the vision's "admin can ban accounts".
+- ⚠️ **Coin-economy admin** — `GtexAdminCoinEconomyScreenV2` orphaned demo (not live-wired).
+- ⚠️ `GtexAdminCommandCenterScreenV2` (richer, has jackpot/coin/health/mint panels) — orphaned demo;
+  the live admin uses v1 instead.
+- ✅ Credit coins (admin_godmode target_user), buy-back, issue-to-traders, create-son, competitions,
+  trust ops, matchday economy, notifications — all wired.
+
+**Fixes:**
+- [x] **Ban account** — added a launcher + confirm dialog (user_id + reason) in the live v1 admin
+  command centre, hitting `POST /api/admin/ban-user` via the authed API. Analyzes clean. (Vision's
+  "admin can ban accounts" now has a functional UI.)
+- [x] **Jackpot admin** — added a **live "Jackpot control"** action in the v1 admin command centre:
+  loads `GET /api/admin/jackpot/runtime` (balance/round/threshold/probability/contribution/distribution/
+  failsafe), with **Set balance** (`PATCH /api/admin/jackpot/balance`), **Edit settings**
+  (`POST /api/admin/jackpot/runtime`, all levers, validated 0–1 caps), and **Trigger round**
+  (`POST /api/admin/jackpot/trigger`, confirm-gated) — all via the authed API, re-fetching after each
+  action. The old static `gtex_jackpot_admin_panel` demo is bypassed; the public jackpot route remains
+  as "GTEX jackpot (public)". Analyzes clean. Needs device verification.
+- [ ] **Coin-economy admin** — live-wire the demo panel, then route it.
+> The orphaned v2 screens are mockups; routing them as-is would surface fake data — they must be wired to the live endpoints first.
 
 ## Persona journey audit (all ✅ in backend)
 - **Coin trader:** apply/profile (`coin_traders`); buy/sell coins (`user_buys`/`user_sells` + buy/sell rates).
