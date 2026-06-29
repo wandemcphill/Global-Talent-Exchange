@@ -16,6 +16,7 @@ class LiveMatchState {
     this.halftimeSecondsRemaining,
     this.halftimeReady = const <String>[],
     this.events = const <Map<String, dynamic>>[],
+    this.yourSide,
   });
 
   final String matchId;
@@ -30,6 +31,8 @@ class LiveMatchState {
   final int? halftimeSecondsRemaining;
   final List<String> halftimeReady;
   final List<Map<String, dynamic>> events;
+  /// The side ("home"/"away") the requesting user controls, or null for spectators.
+  final String? yourSide;
 
   bool get isHalftime => phase == 'half_time';
   bool get isFullTime => phase == 'full_time';
@@ -60,6 +63,7 @@ class LiveMatchState {
               .map((dynamic e) => Map<String, dynamic>.from(e as Map))
               .toList(growable: false) ??
           const <Map<String, dynamic>>[],
+      yourSide: (json['your_side'] as Object?)?.toString(),
     );
   }
 }
@@ -123,6 +127,15 @@ class LiveMatchRepository {
       body: <String, Object?>{'side': side},
     );
     return LiveMatchState.fromJson(json);
+  }
+
+  /// Settle a finished head-to-head live match for the initiator (idempotent).
+  /// Returns the settlement result (win/loss/draw + entitlement effects).
+  Future<Map<String, dynamic>> settleMatch(String matchId) async {
+    return _request(
+      'POST',
+      '/api/simulation-matchmaking/quick-game/$matchId/settle',
+    );
   }
 
   Future<Map<String, dynamic>> _request(

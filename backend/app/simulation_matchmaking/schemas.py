@@ -160,6 +160,28 @@ class LiveSessionBridgeView(CommonSchema):
     away_name: str
 
 
+class LiveMatchSettlementView(CommonSchema):
+    """Result of settling a finished head-to-head live match for the initiator.
+
+    Mirrors the entitlement/economy effects the one-shot quick-game settles up
+    front, applied once the live match reaches full time. Idempotent per match.
+    """
+
+    match_id: str
+    result: str
+    settlement_status: str
+    home_score: int
+    away_score: int
+    free_matches_remaining: int = Field(default=0, ge=0, le=10)
+    free_matches_used: int = Field(default=0, ge=0, le=10)
+    charge_required_now: bool = False
+    fan_coin_charged: Decimal = Field(default=Decimal("0"), ge=0)
+    entry_currency: str = "credit"
+    entry_currency_label: str = "Fan Coin"
+    entitlement_status: str = "free_run_active"
+    already_settled: bool = False
+
+
 class QuickGameResponse(CommonSchema):
     match_id: str
     live_match_key: str | None = None

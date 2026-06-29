@@ -51,6 +51,8 @@ class _GtexLiveMatchViewerScreenState extends State<GtexLiveMatchViewerScreen> {
   LiveMatchState? _state;
   String? _error;
   bool _halftimeDoneSent = false;
+  bool _settleAttempted = false;
+  Map<String, dynamic>? _settlement;
 
   @override
   void initState() {
@@ -74,9 +76,27 @@ class _GtexLiveMatchViewerScreenState extends State<GtexLiveMatchViewerScreen> {
         _error = null;
         if (state.phase != 'half_time') _halftimeDoneSent = false;
       });
+      if (state.isFullTime) {
+        // Match is over — stop polling and settle once (initiator only).
+        _poll?.cancel();
+        await _settleIfNeeded(state);
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = 'Reconnecting…');
+    }
+  }
+
+  Future<void> _settleIfNeeded(LiveMatchState state) async {
+    // Only the initiator (home side) settles; matches the backend ownership gate.
+    if (_settleAttempted || widget.side != 'home') return;
+    _settleAttempted = true;
+    try {
+      final Map<String, dynamic> result = await _repo.settleMatch(widget.matchId);
+      if (mounted) setState(() => _settlement = result);
+    } catch (_) {
+      // Settlement is idempotent server-side; a transient failure can be retried
+      // on the next viewing. Don't block the full-time UI on it.
     }
   }
 
@@ -255,6 +275,10 @@ class _GtexLiveMatchViewerScreenState extends State<GtexLiveMatchViewerScreen> {
             ],
           ),
         ),
+        if (s.isFullTime && _settlement != null) ...<Widget>[
+          const SizedBox(height: 16),
+          _settlementCard(_settlement!),
+        ],
         const SizedBox(height: 16),
         const Text('TIMELINE', style: TextStyle(color: _textMuted, fontSize: 11, letterSpacing: 1)),
         const SizedBox(height: 8),
@@ -363,6 +387,45 @@ class _GtexLiveMatchViewerScreenState extends State<GtexLiveMatchViewerScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _settlementCard(Map<String, dynamic> settlement) {
+    final String result = (settlement['result'] ?? '').toString();
+    final int remaining = (settlement['free_matches_remaining'] as num?)?.toInt() ?? 0;
+    final bool charged = settlement['charge_required_now'] == true;
+    final Color color = result == 'win'
+        ? _green
+        : result == 'loss'
+            ? const Color(0xFFE3563C)
+            : _amber;
+    final String headline = result == 'win'
+        ? 'You won'
+        : result == 'loss'
+            ? 'You lost'
+            : 'Draw';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(headline,
+              style: TextStyle(
+                  color: color, fontFamily: _condensed, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          const SizedBox(height: 6),
+          Text(
+            charged
+                ? 'Fan Coin entry fee applied. $remaining free matches left.'
+                : 'Free match. $remaining free matches left.',
+            style: const TextStyle(color: _textSecondary, fontSize: 13),
+          ),
+        ],
       ),
     );
   }

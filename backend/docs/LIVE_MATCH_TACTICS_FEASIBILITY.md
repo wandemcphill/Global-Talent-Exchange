@@ -90,8 +90,16 @@ live session up front (binding each user to a side) and returns a `live_session`
 (`match_id` + `session_route` + `your_side`) **instead of** pre-computing and settling the result.
 Bot / async pairings keep the one-shot settle path unchanged.
 
-**Remaining increment:**
-- **Inc 5 — settlement-on-finish for live H2H:** when a live session reaches `full_time`, record
-  the `FastMatchSession`/entitlement settlement from the live result (the one-shot path already
-  does this for bot/async). Competitions keep the one-shot engine. This is the settlement-sensitive
-  piece deliberately deferred from Inc 4.
+**Inc 5 — settlement-on-finish for live H2H (DONE, verified):** `SimulationMatchmakingService.
+settle_live_match()` settles a finished live session for its initiator (home side) from the **live
+final score**, applying the same `FastMatchEntitlement`/Fan Coin economy effects the one-shot path
+settles up front (entry-fee quote, conditional charge via `EconomyService.collect_match_entry`,
+`_settle_fast_match`, and a `FastMatchSession` record). **Idempotent** per match via the
+`FastMatchSession`/settlement unique constraints — repeat calls return the existing result. Exposed
+at `POST /api/simulation-matchmaking/quick-game/{match_id}/settle` (409 if missing/in-progress/not
+the initiator, 402 on insufficient balance). The live-match **viewer** calls it once when it observes
+`full_time` (initiator only), stops polling, and shows a win/loss/draw + entitlement card. Verified:
+win/loss/draw mapping, free vs charged paths, the three guards, and idempotency. Competitions keep
+the one-shot engine.
+
+**All live-match increments (1–5) are now complete.**

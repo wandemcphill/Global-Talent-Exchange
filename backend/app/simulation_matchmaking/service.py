@@ -33,7 +33,11 @@ from app.models.fast_match import (
 from app.models.user import User
 from app.models.wallet import LedgerUnit
 from app.services.match_timeline_service import MatchTimelineService
-from app.live_match.service import get_live_match_engine
+from app.live_match.service import (
+    LiveMatchError,
+    get_live_match_engine,
+    session_public_state,
+)
 from app.simulation_matchmaking.schemas import (
     AvailabilityStatus,
     BotClubProfile,
@@ -42,6 +46,7 @@ from app.simulation_matchmaking.schemas import (
     HostedCompetitionPreviewRequest,
     HostedCompetitionPreviewResponse,
     HostedCompetitionType,
+    LiveMatchSettlementView,
     LiveSessionBridgeView,
     MatchContextView,
     MatchSimulationBridgeView,
@@ -325,6 +330,156 @@ class SimulationMatchmakingService:
             settlement_status=settlement_status,
             result=result_label,
             rules_copy="Play free until you lose or reach 10 matches.",
+        )
+
+    def settle_live_match(
+        self,
+        *,
+        match_id: str,
+        actor: User,
+        session: Session,
+    ) -> LiveMatchSettlementView:
+        """Settle a finished head-to-head live match for its initiator (home side).
+
+        Applies the same entitlement / Fan Coin economy effects the one-shot quick
+        game settles up front — but driven by the *live* final score, once the
+        match reaches full time. Idempotent per match (the FastMatchSession /
+        settlement unique constraints on match_id make repeat calls a no-op).
+        Only the initiator (home user) settles, matching the one-shot model where
+        the requester is the entry-fee owner; the opponent is unaffected here.
+        """
+        engine = get_live_match_engine()
+        try:
+            live = engine.get(match_id)
+        except LiveMatchError as exc:
+            raise MatchmakingUnavailableError("Live match session was not found.") from exc
+        if live.phase != "full_time":
+            raise MatchmakingUnavailableError("Live match is still in progress.")
+        if live.home_user_id is not None and actor.id != live.home_user_id:
+            raise MatchmakingUnavailableError("Only the match initiator can settle this result.")
+
+        entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
+
+        existing = session.scalar(
+            select(FastMatchSession).where(FastMatchSession.match_id == match_id)
+        )
+        if existing is not None:
+            return self._live_settlement_view(
+                live=live,
+                result=existing.result or FastMatchResult.DRAW.value,
+                entitlement=entitlement,
+                charge_required_now=existing.charge_required_now,
+                fan_coin_charged=existing.fan_coin_entry_fee,
+                already_settled=True,
+            )
+
+        if live.home_score > live.away_score:
+            result = FastMatchResult.WIN
+        elif live.away_score > live.home_score:
+            result = FastMatchResult.LOSS
+        else:
+            result = FastMatchResult.DRAW
+
+        live_match_key = f"fast-match:{match_id}"
+        quote = EconomyService(session).quote_match_entry(
+            payment_unit=FAST_MATCH_CURRENCY,
+            service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
+        )
+        fan_coin_entry_fee = quote.gross_amount
+        charge_required_now = self._charge_required(entitlement)
+        wallet_ledger_id: str | None = None
+        if charge_required_now and fan_coin_entry_fee > Decimal("0.0000"):
+            payment = EconomyService(session).collect_match_entry(
+                user=actor,
+                payment_unit=FAST_MATCH_CURRENCY,
+                service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
+                reference=f"fast-match-entry:{match_id}",
+                external_reference=live_match_key,
+                description="Live head-to-head Fan Coin entry fee",
+                actor=actor,
+                idempotency_key=f"fast-match-entry:{actor.id}:{match_id}",
+                metadata={
+                    "fast_match": {
+                        "match_id": match_id,
+                        "live_match_key": live_match_key,
+                        "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
+                        "mode": "live_head_to_head",
+                    }
+                },
+            )
+            wallet_ledger_id = payment.transaction_id
+
+        settlement = self._settle_fast_match(
+            session=session,
+            actor=actor,
+            entitlement=entitlement,
+            match_id=match_id,
+            live_match_key=live_match_key,
+            result=result,
+            was_free=not charge_required_now,
+            fan_coin_charged=fan_coin_entry_fee if charge_required_now else Decimal("0.0000"),
+            wallet_ledger_id=wallet_ledger_id,
+        )
+        session.add(
+            FastMatchSession(
+                user_id=actor.id,
+                match_id=match_id,
+                live_match_key=live_match_key,
+                opponent_user_id=live.away_user_id,
+                home_club_id=live.home_id,
+                away_club_id=live.away_id,
+                entitlement_id=entitlement.id,
+                settlement_id=settlement.id,
+                status=FastMatchSessionStatus.SETTLED,
+                charge_required_now=charge_required_now,
+                entry_currency=FAST_MATCH_CURRENCY.value,
+                fan_coin_entry_fee=fan_coin_entry_fee,
+                wallet_ledger_id=wallet_ledger_id,
+                result=result.value,
+                viewer_payload_json=session_public_state(live),
+                simulation_request_json={},
+                metadata_json={
+                    "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
+                    "queue_source": "player",
+                    "viewer_mode_hint": "live",
+                    "final_score": f"{live.home_score}-{live.away_score}",
+                },
+            )
+        )
+        session.flush()
+        return self._live_settlement_view(
+            live=live,
+            result=result.value,
+            entitlement=entitlement,
+            charge_required_now=charge_required_now,
+            fan_coin_charged=fan_coin_entry_fee if charge_required_now else Decimal("0.0000"),
+            already_settled=False,
+        )
+
+    def _live_settlement_view(
+        self,
+        *,
+        live,
+        result: str,
+        entitlement: FastMatchEntitlement,
+        charge_required_now: bool,
+        fan_coin_charged: Decimal,
+        already_settled: bool,
+    ) -> LiveMatchSettlementView:
+        return LiveMatchSettlementView(
+            match_id=live.match_id,
+            result=result,
+            settlement_status=FastMatchSettlementStatus.SETTLED.value,
+            home_score=live.home_score,
+            away_score=live.away_score,
+            free_matches_remaining=entitlement.free_matches_remaining,
+            free_matches_used=entitlement.free_matches_used,
+            charge_required_now=charge_required_now,
+            fan_coin_charged=fan_coin_charged,
+            entry_currency=FAST_MATCH_CURRENCY.value,
+            entry_currency_label=FAST_MATCH_CURRENCY_LABEL,
+            entitlement_status=self._entitlement_status(entitlement),
+            already_settled=already_settled,
         )
 
     def create_quick_tournament(self, payload: QuickTournamentRequest) -> QuickTournamentResponse:

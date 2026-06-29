@@ -10,6 +10,7 @@ from app.simulation_matchmaking.schemas import (
     FastMatchEntitlementResponse,
     HostedCompetitionPreviewRequest,
     HostedCompetitionPreviewResponse,
+    LiveMatchSettlementView,
     QuickGameRequest,
     QuickGameResponse,
     QuickTournamentRequest,
@@ -76,6 +77,26 @@ def create_quick_game(
     except ProfileNotFoundError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MatchmakingUnavailableError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except InsufficientBalanceError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)) from exc
+
+
+@legacy_router.post("/quick-game/{match_id}/settle", response_model=LiveMatchSettlementView)
+@api_router.post("/quick-game/{match_id}/settle", response_model=LiveMatchSettlementView)
+def settle_live_quick_game(
+    match_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    service: SimulationMatchmakingService = Depends(get_simulation_matchmaking_service),
+) -> LiveMatchSettlementView:
+    try:
+        view = service.settle_live_match(match_id=match_id, actor=current_user, session=session)
+        session.commit()
+        return view
     except MatchmakingUnavailableError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
