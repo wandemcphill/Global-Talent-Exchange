@@ -614,10 +614,16 @@ def _router_prefix_paths(
     router_prefixes: dict[str, str],
     parent_routers: dict[str, list[str]],
 ) -> list[str]:
-    prefixes = [_normalize_path(router_prefixes.get(router_var, ""))]
-    for parent in parent_routers.get(router_var, []):
+    current_prefix = _normalize_path(router_prefixes.get(router_var, ""))
+    parents = parent_routers.get(router_var, [])
+    # A router that is included by parent routers is only reachable through those
+    # parents, so it must NOT contribute its own bare prefix as a standalone path.
+    # Otherwise a prefix-less base router (e.g. creators `_base_router`) leaks a
+    # root-level `/profile`, which then aliases to `/api/profile` and clobbers the
+    # canonical user-profile route.
+    prefixes: list[str] = [] if parents else [current_prefix]
+    for parent in parents:
         parent_prefixes = _router_prefix_paths(parent, router_prefixes, parent_routers)
-        current_prefix = _normalize_path(router_prefixes.get(router_var, ""))
         for parent_prefix in parent_prefixes:
             prefixes.append(_join_paths(parent_prefix, current_prefix))
     return sorted(dict.fromkeys(prefixes))

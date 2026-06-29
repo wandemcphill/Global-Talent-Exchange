@@ -144,7 +144,10 @@ class ProfileRuntimeAdapter {
   Future<GtexProfileRuntimeSnapshot> load() async {
     final List<dynamic> payload = await Future.wait<dynamic>(<Future<dynamic>>[
       _bootstrapRepository.load(),
-      _client.getMap('/api/profile'),
+      // Canonical v2 path: the bare `/api/profile` alias collides with the
+      // creators-profile route in the generated contract, so call the versioned
+      // user-profile endpoint directly to avoid being rewritten to creators.
+      _client.getMap('/api/v2/profile'),
       _client.getMap('/api/profile/security'),
       _client.getList('/api/profile/sessions'),
       _client.getMap('/api/wallet/summary'),

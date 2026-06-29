@@ -36626,6 +36626,158 @@
     },
     {
       "method": "GET",
+      "path": "/api/creators/me/competitions",
+      "effective_paths": [
+        "/api/creators/me/competitions",
+        "/api/v2/creators/me/competitions"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_competitions",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[CreatorCompetitionView]",
+        "returns": "list[CreatorCompetitionView]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/creators/me/finance",
+      "effective_paths": [
+        "/api/creators/me/finance",
+        "/api/v2/creators/me/finance"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_finance",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorFinanceSummaryView",
+        "returns": "CreatorFinanceSummaryView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/creators/me/insights",
+      "effective_paths": [
+        "/api/creators/me/insights",
+        "/api/v2/creators/me/insights"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_insights",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorInsightsView",
+        "returns": "CreatorInsightsView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/creators/me/summary",
+      "effective_paths": [
+        "/api/creators/me/summary",
+        "/api/v2/creators/me/summary"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_summary",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorSummaryView",
+        "returns": "CreatorSummaryView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/creators/profile/me",
+      "effective_paths": [
+        "/api/creators/profile/me",
+        "/api/v2/creators/profile/me"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_profile",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorProfileView",
+        "returns": "CreatorProfileView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/creators/{handle}",
+      "effective_paths": [
+        "/api/creators/{handle}",
+        "/api/v2/creators/{handle}"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_creator_profile",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "handle",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorProfileView",
+        "returns": "CreatorProfileView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
       "path": "/api/players/{player_id}/availability",
       "effective_paths": [
         "/api/players/{player_id}/availability"
@@ -37104,90 +37256,9 @@
     },
     {
       "method": "GET",
-      "path": "/me/competitions",
+      "path": "/creators/me/insights",
       "effective_paths": [
-        "/api/creators/me/competitions",
-        "/api/v2/creators/me/competitions",
-        "/me/competitions"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_competitions",
-      "router_variable": "_base_router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "list[CreatorCompetitionView]",
-        "returns": "list[CreatorCompetitionView]"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/me/finance",
-      "effective_paths": [
-        "/api/creators/me/finance",
-        "/api/v2/creators/me/finance",
-        "/me/finance"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_finance",
-      "router_variable": "_base_router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorFinanceSummaryView",
-        "returns": "CreatorFinanceSummaryView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/me/insights",
-      "effective_paths": [
-        "/api/creators/me/insights",
-        "/api/v2/creators/me/insights",
-        "/me/insights"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_insights",
-      "router_variable": "_base_router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorInsightsView",
-        "returns": "CreatorInsightsView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/me/insights",
-      "effective_paths": [
-        "/creators/me/insights",
-        "/me/insights"
+        "/creators/me/insights"
       ],
       "file": "backend/app/segments/creators/segment_creators.py",
       "handler": "get_my_creator_insights",
@@ -37204,84 +37275,6 @@
       "response_shape": {
         "response_model": "CreatorInsightsView",
         "returns": "CreatorInsightsView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/me/summary",
-      "effective_paths": [
-        "/api/creators/me/summary",
-        "/api/v2/creators/me/summary",
-        "/me/summary"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_summary",
-      "router_variable": "_base_router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorSummaryView",
-        "returns": "CreatorSummaryView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/profile/me",
-      "effective_paths": [
-        "/api/creators/profile/me",
-        "/api/v2/creators/profile/me",
-        "/profile/me"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_profile",
-      "router_variable": "_base_router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorProfileView",
-        "returns": "CreatorProfileView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/{handle}",
-      "effective_paths": [
-        "/api/creators/{handle}",
-        "/api/v2/creators/{handle}",
-        "/{handle}"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_creator_profile",
-      "router_variable": "_base_router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "handle",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorProfileView",
-        "returns": "CreatorProfileView"
       },
       "version": "canonical",
       "domain": "segment"
@@ -37471,6 +37464,32 @@
     },
     {
       "method": "PATCH",
+      "path": "/api/creators/profile",
+      "effective_paths": [
+        "/api/creators/profile",
+        "/api/v2/creators/profile"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "update_creator_profile",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorProfileView",
+        "returns": "CreatorProfileView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "PATCH",
       "path": "/api/referrals/share-codes/{share_code_id}",
       "effective_paths": [
         "/api/referrals/share-codes/{share_code_id}"
@@ -37492,33 +37511,6 @@
       "response_shape": {
         "response_model": "ShareCodeView",
         "returns": "ShareCodeView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "PATCH",
-      "path": "/profile",
-      "effective_paths": [
-        "/api/creators/profile",
-        "/api/v2/creators/profile",
-        "/profile"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "update_creator_profile",
-      "router_variable": "_base_router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "payload",
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorProfileView",
-        "returns": "CreatorProfileView"
       },
       "version": "canonical",
       "domain": "segment"
@@ -38533,6 +38525,59 @@
     },
     {
       "method": "POST",
+      "path": "/api/creators/me/copilot/analyze",
+      "effective_paths": [
+        "/api/creators/me/copilot/analyze",
+        "/api/v2/creators/me/copilot/analyze"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "analyze_my_creator_draft",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "orchestrator",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorCopilotAnalysisView",
+        "returns": "CreatorCopilotAnalysisView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/creators/profile",
+      "effective_paths": [
+        "/api/creators/profile",
+        "/api/v2/creators/profile"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "create_creator_profile",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorProfileView",
+        "returns": "CreatorProfileView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
       "path": "/api/players/{player_id}/contracts",
       "effective_paths": [
         "/api/players/{player_id}/contracts"
@@ -38942,38 +38987,9 @@
     },
     {
       "method": "POST",
-      "path": "/me/copilot/analyze",
+      "path": "/creators/me/copilot/analyze",
       "effective_paths": [
-        "/api/creators/me/copilot/analyze",
-        "/api/v2/creators/me/copilot/analyze",
-        "/me/copilot/analyze"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "analyze_my_creator_draft",
-      "router_variable": "_base_router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "payload",
-          "current_user",
-          "orchestrator",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorCopilotAnalysisView",
-        "returns": "CreatorCopilotAnalysisView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "POST",
-      "path": "/me/copilot/analyze",
-      "effective_paths": [
-        "/creators/me/copilot/analyze",
-        "/me/copilot/analyze"
+        "/creators/me/copilot/analyze"
       ],
       "file": "backend/app/segments/creators/segment_creators.py",
       "handler": "analyze_my_creator_draft",
@@ -38991,33 +39007,6 @@
       "response_shape": {
         "response_model": "CreatorCopilotAnalysisView",
         "returns": "CreatorCopilotAnalysisView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "POST",
-      "path": "/profile",
-      "effective_paths": [
-        "/api/creators/profile",
-        "/api/v2/creators/profile",
-        "/profile"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "create_creator_profile",
-      "router_variable": "_base_router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "payload",
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorProfileView",
-        "returns": "CreatorProfileView"
       },
       "version": "canonical",
       "domain": "segment"

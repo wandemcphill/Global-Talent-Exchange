@@ -10088,12 +10088,6 @@
         "response_model": "list[CreatorCompetitionView]"
       },
       {
-        "method": "GET",
-        "path": "/api/creators/me/competitions",
-        "handler": "get_my_creator_competitions",
-        "response_model": "list[CreatorCompetitionView]"
-      },
-      {
         "method": "POST",
         "path": "/api/creators/me/copilot/analyze",
         "handler": "analyze_my_creator_draft",
@@ -10104,18 +10098,6 @@
         "path": "/api/creators/me/copilot/analyze",
         "handler": "analyze_my_creator_draft",
         "response_model": "CreatorCopilotAnalysisView"
-      },
-      {
-        "method": "POST",
-        "path": "/api/creators/me/copilot/analyze",
-        "handler": "analyze_my_creator_draft",
-        "response_model": "CreatorCopilotAnalysisView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/creators/me/finance",
-        "handler": "get_my_creator_finance",
-        "response_model": "CreatorFinanceSummaryView"
       },
       {
         "method": "GET",
@@ -10143,12 +10125,6 @@
       },
       {
         "method": "GET",
-        "path": "/api/creators/me/insights",
-        "handler": "get_my_creator_insights",
-        "response_model": "CreatorInsightsView"
-      },
-      {
-        "method": "GET",
         "path": "/api/creators/me/summary",
         "handler": "get_my_creator_summary",
         "response_model": "CreatorSummaryView"
@@ -10158,18 +10134,6 @@
         "path": "/api/creators/me/summary",
         "handler": "get_my_creator_summary",
         "response_model": "CreatorSummaryView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/creators/me/summary",
-        "handler": "get_my_creator_summary",
-        "response_model": "CreatorSummaryView"
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/creators/profile",
-        "handler": "update_creator_profile",
-        "response_model": "CreatorProfileView"
       },
       {
         "method": "PATCH",
@@ -10196,12 +10160,6 @@
         "response_model": "CreatorProfileView"
       },
       {
-        "method": "POST",
-        "path": "/api/creators/profile",
-        "handler": "create_creator_profile",
-        "response_model": "CreatorProfileView"
-      },
-      {
         "method": "GET",
         "path": "/api/creators/profile/me",
         "handler": "get_my_creator_profile",
@@ -10211,18 +10169,6 @@
         "method": "GET",
         "path": "/api/creators/profile/me",
         "handler": "get_my_creator_profile",
-        "response_model": "CreatorProfileView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/creators/profile/me",
-        "handler": "get_my_creator_profile",
-        "response_model": "CreatorProfileView"
-      },
-      {
-        "method": "GET",
-        "path": "/api/creators/{handle}",
-        "handler": "get_creator_profile",
         "response_model": "CreatorProfileView"
       },
       {

@@ -15935,10 +15935,7 @@
           "/api/creators/{handle}",
           "/api/v1/creators/{handle}",
           "/api/v1/v2/creators/{handle}",
-          "/api/v1/{handle}",
-          "/api/v2/creators/{handle}",
-          "/api/{handle}",
-          "/{handle}"
+          "/api/v2/creators/{handle}"
         ],
         "handler": "get_creator_profile",
         "source_file": "backend/app/segments/creators/segment_creators.py",
@@ -15949,12 +15946,9 @@
         "canonical_path": "/api/v2/creators/me/competitions",
         "aliases": [
           "/api/creators/me/competitions",
-          "/api/me/competitions",
           "/api/v1/creators/me/competitions",
-          "/api/v1/me/competitions",
           "/api/v1/v2/creators/me/competitions",
-          "/api/v2/creators/me/competitions",
-          "/me/competitions"
+          "/api/v2/creators/me/competitions"
         ],
         "handler": "get_my_creator_competitions",
         "source_file": "backend/app/segments/creators/segment_creators.py",
@@ -15965,12 +15959,9 @@
         "canonical_path": "/api/v2/creators/me/finance",
         "aliases": [
           "/api/creators/me/finance",
-          "/api/me/finance",
           "/api/v1/creators/me/finance",
-          "/api/v1/me/finance",
           "/api/v1/v2/creators/me/finance",
-          "/api/v2/creators/me/finance",
-          "/me/finance"
+          "/api/v2/creators/me/finance"
         ],
         "handler": "get_my_creator_finance",
         "source_file": "backend/app/segments/creators/segment_creators.py",
@@ -15981,12 +15972,9 @@
         "canonical_path": "/api/v2/creators/me/insights",
         "aliases": [
           "/api/creators/me/insights",
-          "/api/me/insights",
           "/api/v1/creators/me/insights",
-          "/api/v1/me/insights",
           "/api/v2/creators/me/insights",
-          "/creators/me/insights",
-          "/me/insights"
+          "/creators/me/insights"
         ],
         "handler": "get_my_creator_insights",
         "source_file": "backend/app/segments/creators/segment_creators.py",
@@ -15997,12 +15985,9 @@
         "canonical_path": "/api/v2/creators/me/summary",
         "aliases": [
           "/api/creators/me/summary",
-          "/api/me/summary",
           "/api/v1/creators/me/summary",
-          "/api/v1/me/summary",
           "/api/v1/v2/creators/me/summary",
-          "/api/v2/creators/me/summary",
-          "/me/summary"
+          "/api/v2/creators/me/summary"
         ],
         "handler": "get_my_creator_summary",
         "source_file": "backend/app/segments/creators/segment_creators.py",
@@ -16013,12 +15998,9 @@
         "canonical_path": "/api/v2/creators/profile/me",
         "aliases": [
           "/api/creators/profile/me",
-          "/api/profile/me",
           "/api/v1/creators/profile/me",
-          "/api/v1/profile/me",
           "/api/v1/v2/creators/profile/me",
-          "/api/v2/creators/profile/me",
-          "/profile/me"
+          "/api/v2/creators/profile/me"
         ],
         "handler": "get_my_creator_profile",
         "source_file": "backend/app/segments/creators/segment_creators.py",
@@ -16341,12 +16323,9 @@
         "canonical_path": "/api/v2/creators/profile",
         "aliases": [
           "/api/creators/profile",
-          "/api/profile",
           "/api/v1/creators/profile",
-          "/api/v1/profile",
           "/api/v1/v2/creators/profile",
-          "/api/v2/creators/profile",
-          "/profile"
+          "/api/v2/creators/profile"
         ],
         "handler": "update_creator_profile",
         "source_file": "backend/app/segments/creators/segment_creators.py",
@@ -16837,12 +16816,9 @@
         "canonical_path": "/api/v2/creators/me/copilot/analyze",
         "aliases": [
           "/api/creators/me/copilot/analyze",
-          "/api/me/copilot/analyze",
           "/api/v1/creators/me/copilot/analyze",
-          "/api/v1/me/copilot/analyze",
           "/api/v2/creators/me/copilot/analyze",
-          "/creators/me/copilot/analyze",
-          "/me/copilot/analyze"
+          "/creators/me/copilot/analyze"
         ],
         "handler": "analyze_my_creator_draft",
         "source_file": "backend/app/segments/creators/segment_creators.py",
@@ -16853,12 +16829,9 @@
         "canonical_path": "/api/v2/creators/profile",
         "aliases": [
           "/api/creators/profile",
-          "/api/profile",
           "/api/v1/creators/profile",
-          "/api/v1/profile",
           "/api/v1/v2/creators/profile",
-          "/api/v2/creators/profile",
-          "/profile"
+          "/api/v2/creators/profile"
         ],
         "handler": "create_creator_profile",
         "source_file": "backend/app/segments/creators/segment_creators.py",
@@ -22746,11 +22719,6 @@
     "/api/matches/{match_id}/unity-access/refresh": "/api/v2/matches/{match_id}/unity-access/refresh",
     "/api/me/clubs/sale-market/listings": "/api/v2/me/clubs/sale-market/listings",
     "/api/me/clubs/sale-market/offers": "/api/v2/me/clubs/sale-market/offers",
-    "/api/me/competitions": "/api/v2/creators/me/competitions",
-    "/api/me/copilot/analyze": "/api/v2/creators/me/copilot/analyze",
-    "/api/me/finance": "/api/v2/creators/me/finance",
-    "/api/me/insights": "/api/v2/creators/me/insights",
-    "/api/me/summary": "/api/v2/creators/me/summary",
     "/api/media": "/api/v2/media",
     "/api/media-engine/creator-league/broadcast-modes": "/api/v2/media-engine/creator-league/broadcast-modes",
     "/api/media-engine/creator-league/clubs/{club_id}/stadium": "/api/v2/media-engine/creator-league/clubs/{club_id}/stadium",
@@ -22939,8 +22907,7 @@
     "/api/portfolios/me": "/api/v2/portfolios/me",
     "/api/predictions": "/api/v2/predictions",
     "/api/predictions/leaderboard": "/api/v2/predictions/leaderboard",
-    "/api/profile": "/api/v2/creators/profile",
-    "/api/profile/me": "/api/v2/creators/profile/me",
+    "/api/profile": "/api/v2/profile",
     "/api/profile/security": "/api/v2/profile/security",
     "/api/profile/sessions": "/api/v2/profile/sessions",
     "/api/pundits/matches/{match_key}": "/api/v2/pundits/matches/{match_key}",
@@ -24073,11 +24040,6 @@
     "/api/v1/matches/{match_id}/unity-access/refresh": "/api/v2/matches/{match_id}/unity-access/refresh",
     "/api/v1/me/clubs/sale-market/listings": "/api/v2/me/clubs/sale-market/listings",
     "/api/v1/me/clubs/sale-market/offers": "/api/v2/me/clubs/sale-market/offers",
-    "/api/v1/me/competitions": "/api/v2/creators/me/competitions",
-    "/api/v1/me/copilot/analyze": "/api/v2/creators/me/copilot/analyze",
-    "/api/v1/me/finance": "/api/v2/creators/me/finance",
-    "/api/v1/me/insights": "/api/v2/creators/me/insights",
-    "/api/v1/me/summary": "/api/v2/creators/me/summary",
     "/api/v1/media": "/api/v2/media",
     "/api/v1/media-engine/creator-league/broadcast-modes": "/api/v2/media-engine/creator-league/broadcast-modes",
     "/api/v1/media-engine/creator-league/clubs/{club_id}/stadium": "/api/v2/media-engine/creator-league/clubs/{club_id}/stadium",
@@ -24266,8 +24228,7 @@
     "/api/v1/portfolios/me": "/api/v2/portfolios/me",
     "/api/v1/predictions": "/api/v2/predictions",
     "/api/v1/predictions/leaderboard": "/api/v2/predictions/leaderboard",
-    "/api/v1/profile": "/api/v2/creators/profile",
-    "/api/v1/profile/me": "/api/v2/creators/profile/me",
+    "/api/v1/profile": "/api/v2/profile",
     "/api/v1/profile/security": "/api/v2/profile/security",
     "/api/v1/profile/sessions": "/api/v2/profile/sessions",
     "/api/v1/pundits/matches/{match_key}": "/api/v2/pundits/matches/{match_key}",
@@ -24643,7 +24604,6 @@
     "/api/v1/ws/matches/{match_id}": "/api/v2/ws/matches/{match_id}",
     "/api/v1/ws/spectate/{match_id}": "/api/v2/ws/spectate/{match_id}",
     "/api/v1/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}",
-    "/api/v1/{handle}": "/api/v2/creators/{handle}",
     "/api/v2/admin/access": "/api/v2/admin/access",
     "/api/v2/admin/access/permissions": "/api/v2/admin/access/permissions",
     "/api/v2/admin/analytics/funnels": "/api/v2/admin/analytics/funnels",
@@ -24901,7 +24861,6 @@
     "/api/world/competitions/{competition_id}/context": "/api/v2/world/competitions/{competition_id}/context",
     "/api/world/cultures": "/api/v2/world/cultures",
     "/api/world/narratives": "/api/v2/world/narratives",
-    "/api/{handle}": "/api/v2/creators/{handle}",
     "/auth/confirm-email": "/api/v2/auth/confirm-email",
     "/auth/login": "/api/v2/auth/login",
     "/auth/logout": "/api/v2/auth/logout",
@@ -25319,11 +25278,6 @@
     "/matches/{match_id}/tickets": "/api/v2/matches/{match_id}/tickets",
     "/matches/{match_id}/unity-access": "/api/v2/matches/{match_id}/unity-access",
     "/matches/{match_id}/unity-access/refresh": "/api/v2/matches/{match_id}/unity-access/refresh",
-    "/me/competitions": "/api/v2/creators/me/competitions",
-    "/me/copilot/analyze": "/api/v2/creators/me/copilot/analyze",
-    "/me/finance": "/api/v2/creators/me/finance",
-    "/me/insights": "/api/v2/creators/me/insights",
-    "/me/summary": "/api/v2/creators/me/summary",
     "/media": "/api/v2/media",
     "/media-engine/creator-league/broadcast-modes": "/api/v2/media-engine/creator-league/broadcast-modes",
     "/media-engine/creator-league/clubs/{club_id}/stadium": "/api/v2/media-engine/creator-league/clubs/{club_id}/stadium",
@@ -25486,8 +25440,6 @@
     "/portfolios/me": "/api/v2/portfolios/me",
     "/predictions": "/api/v2/predictions",
     "/predictions/leaderboard": "/api/v2/predictions/leaderboard",
-    "/profile": "/api/v2/creators/profile",
-    "/profile/me": "/api/v2/creators/profile/me",
     "/rankings/clubs": "/api/v2/rankings/clubs",
     "/rankings/global": "/api/v2/rankings/global",
     "/rankings/players": "/api/v2/rankings/players",
@@ -25664,7 +25616,6 @@
     "/ws/match/{match_id}": "/api/v2/ws/match/{match_id}",
     "/ws/matches/{match_id}": "/api/v2/ws/matches/{match_id}",
     "/ws/spectate/{match_id}": "/api/v2/ws/spectate/{match_id}",
-    "/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}",
-    "/{handle}": "/api/v2/creators/{handle}"
+    "/ws/tournament/{tournament_id}": "/api/v2/ws/tournament/{tournament_id}"
   }
 }

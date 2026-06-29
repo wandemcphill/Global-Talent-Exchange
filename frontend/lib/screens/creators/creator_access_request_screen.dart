@@ -120,14 +120,19 @@ class _CreatorAccessRequestScreenState
       return;
     }
 
+    // Fixture mode (tests/dev) must use the sanctioned fixture factory, which
+    // registers the in-memory fixture state; .standard stays fixture-free so the
+    // strict-live production audit passes.
+    final CreatorApplicationApi api =
+        nextMode == GteBackendMode.fixture
+            ? CreatorApplicationApi.fixture()
+            : CreatorApplicationApi.standard(
+              baseUrl: nextBaseUrl,
+              accessToken: nextAccessToken,
+              mode: nextMode,
+            );
     final CreatorApplicationController controller =
-        CreatorApplicationController(
-          api: CreatorApplicationApi.standard(
-            baseUrl: nextBaseUrl,
-            accessToken: nextAccessToken,
-            mode: nextMode,
-          ),
-        );
+        CreatorApplicationController(api: api);
     controller.addListener(_handleApplicationControllerChanged);
     _applicationController = controller;
     controller.load();
