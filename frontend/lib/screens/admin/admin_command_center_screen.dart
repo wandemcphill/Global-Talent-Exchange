@@ -1061,15 +1061,15 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _jackpotMetric('Current balance', runtime['balance']),
-                    _jackpotMetric('Round', runtime['round_number']),
-                    _jackpotMetric('Status', runtime['status']),
-                    _jackpotMetric('Participants', runtime['participant_count']),
-                    _jackpotMetric('Trigger threshold', runtime['threshold_amount']),
-                    _jackpotMetric('Probability cap', runtime['probability_cap']),
-                    _jackpotMetric('Contribution rate', runtime['contribution_rate']),
-                    _jackpotMetric('Distribution', runtime['distribution_mode']),
-                    _jackpotMetric('Failsafe (hours)', runtime['failsafe_hours']),
+                    _metricRow('Current balance', runtime['balance']),
+                    _metricRow('Round', runtime['round_number']),
+                    _metricRow('Status', runtime['status']),
+                    _metricRow('Participants', runtime['participant_count']),
+                    _metricRow('Trigger threshold', runtime['threshold_amount']),
+                    _metricRow('Probability cap', runtime['probability_cap']),
+                    _metricRow('Contribution rate', runtime['contribution_rate']),
+                    _metricRow('Distribution', runtime['distribution_mode']),
+                    _metricRow('Failsafe (hours)', runtime['failsafe_hours']),
                     if (busy) ...<Widget>[
                       const SizedBox(height: 12),
                       const LinearProgressIndicator(),
@@ -1155,7 +1155,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     );
   }
 
-  Widget _jackpotMetric(String label, Object? value) {
+  Widget _metricRow(String label, Object? value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
@@ -1416,6 +1416,316 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       contributionRate,
       topSplit,
       minActivity,
+    ]) {
+      controller.dispose();
+    }
+    return result;
+  }
+
+  Future<void> _showCoinEconomyDialog() async {
+    final GteAuthedApi? api = widget.authedApi;
+    if (api == null) {
+      AppFeedback.showError(context, 'Admin session is not connected.');
+      return;
+    }
+    Map<String, dynamic> governor;
+    try {
+      governor = await api.getMap('/admin/economy/governor');
+    } catch (error) {
+      if (mounted) {
+        AppFeedback.showError(context, error);
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        bool busy = false;
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setLocal) {
+            Future<void> refresh() async {
+              final Map<String, dynamic> latest =
+                  await api.getMap('/admin/economy/governor');
+              setLocal(() => governor = latest);
+            }
+
+            Future<void> run(Future<void> Function() action, String success) async {
+              setLocal(() => busy = true);
+              try {
+                await action();
+                await refresh();
+                if (dialogContext.mounted) {
+                  AppFeedback.showSuccess(dialogContext, success);
+                }
+              } catch (error) {
+                if (dialogContext.mounted) {
+                  AppFeedback.showError(dialogContext, error);
+                }
+              } finally {
+                setLocal(() => busy = false);
+              }
+            }
+
+            final Map<String, dynamic> metrics = (governor['metrics'] is Map)
+                ? Map<String, dynamic>.from(governor['metrics'] as Map)
+                : <String, dynamic>{};
+            final List<dynamic> actions =
+                (governor['recommended_actions'] is List)
+                    ? List<dynamic>.from(governor['recommended_actions'] as List)
+                    : <dynamic>[];
+
+            return AlertDialog(
+              title: const Text('Coin economy governor'),
+              content: SizedBox(
+                width: 440,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _metricRow('Mode', governor['mode']),
+                      _metricRow('GTEX supply', metrics['gtex_supply']),
+                      _metricRow('Fan-coin supply', metrics['fan_supply']),
+                      _metricRow('Treasury balance', metrics['treasury_balance']),
+                      _metricRow('Daily mint', metrics['daily_mint']),
+                      _metricRow('Daily burn', metrics['daily_burn']),
+                      _metricRow('Inflation rate', metrics['inflation_rate']),
+                      const Divider(height: 22),
+                      _metricRow('Tournament entry ×',
+                          governor['tournament_entry_multiplier']),
+                      _metricRow('Match-view cost ×',
+                          governor['match_view_cost_multiplier']),
+                      _metricRow('Reward payout ×',
+                          governor['reward_payout_multiplier']),
+                      _metricRow('Free prize ×', governor['free_prize_multiplier']),
+                      _metricRow('Agent activity ×',
+                          governor['agent_activity_multiplier']),
+                      _metricRow('Price-change limit',
+                          governor['price_change_limit']),
+                      _metricRow('Conversion bonus (bps)',
+                          governor['conversion_bonus_bps']),
+                      _metricRow('Burn bonus (bps)', governor['burn_bonus_bps']),
+                      if (actions.isNotEmpty) ...<Widget>[
+                        const Divider(height: 22),
+                        const Text(
+                          'Recommended actions',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 6),
+                        ...actions.map((dynamic action) {
+                          final Map<String, dynamic> entry = (action is Map)
+                              ? Map<String, dynamic>.from(action)
+                              : <String, dynamic>{};
+                          return _metricRow(
+                            entry['type']?.toString() ?? 'action',
+                            entry['value'],
+                          );
+                        }),
+                      ],
+                      if (busy) ...<Widget>[
+                        const SizedBox(height: 12),
+                        const LinearProgressIndicator(),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: busy ? null : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Close'),
+                ),
+                TextButton(
+                  onPressed: busy
+                      ? null
+                      : () => run(
+                            () async {
+                              await api.post('/admin/economy/governor/evaluate');
+                            },
+                            'Governor re-evaluated.',
+                          ),
+                  child: const Text('Re-evaluate'),
+                ),
+                FilledButton(
+                  onPressed: busy
+                      ? null
+                      : () async {
+                          final Map<String, Object?>? policy =
+                              await _promptEconomyPolicy(dialogContext, governor);
+                          if (policy == null) {
+                            return;
+                          }
+                          await run(
+                            () => api.post(
+                              '/admin/economy/governor/policy',
+                              body: policy,
+                            ),
+                            'Economy policy saved.',
+                          );
+                        },
+                  child: const Text('Edit policy'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<Map<String, Object?>?> _promptEconomyPolicy(
+    BuildContext context,
+    Map<String, dynamic> current,
+  ) async {
+    String text(String key) => (current[key]?.toString() ?? '');
+    final TextEditingController tournament =
+        TextEditingController(text: text('tournament_entry_multiplier'));
+    final TextEditingController matchView =
+        TextEditingController(text: text('match_view_cost_multiplier'));
+    final TextEditingController reward =
+        TextEditingController(text: text('reward_payout_multiplier'));
+    final TextEditingController freePrize =
+        TextEditingController(text: text('free_prize_multiplier'));
+    final TextEditingController agent =
+        TextEditingController(text: text('agent_activity_multiplier'));
+    final TextEditingController priceLimit =
+        TextEditingController(text: text('price_change_limit'));
+    final TextEditingController conversionBps =
+        TextEditingController(text: text('conversion_bonus_bps'));
+    final TextEditingController burnBps =
+        TextEditingController(text: text('burn_bonus_bps'));
+    String mode = (current['mode']?.toString() ?? 'auto');
+    const List<String> modes = <String>['auto', 'manual'];
+    if (!modes.contains(mode)) {
+      mode = 'auto';
+    }
+
+    Widget numberField(String label, TextEditingController controller) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(labelText: label),
+        ),
+      );
+    }
+
+    final Map<String, Object?>? result = await showDialog<Map<String, Object?>>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, void Function(void Function()) setLocal) {
+            return AlertDialog(
+              title: const Text('Edit economy policy'),
+              content: SizedBox(
+                width: 440,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      DropdownButtonFormField<String>(
+                        initialValue: mode,
+                        decoration: const InputDecoration(labelText: 'Mode'),
+                        items: modes
+                            .map(
+                              (String value) => DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (String? value) {
+                          if (value != null) {
+                            setLocal(() => mode = value);
+                          }
+                        },
+                      ),
+                      numberField('Tournament entry ×', tournament),
+                      numberField('Match-view cost ×', matchView),
+                      numberField('Reward payout ×', reward),
+                      numberField('Free prize ×', freePrize),
+                      numberField('Agent activity ×', agent),
+                      numberField('Price-change limit (0-1)', priceLimit),
+                      numberField('Conversion bonus (bps, 0-5000)', conversionBps),
+                      numberField('Burn bonus (bps, 0-5000)', burnBps),
+                    ],
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final double? tEntry = double.tryParse(tournament.text.trim());
+                    final double? mView = double.tryParse(matchView.text.trim());
+                    final double? rPay = double.tryParse(reward.text.trim());
+                    final double? fPrize = double.tryParse(freePrize.text.trim());
+                    final double? aAct = double.tryParse(agent.text.trim());
+                    final double? pLimit = double.tryParse(priceLimit.text.trim());
+                    final int? cBps = int.tryParse(conversionBps.text.trim());
+                    final int? bBps = int.tryParse(burnBps.text.trim());
+                    if (tEntry == null ||
+                        tEntry < 0 ||
+                        mView == null ||
+                        mView < 0 ||
+                        rPay == null ||
+                        rPay < 0 ||
+                        fPrize == null ||
+                        fPrize < 0 ||
+                        aAct == null ||
+                        aAct < 0 ||
+                        pLimit == null ||
+                        pLimit < 0 ||
+                        pLimit > 1 ||
+                        cBps == null ||
+                        cBps < 0 ||
+                        cBps > 5000 ||
+                        bBps == null ||
+                        bBps < 0 ||
+                        bBps > 5000) {
+                      AppFeedback.showError(
+                        dialogContext,
+                        'Check values: multipliers ≥ 0, price limit 0–1, '
+                        'bonus bps 0–5000.',
+                      );
+                      return;
+                    }
+                    Navigator.of(dialogContext).pop(<String, Object?>{
+                      'mode': mode,
+                      'tournament_entry_multiplier': tEntry,
+                      'match_view_cost_multiplier': mView,
+                      'reward_payout_multiplier': rPay,
+                      'free_prize_multiplier': fPrize,
+                      'agent_activity_multiplier': aAct,
+                      'price_change_limit': pLimit,
+                      'conversion_bonus_bps': cBps,
+                      'burn_bonus_bps': bBps,
+                    });
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    for (final TextEditingController controller in <TextEditingController>[
+      tournament,
+      matchView,
+      reward,
+      freePrize,
+      agent,
+      priceLimit,
+      conversionBps,
+      burnBps,
     ]) {
       controller.dispose();
     }
@@ -1973,6 +2283,11 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 onPressed: () => _showJackpotAdminDialog(),
                 icon: const Icon(Icons.celebration_outlined),
                 label: const Text('Jackpot control'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _showCoinEconomyDialog(),
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text('Coin economy'),
               ),
               _buildRouteLauncher(
                 context: context,

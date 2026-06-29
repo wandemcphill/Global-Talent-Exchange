@@ -191,7 +191,13 @@ matrix, create-son (regen).
   (`POST /api/admin/jackpot/trigger`, confirm-gated) — all via the authed API, re-fetching after each
   action. The old static `gtex_jackpot_admin_panel` demo is bypassed; the public jackpot route remains
   as "GTEX jackpot (public)". Analyzes clean. Needs device verification.
-- [ ] **Coin-economy admin** — live-wire the demo panel, then route it.
+- [x] **Coin-economy admin** — added a live **"Coin economy"** action in the v1 command centre
+  wired to the economy governor: loads `GET /admin/economy/governor` (mode, GTEX/fan supply,
+  treasury balance, daily mint/burn, inflation, all policy multipliers + bonus bps, recommended
+  actions), with **Edit policy** (`POST /admin/economy/governor/policy`, mode + multipliers +
+  price-limit 0–1 + bonus bps 0–5000, validated) and **Re-evaluate**
+  (`POST /admin/economy/governor/evaluate`). All via the authed API, re-fetching after each action.
+  The static `gtex_coin_economy_panel` demo is bypassed. Analyzes clean. Needs device verification.
 > The orphaned v2 screens are mockups; routing them as-is would surface fake data — they must be wired to the live endpoints first.
 
 ## Persona journey audit (all ✅ in backend)
