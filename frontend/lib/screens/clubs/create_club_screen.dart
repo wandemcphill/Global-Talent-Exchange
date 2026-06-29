@@ -432,7 +432,7 @@ class _ClubLaunchBriefing extends StatelessWidget {
         ),
         const SizedBox(height: GtexSpacing.md),
         Text(
-          'The form still calls the live club creation API. The redesign simply puts that serious operation inside the same GTEX command-center language as the market and owner dashboard.',
+          'Name your club, pick your colours, and you\'re ready to sign players, set tactics, and compete.',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: GtexColors.textSecondary,
             height: 1.45,
