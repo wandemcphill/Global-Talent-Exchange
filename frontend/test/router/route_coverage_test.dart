@@ -32,6 +32,8 @@ import 'package:gte_frontend/screens/gte_market_players_screen_v2.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_notification_matrix_screen.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_trust_ops_screen_v2.dart';
 import 'package:gte_frontend/screens/gtex_public_landing_screen_v2.dart';
+import 'package:gte_frontend/screens/gte_login_screen.dart';
+import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
 import 'package:gte_frontend/screens/profile/gtex_live_profile_screen.dart';
 import 'package:gte_frontend/screens/support/gte_support_dispute_screens.dart';
@@ -169,6 +171,70 @@ void main() {
 
       expect(find.byType(GtexPublicLandingRouteScreenV2), findsOneWidget);
       expect(find.text('GTEX'), findsWidgets);
+    });
+
+    testWidgets('landing Sign in navigates to the login screen', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 2600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+
+      await tester.pumpWidget(
+        GteFrontendApp(
+          controller: controller,
+          config: const GteAppConfig(
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+          ),
+          initialPath: '/',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Sign in'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(GteLoginScreen), findsOneWidget);
+    });
+
+    testWidgets('landing Create free account navigates to user signup', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 2600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+
+      await tester.pumpWidget(
+        GteFrontendApp(
+          controller: controller,
+          config: const GteAppConfig(
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+          ),
+          initialPath: '/',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Create free account'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(GtexUserSignupScreen), findsOneWidget);
     });
 
     testWidgets('top-level legacy URLs resolve through the premium shell', (

@@ -1,4 +1,5 @@
 const String gtexAccountSelectRoute = '/account/select';
+const String gtexLoginRoute = '/auth/login';
 const String gtexUserSignupRoute = '/auth/signup/user';
 const String gtexCreatorSignupRoute = '/auth/signup/creator';
 const String gtexTraderSignupRoute = '/auth/signup/trader';

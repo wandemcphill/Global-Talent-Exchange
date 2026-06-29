@@ -19,12 +19,10 @@ import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
 import 'package:gte_frontend/features/regens/regens_screen_v2.dart';
-import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_notification_matrix_screen.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_trust_ops_screen_v2.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
-import 'package:gte_frontend/screens/gte_signup_screen.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/screens/gtex_public_landing_screen_v2.dart';
 import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
@@ -97,6 +95,14 @@ GoRouter buildGtexAppRouter({
                 const NoTransitionPage<void>(
                   child: GtexAccountSelectorScreen(),
                 ),
+      ),
+      GoRoute(
+        path: gtexLoginRoute,
+        pageBuilder:
+            (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
+              key: state.pageKey,
+              child: GteLoginScreen(controller: controller),
+            ),
       ),
       GoRoute(
         path: gtexLegacyAccountSelectRoute,
@@ -508,7 +514,7 @@ List<RouteBase> _buildLegacyAliasRoutes({
                     listen: false,
                   ).read(gtexRuntimeProvider).repositories.nationalTeams,
               isAuthenticated: controller.isAuthenticated,
-              onOpenLogin: () => _openLogin(context, controller),
+              onOpenLogin: () => GoRouter.of(context).push(gtexLoginRoute),
             ),
           ),
     ),
@@ -1073,50 +1079,20 @@ Page<void> _landingPage({
   required GoRouterState state,
   required GteExchangeController controller,
 }) {
+  // Navigate through go_router routes (not imperative Navigator.push of legacy
+  // screens, which never surfaced from the landing). Capture the stable router
+  // instance so the callbacks don't depend on a possibly-rebuilt page context.
+  final GoRouter router = GoRouter.of(context);
   return NoTransitionPage<void>(
     key: state.pageKey,
     child: GtexPublicLandingRouteScreenV2(
-      onSignup: () => _openSignup(context, controller),
-      onLogin: () => _openLogin(context, controller),
-      onCreatorSignup: () => _openCreatorAccess(context, controller),
-      onTraderSignup: () => context.go(gtexTraderSignupRoute),
-      onExploreMarket: () => context.go(const GteNavigationRoute.market().path),
+      onSignup: () => router.push(gtexUserSignupRoute),
+      onLogin: () => router.push(gtexLoginRoute),
+      onCreatorSignup: () => router.push(gtexCreatorSignupRoute),
+      onTraderSignup: () => router.push(gtexTraderSignupRoute),
+      onExploreMarket: () => router.go(const GteNavigationRoute.market().path),
     ),
   );
 }
 
-Future<void> _openLogin(
-  BuildContext context,
-  GteExchangeController controller,
-) async {
-  await Navigator.of(context).push<bool>(
-    MaterialPageRoute<bool>(
-      builder: (BuildContext context) => GteLoginScreen(controller: controller),
-    ),
-  );
-}
 
-Future<void> _openSignup(
-  BuildContext context,
-  GteExchangeController controller,
-) async {
-  await Navigator.of(context).push<bool>(
-    MaterialPageRoute<bool>(
-      builder:
-          (BuildContext context) => GteSignupScreen(controller: controller),
-    ),
-  );
-}
-
-Future<void> _openCreatorAccess(
-  BuildContext context,
-  GteExchangeController controller,
-) async {
-  await Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(
-      builder:
-          (BuildContext context) =>
-              CreatorAccessRequestScreen(exchangeController: controller),
-    ),
-  );
-}
