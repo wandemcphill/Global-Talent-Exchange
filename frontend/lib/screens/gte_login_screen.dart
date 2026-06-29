@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../data/gte_models.dart';
 import '../providers/gte_exchange_controller.dart';
+import '../router/gtex_auth_routes.dart';
 import '../ui_gtex/components/gtex_button.dart';
 import '../ui_gtex/components/gtex_panel.dart';
 import '../ui_gtex/components/gtex_status_chip.dart';
 import '../ui_gtex/layout/gtex_focus_flow_scaffold.dart';
 import '../ui_gtex/theme/gtex_colors.dart';
 import '../ui_gtex/theme/gtex_spacing.dart';
-import 'creators/creator_access_request_screen.dart';
-import 'gte_signup_screen.dart';
 import 'wallet/gte_policy_compliance_center_screen.dart';
 
 class GteLoginScreen extends StatefulWidget {
@@ -326,32 +326,14 @@ class _LoginForm extends StatelessWidget {
             onPressed:
                 controller.isSigningIn
                     ? null
-                    : () async {
-                      await Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          builder:
-                              (BuildContext context) =>
-                                  GteSignupScreen(controller: controller),
-                        ),
-                      );
-                    },
+                    : () => context.push(gtexUserSignupRoute),
           ),
           const SizedBox(height: GtexSpacing.xs),
           TextButton.icon(
             onPressed:
                 controller.isSigningIn
                     ? null
-                    : () async {
-                      await Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          builder:
-                              (BuildContext context) =>
-                                  CreatorAccessRequestScreen(
-                                    exchangeController: controller,
-                                  ),
-                        ),
-                      );
-                    },
+                    : () => context.push(gtexCreatorSignupRoute),
             icon: const Icon(Icons.video_camera_front_outlined),
             label: const Text('Apply for creator access'),
           ),
