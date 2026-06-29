@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../ui_gtex/ui_gtex.dart';
 import '../data/gtex_trust_ops_demo_repository.dart';
@@ -84,7 +85,7 @@ class _GtexKycDisputesScreenState extends State<GtexKycDisputesScreen> {
                     onSelectDispute:
                         (String id) => setState(() => _selectedDisputeId = id),
                     onCreateDispute:
-                        widget.onCreateDispute ?? _showCreateDisputeUnavailable,
+                        widget.onCreateDispute ?? _openDisputesRoute,
                   )
                   : GtexKycPanel(
                     kycCases: state.kycCases.take(1).toList(growable: false),
@@ -106,26 +107,17 @@ class _GtexKycDisputesScreenState extends State<GtexKycDisputesScreen> {
                       (GtexKycCaseRecord item) => item.id == _selectedKycCaseId,
                     )
                     .firstOrNull,
-            onTopUp: widget.onTopUp ?? _showTopUpUnavailable,
-            onWithdraw: widget.onWithdraw ?? _showWithdrawUnavailable,
+            onTopUp: widget.onTopUp ?? _openWalletRoute,
+            onWithdraw: widget.onWithdraw ?? _openWalletRoute,
           ),
         );
       },
     );
   }
 
-  void _showTopUpUnavailable() =>
-      _snack('Open the wallet route to use the live top-up flow.');
+  // When the host doesn't inject a handler, fall back to the live routes so the
+  // action still works instead of dead-ending on a snackbar.
+  void _openWalletRoute() => context.go('/wallet');
 
-  void _showWithdrawUnavailable() =>
-      _snack('Open the wallet route to use the live withdrawal flow.');
-
-  void _showCreateDisputeUnavailable() =>
-      _snack('Create-dispute routing is not mounted for this entry point yet.');
-
-  void _snack(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
+  void _openDisputesRoute() => context.go('/disputes');
 }

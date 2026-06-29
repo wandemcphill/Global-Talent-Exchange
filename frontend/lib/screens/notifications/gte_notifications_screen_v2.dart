@@ -12,6 +12,7 @@ import '../../providers/gte_exchange_controller.dart';
 import '../../ui_gtex/ui_gtex.dart';
 import '../support/gte_support_dispute_screens.dart';
 import '../wallet/gte_deposit_history_screen.dart';
+import '../wallet/gte_funding_flow_screen.dart';
 import '../wallet/gte_kyc_screen.dart';
 import '../wallet/gte_withdrawal_flow_screen.dart';
 import '../wallet/gtex_wallet_overview_screen_v2.dart';
@@ -287,8 +288,27 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder:
-            (BuildContext context) =>
-                GtexWalletOverviewScreenV2(controller: exchangeController),
+            (BuildContext context) => GtexWalletOverviewScreenV2(
+              controller: exchangeController,
+              onWithdraw:
+                  () => Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder:
+                          (BuildContext context) => GteWithdrawalEligibilityScreen(
+                            controller: exchangeController,
+                          ),
+                    ),
+                  ),
+              onTopUp:
+                  () => Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder:
+                          (BuildContext context) => GteFundWalletScreen(
+                            controller: exchangeController,
+                          ),
+                    ),
+                  ),
+            ),
       ),
     );
   }
