@@ -349,6 +349,12 @@ Widget _buildPlayerCardsBrowseScreen(
             : () {
               dependencies.onOpenLogin!.call(context);
             },
+    onOpenPlayer:
+        (String playerId) => context.go(
+          GteNavigationHelpers.locationFor(
+            PlayerCardDetailRouteData(playerId: playerId),
+          ),
+        ),
   );
 }
 
@@ -472,6 +478,12 @@ Widget _buildPlayerCardsInventoryScreen(
       accessToken: dependencies.accessToken,
       currentUserId: dependencies.currentUserId,
       onOpenLogin: _loginAction(context, dependencies),
+      onOpenPlayer:
+          (String playerId) => context.go(
+            GteNavigationHelpers.locationFor(
+              PlayerCardDetailRouteData(playerId: playerId),
+            ),
+          ),
     ),
   );
 }
