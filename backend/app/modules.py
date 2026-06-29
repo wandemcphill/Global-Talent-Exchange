@@ -818,6 +818,7 @@ DOMAIN_MODULES = (
     _module("academy", router_path="app.academy.api.router:router", with_api_alias=True),
     _module("squad_tiers", router_path="app.squad_tiers.router:router", with_api_alias=True),
     _module("club_lineup", router_path="app.lineups.router:router", with_api_alias=True),
+    _module("live_match", router_path="app.live_match.router:router", with_api_alias=True),
     _module("world_super_cup", router_path="app.world_super_cup.api.router:router", with_api_alias=True),
     _module("fast_cups", router_path="app.fast_cups.api.router:router", with_api_alias=True),
     _module(

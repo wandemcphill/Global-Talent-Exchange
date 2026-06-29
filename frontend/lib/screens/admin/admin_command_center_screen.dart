@@ -912,6 +912,100 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
     );
   }
 
+  Future<void> _showBanUserDialog() async {
+    final TextEditingController userIdController = TextEditingController();
+    final TextEditingController reasonController = TextEditingController();
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Ban account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: userIdController,
+                decoration: const InputDecoration(
+                  labelText: 'User ID',
+                  hintText: 'Account to ban',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: reasonController,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Reason',
+                  hintText: 'Shown in the audit trail',
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Deactivates the account and freezes wallet, trading, and withdrawals pending manual review.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Ban account'),
+            ),
+          ],
+        );
+      },
+    );
+    final String userId = userIdController.text.trim();
+    final String reason = reasonController.text.trim();
+    userIdController.dispose();
+    reasonController.dispose();
+    if (confirmed != true) {
+      return;
+    }
+    if (userId.isEmpty || reason.length < 3) {
+      if (mounted) {
+        AppFeedback.showError(
+          context,
+          'Enter a user ID and a reason of at least 3 characters.',
+        );
+      }
+      return;
+    }
+    final GteAuthedApi? api = widget.authedApi;
+    if (api == null) {
+      if (mounted) {
+        AppFeedback.showError(context, 'Admin session is not connected.');
+      }
+      return;
+    }
+    try {
+      await api.post(
+        '/api/admin/ban-user',
+        body: <String, Object?>{
+          'user_id': userId,
+          'reason': reason,
+          'deactivate_account': true,
+          'freeze_wallet': true,
+          'block_trading': true,
+          'block_withdrawals': true,
+          'require_manual_review': true,
+        },
+      );
+      if (mounted) {
+        AppFeedback.showSuccess(context, 'Account banned and restricted.');
+      }
+    } catch (error) {
+      if (mounted) {
+        AppFeedback.showError(context, error);
+      }
+    }
+  }
+
   Future<void> _runDepositAction(
     GteAdminDeposit deposit,
     _DepositAdminAction action,
@@ -1441,6 +1535,11 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 onPressed: () => context.go('/admin/notifications'),
                 icon: const Icon(Icons.notifications_active_outlined),
                 label: const Text('Notification matrix'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () => _showBanUserDialog(),
+                icon: const Icon(Icons.gpp_bad_outlined),
+                label: const Text('Ban account'),
               ),
               _buildRouteLauncher(
                 context: context,
