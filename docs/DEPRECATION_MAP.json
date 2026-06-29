@@ -674,6 +674,18 @@
     },
     {
       "consumer": "frontend/lib/data/national_team_api.dart",
+      "from": "/api/v2/market/nationalities",
+      "to": "/api/market/nationalities",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/national_team_api.dart",
+      "from": "/api/v2/market/national-teams",
+      "to": "/api/market/national-teams",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/national_team_api.dart",
       "from": "/api/v2/national/me/history",
       "to": "/api/national/me/history",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
@@ -814,6 +826,30 @@
       "consumer": "frontend/lib/shared/providers/transfer_provider.dart",
       "from": "/api/v2/transfer-market/watchlist",
       "to": "/api/transfer-market/watchlist",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/screens/admin/admin_command_center_screen.dart",
+      "from": "/api/v2/admin/ban-user",
+      "to": "/api/admin/ban-user",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/screens/admin/admin_command_center_screen.dart",
+      "from": "/api/v2/admin/jackpot/runtime",
+      "to": "/api/admin/jackpot/runtime",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/screens/admin/admin_command_center_screen.dart",
+      "from": "/api/v2/admin/jackpot/balance",
+      "to": "/api/admin/jackpot/balance",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/screens/admin/admin_command_center_screen.dart",
+      "from": "/api/v2/admin/jackpot/trigger",
+      "to": "/api/admin/jackpot/trigger",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
@@ -1147,6 +1183,42 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/features/system_profile_redesign/data/profile_runtime_adapter.dart",
+      "from": "/api/v2/session/bootstrap",
+      "to": "/api/session/bootstrap",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/system_profile_redesign/data/profile_runtime_adapter.dart",
+      "from": "/api/v2/profile",
+      "to": "/api/profile",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/system_profile_redesign/data/profile_runtime_adapter.dart",
+      "from": "/api/v2/profile/security",
+      "to": "/api/profile/security",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/system_profile_redesign/data/profile_runtime_adapter.dart",
+      "from": "/api/v2/profile/sessions",
+      "to": "/api/profile/sessions",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/system_profile_redesign/data/profile_runtime_adapter.dart",
+      "from": "/api/v2/wallet/summary",
+      "to": "/api/wallet/summary",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/system_profile_redesign/data/profile_runtime_adapter.dart",
+      "from": "/api/v2/club/current",
+      "to": "/api/club/current",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
       "from": "/api/v2/streamer-tournaments",
       "to": "/api/streamer-tournaments",
@@ -1273,37 +1345,31 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
-      "consumer": "frontend/lib/features/club_identity/reputation/data/reputation_repository.dart",
-      "from": "/api/v2/leaderboards/prestige",
-      "to": "/api/leaderboards/prestige",
-      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
-    },
-    {
       "consumer": "frontend/lib/features/club_identity/dynasty/data/dynasty_api_repository.dart",
       "from": "/api/v2/leaderboards/dynasties",
       "to": "/api/leaderboards/dynasties",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
-      "consumer": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "consumer": "frontend/lib/core/runtime/gtex_runtime_graph.dart",
       "from": "/api/v2/session/bootstrap",
       "to": "/api/session/bootstrap",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
-      "consumer": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "consumer": "frontend/lib/core/runtime/gtex_runtime_graph.dart",
       "from": "/api/v2/matches/{match_id}/state",
       "to": "/api/matches/{match_id}/state",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
-      "consumer": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "consumer": "frontend/lib/core/runtime/gtex_runtime_graph.dart",
       "from": "/api/v2/national-team-engine/competitions",
       "to": "/api/national-team-engine/competitions",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
-      "consumer": "frontend/lib/core/runtime/gtex_runtime.dart",
+      "consumer": "frontend/lib/core/runtime/gtex_runtime_graph.dart",
       "from": "/api/v2/admin/operations-readiness",
       "to": "/api/admin/operations-readiness",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."

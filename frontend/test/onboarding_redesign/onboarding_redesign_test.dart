@@ -11,13 +11,11 @@ void main() {
       const MaterialApp(home: GtexPublicLandingScreenV2()),
     );
     expect(find.text('GTEX'), findsOneWidget);
-    expect(find.text('FOOTBALL HAS\nAN ECONOMY NOW.'), findsOneWidget);
-    expect(find.text('What GTEX Runs'), findsOneWidget);
-    expect(find.text('Find Your Role'), findsOneWidget);
-    expect(find.text('GTEX Coin (GTC)'), findsOneWidget);
-    expect(find.text('Fan Coin (FNC)'), findsOneWidget);
-    expect(find.text('Open a club'), findsOneWidget);
-    expect(find.byType(PageView), findsNothing);
+    expect(find.text('OWN A CLUB.\nSIGN THE STARS.'), findsOneWidget);
+    expect(find.text('WIN IT ALL.'), findsOneWidget);
+    expect(find.text('CHOOSE YOUR PATH'), findsOneWidget);
+    expect(find.text('HOW YOU PLAY'), findsOneWidget);
+    expect(find.text('Create free account'), findsOneWidget);
   });
 
   testWidgets('login screen validates required form fields', (tester) async {

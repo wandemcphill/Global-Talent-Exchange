@@ -1161,6 +1161,12 @@
       },
       {
         "method": "POST",
+        "path": "/api/auth/login",
+        "handler": "login_user",
+        "response_model": "TokenResponse"
+      },
+      {
+        "method": "POST",
         "path": "/api/auth/logout",
         "handler": "logout_user",
         "response_model": "ActionStatusResponse"
@@ -1242,6 +1248,12 @@
         "path": "/api/session/bootstrap",
         "handler": "get_session_bootstrap",
         "response_model": "SessionBootstrapResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/auth/login",
+        "handler": "login_user",
+        "response_model": "TokenResponse"
       },
       {
         "method": "POST",
@@ -1848,6 +1860,30 @@
         "path": "/api/clubs/{club_id}/lifecycle",
         "handler": "get_club_lifecycle",
         "response_model": "ClubLifecycleView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/lineup",
+        "handler": "get_lineup",
+        "response_model": "ClubMatchPlanView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/lineup",
+        "handler": "get_lineup",
+        "response_model": "ClubMatchPlanView"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/clubs/{club_id}/lineup",
+        "handler": "save_lineup",
+        "response_model": "ClubMatchPlanView"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/clubs/{club_id}/lineup",
+        "handler": "save_lineup",
+        "response_model": "ClubMatchPlanView"
       },
       {
         "method": "GET",
@@ -2860,6 +2896,12 @@
         "response_model": "list[CreatorApplicationView]"
       },
       {
+        "method": "GET",
+        "path": "/admin/creator/applications",
+        "handler": "list_creator_applications",
+        "response_model": "list[CreatorApplicationView]"
+      },
+      {
         "method": "POST",
         "path": "/admin/creator/applications/{application_id}/approve",
         "handler": "approve_creator_application",
@@ -2869,6 +2911,18 @@
         "method": "POST",
         "path": "/admin/creator/applications/{application_id}/approve",
         "handler": "approve_creator_application",
+        "response_model": "CreatorApplicationView"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/creator/applications/{application_id}/approve",
+        "handler": "approve_creator_application",
+        "response_model": "CreatorApplicationView"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/creator/applications/{application_id}/reject",
+        "handler": "reject_creator_application",
         "response_model": "CreatorApplicationView"
       },
       {
@@ -2897,6 +2951,12 @@
       },
       {
         "method": "POST",
+        "path": "/admin/creator/applications/{application_id}/request-verification",
+        "handler": "request_creator_application_verification",
+        "response_model": "CreatorApplicationView"
+      },
+      {
+        "method": "POST",
         "path": "/admin/creator/cards/assign",
         "handler": "assign_creator_card",
         "response_model": "CreatorCardView"
@@ -2906,6 +2966,18 @@
         "path": "/admin/creator/cards/assign",
         "handler": "assign_creator_card",
         "response_model": "CreatorCardView"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/creator/cards/assign",
+        "handler": "assign_creator_card",
+        "response_model": "CreatorCardView"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/creator/dashboard",
+        "handler": "get_creator_admin_dashboard",
+        "response_model": "CreatorAdminDashboardView"
       },
       {
         "method": "GET",
@@ -2929,6 +3001,18 @@
         "method": "GET",
         "path": "/admin/creator/fan-share-market/control",
         "handler": "get_creator_fan_share_market_control",
+        "response_model": "CreatorClubShareMarketControlView"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/creator/fan-share-market/control",
+        "handler": "get_creator_fan_share_market_control",
+        "response_model": "CreatorClubShareMarketControlView"
+      },
+      {
+        "method": "PUT",
+        "path": "/admin/creator/fan-share-market/control",
+        "handler": "update_creator_fan_share_market_control",
         "response_model": "CreatorClubShareMarketControlView"
       },
       {
@@ -3016,6 +3100,18 @@
         "response_model": "CreatorApplicationView | None"
       },
       {
+        "method": "GET",
+        "path": "/api/creator/application",
+        "handler": "get_my_creator_application",
+        "response_model": "CreatorApplicationView | None"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/apply",
+        "handler": "submit_creator_application",
+        "response_model": "CreatorApplicationView"
+      },
+      {
         "method": "POST",
         "path": "/api/creator/apply",
         "handler": "submit_creator_application",
@@ -3038,6 +3134,18 @@
         "path": "/api/creator/cards",
         "handler": "list_creator_cards",
         "response_model": "list[CreatorCardView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/cards",
+        "handler": "list_creator_cards",
+        "response_model": "list[CreatorCardView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/cards/listings",
+        "handler": "list_creator_card_listings",
+        "response_model": "list[CreatorCardListingView]"
       },
       {
         "method": "GET",
@@ -3065,6 +3173,18 @@
       },
       {
         "method": "POST",
+        "path": "/api/creator/cards/listings/{listing_id}/buy",
+        "handler": "buy_creator_card_listing",
+        "response_model": "CreatorCardSaleView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/loans/{loan_id}/return",
+        "handler": "return_creator_card_loan",
+        "response_model": "CreatorCardLoanView"
+      },
+      {
+        "method": "POST",
         "path": "/api/creator/cards/loans/{loan_id}/return",
         "handler": "return_creator_card_loan",
         "response_model": "CreatorCardLoanView"
@@ -3089,6 +3209,12 @@
       },
       {
         "method": "POST",
+        "path": "/api/creator/cards/swap",
+        "handler": "swap_creator_cards",
+        "response_model": "CreatorCardSwapView"
+      },
+      {
+        "method": "POST",
         "path": "/api/creator/cards/{creator_card_id}/list",
         "handler": "create_creator_card_listing",
         "response_model": "CreatorCardListingView"
@@ -3098,6 +3224,18 @@
         "path": "/api/creator/cards/{creator_card_id}/list",
         "handler": "create_creator_card_listing",
         "response_model": "CreatorCardListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/{creator_card_id}/list",
+        "handler": "create_creator_card_listing",
+        "response_model": "CreatorCardListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/cards/{creator_card_id}/loan",
+        "handler": "loan_creator_card",
+        "response_model": "CreatorCardLoanView"
       },
       {
         "method": "POST",
@@ -3121,6 +3259,18 @@
         "method": "GET",
         "path": "/api/creator/clubs/{club_id}/fan-share-market",
         "handler": "get_creator_club_fan_share_market",
+        "response_model": "CreatorClubShareMarketView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market",
+        "handler": "get_creator_club_fan_share_market",
+        "response_model": "CreatorClubShareMarketView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market",
+        "handler": "issue_creator_club_fan_shares",
         "response_model": "CreatorClubShareMarketView"
       },
       {
@@ -3149,6 +3299,12 @@
       },
       {
         "method": "GET",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market/distributions",
+        "handler": "list_creator_club_fan_share_distributions",
+        "response_model": "list[CreatorClubShareDistributionView]"
+      },
+      {
+        "method": "GET",
         "path": "/api/creator/clubs/{club_id}/fan-share-market/holding",
         "handler": "get_my_creator_club_fan_share_holding",
         "response_model": "CreatorClubShareHoldingView | None"
@@ -3158,6 +3314,18 @@
         "path": "/api/creator/clubs/{club_id}/fan-share-market/holding",
         "handler": "get_my_creator_club_fan_share_holding",
         "response_model": "CreatorClubShareHoldingView | None"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market/holding",
+        "handler": "get_my_creator_club_fan_share_holding",
+        "response_model": "CreatorClubShareHoldingView | None"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/clubs/{club_id}/fan-share-market/purchase",
+        "handler": "purchase_creator_club_fan_shares",
+        "response_model": "CreatorClubSharePurchaseView"
       },
       {
         "method": "POST",
@@ -3181,6 +3349,18 @@
         "method": "POST",
         "path": "/api/creator/verify-email",
         "handler": "verify_creator_email",
+        "response_model": "CreatorContactVerificationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/verify-email",
+        "handler": "verify_creator_email",
+        "response_model": "CreatorContactVerificationView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creator/verify-phone",
+        "handler": "verify_creator_phone",
         "response_model": "CreatorContactVerificationView"
       },
       {
@@ -5260,6 +5440,66 @@
         "response_model": "list[LiveEventView]"
       },
       {
+        "method": "POST",
+        "path": "/api/live-match/sessions",
+        "handler": "create_session",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/live-match/sessions",
+        "handler": "create_session",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/live-match/sessions/{match_id}",
+        "handler": "get_session",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/live-match/sessions/{match_id}",
+        "handler": "get_session",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/live-match/sessions/{match_id}/halftime/ready",
+        "handler": "halftime_ready",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/live-match/sessions/{match_id}/halftime/ready",
+        "handler": "halftime_ready",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/live-match/sessions/{match_id}/tactics",
+        "handler": "set_tactics",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/live-match/sessions/{match_id}/tactics",
+        "handler": "set_tactics",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/live-match/sessions/{match_id}/tick",
+        "handler": "tick_session",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/live-match/sessions/{match_id}/tick",
+        "handler": "tick_session",
+        "response_model": "LiveMatchSessionView"
+      },
+      {
         "method": "GET",
         "path": "/api/match/live/active",
         "handler": "list_active_live_matches",
@@ -5732,6 +5972,12 @@
         "response_model": "MarketBrowseCatalogView"
       },
       {
+        "method": "GET",
+        "path": "/api/market/browse/catalog",
+        "handler": "get_market_browse_catalog",
+        "response_model": "MarketBrowseCatalogView"
+      },
+      {
         "method": "POST",
         "path": "/api/market/buy",
         "handler": "buy_market_position",
@@ -5742,6 +5988,18 @@
         "path": "/api/market/buy",
         "handler": "buy_market_position",
         "response_model": "CreatorTradeView | PlayerSharePurchaseView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/buy",
+        "handler": "buy_market_position",
+        "response_model": "CreatorTradeView | PlayerSharePurchaseView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/clubs/{club_id}/players",
+        "handler": "list_market_club_players",
+        "response_model": "MarketPlayerListView"
       },
       {
         "method": "GET",
@@ -5765,6 +6023,18 @@
         "method": "GET",
         "path": "/api/market/leagues",
         "handler": "list_market_leagues",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/leagues",
+        "handler": "list_market_leagues",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/leagues/{league_id}/clubs",
+        "handler": "list_market_league_clubs",
         "response_model": null
       },
       {
@@ -5793,6 +6063,18 @@
       },
       {
         "method": "POST",
+        "path": "/api/market/listings",
+        "handler": "create_listing",
+        "response_model": "ListingView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/listings/{listing_id}/cancel",
+        "handler": "cancel_listing",
+        "response_model": "ListingView"
+      },
+      {
+        "method": "POST",
         "path": "/api/market/listings/{listing_id}/cancel",
         "handler": "cancel_listing",
         "response_model": "ListingView"
@@ -5817,6 +6099,12 @@
       },
       {
         "method": "GET",
+        "path": "/api/market/listings/{listing_id}/matches",
+        "handler": "list_trade_intent_matches",
+        "response_model": "list[TradeIntentView]"
+      },
+      {
+        "method": "GET",
         "path": "/api/market/listings/{listing_id}/offers",
         "handler": "list_listing_offers",
         "response_model": "list[OfferView]"
@@ -5826,6 +6114,18 @@
         "path": "/api/market/listings/{listing_id}/offers",
         "handler": "list_listing_offers",
         "response_model": "list[OfferView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/listings/{listing_id}/offers",
+        "handler": "list_listing_offers",
+        "response_model": "list[OfferView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/movers",
+        "handler": "get_market_movers",
+        "response_model": "MarketMoversView"
       },
       {
         "method": "GET",
@@ -5853,6 +6153,18 @@
       },
       {
         "method": "GET",
+        "path": "/api/market/national-teams",
+        "handler": "list_market_national_teams",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/national-teams/{team_id}/eligible-players",
+        "handler": "list_market_national_team_eligible_players",
+        "response_model": "MarketPlayerListView"
+      },
+      {
+        "method": "GET",
         "path": "/api/market/national-teams/{team_id}/eligible-players",
         "handler": "list_market_national_team_eligible_players",
         "response_model": "MarketPlayerListView"
@@ -5874,6 +6186,18 @@
         "path": "/api/market/nationalities",
         "handler": "list_market_nationalities",
         "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/nationalities",
+        "handler": "list_market_nationalities",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/nationalities/{country_code}/players",
+        "handler": "list_market_nationality_players",
+        "response_model": "MarketPlayerListView"
       },
       {
         "method": "GET",
@@ -5897,6 +6221,18 @@
         "method": "POST",
         "path": "/api/market/offers",
         "handler": "create_offer",
+        "response_model": "OfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/offers",
+        "handler": "create_offer",
+        "response_model": "OfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/offers/{offer_id}/accept",
+        "handler": "accept_offer",
         "response_model": "OfferView"
       },
       {
@@ -5925,6 +6261,12 @@
       },
       {
         "method": "POST",
+        "path": "/api/market/offers/{offer_id}/counter",
+        "handler": "counter_offer",
+        "response_model": "OfferView"
+      },
+      {
+        "method": "POST",
         "path": "/api/market/offers/{offer_id}/reject",
         "handler": "reject_offer",
         "response_model": "OfferView"
@@ -5934,6 +6276,18 @@
         "path": "/api/market/offers/{offer_id}/reject",
         "handler": "reject_offer",
         "response_model": "OfferView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/offers/{offer_id}/reject",
+        "handler": "reject_offer",
+        "response_model": "OfferView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/players",
+        "handler": "list_market_players",
+        "response_model": "MarketPlayerListView"
       },
       {
         "method": "GET",
@@ -5961,6 +6315,12 @@
       },
       {
         "method": "GET",
+        "path": "/api/market/players/{player_id}",
+        "handler": "get_market_player_detail",
+        "response_model": "MarketPlayerDetailView"
+      },
+      {
+        "method": "GET",
         "path": "/api/market/players/{player_id}/candles",
         "handler": "get_market_player_candles",
         "response_model": "MarketCandlesView"
@@ -5970,6 +6330,18 @@
         "path": "/api/market/players/{player_id}/candles",
         "handler": "get_market_player_candles",
         "response_model": "MarketCandlesView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/players/{player_id}/candles",
+        "handler": "get_market_player_candles",
+        "response_model": "MarketCandlesView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/players/{player_id}/history",
+        "handler": "get_market_player_history",
+        "response_model": "MarketPlayerHistoryView"
       },
       {
         "method": "GET",
@@ -5996,6 +6368,12 @@
         "response_model": "CreatorTradeView | PlayerShareSaleView"
       },
       {
+        "method": "POST",
+        "path": "/api/market/sell",
+        "handler": "sell_market_position",
+        "response_model": "CreatorTradeView | PlayerShareSaleView"
+      },
+      {
         "method": "GET",
         "path": "/api/market/summary/{asset_id}",
         "handler": "get_market_summary",
@@ -6006,6 +6384,18 @@
         "path": "/api/market/summary/{asset_id}",
         "handler": "get_market_summary",
         "response_model": "MarketSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/summary/{asset_id}",
+        "handler": "get_market_summary",
+        "response_model": "MarketSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/market/ticker/{player_id}",
+        "handler": "get_market_ticker",
+        "response_model": "MarketTickerView"
       },
       {
         "method": "GET",
@@ -6029,6 +6419,18 @@
         "method": "POST",
         "path": "/api/market/trade-intents",
         "handler": "create_trade_intent",
+        "response_model": "TradeIntentView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/trade-intents",
+        "handler": "create_trade_intent",
+        "response_model": "TradeIntentView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/market/trade-intents/{intent_id}/withdraw",
+        "handler": "withdraw_trade_intent",
         "response_model": "TradeIntentView"
       },
       {
@@ -8809,25 +9211,25 @@
     "reputation": [
       {
         "method": "GET",
-        "path": "/api/clubs/{club_id}/prestige",
+        "path": "/clubs/{club_id}/prestige",
         "handler": "get_club_prestige",
         "response_model": "ClubPrestigeView"
       },
       {
         "method": "GET",
-        "path": "/api/clubs/{club_id}/reputation",
+        "path": "/clubs/{club_id}/reputation",
         "handler": "get_club_reputation",
         "response_model": "ClubReputationView"
       },
       {
         "method": "GET",
-        "path": "/api/clubs/{club_id}/reputation/history",
+        "path": "/clubs/{club_id}/reputation/history",
         "handler": "get_club_reputation_history",
         "response_model": "ClubReputationHistoryView"
       },
       {
         "method": "GET",
-        "path": "/api/leaderboards/prestige",
+        "path": "/leaderboards/prestige",
         "handler": "get_prestige_leaderboard",
         "response_model": "PrestigeLeaderboardView"
       }
@@ -9443,7 +9845,7 @@
         "method": "GET",
         "path": "/api/clubs/{club_id}/v2-snapshot",
         "handler": "get_club_v2_snapshot",
-        "response_model": null
+        "response_model": "ClubV2SnapshotView"
       },
       {
         "method": "GET",
@@ -9680,10 +10082,46 @@
         "response_model": "list[CreatorCompetitionView]"
       },
       {
+        "method": "GET",
+        "path": "/api/creators/me/competitions",
+        "handler": "get_my_creator_competitions",
+        "response_model": "list[CreatorCompetitionView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/me/competitions",
+        "handler": "get_my_creator_competitions",
+        "response_model": "list[CreatorCompetitionView]"
+      },
+      {
         "method": "POST",
         "path": "/api/creators/me/copilot/analyze",
         "handler": "analyze_my_creator_draft",
         "response_model": "CreatorCopilotAnalysisView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creators/me/copilot/analyze",
+        "handler": "analyze_my_creator_draft",
+        "response_model": "CreatorCopilotAnalysisView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creators/me/copilot/analyze",
+        "handler": "analyze_my_creator_draft",
+        "response_model": "CreatorCopilotAnalysisView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/me/finance",
+        "handler": "get_my_creator_finance",
+        "response_model": "CreatorFinanceSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/me/finance",
+        "handler": "get_my_creator_finance",
+        "response_model": "CreatorFinanceSummaryView"
       },
       {
         "method": "GET",
@@ -9699,9 +10137,45 @@
       },
       {
         "method": "GET",
+        "path": "/api/creators/me/insights",
+        "handler": "get_my_creator_insights",
+        "response_model": "CreatorInsightsView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/me/insights",
+        "handler": "get_my_creator_insights",
+        "response_model": "CreatorInsightsView"
+      },
+      {
+        "method": "GET",
         "path": "/api/creators/me/summary",
         "handler": "get_my_creator_summary",
         "response_model": "CreatorSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/me/summary",
+        "handler": "get_my_creator_summary",
+        "response_model": "CreatorSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/me/summary",
+        "handler": "get_my_creator_summary",
+        "response_model": "CreatorSummaryView"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/creators/profile",
+        "handler": "update_creator_profile",
+        "response_model": "CreatorProfileView"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/creators/profile",
+        "handler": "update_creator_profile",
+        "response_model": "CreatorProfileView"
       },
       {
         "method": "PATCH",
@@ -9716,9 +10190,45 @@
         "response_model": "CreatorProfileView"
       },
       {
+        "method": "POST",
+        "path": "/api/creators/profile",
+        "handler": "create_creator_profile",
+        "response_model": "CreatorProfileView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/creators/profile",
+        "handler": "create_creator_profile",
+        "response_model": "CreatorProfileView"
+      },
+      {
         "method": "GET",
         "path": "/api/creators/profile/me",
         "handler": "get_my_creator_profile",
+        "response_model": "CreatorProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/profile/me",
+        "handler": "get_my_creator_profile",
+        "response_model": "CreatorProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/profile/me",
+        "handler": "get_my_creator_profile",
+        "response_model": "CreatorProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/{handle}",
+        "handler": "get_creator_profile",
+        "response_model": "CreatorProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/creators/{handle}",
+        "handler": "get_creator_profile",
         "response_model": "CreatorProfileView"
       },
       {
@@ -9989,6 +10499,12 @@
       },
       {
         "method": "POST",
+        "path": "/api/simulation-matchmaking/quick-game/{match_id}/settle",
+        "handler": "settle_live_quick_game",
+        "response_model": "LiveMatchSettlementView"
+      },
+      {
+        "method": "POST",
         "path": "/api/simulation-matchmaking/quick-tournament",
         "handler": "create_quick_tournament",
         "response_model": "QuickTournamentResponse"
@@ -10022,6 +10538,12 @@
         "path": "/simulation-matchmaking/quick-game",
         "handler": "create_quick_game",
         "response_model": "QuickGameResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/simulation-matchmaking/quick-game/{match_id}/settle",
+        "handler": "settle_live_quick_game",
+        "response_model": "LiveMatchSettlementView"
       },
       {
         "method": "POST",
@@ -10132,6 +10654,56 @@
         "path": "/api/sponsorship/placements",
         "handler": "resolve_placements",
         "response_model": "SponsorshipPlacementResponse"
+      }
+    ],
+    "squad": [
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/academy/intake",
+        "handler": "get_academy_intake",
+        "response_model": "AcademyIntakeView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/academy/intake",
+        "handler": "get_academy_intake",
+        "response_model": "AcademyIntakeView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/academy/intake/{player_id}/sign-up",
+        "handler": "sign_up_to_first_team",
+        "response_model": "SquadTierMemberView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/academy/intake/{player_id}/sign-up",
+        "handler": "sign_up_to_first_team",
+        "response_model": "SquadTierMemberView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad/tiers",
+        "handler": "get_squad_tiers",
+        "response_model": "SquadTiersView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/{club_id}/squad/tiers",
+        "handler": "get_squad_tiers",
+        "response_model": "SquadTiersView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/squad/tiers/{player_id}/assign",
+        "handler": "assign_tier",
+        "response_model": "SquadTierMemberView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/squad/tiers/{player_id}/assign",
+        "handler": "assign_tier",
+        "response_model": "SquadTierMemberView"
       }
     ],
     "story": [
@@ -11213,373 +11785,559 @@
       },
       {
         "method": "GET",
-        "path": "/api/wallet",
+        "path": "/api/v2/wallet",
         "handler": "get_wallet_profile",
         "response_model": "WalletProfileView"
       },
       {
         "method": "GET",
-        "path": "/api/wallet",
+        "path": "/api/v2/wallet",
         "handler": "get_wallet_profile",
         "response_model": "WalletProfileView"
       },
       {
         "method": "GET",
-        "path": "/api/wallet/summary",
+        "path": "/api/v2/wallet",
+        "handler": "get_wallet_profile",
+        "response_model": "WalletProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallet/summary",
         "handler": "get_wallet_summary_alias",
         "response_model": "WalletSummaryView"
       },
       {
         "method": "GET",
-        "path": "/api/wallet/summary",
+        "path": "/api/v2/wallet/summary",
+        "handler": "get_wallet_summary_alias",
+        "response_model": "WalletSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallet/summary",
         "handler": "get_wallet_summary_alias",
         "response_model": "WalletSummaryView"
       },
       {
         "method": "POST",
-        "path": "/api/wallet/top-up/initiate",
+        "path": "/api/v2/wallet/top-up/initiate",
         "handler": "initiate_wallet_top_up",
         "response_model": "WalletTopUpInitiateView"
       },
       {
         "method": "POST",
-        "path": "/api/wallet/top-up/initiate",
+        "path": "/api/v2/wallet/top-up/initiate",
         "handler": "initiate_wallet_top_up",
         "response_model": "WalletTopUpInitiateView"
       },
       {
         "method": "POST",
-        "path": "/api/wallet/top-up/verify",
+        "path": "/api/v2/wallet/top-up/initiate",
+        "handler": "initiate_wallet_top_up",
+        "response_model": "WalletTopUpInitiateView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallet/top-up/verify",
         "handler": "verify_wallet_top_up",
         "response_model": "WalletTopUpVerifyView"
       },
       {
         "method": "POST",
-        "path": "/api/wallet/top-up/verify",
+        "path": "/api/v2/wallet/top-up/verify",
+        "handler": "verify_wallet_top_up",
+        "response_model": "WalletTopUpVerifyView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallet/top-up/verify",
         "handler": "verify_wallet_top_up",
         "response_model": "WalletTopUpVerifyView"
       },
       {
         "method": "GET",
-        "path": "/api/wallet/transactions",
+        "path": "/api/v2/wallet/transactions",
         "handler": "list_wallet_transactions",
         "response_model": "list[WalletTransactionRecordView]"
       },
       {
         "method": "GET",
-        "path": "/api/wallet/transactions",
+        "path": "/api/v2/wallet/transactions",
         "handler": "list_wallet_transactions",
         "response_model": "list[WalletTransactionRecordView]"
       },
       {
         "method": "GET",
-        "path": "/api/wallets",
+        "path": "/api/v2/wallet/transactions",
+        "handler": "list_wallet_transactions",
+        "response_model": "list[WalletTransactionRecordView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets",
         "handler": "get_wallet_profile",
         "response_model": "WalletProfileView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets",
+        "path": "/api/v2/wallets",
         "handler": "get_wallet_profile",
         "response_model": "WalletProfileView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/accounts",
+        "path": "/api/v2/wallets",
+        "handler": "get_wallet_profile",
+        "response_model": "WalletProfileView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/accounts",
         "handler": "list_wallet_accounts",
         "response_model": "list[WalletAccountBalance]"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/accounts",
+        "path": "/api/v2/wallets/accounts",
         "handler": "list_wallet_accounts",
         "response_model": "list[WalletAccountBalance]"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/adaptive-overview",
+        "path": "/api/v2/wallets/accounts",
+        "handler": "list_wallet_accounts",
+        "response_model": "list[WalletAccountBalance]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/adaptive-overview",
         "handler": "get_wallet_adaptive_overview",
         "response_model": "WalletAdaptiveOverviewView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/adaptive-overview",
+        "path": "/api/v2/wallets/adaptive-overview",
+        "handler": "get_wallet_adaptive_overview",
+        "response_model": "WalletAdaptiveOverviewView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/adaptive-overview",
         "handler": "get_wallet_adaptive_overview",
         "response_model": "WalletAdaptiveOverviewView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/conversions",
+        "path": "/api/v2/wallets/conversions",
         "handler": "create_wallet_conversion",
         "response_model": "WalletConversionView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/conversions",
+        "path": "/api/v2/wallets/conversions",
         "handler": "create_wallet_conversion",
         "response_model": "WalletConversionView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/conversions/quote",
+        "path": "/api/v2/wallets/conversions",
+        "handler": "create_wallet_conversion",
+        "response_model": "WalletConversionView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/conversions/quote",
         "handler": "quote_wallet_conversion",
         "response_model": "WalletConversionQuoteView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/conversions/quote",
+        "path": "/api/v2/wallets/conversions/quote",
+        "handler": "quote_wallet_conversion",
+        "response_model": "WalletConversionQuoteView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/conversions/quote",
         "handler": "quote_wallet_conversion",
         "response_model": "WalletConversionQuoteView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/deposits",
+        "path": "/api/v2/wallets/deposits",
         "handler": "list_deposits",
         "response_model": "list[DepositRequestView]"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/deposits",
+        "path": "/api/v2/wallets/deposits",
+        "handler": "list_deposits",
+        "response_model": "list[DepositRequestView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/deposits",
         "handler": "list_deposits",
         "response_model": "list[DepositRequestView]"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/deposits",
+        "path": "/api/v2/wallets/deposits",
         "handler": "create_deposit_request",
         "response_model": "DepositRequestView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/deposits",
+        "path": "/api/v2/wallets/deposits",
         "handler": "create_deposit_request",
         "response_model": "DepositRequestView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/deposits/{deposit_id}/submit",
+        "path": "/api/v2/wallets/deposits",
+        "handler": "create_deposit_request",
+        "response_model": "DepositRequestView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/deposits/{deposit_id}/submit",
         "handler": "submit_deposit_request",
         "response_model": "DepositRequestView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/deposits/{deposit_id}/submit",
+        "path": "/api/v2/wallets/deposits/{deposit_id}/submit",
+        "handler": "submit_deposit_request",
+        "response_model": "DepositRequestView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/deposits/{deposit_id}/submit",
         "handler": "submit_deposit_request",
         "response_model": "DepositRequestView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/ledger",
+        "path": "/api/v2/wallets/ledger",
         "handler": "list_wallet_ledger",
         "response_model": "WalletLedgerPageView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/ledger",
+        "path": "/api/v2/wallets/ledger",
         "handler": "list_wallet_ledger",
         "response_model": "WalletLedgerPageView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/market-topups",
+        "path": "/api/v2/wallets/ledger",
+        "handler": "list_wallet_ledger",
+        "response_model": "WalletLedgerPageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/market-topups",
         "handler": "list_market_topups",
         "response_model": "MarketTopupPageView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/market-topups",
+        "path": "/api/v2/wallets/market-topups",
         "handler": "list_market_topups",
         "response_model": "MarketTopupPageView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/overview",
+        "path": "/api/v2/wallets/market-topups",
+        "handler": "list_market_topups",
+        "response_model": "MarketTopupPageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/overview",
         "handler": "get_wallet_overview",
         "response_model": "WalletOverviewView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/overview",
+        "path": "/api/v2/wallets/overview",
+        "handler": "get_wallet_overview",
+        "response_model": "WalletOverviewView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/overview",
         "handler": "get_wallet_overview",
         "response_model": "WalletOverviewView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/payment-events",
+        "path": "/api/v2/wallets/payment-events",
         "handler": "create_payment_event",
         "response_model": "PaymentEventView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/payment-events",
+        "path": "/api/v2/wallets/payment-events",
         "handler": "create_payment_event",
         "response_model": "PaymentEventView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/providers/{provider_key}/webhook",
+        "path": "/api/v2/wallets/payment-events",
+        "handler": "create_payment_event",
+        "response_model": "PaymentEventView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/providers/{provider_key}/webhook",
         "handler": "handle_provider_webhook",
         "response_model": null
       },
       {
         "method": "POST",
-        "path": "/api/wallets/providers/{provider_key}/webhook",
+        "path": "/api/v2/wallets/providers/{provider_key}/webhook",
+        "handler": "handle_provider_webhook",
+        "response_model": null
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/providers/{provider_key}/webhook",
         "handler": "handle_provider_webhook",
         "response_model": null
       },
       {
         "method": "GET",
-        "path": "/api/wallets/purchase-orders",
+        "path": "/api/v2/wallets/purchase-orders",
         "handler": "list_purchase_orders",
         "response_model": "PurchaseOrderPageView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/purchase-orders",
+        "path": "/api/v2/wallets/purchase-orders",
+        "handler": "list_purchase_orders",
+        "response_model": "PurchaseOrderPageView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/purchase-orders",
         "handler": "list_purchase_orders",
         "response_model": "PurchaseOrderPageView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/purchase-orders",
+        "path": "/api/v2/wallets/purchase-orders",
         "handler": "create_purchase_order",
         "response_model": "PurchaseOrderView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/purchase-orders",
+        "path": "/api/v2/wallets/purchase-orders",
         "handler": "create_purchase_order",
         "response_model": "PurchaseOrderView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/purchase-orders/quote",
+        "path": "/api/v2/wallets/purchase-orders",
+        "handler": "create_purchase_order",
+        "response_model": "PurchaseOrderView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/purchase-orders/quote",
         "handler": "create_purchase_order_quote",
         "response_model": "PurchaseOrderQuoteView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/purchase-orders/quote",
+        "path": "/api/v2/wallets/purchase-orders/quote",
+        "handler": "create_purchase_order_quote",
+        "response_model": "PurchaseOrderQuoteView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/purchase-orders/quote",
         "handler": "create_purchase_order_quote",
         "response_model": "PurchaseOrderQuoteView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/purchase-orders/{order_id}",
+        "path": "/api/v2/wallets/purchase-orders/{order_id}",
         "handler": "get_purchase_order",
         "response_model": "PurchaseOrderView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/purchase-orders/{order_id}",
+        "path": "/api/v2/wallets/purchase-orders/{order_id}",
         "handler": "get_purchase_order",
         "response_model": "PurchaseOrderView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/summary",
+        "path": "/api/v2/wallets/purchase-orders/{order_id}",
+        "handler": "get_purchase_order",
+        "response_model": "PurchaseOrderView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/summary",
         "handler": "get_wallet_summary",
         "response_model": "WalletSummaryView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/summary",
+        "path": "/api/v2/wallets/summary",
+        "handler": "get_wallet_summary",
+        "response_model": "WalletSummaryView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/summary",
         "handler": "get_wallet_summary",
         "response_model": "WalletSummaryView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/top-up/initiate",
+        "path": "/api/v2/wallets/top-up/initiate",
         "handler": "initiate_wallet_top_up",
         "response_model": "WalletTopUpInitiateView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/top-up/initiate",
+        "path": "/api/v2/wallets/top-up/initiate",
         "handler": "initiate_wallet_top_up",
         "response_model": "WalletTopUpInitiateView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/top-up/verify",
+        "path": "/api/v2/wallets/top-up/initiate",
+        "handler": "initiate_wallet_top_up",
+        "response_model": "WalletTopUpInitiateView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/top-up/verify",
         "handler": "verify_wallet_top_up",
         "response_model": "WalletTopUpVerifyView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/top-up/verify",
+        "path": "/api/v2/wallets/top-up/verify",
+        "handler": "verify_wallet_top_up",
+        "response_model": "WalletTopUpVerifyView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/top-up/verify",
         "handler": "verify_wallet_top_up",
         "response_model": "WalletTopUpVerifyView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/transactions",
+        "path": "/api/v2/wallets/transactions",
         "handler": "list_wallet_transactions",
         "response_model": "list[WalletTransactionRecordView]"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/transactions",
+        "path": "/api/v2/wallets/transactions",
         "handler": "list_wallet_transactions",
         "response_model": "list[WalletTransactionRecordView]"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/withdrawals",
+        "path": "/api/v2/wallets/transactions",
+        "handler": "list_wallet_transactions",
+        "response_model": "list[WalletTransactionRecordView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/withdrawals",
         "handler": "list_withdrawals",
         "response_model": "list[TreasuryWithdrawalRequestView]"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/withdrawals",
+        "path": "/api/v2/wallets/withdrawals",
+        "handler": "list_withdrawals",
+        "response_model": "list[TreasuryWithdrawalRequestView]"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/withdrawals",
         "handler": "list_withdrawals",
         "response_model": "list[TreasuryWithdrawalRequestView]"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/withdrawals",
+        "path": "/api/v2/wallets/withdrawals",
         "handler": "create_withdrawal_request",
         "response_model": "TreasuryWithdrawalRequestView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/withdrawals",
+        "path": "/api/v2/wallets/withdrawals",
+        "handler": "create_withdrawal_request",
+        "response_model": "TreasuryWithdrawalRequestView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/withdrawals",
         "handler": "create_withdrawal_request",
         "response_model": "TreasuryWithdrawalRequestView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/withdrawals/eligibility",
+        "path": "/api/v2/wallets/withdrawals/eligibility",
         "handler": "get_withdrawal_eligibility",
         "response_model": "WithdrawalEligibilityView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/withdrawals/eligibility",
+        "path": "/api/v2/wallets/withdrawals/eligibility",
+        "handler": "get_withdrawal_eligibility",
+        "response_model": "WithdrawalEligibilityView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/withdrawals/eligibility",
         "handler": "get_withdrawal_eligibility",
         "response_model": "WithdrawalEligibilityView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/withdrawals/quote",
+        "path": "/api/v2/wallets/withdrawals/quote",
         "handler": "create_withdrawal_quote",
         "response_model": "WithdrawalQuoteView"
       },
       {
         "method": "POST",
-        "path": "/api/wallets/withdrawals/quote",
+        "path": "/api/v2/wallets/withdrawals/quote",
+        "handler": "create_withdrawal_quote",
+        "response_model": "WithdrawalQuoteView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v2/wallets/withdrawals/quote",
         "handler": "create_withdrawal_quote",
         "response_model": "WithdrawalQuoteView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/withdrawals/{withdrawal_id}/receipt",
+        "path": "/api/v2/wallets/withdrawals/{withdrawal_id}/receipt",
         "handler": "get_withdrawal_receipt",
         "response_model": "WithdrawalReceiptView"
       },
       {
         "method": "GET",
-        "path": "/api/wallets/withdrawals/{withdrawal_id}/receipt",
+        "path": "/api/v2/wallets/withdrawals/{withdrawal_id}/receipt",
+        "handler": "get_withdrawal_receipt",
+        "response_model": "WithdrawalReceiptView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v2/wallets/withdrawals/{withdrawal_id}/receipt",
         "handler": "get_withdrawal_receipt",
         "response_model": "WithdrawalReceiptView"
       },
@@ -11620,6 +12378,30 @@
         "path": "/api/world-super-cup/countdown",
         "handler": "get_tournament_countdown",
         "response_model": "TournamentCountdownView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/world-super-cup/fixtures",
+        "handler": "get_fixtures",
+        "response_model": "WorldSuperCupFixturesView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/world-super-cup/fixtures",
+        "handler": "get_fixtures",
+        "response_model": "WorldSuperCupFixturesView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/world-super-cup/fixtures/{fixture_id}/settlement",
+        "handler": "settle_fixture_result",
+        "response_model": "WorldSuperCupSettlementView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/world-super-cup/fixtures/{fixture_id}/settlement",
+        "handler": "settle_fixture_result",
+        "response_model": "WorldSuperCupSettlementView"
       },
       {
         "method": "GET",

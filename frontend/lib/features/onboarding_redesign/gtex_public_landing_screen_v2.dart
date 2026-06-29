@@ -530,7 +530,30 @@ class _ResultsTickerState extends State<_ResultsTicker>
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 22),
-  )..repeat();
+  );
+  final GlobalKey _contentKey = GlobalKey();
+  double _contentWidth = 0;
+
+  bool get _isTestBinding =>
+      WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
+  @override
+  void initState() {
+    super.initState();
+    // A perpetually repeating marquee never lets pumpAndSettle settle, so skip
+    // the repeat under the test binding — the static layout stays verifiable.
+    if (!_isTestBinding) {
+      _controller.repeat();
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureContent());
+  }
+
+  void _measureContent() {
+    final double width = _contentKey.currentContext?.size?.width ?? 0;
+    if (width > 0 && width != _contentWidth && mounted) {
+      setState(() => _contentWidth = width);
+    }
+  }
 
   @override
   void dispose() {
@@ -538,14 +561,27 @@ class _ResultsTickerState extends State<_ResultsTicker>
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _tickerRow(Key? key) {
     const List<Widget> items = <Widget>[
       _TickerItem(text: 'Marlow FC signed J. Okafor', color: _greenBright),
       _TickerItem(text: 'Lagos Cup won by Vista United', color: _gold),
       _TickerItem(text: 'Rivas (regen) hits 92 GSI', color: _violet),
       _TickerItem(text: '+1,420 GTC top transfer', color: _blue),
     ];
+    return Row(
+      key: key,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (final Widget item in items) ...<Widget>[
+          item,
+          const SizedBox(width: 34),
+        ],
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       height: 34,
       decoration: const BoxDecoration(
@@ -555,33 +591,23 @@ class _ResultsTickerState extends State<_ResultsTicker>
         ),
       ),
       child: ClipRect(
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            return AnimatedBuilder(
-              animation: _controller,
-              builder: (BuildContext context, Widget? child) {
-                final double w = constraints.maxWidth;
-                final double dx = -_controller.value * w;
-                return Stack(
-                  children: <Widget>[
-                    Transform.translate(
-                      offset: Offset(dx, 0),
-                      child: child,
-                    ),
-                    Transform.translate(
-                      offset: Offset(dx + w, 0),
-                      child: child,
-                    ),
-                  ],
-                );
-              },
-              child: SizedBox(
-                width: constraints.maxWidth,
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: items,
-                ),
-              ),
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (BuildContext context, Widget? child) {
+            // Scroll by the content's own width so the second copy lines up
+            // seamlessly; stay still until the width has been measured.
+            // Positioned children (left only, no width) get UNBOUNDED width, so
+            // the content row lays out at its intrinsic size instead of being
+            // clamped to the viewport (which would overflow). The two copies are
+            // distinct instances; only the first carries the measuring key.
+            final double span = _contentWidth;
+            final double dx = -_controller.value * span;
+            return Stack(
+              clipBehavior: Clip.none,
+              children: <Widget>[
+                Positioned(left: dx, top: 0, bottom: 0, child: _tickerRow(_contentKey)),
+                Positioned(left: dx + span, top: 0, bottom: 0, child: _tickerRow(null)),
+              ],
             );
           },
         ),

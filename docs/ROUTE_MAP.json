@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1650,
+  "route_count": 1667,
   "routes": [
     {
       "method": "POST",
@@ -1665,6 +1665,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "session",
           "_",
           "service"
@@ -5269,6 +5270,35 @@
     },
     {
       "method": "POST",
+      "path": "/api/auth/login",
+      "effective_paths": [
+        "/api/auth/login"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "login_user",
+      "router_variable": "api_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request",
+          "x_device_id",
+          "Header(alias"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
       "path": "/api/auth/logout",
       "effective_paths": [
         "/api/auth/logout"
@@ -5422,6 +5452,35 @@
           "payload",
           "session",
           "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TokenResponse",
+        "returns": "TokenResponse"
+      },
+      "version": "canonical",
+      "domain": "auth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/login",
+      "effective_paths": [
+        "/api/v2/auth/login"
+      ],
+      "file": "backend/app/auth/router.py",
+      "handler": "login_user",
+      "router_variable": "api_v2_router",
+      "module_path": "app.auth.router",
+      "module_mounts": [
+        "auth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "request",
+          "x_device_id",
+          "Header(alias"
         ]
       },
       "response_shape": {
@@ -7758,6 +7817,35 @@
     },
     {
       "method": "GET",
+      "path": "/clubs/{club_id}/lineup",
+      "effective_paths": [
+        "/api/clubs/{club_id}/lineup",
+        "/clubs/{club_id}/lineup"
+      ],
+      "file": "backend/app/lineups/router.py",
+      "handler": "get_lineup",
+      "router_variable": "router",
+      "module_path": "app.lineups.router",
+      "module_mounts": [
+        "club_lineup"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "service",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubMatchPlanView",
+        "returns": "ClubMatchPlanView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
       "path": "/clubs/{club_id}/operating-dashboard",
       "effective_paths": [
         "/api/clubs/{club_id}/operating-dashboard"
@@ -9301,6 +9389,36 @@
       "response_shape": {
         "response_model": "ClubSaleListingDetailView",
         "returns": "ClubSaleListingDetailView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "PUT",
+      "path": "/clubs/{club_id}/lineup",
+      "effective_paths": [
+        "/api/clubs/{club_id}/lineup",
+        "/clubs/{club_id}/lineup"
+      ],
+      "file": "backend/app/lineups/router.py",
+      "handler": "save_lineup",
+      "router_variable": "router",
+      "module_path": "app.lineups.router",
+      "module_mounts": [
+        "club_lineup"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "payload",
+          "service",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubMatchPlanView",
+        "returns": "ClubMatchPlanView"
       },
       "version": "canonical",
       "domain": "club"
@@ -12150,7 +12268,8 @@
       "path": "/admin/creator/applications",
       "effective_paths": [
         "/admin/creator/applications",
-        "/api/admin/creator/applications"
+        "/api/admin/creator/applications",
+        "/api/v2/admin/creator/applications"
       ],
       "file": "backend/app/creator/router.py",
       "handler": "list_creator_applications",
@@ -12175,7 +12294,8 @@
       "path": "/admin/creator/dashboard",
       "effective_paths": [
         "/admin/creator/dashboard",
-        "/api/admin/creator/dashboard"
+        "/api/admin/creator/dashboard",
+        "/api/v2/admin/creator/dashboard"
       ],
       "file": "backend/app/creator/router.py",
       "handler": "get_creator_admin_dashboard",
@@ -12200,7 +12320,8 @@
       "path": "/admin/creator/fan-share-market/control",
       "effective_paths": [
         "/admin/creator/fan-share-market/control",
-        "/api/admin/creator/fan-share-market/control"
+        "/api/admin/creator/fan-share-market/control",
+        "/api/v2/admin/creator/fan-share-market/control"
       ],
       "file": "backend/app/creator/router.py",
       "handler": "get_creator_fan_share_market_control",
@@ -12225,6 +12346,7 @@
       "path": "/api/creator/application",
       "effective_paths": [
         "/api/creator/application",
+        "/api/v2/creator/application",
         "/creator/application"
       ],
       "file": "backend/app/creator/router.py",
@@ -12250,6 +12372,7 @@
       "path": "/api/creator/cards",
       "effective_paths": [
         "/api/creator/cards",
+        "/api/v2/creator/cards",
         "/creator/cards"
       ],
       "file": "backend/app/creator/router.py",
@@ -12275,6 +12398,7 @@
       "path": "/api/creator/cards/listings",
       "effective_paths": [
         "/api/creator/cards/listings",
+        "/api/v2/creator/cards/listings",
         "/creator/cards/listings"
       ],
       "file": "backend/app/creator/router.py",
@@ -12299,6 +12423,7 @@
       "path": "/api/creator/clubs/{club_id}/fan-share-market",
       "effective_paths": [
         "/api/creator/clubs/{club_id}/fan-share-market",
+        "/api/v2/creator/clubs/{club_id}/fan-share-market",
         "/creator/clubs/{club_id}/fan-share-market"
       ],
       "file": "backend/app/creator/router.py",
@@ -12325,6 +12450,7 @@
       "path": "/api/creator/clubs/{club_id}/fan-share-market/distributions",
       "effective_paths": [
         "/api/creator/clubs/{club_id}/fan-share-market/distributions",
+        "/api/v2/creator/clubs/{club_id}/fan-share-market/distributions",
         "/creator/clubs/{club_id}/fan-share-market/distributions"
       ],
       "file": "backend/app/creator/router.py",
@@ -12351,6 +12477,7 @@
       "path": "/api/creator/clubs/{club_id}/fan-share-market/holding",
       "effective_paths": [
         "/api/creator/clubs/{club_id}/fan-share-market/holding",
+        "/api/v2/creator/clubs/{club_id}/fan-share-market/holding",
         "/creator/clubs/{club_id}/fan-share-market/holding"
       ],
       "file": "backend/app/creator/router.py",
@@ -12802,7 +12929,8 @@
       "path": "/admin/creator/applications/{application_id}/approve",
       "effective_paths": [
         "/admin/creator/applications/{application_id}/approve",
-        "/api/admin/creator/applications/{application_id}/approve"
+        "/api/admin/creator/applications/{application_id}/approve",
+        "/api/v2/admin/creator/applications/{application_id}/approve"
       ],
       "file": "backend/app/creator/router.py",
       "handler": "approve_creator_application",
@@ -12830,7 +12958,8 @@
       "path": "/admin/creator/applications/{application_id}/reject",
       "effective_paths": [
         "/admin/creator/applications/{application_id}/reject",
-        "/api/admin/creator/applications/{application_id}/reject"
+        "/api/admin/creator/applications/{application_id}/reject",
+        "/api/v2/admin/creator/applications/{application_id}/reject"
       ],
       "file": "backend/app/creator/router.py",
       "handler": "reject_creator_application",
@@ -12858,7 +12987,8 @@
       "path": "/admin/creator/applications/{application_id}/request-verification",
       "effective_paths": [
         "/admin/creator/applications/{application_id}/request-verification",
-        "/api/admin/creator/applications/{application_id}/request-verification"
+        "/api/admin/creator/applications/{application_id}/request-verification",
+        "/api/v2/admin/creator/applications/{application_id}/request-verification"
       ],
       "file": "backend/app/creator/router.py",
       "handler": "request_creator_application_verification",
@@ -12886,7 +13016,8 @@
       "path": "/admin/creator/cards/assign",
       "effective_paths": [
         "/admin/creator/cards/assign",
-        "/api/admin/creator/cards/assign"
+        "/api/admin/creator/cards/assign",
+        "/api/v2/admin/creator/cards/assign"
       ],
       "file": "backend/app/creator/router.py",
       "handler": "assign_creator_card",
@@ -12913,6 +13044,7 @@
       "path": "/api/creator/apply",
       "effective_paths": [
         "/api/creator/apply",
+        "/api/v2/creator/apply",
         "/creator/apply"
       ],
       "file": "backend/app/creator/router.py",
@@ -12940,6 +13072,7 @@
       "path": "/api/creator/cards/listings/{listing_id}/buy",
       "effective_paths": [
         "/api/creator/cards/listings/{listing_id}/buy",
+        "/api/v2/creator/cards/listings/{listing_id}/buy",
         "/creator/cards/listings/{listing_id}/buy"
       ],
       "file": "backend/app/creator/router.py",
@@ -12967,6 +13100,7 @@
       "path": "/api/creator/cards/loans/{loan_id}/return",
       "effective_paths": [
         "/api/creator/cards/loans/{loan_id}/return",
+        "/api/v2/creator/cards/loans/{loan_id}/return",
         "/creator/cards/loans/{loan_id}/return"
       ],
       "file": "backend/app/creator/router.py",
@@ -12994,6 +13128,7 @@
       "path": "/api/creator/cards/swap",
       "effective_paths": [
         "/api/creator/cards/swap",
+        "/api/v2/creator/cards/swap",
         "/creator/cards/swap"
       ],
       "file": "backend/app/creator/router.py",
@@ -13021,6 +13156,7 @@
       "path": "/api/creator/cards/{creator_card_id}/list",
       "effective_paths": [
         "/api/creator/cards/{creator_card_id}/list",
+        "/api/v2/creator/cards/{creator_card_id}/list",
         "/creator/cards/{creator_card_id}/list"
       ],
       "file": "backend/app/creator/router.py",
@@ -13049,6 +13185,7 @@
       "path": "/api/creator/cards/{creator_card_id}/loan",
       "effective_paths": [
         "/api/creator/cards/{creator_card_id}/loan",
+        "/api/v2/creator/cards/{creator_card_id}/loan",
         "/creator/cards/{creator_card_id}/loan"
       ],
       "file": "backend/app/creator/router.py",
@@ -13077,6 +13214,7 @@
       "path": "/api/creator/clubs/{club_id}/fan-share-market",
       "effective_paths": [
         "/api/creator/clubs/{club_id}/fan-share-market",
+        "/api/v2/creator/clubs/{club_id}/fan-share-market",
         "/creator/clubs/{club_id}/fan-share-market"
       ],
       "file": "backend/app/creator/router.py",
@@ -13105,6 +13243,7 @@
       "path": "/api/creator/clubs/{club_id}/fan-share-market/purchase",
       "effective_paths": [
         "/api/creator/clubs/{club_id}/fan-share-market/purchase",
+        "/api/v2/creator/clubs/{club_id}/fan-share-market/purchase",
         "/creator/clubs/{club_id}/fan-share-market/purchase"
       ],
       "file": "backend/app/creator/router.py",
@@ -13133,6 +13272,7 @@
       "path": "/api/creator/verify-email",
       "effective_paths": [
         "/api/creator/verify-email",
+        "/api/v2/creator/verify-email",
         "/creator/verify-email"
       ],
       "file": "backend/app/creator/router.py",
@@ -13159,6 +13299,7 @@
       "path": "/api/creator/verify-phone",
       "effective_paths": [
         "/api/creator/verify-phone",
+        "/api/v2/creator/verify-phone",
         "/creator/verify-phone"
       ],
       "file": "backend/app/creator/router.py",
@@ -13454,7 +13595,8 @@
       "path": "/admin/creator/fan-share-market/control",
       "effective_paths": [
         "/admin/creator/fan-share-market/control",
-        "/api/admin/creator/fan-share-market/control"
+        "/api/admin/creator/fan-share-market/control",
+        "/api/v2/admin/creator/fan-share-market/control"
       ],
       "file": "backend/app/creator/router.py",
       "handler": "update_creator_fan_share_market_control",
@@ -21477,6 +21619,34 @@
     },
     {
       "method": "GET",
+      "path": "/live-match/sessions/{match_id}",
+      "effective_paths": [
+        "/api/live-match/sessions/{match_id}",
+        "/live-match/sessions/{match_id}"
+      ],
+      "file": "backend/app/live_match/router.py",
+      "handler": "get_session",
+      "router_variable": "router",
+      "module_path": "app.live_match.router",
+      "module_mounts": [
+        "live_match"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "engine",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveMatchSessionView",
+        "returns": "LiveMatchSessionView"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "GET",
       "path": "/match/live/active",
       "effective_paths": [
         "/match/live/active"
@@ -21854,6 +22024,119 @@
       "response_shape": {
         "response_model": "UnityLiveAccessView",
         "returns": "UnityLiveAccessView"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/live-match/sessions",
+      "effective_paths": [
+        "/api/live-match/sessions",
+        "/live-match/sessions"
+      ],
+      "file": "backend/app/live_match/router.py",
+      "handler": "create_session",
+      "router_variable": "router",
+      "module_path": "app.live_match.router",
+      "module_mounts": [
+        "live_match"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "engine",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveMatchSessionView",
+        "returns": "LiveMatchSessionView"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/live-match/sessions/{match_id}/halftime/ready",
+      "effective_paths": [
+        "/api/live-match/sessions/{match_id}/halftime/ready",
+        "/live-match/sessions/{match_id}/halftime/ready"
+      ],
+      "file": "backend/app/live_match/router.py",
+      "handler": "halftime_ready",
+      "router_variable": "router",
+      "module_path": "app.live_match.router",
+      "module_mounts": [
+        "live_match"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "payload",
+          "engine",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveMatchSessionView",
+        "returns": "LiveMatchSessionView"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/live-match/sessions/{match_id}/tactics",
+      "effective_paths": [
+        "/api/live-match/sessions/{match_id}/tactics",
+        "/live-match/sessions/{match_id}/tactics"
+      ],
+      "file": "backend/app/live_match/router.py",
+      "handler": "set_tactics",
+      "router_variable": "router",
+      "module_path": "app.live_match.router",
+      "module_mounts": [
+        "live_match"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "payload",
+          "engine",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveMatchSessionView",
+        "returns": "LiveMatchSessionView"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "POST",
+      "path": "/live-match/sessions/{match_id}/tick",
+      "effective_paths": [
+        "/api/live-match/sessions/{match_id}/tick",
+        "/live-match/sessions/{match_id}/tick"
+      ],
+      "file": "backend/app/live_match/router.py",
+      "handler": "tick_session",
+      "router_variable": "router",
+      "module_path": "app.live_match.router",
+      "module_mounts": [
+        "live_match"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "engine"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveMatchSessionView",
+        "returns": "LiveMatchSessionView"
       },
       "version": "canonical",
       "domain": "live"
@@ -23159,6 +23442,7 @@
       "path": "/api/market/browse/catalog",
       "effective_paths": [
         "/api/market/browse/catalog",
+        "/api/v2/market/browse/catalog",
         "/market/browse/catalog"
       ],
       "file": "backend/app/market/router.py",
@@ -23186,6 +23470,7 @@
       "path": "/api/market/clubs/{club_id}/players",
       "effective_paths": [
         "/api/market/clubs/{club_id}/players",
+        "/api/v2/market/clubs/{club_id}/players",
         "/market/clubs/{club_id}/players"
       ],
       "file": "backend/app/market/router.py",
@@ -23216,6 +23501,7 @@
       "path": "/api/market/leagues",
       "effective_paths": [
         "/api/market/leagues",
+        "/api/v2/market/leagues",
         "/market/leagues"
       ],
       "file": "backend/app/market/router.py",
@@ -23242,6 +23528,7 @@
       "path": "/api/market/leagues/{league_id}/clubs",
       "effective_paths": [
         "/api/market/leagues/{league_id}/clubs",
+        "/api/v2/market/leagues/{league_id}/clubs",
         "/market/leagues/{league_id}/clubs"
       ],
       "file": "backend/app/market/router.py",
@@ -23269,6 +23556,7 @@
       "path": "/api/market/listings/{listing_id}/matches",
       "effective_paths": [
         "/api/market/listings/{listing_id}/matches",
+        "/api/v2/market/listings/{listing_id}/matches",
         "/market/listings/{listing_id}/matches"
       ],
       "file": "backend/app/market/router.py",
@@ -23297,6 +23585,7 @@
       "path": "/api/market/listings/{listing_id}/offers",
       "effective_paths": [
         "/api/market/listings/{listing_id}/offers",
+        "/api/v2/market/listings/{listing_id}/offers",
         "/market/listings/{listing_id}/offers"
       ],
       "file": "backend/app/market/router.py",
@@ -23325,6 +23614,7 @@
       "path": "/api/market/movers",
       "effective_paths": [
         "/api/market/movers",
+        "/api/v2/market/movers",
         "/market/movers"
       ],
       "file": "backend/app/market/router.py",
@@ -23336,6 +23626,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "request",
           "limit",
           "ge",
           "le",
@@ -23354,6 +23645,7 @@
       "path": "/api/market/national-teams",
       "effective_paths": [
         "/api/market/national-teams",
+        "/api/v2/market/national-teams",
         "/market/national-teams"
       ],
       "file": "backend/app/market/router.py",
@@ -23380,6 +23672,7 @@
       "path": "/api/market/national-teams/{team_id}/eligible-players",
       "effective_paths": [
         "/api/market/national-teams/{team_id}/eligible-players",
+        "/api/v2/market/national-teams/{team_id}/eligible-players",
         "/market/national-teams/{team_id}/eligible-players"
       ],
       "file": "backend/app/market/router.py",
@@ -23410,6 +23703,7 @@
       "path": "/api/market/nationalities",
       "effective_paths": [
         "/api/market/nationalities",
+        "/api/v2/market/nationalities",
         "/market/nationalities"
       ],
       "file": "backend/app/market/router.py",
@@ -23436,6 +23730,7 @@
       "path": "/api/market/nationalities/{country_code}/players",
       "effective_paths": [
         "/api/market/nationalities/{country_code}/players",
+        "/api/v2/market/nationalities/{country_code}/players",
         "/market/nationalities/{country_code}/players"
       ],
       "file": "backend/app/market/router.py",
@@ -23466,6 +23761,7 @@
       "path": "/api/market/players",
       "effective_paths": [
         "/api/market/players",
+        "/api/v2/market/players",
         "/market/players"
       ],
       "file": "backend/app/market/router.py",
@@ -23518,6 +23814,7 @@
       "path": "/api/market/players/{player_id}",
       "effective_paths": [
         "/api/market/players/{player_id}",
+        "/api/v2/market/players/{player_id}",
         "/market/players/{player_id}"
       ],
       "file": "backend/app/market/router.py",
@@ -23545,6 +23842,7 @@
       "path": "/api/market/players/{player_id}/candles",
       "effective_paths": [
         "/api/market/players/{player_id}/candles",
+        "/api/v2/market/players/{player_id}/candles",
         "/market/players/{player_id}/candles"
       ],
       "file": "backend/app/market/router.py",
@@ -23576,6 +23874,7 @@
       "path": "/api/market/players/{player_id}/history",
       "effective_paths": [
         "/api/market/players/{player_id}/history",
+        "/api/v2/market/players/{player_id}/history",
         "/market/players/{player_id}/history"
       ],
       "file": "backend/app/market/router.py",
@@ -23603,6 +23902,7 @@
       "path": "/api/market/summary/{asset_id}",
       "effective_paths": [
         "/api/market/summary/{asset_id}",
+        "/api/v2/market/summary/{asset_id}",
         "/market/summary/{asset_id}"
       ],
       "file": "backend/app/market/router.py",
@@ -23630,6 +23930,7 @@
       "path": "/api/market/ticker/{player_id}",
       "effective_paths": [
         "/api/market/ticker/{player_id}",
+        "/api/v2/market/ticker/{player_id}",
         "/market/ticker/{player_id}"
       ],
       "file": "backend/app/market/router.py",
@@ -23657,6 +23958,7 @@
       "path": "/api/market/buy",
       "effective_paths": [
         "/api/market/buy",
+        "/api/v2/market/buy",
         "/market/buy"
       ],
       "file": "backend/app/market/router.py",
@@ -23686,6 +23988,7 @@
       "path": "/api/market/listings",
       "effective_paths": [
         "/api/market/listings",
+        "/api/v2/market/listings",
         "/market/listings"
       ],
       "file": "backend/app/market/router.py",
@@ -23714,6 +24017,7 @@
       "path": "/api/market/listings/{listing_id}/cancel",
       "effective_paths": [
         "/api/market/listings/{listing_id}/cancel",
+        "/api/v2/market/listings/{listing_id}/cancel",
         "/market/listings/{listing_id}/cancel"
       ],
       "file": "backend/app/market/router.py",
@@ -23742,6 +24046,7 @@
       "path": "/api/market/offers",
       "effective_paths": [
         "/api/market/offers",
+        "/api/v2/market/offers",
         "/market/offers"
       ],
       "file": "backend/app/market/router.py",
@@ -23770,6 +24075,7 @@
       "path": "/api/market/offers/{offer_id}/accept",
       "effective_paths": [
         "/api/market/offers/{offer_id}/accept",
+        "/api/v2/market/offers/{offer_id}/accept",
         "/market/offers/{offer_id}/accept"
       ],
       "file": "backend/app/market/router.py",
@@ -23798,6 +24104,7 @@
       "path": "/api/market/offers/{offer_id}/counter",
       "effective_paths": [
         "/api/market/offers/{offer_id}/counter",
+        "/api/v2/market/offers/{offer_id}/counter",
         "/market/offers/{offer_id}/counter"
       ],
       "file": "backend/app/market/router.py",
@@ -23827,6 +24134,7 @@
       "path": "/api/market/offers/{offer_id}/reject",
       "effective_paths": [
         "/api/market/offers/{offer_id}/reject",
+        "/api/v2/market/offers/{offer_id}/reject",
         "/market/offers/{offer_id}/reject"
       ],
       "file": "backend/app/market/router.py",
@@ -23855,6 +24163,7 @@
       "path": "/api/market/sell",
       "effective_paths": [
         "/api/market/sell",
+        "/api/v2/market/sell",
         "/market/sell"
       ],
       "file": "backend/app/market/router.py",
@@ -23884,6 +24193,7 @@
       "path": "/api/market/trade-intents",
       "effective_paths": [
         "/api/market/trade-intents",
+        "/api/v2/market/trade-intents",
         "/market/trade-intents"
       ],
       "file": "backend/app/market/router.py",
@@ -23912,6 +24222,7 @@
       "path": "/api/market/trade-intents/{intent_id}/withdraw",
       "effective_paths": [
         "/api/market/trade-intents/{intent_id}/withdraw",
+        "/api/v2/market/trade-intents/{intent_id}/withdraw",
         "/market/trade-intents/{intent_id}/withdraw"
       ],
       "file": "backend/app/market/router.py",
@@ -33833,9 +34144,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/clubs/{club_id}/prestige",
+      "path": "/clubs/{club_id}/prestige",
       "effective_paths": [
-        "/api/clubs/{club_id}/prestige"
+        "/clubs/{club_id}/prestige"
       ],
       "file": "backend/app/club_identity/reputation/router.py",
       "handler": "get_club_prestige",
@@ -33857,9 +34168,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/clubs/{club_id}/reputation",
+      "path": "/clubs/{club_id}/reputation",
       "effective_paths": [
-        "/api/clubs/{club_id}/reputation"
+        "/clubs/{club_id}/reputation"
       ],
       "file": "backend/app/club_identity/reputation/router.py",
       "handler": "get_club_reputation",
@@ -33881,9 +34192,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/clubs/{club_id}/reputation/history",
+      "path": "/clubs/{club_id}/reputation/history",
       "effective_paths": [
-        "/api/clubs/{club_id}/reputation/history"
+        "/clubs/{club_id}/reputation/history"
       ],
       "file": "backend/app/club_identity/reputation/router.py",
       "handler": "get_club_reputation_history",
@@ -33905,9 +34216,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/leaderboards/prestige",
+      "path": "/leaderboards/prestige",
       "effective_paths": [
-        "/api/leaderboards/prestige"
+        "/leaderboards/prestige"
       ],
       "file": "backend/app/club_identity/reputation/router.py",
       "handler": "get_prestige_leaderboard",
@@ -35870,8 +36181,8 @@
         ]
       },
       "response_shape": {
-        "response_model": null,
-        "returns": "dict[str, object]"
+        "response_model": "ClubV2SnapshotView",
+        "returns": "ClubV2SnapshotView"
       },
       "version": "canonical",
       "domain": "segment"
@@ -36309,152 +36620,6 @@
       "response_shape": {
         "response_model": "CompetitionSummaryView",
         "returns": "CompetitionSummaryView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/api/creators/me/competitions",
-      "effective_paths": [
-        "/api/creators/me/competitions"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_competitions",
-      "router_variable": "router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "list[CreatorCompetitionView]",
-        "returns": "list[CreatorCompetitionView]"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/api/creators/me/finance",
-      "effective_paths": [
-        "/api/creators/me/finance"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_finance",
-      "router_variable": "router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorFinanceSummaryView",
-        "returns": "CreatorFinanceSummaryView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/api/creators/me/insights",
-      "effective_paths": [
-        "/api/creators/me/insights"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_insights",
-      "router_variable": "router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorInsightsView",
-        "returns": "CreatorInsightsView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/api/creators/me/summary",
-      "effective_paths": [
-        "/api/creators/me/summary"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_summary",
-      "router_variable": "router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorSummaryView",
-        "returns": "CreatorSummaryView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/api/creators/profile/me",
-      "effective_paths": [
-        "/api/creators/profile/me"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_my_creator_profile",
-      "router_variable": "router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorProfileView",
-        "returns": "CreatorProfileView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "GET",
-      "path": "/api/creators/{handle}",
-      "effective_paths": [
-        "/api/creators/{handle}"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "get_creator_profile",
-      "router_variable": "router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "handle",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorProfileView",
-        "returns": "CreatorProfileView"
       },
       "version": "canonical",
       "domain": "segment"
@@ -36939,13 +37104,68 @@
     },
     {
       "method": "GET",
-      "path": "/creators/me/insights",
+      "path": "/me/competitions",
       "effective_paths": [
-        "/creators/me/insights"
+        "/api/creators/me/competitions",
+        "/api/v2/creators/me/competitions",
+        "/me/competitions"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_competitions",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[CreatorCompetitionView]",
+        "returns": "list[CreatorCompetitionView]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/me/finance",
+      "effective_paths": [
+        "/api/creators/me/finance",
+        "/api/v2/creators/me/finance",
+        "/me/finance"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_finance",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorFinanceSummaryView",
+        "returns": "CreatorFinanceSummaryView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/me/insights",
+      "effective_paths": [
+        "/api/creators/me/insights",
+        "/api/v2/creators/me/insights",
+        "/me/insights"
       ],
       "file": "backend/app/segments/creators/segment_creators.py",
       "handler": "get_my_creator_insights",
-      "router_variable": "alias_router",
+      "router_variable": "_base_router",
       "module_path": "app.segments.creators.segment_creators",
       "module_mounts": [],
       "request_shape": {
@@ -36958,6 +37178,110 @@
       "response_shape": {
         "response_model": "CreatorInsightsView",
         "returns": "CreatorInsightsView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/me/insights",
+      "effective_paths": [
+        "/creators/me/insights",
+        "/me/insights"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_insights",
+      "router_variable": "_alias_subset",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorInsightsView",
+        "returns": "CreatorInsightsView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/me/summary",
+      "effective_paths": [
+        "/api/creators/me/summary",
+        "/api/v2/creators/me/summary",
+        "/me/summary"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_summary",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorSummaryView",
+        "returns": "CreatorSummaryView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/profile/me",
+      "effective_paths": [
+        "/api/creators/profile/me",
+        "/api/v2/creators/profile/me",
+        "/profile/me"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_my_creator_profile",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorProfileView",
+        "returns": "CreatorProfileView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/{handle}",
+      "effective_paths": [
+        "/api/creators/{handle}",
+        "/api/v2/creators/{handle}",
+        "/{handle}"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "get_creator_profile",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "handle",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorProfileView",
+        "returns": "CreatorProfileView"
       },
       "version": "canonical",
       "domain": "segment"
@@ -37147,31 +37471,6 @@
     },
     {
       "method": "PATCH",
-      "path": "/api/creators/profile",
-      "effective_paths": [
-        "/api/creators/profile"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "update_creator_profile",
-      "router_variable": "router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "payload",
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorProfileView",
-        "returns": "CreatorProfileView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "PATCH",
       "path": "/api/referrals/share-codes/{share_code_id}",
       "effective_paths": [
         "/api/referrals/share-codes/{share_code_id}"
@@ -37193,6 +37492,33 @@
       "response_shape": {
         "response_model": "ShareCodeView",
         "returns": "ShareCodeView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "PATCH",
+      "path": "/profile",
+      "effective_paths": [
+        "/api/creators/profile",
+        "/api/v2/creators/profile",
+        "/profile"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "update_creator_profile",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorProfileView",
+        "returns": "CreatorProfileView"
       },
       "version": "canonical",
       "domain": "segment"
@@ -38207,57 +38533,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/creators/me/copilot/analyze",
-      "effective_paths": [
-        "/api/creators/me/copilot/analyze"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "analyze_my_creator_draft",
-      "router_variable": "router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "payload",
-          "current_user",
-          "orchestrator",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorCopilotAnalysisView",
-        "returns": "CreatorCopilotAnalysisView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "POST",
-      "path": "/api/creators/profile",
-      "effective_paths": [
-        "/api/creators/profile"
-      ],
-      "file": "backend/app/segments/creators/segment_creators.py",
-      "handler": "create_creator_profile",
-      "router_variable": "router",
-      "module_path": "app.segments.creators.segment_creators",
-      "module_mounts": [],
-      "request_shape": {
-        "parameters": [
-          "payload",
-          "current_user",
-          "orchestrator"
-        ]
-      },
-      "response_shape": {
-        "response_model": "CreatorProfileView",
-        "returns": "CreatorProfileView"
-      },
-      "version": "canonical",
-      "domain": "segment"
-    },
-    {
-      "method": "POST",
       "path": "/api/players/{player_id}/contracts",
       "effective_paths": [
         "/api/players/{player_id}/contracts"
@@ -38667,13 +38942,15 @@
     },
     {
       "method": "POST",
-      "path": "/creators/me/copilot/analyze",
+      "path": "/me/copilot/analyze",
       "effective_paths": [
-        "/creators/me/copilot/analyze"
+        "/api/creators/me/copilot/analyze",
+        "/api/v2/creators/me/copilot/analyze",
+        "/me/copilot/analyze"
       ],
       "file": "backend/app/segments/creators/segment_creators.py",
       "handler": "analyze_my_creator_draft",
-      "router_variable": "alias_router",
+      "router_variable": "_base_router",
       "module_path": "app.segments.creators.segment_creators",
       "module_mounts": [],
       "request_shape": {
@@ -38687,6 +38964,60 @@
       "response_shape": {
         "response_model": "CreatorCopilotAnalysisView",
         "returns": "CreatorCopilotAnalysisView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
+      "path": "/me/copilot/analyze",
+      "effective_paths": [
+        "/creators/me/copilot/analyze",
+        "/me/copilot/analyze"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "analyze_my_creator_draft",
+      "router_variable": "_alias_subset",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "orchestrator",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorCopilotAnalysisView",
+        "returns": "CreatorCopilotAnalysisView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
+      "path": "/profile",
+      "effective_paths": [
+        "/api/creators/profile",
+        "/api/v2/creators/profile",
+        "/profile"
+      ],
+      "file": "backend/app/segments/creators/segment_creators.py",
+      "handler": "create_creator_profile",
+      "router_variable": "_base_router",
+      "module_path": "app.segments.creators.segment_creators",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "orchestrator"
+        ]
+      },
+      "response_shape": {
+        "response_model": "CreatorProfileView",
+        "returns": "CreatorProfileView"
       },
       "version": "canonical",
       "domain": "segment"
@@ -38853,6 +39184,34 @@
     },
     {
       "method": "POST",
+      "path": "/api/simulation-matchmaking/quick-game/{match_id}/settle",
+      "effective_paths": [
+        "/api/simulation-matchmaking/quick-game/{match_id}/settle"
+      ],
+      "file": "backend/app/simulation_matchmaking/router.py",
+      "handler": "settle_live_quick_game",
+      "router_variable": "api_router",
+      "module_path": "app.simulation_matchmaking.router",
+      "module_mounts": [
+        "simulation_matchmaking"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "current_user",
+          "session",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveMatchSettlementView",
+        "returns": "LiveMatchSettlementView"
+      },
+      "version": "canonical",
+      "domain": "simulation"
+    },
+    {
+      "method": "POST",
       "path": "/api/simulation-matchmaking/quick-tournament",
       "effective_paths": [
         "/api/simulation-matchmaking/quick-tournament"
@@ -38927,6 +39286,34 @@
       "response_shape": {
         "response_model": "QuickGameResponse",
         "returns": "QuickGameResponse"
+      },
+      "version": "canonical",
+      "domain": "simulation"
+    },
+    {
+      "method": "POST",
+      "path": "/simulation-matchmaking/quick-game/{match_id}/settle",
+      "effective_paths": [
+        "/simulation-matchmaking/quick-game/{match_id}/settle"
+      ],
+      "file": "backend/app/simulation_matchmaking/router.py",
+      "handler": "settle_live_quick_game",
+      "router_variable": "legacy_router",
+      "module_path": "app.simulation_matchmaking.router",
+      "module_mounts": [
+        "simulation_matchmaking"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "current_user",
+          "session",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveMatchSettlementView",
+        "returns": "LiveMatchSettlementView"
       },
       "version": "canonical",
       "domain": "simulation"
@@ -39463,6 +39850,125 @@
       },
       "version": "canonical",
       "domain": "sponsorship"
+    },
+    {
+      "method": "GET",
+      "path": "/clubs/{club_id}/academy/intake",
+      "effective_paths": [
+        "/api/clubs/{club_id}/academy/intake",
+        "/clubs/{club_id}/academy/intake"
+      ],
+      "file": "backend/app/squad_tiers/router.py",
+      "handler": "get_academy_intake",
+      "router_variable": "router",
+      "module_path": "app.squad_tiers.router",
+      "module_mounts": [
+        "squad_tiers"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "service",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "AcademyIntakeView",
+        "returns": "AcademyIntakeView"
+      },
+      "version": "canonical",
+      "domain": "squad"
+    },
+    {
+      "method": "GET",
+      "path": "/clubs/{club_id}/squad/tiers",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad/tiers",
+        "/clubs/{club_id}/squad/tiers"
+      ],
+      "file": "backend/app/squad_tiers/router.py",
+      "handler": "get_squad_tiers",
+      "router_variable": "router",
+      "module_path": "app.squad_tiers.router",
+      "module_mounts": [
+        "squad_tiers"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "service",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "SquadTiersView",
+        "returns": "SquadTiersView"
+      },
+      "version": "canonical",
+      "domain": "squad"
+    },
+    {
+      "method": "POST",
+      "path": "/clubs/{club_id}/academy/intake/{player_id}/sign-up",
+      "effective_paths": [
+        "/api/clubs/{club_id}/academy/intake/{player_id}/sign-up",
+        "/clubs/{club_id}/academy/intake/{player_id}/sign-up"
+      ],
+      "file": "backend/app/squad_tiers/router.py",
+      "handler": "sign_up_to_first_team",
+      "router_variable": "router",
+      "module_path": "app.squad_tiers.router",
+      "module_mounts": [
+        "squad_tiers"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "player_id",
+          "service",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "SquadTierMemberView",
+        "returns": "SquadTierMemberView"
+      },
+      "version": "canonical",
+      "domain": "squad"
+    },
+    {
+      "method": "POST",
+      "path": "/clubs/{club_id}/squad/tiers/{player_id}/assign",
+      "effective_paths": [
+        "/api/clubs/{club_id}/squad/tiers/{player_id}/assign",
+        "/clubs/{club_id}/squad/tiers/{player_id}/assign"
+      ],
+      "file": "backend/app/squad_tiers/router.py",
+      "handler": "assign_tier",
+      "router_variable": "router",
+      "module_path": "app.squad_tiers.router",
+      "module_mounts": [
+        "squad_tiers"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "player_id",
+          "payload",
+          "service",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "SquadTierMemberView",
+        "returns": "SquadTierMemberView"
+      },
+      "version": "canonical",
+      "domain": "squad"
     },
     {
       "method": "GET",
@@ -44140,8 +44646,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallet",
+      "path": "/api/v2/wallet",
       "effective_paths": [
+        "/api/v2/wallet",
         "/api/wallet",
         "/wallet"
       ],
@@ -44168,8 +44675,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallet/summary",
+      "path": "/api/v2/wallet/summary",
       "effective_paths": [
+        "/api/v2/wallet/summary",
         "/api/wallet/summary",
         "/wallet/summary"
       ],
@@ -44197,8 +44705,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallet/transactions",
+      "path": "/api/v2/wallet/transactions",
       "effective_paths": [
+        "/api/v2/wallet/transactions",
         "/api/wallet/transactions",
         "/wallet/transactions"
       ],
@@ -44228,8 +44737,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets",
+      "path": "/api/v2/wallets",
       "effective_paths": [
+        "/api/v2/wallets",
         "/api/wallets",
         "/wallets"
       ],
@@ -44256,8 +44766,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/accounts",
+      "path": "/api/v2/wallets/accounts",
       "effective_paths": [
+        "/api/v2/wallets/accounts",
         "/api/wallets/accounts",
         "/wallets/accounts"
       ],
@@ -44284,8 +44795,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/adaptive-overview",
+      "path": "/api/v2/wallets/adaptive-overview",
       "effective_paths": [
+        "/api/v2/wallets/adaptive-overview",
         "/api/wallets/adaptive-overview",
         "/wallets/adaptive-overview"
       ],
@@ -44312,8 +44824,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/deposits",
+      "path": "/api/v2/wallets/deposits",
       "effective_paths": [
+        "/api/v2/wallets/deposits",
         "/api/wallets/deposits",
         "/wallets/deposits"
       ],
@@ -44340,8 +44853,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/ledger",
+      "path": "/api/v2/wallets/ledger",
       "effective_paths": [
+        "/api/v2/wallets/ledger",
         "/api/wallets/ledger",
         "/wallets/ledger"
       ],
@@ -44373,8 +44887,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/market-topups",
+      "path": "/api/v2/wallets/market-topups",
       "effective_paths": [
+        "/api/v2/wallets/market-topups",
         "/api/wallets/market-topups",
         "/wallets/market-topups"
       ],
@@ -44410,8 +44925,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/overview",
+      "path": "/api/v2/wallets/overview",
       "effective_paths": [
+        "/api/v2/wallets/overview",
         "/api/wallets/overview",
         "/wallets/overview"
       ],
@@ -44438,8 +44954,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/purchase-orders",
+      "path": "/api/v2/wallets/purchase-orders",
       "effective_paths": [
+        "/api/v2/wallets/purchase-orders",
         "/api/wallets/purchase-orders",
         "/wallets/purchase-orders"
       ],
@@ -44476,8 +44993,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/purchase-orders/{order_id}",
+      "path": "/api/v2/wallets/purchase-orders/{order_id}",
       "effective_paths": [
+        "/api/v2/wallets/purchase-orders/{order_id}",
         "/api/wallets/purchase-orders/{order_id}",
         "/wallets/purchase-orders/{order_id}"
       ],
@@ -44504,8 +45022,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/summary",
+      "path": "/api/v2/wallets/summary",
       "effective_paths": [
+        "/api/v2/wallets/summary",
         "/api/wallets/summary",
         "/wallets/summary"
       ],
@@ -44533,8 +45052,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/transactions",
+      "path": "/api/v2/wallets/transactions",
       "effective_paths": [
+        "/api/v2/wallets/transactions",
         "/api/wallets/transactions",
         "/wallets/transactions"
       ],
@@ -44564,8 +45084,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/withdrawals",
+      "path": "/api/v2/wallets/withdrawals",
       "effective_paths": [
+        "/api/v2/wallets/withdrawals",
         "/api/wallets/withdrawals",
         "/wallets/withdrawals"
       ],
@@ -44592,8 +45113,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/withdrawals/eligibility",
+      "path": "/api/v2/wallets/withdrawals/eligibility",
       "effective_paths": [
+        "/api/v2/wallets/withdrawals/eligibility",
         "/api/wallets/withdrawals/eligibility",
         "/wallets/withdrawals/eligibility"
       ],
@@ -44620,8 +45142,9 @@
     },
     {
       "method": "GET",
-      "path": "/api/wallets/withdrawals/{withdrawal_id}/receipt",
+      "path": "/api/v2/wallets/withdrawals/{withdrawal_id}/receipt",
       "effective_paths": [
+        "/api/v2/wallets/withdrawals/{withdrawal_id}/receipt",
         "/api/wallets/withdrawals/{withdrawal_id}/receipt",
         "/wallets/withdrawals/{withdrawal_id}/receipt"
       ],
@@ -44790,8 +45313,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallet/top-up/initiate",
+      "path": "/api/v2/wallet/top-up/initiate",
       "effective_paths": [
+        "/api/v2/wallet/top-up/initiate",
         "/api/wallet/top-up/initiate",
         "/wallet/top-up/initiate"
       ],
@@ -44819,8 +45343,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallet/top-up/verify",
+      "path": "/api/v2/wallet/top-up/verify",
       "effective_paths": [
+        "/api/v2/wallet/top-up/verify",
         "/api/wallet/top-up/verify",
         "/wallet/top-up/verify"
       ],
@@ -44848,8 +45373,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/conversions",
+      "path": "/api/v2/wallets/conversions",
       "effective_paths": [
+        "/api/v2/wallets/conversions",
         "/api/wallets/conversions",
         "/wallets/conversions"
       ],
@@ -44877,8 +45403,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/conversions/quote",
+      "path": "/api/v2/wallets/conversions/quote",
       "effective_paths": [
+        "/api/v2/wallets/conversions/quote",
         "/api/wallets/conversions/quote",
         "/wallets/conversions/quote"
       ],
@@ -44906,8 +45433,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/deposits",
+      "path": "/api/v2/wallets/deposits",
       "effective_paths": [
+        "/api/v2/wallets/deposits",
         "/api/wallets/deposits",
         "/wallets/deposits"
       ],
@@ -44935,8 +45463,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/deposits/{deposit_id}/submit",
+      "path": "/api/v2/wallets/deposits/{deposit_id}/submit",
       "effective_paths": [
+        "/api/v2/wallets/deposits/{deposit_id}/submit",
         "/api/wallets/deposits/{deposit_id}/submit",
         "/wallets/deposits/{deposit_id}/submit"
       ],
@@ -44965,8 +45494,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/payment-events",
+      "path": "/api/v2/wallets/payment-events",
       "effective_paths": [
+        "/api/v2/wallets/payment-events",
         "/api/wallets/payment-events",
         "/wallets/payment-events"
       ],
@@ -44994,8 +45524,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/providers/{provider_key}/webhook",
+      "path": "/api/v2/wallets/providers/{provider_key}/webhook",
       "effective_paths": [
+        "/api/v2/wallets/providers/{provider_key}/webhook",
         "/api/wallets/providers/{provider_key}/webhook",
         "/wallets/providers/{provider_key}/webhook"
       ],
@@ -45022,8 +45553,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/purchase-orders",
+      "path": "/api/v2/wallets/purchase-orders",
       "effective_paths": [
+        "/api/v2/wallets/purchase-orders",
         "/api/wallets/purchase-orders",
         "/wallets/purchase-orders"
       ],
@@ -45051,8 +45583,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/purchase-orders/quote",
+      "path": "/api/v2/wallets/purchase-orders/quote",
       "effective_paths": [
+        "/api/v2/wallets/purchase-orders/quote",
         "/api/wallets/purchase-orders/quote",
         "/wallets/purchase-orders/quote"
       ],
@@ -45080,8 +45613,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/top-up/initiate",
+      "path": "/api/v2/wallets/top-up/initiate",
       "effective_paths": [
+        "/api/v2/wallets/top-up/initiate",
         "/api/wallets/top-up/initiate",
         "/wallets/top-up/initiate"
       ],
@@ -45109,8 +45643,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/top-up/verify",
+      "path": "/api/v2/wallets/top-up/verify",
       "effective_paths": [
+        "/api/v2/wallets/top-up/verify",
         "/api/wallets/top-up/verify",
         "/wallets/top-up/verify"
       ],
@@ -45138,8 +45673,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/withdrawals",
+      "path": "/api/v2/wallets/withdrawals",
       "effective_paths": [
+        "/api/v2/wallets/withdrawals",
         "/api/wallets/withdrawals",
         "/wallets/withdrawals"
       ],
@@ -45167,8 +45703,9 @@
     },
     {
       "method": "POST",
-      "path": "/api/wallets/withdrawals/quote",
+      "path": "/api/v2/wallets/withdrawals/quote",
       "effective_paths": [
+        "/api/v2/wallets/withdrawals/quote",
         "/api/wallets/withdrawals/quote",
         "/wallets/withdrawals/quote"
       ],
@@ -45324,12 +45861,41 @@
       "request_shape": {
         "parameters": [
           "request",
-          "reference_at"
+          "reference_at",
+          "tournament_id"
         ]
       },
       "response_shape": {
         "response_model": "TournamentCountdownView",
         "returns": "TournamentCountdownView"
+      },
+      "version": "canonical",
+      "domain": "world"
+    },
+    {
+      "method": "GET",
+      "path": "/world-super-cup/fixtures",
+      "effective_paths": [
+        "/api/world-super-cup/fixtures",
+        "/world-super-cup/fixtures"
+      ],
+      "file": "backend/app/world_super_cup/api/router.py",
+      "handler": "get_fixtures",
+      "router_variable": "router",
+      "module_path": "app.world_super_cup.api.router",
+      "module_mounts": [
+        "world_super_cup"
+      ],
+      "request_shape": {
+        "parameters": [
+          "request",
+          "reference_at",
+          "tournament_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": "WorldSuperCupFixturesView",
+        "returns": "WorldSuperCupFixturesView"
       },
       "version": "canonical",
       "domain": "world"
@@ -45351,7 +45917,8 @@
       "request_shape": {
         "parameters": [
           "request",
-          "reference_at"
+          "reference_at",
+          "tournament_id"
         ]
       },
       "response_shape": {
@@ -45378,7 +45945,8 @@
       "request_shape": {
         "parameters": [
           "request",
-          "reference_at"
+          "reference_at",
+          "tournament_id"
         ]
       },
       "response_shape": {
@@ -45405,7 +45973,8 @@
       "request_shape": {
         "parameters": [
           "request",
-          "reference_at"
+          "reference_at",
+          "tournament_id"
         ]
       },
       "response_shape": {
@@ -45432,12 +46001,42 @@
       "request_shape": {
         "parameters": [
           "request",
-          "reference_at"
+          "reference_at",
+          "tournament_id"
         ]
       },
       "response_shape": {
         "response_model": "QualificationExplanationView",
         "returns": "QualificationExplanationView"
+      },
+      "version": "canonical",
+      "domain": "world"
+    },
+    {
+      "method": "POST",
+      "path": "/world-super-cup/fixtures/{fixture_id}/settlement",
+      "effective_paths": [
+        "/api/world-super-cup/fixtures/{fixture_id}/settlement",
+        "/world-super-cup/fixtures/{fixture_id}/settlement"
+      ],
+      "file": "backend/app/world_super_cup/api/router.py",
+      "handler": "settle_fixture_result",
+      "router_variable": "router",
+      "module_path": "app.world_super_cup.api.router",
+      "module_mounts": [
+        "world_super_cup"
+      ],
+      "request_shape": {
+        "parameters": [
+          "fixture_id",
+          "payload",
+          "session",
+          "_admin"
+        ]
+      },
+      "response_shape": {
+        "response_model": "WorldSuperCupSettlementView",
+        "returns": "WorldSuperCupSettlementView"
       },
       "version": "canonical",
       "domain": "world"

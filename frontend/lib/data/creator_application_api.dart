@@ -33,6 +33,12 @@ class CreatorApplicationApi {
             mode: resolvedMode,
           ),
       mode: resolvedMode,
+      // Fixture mode (dev/tests only — production always resolves to live) needs
+      // a backing fixture state, otherwise load/verify/submit throw "fixtures
+      // are not registered".
+      fixtureState: resolvedMode == GteBackendMode.fixture
+          ? _CreatorApplicationFixtureState()
+          : null,
     );
   }
 

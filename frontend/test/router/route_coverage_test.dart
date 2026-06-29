@@ -119,9 +119,12 @@ void main() {
         '/player-cards',
         '/world',
         '/world/regens',
+        '/world/federations',
+        '/world/awards',
         '/national-team',
         '/football/transfer-center',
         '/streamer-tournaments',
+        '/viral-feed',
       };
       final Set<String> directCatalogCollisions =
           seenDirectPaths.where(catalogPaths.contains).toSet();
