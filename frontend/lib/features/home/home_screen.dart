@@ -1832,6 +1832,11 @@ List<_QuickActionSpec> _actionsForPersona(_HomePersona persona) {
           icon: Icons.sports_rounded,
         ),
         _QuickActionSpec(
+          location: AppRoutes.lineup,
+          label: 'Set lineup',
+          icon: Icons.dashboard_customize_rounded,
+        ),
+        _QuickActionSpec(
           location: AppRoutes.matches,
           label: 'Prepare matchday',
           icon: Icons.sports_soccer_rounded,

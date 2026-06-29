@@ -17,6 +17,7 @@ class AppRoutes {
   static const String nationalTeams = '/national-teams';
   static const String nationalTeamDetail = '/national-teams/:competitionId';
   static const String coaches = '/coaches';
+  static const String lineup = '/lineup';
   static const String tasks = '/tasks';
   static const String profile = '/profile';
   static const String profileLogin = '/profile/login';

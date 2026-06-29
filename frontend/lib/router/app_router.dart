@@ -30,6 +30,7 @@ import 'package:gte_frontend/screens/gtex_public_landing_screen_v2.dart';
 import 'package:gte_frontend/screens/gtex_national_team_rental_screen_v2.dart';
 import 'package:gte_frontend/screens/manager_market_screen.dart';
 import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
+import 'package:gte_frontend/features/club/gtex_lineup_editor_screen.dart';
 import 'package:gte_frontend/screens/match/gtex_match_center_screen_v2.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
 import 'package:gte_frontend/screens/profile/gtex_live_profile_screen.dart';
@@ -534,6 +535,34 @@ List<RouteBase> _buildLegacyAliasRoutes({
               backendMode: config.activeShellBackendMode,
             ),
           ),
+    ),
+    GoRoute(
+      path: '/lineup',
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies = dependenciesBuilder(
+          context,
+        );
+        final String clubId = dependencies.currentClubId ?? '';
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: clubId.isEmpty
+              ? GteRouteIntegrityScreen.blocked(
+                  title: 'No club yet',
+                  message:
+                      'Open a club to set your formation and starting lineup.',
+                  icon: Icons.groups_outlined,
+                  actionLabel: 'Back to GTEX',
+                  onAction: () =>
+                      context.go(const GteNavigationRoute.home().path),
+                )
+              : GtexLineupEditorScreen(
+                  clubId: clubId,
+                  baseUrl: config.apiBaseUrl,
+                  accessToken: controller.accessToken ?? '',
+                  backendMode: config.activeShellBackendMode,
+                ),
+        );
+      },
     ),
     GoRoute(
       path: '/managers',
