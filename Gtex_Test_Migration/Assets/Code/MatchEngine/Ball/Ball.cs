@@ -953,7 +953,7 @@ namespace FStudio.MatchEngine.Balls {
                 originalRuntimeIntendedReceivePoint.z);
             var distanceToReceiver = Vector3.Distance(receiverPosition, ballPosition);
             var distanceToPoint = Vector3.Distance(receivePoint, ballPosition);
-            var trapRadius = Mathf.Lerp(1.05f, 1.65f, Mathf.InverseLerp(4f, 16f, Velocity.magnitude));
+            var trapRadius = Mathf.Lerp(1.5f, 2.2f, Mathf.InverseLerp(4f, 16f, Velocity.magnitude));
 
             if (distanceToReceiver > trapRadius) {
                 return;

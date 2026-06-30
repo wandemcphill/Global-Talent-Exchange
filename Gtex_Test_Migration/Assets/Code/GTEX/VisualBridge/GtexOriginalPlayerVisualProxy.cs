@@ -179,7 +179,7 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            if (!Player.IsHoldingBall && !TryTakeNearbyBallForCommand("Pass", 1.65f))
+            if (!Player.IsHoldingBall && !TryTakeNearbyBallForCommand("Pass", 2.4f))
             {
                 return;
             }
@@ -457,7 +457,7 @@ namespace FStudio.GTEX.VisualBridge
                 return false;
             }
 
-            if (!Player.IsHoldingBall && !TryTakeNearbyBallForCommand("LoftPass", 1.65f))
+            if (!Player.IsHoldingBall && !TryTakeNearbyBallForCommand("LoftPass", 2.4f))
             {
                 return false;
             }
@@ -613,7 +613,7 @@ namespace FStudio.GTEX.VisualBridge
 
             if (receiver != null)
             {
-                var receiveDuration = Mathf.Clamp(passDistance / Mathf.Max(passSpeed, 0.1f) + 0.85f, 1.05f, 2.4f);
+                var receiveDuration = Mathf.Clamp(passDistance / Mathf.Max(passSpeed, 0.1f) + 0.85f, 1.05f, 2.8f);
                 receiver.CommitOriginalRuntimeReceive(Player, groundTarget, receiveDuration);
                 ball.TrackOriginalRuntimeReceiver(receiver, groundTarget, receiveDuration);
                 receiver.ActivateBehaviour("BallChasingWithoutCondition");
@@ -652,7 +652,7 @@ namespace FStudio.GTEX.VisualBridge
 
         private IEnumerator ReceiveTrapRoutine(PlayerBase receiver, Vector3 groundTarget, Vector3 passOrigin, string receiverUid)
         {
-            var end = Time.time + 1.75f;
+            var end = Time.time + 2.6f;
             while (Time.time < end && receiver != null && Ball.Current != null)
             {
                 var ball = Ball.Current;
@@ -678,7 +678,7 @@ namespace FStudio.GTEX.VisualBridge
 
                 var receiverDistance = DistanceXZ(ballPosition, receiverPosition);
                 var targetDistance = DistanceXZ(ballPosition, groundTarget);
-                if (receiverDistance <= 1.38f && targetDistance <= 1.9f)
+                if (receiverDistance <= 1.9f && targetDistance <= 2.6f)
                 {
                     ball.StopDeadBallMotion();
                     ball.Hold(receiver);
