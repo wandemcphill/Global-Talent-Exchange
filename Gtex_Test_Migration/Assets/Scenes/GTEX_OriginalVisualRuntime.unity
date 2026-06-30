@@ -983,6 +983,7 @@ MonoBehaviour:
   scoreBridge: {fileID: 980000005}
   autoConfigureOnEnable: 1
   subscribeToLiveState: 1
+  startupMode: 1
 --- !u!114 &980000003
 MonoBehaviour:
   m_ObjectHideFlags: 0
