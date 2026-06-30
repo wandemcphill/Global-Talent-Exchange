@@ -53,7 +53,7 @@ namespace FStudio.GTEX.VisualBridge
         [SerializeField] private bool subscribeToLiveState = true;
         [SerializeField] private bool preferBackendFeedWhenAvailable = true;
         [SerializeField] private bool logVisualCommands;
-        [SerializeField] private GtexOriginalVisualStartupMode startupMode = GtexOriginalVisualStartupMode.CommandDriven;
+        [SerializeField] private GtexOriginalVisualStartupMode startupMode = GtexOriginalVisualStartupMode.VisualSmoke;
 
         private readonly HashSet<string> consumedEvents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private GtexMatchConfig config;
@@ -793,7 +793,8 @@ namespace FStudio.GTEX.VisualBridge
             {
                 StartLiveFeedInternal();
             }
-            else if (startLocalSimulationAfterBootstrap)
+            else if (startLocalSimulationAfterBootstrap ||
+                     startupMode == GtexOriginalVisualStartupMode.VisualSmoke)
             {
                 StartLocalSimulationFeedInternal();
             }
