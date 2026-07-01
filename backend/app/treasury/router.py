@@ -3,11 +3,16 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.admin.capabilities import assert_admin_capability
+from app.core.cloudinary_upload import (
+    CloudinaryUploadError,
+    cloudinary_configured,
+    upload_kyc_document,
+)
 from app.auth.dependencies import get_current_admin, get_current_user, get_current_wallet_user, get_session
 from app.models.dispute import Dispute, DisputeMessage
 from app.models.treasury import (
@@ -105,6 +110,92 @@ def submit_kyc_profile(
             selfie_attachment_id=payload.selfie_attachment_id,
             proof_of_address_attachment_id=payload.proof_of_address_attachment_id,
             country_confirmation=payload.country_confirmation,
+        )
+        session.commit()
+    except TreasuryConflictError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return KycProfileView.model_validate(profile)
+
+
+_MAX_KYC_DOCUMENT_BYTES = 10 * 1024 * 1024
+
+
+@api_router.post("/kyc/documents", response_model=KycProfileView)
+async def submit_kyc_documents(
+    government_id: UploadFile = File(...),
+    selfie: UploadFile = File(...),
+    proof_of_address: UploadFile | None = File(None),
+    address_line1: str = Form(...),
+    address_line2: str | None = Form(None),
+    city: str | None = Form(None),
+    state: str | None = Form(None),
+    country: str = Form(...),
+    nin: str | None = Form(None),
+    bvn: str | None = Form(None),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_wallet_user),
+    request: Request = None,
+) -> KycProfileView:
+    """Upload real KYC documents (files) and submit them for review.
+
+    This is the withdrawal-time KYC path: documents are stored in Cloudinary as
+    authenticated assets and their URLs are recorded on the user's KYC profile,
+    which flips the profile to ``UNDER_REVIEW``.
+    """
+    if not cloudinary_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="KYC document uploads are not configured yet. Set the CLOUDINARY_* environment variables.",
+        )
+
+    async def _store(upload: UploadFile, kind: str) -> str:
+        content = await upload.read()
+        if not content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{kind.replace('_', ' ').title()} document is empty.",
+            )
+        if len(content) > _MAX_KYC_DOCUMENT_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"{kind.replace('_', ' ').title()} document exceeds the 10MB limit.",
+            )
+        try:
+            asset = upload_kyc_document(
+                content,
+                user_id=current_user.id,
+                doc_kind=kind,
+                filename=upload.filename,
+                content_type=upload.content_type,
+            )
+        except CloudinaryUploadError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        return asset.secure_url
+
+    government_id_url = await _store(government_id, "government_id")
+    selfie_url = await _store(selfie, "selfie")
+    proof_of_address_url = (
+        await _store(proof_of_address, "proof_of_address") if proof_of_address is not None else None
+    )
+
+    service = _service(request)
+    try:
+        profile = service.submit_kyc(
+            session,
+            user=current_user,
+            nin=nin,
+            bvn=bvn,
+            address_line1=address_line1,
+            address_line2=address_line2,
+            city=city,
+            state=state,
+            country=country,
+            id_document_attachment_id=None,
+            government_id_attachment_id=government_id_url,
+            selfie_attachment_id=selfie_url,
+            proof_of_address_attachment_id=proof_of_address_url,
+            country_confirmation=country,
         )
         session.commit()
     except TreasuryConflictError as exc:

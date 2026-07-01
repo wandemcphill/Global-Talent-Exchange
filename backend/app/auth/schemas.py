@@ -139,7 +139,10 @@ class UserClubSignupRequest(BaseModel):
     height_cm: int | None = Field(default=None, ge=120, le=230)
     jersey_number: int | None = Field(default=None, ge=1, le=99)
     preferred_role: str | None = Field(default=None, max_length=80)
-    compliance: ComplianceSubmissionRequest
+    # KYC is no longer collected at signup (only required when a user withdraws).
+    # Kept optional so older clients that still POST a compliance block don't 400;
+    # the value is ignored by the signup flow.
+    compliance: ComplianceSubmissionRequest | None = None
 
     @field_validator("email")
     @classmethod
@@ -236,7 +239,9 @@ class TraderSignupRequest(BaseModel):
     recovery_phrase_hash: str = Field(min_length=16, max_length=255)
     security_pin_hash: str = Field(min_length=16, max_length=255)
     totp_code: str = Field(min_length=6, max_length=12)
-    compliance: ComplianceSubmissionRequest
+    # KYC is no longer collected at signup (only required when a trader withdraws).
+    # Optional so older clients that still POST compliance don't 400; it is ignored.
+    compliance: ComplianceSubmissionRequest | None = None
 
     @field_validator("email")
     @classmethod
@@ -251,11 +256,6 @@ class TraderSignupRequest(BaseModel):
             raise ValueError("trading_experience must be beginner, intermediate, or professional.")
         return candidate
 
-    @model_validator(mode="after")
-    def require_trader_proof_of_address(self) -> "TraderSignupRequest":
-        if not self.compliance.proof_of_address_attachment_id:
-            raise ValueError("proof_of_address_attachment_id is required for coin trader signup.")
-        return self
 
 
 class LoginRequest(BaseModel):

@@ -358,7 +358,9 @@ class LaunchControlService:
     def client_flags(self, *, user: User | None) -> list[ClientFeatureFlagView]:
         grants = self._active_beta_grants_for_user(user)
         visible: list[ClientFeatureFlagView] = []
+        seen_keys: set[str] = set()
         for flag in self.list_flags():
+            seen_keys.add(flag.feature_key)
             if not self._is_client_visible(flag, user=user, beta_grants=grants):
                 continue
             enabled = self._is_effectively_enabled(flag)
@@ -370,6 +372,26 @@ class LaunchControlService:
                     launch_state=self._launch_state(flag),
                     route=self._route_for(flag),
                     maintenance_message=flag.maintenance_message if flag.launch_state == LaunchState.MAINTENANCE else None,
+                )
+            )
+        # Default-public: any catalog feature that has no AdminFeatureFlag row is exposed
+        # to every account as PUBLIC/enabled. This gives instant access to all modules
+        # (coin_traders, transfer_hub, etc.) without an admin having to seed each flag.
+        # Admins can still gate a module later by creating/editing its flag row, which
+        # takes precedence because its feature_key is already in seen_keys.
+        for item in COMMAND_ROUTE_CATALOG:
+            feature_key = item.get("feature_key")
+            if not feature_key or feature_key in seen_keys:
+                continue
+            seen_keys.add(feature_key)
+            visible.append(
+                ClientFeatureFlagView(
+                    feature_key=feature_key,
+                    title=item.get("title", feature_key.replace("_", " ").title()),
+                    enabled=True,
+                    launch_state=LaunchState.PUBLIC,
+                    route=item.get("route"),
+                    maintenance_message=None,
                 )
             )
         return visible

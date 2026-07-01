@@ -165,10 +165,10 @@ def get_my_creator_application(
     current_user: User = Depends(get_current_user),
     service: CreatorApplicationService = Depends(get_application_service),
 ) -> CreatorApplicationView | None:
-    application = service.get_my_application(actor=current_user)
-    if application is None:
+    payload = service.get_my_application_payload(actor=current_user)
+    if payload is None:
         return None
-    return CreatorApplicationView.model_validate(service.serialize_application(application))
+    return CreatorApplicationView.model_validate(payload)
 
 
 @creator_router.get("/cards", response_model=list[CreatorCardView])

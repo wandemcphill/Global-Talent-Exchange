@@ -289,6 +289,11 @@ abstract class GteApiRepository {
 
   Future<GteKycProfile> submitKycProfile(GteKycSubmitRequest request);
 
+  /// Uploads real KYC document files (government ID + selfie, optional proof of
+  /// address) to the backend, which stores them in Cloudinary and flips the KYC
+  /// profile to under-review. Used at withdrawal time.
+  Future<GteKycProfile> submitKycDocuments(GteKycDocumentSubmission submission);
+
   Future<List<GteUserBankAccount>> listUserBankAccounts();
 
   Future<GteUserBankAccount> createUserBankAccount(
@@ -1216,6 +1221,93 @@ class GteModeAwareApiRepository implements GteApiRepository {
       ),
       () => fixtures.submitKycProfile(request),
     );
+  }
+
+  @override
+  Future<GteKycProfile> submitKycDocuments(
+    GteKycDocumentSubmission submission,
+  ) {
+    return _withFallback<GteKycProfile>(
+      () => _submitKycDocumentsLive(submission),
+      () => fixtures.submitKycProfile(submission.toLegacyRequest()),
+    );
+  }
+
+  Future<GteKycProfile> _submitKycDocumentsLive(
+    GteKycDocumentSubmission submission,
+  ) async {
+    final Uri uri = config.uriFor('/api/kyc/documents');
+    final http.Client client = http.Client();
+    try {
+      final http.MultipartRequest request = http.MultipartRequest('POST', uri)
+        ..headers.addAll(
+          gteVersionedApiHeaders(<String, String>{'Accept': 'application/json'}),
+        );
+      final String? token = await tokenStore.readToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.fields['address_line1'] = submission.addressLine1;
+      if (submission.addressLine2 != null) {
+        request.fields['address_line2'] = submission.addressLine2!;
+      }
+      if (submission.city != null) request.fields['city'] = submission.city!;
+      if (submission.state != null) request.fields['state'] = submission.state!;
+      request.fields['country'] = submission.country;
+      if (submission.nin != null) request.fields['nin'] = submission.nin!;
+      if (submission.bvn != null) request.fields['bvn'] = submission.bvn!;
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'government_id',
+          submission.governmentId.bytes,
+          filename: submission.governmentId.filename,
+        ),
+      );
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'selfie',
+          submission.selfie.bytes,
+          filename: submission.selfie.filename,
+        ),
+      );
+      if (submission.proofOfAddress != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'proof_of_address',
+            submission.proofOfAddress!.bytes,
+            filename: submission.proofOfAddress!.filename,
+          ),
+        );
+      }
+      final http.StreamedResponse response = await client.send(request);
+      final String text = await response.stream.bytesToString();
+      final Object? decoded = text.trim().isEmpty ? null : jsonDecode(text);
+      if (response.statusCode >= 400) {
+        throw GteApiException(
+          type: _errorTypeFromStatusCode(response.statusCode),
+          message: _errorMessage(decoded),
+          statusCode: response.statusCode,
+          cause: decoded,
+        );
+      }
+      return GteKycProfile.fromJson(gteApiSuccessPayload(decoded));
+    } on FormatException catch (error) {
+      throw GteApiException(
+        type: GteApiErrorType.parsing,
+        message: error.message,
+        cause: error,
+      );
+    } on GteApiException {
+      rethrow;
+    } catch (error) {
+      throw GteApiException(
+        type: GteApiErrorType.network,
+        message: 'Unable to reach the backend.',
+        cause: error,
+      );
+    } finally {
+      client.close();
+    }
   }
 
   @override
@@ -2303,4 +2395,55 @@ String _serializeWithdrawalStatus(GteWithdrawalStatus status) {
     case GteWithdrawalStatus.cancelled:
       return 'cancelled';
   }
+}
+
+/// A single KYC document file selected for upload.
+class GteKycDocumentFile {
+  const GteKycDocumentFile({
+    required this.filename,
+    required this.bytes,
+    this.contentType,
+  });
+
+  final String filename;
+  final List<int> bytes;
+  final String? contentType;
+}
+
+/// Bundle of KYC documents + identity/address fields uploaded at withdrawal time.
+class GteKycDocumentSubmission {
+  const GteKycDocumentSubmission({
+    required this.governmentId,
+    required this.selfie,
+    this.proofOfAddress,
+    required this.addressLine1,
+    this.addressLine2,
+    this.city,
+    this.state,
+    this.country = 'Nigeria',
+    this.nin,
+    this.bvn,
+  });
+
+  final GteKycDocumentFile governmentId;
+  final GteKycDocumentFile selfie;
+  final GteKycDocumentFile? proofOfAddress;
+  final String addressLine1;
+  final String? addressLine2;
+  final String? city;
+  final String? state;
+  final String country;
+  final String? nin;
+  final String? bvn;
+
+  /// Fallback shape for fixture/offline mode (documents are not persisted there).
+  GteKycSubmitRequest toLegacyRequest() => GteKycSubmitRequest(
+    nin: nin,
+    bvn: bvn,
+    addressLine1: addressLine1,
+    addressLine2: addressLine2,
+    city: city,
+    state: state,
+    country: country,
+  );
 }

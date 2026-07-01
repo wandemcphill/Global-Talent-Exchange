@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_feedback.dart';
+import '../../data/gte_api_repository.dart';
 import '../../data/gte_models.dart';
 import '../../providers/gte_exchange_controller.dart';
 import '../../widgets/gte_formatters.dart';
@@ -33,9 +34,10 @@ class _GteKycScreenState extends State<GteKycScreen> {
 
   bool _hasHydrated = false;
   bool _isSubmitting = false;
-  bool _isUploading = false;
   String? _error;
-  GteAttachment? _attachment;
+  GteKycDocumentFile? _governmentIdFile;
+  GteKycDocumentFile? _selfieFile;
+  GteKycDocumentFile? _proofOfAddressFile;
 
   @override
   void initState() {
@@ -85,14 +87,7 @@ class _GteKycScreenState extends State<GteKycScreen> {
     });
   }
 
-  Future<void> _pickAttachment() async {
-    if (_isUploading) {
-      return;
-    }
-    setState(() {
-      _isUploading = true;
-      _error = null;
-    });
+  Future<void> _pickDocument(ValueChanged<GteKycDocumentFile> onPicked) async {
     try {
       final FilePickerResult? result = await FilePicker.platform.pickFiles(
         withData: true,
@@ -107,18 +102,19 @@ class _GteKycScreenState extends State<GteKycScreen> {
       if (bytes.isEmpty) {
         throw Exception('Unable to read the selected file.');
       }
-      final GteAttachment attachment = await widget.controller.api
-          .uploadAttachment(
-            file.name,
-            bytes,
-            contentType:
-                file.extension == null ? null : 'application/${file.extension}',
-          );
       if (!mounted) {
         return;
       }
       setState(() {
-        _attachment = attachment;
+        _error = null;
+        onPicked(
+          GteKycDocumentFile(
+            filename: file.name,
+            bytes: bytes,
+            contentType:
+                file.extension == null ? null : 'application/${file.extension}',
+          ),
+        );
       });
     } catch (error) {
       if (!mounted) {
@@ -127,12 +123,6 @@ class _GteKycScreenState extends State<GteKycScreen> {
       setState(() {
         _error = AppFeedback.messageFor(error);
       });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUploading = false;
-        });
-      }
     }
   }
 
@@ -160,6 +150,13 @@ class _GteKycScreenState extends State<GteKycScreen> {
       });
       return;
     }
+    if (_governmentIdFile == null || _selfieFile == null) {
+      setState(() {
+        _error =
+            'Upload both a government ID and a selfie to submit KYC. These are required before withdrawals.';
+      });
+      return;
+    }
 
     setState(() {
       _isSubmitting = true;
@@ -167,8 +164,11 @@ class _GteKycScreenState extends State<GteKycScreen> {
     });
 
     try {
-      await widget.controller.api.submitKycProfile(
-        GteKycSubmitRequest(
+      await widget.controller.api.submitKycDocuments(
+        GteKycDocumentSubmission(
+          governmentId: _governmentIdFile!,
+          selfie: _selfieFile!,
+          proofOfAddress: _proofOfAddressFile,
           nin: nin.isEmpty ? null : nin,
           bvn: bvn.isEmpty ? null : bvn,
           addressLine1: addressLine1,
@@ -176,8 +176,6 @@ class _GteKycScreenState extends State<GteKycScreen> {
           city: city.isEmpty ? null : city,
           state: state.isEmpty ? null : state,
           country: country.isEmpty ? 'Nigeria' : country,
-          idDocumentAttachmentId:
-              _attachment?.id ?? profile.idDocumentAttachmentId,
         ),
       );
       if (!mounted) {
@@ -346,32 +344,41 @@ class _GteKycScreenState extends State<GteKycScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'ID document (optional for partial verification)',
+                        'Verification documents',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: <Widget>[
-                          OutlinedButton.icon(
-                            onPressed:
-                                isLocked || _isUploading
-                                    ? null
-                                    : _pickAttachment,
-                            icon: const Icon(Icons.upload_file_outlined),
-                            label: Text(
-                              _isUploading ? 'Uploading...' : 'Upload ID',
+                      const SizedBox(height: 4),
+                      Text(
+                        'Required before withdrawals. Accepted: PNG, JPG, or PDF.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                      _documentPickerRow(
+                        label: 'Government ID',
+                        file: _governmentIdFile,
+                        isLocked: isLocked,
+                        onPick:
+                            () => _pickDocument(
+                              (f) => _governmentIdFile = f,
                             ),
-                          ),
-                          if (_attachment != null ||
-                              profile.idDocumentAttachmentId != null)
-                            Chip(
-                              label: Text(
-                                _attachment?.filename ?? 'Attachment on file',
-                              ),
+                      ),
+                      const SizedBox(height: 12),
+                      _documentPickerRow(
+                        label: 'Selfie verification',
+                        file: _selfieFile,
+                        isLocked: isLocked,
+                        onPick:
+                            () => _pickDocument((f) => _selfieFile = f),
+                      ),
+                      const SizedBox(height: 12),
+                      _documentPickerRow(
+                        label: 'Proof of address (optional)',
+                        file: _proofOfAddressFile,
+                        isLocked: isLocked,
+                        onPick:
+                            () => _pickDocument(
+                              (f) => _proofOfAddressFile = f,
                             ),
-                        ],
                       ),
                       if (_error != null) ...<Widget>[
                         const SizedBox(height: 16),
@@ -402,6 +409,34 @@ class _GteKycScreenState extends State<GteKycScreen> {
           );
         },
       ),
+    );
+  }
+
+  Widget _documentPickerRow({
+    required String label,
+    required GteKycDocumentFile? file,
+    required bool isLocked,
+    required VoidCallback onPick,
+  }) {
+    return Row(
+      children: <Widget>[
+        OutlinedButton.icon(
+          onPressed: isLocked ? null : onPick,
+          icon: const Icon(Icons.upload_file_outlined),
+          label: Text(file == null ? 'Upload $label' : 'Replace $label'),
+        ),
+        const SizedBox(width: 12),
+        if (file != null)
+          Expanded(
+            child: Chip(
+              avatar: const Icon(Icons.check_circle_outline, size: 18),
+              label: Text(
+                file.filename,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -196,6 +196,12 @@ class GteExchangeApiClient {
     return repository.submitKycProfile(request);
   }
 
+  Future<GteKycProfile> submitKycDocuments(
+    GteKycDocumentSubmission submission,
+  ) {
+    return repository.submitKycDocuments(submission);
+  }
+
   Future<List<GteUserBankAccount>> listUserBankAccounts() {
     return repository.listUserBankAccounts();
   }

@@ -208,6 +208,7 @@ def get_asgi_app() -> FastAPI:
 def register_core(app: FastAPI) -> None:
     from app.auth.dependencies import get_session as auth_get_session
     from app.auth.middleware import AuthEnforcementMiddleware
+    from app.core.club_api_alias import ClubApiV2AliasMiddleware
     from app.core.database import get_read_session as core_get_read_session
     from app.core.database import get_session as core_get_session
     from app.core.health import router as health_router
@@ -222,6 +223,10 @@ def register_core(app: FastAPI) -> None:
     _mount_tts_app(app)
     _mount_generated_media(app)
     app.include_router(health_router)
+    # Alias /api/v2/clubs/* -> /api/clubs/*. Added first => innermost, so it runs as the
+    # final transform immediately before routing (auth already ran and is path-agnostic
+    # for authenticated club endpoints).
+    app.add_middleware(ClubApiV2AliasMiddleware)
     app.add_middleware(AuthEnforcementMiddleware)
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestHardeningMiddleware)

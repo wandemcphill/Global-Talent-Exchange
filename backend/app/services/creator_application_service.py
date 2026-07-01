@@ -94,6 +94,47 @@ class CreatorApplicationService:
     def get_my_application(self, *, actor: User) -> CreatorApplication | None:
         return self.session.scalar(select(CreatorApplication).where(CreatorApplication.user_id == actor.id))
 
+    def get_my_application_payload(self, *, actor: User) -> dict[str, object] | None:
+        """Return the serialized creator application for the frontend access gate.
+
+        Creator accounts get instant access with no admin review: if the user already
+        has a CreatorProfile (created at creator signup) but no application row, we
+        synthesize an APPROVED application so the client unlocks Studio immediately.
+        A persisted application row, if present, always takes precedence.
+        """
+        application = self.get_my_application(actor=actor)
+        if application is not None:
+            return self.serialize_application(application)
+        profile = self.session.scalar(
+            select(CreatorProfile).where(CreatorProfile.user_id == actor.id)
+        )
+        if profile is None:
+            return None
+        verified_at = actor.email_verified_at or profile.created_at or utcnow()
+        phone_verified_at = actor.phone_verified_at or profile.created_at or utcnow()
+        return {
+            "application_id": profile.id,
+            "user_id": actor.id,
+            "requested_handle": profile.handle,
+            "display_name": profile.display_name,
+            "platform": "gtex",
+            "follower_count": 0,
+            "social_links": [],
+            "email_verified_at": verified_at,
+            "phone_verified_at": phone_verified_at,
+            "status": CREATOR_APPLICATION_APPROVED,
+            "review_notes": None,
+            "decision_reason": "auto_approved_on_signup",
+            "reviewed_by_user_id": None,
+            "reviewed_at": profile.created_at or utcnow(),
+            "verification_requested_at": None,
+            "approved_at": profile.created_at or utcnow(),
+            "rejected_at": None,
+            "created_at": profile.created_at or utcnow(),
+            "updated_at": profile.updated_at or profile.created_at or utcnow(),
+            "provisioning": None,
+        }
+
     def list_applications(self, *, status_filter: str | None = None) -> list[CreatorApplication]:
         stmt = select(CreatorApplication).order_by(CreatorApplication.created_at.desc())
         if status_filter:

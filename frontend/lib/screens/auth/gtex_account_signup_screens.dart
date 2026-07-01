@@ -165,8 +165,6 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
   final _height = TextEditingController(text: '178');
   final _jersey = TextEditingController(text: '8');
   final _preferredRole = TextEditingController(text: 'Box-to-box midfielder');
-  final _govId = TextEditingController();
-  final _selfie = TextEditingController();
   String _clubType = 'academy';
   String _footballIdentity = 'club_owner';
   bool _submitting = false;
@@ -216,9 +214,7 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
           _field(_jersey, 'Jersey Number'),
           _field(_preferredRole, 'Preferred Role'),
         ],
-        _sectionLabel(context, 'Step 4', 'Compliance'),
-        _field(_govId, 'Government ID Attachment ID'),
-        _field(_selfie, 'Selfie Verification Attachment ID'),
+        // KYC is not collected at signup — it is only required when withdrawing.
       ],
     );
   }
@@ -270,11 +266,6 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
               _footballIdentity == 'player' || _footballIdentity == 'both'
                   ? _preferredRole.text
                   : null,
-          compliance: GteComplianceSignupPayload(
-            governmentIdAttachmentId: _govId.text,
-            selfieAttachmentId: _selfie.text,
-            countryConfirmation: _country.text,
-          ),
         ),
       );
       widget.controller.syncSession(session);
@@ -413,9 +404,6 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   final _country = TextEditingController(text: 'NG');
   final _currency = TextEditingController(text: 'USD');
   final _totpCode = TextEditingController();
-  final _govId = TextEditingController();
-  final _selfie = TextEditingController();
-  final _address = TextEditingController();
   String _experience = 'beginner';
   bool _submitting = false;
   String? _error;
@@ -449,10 +437,7 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
         _sectionLabel(context, 'Step 3', 'Wallet security'),
         SelectableText('Authenticator setup secret: $_setupSecret'),
         _field(_totpCode, '2FA Authenticator Code'),
-        _sectionLabel(context, 'Step 4', 'KYC'),
-        _field(_govId, 'Government ID Attachment ID'),
-        _field(_selfie, 'Selfie Attachment ID'),
-        _field(_address, 'Proof of Address Attachment ID'),
+        // KYC is not collected at signup — it is only required when withdrawing.
       ],
     );
   }
@@ -483,12 +468,6 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
           totpCode: _totpCode.text,
           recoveryPhraseHash: 'client-confirmed-recovery-phrase-hash',
           securityPinHash: 'client-confirmed-security-pin-hash',
-          compliance: GteComplianceSignupPayload(
-            governmentIdAttachmentId: _govId.text,
-            selfieAttachmentId: _selfie.text,
-            proofOfAddressAttachmentId: _address.text,
-            countryConfirmation: _country.text,
-          ),
         ),
       );
       widget.controller.syncSession(session);

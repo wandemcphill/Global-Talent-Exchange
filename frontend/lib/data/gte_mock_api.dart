@@ -1275,6 +1275,14 @@ class GteMockApi implements GteApiRepository {
   }
 
   @override
+  Future<GteKycProfile> submitKycDocuments(
+    GteKycDocumentSubmission submission,
+  ) {
+    // Offline/fixture mode does not persist files; reuse the legacy submit path.
+    return submitKycProfile(submission.toLegacyRequest());
+  }
+
+  @override
   Future<List<GteUserBankAccount>> listUserBankAccounts() async {
     await _delay();
     return List<GteUserBankAccount>.of(_userBankAccounts, growable: false);

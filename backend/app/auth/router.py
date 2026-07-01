@@ -601,14 +601,8 @@ def signup_user(
         )
         user.preferred_position = payload.position
         user.nationality = payload.country
-        _submit_signup_compliance(
-            session,
-            user,
-            government_id_attachment_id=payload.compliance.government_id_attachment_id,
-            selfie_attachment_id=payload.compliance.selfie_attachment_id,
-            proof_of_address_attachment_id=payload.compliance.proof_of_address_attachment_id,
-            country_confirmation=payload.compliance.country_confirmation,
-        )
+        # KYC is intentionally NOT submitted at signup. Users get instant access; KYC is
+        # required only when they initiate a withdrawal (enforced in the treasury flow).
         issued_session, confirmation_code = _issue_signup_session(
             service=service,
             session=session,
@@ -765,14 +759,8 @@ def signup_trader(
             recovery_phrase_hash=payload.recovery_phrase_hash,
             security_pin_hash=payload.security_pin_hash,
         )
-        _submit_signup_compliance(
-            session,
-            user,
-            government_id_attachment_id=payload.compliance.government_id_attachment_id,
-            selfie_attachment_id=payload.compliance.selfie_attachment_id,
-            proof_of_address_attachment_id=payload.compliance.proof_of_address_attachment_id,
-            country_confirmation=payload.compliance.country_confirmation,
-        )
+        # KYC is intentionally NOT submitted at signup. Traders get instant access; KYC is
+        # required only when they initiate a withdrawal (enforced in the treasury flow).
         issued_session, confirmation_code = _issue_signup_session(
             service=service,
             session=session,
