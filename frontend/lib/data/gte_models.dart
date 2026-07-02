@@ -571,7 +571,7 @@ class GteUserSignupRequest {
     required this.clubLocality,
     required this.clubType,
     required this.footballIdentity,
-    required this.compliance,
+    this.compliance,
     this.position,
     this.dominantFoot,
     this.heightCm,
@@ -593,7 +593,7 @@ class GteUserSignupRequest {
   final String clubLocality;
   final String clubType;
   final String footballIdentity;
-  final GteComplianceSignupPayload compliance;
+  final GteComplianceSignupPayload? compliance;
   final String? position;
   final String? dominantFoot;
   final int? heightCm;
@@ -620,7 +620,7 @@ class GteUserSignupRequest {
     if (heightCm != null) 'height_cm': heightCm,
     if (jerseyNumber != null) 'jersey_number': jerseyNumber,
     if (preferredRole != null) 'preferred_role': preferredRole,
-    'compliance': compliance.toJson(),
+    if (compliance != null) 'compliance': compliance!.toJson(),
   };
 }
 
@@ -675,7 +675,7 @@ class GteTraderSignupRequest {
     required this.totpCode,
     required this.recoveryPhraseHash,
     required this.securityPinHash,
-    required this.compliance,
+    this.compliance,
   });
 
   final String fullName;
@@ -691,7 +691,7 @@ class GteTraderSignupRequest {
   final String totpCode;
   final String recoveryPhraseHash;
   final String securityPinHash;
-  final GteComplianceSignupPayload compliance;
+  final GteComplianceSignupPayload? compliance;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'full_name': fullName,
@@ -707,7 +707,7 @@ class GteTraderSignupRequest {
     'totp_code': totpCode,
     'recovery_phrase_hash': recoveryPhraseHash,
     'security_pin_hash': securityPinHash,
-    'compliance': compliance.toJson(),
+    if (compliance != null) 'compliance': compliance!.toJson(),
   };
 }
 

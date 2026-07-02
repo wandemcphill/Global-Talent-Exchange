@@ -18598,6 +18598,18 @@
         "source_file": "backend/app/treasury/router.py",
         "response_model": "KycProfileView"
       },
+      "post_api_v2_kyc_documents": {
+        "method": "POST",
+        "canonical_path": "/api/v2/kyc/documents",
+        "aliases": [
+          "/api/kyc/documents",
+          "/api/v1/kyc/documents",
+          "/api/v2/kyc/documents"
+        ],
+        "handler": "submit_kyc_documents",
+        "source_file": "backend/app/treasury/router.py",
+        "response_model": "KycProfileView"
+      },
       "put_api_v2_admin_treasury_bank_accounts_account_id": {
         "method": "PUT",
         "canonical_path": "/api/v2/admin/treasury/bank-accounts/{account_id}",
@@ -20956,6 +20968,7 @@
     "/api/v2/jackpot/state": "get_api_v2_jackpot_state",
     "/api/v2/jobs/{job_id}": "get_api_v2_jobs_job_id",
     "/api/v2/kyc": "post_api_v2_kyc",
+    "/api/v2/kyc/documents": "post_api_v2_kyc_documents",
     "/api/v2/leaderboard/division/{division}": "get_api_v2_leaderboard_division_division",
     "/api/v2/leaderboard/global": "get_api_v2_leaderboard_global",
     "/api/v2/leaderboard/player/{player_id}": "get_api_v2_leaderboard_player_player_id",
@@ -22591,6 +22604,7 @@
     "/api/jackpot/state": "/api/v2/jackpot/state",
     "/api/jobs/{job_id}": "/api/v2/jobs/{job_id}",
     "/api/kyc": "/api/v2/kyc",
+    "/api/kyc/documents": "/api/v2/kyc/documents",
     "/api/leaderboard/division/{division}": "/api/v2/leaderboard/division/{division}",
     "/api/leaderboard/global": "/api/v2/leaderboard/global",
     "/api/leaderboard/player/{player_id}": "/api/v2/leaderboard/player/{player_id}",
@@ -23912,6 +23926,7 @@
     "/api/v1/jackpot/state": "/api/v2/jackpot/state",
     "/api/v1/jobs/{job_id}": "/api/v2/jobs/{job_id}",
     "/api/v1/kyc": "/api/v2/kyc",
+    "/api/v1/kyc/documents": "/api/v2/kyc/documents",
     "/api/v1/leaderboard/division/{division}": "/api/v2/leaderboard/division/{division}",
     "/api/v1/leaderboard/global": "/api/v2/leaderboard/global",
     "/api/v1/leaderboard/player/{player_id}": "/api/v2/leaderboard/player/{player_id}",
@@ -24734,6 +24749,7 @@
     "/api/v2/hosted-competitions/mine": "/api/v2/hosted-competitions/mine",
     "/api/v2/hosted-competitions/templates": "/api/v2/hosted-competitions/templates",
     "/api/v2/kyc": "/api/v2/kyc",
+    "/api/v2/kyc/documents": "/api/v2/kyc/documents",
     "/api/v2/leaderboards/dynasties": "/api/v2/leaderboards/dynasties",
     "/api/v2/leaderboards/trophies": "/api/v2/leaderboards/trophies",
     "/api/v2/managers/assign": "/api/v2/managers/assign",
