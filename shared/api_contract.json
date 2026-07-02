@@ -24749,7 +24749,6 @@
     "/api/v2/hosted-competitions/mine": "/api/v2/hosted-competitions/mine",
     "/api/v2/hosted-competitions/templates": "/api/v2/hosted-competitions/templates",
     "/api/v2/kyc": "/api/v2/kyc",
-    "/api/v2/kyc/documents": "/api/v2/kyc/documents",
     "/api/v2/leaderboards/dynasties": "/api/v2/leaderboards/dynasties",
     "/api/v2/leaderboards/trophies": "/api/v2/leaderboards/trophies",
     "/api/v2/managers/assign": "/api/v2/managers/assign",

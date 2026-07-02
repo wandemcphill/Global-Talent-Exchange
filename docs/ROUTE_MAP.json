@@ -42761,6 +42761,43 @@
       "domain": "treasury"
     },
     {
+      "method": "POST",
+      "path": "/api/kyc/documents",
+      "effective_paths": [
+        "/api/kyc/documents"
+      ],
+      "file": "backend/app/treasury/router.py",
+      "handler": "submit_kyc_documents",
+      "router_variable": "api_router",
+      "module_path": "app.treasury.router",
+      "module_mounts": [
+        "treasury"
+      ],
+      "request_shape": {
+        "parameters": [
+          "government_id",
+          "selfie",
+          "proof_of_address",
+          "address_line1",
+          "address_line2",
+          "city",
+          "state",
+          "country",
+          "nin",
+          "bvn",
+          "session",
+          "current_user",
+          "request"
+        ]
+      },
+      "response_shape": {
+        "response_model": "KycProfileView",
+        "returns": "KycProfileView"
+      },
+      "version": "canonical",
+      "domain": "treasury"
+    },
+    {
       "method": "PUT",
       "path": "/api/admin/treasury/bank-accounts/{account_id}",
       "effective_paths": [
