@@ -97,38 +97,34 @@ footballWorldPulseProvider = FutureProvider<FootballWorldPulseData>((
       message: 'Football world pulse requires strict-live backend authority.',
     );
   }
+  // Market + world are the core pulse signal and should still fail the
+  // provider if unavailable. Competitions/discussions/live-threads are
+  // supplementary widgets on this screen, so a failure in any one of them
+  // must not blank out the whole "world pulse" view.
   final Future<MarketDashboardData> marketFuture = ref.watch(
     marketDashboardProvider.future,
   );
   final Future<WorldAggregateData> worldFuture = ref.watch(
     worldAggregateProvider.future,
   );
-  final Future<CompetitionHubData> competitionsFuture = ref.watch(
-    competitionHubProvider.future,
-  );
+  final Future<CompetitionHubData?> competitionsFuture = ref
+      .watch(competitionHubProvider.future)
+      .then<CompetitionHubData?>((CompetitionHubData value) => value)
+      .catchError((Object _, StackTrace __) => null);
   final Future<List<LiveThread>> discussionFuture = _loadCommunityThreads(
     ref,
     discussions: true,
-  );
+  ).catchError((Object _, StackTrace __) => const <LiveThread>[]);
   final Future<List<LiveThread>> liveThreadFuture = _loadCommunityThreads(
     ref,
     discussions: false,
-  );
+  ).catchError((Object _, StackTrace __) => const <LiveThread>[]);
 
-  final List<Object?> payloads = await Future.wait<Object?>(<Future<Object?>>[
-    marketFuture,
-    worldFuture,
-    competitionsFuture,
-    discussionFuture,
-    liveThreadFuture,
-  ]);
-  final MarketDashboardData market = payloads[0] as MarketDashboardData;
-  final WorldAggregateData world = payloads[1] as WorldAggregateData;
-  final CompetitionHubData? competitions = payloads[2] as CompetitionHubData?;
-  final List<LiveThread> discussions =
-      (payloads[3] as List<LiveThread>?) ?? const <LiveThread>[];
-  final List<LiveThread> liveThreads =
-      (payloads[4] as List<LiveThread>?) ?? const <LiveThread>[];
+  final MarketDashboardData market = await marketFuture;
+  final WorldAggregateData world = await worldFuture;
+  final CompetitionHubData? competitions = await competitionsFuture;
+  final List<LiveThread> discussions = await discussionFuture;
+  final List<LiveThread> liveThreads = await liveThreadFuture;
 
   return FootballWorldPulseData(
     transferTicker: _transferTicker(market),

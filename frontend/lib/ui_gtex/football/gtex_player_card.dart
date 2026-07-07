@@ -1185,14 +1185,24 @@ class _StatGrid extends StatelessWidget {
     if (stats.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Wrap(
-      spacing: GtexSpacing.xs,
-      runSpacing: GtexSpacing.xs,
-      children: stats
-          .take(5)
-          .map((_StatItem stat) {
+    final List<_StatItem> shown = stats.take(5).toList(growable: false);
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        // Fit as many columns as the available width allows (min 56px/cell)
+        // so the grid never overflows a narrow detail panel.
+        final int columns = (constraints.maxWidth / 66).floor().clamp(
+          1,
+          shown.length,
+        );
+        return Wrap(
+          spacing: GtexSpacing.xs,
+          runSpacing: GtexSpacing.xs,
+          children: shown.map((_StatItem stat) {
+            final double cellWidth =
+                (constraints.maxWidth - GtexSpacing.xs * (columns - 1)) /
+                columns;
             return Container(
-              width: 66,
+              width: cellWidth.clamp(56, double.infinity),
               padding: const EdgeInsets.symmetric(
                 horizontal: GtexSpacing.xs,
                 vertical: GtexSpacing.xs,
@@ -1204,6 +1214,7 @@ class _StatGrid extends StatelessWidget {
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   Text(
                     stat.label.toUpperCase(),
@@ -1231,8 +1242,9 @@ class _StatGrid extends StatelessWidget {
                 ],
               ),
             );
-          })
-          .toList(growable: false),
+          }).toList(growable: false),
+        );
+      },
     );
   }
 }
