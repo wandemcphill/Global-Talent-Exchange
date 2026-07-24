@@ -32,6 +32,7 @@ class AdminCapability(StrEnum):
     MANAGE_NATIONAL_REGENS = "manage_national_regens"
     MANAGE_REGEN_AWARDS = "manage_regen_awards"
     MANAGE_REGEN_GENERATION = "manage_regen_generation"
+    MANAGE_PLAYERS = "manage_players"
 
 
 ADMIN_CAPABILITY_VALUES: tuple[str, ...] = tuple(item.value for item in AdminCapability)

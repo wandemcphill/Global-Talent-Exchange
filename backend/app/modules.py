@@ -493,6 +493,7 @@ DOMAIN_MODULES = (
     _module("admin_api", router_path="app.admin_api.router:router"),
     _module("admin_finance", router_path="app.admin_finance.router:router"),
     _module("admin_godmode", router_path="app.admin_godmode.router:router"),
+    _module("admin_players", router_path="app.admin_players.router:router"),
     _module(
         "admin_engine",
         router_path="app.admin_engine.router:router",
