@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import random
 import sys
 import uuid
@@ -26,7 +27,12 @@ from datetime import datetime, timedelta, timezone
 
 import psycopg
 
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
+
 from app.services.regen_service import generate_country_display_name, resolve_country_naming_profile
+from scripts.sofifa_pricing import compute_price_credits
 
 SOURCE_PROVIDER = "gtex_regen"
 NS = uuid.UUID("5f9b7d2e-0000-4000-8000-000000000001")  # stable namespace for deterministic ids
@@ -101,6 +107,7 @@ def build_regens(target: int, seed: int = 20260623):
             "id": pid, "ext": ext, "name": name, "first": first, "last": last,
             "position": position, "norm": NORM_POS[position], "dob": dob, "mv": mv,
             "dna": dna, "now": now, "overall": overall, "potential": potential, "nationality": nationality,
+            "age": age,
         })
     return out
 
@@ -132,7 +139,10 @@ def insert_summaries(cur, regens):
     """
     rows = []
     for r in regens:
-        val = float(r["overall"]) * 25_000.0
+        # Banded pricing, same formula as real players (GSI + age + neutral team,
+        # since regens are free agents with no club). Keeps regens coherent with
+        # the rest of the market instead of the old overall*25k blow-up.
+        val = compute_price_credits(overall=r["overall"], club_rating=None, age=float(r["age"]))[0]
         summary = {"position": r["position"], "nationality": r["nationality"], "overall": r["overall"],
                    "potential": r["potential"], "is_regen": True, "asset_origin": "regen_newgen"}
         rows.append({"id": r["id"], "name": r["name"], "now": r["now"], "val": val,
