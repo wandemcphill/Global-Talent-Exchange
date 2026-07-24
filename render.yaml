@@ -306,6 +306,44 @@ services:
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
+  # One-time SoFIFA / EA FC frozen player import (~18k players). Runs in-region
+  # so the full import completes in minutes instead of the many hours a laptop
+  # session needs over the EU pooler. Resume-safe (skips already-imported
+  # players). Manual: set env in dashboard, then Trigger Run. Schedule is a
+  # placeholder — this is a one-off, not a recurring job.
+  - name: gtex-sofifa-import
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 6 1 * *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-sofifa-import.sh"
+    envVars:
+      # Supabase Postgres URL (postgresql://...?sslmode=require) — the NEW project.
+      - key: DATABASE_URL
+        sync: false
+      # Public/temporary URL to the SoFIFA players CSV (e.g. a Supabase Storage
+      # public object URL). The job downloads it at runtime.
+      - key: CSV_URL
+        sync: false
+      # none | url | cloudinary. 'url' stores sofifa CDN urls (fast). 'cloudinary'
+      # mirrors faces to your account (set the CLOUDINARY_* vars below too).
+      - key: IMAGES
+        value: "cloudinary"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
   # Rebuild the regen cohort + (re)generate portraits. Manual: Trigger Run.
   # Schedule is a placeholder (monthly) — this is meant to be run on demand.
   - name: gtex-regen-rebuild

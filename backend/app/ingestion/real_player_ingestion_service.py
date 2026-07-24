@@ -1447,6 +1447,18 @@ class RealPlayerIngestionService:
         player.height_cm = normalized.identity.height_cm
         player.weight_kg = payload.weight_kg
         player.preferred_foot = normalized.dominant_foot
+        player.potential = payload.potential
+        # Stash pricing inputs so the appreciation scheduler can recompute the
+        # banded price over time (GSI + potential + team factor).
+        if payload.overall_rating is not None or payload.club_rating is not None:
+            dna = dict(player.dna_profile) if isinstance(player.dna_profile, dict) else {}
+            if payload.overall_rating is not None:
+                dna["sofifa_overall"] = payload.overall_rating
+            if payload.potential is not None:
+                dna["sofifa_potential"] = payload.potential
+            if payload.club_rating is not None:
+                dna["sofifa_club_rating"] = payload.club_rating
+            player.dna_profile = dna
         player.market_value_eur = normalized.reference_market_value_eur
         player.profile_completeness_score = normalized.profile_completeness_score
         player.is_tradable = True

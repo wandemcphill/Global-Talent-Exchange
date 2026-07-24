@@ -438,6 +438,7 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     weight_kg: Mapped[int | None] = mapped_column(Integer, nullable=True)
     preferred_foot: Mapped[str | None] = mapped_column(String(16), nullable=True)
     shirt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    potential: Mapped[int | None] = mapped_column(Integer, nullable=True)
     market_value_eur: Mapped[float | None] = mapped_column(Float, nullable=True)
     morale: Mapped[float] = mapped_column(Float, nullable=False, default=50.0, server_default="50.0")
     profile_completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)

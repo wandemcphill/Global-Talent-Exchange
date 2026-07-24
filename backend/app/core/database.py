@@ -293,7 +293,9 @@ def initialize_database_connection(
 def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, ...]:
     load_model_modules()
     database_engine = engine or get_engine()
-    config = build_alembic_config(str(database_engine.url))
+    # str(url) masks the password as "***" (SQLAlchemy default), which would make
+    # alembic authenticate with an invalid password. Render with the real password.
+    config = build_alembic_config(database_engine.url.render_as_string(hide_password=False))
     script = ScriptDirectory.from_config(config)
     target_head = script.get_current_head()
     target_heads = (target_head,) if target_head is not None else tuple()

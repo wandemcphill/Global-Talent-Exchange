@@ -30,6 +30,9 @@ class RealPlayerSeedInput(BaseModel):
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
     age: int | None = Field(default=None, ge=13, le=60)
     dominant_foot: str | None = None
+    overall_rating: int | None = Field(default=None, ge=1, le=99)
+    potential: int | None = Field(default=None, ge=1, le=99)
+    club_rating: int | None = Field(default=None, ge=1, le=99)
     primary_position: str | None = None
     secondary_positions: list[str] = Field(default_factory=list)
     current_real_world_club: str | None = None
