@@ -66,7 +66,7 @@ from app.ingestion.real_player_ingestion_service import (
     RealPlayerIngestionService,
 )
 from app.schemas.real_player_ingestion import RealPlayerIngestionRequest, RealPlayerSeedInput
-from scripts.sofifa_pricing import compute_price_credits, credits_to_naira
+from scripts.sofifa_pricing import SOFIFA_SNAPSHOT_DATE, credits_to_naira, projected_price_credits
 
 logger = logging.getLogger("import_sofifa_players")
 
@@ -653,18 +653,22 @@ def main() -> int:
             payload = build_payload(row, columns, as_of=as_of, photo_url=photo_url, now_iso=now_iso)
             if payload is not None:
                 payloads.append(payload)
-                # Frozen launch price (banded GSI 60 / age 20 / team 20). At ingest,
-                # effective GSI == overall, so this is the launch price.
-                _age = None
+                # Launch price via the projected model (effective GSI grown from the
+                # SoFIFA snapshot date to today), so it agrees with the appreciation
+                # scheduler from day one — young players already reflect ~1yr growth.
+                _dob = None
                 if payload.get("date_of_birth"):
                     try:
-                        _age = (as_of.date() - date.fromisoformat(payload["date_of_birth"])).days / 365.25
+                        _dob = date.fromisoformat(payload["date_of_birth"])
                     except ValueError:
-                        _age = None
-                _price, _tier, _ = compute_price_credits(
+                        _dob = None
+                _price, _tier, _ = projected_price_credits(
                     overall=payload.get("overall_rating"),
+                    potential=payload.get("potential"),
                     club_rating=payload.get("club_rating"),
-                    age=_age,
+                    dob=_dob,
+                    ingest_date=SOFIFA_SNAPSHOT_DATE,
+                    as_of=as_of.date(),
                 )
                 frozen_prices[payload["source_player_key"]] = _price
             if rows_seen % 500 == 0:

@@ -17,6 +17,11 @@ from datetime import date
 
 NAIRA_PER_CREDIT = 90.0
 
+# The SoFIFA snapshot the ratings were captured at (CSV: 2025-06-03). Effective GSI
+# grows from a player's age at this date toward potential. Shared by the importer's
+# launch pricing and the appreciation scheduler so they agree from day one.
+SOFIFA_SNAPSHOT_DATE = date(2025, 6, 3)
+
 # Composite weights (founder-approved): GSI 60 / age 20 / team 20.
 W_GSI = 0.60
 W_AGE = 0.20
@@ -128,9 +133,6 @@ def credits_to_naira(credits: float) -> float:
 # on top.                                                                         #
 # --------------------------------------------------------------------------- #
 PEAK_AGE = 25.0            # potential is fully realised by ~25
-DECLINE_START_AGE = 30.0   # value holds until ~30
-DECLINE_END_AGE = 36.0     # ~20% haircut fully applied by ~36
-MAX_DECLINE = 0.20
 
 
 def effective_gsi(
@@ -140,16 +142,19 @@ def effective_gsi(
     age_at_ingest: float,
     current_age: float,
 ) -> float:
-    """Effective GSI at `current_age`, anchored to `overall` at `age_at_ingest`."""
+    """Effective GSI at `current_age`, anchored to `overall` at `age_at_ingest`.
+
+    Only GROWS: a young player's effective GSI climbs from its ingest `overall`
+    toward `potential` as it ages into its peak window. It does NOT auto-decline —
+    a veteran holds its tier, and age already discounts it within the band via the
+    age factor. Real decline (a fading star) is handled by the manual admin re-rate,
+    not an automatic tier crash (which the steep bands would otherwise cause).
+    """
     ceiling = max(potential or overall, overall)
-    grown = float(overall)
     if current_age > age_at_ingest and ceiling > overall and age_at_ingest < PEAK_AGE:
         frac = _clamp01((current_age - age_at_ingest) / (PEAK_AGE - age_at_ingest))
-        grown = overall + (ceiling - overall) * frac
-    if current_age > DECLINE_START_AGE:
-        decline = _clamp01((current_age - DECLINE_START_AGE) / (DECLINE_END_AGE - DECLINE_START_AGE))
-        grown *= 1.0 - (MAX_DECLINE * decline)
-    return round(grown, 1)
+        return round(overall + (ceiling - overall) * frac, 1)
+    return float(overall)
 
 
 def projected_price_credits(
@@ -166,7 +171,7 @@ def projected_price_credits(
     At ingestion (as_of == ingest_date) this equals the frozen launch price; later
     dates reflect potential-driven appreciation / age decline.
     """
-    if dob is None:
+    if dob is None or overall is None:
         return compute_price_credits(overall=overall, club_rating=club_rating, age=None)
     age_at_ingest = (ingest_date - dob).days / 365.25
     current_age = (as_of - dob).days / 365.25

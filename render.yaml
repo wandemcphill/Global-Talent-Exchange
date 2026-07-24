@@ -344,6 +344,27 @@ services:
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
+  # Appreciation scheduler: recompute frozen prices from potential-driven effective
+  # GSI as players age (young players appreciate). Weekly, in-region. Feed-free +
+  # idempotent. Runs on the same DB as the API.
+  - name: gtex-appreciation-reprice
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 2 * * 1"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-reprice-appreciation.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
   # Rebuild the regen cohort + (re)generate portraits. Manual: Trigger Run.
   # Schedule is a placeholder (monthly) — this is meant to be run on demand.
   - name: gtex-regen-rebuild
