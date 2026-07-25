@@ -49,7 +49,9 @@ while [ "$attempt" -lt "$MAX_ATTEMPTS" ]; do
   code=$?
 
   if [ "$code" -eq 0 ]; then
-    echo "[$(date -u +%FT%TZ)] completed cleanly (exit 0) after $attempt attempt(s)"
+    echo "[$(date -u +%FT%TZ)] import complete after $attempt attempt(s); assigning supply-tier scarcity"
+    python -u scripts/assign_supply_scarcity.py --database-url "$DATABASE_URL" || echo "WARN: scarcity assignment failed (non-fatal)"
+    echo "[$(date -u +%FT%TZ)] done"
     exit 0
   fi
 
