@@ -40,8 +40,8 @@ W_TEAM = 0.20
 @dataclass(frozen=True, slots=True)
 class PriceTier:
     code: str
-    min_overall: int          # inclusive lower bound of the tier's GSI range
-    overall_span: int         # width used to normalise GSI within the tier
+    min_overall: int  # inclusive lower bound of the tier's GSI range
+    overall_span: int  # width used to normalise GSI within the tier
     band_min_naira: float
     band_max_naira: float
 
@@ -117,11 +117,7 @@ def compute_price_credits(
 ) -> tuple[float, str, float]:
     """Return (price_credits, tier_code, composite_score)."""
     tier = resolve_price_tier(overall)
-    composite = (
-        W_GSI * _gsi_score(overall, tier)
-        + W_AGE * _age_score(age)
-        + W_TEAM * _team_score(club_rating)
-    )
+    composite = W_GSI * _gsi_score(overall, tier) + W_AGE * _age_score(age) + W_TEAM * _team_score(club_rating)
     span = tier.band_max_credits - tier.band_min_credits
     price = tier.band_min_credits + (composite * span)
     return round(price, 2), tier.code, round(composite, 4)
@@ -131,7 +127,7 @@ def credits_to_naira(credits: float) -> float:
     return round(credits * NAIRA_PER_CREDIT, 2)
 
 
-PEAK_AGE = 25.0            # potential is fully realised by ~25
+PEAK_AGE = 25.0  # potential is fully realised by ~25
 
 
 def effective_gsi(

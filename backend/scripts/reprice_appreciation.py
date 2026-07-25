@@ -13,6 +13,7 @@ day yields the same prices.
 Usage:
     python scripts/reprice_appreciation.py --database-url <url> [--as-of YYYY-MM-DD] [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -54,11 +55,7 @@ def main() -> int:
     ap.add_argument("--batch-size", type=int, default=1000)
     args = ap.parse_args()
 
-    as_of = (
-        datetime.strptime(args.as_of, "%Y-%m-%d").date()
-        if args.as_of
-        else datetime.now(timezone.utc).date()
-    )
+    as_of = datetime.strptime(args.as_of, "%Y-%m-%d").date() if args.as_of else datetime.now(timezone.utc).date()
     print(f"repricing as-of {as_of}")
 
     read_sql = """
