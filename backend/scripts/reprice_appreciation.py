@@ -27,6 +27,7 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 from scripts.sofifa_pricing import SOFIFA_SNAPSHOT_DATE, projected_price_credits
+from app.value_engine.banded_pricing import share_price_coin_from_credits
 
 
 def _int(value) -> int | None:
@@ -117,6 +118,29 @@ def main() -> int:
                 cur.executemany(update_sql, updates[i : i + args.batch_size])
                 conn.commit()
                 print(f"  committed {min(i + args.batch_size, len(updates))}/{len(updates)}")
+
+        # Re-anchor UNTRADED share markets to the banded fair value so appreciation
+        # moves the tradeable price. Traded markets (circulating_shares > 0) are left
+        # to their bonding-curve/governor price so we never wipe discovered prices.
+        price_by_pid = {u["id"]: u["new"] for u in updates}
+        market_updates = []
+        with conn.cursor() as cur:
+            cur.execute(
+                "select player_id, total_shares from player_share_markets where coalesce(circulating_shares,0) = 0"
+            )
+            for pid, total_shares in cur.fetchall():
+                credits = price_by_pid.get(pid)
+                if credits is None:
+                    continue
+                coin = share_price_coin_from_credits(float(credits), int(total_shares or 1000))
+                market_updates.append({"pid": pid, "coin": coin})
+        if market_updates:
+            with conn.cursor() as cur:
+                msql = "update player_share_markets set share_price_coin = %(coin)s, updated_at = now() where player_id = %(pid)s"
+                for i in range(0, len(market_updates), args.batch_size):
+                    cur.executemany(msql, market_updates[i : i + args.batch_size])
+                    conn.commit()
+            print(f"  re-anchored {len(market_updates)} untraded share markets to fair value")
     print("DONE")
     return 0
 

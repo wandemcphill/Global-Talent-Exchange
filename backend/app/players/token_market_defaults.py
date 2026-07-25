@@ -43,7 +43,9 @@ def resolve_player_share_market_config(
     status: str | None = "active",
 ) -> ResolvedPlayerShareMarketConfig:
     normalized_total_shares = int(total_shares or DEFAULT_TOTAL_SHARES)
-    normalized_share_price = _resolve_share_price_coin(player, explicit_value=share_price_coin)
+    normalized_share_price = _resolve_share_price_coin(
+        player, explicit_value=share_price_coin, total_shares=normalized_total_shares
+    )
     normalized_liquidity = _resolve_liquidity_coin(
         normalized_total_shares,
         normalized_share_price,
@@ -62,14 +64,40 @@ def _resolve_share_price_coin(
     player: Player,
     *,
     explicit_value: Decimal | int | float | str | None,
+    total_shares: int = DEFAULT_TOTAL_SHARES,
 ) -> Decimal:
     if explicit_value is not None:
         return _amount(explicit_value)
 
-    reference_market_value = _reference_market_value_eur(player)
-    derived_credits = _credits_from_real_world_value(reference_market_value)
-    derived_coin_price = Decimal(str(derived_credits / 100.0))
-    return max(_amount(derived_coin_price), MIN_SHARE_PRICE_COIN)
+    # Prefer the banded player value (same model as the display value, so appreciation
+    # and admin re-rates move the tradeable price), converted credits -> Coin so the
+    # full share float equals the player's banded value. Fall back to the EUR reference
+    # for players without stored ratings.
+    from datetime import UTC, datetime
+
+    from app.value_engine.banded_pricing import (
+        SOFIFA_SNAPSHOT_DATE,
+        banded_credits_from_dna,
+        share_price_coin_from_credits,
+    )
+
+    as_of = datetime.now(UTC).date()
+    created_at = getattr(player, "created_at", None)
+    anchor = (
+        created_at.date()
+        if getattr(player, "source_provider", None) == "gtex_regen" and created_at is not None
+        else SOFIFA_SNAPSHOT_DATE
+    )
+    value_credits = banded_credits_from_dna(
+        player.dna_profile, dob=player.date_of_birth, ingest_date=anchor, as_of=as_of
+    )
+    if value_credits is None:
+        value_credits = _credits_from_real_world_value(_reference_market_value_eur(player))
+    # share_price_coin_from_credits already floors at a tiny min so the full float
+    # tracks the player's banded value; do not re-apply the higher legacy floor
+    # (it would over-price cheap players).
+    coin_price = share_price_coin_from_credits(value_credits, total_shares)
+    return _amount(coin_price)
 
 
 def _resolve_liquidity_coin(

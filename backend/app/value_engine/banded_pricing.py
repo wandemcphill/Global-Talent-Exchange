@@ -19,6 +19,12 @@ from dataclasses import dataclass
 from datetime import date
 
 NAIRA_PER_CREDIT = 90.0
+# 1 GTEX Coin = ₦100 = 100 Fan Coin (wallet ledger rate). Player value is denominated
+# in credits (₦90 each); trading happens in GTEX Coin (₦100 each). A player's full
+# share float is worth its banded credit value, so display value and tradeable price
+# agree: total_coin_value = value_credits * CREDIT_TO_COIN; per-share = that / shares.
+NAIRA_PER_COIN = 100.0
+CREDIT_TO_COIN = NAIRA_PER_CREDIT / NAIRA_PER_COIN  # 0.9 coin per credit
 
 # The SoFIFA snapshot the ratings were captured at (CSV: 2025-06-03). Effective GSI
 # grows from a player's age at this date toward potential. Shared by the importer's
@@ -171,3 +177,43 @@ def projected_price_credits(
         current_age=current_age,
     )
     return compute_price_credits(overall=int(round(eff)), club_rating=club_rating, age=current_age)
+
+
+def _dna_int(dna: dict | None, *keys: str) -> int | None:
+    if not isinstance(dna, dict):
+        return None
+    for key in keys:
+        value = dna.get(key)
+        if value is not None:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def banded_credits_from_dna(dna: dict | None, *, dob: date | None, ingest_date: date, as_of: date) -> float | None:
+    """Banded credit value from a stored dna_profile (SoFIFA real or regen), or None
+    if no rating is present. Uses the same projected banded model as the display value."""
+    overall = _dna_int(dna, "sofifa_overall", "overall")
+    if overall is None:
+        return None
+    potential = _dna_int(dna, "sofifa_potential", "potential")
+    club_rating = _dna_int(dna, "sofifa_club_rating")
+    price, _tier, _ = projected_price_credits(
+        overall=overall,
+        potential=potential,
+        club_rating=club_rating,
+        dob=dob,
+        ingest_date=ingest_date,
+        as_of=as_of,
+    )
+    return price
+
+
+def share_price_coin_from_credits(value_credits: float, total_shares: int, *, min_coin: float = 0.001) -> float:
+    """Per-share GTEX Coin price so the full float equals the player's banded value:
+    total_coin = value_credits * CREDIT_TO_COIN; per-share = total_coin / total_shares."""
+    shares = max(int(total_shares or 1), 1)
+    per_share = (value_credits * CREDIT_TO_COIN) / shares
+    return round(max(per_share, min_coin), 4)
