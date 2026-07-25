@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 import pytest
 
 from app.economy.service import EconomyConfigService
-from app.models import Base, RevenueShareRule, User
+from app.models import Base, EconomyGovernorPolicy, RevenueShareRule, User
 
 
 @pytest.fixture()
@@ -23,6 +23,8 @@ def session():
         tables=[
             User.__table__,
             RevenueShareRule.__table__,
+            # compute_revenue_split reads the governor policy table.
+            EconomyGovernorPolicy.__table__,
         ],
     )
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)

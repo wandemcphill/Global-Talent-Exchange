@@ -343,6 +343,8 @@ from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
 from app.models.economy_config import GiftCatalogItem, ServicePricingRule
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.economy_daily_stat import EconomyDailyStat
+from app.models.economy_governor import EconomyGovernorPolicy
+from app.models.fx_pricing import FxRate, RegionalPricingRule
 from app.models.event_backbone import CompetitionQueueRecord, EventConsumerState, EventDeadLetter, EventOutbox
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
 from app.models.regen_creation_order import (
@@ -1014,6 +1016,9 @@ __all__ = [
     "GiftCatalogItem",
     "EconomyBurnEvent",
     "EconomyDailyStat",
+    "EconomyGovernorPolicy",
+    "FxRate",
+    "RegionalPricingRule",
     "CompetitionQueueRecord",
     "EventConsumerState",
     "EventDeadLetter",
