@@ -17,7 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
