@@ -84,6 +84,8 @@ DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
 )
 
 AMOUNT_QUANTUM = Decimal('0.0001')
+_MIN_TEAMS = 2
+_MAX_TEAMS = 32  # tournaments comprise up to 32 teams (founder spec)
 
 
 class HostedCompetitionError(ValueError):
@@ -192,10 +194,20 @@ class HostedCompetitionService:
         if entry_fee < Decimal('0.0000'):
             raise HostedCompetitionError('Entry fee cannot be negative.')
         max_participants = int(payload.max_participants or template.participants)
+        if max_participants < _MIN_TEAMS or max_participants > _MAX_TEAMS:
+            raise HostedCompetitionError(f'Competitions must have between {_MIN_TEAMS} and {_MAX_TEAMS} teams.')
         platform_fee_bps = self._active_platform_fee_bps()
-        capacity_revenue = entry_fee * Decimal(max_participants)
-        platform_fee_amount = (capacity_revenue * Decimal(platform_fee_bps) / Decimal(10_000)).quantize(Decimal('0.0001'))
-        reward_pool = max(Decimal('0.0000'), (capacity_revenue - platform_fee_amount).quantize(Decimal('0.0001')))
+        # Host-prepay-free: entry fee 0 + host funds the reward pool up front, so
+        # joiners pay nothing. Platform still takes its cut of the overall pool.
+        host_funded_pool = self._normalize_amount(getattr(payload, 'reward_pool_fancoin', None) or Decimal('0'))
+        host_prepay = entry_fee <= Decimal('0.0000') and host_funded_pool > Decimal('0.0000')
+        if host_prepay:
+            platform_fee_amount = (host_funded_pool * Decimal(platform_fee_bps) / Decimal(10_000)).quantize(Decimal('0.0001'))
+            reward_pool = max(Decimal('0.0000'), (host_funded_pool - platform_fee_amount).quantize(Decimal('0.0001')))
+        else:
+            capacity_revenue = entry_fee * Decimal(max_participants)
+            platform_fee_amount = (capacity_revenue * Decimal(platform_fee_bps) / Decimal(10_000)).quantize(Decimal('0.0001'))
+            reward_pool = max(Decimal('0.0000'), (capacity_revenue - platform_fee_amount).quantize(Decimal('0.0001')))
         competition = UserHostedCompetition(
             template_id=template.id,
             host_user_id=host.id,
@@ -216,10 +228,38 @@ class HostedCompetitionService:
         self.session.flush()
         participant = self._create_entry_participant(competition=competition, user=host, role='host')
         try:
-            self._collect_entry_fee(competition=competition, participant=participant, user=host)
+            if host_prepay:
+                self._collect_host_pool(competition=competition, user=host, amount=host_funded_pool)
+                participant.metadata_json = {**participant.metadata_json, 'payment_status': 'host_prepaid'}
+                self.session.flush()
+            else:
+                self._collect_entry_fee(competition=competition, participant=participant, user=host)
         except InsufficientBalanceError as exc:
             raise HostedCompetitionError(str(exc)) from exc
         return competition, template, True
+
+    def _collect_host_pool(self, *, competition: UserHostedCompetition, user: User, amount: Decimal) -> None:
+        """Charge the host the full prepaid reward pool into competition escrow."""
+        amount = self._normalize_amount(amount)
+        if amount <= Decimal('0.0000'):
+            return
+        user_account = self.wallet_service.get_user_account(self.session, user, LedgerUnit.CREDIT)
+        escrow_account = self._competition_escrow_account(competition)
+        if self.wallet_service.get_balance(self.session, user_account) < amount:
+            raise InsufficientBalanceError('Available FanCoin balance is lower than the prepaid reward pool.')
+        self.wallet_service.append_transaction(
+            self.session,
+            postings=[
+                LedgerPosting(account=user_account, amount=-amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND),
+                LedgerPosting(account=escrow_account, amount=amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND),
+            ],
+            reason=LedgerEntryReason.COMPETITION_ENTRY,
+            reference=f'hosted-hostpool:{competition.id}:{user.id}',
+            description=f'Prepaid reward pool for {competition.title}',
+            external_reference=f'hosted-hostpool:{competition.id}:{user.id}',
+            actor=user,
+        )
+        self.session.flush()
 
     def list_public_competitions(self) -> list[UserHostedCompetition]:
         stmt = select(UserHostedCompetition).where(UserHostedCompetition.visibility == 'public').order_by(UserHostedCompetition.created_at.desc())
