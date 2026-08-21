@@ -12,7 +12,8 @@ from app.models.economic_conversion import (
     EconomicConversionStatus,
     EconomicConversionType,
 )
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType
 from app.wallets.service import LedgerPosting, WalletService
 
 
@@ -70,16 +71,18 @@ class FanCoinGiftConversionService:
 
         if destination <= Decimal("0"):
             raise EconomicConversionError("FanCoin gift conversion produces no GTEX Coin destination amount.")
-
         if FANCOIN is GTEX_COIN:
             raise CurrencyPolicyError("FanCoin and GTEX Coin must remain distinct economic units.")
 
-        source_account = self.wallet_service.get_account_by_user_id(
-            self.session, source_user_id, FANCOIN
-        )
-        recipient_account = self.wallet_service.get_account_by_user_id(
-            self.session, recipient_user_id, GTEX_COIN
-        )
+        source_user = self.session.get(User, source_user_id)
+        recipient_user = self.session.get(User, recipient_user_id)
+        if source_user is None or recipient_user is None:
+            raise EconomicConversionError("Gift conversion references a missing user.")
+        if not source_user.is_active or not recipient_user.is_active:
+            raise EconomicConversionError("Gift conversion requires active users.")
+
+        source_account = self.wallet_service.get_user_account(self.session, source_user, FANCOIN)
+        recipient_account = self.wallet_service.get_user_account(self.session, recipient_user, GTEX_COIN)
         source_available = self.wallet_service.get_balance(self.session, source_account)
         if source_available < gross:
             raise EconomicConversionError("Insufficient FanCoin balance for gift conversion.")
@@ -121,7 +124,7 @@ class FanCoinGiftConversionService:
         self.session.add(conversion)
         self.session.flush()
 
-        source_entries = self.wallet_service.append_transaction(
+        entries = self.wallet_service.append_transaction(
             self.session,
             postings=[
                 LedgerPosting(
@@ -139,20 +142,6 @@ class FanCoinGiftConversionService:
                     amount=destination,
                     source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
                 ),
-            ],
-            reason=LedgerEntryReason.ADJUSTMENT,
-            source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-            transaction_type=LedgerTransactionType.CONVERSION,
-            reference=f"conversion:source:{conversion.id}",
-            external_reference=conversion_key,
-            description="FanCoin gift conversion source leg",
-            idempotency_key=f"{conversion_key}:source",
-            metadata={"conversion_id": conversion.id, "conversion_type": conversion.conversion_type.value},
-        )
-
-        destination_entries = self.wallet_service.append_transaction(
-            self.session,
-            postings=[
                 LedgerPosting(
                     account=bridge_coin,
                     amount=-destination,
@@ -167,15 +156,24 @@ class FanCoinGiftConversionService:
             reason=LedgerEntryReason.ADJUSTMENT,
             source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
             transaction_type=LedgerTransactionType.CONVERSION,
-            reference=f"conversion:destination:{conversion.id}",
+            reference=f"conversion:{conversion.id}",
             external_reference=conversion_key,
-            description="FanCoin gift conversion destination leg",
-            idempotency_key=f"{conversion_key}:destination",
-            metadata={"conversion_id": conversion.id, "conversion_type": conversion.conversion_type.value},
+            idempotency_key=idempotency_key or f"fan-gift-conversion:{conversion.id}",
+            actor=source_user,
+            metadata={
+                "conversion_id": conversion.id,
+                "conversion_type": conversion.conversion_type.value,
+                "source_unit": FANCOIN.value,
+                "destination_unit": GTEX_COIN.value,
+                "source_amount": str(gross),
+                "platform_fee_amount": str(fee),
+                "destination_amount": str(destination),
+            },
         )
 
-        conversion.source_ledger_transaction_id = source_entries[0].transaction_id
-        conversion.destination_ledger_transaction_id = destination_entries[0].transaction_id
+        transaction_id = entries[0].transaction_id if entries else None
+        conversion.source_ledger_transaction_id = transaction_id
+        conversion.destination_ledger_transaction_id = transaction_id
         conversion.status = EconomicConversionStatus.SETTLED
         self.session.flush()
         return conversion
