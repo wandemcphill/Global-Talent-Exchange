@@ -17,8 +17,13 @@ Current head is the same branch used by PR #3.
 - `backend/app/economy/currency_policy.py`
 - `backend/app/economy/conversion_service.py`
 - `backend/app/models/economic_conversion.py`
+- explicit gift source/destination currency fields on `GiftTransaction`
 - migration `20260821_0107_economic_conversions`
-- currency-policy unit tests
+- migration `20260821_0108_gift_currency_semantics`
+- backend payout guard that rejects FanCoin at the `PayoutRequest` ORM boundary
+- currency-policy tests
+- conversion-reconciliation tests
+- withdrawal-currency guard tests
 
 ## Important implementation correction
 
@@ -30,14 +35,21 @@ The intended FanCoin gift conversion is one atomic multi-unit transaction:
 CREDIT:
   sender                 -gross
   platform fee           +fee
-  FanCoin bridge         +(gross-fee)
+  conversion bridge      +(gross-fee-burn)
+  burn                   +burn
 
 COIN:
-  Coin bridge            -(gross-fee)
-  recipient              +(gross-fee)
+  Coin bridge            -(gross-fee-burn)
+  recipient              +(gross-fee-burn)
 ```
 
 The `EconomicConversion` record provides durable provenance.
+
+## Current state
+
+The currency model and withdrawal boundary are implemented. Gift Engine runtime integration is the remaining P0 within the gifting slice.
+
+Do not reintroduce context-dependent currency selection. `source_scope` is contextual metadata only. It must never select FanCoin versus GTEX Coin.
 
 ## Next implementation priorities
 
@@ -51,7 +63,11 @@ Replace the current context-dependent `ledger_unit` behavior with the canonical 
 - user-hosted/GTEX-hosted context must not alter currency semantics
 - preserve gift abuse/collusion controls
 - preserve idempotency
-- update GiftTransaction to retain source and destination unit semantics and conversion linkage
+- populate `source_ledger_unit = CREDIT`
+- populate `destination_ledger_unit = COIN`
+- populate `economic_conversion_id`, `conversion_rate`, and shared ledger transaction reference
+
+The legacy `GiftTransaction.ledger_unit` field is compatibility-only and must not drive new accounting.
 
 ### 2. Add actual integration tests
 
@@ -65,10 +81,11 @@ Do not stop at pure policy tests. Add DB-backed tests that prove:
 - retry is idempotent
 - ledger transaction balances independently by unit
 - recipient Coin is visible to withdrawal logic
+- conversion record links to the same ledger transaction
 
-### 3. Add backend withdrawal currency guard
+### 3. Keep the backend withdrawal currency guard
 
-Withdrawal authority must reject `LedgerUnit.CREDIT` directly. Do not rely on frontend. Preserve ordinary compliance/risk/provider checks for COIN.
+Withdrawal authority rejects `LedgerUnit.CREDIT` directly at the payout model boundary. Do not rely on frontend visibility. Preserve ordinary compliance/risk/provider checks for COIN.
 
 ### 4. Centralize economic fees
 
