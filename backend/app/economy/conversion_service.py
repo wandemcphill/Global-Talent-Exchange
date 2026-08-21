@@ -40,6 +40,8 @@ class FanCoinGiftConversionService:
         recipient_user_id: str,
         gross_fancoin: Decimal,
         platform_fee_fancoin: Decimal,
+        destination_coin_amount: Decimal,
+        burn_fancoin: Decimal = Decimal("0.0000"),
         conversion_key: str,
         gift_transaction_id: str | None = None,
         fee_rule_key: str | None = None,
@@ -49,11 +51,14 @@ class FanCoinGiftConversionService:
     ) -> EconomicConversion:
         gross = self._normalize(gross_fancoin)
         fee = self._normalize(platform_fee_fancoin)
-        destination = self._normalize(gross - fee)
+        destination = self._normalize(destination_coin_amount)
+        burn = self._normalize(burn_fancoin)
         if gross <= Decimal("0"):
             raise EconomicConversionError("FanCoin conversion amount must be positive.")
-        if fee < Decimal("0") or fee > gross:
-            raise EconomicConversionError("FanCoin conversion fee must be between zero and the gross amount.")
+        if fee < Decimal("0") or burn < Decimal("0") or destination <= Decimal("0"):
+            raise EconomicConversionError("FanCoin gift conversion amounts must be non-negative with a positive destination.")
+        if fee + burn + destination != gross:
+            raise EconomicConversionError("FanCoin gift conversion legs must reconcile exactly to the gross amount.")
         if source_user_id == recipient_user_id:
             raise EconomicConversionError("Economic gift conversion requires distinct source and recipient users.")
 
@@ -69,8 +74,6 @@ class FanCoinGiftConversionService:
             if existing is not None:
                 return existing
 
-        if destination <= Decimal("0"):
-            raise EconomicConversionError("FanCoin gift conversion produces no GTEX Coin destination amount.")
         if FANCOIN is GTEX_COIN:
             raise CurrencyPolicyError("FanCoin and GTEX Coin must remain distinct economic units.")
 
@@ -102,6 +105,9 @@ class FanCoinGiftConversionService:
             unit=FANCOIN,
             allow_negative=False,
         )
+        burn_account = None
+        if burn > Decimal("0"):
+            burn_account = self.wallet_service.ensure_platform_burn_account(self.session, FANCOIN)
 
         conversion = EconomicConversion(
             conversion_key=conversion_key,
@@ -119,40 +125,24 @@ class FanCoinGiftConversionService:
             fee_rule_key=fee_rule_key,
             fee_rule_version=fee_rule_version,
             idempotency_key=idempotency_key,
-            metadata_json=metadata or {},
+            metadata_json={**(metadata or {}), "burn_amount": str(burn)},
         )
         self.session.add(conversion)
         self.session.flush()
 
+        postings = [
+            LedgerPosting(account=source_account, amount=-gross, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(account=platform_fancoin_revenue, amount=fee, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(account=bridge_fancoin, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(account=bridge_coin, amount=-destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(account=recipient_account, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+        ]
+        if burn_account is not None:
+            postings.append(LedgerPosting(account=burn_account, amount=burn, source_tag=LedgerSourceTag.GIFT_RAKE_BURN))
+
         entries = self.wallet_service.append_transaction(
             self.session,
-            postings=[
-                LedgerPosting(
-                    account=source_account,
-                    amount=-gross,
-                    source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-                ),
-                LedgerPosting(
-                    account=platform_fancoin_revenue,
-                    amount=fee,
-                    source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-                ),
-                LedgerPosting(
-                    account=bridge_fancoin,
-                    amount=destination,
-                    source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-                ),
-                LedgerPosting(
-                    account=bridge_coin,
-                    amount=-destination,
-                    source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-                ),
-                LedgerPosting(
-                    account=recipient_account,
-                    amount=destination,
-                    source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-                ),
-            ],
+            postings=postings,
             reason=LedgerEntryReason.ADJUSTMENT,
             source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
             transaction_type=LedgerTransactionType.CONVERSION,
@@ -167,6 +157,7 @@ class FanCoinGiftConversionService:
                 "destination_unit": GTEX_COIN.value,
                 "source_amount": str(gross),
                 "platform_fee_amount": str(fee),
+                "burn_amount": str(burn),
                 "destination_amount": str(destination),
             },
         )
