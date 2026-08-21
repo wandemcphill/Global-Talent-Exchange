@@ -8,6 +8,7 @@ from sqlalchemy import Enum, ForeignKey, JSON, Numeric, String, Text, UniqueCons
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.economic_conversion import EconomicConversion
 from app.models.wallet import LedgerUnit
 
 if TYPE_CHECKING:
