@@ -5,6 +5,7 @@ import pytest
 from app.economy.competition_funding_policy import (
     CompetitionFundingMode,
     CompetitionFundingPolicyError,
+    funding_mode_from_prize_mode,
     validate_competition_funding_contract,
 )
 from app.models.wallet import LedgerUnit
@@ -66,3 +67,23 @@ def test_fancoin_entry_pool_cannot_also_specify_host_prize() -> None:
             participant_entry_amount=Decimal("10"),
             host_prize_amount=Decimal("50"),
         )
+
+
+@pytest.mark.parametrize(
+    ("prize_mode", "expected"),
+    [
+        ("entry_funded", CompetitionFundingMode.FANCOIN_ENTRY_POOL),
+        ("dynamic", CompetitionFundingMode.FANCOIN_ENTRY_POOL),
+        ("host_funded_fixed", CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE),
+        ("host_funded", CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE),
+    ],
+)
+def test_existing_prize_modes_map_to_constitutional_funding_modes(
+    prize_mode: str, expected: CompetitionFundingMode
+) -> None:
+    assert funding_mode_from_prize_mode(prize_mode) is expected
+
+
+def test_unknown_prize_mode_is_rejected() -> None:
+    with pytest.raises(CompetitionFundingPolicyError, match="Unsupported competition prize mode"):
+        funding_mode_from_prize_mode("participant_coin_wager")
