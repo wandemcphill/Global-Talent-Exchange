@@ -2,23 +2,38 @@
 
 ## Purpose
 
-FanCoin gifting is a cross-currency economic event. It must not be implemented by changing the recipient ledger unit on an otherwise single-currency ledger transaction.
+FanCoin gifting is a cross-currency economic event. It must not be implemented by simply changing the recipient currency label or by treating the recipient as still holding FanCoin.
 
-The wallet ledger is unit-specific. `CREDIT` and `COIN` are separate economic units, so the gifting flow must preserve both legs and connect them with a common conversion reference.
+The GTEX ledger supports multiple units within one transaction, but it requires each unit to net to zero independently. Therefore a FanCoin→GTEX Coin gift can be represented as **one atomic ledger transaction with two balanced currency legs**, connected by a durable conversion record.
 
 ## Canonical gift economics
 
 For a gift with gross FanCoin amount `G` and active platform fee `F`:
 
 ```text
-Sender FanCoin debit          G
-Platform FanCoin revenue      F
-Conversion amount             G - F
+CREDIT leg
+Sender FanCoin debit          -G
+Platform FanCoin fee           +F
+Conversion bridge FanCoin     +(G-F)
+--------------------------------
+CREDIT net                      0
 
-Recipient GTEX Coin credit    G - F
+COIN leg
+Conversion bridge GTEX Coin    -(G-F)
+Recipient GTEX Coin credit     +(G-F)
+--------------------------------
+COIN net                        0
 ```
 
-The exact amount may be further adjusted by an explicitly approved gift rule/bonus policy, but the source and destination currencies remain fixed:
+The result is:
+
+```text
+sender loses G FanCoin
+platform receives F FanCoin economics
+recipient receives G-F GTEX Coin
+```
+
+The exact fee/bonus calculation remains subject to the active Admin economic policy, but the currency direction is fixed:
 
 ```text
 input  = FanCoin / CREDIT
@@ -27,103 +42,83 @@ output = GTEX Coin / COIN
 
 ## Ledger implementation requirement
 
-Do **not** create one ledger transaction containing both CREDIT and COIN entries.
+Use the existing `WalletService.append_transaction()` unit-balanced ledger behavior.
 
-The current ledger model is unit-specific. Implement the conversion as two balanced unit transactions tied to one immutable conversion reference:
+Do **not** create a same-unit recipient credit in FanCoin.
 
-### Conversion leg A: FanCoin
+Do **not** create an unbalanced cross-currency transaction.
 
-```text
-Sender CREDIT           -G
-Platform CREDIT revenue +F
-Conversion/issuance     +(G-F)
-```
+The transaction must contain:
 
-### Conversion leg B: GTEX Coin
+### CREDIT leg
 
-```text
-Conversion/issuance     -(G-F)
-Recipient COIN          +(G-F)
-```
+- sender debit
+- platform FanCoin fee revenue credit
+- FanCoin conversion bridge credit
 
-Both transactions share:
+### COIN leg
 
-- `conversion_id`
-- `gift_transaction_id`
+- GTEX Coin conversion bridge debit
+- recipient GTEX Coin credit
+
+The ledger already validates each unit independently. The conversion bridge is a system account that connects the two balanced unit legs inside the same atomic database transaction.
+
+## Durable conversion record
+
+`EconomicConversion` links the economic event to the ledger transaction and stores:
+
+- conversion ID/key
+- type
+- status
 - source user
 - recipient user
-- gross FanCoin amount
-- platform fee
-- destination Coin amount
-- fee-policy ID/version
+- gift transaction
+- source unit
+- destination unit
+- source amount
+- platform fee amount
+- destination amount
 - conversion rate/version
-- idempotency key lineage
+- ledger transaction ID / conversion reference
+- fee policy ID/version
+- idempotency key
+- metadata
 
-The conversion/issuance account is a system economic bridge. It must never become an unexplained user balance or a manually editable wallet amount.
+The `GiftTransaction` record should additionally retain source and destination currency semantics. Do not overload its existing single `ledger_unit` field to mean both currencies.
 
 ## Treasury implication
 
-The FanCoin gift conversion creates a withdrawable GTEX Coin liability. This is intentional product behavior, but it must be visible to Treasury and reconciliation systems.
+The FanCoin gift conversion creates a withdrawable GTEX Coin liability. The bridge account is intentionally permitted to reflect that economic liability, while treasury/reconciliation systems must separately track whether the resulting Coin liability is backed and settled according to the platform's economic policy.
 
-A later treasury phase must be able to reconcile:
+This is not a reason to keep the recipient in FanCoin. It is a reason to make the conversion explicit and auditable.
+
+A later treasury phase must reconcile:
 
 ```text
 FanCoin consumed through conversion
 vs
 GTEX Coin issued through conversion
 vs
-platform treasury backing / Coin liabilities
+platform liquidity / Coin liabilities
 ```
-
-Do not paper over this by assigning the recipient the same `CREDIT` unit.
-
-## Required data provenance
-
-`GiftTransaction` should retain both:
-
-- `source_ledger_unit = CREDIT`
-- `destination_ledger_unit = COIN`
-
-and ideally:
-
-- `conversion_id`
-- `conversion_rate`
-- `platform_fee_amount`
-- `recipient_coin_amount`
-- `source_ledger_transaction_id`
-- `destination_ledger_transaction_id`
-- `fee_policy_id`
-- `fee_policy_version`
-
-The existing `ledger_unit` field is insufficient for the new cross-currency semantics and should not be overloaded to mean both currencies.
 
 ## Idempotency
 
 A retry must never create a second Coin credit.
 
-The canonical idempotency identity should cover the conversion, not merely the UI request. For example:
+Use a canonical conversion idempotency identity, for example:
 
 ```text
 fan-gift-conversion:{gift_transaction_id}
 ```
 
-The source and destination ledger transactions must be linked to the same conversion identity and be committed atomically at the database transaction boundary.
+The ledger transaction itself should be idempotent and the `EconomicConversion` record should have a unique conversion key/idempotency key.
 
 ## Reversal/refund semantics
 
 A settled gift conversion cannot simply be deleted.
 
-A valid reversal must create compensating ledger transactions linked to the original conversion:
-
-```text
-Recipient COIN debit
-Conversion bridge COIN credit
-
-Conversion bridge CREDIT debit
-Platform/source-side CREDIT compensation
-```
-
-Any reversal policy must explicitly state whether already-withdrawn Coin can be clawed back, held, or recovered through a treasury/negative-liability workflow. Do not invent this inside the gift service.
+A valid reversal must create a compensating multi-unit ledger transaction linked to the original conversion. The exact treatment of already-withdrawn Coin must be governed by a future explicit recovery policy and must not be invented inside the gift service.
 
 ## User-visible semantics
 
@@ -152,15 +147,17 @@ Do not describe the recipient amount as FanCoin.
 2. GTEX-hosted gift consumes CREDIT and creates COIN.
 3. Normal social gift consumes CREDIT and creates COIN.
 4. Attempted COIN gift is rejected before any ledger mutation.
-5. Source and destination unit fields remain explicit.
-6. Platform fee is applied exactly once.
-7. Recipient Coin amount equals the configured post-fee conversion amount.
-8. Retrying the same gift does not create another Coin credit.
-9. Source and destination ledger transactions share one conversion ID.
-10. Both currency legs commit atomically or neither commits.
-11. Existing gift abuse/collusion controls remain active.
-12. Gift context never changes the currency semantics.
+5. CREDIT postings net to zero.
+6. COIN postings net to zero.
+7. Platform fee is applied exactly once.
+8. Recipient Coin amount equals the configured post-fee conversion amount.
+9. Retrying the same gift does not create another Coin credit.
+10. Source and destination unit semantics are persisted.
+11. The ledger transaction and `EconomicConversion` record share one conversion identity.
+12. Both currency legs commit atomically or neither commits.
+13. Existing gift abuse/collusion controls remain active.
+14. Gift context never changes currency semantics.
 
 ## Non-goals for Phase A
 
-Do not add dynamic exchange rates, market pricing, or trader pricing to gifting. Gift conversion is a fixed platform-defined conversion unless a later approved policy explicitly changes it.
+Do not add dynamic exchange rates, market pricing, or trader pricing to gifting. Gift conversion uses the fixed platform-defined 1:1 Coin/FanCoin unit relationship unless a later approved product policy explicitly changes it.
