@@ -6,7 +6,7 @@ This phase establishes the canonical currency, fee, gifting, ledger, and economi
 
 ## Status
 
-Architecture lock complete. The first reusable currency-policy primitive and the cross-currency conversion design are now on the branch. Runtime integration remains deliberately pending because FanCoin→GTEX Coin is a true multi-currency conversion and must not be faked inside one single-unit ledger transaction.
+Architecture lock complete. The first reusable currency-policy primitive, durable conversion record, conversion service, and withdrawal contract are now on the branch. Runtime Gift Engine integration remains pending until the conversion path is wired and audited.
 
 See `docs/implementation/PHASE_A_CROSS_CURRENCY_CONVERSION.md` before modifying Gift Engine accounting.
 
@@ -36,30 +36,22 @@ The reusable primitive is `backend/app/economy/currency_policy.py`.
 
 ### A2. Gift conversion
 
-Refactor Gift Engine accounting so a gift is a cross-currency economic transaction. Do not place CREDIT and COIN postings into one single ledger transaction if the ledger enforces unit consistency.
+Refactor Gift Engine accounting so a gift is a cross-currency economic transaction. The ledger already supports multiple units in one transaction while requiring each unit to net to zero, so use one atomic multi-unit ledger transaction plus the durable `EconomicConversion` record.
 
-The required economic sequence is:
+Required legs:
 
 ```text
-Sender CREDIT debit
-        ↓
-platform fee/rake + conversion amount
-        ↓
-recipient COIN credit
+CREDIT:
+  sender -gross
+  platform +fee
+  conversion bridge +(gross-fee)
+
+COIN:
+  conversion bridge -(gross-fee)
+  recipient +(gross-fee)
 ```
 
-Implement this as two balanced, atomically-linked unit transactions tied to one conversion identity. See the dedicated cross-currency design document for the ledger bridge and treasury implications.
-
 The gift record must preserve source and destination currency semantics, not a single overloaded `ledger_unit` field.
-
-Add regression tests for:
-
-- user-hosted competition gift
-- GTEX-hosted competition gift
-- normal social gift
-- attempted GTEX Coin gift
-- withdrawal of gifted Coin
-- duplicate/retry safety
 
 ### A3. Central economic fee policy
 
@@ -137,8 +129,7 @@ Cross-currency conversions must additionally preserve:
 - source unit
 - destination unit
 - conversion rate/version
-- source ledger transaction
-- destination ledger transaction
+- ledger transaction ID
 
 ### A7. Withdrawal contract
 
@@ -168,6 +159,8 @@ Verify the external payout provider execution path before enabling automatic wit
 - idempotent repeat gift -> no duplicate credit
 - fee policy applied exactly once
 - source/destination units are both recorded
+- CREDIT leg nets to zero
+- COIN leg nets to zero
 
 ### Competition
 
