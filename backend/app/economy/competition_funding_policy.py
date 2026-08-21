@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from decimal import Decimal
+from enum import StrEnum
 
 from app.models.wallet import LedgerUnit
 
@@ -30,6 +30,26 @@ class CompetitionFundingContract:
     @property
     def prize_is_withdrawable(self) -> bool:
         return self.mode is CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE
+
+
+def funding_mode_from_prize_mode(prize_mode: str | None) -> CompetitionFundingMode:
+    normalized = (prize_mode or "entry_funded").strip().lower()
+    if normalized in {
+        "host_funded_fixed",
+        "host_funded",
+        "host_funded_gtex_coin_prize",
+        "host_prize",
+    }:
+        return CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE
+    if normalized in {
+        "entry_funded",
+        "fancoin_entry_pool",
+        "participant_funded",
+        "pool",
+        "dynamic",
+    }:
+        return CompetitionFundingMode.FANCOIN_ENTRY_POOL
+    raise CompetitionFundingPolicyError(f"Unsupported competition prize mode: {prize_mode!r}.")
 
 
 def validate_competition_funding_contract(
@@ -92,5 +112,6 @@ __all__ = [
     "CompetitionFundingContract",
     "CompetitionFundingMode",
     "CompetitionFundingPolicyError",
+    "funding_mode_from_prize_mode",
     "validate_competition_funding_contract",
 ]
