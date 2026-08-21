@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.economy.currency_policy import GTEX_COIN, FANCOIN, CurrencyPolicyError
+from app.economy.currency_policy import CurrencyPolicyError, FANCOIN, GTEX_COIN
 from app.models.economic_conversion import (
     EconomicConversion,
     EconomicConversionStatus,
@@ -15,7 +15,6 @@ from app.models.economic_conversion import (
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType
 from app.wallets.service import LedgerPosting, WalletService
-
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 
@@ -56,11 +55,17 @@ class FanCoinGiftConversionService:
         if gross <= Decimal("0"):
             raise EconomicConversionError("FanCoin conversion amount must be positive.")
         if fee < Decimal("0") or burn < Decimal("0") or destination <= Decimal("0"):
-            raise EconomicConversionError("FanCoin gift conversion amounts must be non-negative with a positive destination.")
+            raise EconomicConversionError(
+                "FanCoin gift conversion amounts must be non-negative with a positive destination."
+            )
         if fee + burn + destination != gross:
-            raise EconomicConversionError("FanCoin gift conversion legs must reconcile exactly to the gross amount.")
+            raise EconomicConversionError(
+                "FanCoin gift conversion legs must reconcile exactly to the gross amount."
+            )
         if source_user_id == recipient_user_id:
-            raise EconomicConversionError("Economic gift conversion requires distinct source and recipient users.")
+            raise EconomicConversionError(
+                "Economic gift conversion requires distinct source and recipient users."
+            )
 
         existing = self.session.scalar(
             select(EconomicConversion).where(EconomicConversion.conversion_key == conversion_key)
@@ -131,14 +136,40 @@ class FanCoinGiftConversionService:
         self.session.flush()
 
         postings = [
-            LedgerPosting(account=source_account, amount=-gross, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=platform_fancoin_revenue, amount=fee, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=bridge_fancoin, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=bridge_coin, amount=-destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=recipient_account, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(
+                account=source_account,
+                amount=-gross,
+                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
+            ),
+            LedgerPosting(
+                account=platform_fancoin_revenue,
+                amount=fee,
+                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
+            ),
+            LedgerPosting(
+                account=bridge_fancoin,
+                amount=destination,
+                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
+            ),
+            LedgerPosting(
+                account=bridge_coin,
+                amount=-destination,
+                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
+            ),
+            LedgerPosting(
+                account=recipient_account,
+                amount=destination,
+                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
+            ),
         ]
         if burn_account is not None:
-            postings.append(LedgerPosting(account=burn_account, amount=burn, source_tag=LedgerSourceTag.GIFT_RAKE_BURN))
+            postings.append(
+                LedgerPosting(
+                    account=burn_account,
+                    amount=burn,
+                    source_tag=LedgerSourceTag.GIFT_RAKE_BURN,
+                )
+            )
 
         entries = self.wallet_service.append_transaction(
             self.session,
