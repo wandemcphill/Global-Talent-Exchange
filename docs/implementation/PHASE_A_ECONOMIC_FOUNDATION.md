@@ -4,6 +4,12 @@ Branch: `phase/a-economic-foundation`
 
 This phase establishes the canonical currency, fee, gifting, ledger, and economic-account rules before Competition Core, Club Economy, National Qualification, League, AI, or UX work is allowed to depend on them.
 
+## Status
+
+Architecture lock complete. The first reusable currency-policy primitive and the cross-currency conversion design are now on the branch. Runtime integration remains deliberately pending because FanCoin→GTEX Coin is a true multi-currency conversion and must not be faked inside one single-unit ledger transaction.
+
+See `docs/implementation/PHASE_A_CROSS_CURRENCY_CONVERSION.md` before modifying Gift Engine accounting.
+
 ## Current confirmed defects / gaps
 
 1. Gift currency is currently selected from `source_scope` and therefore user-hosted gifts can remain in FanCoin/CREDIT while GTEX-hosted gifts use COIN. This conflicts with the product rule that every successful gift debits FanCoin and credits withdrawable GTEX Coin to the recipient.
@@ -11,6 +17,7 @@ This phase establishes the canonical currency, fee, gifting, ledger, and economi
 3. Competition fee seeds currently contain 10%/20% values; the intended current product policy is 30%, but the rate must come from Admin-configurable policy rather than code constants.
 4. Agent Wallet remains a separate monetary authority and must be migrated to the canonical ledger.
 5. KYC/compliance must not be derived from wallet-created status.
+6. Withdrawal eligibility must be enforced from the currency authority, not only by the UI.
 
 ## Implementation order
 
@@ -23,22 +30,27 @@ Implement explicit semantics:
 - Gift input currency = FanCoin only.
 - Gift output currency = GTEX Coin.
 - GTEX Coin gifting is rejected.
+- Currency semantics are never inferred from competition context.
 
-Do not infer recipient currency from competition context.
+The reusable primitive is `backend/app/economy/currency_policy.py`.
 
 ### A2. Gift conversion
 
-Refactor Gift Engine accounting so a gift is a cross-currency economic transaction:
+Refactor Gift Engine accounting so a gift is a cross-currency economic transaction. Do not place CREDIT and COIN postings into one single ledger transaction if the ledger enforces unit consistency.
+
+The required economic sequence is:
 
 ```text
-sender CREDIT debit
-+
-platform fee/rake
-↓
+Sender CREDIT debit
+        ↓
+platform fee/rake + conversion amount
+        ↓
 recipient COIN credit
 ```
 
-The gift record must preserve both source and destination currency semantics. Preserve idempotency and existing abuse/collusion controls.
+Implement this as two balanced, atomically-linked unit transactions tied to one conversion identity. See the dedicated cross-currency design document for the ledger bridge and treasury implications.
+
+The gift record must preserve source and destination currency semantics, not a single overloaded `ledger_unit` field.
 
 Add regression tests for:
 
@@ -47,6 +59,7 @@ Add regression tests for:
 - normal social gift
 - attempted GTEX Coin gift
 - withdrawal of gifted Coin
+- duplicate/retry safety
 
 ### A3. Central economic fee policy
 
@@ -118,9 +131,20 @@ All economic transactions must preserve:
 - ledger transaction ID
 - idempotency key where applicable
 
+Cross-currency conversions must additionally preserve:
+
+- conversion ID
+- source unit
+- destination unit
+- conversion rate/version
+- source ledger transaction
+- destination ledger transaction
+
 ### A7. Withdrawal contract
 
 GTEX Coin is withdrawable subject to ordinary account/compliance/risk/provider controls. FanCoin is never withdrawable.
+
+The withdrawal authority must reject CREDIT/FanCoin directly at the backend boundary.
 
 Verify the external payout provider execution path before enabling automatic withdrawals in production.
 
@@ -132,15 +156,18 @@ Verify the external payout provider execution path before enabling automatic wit
 - GTEX Coin purchase -> COIN
 - unused COIN -> withdrawable
 - unused CREDIT -> not withdrawable
+- direct CREDIT withdrawal -> reject
 
 ### Gifts
 
 - FanCoin gift -> COIN recipient
 - user-hosted gift -> COIN recipient
 - GTEX-hosted gift -> COIN recipient
+- normal social gift -> COIN recipient
 - GTEX Coin gift -> reject
 - idempotent repeat gift -> no duplicate credit
 - fee policy applied exactly once
+- source/destination units are both recorded
 
 ### Competition
 
@@ -163,6 +190,7 @@ Verify the external payout provider execution path before enabling automatic wit
 - CREDIT withdrawal rejected
 - COIN withdrawal accepted when ordinary controls pass
 - platform fee and processor fee are explicit
+- historical withdrawal retains applied fee policy
 
 ## Claude handoff
 
