@@ -10,7 +10,6 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-
 revision = "20260821_0108_gift_currency_semantics"
 down_revision = "20260821_0107_economic_conversions"
 branch_labels = None
@@ -32,7 +31,12 @@ def upgrade() -> None:
     )
     op.add_column(
         "gift_transactions",
-        sa.Column("conversion_rate", sa.Numeric(20, 8), server_default="1", nullable=False),
+        sa.Column(
+            "conversion_rate",
+            sa.Numeric(20, 8),
+            server_default="1",
+            nullable=False,
+        ),
     )
 
     op.execute(
@@ -47,8 +51,18 @@ def upgrade() -> None:
         )
     )
 
-    op.alter_column("gift_transactions", "source_ledger_unit", nullable=False, server_default="credit")
-    op.alter_column("gift_transactions", "destination_ledger_unit", nullable=False, server_default="coin")
+    op.alter_column(
+        "gift_transactions",
+        "source_ledger_unit",
+        nullable=False,
+        server_default="credit",
+    )
+    op.alter_column(
+        "gift_transactions",
+        "destination_ledger_unit",
+        nullable=False,
+        server_default="coin",
+    )
 
     op.create_foreign_key(
         "fk_gift_transactions_economic_conversion_id",
@@ -67,7 +81,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_gift_transactions_economic_conversion_id", table_name="gift_transactions")
+    op.drop_index(
+        "ix_gift_transactions_economic_conversion_id",
+        table_name="gift_transactions",
+    )
     op.drop_constraint(
         "fk_gift_transactions_economic_conversion_id",
         "gift_transactions",
