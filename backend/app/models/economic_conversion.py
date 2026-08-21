@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from decimal import Decimal
 from enum import StrEnum
+from typing import Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Enum, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
-from app.models.wallet import LedgerUnit
+from app.models.wallet import LedgerUnit, PayoutRequest
 
 
 class EconomicConversionStatus(StrEnum):
@@ -23,7 +24,7 @@ class EconomicConversionType(StrEnum):
 
 
 class EconomicConversion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
-    """Durable bridge between two unit-specific ledger transactions."""
+    """Durable bridge between unit-specific ledger accounting and a cross-currency event."""
 
     __tablename__ = "economic_conversions"
     __table_args__ = (
@@ -70,6 +71,15 @@ class EconomicConversion(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+def _assert_withdrawable_payout_currency(_: Any, __: Any, payout: PayoutRequest) -> None:
+    if payout.unit is LedgerUnit.CREDIT or str(payout.unit) == LedgerUnit.CREDIT.value:
+        raise ValueError("FanCoin is never withdrawable. Withdrawal requests must use GTEX Coin.")
+
+
+event.listen(PayoutRequest, "before_insert", _assert_withdrawable_payout_currency, propagate=True)
+event.listen(PayoutRequest, "before_update", _assert_withdrawable_payout_currency, propagate=True)
 
 
 __all__ = ["EconomicConversion", "EconomicConversionStatus", "EconomicConversionType"]
