@@ -49,8 +49,27 @@ class GiftTransaction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     source_scope: Mapped[str] = mapped_column(
         String(32), nullable=False, default="user_hosted", server_default="user_hosted"
     )
+    # Deprecated compatibility field. New code must use source_ledger_unit and destination_ledger_unit.
     ledger_unit: Mapped[LedgerUnit] = mapped_column(
         Enum(LedgerUnit, name="ledger_unit", native_enum=False), nullable=False, default=LedgerUnit.CREDIT
+    )
+    source_ledger_unit: Mapped[LedgerUnit] = mapped_column(
+        Enum(LedgerUnit, name="gift_source_ledger_unit", native_enum=False),
+        nullable=False,
+        default=LedgerUnit.CREDIT,
+        server_default=LedgerUnit.CREDIT.value,
+    )
+    destination_ledger_unit: Mapped[LedgerUnit] = mapped_column(
+        Enum(LedgerUnit, name="gift_destination_ledger_unit", native_enum=False),
+        nullable=False,
+        default=LedgerUnit.COIN,
+        server_default=LedgerUnit.COIN.value,
+    )
+    economic_conversion_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("economic_conversions.id", ondelete="SET NULL"), nullable=True, unique=True, index=True
+    )
+    conversion_rate: Mapped[Decimal] = mapped_column(
+        Numeric(20, 8), nullable=False, default=1, server_default="1"
     )
     ledger_transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     wallet_debit_ledger_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
