@@ -59,13 +59,9 @@ class FanCoinGiftConversionService:
                 "FanCoin gift conversion amounts must be non-negative with a positive destination."
             )
         if fee + burn + destination != gross:
-            raise EconomicConversionError(
-                "FanCoin gift conversion legs must reconcile exactly to the gross amount."
-            )
+            raise EconomicConversionError("FanCoin gift conversion legs must reconcile exactly to the gross amount.")
         if source_user_id == recipient_user_id:
-            raise EconomicConversionError(
-                "Economic gift conversion requires distinct source and recipient users."
-            )
+            raise EconomicConversionError("Economic gift conversion requires distinct source and recipient users.")
 
         existing = self.session.scalar(
             select(EconomicConversion).where(EconomicConversion.conversion_key == conversion_key)
