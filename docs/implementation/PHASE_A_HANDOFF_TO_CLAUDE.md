@@ -16,6 +16,7 @@ Current head is the same branch used by PR #3.
 - `PHASE_A_WITHDRAWAL_CONTRACT.md`
 - `backend/app/economy/currency_policy.py`
 - `backend/app/economy/conversion_service.py`
+- `backend/app/economy/competition_funding_policy.py`
 - `backend/app/models/economic_conversion.py`
 - explicit gift source/destination currency fields on `GiftTransaction`
 - migration `20260821_0107_economic_conversions`
@@ -24,6 +25,7 @@ Current head is the same branch used by PR #3.
 - currency-policy tests
 - conversion-reconciliation tests
 - withdrawal-currency guard tests
+- competition funding-policy tests
 
 ## Important implementation correction
 
@@ -47,7 +49,11 @@ The `EconomicConversion` record provides durable provenance.
 
 ## Current state
 
-The currency model and withdrawal boundary are implemented. Gift Engine runtime integration is the remaining P0 within the gifting slice.
+The currency model and withdrawal boundary are implemented. A constitutional competition funding policy is also implemented and mapped to the repository's existing `entry_funded` / `host_funded_fixed` prize vocabulary.
+
+The repository already has host-funding escrow plumbing in `CompetitionWalletService` and the orchestrator calls the host-funding escrow path. The remaining work is to enforce the policy at the create/update/wallet boundaries and add DB-backed integration coverage.
+
+Gift Engine runtime integration remains the remaining P0 within the gifting slice.
 
 Do not reintroduce context-dependent currency selection. `source_scope` is contextual metadata only. It must never select FanCoin versus GTEX Coin.
 
@@ -83,24 +89,26 @@ Do not stop at pure policy tests. Add DB-backed tests that prove:
 - recipient Coin is visible to withdrawal logic
 - conversion record links to the same ledger transaction
 
-### 3. Keep the backend withdrawal currency guard
+### 3. Enforce competition funding contracts in runtime code
+
+Use `backend/app/economy/competition_funding_policy.py` as the single policy vocabulary:
+
+- `FANCOIN_ENTRY_POOL` = CREDIT/FanCoin, participant-funded, non-withdrawable payout
+- `HOST_FUNDED_GTEX_COIN_PRIZE` = COIN/GTEX Coin, host-funded, participant Coin contribution forbidden, withdrawable payout
+
+The existing `prize_mode` values `entry_funded` / `dynamic` map to the first contract; `host_funded_fixed` / `host_funded` map to the second.
+
+Before a competition opens, verify the selected contract, currency, entry amount, and required host prize amount. Reject participant-funded Coin pools before any ledger mutation.
+
+### 4. Keep the backend withdrawal currency guard
 
 Withdrawal authority rejects `LedgerUnit.CREDIT` directly at the payout model boundary. Do not rely on frontend visibility. Preserve ordinary compliance/risk/provider checks for COIN.
 
-### 4. Centralize economic fees
+### 5. Centralize economic fees
 
 Refactor feature services to use one Admin-configured fee policy. The current intended competition rate is 30%, but it must never be hardcoded.
 
 The policy must support separate platform and processor fees and retain historical policy/version data on settlement.
-
-### 5. Add first-class competition funding modes
-
-Implement:
-
-- `FANCOIN_ENTRY_POOL`
-- `HOST_FUNDED_GTEX_COIN_PRIZE`
-
-For host-funded Coin prizes, escrow the host's Coin before the competition opens. Participant-funded withdrawable Coin pools are prohibited.
 
 ### 6. Agent Wallet migration
 
