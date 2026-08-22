@@ -7,8 +7,8 @@ Create Date: 2026-08-21 22:58:00.000000
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "20260821_0108_gift_currency_semantics"
 down_revision = "20260821_0107_economic_conversions"
