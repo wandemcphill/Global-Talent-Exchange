@@ -1,0 +1,51 @@
+name: Phase A model export patch
+
+on:
+  push:
+    branches:
+      - phase/a-economic-foundation
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Restore Phase A model exports
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("backend/app/models/__init__.py")
+          text = path.read_text()
+
+          anchor = "import app.agents.models  # noqa: F401\n"
+          if "from app.agents.models import AgentRecord" not in text:
+              text = text.replace(anchor, anchor + "from app.agents.models import AgentRecord, AgentStrategyRecord\n", 1)
+
+          anchor = "from app.models.economy_config import GiftCatalogItem, ServicePricingRule\n"
+          if "from app.models.economic_conversion import EconomicConversion" not in text:
+              text = text.replace(
+                  anchor,
+                  anchor + "from app.models.economic_conversion import EconomicConversion\n",
+                  1,
+              )
+
+          path.write_text(text)
+          PY
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/models/__init__.py
+          git commit -m "fix(phase-a): restore economic model exports"
+          git push origin HEAD:phase/a-economic-foundation
