@@ -10,7 +10,7 @@
 
 4. FanCoin gifting now uses the canonical conversion adapter across contexts: sender spends FanCoin and recipient receives GTEX Coin. GTEX Coin cannot be gifted. The conversion carries durable provenance in `EconomicConversion`.
 
-5. Agent Wallet defaults now fail closed. A new canonical `AgentLedgerService` provides deterministic system-owned agent Coin accounts and ledger-backed spend/earn primitives. Full migration of `AgentStateStore.save_agent()` and `AgentManager.record_performance()` away from projection mutation is still required.
+5. Agent Wallet defaults now fail closed. A new canonical `AgentLedgerService` provides deterministic system-owned agent Coin accounts and ledger-backed spend/earn primitives. The active monetary mutation paths are being moved behind that ledger boundary now.
 
 6. The Phase A migration chain is linear from `20260724_0106_player_potential` through `20260822_0112_hosted_competition_funding_contract`.
 
@@ -18,10 +18,15 @@
 
 8. Vercel has reported a separate frontend deployment failure in the broad CI status. Treat it as a deployment investigation, not an economic-logic verdict.
 
+9. Added Agent ledger source tags `agent_boost_spend` and `agent_performance_earnings`; these are string-backed ledger tags and do not require a native enum migration.
+
 ## Required next work
 
 - run and pass fresh branch-head Black/Ruff/pytest quality gates
 - finish DB-backed Coin competition create/escrow/settlement/withdrawal tests
-- integrate AgentLedgerService into AgentStateStore/AgentManager monetary mutations
+- complete AgentLedgerService integration into AgentStateStore/AgentManager monetary mutations
 - reconcile any historical Agent Wallet projection balances before removing their monetary authority
+- retire any remaining live path into the legacy hosted competition economic implementation
 - independently audit Phase A before starting Club Shares or League work
+
+Remote closure trigger: continue Phase A Agent ledger closure.
