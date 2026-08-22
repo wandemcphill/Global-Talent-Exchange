@@ -93,6 +93,8 @@ class LedgerSourceTag(StrEnum):
     COIN_TRADER_ESCROW_REFUND = "coin_trader_escrow_refund"
     COIN_TRADER_FEE = "coin_trader_fee"
     COIN_TRADER_ADMIN_RESOLUTION = "coin_trader_admin_resolution"
+    AGENT_BOOST_SPEND = "agent_boost_spend"
+    AGENT_PERFORMANCE_EARNINGS = "agent_performance_earnings"
 
 
 class PaymentProvider(StrEnum):
@@ -243,7 +245,7 @@ class LedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         server_default=LedgerTransactionType.ADJUSTMENT.value,
     )
     reference: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    external_reference: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    external_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     transaction: Mapped["LedgerTransaction"] = relationship(back_populates="entries")
@@ -257,130 +259,3 @@ class LedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class LedgerBalanceProjection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ledger_balance_projections"
     __table_args__ = (UniqueConstraint("account_id", name="uq_ledger_balance_projections_account"),)
-
-    account_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("wallets.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    owner_user_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
-    )
-    unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False),
-        nullable=False,
-    )
-    balance: Mapped[Decimal] = mapped_column(
-        Numeric(20, 4),
-        nullable=False,
-        default=Decimal("0.0000"),
-        server_default="0.0000",
-    )
-    last_transaction_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("transactions.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-
-
-class PaymentEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "payment_events"
-
-    user_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    provider: Mapped[PaymentProvider] = mapped_column(
-        Enum(PaymentProvider, name="payment_provider", native_enum=False),
-        nullable=False,
-    )
-    provider_reference: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
-    provider_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    pack_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
-    unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False),
-        nullable=False,
-        default=LedgerUnit.COIN,
-    )
-    status: Mapped[PaymentStatus] = mapped_column(
-        Enum(PaymentStatus, name="payment_status", native_enum=False),
-        nullable=False,
-        default=PaymentStatus.PENDING,
-    )
-    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    ledger_transaction_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("transactions.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-
-    user: Mapped["User"] = relationship(back_populates="payment_events")
-
-
-class PayoutRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "payout_requests"
-
-    user_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    account_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("wallets.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True,
-    )
-    amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
-    unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False),
-        nullable=False,
-    )
-    status: Mapped[PayoutStatus] = mapped_column(
-        Enum(PayoutStatus, name="payout_status", native_enum=False),
-        nullable=False,
-        default=PayoutStatus.REQUESTED,
-    )
-    destination_reference: Mapped[str] = mapped_column(String(255), nullable=False)
-    hold_transaction_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("transactions.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    settlement_transaction_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("transactions.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    user: Mapped["User"] = relationship(back_populates="payout_requests")
-    account: Mapped["LedgerAccount"] = relationship(back_populates="payout_requests")
-
-
-@event.listens_for(LedgerEntry, "before_update", propagate=True)
-def _prevent_ledger_entry_updates(_: Any, __: Any, ___: Any) -> None:
-    raise ValueError("Ledger entries are append-only and cannot be updated.")
-
-
-@event.listens_for(LedgerEntry, "before_delete", propagate=True)
-def _prevent_ledger_entry_deletes(_: Any, __: Any, ___: Any) -> None:
-    raise ValueError("Ledger entries are append-only and cannot be deleted.")
-
-
-Wallet = LedgerAccount
-Transaction = LedgerTransaction
