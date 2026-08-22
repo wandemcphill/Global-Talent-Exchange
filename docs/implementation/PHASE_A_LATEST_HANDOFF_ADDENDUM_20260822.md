@@ -1,22 +1,27 @@
 # Phase A Latest Handoff Addendum
 
-## Newly confirmed P0s
+## Current state
 
-1. `WalletService.request_payout()` still carries a baked-in `withdrawal_fee_bps=1000` default. The active Admin reward policy already exposes `withdrawal_fee_bps`; the live path must resolve that policy instead of silently defaulting to 10%.
+1. The Treasury withdrawal request path now resolves withdrawal fees from the persisted Admin commission policy. The old 10% fallback at the Treasury call site is removed and covered by resolver tests. `WalletService.request_payout()` still exposes a legacy default parameter of 1000 bps for defensive compatibility; direct application callers were scanned and Treasury is the only production caller outside the WalletService itself. This low-level default should eventually be removed or made mandatory once downstream compatibility is proven.
 
 2. Hosted Coin-prize competitions now freeze the competition fee basis at creation in competition metadata. Settlement must use that frozen value, not the current Admin rate.
 
-3. Hosted Coin-prize runtime is now routed through `CoinAwareHostedCompetitionService`, with dedicated GTEX Coin escrow and Coin settlement. Add DB-backed end-to-end tests before certification.
+3. Hosted Coin-prize runtime is routed through `CoinAwareHostedCompetitionService`, with dedicated GTEX Coin escrow and Coin settlement. DB-backed end-to-end create/escrow/settlement/withdrawal proof is still required before certification.
 
-4. Quality Gates has passed runtime alignment, API contract, strict-live reality, and dependency audits. The remaining failure is Black formatting on 14 changed Phase A files.
+4. FanCoin gifting now uses the canonical conversion adapter across contexts: sender spends FanCoin and recipient receives GTEX Coin. GTEX Coin cannot be gifted. The conversion carries durable provenance in `EconomicConversion`.
 
-5. Vercel is currently failing separately from the backend Quality Gates result. Treat it as a deployment investigation, not an economic-logic verdict.
+5. Agent Wallet defaults now fail closed. A new canonical `AgentLedgerService` provides deterministic system-owned agent Coin accounts and ledger-backed spend/earn primitives. Full migration of `AgentStateStore.save_agent()` and `AgentManager.record_performance()` away from projection mutation is still required.
+
+6. The Phase A migration chain is linear from `20260724_0106_player_potential` through `20260822_0112_hosted_competition_funding_contract`.
+
+7. Current remote Quality Gates have already passed runtime alignment, API contract, strict-live reality, and dependency audits on earlier Phase A heads. Fresh runs are being queued against the latest head. The remaining known quality-work is formatter/lint certification plus runtime tests.
+
+8. Vercel has reported a separate frontend deployment failure in the broad CI status. Treat it as a deployment investigation, not an economic-logic verdict.
 
 ## Required next work
 
-- remove/route around the WalletService withdrawal fee default through Admin policy
+- run and pass fresh branch-head Black/Ruff/pytest quality gates
 - finish DB-backed Coin competition create/escrow/settlement/withdrawal tests
-- format the Phase A changed files with the repository's pinned Black version
-- run fresh branch-head Quality Gates after formatting
-- complete Agent Wallet monetary migration to the canonical ledger
+- integrate AgentLedgerService into AgentStateStore/AgentManager monetary mutations
+- reconcile any historical Agent Wallet projection balances before removing their monetary authority
 - independently audit Phase A before starting Club Shares or League work
