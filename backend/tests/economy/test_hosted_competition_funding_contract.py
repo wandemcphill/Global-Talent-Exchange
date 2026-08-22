@@ -7,11 +7,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.models import (
-    Base,
-    HostedCompetitionFundingMode,
-    UserHostedCompetition,
-)
+from app.models import Base
+from app.models.hosted_competition import HostedCompetitionFundingMode, UserHostedCompetition
 
 
 def _session():
