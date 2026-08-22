@@ -631,7 +631,7 @@ class CreatorAgentManager:
         if self.state_store is None:
             raise RuntimeError("Agent ledger persistence is unavailable; refusing economic earnings.")
         with self.state_store.session_factory() as session:
-            source = self.agent_ledger_service.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+            source = self.agent_ledger_service.wallet_service.ensure_rewards_pool_account(session, LedgerUnit.COIN)
             transaction_id = self.agent_ledger_service.earn(
                 session,
                 agent_id=agent_id,
