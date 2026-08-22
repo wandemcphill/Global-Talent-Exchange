@@ -5,7 +5,6 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
-    DateTime,
     Enum,
     ForeignKey,
     JSON,
