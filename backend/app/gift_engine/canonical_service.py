@@ -12,15 +12,64 @@ from app.models.economic_conversion import (
     EconomicConversionType,
 )
 from app.models.user import User
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
+from app.models.wallet import (
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransactionType,
+    LedgerUnit,
+)
 from app.wallets.service import LedgerPosting
 
 
 class CanonicalGiftEngineService(LegacyGiftEngineService):
-    """Compatibility adapter that converts every gifted FanCoin amount into GTEX Coin."""
+    """Canonical gift accounting: FanCoin is spent, recipient receives GTEX Coin."""
+
+    @staticmethod
+    def _normalize_scope(source_scope: str | None) -> str:
+        normalized = (source_scope or "user_hosted").strip().lower()
+        if any(
+            token in normalized
+            for token in {"gtex", "platform", "official", "national", "qualifier", "international"}
+        ):
+            return "gtex_competition"
+        if normalized in {
+            "user",
+            "creator",
+            "creator_hosted",
+            "hosted",
+            "hosted_competition",
+            "club_competition",
+            "area_competition",
+            "state_competition",
+            "community",
+            "competition",
+            "user_hosted",
+        }:
+            return "user_hosted"
+        return "user_hosted"
 
     def send_gift(self, *, sender: User, **kwargs: Any):  # type: ignore[override]
+        requested_scope = self._normalize_scope(kwargs.get("source_scope"))
+        kwargs["source_scope"] = "user_hosted"
+
+        if requested_scope == "gtex_competition":
+            recipient_user_id = kwargs.get("recipient_user_id")
+            if recipient_user_id:
+                recent_pair_count = self._match_scope_gift_count(
+                    sender_id=sender.id,
+                    recipient_id=str(recipient_user_id),
+                    source_scope=requested_scope,
+                    window_seconds=60,
+                )
+                if recent_pair_count >= 5:
+                    raise GiftEngineError(
+                        "Match gifting is rate limited to 5 gifts per minute for each sender-recipient pair.",
+                        reason="match_gift_rate_limited",
+                    )
+
         transaction = super().send_gift(sender=sender, **kwargs)
+        transaction.source_scope = requested_scope
+
         if transaction.economic_conversion_id:
             return transaction
 
@@ -41,7 +90,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             )
         )
         if conversion is not None:
-            self._mark_transaction_converted(transaction, conversion)
+            self._mark_transaction_converted(transaction, conversion, requested_scope)
             return transaction
 
         source_account = self.wallet_service.get_user_account(
@@ -86,6 +135,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 "gift_transaction_id": transaction.id,
                 "semantics": "gifted_fancoin_becomes_withdrawable_gtex_coin",
                 "conversion_fee_already_applied": True,
+                "source_scope": requested_scope,
             },
         )
         self.session.add(conversion)
@@ -132,13 +182,15 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         conversion.source_ledger_transaction_id = transaction_id
         conversion.destination_ledger_transaction_id = transaction_id
         conversion.status = EconomicConversionStatus.SETTLED
-        self._mark_transaction_converted(transaction, conversion)
+        self._mark_transaction_converted(transaction, conversion, requested_scope)
         self.session.flush()
         return transaction
 
     @staticmethod
     def _mark_transaction_converted(
-        transaction: Any, conversion: EconomicConversion
+        transaction: Any,
+        conversion: EconomicConversion,
+        source_scope: str,
     ) -> None:
         transaction.economic_conversion_id = conversion.id
         transaction.source_ledger_unit = LedgerUnit.CREDIT
@@ -151,6 +203,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             "source_ledger_unit": LedgerUnit.CREDIT.value,
             "destination_ledger_unit": LedgerUnit.COIN.value,
             "conversion_id": conversion.id,
+            "source_scope": source_scope,
         }
 
 
