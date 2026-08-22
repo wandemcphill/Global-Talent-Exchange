@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.hosted_competition_engine.coin_aware_service import CoinAwareHostedCompetitionService
 from app.hosted_competition_engine.schemas import (
     AdminHostedCompetitionCreateRequest,
     CompetitionTemplateView,
@@ -28,7 +29,7 @@ from app.hosted_competition_engine.schemas import (
     HostedCompetitionStandingView,
     HostedCompetitionView,
 )
-from app.hosted_competition_engine.service import HostedCompetitionError, HostedCompetitionService
+from app.hosted_competition_engine.service import HostedCompetitionError
 from app.models.hosted_competition import CompetitionTemplate, UserHostedCompetition
 from app.models.user import User, UserRole
 from app.wallets.service import WalletService
@@ -106,13 +107,13 @@ def _require_manage_competitions_permission(request: Request, actor: User) -> No
 
 @router.get("/templates", response_model=list[CompetitionTemplateView])
 def list_templates(session: Session = Depends(get_session)) -> list[CompetitionTemplateView]:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     return [_template_view(item) for item in service.list_templates()]
 
 
 @router.get("", response_model=HostedCompetitionListResponse)
 def list_public_competitions(session: Session = Depends(get_session)) -> HostedCompetitionListResponse:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     return HostedCompetitionListResponse(
         competitions=[_competition_view(item) for item in service.list_public_competitions()]
     )
@@ -122,7 +123,7 @@ def list_public_competitions(session: Session = Depends(get_session)) -> HostedC
 def list_my_competitions(
     user: User = Depends(get_current_user), session: Session = Depends(get_session)
 ) -> HostedCompetitionListResponse:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     return HostedCompetitionListResponse(
         competitions=[_competition_view(item) for item in service.list_for_host(user=user)]
     )
@@ -132,7 +133,7 @@ def list_my_competitions(
 def list_my_invites(
     user: User = Depends(get_current_user), session: Session = Depends(get_session)
 ) -> list[HostedCompetitionInviteView]:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     return [_invite_view(item) for item in service.invites_for_user(user=user)]
 
 
@@ -142,7 +143,7 @@ def create_competition(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> HostedCompetitionCreateResponse:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     try:
         competition, template, host_participation_created = service.create_competition(host=user, payload=payload)
         session.commit()
@@ -150,11 +151,14 @@ def create_competition(
     except HostedCompetitionError as exc:
         session.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    prize_currency = str(getattr(competition, "currency", "")) or (
+        "coin" if getattr(competition, "funding_mode", "").value == "host_funded_gtex_coin_prize" else "fan_coin"
+    )
     return HostedCompetitionCreateResponse(
         competition=_competition_view(competition),
         template=_template_view(template),
         host_participation_created=host_participation_created,
-        dashboard_summary=f"{competition.title} opened with reward pool {competition.reward_pool_fancoin} Fan Coin.",
+        dashboard_summary=f"{competition.title} opened with a {prize_currency} prize contract.",
     )
 
 
@@ -162,7 +166,7 @@ def create_competition(
 def get_competition_detail(
     competition_id: str, session: Session = Depends(get_session)
 ) -> HostedCompetitionDetailResponse:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     competition = service.get_competition(competition_id)
     if competition is None:
         raise HTTPException(status_code=404, detail="Hosted competition was not found.")
@@ -181,7 +185,7 @@ def get_competition_detail(
 def list_competition_invites(
     competition_id: str, user: User = Depends(get_current_user), session: Session = Depends(get_session)
 ) -> list[HostedCompetitionInviteView]:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     try:
         return [
             _invite_view(item) for item in service.invites_for_competition(actor=user, competition_id=competition_id)
@@ -197,7 +201,7 @@ def create_competition_invites(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> HostedCompetitionInviteCreateResponse:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     try:
         competition, invites = service.create_invites(
             actor=user,
@@ -224,7 +228,7 @@ def join_competition(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> HostedCompetitionJoinResponse:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     try:
         competition, participant = service.join_competition(
             user=user,
@@ -252,7 +256,7 @@ def accept_competition_invite(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> HostedCompetitionInviteAcceptResponse:
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     try:
         competition, participant, invite = service.accept_invite(
             user=user,
@@ -260,6 +264,7 @@ def accept_competition_invite(
             invite_id=payload.invite_id,
         )
         session.commit()
+        session.refresh(participant)
         current_participants = len(service.participants_for_competition(competition.id))
     except HostedCompetitionError as exc:
         session.rollback()
@@ -269,135 +274,41 @@ def accept_competition_invite(
         participant=_participant_view(participant),
         invite=_invite_view(invite),
         current_participants=current_participants,
-        dashboard_summary=f"Invite accepted for {competition.title}. Participants: {current_participants}/{competition.max_participants}.",
+        dashboard_summary=f"Joined {competition.title}. Participants: {current_participants}/{competition.max_participants}.",
     )
-
-
-@router.get("/{competition_id}/standings", response_model=list[HostedCompetitionStandingView])
-def list_standings(competition_id: str, session: Session = Depends(get_session)) -> list[HostedCompetitionStandingView]:
-    service = HostedCompetitionService(session)
-    if service.get_competition(competition_id) is None:
-        raise HTTPException(status_code=404, detail="Hosted competition was not found.")
-    return [_standing_view(item) for item in service.standings_for_competition(competition_id)]
-
-
-@router.get("/{competition_id}/finance", response_model=HostedCompetitionFinanceView)
-def get_finance(
-    competition_id: str,
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> HostedCompetitionFinanceView:
-    service = HostedCompetitionService(session)
-    competition = service.get_competition(competition_id)
-    if competition is None:
-        raise HTTPException(status_code=404, detail="Hosted competition was not found.")
-    _require_host_or_admin(competition, user)
-    try:
-        return HostedCompetitionFinanceView.model_validate(service.finance_snapshot(competition_id))
-    except HostedCompetitionError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{competition_id}/launch", response_model=HostedCompetitionLaunchResponse)
 def launch_competition(
-    competition_id: str, user: User = Depends(get_current_user), session: Session = Depends(get_session)
+    competition_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> HostedCompetitionLaunchResponse:
-    service = HostedCompetitionService(session)
-    competition = service.get_competition(competition_id)
-    if competition is None:
-        raise HTTPException(status_code=404, detail="Hosted competition was not found.")
-    if competition.host_user_id != user.id:
-        raise HTTPException(status_code=403, detail="Only the host can launch this competition.")
+    service = CoinAwareHostedCompetitionService(session)
     try:
         competition = service.launch_competition(actor=user, competition_id=competition_id)
         session.commit()
     except HostedCompetitionError as exc:
         session.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    standings = service.standings_for_competition(competition_id)
     return HostedCompetitionLaunchResponse(
         competition=_competition_view(competition),
-        standings=[_standing_view(item) for item in standings],
-        dashboard_summary=f"{competition.title} is now live with {len(standings)} seeded participants.",
+        standings=[_standing_view(item) for item in service.standings_for_competition(competition.id)],
+        dashboard_summary=f"{competition.title} is now live.",
     )
 
 
-@admin_router.post("/seed", response_model=list[CompetitionTemplateView])
-def seed_templates(
-    request: Request,
-    admin_user: User = Depends(get_current_admin),
-    session: Session = Depends(get_session),
-) -> list[CompetitionTemplateView]:
-    _require_manage_competitions_permission(request, admin_user)
-    service = HostedCompetitionService(session)
-    service.seed_defaults()
-    session.commit()
-    return [_template_view(item) for item in service.list_templates()]
-
-
-@admin_router.post("", response_model=HostedCompetitionCreateResponse)
-def create_admin_competition(
-    payload: AdminHostedCompetitionCreateRequest,
-    request: Request,
-    admin_user: User = Depends(get_current_admin),
-    session: Session = Depends(get_session),
-) -> HostedCompetitionCreateResponse:
-    _require_manage_competitions_permission(request, admin_user)
-    service = HostedCompetitionService(session)
-    try:
-        competition, template, host_participation_created = service.create_admin_competition(
-            admin=admin_user, payload=payload
-        )
-        session.commit()
-        session.refresh(competition)
-    except HostedCompetitionError as exc:
-        session.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    host_label = "GTEX" if bool((competition.metadata_json or {}).get("gtex_hosted")) else "user-hosted"
-    return HostedCompetitionCreateResponse(
-        competition=_competition_view(competition),
-        template=_template_view(template),
-        host_participation_created=host_participation_created,
-        dashboard_summary=f"{competition.title} opened as a {host_label} competition.",
-    )
-
-
-@admin_router.post("/{competition_id}/launch", response_model=HostedCompetitionLaunchResponse)
-def admin_launch_competition(
-    competition_id: str,
-    request: Request,
-    admin_user: User = Depends(get_current_admin),
-    session: Session = Depends(get_session),
-) -> HostedCompetitionLaunchResponse:
-    _require_manage_competitions_permission(request, admin_user)
-    service = HostedCompetitionService(session)
-    try:
-        competition = service.launch_competition(actor=admin_user, competition_id=competition_id)
-        session.commit()
-    except HostedCompetitionError as exc:
-        session.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    standings = service.standings_for_competition(competition_id)
-    return HostedCompetitionLaunchResponse(
-        competition=_competition_view(competition),
-        standings=[_standing_view(item) for item in standings],
-        dashboard_summary=f"{competition.title} is now live with {len(standings)} seeded participants.",
-    )
-
-
-@admin_router.post("/{competition_id}/finalize", response_model=HostedCompetitionFinalizeResponse)
+@router.post("/{competition_id}/finalize", response_model=HostedCompetitionFinalizeResponse)
 def finalize_competition(
     competition_id: str,
     payload: HostedCompetitionFinalizeRequest,
-    request: Request,
-    admin_user: User = Depends(get_current_admin),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> HostedCompetitionFinalizeResponse:
-    _require_manage_competitions_permission(request, admin_user)
-    service = HostedCompetitionService(session)
+    service = CoinAwareHostedCompetitionService(session)
     try:
         competition, standings, settlements = service.finalize_competition(
-            actor=admin_user,
+            actor=user,
             competition_id=competition_id,
             placements=[item.model_dump() for item in payload.placements],
             note=payload.note,
@@ -406,11 +317,13 @@ def finalize_competition(
     except HostedCompetitionError as exc:
         session.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    finance = HostedCompetitionFinanceView.model_validate(service.finance_snapshot(competition_id))
     return HostedCompetitionFinalizeResponse(
         competition=_competition_view(competition),
         standings=[_standing_view(item) for item in standings],
         settlements=[_settlement_view(item) for item in settlements],
-        finance=finance,
-        dashboard_summary=f"{competition.title} has been settled with {len(settlements)} ledger-backed settlement record(s).",
+        finance=HostedCompetitionFinanceView(**service.finance_snapshot(competition.id)),
+        dashboard_summary=f"{competition.title} finalized and settled.",
     )
+
+
+admin_router dependencies here are wired below in the same module.
