@@ -35,3 +35,13 @@ def test_kubernetes_secret_template_carries_the_same_korapay_contract() -> None:
     assert "/integrations/payments/korapay/webhook" in content
     assert "/api/v2/payments/korapay/webhook" not in content
     assert "/api/webhooks/korapay" not in content
+
+
+def test_render_blueprint_targets_current_production_api() -> None:
+    content = _read("render.yaml")
+
+    assert "https://gtex-api-opea.onrender.com" in content
+    assert "https://gtex-api-cijn.onrender.com" not in content
+    assert "value: https://gtex-api-opea.onrender.com" in content
+    assert "GTE_KORAPAY_NOTIFICATION_URL" in content
+    assert "gtex-web" in content
