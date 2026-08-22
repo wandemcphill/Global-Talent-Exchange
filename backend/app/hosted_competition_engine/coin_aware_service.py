@@ -40,6 +40,18 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
             raise HostedCompetitionError("Configured competition platform fee is outside the allowed policy range.")
         return fee_bps
 
+    def _frozen_platform_fee_bps(self, competition: UserHostedCompetition) -> int:
+        raw = str((competition.metadata_json or {}).get("platform_fee_bps") or "").strip()
+        if not raw:
+            raise HostedCompetitionError("Hosted competition is missing its frozen platform fee policy.")
+        try:
+            fee_bps = int(raw)
+        except ValueError as exc:
+            raise HostedCompetitionError("Hosted competition has an invalid frozen platform fee policy.") from exc
+        if fee_bps < 0 or fee_bps > 3000:
+            raise HostedCompetitionError("Hosted competition frozen platform fee is outside the allowed policy range.")
+        return fee_bps
+
     def _funding_mode(self, payload) -> CompetitionFundingMode:
         requested = getattr(payload, "funding_mode", None)
         if requested:
@@ -234,7 +246,8 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
             raise HostedCompetitionError("Payout percent cannot be negative.")
 
         gross_prize = self._normalize_amount(competition.reward_pool_coin)
-        platform_fee = self._normalize_amount(gross_prize * Decimal(self._active_platform_fee_bps()) / Decimal("10000"))
+        platform_fee_bps = self._frozen_platform_fee_bps(competition)
+        platform_fee = self._normalize_amount(gross_prize * Decimal(platform_fee_bps) / Decimal("10000"))
         net_prize = self._normalize_amount(gross_prize - platform_fee)
         payout_rows: list[tuple[User, Decimal]] = []
         total_payout = Decimal("0.0000")
