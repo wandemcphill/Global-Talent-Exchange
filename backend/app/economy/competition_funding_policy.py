@@ -32,7 +32,9 @@ class CompetitionFundingContract:
         return self.mode is CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE
 
 
-def funding_mode_from_prize_mode(prize_mode: str | None) -> CompetitionFundingMode:
+def funding_mode_from_prize_mode(
+    prize_mode: str | None,
+) -> CompetitionFundingMode:
     normalized = (prize_mode or "entry_funded").strip().lower()
     if normalized in {
         "host_funded_fixed",
