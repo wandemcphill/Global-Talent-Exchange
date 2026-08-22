@@ -3,7 +3,9 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from app.gift_engine.service import GiftEngineService as LegacyGiftEngineService
+from sqlalchemy import select
+
+from app.gift_engine.service import GiftEngineError, GiftEngineService as LegacyGiftEngineService
 from app.models.economic_conversion import (
     EconomicConversion,
     EconomicConversionStatus,
@@ -24,26 +26,22 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
 
         recipient = self.session.get(User, transaction.recipient_user_id)
         if recipient is None:
-            raise ValueError("Gift conversion recipient no longer exists.")
+            raise GiftEngineError("Gift conversion recipient no longer exists.")
 
         destination_amount = Decimal(transaction.recipient_net_amount).quantize(
             Decimal("0.0001")
         )
         if destination_amount <= Decimal("0"):
-            raise ValueError("Gift conversion requires a positive recipient amount.")
+            raise GiftEngineError("Gift conversion requires a positive recipient amount.")
 
         conversion_key = f"gift-recipient-conversion:{transaction.id}"
         conversion = self.session.scalar(
-            __import__("sqlalchemy", fromlist=["select"]).select(EconomicConversion).where(
+            select(EconomicConversion).where(
                 EconomicConversion.conversion_key == conversion_key
             )
         )
         if conversion is not None:
-            transaction.economic_conversion_id = conversion.id
-            transaction.source_ledger_unit = LedgerUnit.CREDIT
-            transaction.destination_ledger_unit = LedgerUnit.COIN
-            transaction.ledger_unit = LedgerUnit.COIN
-            transaction.conversion_rate = Decimal("1")
+            self._mark_transaction_converted(transaction, conversion)
             return transaction
 
         source_account = self.wallet_service.get_user_account(
@@ -64,7 +62,9 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         )
 
         if self.wallet_service.get_balance(self.session, source_account) < destination_amount:
-            raise ValueError("Gift recipient FanCoin balance is insufficient for conversion.")
+            raise GiftEngineError(
+                "Gift recipient FanCoin balance is insufficient for conversion."
+            )
 
         conversion = EconomicConversion(
             conversion_key=conversion_key,
@@ -132,19 +132,19 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         conversion.source_ledger_transaction_id = transaction_id
         conversion.destination_ledger_transaction_id = transaction_id
         conversion.status = EconomicConversionStatus.SETTLED
+        self._mark_transaction_converted(transaction, conversion)
+        self.session.flush()
+        return transaction
+
+    @staticmethod
+    def _mark_transaction_converted(
+        transaction: Any, conversion: EconomicConversion
+    ) -> None:
         transaction.economic_conversion_id = conversion.id
         transaction.source_ledger_unit = LedgerUnit.CREDIT
         transaction.destination_ledger_unit = LedgerUnit.COIN
         transaction.ledger_unit = LedgerUnit.COIN
         transaction.conversion_rate = Decimal("1")
-        transaction.wallet_credit_ledger_id = next(
-            (
-                entry.id
-                for entry in entries
-                if entry.account_id == destination_account.id and entry.amount > Decimal("0")
-            ),
-            transaction.wallet_credit_ledger_id,
-        )
         transaction.metadata_json = {
             **(transaction.metadata_json or {}),
             "currency_semantics": "fan_coin_gift_converted_to_gtex_coin",
@@ -152,5 +152,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             "destination_ledger_unit": LedgerUnit.COIN.value,
             "conversion_id": conversion.id,
         }
-        self.session.flush()
-        return transaction
+
+
+GiftEngineService = CanonicalGiftEngineService
+
+__all__ = ["CanonicalGiftEngineService", "GiftEngineError", "GiftEngineService"]
