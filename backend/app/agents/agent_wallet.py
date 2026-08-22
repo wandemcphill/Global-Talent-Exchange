@@ -9,6 +9,7 @@ def _clamp(value: float, minimum: float, maximum: float) -> float:
 
 @dataclass(frozen=True, slots=True)
 class AgentWallet:
+    # Compatibility projection only. Monetary authority is the canonical ledger.
     balance: float = 12.0
     lifetime_earnings: float = 0.0
     boost_spend: float = 0.0
@@ -18,7 +19,8 @@ class AgentWallet:
     trust_score: float = 0.8
     quality_score: float = 0.65
     repetition_ratio: float = 0.0
-    payout_eligible: bool = True
+    # Fail closed until explicit payout authorization succeeds.
+    payout_eligible: bool = False
     last_block_reason: str | None = None
 
 
