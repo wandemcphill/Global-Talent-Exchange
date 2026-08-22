@@ -13,7 +13,7 @@ from app.economy.hosted_competition_coin_escrow import (
     HostedCompetitionCoinEscrowService,
 )
 from app.hosted_competition_engine.service import HostedCompetitionError, HostedCompetitionService
-from app.models.hosted_competition import HostedCompetitionStatus
+from app.models.hosted_competition import HostedCompetitionStatus, UserHostedCompetition
 from app.models.wallet import LedgerUnit
 from app.wallets.service import InsufficientBalanceError
 
@@ -30,14 +30,7 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
                 raise HostedCompetitionError(str(exc)) from exc
         return CompetitionFundingMode.FANCOIN_ENTRY_POOL
 
-    def create_competition(
-        self,
-        *,
-        host,
-        payload,
-        created_by_admin=None,
-        gtex_hosted: bool = False,
-    ):
+    def create_competition(self, *, host, payload, created_by_admin=None, gtex_hosted: bool = False):
         mode = self._funding_mode(payload)
         if mode is CompetitionFundingMode.FANCOIN_ENTRY_POOL:
             return super().create_competition(
@@ -61,7 +54,9 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         entry_fee = self._normalize_amount(getattr(payload, "entry_fee_fancoin", None) or 0)
         gross_prize = self._normalize_amount(getattr(payload, "reward_pool_coin", None) or 0)
         if entry_fee != Decimal("0.0000"):
-            raise HostedCompetitionError("Host-funded GTEX Coin competitions cannot charge participant entry Coin or FanCoin.")
+            raise HostedCompetitionError(
+                "Host-funded GTEX Coin competitions cannot charge participant entry Coin or FanCoin."
+            )
         try:
             validate_competition_funding_contract(
                 mode=mode,
@@ -77,7 +72,9 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         platform_fee = self._normalize_amount(gross_prize * Decimal(platform_fee_bps) / Decimal("10000"))
         net_prize = self._normalize_amount(gross_prize - platform_fee)
         if net_prize <= Decimal("0.0000"):
-            raise HostedCompetitionError("Host-funded GTEX Coin prize must leave a positive net prize after platform fees.")
+            raise HostedCompetitionError(
+                "Host-funded GTEX Coin prize must leave a positive net prize after platform fees."
+            )
         metadata = self._metadata_with_join_rules(
             payload=payload,
             visibility=str(payload.visibility or "public").strip().lower(),
@@ -86,10 +83,6 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         visibility = str(payload.visibility or "public").strip().lower()
         if metadata.get("join_passcode_required") is True and visibility == "public":
             visibility = "passcode"
-
-        competition = self.__class__.__mro__[1].__dict__["__dataclass_fields__"] if False else None
-        # Use the canonical SQLAlchemy model directly to avoid invoking legacy FanCoin prepayment.
-        from app.models.hosted_competition import UserHostedCompetition
 
         competition = UserHostedCompetition(
             template_id=template.id,
@@ -123,10 +116,9 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
 
         escrow_service = HostedCompetitionCoinEscrowService(self.session, self.wallet_service)
         try:
-            funding_actor = host
             escrow_service.fund_from_host(
                 competition=competition,
-                host=funding_actor,
+                host=host,
                 gross_prize=gross_prize,
             )
         except (InsufficientBalanceError, HostedCompetitionCoinEscrowError) as exc:
