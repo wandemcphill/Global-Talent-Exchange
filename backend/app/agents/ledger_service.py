@@ -68,13 +68,15 @@ class AgentLedgerService:
             is_active=True,
         )
         try:
-            session.add(account)
-            session.flush()
+            with session.begin_nested():
+                session.add(account)
+                session.flush()
         except IntegrityError:
-            session.rollback()
             account = session.scalar(select(LedgerAccount).where(LedgerAccount.code == code).with_for_update())
             if account is None:
                 raise
+        if account.unit is not unit or account.kind is not LedgerAccountKind.SYSTEM:
+            raise LedgerError(f"Agent ledger account {code} has an invalid identity.")
         return account
 
     def balance(self, session: Session, *, agent_id: str, unit: LedgerUnit = LedgerUnit.COIN) -> Decimal:
