@@ -6,11 +6,11 @@
 
 2. Hosted Coin-prize competitions now freeze the competition fee basis at creation in competition metadata. Settlement must use that frozen value, not the current Admin rate.
 
-3. Hosted Coin-prize runtime is routed through `CoinAwareHostedCompetitionService`, with dedicated GTEX Coin escrow and Coin settlement. DB-backed end-to-end create/escrow/settlement/withdrawal proof is still required before certification.
+3. Hosted competition routing uses `CoinAwareHostedCompetitionService`. The participant-funded FanCoin mode is now being hardened to freeze its Admin fee policy at creation too, eliminating mutable settlement economics in the compatibility path.
 
 4. FanCoin gifting now uses the canonical conversion adapter across contexts: sender spends FanCoin and recipient receives GTEX Coin. GTEX Coin cannot be gifted. The conversion carries durable provenance in `EconomicConversion`.
 
-5. Agent Wallet defaults now fail closed. A new canonical `AgentLedgerService` provides deterministic system-owned agent Coin accounts and ledger-backed spend/earn primitives. The active monetary mutation paths are being moved behind that ledger boundary now.
+5. Agent Wallet defaults now fail closed. A new canonical `AgentLedgerService` provides deterministic system-owned agent Coin accounts and ledger-backed spend/earn primitives. The active monetary mutation paths are now being moved behind that ledger boundary.
 
 6. The Phase A migration chain is linear from `20260724_0106_player_potential` through `20260822_0112_hosted_competition_funding_contract`.
 
@@ -29,4 +29,4 @@
 - retire any remaining live path into the legacy hosted competition economic implementation
 - independently audit Phase A before starting Club Shares or League work
 
-Remote closure trigger: continue Phase A Agent ledger closure.
+Remote finalizer trigger: commit Agent Wallet ledger-authoritative closure and hosted competition fee freeze.
