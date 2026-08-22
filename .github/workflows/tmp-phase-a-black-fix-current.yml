@@ -43,3 +43,4 @@ jobs:
           git add backend/app/economy/competition_funding_policy.py backend/app/economy/conversion_service.py backend/app/economy/hosted_competition_coin_escrow.py backend/app/gift_engine/canonical_service.py backend/app/agents/state_store.py backend/app/models/admin_rules.py backend/app/models/economic_conversion.py backend/app/hosted_competition_engine/coin_aware_service.py backend/app/hosted_competition_engine/router.py backend/migrations/versions/20260821_0108_gift_currency_semantics.py backend/migrations/versions/20260822_0109_competition_fee_policy_default.py backend/migrations/versions/20260822_0111_hosted_competition_template_fee_default.py backend/app/models/gift_transaction.py backend/tests/gift_engine/test_fan_coin_to_gtex_coin_conversion.py
           git commit -m "style: apply black formatting to phase A changes"
           git push
+# retrigger formatter
