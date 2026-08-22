@@ -3,13 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
+    LedgerEntry,
     LedgerEntryReason,
     LedgerSourceTag,
     LedgerTransactionType,
@@ -83,6 +84,24 @@ class AgentLedgerService:
         account = self.get_or_create_account(session, agent_id=agent_id, unit=unit)
         return self.wallet_service.get_balance(session, account)
 
+    def tagged_total(
+        self,
+        session: Session,
+        *,
+        agent_id: str,
+        source_tag: LedgerSourceTag,
+        positive_only: bool = False,
+    ) -> Decimal:
+        account = self.get_or_create_account(session, agent_id=agent_id, unit=LedgerUnit.COIN)
+        stmt = select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(
+            LedgerEntry.account_id == account.id,
+            LedgerEntry.source_tag == source_tag,
+        )
+        if positive_only:
+            stmt = stmt.where(LedgerEntry.amount > 0)
+        value = session.scalar(stmt) or 0
+        return Decimal(str(value)).quantize(AMOUNT_QUANTUM)
+
     def spend(
         self,
         session: Session,
@@ -92,7 +111,7 @@ class AgentLedgerService:
         funding_sink: LedgerAccount,
         reference: str,
         actor=None,
-        source_tag: LedgerSourceTag = LedgerSourceTag.VIDEO_VIEW_SPEND,
+        source_tag: LedgerSourceTag = LedgerSourceTag.AGENT_BOOST_SPEND,
         idempotency_key: str | None = None,
     ) -> str:
         amount = Decimal(str(amount)).quantize(AMOUNT_QUANTUM)
@@ -126,7 +145,7 @@ class AgentLedgerService:
         funding_source: LedgerAccount,
         reference: str,
         actor=None,
-        source_tag: LedgerSourceTag = LedgerSourceTag.CREATOR_CLIP_REVENUE,
+        source_tag: LedgerSourceTag = LedgerSourceTag.AGENT_PERFORMANCE_EARNINGS,
         idempotency_key: str | None = None,
     ) -> str:
         amount = Decimal(str(amount)).quantize(AMOUNT_QUANTUM)
