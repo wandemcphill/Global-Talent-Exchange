@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.hosted_competition_engine.coin_aware_service import (
+    CoinAwareHostedCompetitionService as HostedCompetitionService,
+)
 from app.hosted_competition_engine.schemas import (
     AdminHostedCompetitionCreateRequest,
     CompetitionTemplateView,
@@ -28,7 +31,7 @@ from app.hosted_competition_engine.schemas import (
     HostedCompetitionStandingView,
     HostedCompetitionView,
 )
-from app.hosted_competition_engine.service import HostedCompetitionError, HostedCompetitionService
+from app.hosted_competition_engine.service import HostedCompetitionError
 from app.models.hosted_competition import CompetitionTemplate, UserHostedCompetition
 from app.models.user import User, UserRole
 from app.wallets.service import WalletService

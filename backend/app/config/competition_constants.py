@@ -54,6 +54,8 @@ LEAGUE_RULE_ALLOWED_TIE_BREAKS: tuple[str, ...] = (
 
 CUP_ALLOWED_PARTICIPANT_SIZES: tuple[int, ...] = (4, 8, 12, 16, 32, 64)
 
-USER_COMPETITION_MAX_PLATFORM_FEE_BPS: int = 2000
+# Maximum permitted user-competition platform cut. The active rate remains
+# Admin-configured through the central economic policy and is not hardcoded here.
+USER_COMPETITION_MAX_PLATFORM_FEE_BPS: int = 3000
 USER_COMPETITION_MAX_HOST_CREATION_FEE_MINOR: int = 250_000
 USER_COMPETITION_MAX_ENTRY_FEE_MINOR: int = 1_000_000
