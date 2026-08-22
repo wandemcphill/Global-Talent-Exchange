@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.common.enums.competition_type import CompetitionType
-from app.common.enums.fixture_window import FixtureWindow
 from app.common.schemas.competition import CompetitionSchedulePlan, CompetitionScheduleRequest
 
 
