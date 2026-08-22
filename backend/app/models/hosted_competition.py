@@ -54,7 +54,8 @@ class CompetitionTemplate(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     is_user_hostable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     entry_fee_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
     reward_pool_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
-    platform_fee_bps: Mapped[int] = mapped_column(nullable=False, default=1000)
+    # Display/default only. Actual fee is resolved from the active Admin reward policy.
+    platform_fee_bps: Mapped[int] = mapped_column(nullable=False, default=3000)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
