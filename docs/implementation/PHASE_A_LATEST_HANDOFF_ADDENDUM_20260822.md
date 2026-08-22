@@ -14,7 +14,7 @@
 
 6. The Phase A migration chain is linear from `20260724_0106_player_potential` through `20260822_0112_hosted_competition_funding_contract`.
 
-7. Runtime alignment, API contract, strict-live reality, and dependency audits pass on the current branch family. Fresh Quality Gates still need a clean branch-head run after the autofix commits.
+7. Runtime alignment, API contract, strict-live reality, and dependency audits pass on the current branch family. Fresh branch-head certification is now running against the actual branch instead of a stale PR merge snapshot.
 
 8. Vercel has reported a separate frontend deployment issue in the broad CI. Treat that independently from the Phase A economic proof.
 
@@ -33,3 +33,5 @@
 - [ ] Clean final branch-head Quality Gates
 - [ ] Restore Quality Gates workflow to normal read-only configuration and remove temporary closure workflows
 - [ ] Independent Phase A red-team sign-off
+
+Certification trigger: run Phase A branch-head economic proof.
