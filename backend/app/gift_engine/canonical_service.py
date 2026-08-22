@@ -28,8 +28,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
     def _normalize_scope(source_scope: str | None) -> str:
         normalized = (source_scope or "user_hosted").strip().lower()
         if any(
-            token in normalized
-            for token in {"gtex", "platform", "official", "national", "qualifier", "international"}
+            token in normalized for token in {"gtex", "platform", "official", "national", "qualifier", "international"}
         ):
             return "gtex_competition"
         if normalized in {
@@ -77,28 +76,20 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         if recipient is None:
             raise GiftEngineError("Gift conversion recipient no longer exists.")
 
-        destination_amount = Decimal(transaction.recipient_net_amount).quantize(
-            Decimal("0.0001")
-        )
+        destination_amount = Decimal(transaction.recipient_net_amount).quantize(Decimal("0.0001"))
         if destination_amount <= Decimal("0"):
             raise GiftEngineError("Gift conversion requires a positive recipient amount.")
 
         conversion_key = f"gift-recipient-conversion:{transaction.id}"
         conversion = self.session.scalar(
-            select(EconomicConversion).where(
-                EconomicConversion.conversion_key == conversion_key
-            )
+            select(EconomicConversion).where(EconomicConversion.conversion_key == conversion_key)
         )
         if conversion is not None:
             self._mark_transaction_converted(transaction, conversion, requested_scope)
             return transaction
 
-        source_account = self.wallet_service.get_user_account(
-            self.session, recipient, LedgerUnit.CREDIT
-        )
-        destination_account = self.wallet_service.get_user_account(
-            self.session, recipient, LedgerUnit.COIN
-        )
+        source_account = self.wallet_service.get_user_account(self.session, recipient, LedgerUnit.CREDIT)
+        destination_account = self.wallet_service.get_user_account(self.session, recipient, LedgerUnit.COIN)
         platform_credit_bridge = self.wallet_service.ensure_named_system_account(
             self.session,
             code="platform:credit:gift_conversion_bridge",
@@ -106,14 +97,10 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             unit=LedgerUnit.CREDIT,
             allow_negative=False,
         )
-        platform_coin_account = self.wallet_service.ensure_platform_account(
-            self.session, LedgerUnit.COIN
-        )
+        platform_coin_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
 
         if self.wallet_service.get_balance(self.session, source_account) < destination_amount:
-            raise GiftEngineError(
-                "Gift recipient FanCoin balance is insufficient for conversion."
-            )
+            raise GiftEngineError("Gift recipient FanCoin balance is insufficient for conversion.")
 
         conversion = EconomicConversion(
             conversion_key=conversion_key,

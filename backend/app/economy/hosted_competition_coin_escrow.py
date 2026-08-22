@@ -13,8 +13,10 @@ from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletS
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 
+
 class HostedCompetitionCoinEscrowError(ValueError):
     """Raised when a host-funded GTEX Coin prize cannot be escrowed or settled."""
+
 
 @dataclass(slots=True)
 class HostedCompetitionCoinEscrowService:
@@ -43,7 +45,9 @@ class HostedCompetitionCoinEscrowService:
     def available_balance(self, competition: UserHostedCompetition) -> Decimal:
         return self._amount(self.wallet_service.get_balance(self.session, self.escrow_account(competition)))
 
-    def fund_from_host(self, *, competition: UserHostedCompetition, host: User, gross_prize: Decimal | int | float | str) -> str:
+    def fund_from_host(
+        self, *, competition: UserHostedCompetition, host: User, gross_prize: Decimal | int | float | str
+    ) -> str:
         amount = self._amount(gross_prize)
         if amount <= Decimal("0.0000"):
             raise HostedCompetitionCoinEscrowError("Host-funded GTEX Coin prize must be positive.")
@@ -63,7 +67,11 @@ class HostedCompetitionCoinEscrowService:
             description=f"Host-funded GTEX Coin prize for {competition.title}",
             actor=host,
             idempotency_key=f"hosted-coin-prize-fund:{competition.id}",
-            metadata={"hosted_competition_id": competition.id, "currency": LedgerUnit.COIN.value, "funding_mode": "host_funded_gtex_coin_prize"},
+            metadata={
+                "hosted_competition_id": competition.id,
+                "currency": LedgerUnit.COIN.value,
+                "funding_mode": "host_funded_gtex_coin_prize",
+            },
         )
         competition.host_funding_required_coin = amount
         competition.host_funding_escrowed_coin = amount
@@ -71,7 +79,15 @@ class HostedCompetitionCoinEscrowService:
         self.session.flush()
         return entries[0].transaction_id
 
-    def settle(self, *, competition: UserHostedCompetition, winner: User, net_prize: Decimal | int | float | str, platform_fee: Decimal | int | float | str, actor: User) -> str:
+    def settle(
+        self,
+        *,
+        competition: UserHostedCompetition,
+        winner: User,
+        net_prize: Decimal | int | float | str,
+        platform_fee: Decimal | int | float | str,
+        actor: User,
+    ) -> str:
         return self.settle_distribution(
             competition=competition,
             payouts=[(winner, self._amount(net_prize))],
@@ -79,7 +95,14 @@ class HostedCompetitionCoinEscrowService:
             actor=actor,
         )
 
-    def settle_distribution(self, *, competition: UserHostedCompetition, payouts: list[tuple[User, Decimal]], platform_fee: Decimal | int | float | str, actor: User) -> str:
+    def settle_distribution(
+        self,
+        *,
+        competition: UserHostedCompetition,
+        payouts: list[tuple[User, Decimal]],
+        platform_fee: Decimal | int | float | str,
+        actor: User,
+    ) -> str:
         fee = self._amount(platform_fee)
         if fee < Decimal("0.0000"):
             raise HostedCompetitionCoinEscrowError("Platform fee cannot be negative.")
@@ -102,15 +125,23 @@ class HostedCompetitionCoinEscrowService:
         postings: list[LedgerPosting] = []
         for winner, payout in normalized_payouts:
             recipient = self.wallet_service.get_user_account(self.session, winner, LedgerUnit.COIN)
-            postings.extend([
-                LedgerPosting(account=escrow, amount=-payout, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD),
-                LedgerPosting(account=recipient, amount=payout, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD),
-            ])
+            postings.extend(
+                [
+                    LedgerPosting(
+                        account=escrow, amount=-payout, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD
+                    ),
+                    LedgerPosting(
+                        account=recipient, amount=payout, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD
+                    ),
+                ]
+            )
         if fee > Decimal("0.0000"):
-            postings.extend([
-                LedgerPosting(account=escrow, amount=-fee, source_tag=LedgerSourceTag.HOSTING_FEE_SPEND),
-                LedgerPosting(account=platform, amount=fee, source_tag=LedgerSourceTag.HOSTING_FEE_SPEND),
-            ])
+            postings.extend(
+                [
+                    LedgerPosting(account=escrow, amount=-fee, source_tag=LedgerSourceTag.HOSTING_FEE_SPEND),
+                    LedgerPosting(account=platform, amount=fee, source_tag=LedgerSourceTag.HOSTING_FEE_SPEND),
+                ]
+            )
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=postings,
@@ -133,5 +164,6 @@ class HostedCompetitionCoinEscrowService:
         competition.host_funding_escrowed_coin = self._amount(escrow_balance - required)
         self.session.flush()
         return entries[0].transaction_id
+
 
 __all__ = ["HostedCompetitionCoinEscrowError", "HostedCompetitionCoinEscrowService"]

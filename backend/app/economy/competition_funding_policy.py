@@ -51,9 +51,7 @@ def funding_mode_from_prize_mode(
         "dynamic",
     }:
         return CompetitionFundingMode.FANCOIN_ENTRY_POOL
-    raise CompetitionFundingPolicyError(
-        f"Unsupported competition prize mode: {prize_mode!r}."
-    )
+    raise CompetitionFundingPolicyError(f"Unsupported competition prize mode: {prize_mode!r}.")
 
 
 def validate_competition_funding_contract(
@@ -69,15 +67,11 @@ def validate_competition_funding_contract(
     host_prize = _decimal(host_prize_amount)
 
     if entry < 0 or host_prize < 0:
-        raise CompetitionFundingPolicyError(
-            "Competition monetary amounts cannot be negative."
-        )
+        raise CompetitionFundingPolicyError("Competition monetary amounts cannot be negative.")
 
     if normalized_mode is CompetitionFundingMode.FANCOIN_ENTRY_POOL:
         if normalized_currency is not LedgerUnit.CREDIT:
-            raise CompetitionFundingPolicyError(
-                "FanCoin entry-pool competitions must use FanCoin/CREDIT."
-            )
+            raise CompetitionFundingPolicyError("FanCoin entry-pool competitions must use FanCoin/CREDIT.")
         if host_prize > 0:
             raise CompetitionFundingPolicyError(
                 "FanCoin entry-pool competitions cannot also carry a host-funded prize."
@@ -90,17 +84,11 @@ def validate_competition_funding_contract(
         )
 
     if normalized_currency is not LedgerUnit.COIN:
-        raise CompetitionFundingPolicyError(
-            "Host-funded prize competitions must use withdrawable GTEX Coin."
-        )
+        raise CompetitionFundingPolicyError("Host-funded prize competitions must use withdrawable GTEX Coin.")
     if entry > 0:
-        raise CompetitionFundingPolicyError(
-            "Participant-funded GTEX Coin prize pools are prohibited."
-        )
+        raise CompetitionFundingPolicyError("Participant-funded GTEX Coin prize pools are prohibited.")
     if host_prize <= 0:
-        raise CompetitionFundingPolicyError(
-            "Host-funded GTEX Coin competitions require a positive host prize amount."
-        )
+        raise CompetitionFundingPolicyError("Host-funded GTEX Coin competitions require a positive host prize amount.")
 
     return CompetitionFundingContract(
         mode=normalized_mode,

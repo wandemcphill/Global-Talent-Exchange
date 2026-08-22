@@ -51,9 +51,7 @@ class AdminFeatureFlagAuditLog(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 class AdminBetaAccessGrant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "admin_beta_access_grants"
-    __table_args__ = (
-        UniqueConstraint("feature_key", "user_id", name="uq_admin_beta_access_grants_feature_user"),
-    )
+    __table_args__ = (UniqueConstraint("feature_key", "user_id", name="uq_admin_beta_access_grants_feature_user"),)
 
     feature_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)

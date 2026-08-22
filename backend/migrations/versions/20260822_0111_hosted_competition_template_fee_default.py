@@ -24,16 +24,12 @@ def upgrade() -> None:
         "platform_fee_bps",
         server_default=sa.text("3000"),
     )
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE competition_templates
             SET platform_fee_bps = 3000
             WHERE active = 1
               AND platform_fee_bps IN (1000, 2000)
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:

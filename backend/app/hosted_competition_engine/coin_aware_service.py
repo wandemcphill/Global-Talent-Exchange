@@ -63,7 +63,11 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
 
     def _competition_mode(self, competition: UserHostedCompetition) -> CompetitionFundingMode:
         try:
-            value = competition.funding_mode.value if hasattr(competition.funding_mode, "value") else competition.funding_mode
+            value = (
+                competition.funding_mode.value
+                if hasattr(competition.funding_mode, "value")
+                else competition.funding_mode
+            )
             return CompetitionFundingMode(str(value))
         except ValueError as exc:
             raise HostedCompetitionError("Hosted competition has an unsupported funding mode.") from exc
@@ -203,7 +207,9 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
             "participant_count": len(participants),
             "entry_fee_fancoin": Decimal("0.0000"),
             "gross_collected": self._normalize_amount(competition.reward_pool_coin),
-            "projected_reward_pool": self._normalize_amount(competition.reward_pool_coin - competition.platform_fee_amount),
+            "projected_reward_pool": self._normalize_amount(
+                competition.reward_pool_coin - competition.platform_fee_amount
+            ),
             "projected_platform_fee": self._normalize_amount(competition.platform_fee_amount),
             "escrow_balance": escrow_service.available_balance(competition),
             "settled_prizes": settled_prizes,
@@ -254,7 +260,9 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         standings_by_user = {row.user_id: row for row in self.standings_for_competition(competition_id)}
         if not standings_by_user:
             for participant in self.participants_for_competition(competition_id):
-                row = HostedCompetitionStanding(competition_id=competition.id, user_id=participant.user_id, metadata_json={})
+                row = HostedCompetitionStanding(
+                    competition_id=competition.id, user_id=participant.user_id, metadata_json={}
+                )
                 self.session.add(row)
                 self.session.flush()
                 standings_by_user[participant.user_id] = row

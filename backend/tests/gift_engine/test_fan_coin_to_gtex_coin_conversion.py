@@ -93,9 +93,7 @@ def _assert_converted(session, wallet, tx, recipient) -> None:
     assert tx.recipient_net_amount == Decimal("70.0000")
     assert tx.economic_conversion_id is not None
 
-    conversion = session.scalar(
-        select(EconomicConversion).where(EconomicConversion.id == tx.economic_conversion_id)
-    )
+    conversion = session.scalar(select(EconomicConversion).where(EconomicConversion.id == tx.economic_conversion_id))
     assert conversion is not None
     assert conversion.source_unit is LedgerUnit.CREDIT
     assert conversion.destination_unit is LedgerUnit.COIN

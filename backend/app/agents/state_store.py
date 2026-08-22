@@ -222,14 +222,16 @@ class AgentStateStore:
                     avg_duration=int(strategy_record.avg_duration if strategy_record is not None else 12),
                     tempo=str(strategy_record.tempo if strategy_record is not None else "medium"),
                     audience_bias=str(strategy_record.audience_bias if strategy_record is not None else "general"),
-                    preferred_formats=tuple(
-                        str(item) for item in (strategy_record.preferred_formats_json or [])
-                    )
-                    if strategy_record is not None
-                    else (),
-                    event_focus=tuple(str(item) for item in (strategy_record.event_focus_json or []))
-                    if strategy_record is not None
-                    else (),
+                    preferred_formats=(
+                        tuple(str(item) for item in (strategy_record.preferred_formats_json or []))
+                        if strategy_record is not None
+                        else ()
+                    ),
+                    event_focus=(
+                        tuple(str(item) for item in (strategy_record.event_focus_json or []))
+                        if strategy_record is not None
+                        else ()
+                    ),
                     cadence_minutes=int(strategy_record.cadence_minutes if strategy_record is not None else 8),
                     experimental_share=float(
                         strategy_record.experimental_share if strategy_record is not None else 0.3
@@ -249,9 +251,9 @@ class AgentStateStore:
                 total_posts=int(learning_record.total_posts if learning_record is not None else 0),
                 total_rewards=float(learning_record.total_rewards if learning_record is not None else 0.0),
                 total_penalties=float(learning_record.total_penalties if learning_record is not None else 0.0),
-                preferred_formats=dict(learning_record.preferred_formats_json or {})
-                if learning_record is not None
-                else {},
+                preferred_formats=(
+                    dict(learning_record.preferred_formats_json or {}) if learning_record is not None else {}
+                ),
                 last_updated_at=(
                     self._with_utc(learning_record.last_updated_at) or datetime.now(UTC)
                     if learning_record is not None

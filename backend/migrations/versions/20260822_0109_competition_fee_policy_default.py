@@ -24,16 +24,12 @@ def upgrade() -> None:
         "competition_platform_fee_bps",
         server_default=sa.text("3000"),
     )
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE admin_reward_rules
             SET competition_platform_fee_bps = 3000
             WHERE active = 1
               AND competition_platform_fee_bps = 1000
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:
@@ -42,13 +38,9 @@ def downgrade() -> None:
         "competition_platform_fee_bps",
         server_default=sa.text("1000"),
     )
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE admin_reward_rules
             SET competition_platform_fee_bps = 1000
             WHERE active = 1
               AND competition_platform_fee_bps = 3000
-            """
-        )
-    )
+            """))

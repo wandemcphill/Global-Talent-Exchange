@@ -39,17 +39,13 @@ def upgrade() -> None:
         ),
     )
 
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE gift_transactions
             SET source_ledger_unit = ledger_unit,
                 destination_ledger_unit = ledger_unit
             WHERE source_ledger_unit IS NULL
                OR destination_ledger_unit IS NULL
-            """
-        )
-    )
+            """))
 
     op.alter_column(
         "gift_transactions",

@@ -23,11 +23,7 @@ class GiftTransactionStatus(StrEnum):
 
 class GiftTransaction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "gift_transactions"
-    __table_args__ = (
-        UniqueConstraint(
-            "idempotency_key", name="uq_gift_transactions_idempotency_key"
-        ),
-    )
+    __table_args__ = (UniqueConstraint("idempotency_key", name="uq_gift_transactions_idempotency_key"),)
 
     sender_user_id: Mapped[str] = mapped_column(
         String(36),
@@ -47,39 +43,19 @@ class GiftTransaction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    idempotency_key: Mapped[str | None] = mapped_column(
-        String(128), nullable=True, index=True
-    )
-    recipient_type: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="user", server_default="user"
-    )
-    recipient_entity_id: Mapped[str | None] = mapped_column(
-        String(64), nullable=True, index=True
-    )
-    chat_thread_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
-    discussion_thread_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
-    discussion_reply_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    recipient_type: Mapped[str] = mapped_column(String(32), nullable=False, default="user", server_default="user")
+    recipient_entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    chat_thread_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    discussion_thread_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    discussion_reply_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     match_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    competition_id: Mapped[str | None] = mapped_column(
-        String(64), nullable=True, index=True
-    )
-    quantity: Mapped[Decimal] = mapped_column(
-        Numeric(18, 4), nullable=False, default=1, server_default="1.0000"
-    )
+    competition_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=1, server_default="1.0000")
     unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
-    platform_rake_amount: Mapped[Decimal] = mapped_column(
-        Numeric(18, 4), nullable=False
-    )
-    recipient_net_amount: Mapped[Decimal] = mapped_column(
-        Numeric(18, 4), nullable=False
-    )
+    platform_rake_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    recipient_net_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     source_scope: Mapped[str] = mapped_column(
         String(32), nullable=False, default="user_hosted", server_default="user_hosted"
     )
@@ -108,30 +84,16 @@ class GiftTransaction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         unique=True,
         index=True,
     )
-    conversion_rate: Mapped[Decimal] = mapped_column(
-        Numeric(20, 8), nullable=False, default=1, server_default="1"
-    )
-    ledger_transaction_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
-    wallet_debit_ledger_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
-    wallet_credit_ledger_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
-    platform_fee_ledger_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True, index=True
-    )
+    conversion_rate: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False, default=1, server_default="1")
+    ledger_transaction_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    wallet_debit_ledger_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    wallet_credit_ledger_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    platform_fee_ledger_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     animation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sound_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    abuse_status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="clean", server_default="clean"
-    )
+    abuse_status: Mapped[str] = mapped_column(String(32), nullable=False, default="clean", server_default="clean")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata_json: Mapped[dict[str, object]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[GiftTransactionStatus] = mapped_column(
         Enum(GiftTransactionStatus, name="gift_transaction_status", native_enum=False),
         nullable=False,
@@ -146,43 +108,31 @@ class GiftTransaction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class GiftStats(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "gift_stats"
-    __table_args__ = (
-        UniqueConstraint("entity_type", "entity_id", name="uq_gift_stats_entity"),
-    )
+    __table_args__ = (UniqueConstraint("entity_type", "entity_id", name="uq_gift_stats_entity"),)
 
     entity_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     entity_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    total_gifts_received: Mapped[int] = mapped_column(
-        nullable=False, default=0, server_default="0"
-    )
+    total_gifts_received: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     total_fan_coin_received: Mapped[Decimal] = mapped_column(
         Numeric(20, 4),
         nullable=False,
         default=Decimal("0.0000"),
         server_default="0.0000",
     )
-    total_unique_senders: Mapped[int] = mapped_column(
-        nullable=False, default=0, server_default="0"
-    )
+    total_unique_senders: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     top_gift_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    mythic_gifts_received: Mapped[int] = mapped_column(
-        nullable=False, default=0, server_default="0"
-    )
+    mythic_gifts_received: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
 
 
 class GiftAbuseFlag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "gift_abuse_flags"
-    __table_args__ = (
-        UniqueConstraint("flag_key", name="uq_gift_abuse_flags_flag_key"),
-    )
+    __table_args__ = (UniqueConstraint("flag_key", name="uq_gift_abuse_flags_flag_key"),)
 
     flag_key: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
     sender_user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    recipient_type: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="user", server_default="user"
-    )
+    recipient_type: Mapped[str] = mapped_column(String(32), nullable=False, default="user", server_default="user")
     recipient_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     gift_transaction_id: Mapped[str | None] = mapped_column(
         String(36),
@@ -191,13 +141,7 @@ class GiftAbuseFlag(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     flag_type: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
-    severity: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="medium", server_default="medium"
-    )
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="medium", server_default="medium")
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(
-        String(24), nullable=False, default="open", server_default="open"
-    )
-    metadata_json: Mapped[dict[str, object]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="open", server_default="open")
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
