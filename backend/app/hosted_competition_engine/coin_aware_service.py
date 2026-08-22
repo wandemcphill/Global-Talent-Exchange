@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 
+from app.admin_engine.service import AdminEngineService
 from app.economy.competition_funding_policy import (
     CompetitionFundingMode,
     CompetitionFundingPolicyError,
@@ -29,6 +30,15 @@ from app.wallets.service import InsufficientBalanceError
 
 class CoinAwareHostedCompetitionService(HostedCompetitionService):
     """Hosted competition service with the Phase A funding constitution enforced."""
+
+    def _active_platform_fee_bps(self) -> int:
+        rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
+        if rule is None:
+            raise HostedCompetitionError("No active competition platform fee policy is configured.")
+        fee_bps = int(rule.competition_platform_fee_bps)
+        if fee_bps < 0 or fee_bps > 3000:
+            raise HostedCompetitionError("Configured competition platform fee is outside the allowed policy range.")
+        return fee_bps
 
     def _funding_mode(self, payload) -> CompetitionFundingMode:
         requested = getattr(payload, "funding_mode", None)
