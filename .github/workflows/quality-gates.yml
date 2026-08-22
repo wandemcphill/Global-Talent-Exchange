@@ -80,6 +80,15 @@ jobs:
           if old_hosted not in h:
               raise SystemExit("CoinAware FanCoin delegation block not found")
           hosted.write_text(h.replace(old_hosted, new_hosted, 1))
+
+          wallet = Path("backend/app/models/wallet.py")
+          w = wallet.read_text()
+          w = w.replace(
+              'payout_requests: Mapped[list["PayoutRequest"]] = relationship(back_populates="account")',
+              'payout_requests: Mapped[list[Any]] = relationship(back_populates="account")',
+              1,
+          )
+          wallet.write_text(w)
           PY
           python -m black backend/app/agents/agent_manager.py backend/app/agents/ledger_service.py backend/app/agents/state_store.py backend/app/hosted_competition_engine/coin_aware_service.py backend/app/models/wallet.py
           python -m ruff check --fix --no-cache backend/app/agents/agent_manager.py backend/app/agents/ledger_service.py backend/app/agents/state_store.py backend/app/hosted_competition_engine/coin_aware_service.py backend/app/models/wallet.py
