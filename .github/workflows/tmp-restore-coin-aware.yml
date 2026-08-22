@@ -1,0 +1,38 @@
+name: Phase A restore CoinAware service
+
+on:
+  push:
+    branches:
+      - phase/a-economic-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore known-good service and apply frozen flag
+        run: |
+          git fetch origin phase/a-economic-foundation
+          git checkout 10fb096581bbf0d628f121b5ad9c313378142f11 -- backend/app/hosted_competition_engine/coin_aware_service.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("backend/app/hosted_competition_engine/coin_aware_service.py")
+          text = path.read_text()
+          needle = '                "platform_fee_bps": platform_fee_bps,\n'
+          replacement = needle + '                "platform_fee_policy_frozen": True,\n'
+          if '"platform_fee_policy_frozen": True' not in text:
+              if needle not in text:
+                  raise SystemExit("CoinAware metadata anchor not found")
+              text = text.replace(needle, replacement, 1)
+          path.write_text(text)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/hosted_competition_engine/coin_aware_service.py
+          git commit -m "fix(phase-a): persist frozen Coin fee policy"
+          git push origin HEAD:phase/a-economic-foundation
