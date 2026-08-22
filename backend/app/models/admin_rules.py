@@ -87,7 +87,6 @@ class AdminCalendarRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class AdminRewardRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "admin_reward_rules"
-
     rule_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -97,8 +96,9 @@ class AdminRewardRule(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     minimum_withdrawal_fee_credits: Mapped[float] = mapped_column(
         Numeric(18, 4), nullable=False, default=5, server_default="5.0000"
     )
+    # Product default is 30%; Admin may change the active rule without code changes.
     competition_platform_fee_bps: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=1000, server_default="1000"
+        Integer, nullable=False, default=3000, server_default="3000"
     )
     stability_controls_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
