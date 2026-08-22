@@ -9,5 +9,3 @@ from app.gift_engine.canonical_service import CanonicalGiftEngineService
 # single runtime entrypoint for gift economics after package initialization.
 _legacy_service_module.GiftEngineService = CanonicalGiftEngineService
 sys.modules["app.gift_engine.service"].GiftEngineService = CanonicalGiftEngineService
-
-from app.gift_engine.router import router  # noqa: E402
