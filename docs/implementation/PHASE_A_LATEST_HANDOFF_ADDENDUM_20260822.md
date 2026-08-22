@@ -14,11 +14,13 @@
 
 6. The Phase A migration chain is linear from `20260724_0106_player_potential` through `20260822_0112_hosted_competition_funding_contract`.
 
-7. Runtime alignment, API contract, strict-live reality, and dependency audits pass on the current branch family. Fresh branch-head certification is now running against the actual branch instead of a stale PR merge snapshot.
+7. Runtime alignment, API contract, strict-live reality, and dependency audits pass on the current branch family. Fresh branch-head certification is now running against the repaired branch head.
 
 8. Vercel has reported a separate frontend deployment issue in the broad CI. Treat that independently from the Phase A economic proof.
 
 9. Agent ledger source tags `agent_boost_spend` and `agent_performance_earnings` are string-backed and require no native enum migration.
+
+10. The branch ledger model was restored to the complete canonical schema after branch-head DB tests exposed a truncated `LedgerBalanceProjection` definition. Phase A Agent source tags and the forward-safe payout relationship annotation were re-applied on top of the restored model.
 
 ## Closure checklist
 
@@ -31,7 +33,8 @@
 - [x] Agent Wallet ledger-authoritative spend/earn boundary
 - [ ] DB-backed end-to-end hosted competition settlement proof
 - [ ] Clean final branch-head Quality Gates
-- [ ] Restore Quality Gates workflow to normal read-only configuration and remove temporary closure workflows
+- [x] Quality Gates restored to normal read-only configuration
+- [x] Temporary closure workflows removed
 - [ ] Independent Phase A red-team sign-off
 
-Certification trigger: run Phase A branch-head economic proof.
+Certification trigger: rerun the permanent Phase A economic regression gate after the model-export repair.
