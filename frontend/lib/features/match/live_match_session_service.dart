@@ -25,9 +25,9 @@ class LiveMatchSessionService {
       return null;
     }
     try {
-      final Map<String, Object?> payload = await _api.joinMatchSpectateSession(
-        matchId,
-      );
+      final Map<String, Object?> payload = await _api
+          .joinMatchSpectateSession(matchId)
+          .timeout(const Duration(seconds: 8));
       return LiveMatchSpectateSession.fromJson(payload);
     } catch (_) {
       return null;
