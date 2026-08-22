@@ -21,14 +21,23 @@ class LiveMatchSessionService {
   final GteExchangeApiClient _api;
 
   Future<LiveMatchSpectateSession?> resolveSession(String matchId) async {
-    if (_config.activeShellBackendMode == GteBackendMode.fixture) {
+    final String requestedMatchId = matchId.trim();
+    if (requestedMatchId.isEmpty ||
+        _config.activeShellBackendMode == GteBackendMode.fixture) {
       return null;
     }
     try {
       final Map<String, Object?> payload = await _api
-          .joinMatchSpectateSession(matchId)
+          .joinMatchSpectateSession(requestedMatchId)
           .timeout(const Duration(seconds: 8));
-      return LiveMatchSpectateSession.fromJson(payload);
+      final LiveMatchSpectateSession session =
+          LiveMatchSpectateSession.fromJson(payload);
+      if (session.matchId.trim() != requestedMatchId ||
+          session.id.trim().isEmpty ||
+          session.websocketPath.trim().isEmpty) {
+        return null;
+      }
+      return session;
     } catch (_) {
       return null;
     }
