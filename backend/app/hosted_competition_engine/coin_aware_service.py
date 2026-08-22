@@ -75,12 +75,20 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
     def create_competition(self, *, host, payload, created_by_admin=None, gtex_hosted: bool = False):
         mode = self._funding_mode(payload)
         if mode is CompetitionFundingMode.FANCOIN_ENTRY_POOL:
-            return super().create_competition(
+            competition, template, host_participation_created = super().create_competition(
                 host=host,
                 payload=payload,
                 created_by_admin=created_by_admin,
                 gtex_hosted=gtex_hosted,
             )
+            metadata = dict(competition.metadata_json or {})
+            metadata["funding_mode"] = mode.value
+            metadata["platform_fee_bps"] = self._active_platform_fee_bps()
+            metadata["platform_fee_policy_frozen"] = True
+            competition.funding_mode = mode
+            competition.metadata_json = metadata
+            self.session.flush()
+            return competition, template, host_participation_created
 
         if mode is not CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE:
             raise HostedCompetitionError("Unsupported hosted competition funding mode.")

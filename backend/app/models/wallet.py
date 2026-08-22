@@ -15,7 +15,6 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
-    event,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -158,7 +157,7 @@ class LedgerAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     owner: Mapped["User | None"] = relationship(back_populates="ledger_accounts")
     entries: Mapped[list["LedgerEntry"]] = relationship(back_populates="account")
-    payout_requests: Mapped[list["PayoutRequest"]] = relationship(back_populates="account")
+    payout_requests: Mapped[list[Any]] = relationship(back_populates="account")
 
 
 class LedgerTransaction(UUIDPrimaryKeyMixin, Base):

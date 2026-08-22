@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections import Counter, deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 import logging
 from threading import RLock
 from typing import Any
@@ -10,8 +11,16 @@ from typing import Any
 from fastapi import FastAPI
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.agents.agent_brain import AgentBrain, AgentDecisionContext, AgentIdentity, AgentMomentCandidate, AgentProfile, AgentStrategy
+from app.agents.agent_brain import (
+    AgentBrain,
+    AgentDecisionContext,
+    AgentIdentity,
+    AgentMomentCandidate,
+    AgentProfile,
+    AgentStrategy,
+)
 from app.agents.agent_wallet import AgentWallet, AgentWalletService
+from app.agents.ledger_service import AgentLedgerService
 from app.backbone.scale_events import enqueue_viral_dispatch
 from app.agents.content_generator import AgentContentGenerator, AgentGeneratedClip
 from app.agents.learning_engine import AgentLearningEngine, AgentLearningState, AgentPerformanceSignal
@@ -20,10 +29,10 @@ from app.agents.variant_planner import VariantPlanner
 from app.copilot.agent_copilot_service import AgentCopilotService
 from app.core.config import Settings, get_settings
 from app.core.events import DomainEvent, EventPublisher
+from app.models.wallet import LedgerSourceTag, LedgerUnit
 from app.orchestrator.orchestrator_service import AttentionOrchestratorService, build_attention_orchestrator_service
 from app.viral.ranking_service import LeaderboardEnvelope, ViralLeaderboardStore, ensure_viral_leaderboard_store
 from app.viral.schemas import ViralClipDistributionView
-
 
 logger = logging.getLogger(__name__)
 
@@ -315,8 +324,11 @@ class CreatorAgentManager:
         self.variant_planner = variant_planner or VariantPlanner()
         self.content_generator = content_generator or AgentContentGenerator()
         self.wallet_service = wallet_service or AgentWalletService()
+        self.agent_ledger_service = AgentLedgerService()
         self.learning_engine = learning_engine or AgentLearningEngine()
-        self.state_store = state_store or build_agent_state_store(session_factory=getattr(app.state, "session_factory", None))
+        self.state_store = state_store or build_agent_state_store(
+            session_factory=getattr(app.state, "session_factory", None)
+        )
         self._agents: dict[str, CreatorAgent] = {}
         self._candidate_pool: deque[AgentMomentCandidate] = deque()
         self._dispatch_window: deque[DispatchWindowEntry] = deque()
@@ -438,6 +450,10 @@ class CreatorAgentManager:
                 if not decision.should_post or decision.candidate is None:
                     skipped_count += 1
                     continue
+                agent.wallet = replace(
+                    agent.wallet,
+                    balance=float(self._agent_ledger_balance(agent.profile.identity.agent_id)),
+                )
                 boost_decision = self.wallet_service.recommend_boost(
                     wallet=agent.wallet,
                     predicted_reward=decision.predicted_reward,
@@ -453,7 +469,15 @@ class CreatorAgentManager:
                     variants=variants,
                     boost_amount=boost_decision.boost_amount,
                 )
-                agent.wallet = self.wallet_service.apply_spend(agent.wallet, boost_decision.boost_amount)
+                if boost_decision.boost_amount > 0.0:
+                    self._agent_ledger_spend(
+                        agent_id=agent.profile.identity.agent_id,
+                        amount=Decimal(str(boost_decision.boost_amount)),
+                        reference=f"agent-boost:{generated.clip_id}",
+                    )
+                agent.wallet = self._refresh_wallet_projection(
+                    agent, last_spend=boost_decision.boost_amount, last_earnings=0.0
+                )
                 self._publish_generated_clip(generated)
                 agent.last_generated_clip_id = generated.clip_id
                 agent.last_generated_at = generated.created_at
@@ -534,6 +558,15 @@ class CreatorAgentManager:
                 trust_score=trust_score,
                 repetition_ratio=repetition_ratio,
             )
+            if settlement.approved and settlement.realized_earnings > 0.0:
+                self._agent_ledger_earn(
+                    agent_id=record.agent_id,
+                    amount=Decimal(str(settlement.realized_earnings)),
+                    reference=f"agent-earnings:{record.clip_id}",
+                )
+            agent.wallet = self._refresh_wallet_projection(
+                agent, last_spend=0.0, last_earnings=settlement.realized_earnings
+            )
             agent.save_state()
             if self.state_store is not None:
                 self.state_store.record_performance_log(
@@ -570,6 +603,81 @@ class CreatorAgentManager:
                 payout_block_reason=None if settlement.approved else settlement.reason,
             )
 
+    def _agent_ledger_balance(self, agent_id: str) -> Decimal:
+        if self.state_store is None:
+            return Decimal("0.0000")
+        with self.state_store.session_factory() as session:
+            return self.agent_ledger_service.balance(session, agent_id=agent_id, unit=LedgerUnit.COIN)
+
+    def _agent_ledger_spend(self, *, agent_id: str, amount: Decimal, reference: str) -> str:
+        if self.state_store is None:
+            raise RuntimeError("Agent ledger persistence is unavailable; refusing economic spend.")
+        with self.state_store.session_factory() as session:
+            sink = self.agent_ledger_service.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+            transaction_id = self.agent_ledger_service.spend(
+                session,
+                agent_id=agent_id,
+                amount=amount,
+                funding_sink=sink,
+                reference=reference,
+                actor=None,
+                source_tag=LedgerSourceTag.AGENT_BOOST_SPEND,
+                idempotency_key=reference,
+            )
+            session.commit()
+            return transaction_id
+
+    def _agent_ledger_earn(self, *, agent_id: str, amount: Decimal, reference: str) -> str:
+        if self.state_store is None:
+            raise RuntimeError("Agent ledger persistence is unavailable; refusing economic earnings.")
+        with self.state_store.session_factory() as session:
+            source = self.agent_ledger_service.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+            transaction_id = self.agent_ledger_service.earn(
+                session,
+                agent_id=agent_id,
+                amount=amount,
+                funding_source=source,
+                reference=reference,
+                actor=None,
+                source_tag=LedgerSourceTag.AGENT_PERFORMANCE_EARNINGS,
+                idempotency_key=reference,
+            )
+            session.commit()
+            return transaction_id
+
+    def _agent_ledger_total(self, agent_id: str, source_tag: LedgerSourceTag) -> Decimal:
+        if self.state_store is None:
+            return Decimal("0.0000")
+        with self.state_store.session_factory() as session:
+            return self.agent_ledger_service.tagged_total(session, agent_id=agent_id, source_tag=source_tag)
+
+    def _refresh_wallet_projection(
+        self, agent: CreatorAgent, *, last_spend: float, last_earnings: float
+    ) -> AgentWallet:
+        balance = self._agent_ledger_balance(agent.profile.identity.agent_id)
+        cumulative_earnings = self._agent_ledger_total(
+            agent.profile.identity.agent_id, LedgerSourceTag.AGENT_PERFORMANCE_EARNINGS
+        )
+        cumulative_spend = abs(
+            self._agent_ledger_total(agent.profile.identity.agent_id, LedgerSourceTag.AGENT_BOOST_SPEND)
+        )
+        roi = (
+            (cumulative_earnings - cumulative_spend) / cumulative_spend if cumulative_spend > 0 else cumulative_earnings
+        )
+        return AgentWallet(
+            balance=float(balance),
+            lifetime_earnings=float(cumulative_earnings),
+            boost_spend=float(cumulative_spend),
+            roi=round(float(roi), 4),
+            last_spend=float(last_spend),
+            last_earnings=float(last_earnings),
+            trust_score=agent.wallet.trust_score,
+            quality_score=agent.wallet.quality_score,
+            repetition_ratio=agent.wallet.repetition_ratio,
+            payout_eligible=agent.wallet.payout_eligible,
+            last_block_reason=agent.wallet.last_block_reason,
+        )
+
     def close(self) -> None:
         self._closed = True
 
@@ -603,7 +711,13 @@ class CreatorAgentManager:
         return sorted(
             self._agents.values(),
             key=lambda item: (
-                len([stamp for stamp in item.post_history if stamp >= now - timedelta(minutes=self.config.per_agent_window_minutes)]),
+                len(
+                    [
+                        stamp
+                        for stamp in item.post_history
+                        if stamp >= now - timedelta(minutes=self.config.per_agent_window_minutes)
+                    ]
+                ),
                 item.last_generated_at or datetime.min.replace(tzinfo=UTC),
                 item.profile.identity.agent_id,
             ),
@@ -828,7 +942,9 @@ class CreatorAgentManager:
                     )
                     session.commit()
             except Exception:
-                logger.exception("agents.dispatch.enqueue_failed agent_id=%s clip_id=%s", generated.agent_id, generated.clip_id)
+                logger.exception(
+                    "agents.dispatch.enqueue_failed agent_id=%s clip_id=%s", generated.agent_id, generated.clip_id
+                )
         if self.event_publisher is not None:
             self.event_publisher.publish(event)
         else:

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.agents.agent_brain import AgentIdentity, AgentProfile, AgentStrategy
 from app.agents.agent_wallet import AgentWallet
 from app.agents.learning_engine import AgentLearningState, AgentPerformanceSignal
+from app.agents.ledger_service import AgentLedgerService
 from app.agents.models import (
     AgentLearningStateRecord,
     AgentPerformanceLogRecord,
@@ -18,6 +19,7 @@ from app.agents.models import (
     AgentStrategyRecord,
     AgentWalletRecord,
 )
+from app.models.wallet import LedgerSourceTag, LedgerUnit
 
 if TYPE_CHECKING:
     from app.agents.agent_manager import CreatorAgent
@@ -123,9 +125,18 @@ class AgentStateStore:
             if wallet_record is None:
                 wallet_record = AgentWalletRecord(agent_id=agent_id)
                 session.add(wallet_record)
-            wallet_record.balance = float(agent.wallet.balance)
-            wallet_record.lifetime_earnings = float(agent.wallet.lifetime_earnings)
-            wallet_record.boost_spend = float(agent.wallet.boost_spend)
+            ledger_service = AgentLedgerService()
+            ledger_account = ledger_service.get_or_create_account(session, agent_id=agent_id, unit=LedgerUnit.COIN)
+            ledger_balance = ledger_service.wallet_service.get_balance(session, ledger_account)
+            lifetime_earnings = ledger_service.tagged_total(
+                session, agent_id=agent_id, source_tag=LedgerSourceTag.AGENT_PERFORMANCE_EARNINGS
+            )
+            boost_spend = abs(
+                ledger_service.tagged_total(session, agent_id=agent_id, source_tag=LedgerSourceTag.AGENT_BOOST_SPEND)
+            )
+            wallet_record.balance = float(ledger_balance)
+            wallet_record.lifetime_earnings = float(lifetime_earnings)
+            wallet_record.boost_spend = float(boost_spend)
             wallet_record.roi = float(agent.wallet.roi)
             wallet_record.last_spend = float(agent.wallet.last_spend)
             wallet_record.last_earnings = float(agent.wallet.last_earnings)
@@ -208,6 +219,15 @@ class AgentStateStore:
         strategy_record = session.get(AgentStrategyRecord, agent_id)
         learning_record = session.get(AgentLearningStateRecord, agent_id)
         wallet_record = session.get(AgentWalletRecord, agent_id)
+        ledger_service = AgentLedgerService()
+        ledger_account = ledger_service.get_or_create_account(session, agent_id=agent_id, unit=LedgerUnit.COIN)
+        ledger_balance = ledger_service.wallet_service.get_balance(session, ledger_account)
+        lifetime_earnings = ledger_service.tagged_total(
+            session, agent_id=agent_id, source_tag=LedgerSourceTag.AGENT_PERFORMANCE_EARNINGS
+        )
+        boost_spend = abs(
+            ledger_service.tagged_total(session, agent_id=agent_id, source_tag=LedgerSourceTag.AGENT_BOOST_SPEND)
+        )
         return AgentStateSnapshot(
             profile=AgentProfile(
                 identity=AgentIdentity(
@@ -261,9 +281,9 @@ class AgentStateStore:
                 ),
             ),
             wallet=AgentWallet(
-                balance=float(wallet_record.balance if wallet_record is not None else 0.0),
-                lifetime_earnings=float(wallet_record.lifetime_earnings if wallet_record is not None else 0.0),
-                boost_spend=float(wallet_record.boost_spend if wallet_record is not None else 0.0),
+                balance=float(ledger_balance),
+                lifetime_earnings=float(lifetime_earnings),
+                boost_spend=float(boost_spend),
                 roi=float(wallet_record.roi if wallet_record is not None else 0.0),
                 last_spend=float(wallet_record.last_spend if wallet_record is not None else 0.0),
                 last_earnings=float(wallet_record.last_earnings if wallet_record is not None else 0.0),
