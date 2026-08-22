@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.ledger_service import AgentLedgerService
 from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerUnit
-from app.wallets.service import LedgerError, WalletService
+from app.wallets.service import InsufficientBalanceError, LedgerError, WalletService
 
 
 def make_session() -> Session:
@@ -46,3 +46,21 @@ def test_agent_account_identity_cannot_be_reused_with_wrong_kind() -> None:
                 agent_id="agent-1",
                 unit=LedgerUnit.COIN,
             )
+
+
+def test_agent_earnings_fail_closed_when_rewards_pool_is_unfunded() -> None:
+    with make_session() as session:
+        service = AgentLedgerService(WalletService())
+        clearing = service.wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+
+        with pytest.raises(InsufficientBalanceError):
+            service.earn(
+                session,
+                agent_id="agent-1",
+                amount=Decimal("1.0000"),
+                funding_source=clearing,
+                reference="agent-earnings:unfunded",
+                idempotency_key="agent-earnings:unfunded",
+            )
+
+        assert service.balance(session, agent_id="agent-1") == Decimal("0.0000")
