@@ -6,7 +6,7 @@
 
 ## Continue from
 
-Current head is the same branch used by PR #3.
+Use the current branch head. PR #3 remains the containment PR against `main`.
 
 ## Work already established
 
@@ -21,100 +21,109 @@ Current head is the same branch used by PR #3.
 - explicit gift source/destination currency fields on `GiftTransaction`
 - migration `20260821_0107_economic_conversions`
 - migration `20260821_0108_gift_currency_semantics`
+- migration `20260822_0109_competition_fee_policy_default`
+- migration `20260822_0110_agent_wallet_fail_closed`
+- migration `20260822_0111_hosted_competition_template_fee_default`
 - backend payout guard that rejects FanCoin at the `PayoutRequest` ORM boundary
 - currency-policy tests
 - conversion-reconciliation tests
 - withdrawal-currency guard tests
 - competition funding-policy tests
+- Gift Engine runtime adapter and DB-backed conversion regressions
+- Agent Wallet fail-closed defaults and state-store regression coverage
 
-## Important implementation correction
+## Important ledger correction
 
-`WalletService.append_transaction()` already supports multiple ledger units in one transaction provided each unit independently nets to zero. Do not introduce two separate ledger transactions just because the conversion crosses currencies.
+`WalletService.append_transaction()` supports multiple ledger units in one transaction provided each currency independently nets to zero. Do not create separate transactions merely because a gift crosses currencies.
 
-The intended FanCoin gift conversion is one atomic multi-unit transaction:
+The intended FanCoin gift conversion is one atomic economic event:
 
 ```text
 CREDIT:
   sender                 -gross
   platform fee           +fee
-  conversion bridge      +(gross-fee-burn)
-  burn                   +burn
+  conversion bridge      +(recipient_net)
+  burn                   +burn, when configured
 
 COIN:
-  Coin bridge            -(gross-fee-burn)
-  recipient              +(gross-fee-burn)
+  Coin bridge            -(recipient_net)
+  recipient              +(recipient_net)
 ```
 
 The `EconomicConversion` record provides durable provenance.
 
 ## Current state
 
-The currency model and withdrawal boundary are implemented. A constitutional competition funding policy is also implemented and mapped to the repository's existing `entry_funded` / `host_funded_fixed` prize vocabulary.
+### Gift Engine
 
-The repository already has host-funding escrow plumbing in `CompetitionWalletService` and the orchestrator calls the host-funding escrow path. The remaining work is to enforce the policy at the create/update/wallet boundaries and add DB-backed integration coverage.
+Runtime integration is now routed through `CanonicalGiftEngineService`.
 
-Gift Engine runtime integration remains the remaining P0 within the gifting slice.
+The canonical path deliberately forces every gift through the legacy FanCoin spend path first, regardless of `source_scope`, then converts only the recipient net amount into GTEX Coin in the same database transaction.
 
-Do not reintroduce context-dependent currency selection. `source_scope` is contextual metadata only. It must never select FanCoin versus GTEX Coin.
+`source_scope` is contextual metadata only. It must never select the currency.
+
+Additional GTEX-context rate limiting is preserved before the normalized legacy path executes.
+
+This integration now has tests for both:
+
+- user-hosted gifts
+- GTEX-hosted gifts
+
+The remaining requirement is fresh CI/runtime certification against the actual branch head.
+
+### Withdrawal
+
+The backend payout boundary rejects `LedgerUnit.CREDIT`. GTEX Coin remains the withdrawable economic unit.
+
+### Competition
+
+A constitutional funding policy exists and maps to the existing `entry_funded` / `host_funded_fixed` vocabulary.
+
+The legacy hosted-competition service still contains an obsolete host-prepaid FanCoin path. Do not expose or extend that path. A withdrawable host-funded prize must be implemented as a separate GTEX Coin contract, with Coin escrow before the competition opens.
+
+The template model/defaults have been aligned to the current 30% Admin policy, but the old service still contains legacy constants and needs runtime consolidation.
+
+### Agent Wallet
+
+The compatibility wallet now defaults to:
+
+- balance = `0`
+- payout eligibility = `false`
+
+The persisted model defaults and state-store fallbacks are aligned. Existing historical Agent Wallet balances have intentionally not been mass-zeroed because their provenance has not yet been proven. The full ledger migration is still required.
 
 ## Next implementation priorities
 
-### 1. Integrate Gift Engine
+### 1. Finish hosted-competition runtime enforcement
 
-Replace the current context-dependent `ledger_unit` behavior with the canonical gift path:
-
-- input must always be FanCoin
-- GTEX Coin cannot be gifted
-- recipient always receives GTEX Coin
-- user-hosted/GTEX-hosted context must not alter currency semantics
-- preserve gift abuse/collusion controls
-- preserve idempotency
-- populate `source_ledger_unit = CREDIT`
-- populate `destination_ledger_unit = COIN`
-- populate `economic_conversion_id`, `conversion_rate`, and shared ledger transaction reference
-
-The legacy `GiftTransaction.ledger_unit` field is compatibility-only and must not drive new accounting.
-
-### 2. Add actual integration tests
-
-Do not stop at pure policy tests. Add DB-backed tests that prove:
-
-- user-hosted gift: CREDIT debited, COIN credited
-- GTEX-hosted gift: CREDIT debited, COIN credited
-- normal social gift: CREDIT debited, COIN credited
-- GTEX Coin gifting rejected before ledger mutation
-- platform fee applied once
-- retry is idempotent
-- ledger transaction balances independently by unit
-- recipient Coin is visible to withdrawal logic
-- conversion record links to the same ledger transaction
-
-### 3. Enforce competition funding contracts in runtime code
-
-Use `backend/app/economy/competition_funding_policy.py` as the single policy vocabulary:
+Create the proper two-mode contract:
 
 - `FANCOIN_ENTRY_POOL` = CREDIT/FanCoin, participant-funded, non-withdrawable payout
 - `HOST_FUNDED_GTEX_COIN_PRIZE` = COIN/GTEX Coin, host-funded, participant Coin contribution forbidden, withdrawable payout
 
-The existing `prize_mode` values `entry_funded` / `dynamic` map to the first contract; `host_funded_fixed` / `host_funded` map to the second.
+Before a competition opens, verify the selected contract, currency, entry amount, and required host prize amount. Reject the obsolete host-prepaid FanCoin mode before any ledger mutation.
 
-Before a competition opens, verify the selected contract, currency, entry amount, and required host prize amount. Reject participant-funded Coin pools before any ledger mutation.
-
-### 4. Keep the backend withdrawal currency guard
-
-Withdrawal authority rejects `LedgerUnit.CREDIT` directly at the payout model boundary. Do not rely on frontend visibility. Preserve ordinary compliance/risk/provider checks for COIN.
-
-### 5. Centralize economic fees
+### 2. Centralize economic fees
 
 Refactor feature services to use one Admin-configured fee policy. The current intended competition rate is 30%, but it must never be hardcoded.
 
-The policy must support separate platform and processor fees and retain historical policy/version data on settlement.
+Support separate platform and processor fees and retain historical policy/version data on settlement.
 
-### 6. Agent Wallet migration
+### 3. Finish Agent Wallet ledger migration
 
-Move all agent monetary mutations to ledger accounts. Default payout eligibility must be false. Add concurrency and idempotency tests.
+Move all agent monetary mutations to canonical ledger accounts. The current projection may continue to describe agent economics, but it must not be the monetary authority.
 
-## Do not do yet
+Add concurrency and idempotency tests.
+
+### 4. Withdrawal execution certification
+
+Prove the complete production path:
+
+`COIN balance → withdrawal request → fee → provider payout → confirmation → reconciliation`.
+
+Do not certify withdrawal readiness from the ORM guard alone.
+
+## After Phase A
 
 Do not start:
 
@@ -124,7 +133,7 @@ Do not start:
 - AI
 - UX redesign
 
-until Phase A is audited and signed off.
+until Phase A has been independently audited and signed off.
 
 ## Required completion report
 
