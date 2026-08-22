@@ -36,6 +36,11 @@ class HostedCompetitionSettlementStatus(str, Enum):
     VOIDED = "voided"
 
 
+class HostedCompetitionFundingMode(str, Enum):
+    FANCOIN_ENTRY_POOL = "fancoin_entry_pool"
+    HOST_FUNDED_GTEX_COIN_PRIZE = "host_funded_gtex_coin_prize"
+
+
 class CompetitionTemplate(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "competition_templates"
     __table_args__ = (UniqueConstraint("template_key", name="uq_competition_templates_template_key"),)
@@ -52,8 +57,14 @@ class CompetitionTemplate(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     gift_rules: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     seeding_method: Mapped[str] = mapped_column(String(40), nullable=False, default="random")
     is_user_hostable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    funding_mode: Mapped[HostedCompetitionFundingMode] = mapped_column(
+        SqlEnum(HostedCompetitionFundingMode, name="hosted_competition_funding_mode", native_enum=False),
+        nullable=False,
+        default=HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL,
+    )
     entry_fee_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
     reward_pool_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
+    reward_pool_coin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
     # Display/default only. Actual fee is resolved from the active Admin reward policy.
     platform_fee_bps: Mapped[int] = mapped_column(nullable=False, default=3000)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
@@ -83,8 +94,20 @@ class UserHostedCompetition(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     lock_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     max_participants: Mapped[int] = mapped_column(nullable=False, default=8)
+    funding_mode: Mapped[HostedCompetitionFundingMode] = mapped_column(
+        SqlEnum(HostedCompetitionFundingMode, name="hosted_competition_funding_mode", native_enum=False),
+        nullable=False,
+        default=HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL,
+    )
     entry_fee_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
     reward_pool_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
+    reward_pool_coin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
+    host_funding_required_coin: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000")
+    )
+    host_funding_escrowed_coin: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000")
+    )
     platform_fee_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
@@ -137,6 +160,7 @@ class HostedCompetitionSettlement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=False,
         default=HostedCompetitionSettlementStatus.PENDING,
     )
+    currency: Mapped[str] = mapped_column(String(12), nullable=False, default="credit")
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
     platform_fee_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
     net_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
