@@ -10,9 +10,11 @@ from app.models.wallet import LedgerUnit
 
 def test_coin_funding_mode_creates_host_funded_withdrawable_contract() -> None:
     session = MagicMock()
+    session.scalar.return_value = None
     wallet = MagicMock()
     wallet.get_balance.return_value = Decimal("5000.0000")
     wallet.get_user_account.side_effect = lambda session, user, unit: SimpleNamespace(unit=unit, owner_user_id=user.id)
+    wallet.ensure_platform_account.side_effect = lambda session, unit: SimpleNamespace(unit=unit, code="platform")
     wallet.append_transaction.return_value = [SimpleNamespace(transaction_id="fund-tx")]
     service = CoinAwareHostedCompetitionService(session=session, wallet_service=wallet)
     service.get_template_by_key = MagicMock(
