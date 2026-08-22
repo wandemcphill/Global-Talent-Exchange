@@ -11,12 +11,8 @@ from app.auth.service import AuthService
 from app.hosted_competition_engine.coin_aware_service import CoinAwareHostedCompetitionService
 from app.models import Base
 from app.models.admin_rules import AdminRewardRule
-from app.models.hosted_competition import (
-    CompetitionTemplate,
-    HostedCompetitionSettlement,
-    UserHostedCompetitionParticipant,
-)
-from app.models.wallet import LedgerUnit
+from app.models.hosted_competition import CompetitionTemplate, HostedCompetitionSettlement, UserHostedCompetitionParticipant
+from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
 
 
@@ -51,6 +47,7 @@ def seed_host_coin(session, host, amount: Decimal) -> None:
             LedgerPosting(account=host_account, amount=amount),
             LedgerPosting(account=clearing, amount=-amount),
         ],
+        reason=LedgerEntryReason.ADJUSTMENT,
         reference="phase-a-host-funding-seed",
         actor=host,
     )
