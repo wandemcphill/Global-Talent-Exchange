@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -169,3 +170,43 @@ class HostedCompetitionSettlement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     settled_by_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+
+
+def _validate_hosted_competition_economic_contract(_: object, __: object, competition: UserHostedCompetition) -> None:
+    mode = competition.funding_mode or HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL
+    entry = Decimal(competition.entry_fee_fancoin or 0)
+    fancoin_prize = Decimal(competition.reward_pool_fancoin or 0)
+    coin_prize = Decimal(competition.reward_pool_coin or 0)
+    required = Decimal(competition.host_funding_required_coin or 0)
+    escrowed = Decimal(competition.host_funding_escrowed_coin or 0)
+
+    if any(value < 0 for value in (entry, fancoin_prize, coin_prize, required, escrowed)):
+        raise ValueError("Hosted competition monetary amounts cannot be negative.")
+
+    if mode is HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL:
+        if coin_prize != 0 or required != 0 or escrowed != 0:
+            raise ValueError("FanCoin entry-pool competitions cannot carry a GTEX Coin host-funded prize.")
+        return
+
+    if entry != 0 or fancoin_prize != 0:
+        raise ValueError("GTEX Coin prize competitions cannot use participant-funded FanCoin or Coin entry pools.")
+    if coin_prize <= 0 or required <= 0:
+        raise ValueError("GTEX Coin prize competitions require a positive host-funded prize and funding requirement.")
+    if escrowed > required:
+        raise ValueError("Escrowed GTEX Coin cannot exceed the required host funding amount.")
+
+
+event.listen(UserHostedCompetition, "before_insert", _validate_hosted_competition_economic_contract, propagate=True)
+event.listen(UserHostedCompetition, "before_update", _validate_hosted_competition_economic_contract, propagate=True)
+
+
+__all__ = [
+    "CompetitionTemplate",
+    "HostedCompetitionFundingMode",
+    "HostedCompetitionSettlement",
+    "HostedCompetitionSettlementStatus",
+    "HostedCompetitionStanding",
+    "HostedCompetitionStatus",
+    "UserHostedCompetition",
+    "UserHostedCompetitionParticipant",
+]
