@@ -68,19 +68,25 @@ class FanCoinGiftConversionService:
             )
 
         existing = self.session.scalar(
-            select(EconomicConversion).where(EconomicConversion.conversion_key == conversion_key)
+            select(EconomicConversion).where(
+                EconomicConversion.conversion_key == conversion_key
+            )
         )
         if existing is not None:
             return existing
         if idempotency_key:
             existing = self.session.scalar(
-                select(EconomicConversion).where(EconomicConversion.idempotency_key == idempotency_key)
+                select(EconomicConversion).where(
+                    EconomicConversion.idempotency_key == idempotency_key
+                )
             )
             if existing is not None:
                 return existing
 
         if FANCOIN is GTEX_COIN:
-            raise CurrencyPolicyError("FanCoin and GTEX Coin must remain distinct economic units.")
+            raise CurrencyPolicyError(
+                "FanCoin and GTEX Coin must remain distinct economic units."
+            )
 
         source_user = self.session.get(User, source_user_id)
         recipient_user = self.session.get(User, recipient_user_id)
@@ -89,9 +95,15 @@ class FanCoinGiftConversionService:
         if not source_user.is_active or not recipient_user.is_active:
             raise EconomicConversionError("Gift conversion requires active users.")
 
-        source_account = self.wallet_service.get_user_account(self.session, source_user, FANCOIN)
-        recipient_account = self.wallet_service.get_user_account(self.session, recipient_user, GTEX_COIN)
-        source_available = self.wallet_service.get_balance(self.session, source_account)
+        source_account = self.wallet_service.get_user_account(
+            self.session, source_user, FANCOIN
+        )
+        recipient_account = self.wallet_service.get_user_account(
+            self.session, recipient_user, GTEX_COIN
+        )
+        source_available = self.wallet_service.get_balance(
+            self.session, source_account
+        )
         if source_available < gross:
             raise EconomicConversionError("Insufficient FanCoin balance for gift conversion.")
 
@@ -102,7 +114,9 @@ class FanCoinGiftConversionService:
             unit=FANCOIN,
             allow_negative=False,
         )
-        bridge_coin = self.wallet_service.ensure_platform_account(self.session, GTEX_COIN)
+        bridge_coin = self.wallet_service.ensure_platform_account(
+            self.session, GTEX_COIN
+        )
         platform_fancoin_revenue = self.wallet_service.ensure_named_system_account(
             self.session,
             code="platform:credit:gift_conversion_fee_revenue",
@@ -112,7 +126,9 @@ class FanCoinGiftConversionService:
         )
         burn_account = None
         if burn > Decimal("0"):
-            burn_account = self.wallet_service.ensure_platform_burn_account(self.session, FANCOIN)
+            burn_account = self.wallet_service.ensure_platform_burn_account(
+                self.session, FANCOIN
+            )
 
         conversion = EconomicConversion(
             conversion_key=conversion_key,
