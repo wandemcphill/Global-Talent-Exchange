@@ -29,3 +29,4 @@ jobs:
           git add backend/app/models/wallet.py backend/tests/economy/test_phase_a_hosted_competition_db_roundtrip.py
           git commit -m "chore: format phase A economic files"
           git push
+# trigger formatting repair
