@@ -22,9 +22,7 @@ class CommissionPolicy:
 
 
 def resolve_commission_policy(session: Session) -> CommissionPolicy:
-    row = session.scalar(
-        select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GOD_MODE_STATE_KEY)
-    )
+    row = session.scalar(select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GOD_MODE_STATE_KEY))
     if row is None:
         raise CommissionPolicyUnavailableError("Admin commission policy is unavailable.")
 
