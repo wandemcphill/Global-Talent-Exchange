@@ -1,9 +1,6 @@
 name: Phase A model export patch
 
 on:
-  push:
-    branches:
-      - phase/a-economic-foundation
   pull_request:
     types: [synchronize]
 
@@ -12,11 +9,11 @@ permissions:
 
 jobs:
   patch:
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: phase/a-economic-foundation
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
