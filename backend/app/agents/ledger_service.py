@@ -151,13 +151,14 @@ class AgentLedgerService:
         amount = Decimal(str(amount)).quantize(AMOUNT_QUANTUM)
         if amount <= 0:
             raise LedgerError("Agent earnings must be positive.")
-        account = self.get_or_create_account(session, agent_id=agent_id, unit=funding_source.unit)
-        if funding_source.unit is not account.unit:
+        rewards_pool = self.wallet_service.ensure_rewards_pool_account(session, funding_source.unit)
+        account = self.get_or_create_account(session, agent_id=agent_id, unit=rewards_pool.unit)
+        if rewards_pool.unit is not account.unit:
             raise LedgerError("Agent earnings accounts must use the same ledger currency.")
         return self.wallet_service.append_transaction(
             session,
             postings=[
-                LedgerPosting(account=funding_source, amount=-amount, source_tag=source_tag),
+                LedgerPosting(account=rewards_pool, amount=-amount, source_tag=source_tag),
                 LedgerPosting(account=account, amount=amount, source_tag=source_tag),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
