@@ -73,6 +73,7 @@ def test_coin_settlement_pays_winner_and_platform_from_coin_escrow() -> None:
     competition.host_funding_required_coin = Decimal("1000.0000")
     competition.host_funding_escrowed_coin = Decimal("1000.0000")
     competition.reward_pool_coin = Decimal("1000.0000")
+    wallet.get_balance.return_value = Decimal("1000.0000")
     winner = _user("winner-1")
     actor = _user("admin-1")
 
