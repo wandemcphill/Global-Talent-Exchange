@@ -1,0 +1,37 @@
+name: Temporary Render URL correction
+
+on:
+  push:
+    branches: [phase/b-engine-integration]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update canonical production Render URLs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('render.yaml')
+          s = p.read_text()
+          s = s.replace('https://gtex-api-cijn.onrender.com/api/webhooks/korapay', 'https://gtex-api-opea.onrender.com/api/webhooks/korapay')
+          s = s.replace('https://gtex-api-cijn.onrender.com', 'https://gtex-api-opea.onrender.com')
+          p.write_text(s)
+          PY
+          git diff --check
+      - name: Commit corrected Render URLs
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add render.yaml
+          if git diff --cached --quiet; then
+            echo 'No changes required.'
+            exit 0
+          fi
+          git commit -m 'fix: align Render blueprint with current production URLs'
+          git push
