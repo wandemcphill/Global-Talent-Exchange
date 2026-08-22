@@ -11,7 +11,11 @@ from app.auth.service import AuthService
 from app.hosted_competition_engine.coin_aware_service import CoinAwareHostedCompetitionService
 from app.models import Base
 from app.models.admin_rules import AdminRewardRule
-from app.models.hosted_competition import CompetitionTemplate, HostedCompetitionSettlement, UserHostedCompetitionParticipant
+from app.models.hosted_competition import (
+    CompetitionTemplate,
+    HostedCompetitionSettlement,
+    UserHostedCompetitionParticipant,
+)
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -117,7 +121,9 @@ def test_hosted_coin_competition_create_freeze_settle_roundtrip_uses_db_ledger()
         assert competition.metadata_json["platform_fee_bps"] == 3000
         assert competition.metadata_json["platform_fee_policy_frozen"] is True
         assert competition.host_funding_escrowed_coin == Decimal("1000.0000")
-        assert WalletService().get_balance(session, WalletService().get_user_account(session, host, LedgerUnit.COIN)) == Decimal("0.0000")
+        assert WalletService().get_balance(
+            session, WalletService().get_user_account(session, host, LedgerUnit.COIN)
+        ) == Decimal("0.0000")
 
         session.add(
             UserHostedCompetitionParticipant(
