@@ -18,9 +18,11 @@ from app.hosted_competition_engine.service import HostedCompetitionError, Hosted
 from app.models.hosted_competition import (
     HostedCompetitionSettlement,
     HostedCompetitionSettlementStatus,
+    HostedCompetitionStanding,
     HostedCompetitionStatus,
     UserHostedCompetition,
 )
+from app.models.user import User
 from app.models.wallet import LedgerUnit
 from app.wallets.service import InsufficientBalanceError
 
@@ -39,7 +41,8 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
 
     def _competition_mode(self, competition: UserHostedCompetition) -> CompetitionFundingMode:
         try:
-            return CompetitionFundingMode(str(competition.funding_mode.value if hasattr(competition.funding_mode, "value") else competition.funding_mode))
+            value = competition.funding_mode.value if hasattr(competition.funding_mode, "value") else competition.funding_mode
+            return CompetitionFundingMode(str(value))
         except ValueError as exc:
             raise HostedCompetitionError("Hosted competition has an unsupported funding mode.") from exc
 
@@ -129,11 +132,7 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
 
         escrow_service = HostedCompetitionCoinEscrowService(self.session, self.wallet_service)
         try:
-            escrow_service.fund_from_host(
-                competition=competition,
-                host=host,
-                gross_prize=gross_prize,
-            )
+            escrow_service.fund_from_host(competition=competition, host=host, gross_prize=gross_prize)
         except (InsufficientBalanceError, HostedCompetitionCoinEscrowError) as exc:
             self.session.delete(competition)
             self.session.flush()
@@ -190,7 +189,7 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
             "status": competition.status.value if hasattr(competition.status, "value") else str(competition.status),
         }
 
-    def finalize_competition(self, *, actor, competition_id: str, placements, note: str | None = None):
+    def finalize_competition(self, *, actor: User, competition_id: str, placements, note: str | None = None):
         competition = self.get_competition(competition_id)
         if competition is None:
             raise HostedCompetitionError("Hosted competition was not found.")
@@ -227,20 +226,18 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         gross_prize = self._normalize_amount(competition.reward_pool_coin)
         platform_fee = self._normalize_amount(gross_prize * Decimal(self._active_platform_fee_bps()) / Decimal("10000"))
         net_prize = self._normalize_amount(gross_prize - platform_fee)
-        payout_rows: list[tuple[object, Decimal]] = []
+        payout_rows: list[tuple[User, Decimal]] = []
         total_payout = Decimal("0.0000")
         standings_by_user = {row.user_id: row for row in self.standings_for_competition(competition_id)}
         if not standings_by_user:
             for participant in self.participants_for_competition(competition_id):
-                from app.models.hosted_competition import HostedCompetitionStanding
-
                 row = HostedCompetitionStanding(competition_id=competition.id, user_id=participant.user_id, metadata_json={})
                 self.session.add(row)
                 self.session.flush()
                 standings_by_user[participant.user_id] = row
 
         for item in placements:
-            user = self.session.get(__import__("app.models.user", fromlist=["User"]).User, str(item["user_id"]))
+            user = self.session.get(User, str(item["user_id"]))
             if user is None:
                 raise HostedCompetitionError("A placement referenced a missing user.")
             payout_percent = Decimal(str(item.get("payout_percent", 0)))
