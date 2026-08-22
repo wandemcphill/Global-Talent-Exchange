@@ -44,7 +44,7 @@ services:
       - key: GTE_KORAPAY_WEBHOOK_SECRET
         sync: false
       - key: GTE_KORAPAY_NOTIFICATION_URL
-        value: https://gtex-api-opea.onrender.com/api/webhooks/korapay
+        value: https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook
       - key: GTE_ENABLE_PAYSTACK
         value: "false"
       - key: TREASURY_BANK_NAME
