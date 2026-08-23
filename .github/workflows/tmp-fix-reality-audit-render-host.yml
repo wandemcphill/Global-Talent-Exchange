@@ -1,0 +1,40 @@
+name: Temporary fix reality audit render host
+
+on:
+  push:
+    branches:
+      - phase/b-production-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update canonical Render endpoints in reality audit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tools/audit/reality_audit.py')
+          s = p.read_text()
+          replacements = {
+              'https://gtex-api-cijn.onrender.com/api/webhooks/korapay': 'https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook',
+              'https://gtex-api-cijn.onrender.com': 'https://gtex-api-opea.onrender.com',
+          }
+          for old, new in replacements.items():
+              s = s.replace(old, new)
+          p.write_text(s)
+          if 'gtex-api-cijn.onrender.com' in s:
+              raise SystemExit('legacy Render host remains in reality_audit.py')
+          PY
+      - name: Commit and push patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/audit/reality_audit.py
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: align reality audit with canonical Render endpoints'
+          git push
