@@ -4,13 +4,16 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, HTTPException, Request, status
 
 from app.auth.dependencies import get_current_admin
 from app.models.user import User, UserRole
 from app.wallets.service import WalletService
+
+if TYPE_CHECKING:
+    from app.admin_godmode.service import AdminGodModeService
 
 logger = logging.getLogger(__name__)
 
