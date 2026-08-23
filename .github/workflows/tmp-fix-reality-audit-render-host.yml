@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,9 +24,6 @@ jobs:
           replacement = '''def _render_config_failures() -> list[str]:
     render = _read("render.yaml")
     failures: list[str] = []
-
-    # Parse each Render env declaration structurally enough to avoid false
-    # negatives when comments or service boundaries occur between declarations.
     env_blocks = {}
     lines = render.splitlines()
     current_service = None
@@ -68,15 +64,12 @@ jobs:
     notification_block = service_block("gtex-api", "GTE_KORAPAY_NOTIFICATION_URL")
     if "https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook" not in notification_block:
         failures.append("render.yaml is missing the production KoraPay notification URL.")
-
     paystack_block = service_block("gtex-api", "GTE_ENABLE_PAYSTACK")
     if 'value: "false"' not in paystack_block and "value: false" not in paystack_block:
         failures.append("render.yaml does not explicitly disable Paystack.")
-
     api_base_block = service_block("gtex-web", "GTE_API_BASE_URL")
     if "https://gtex-api-opea.onrender.com" not in api_base_block:
         failures.append("render.yaml gtex-web service does not point at the live API base URL.")
-
     backend_mode_block = service_block("gtex-web", "GTE_BACKEND_MODE")
     if "value: live" not in backend_mode_block and "value: strict_live" not in backend_mode_block:
         failures.append("render.yaml gtex-web service does not force live backend mode.")
@@ -92,6 +85,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add tools/audit/reality_audit.py
-          git diff --cached --quiet && exit 0
+          if git diff --cached --quiet; then exit 0; fi
           git commit -m 'fix: make render reality audit validate service env blocks'
           git push
