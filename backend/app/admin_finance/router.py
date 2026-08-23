@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
@@ -23,10 +24,13 @@ from app.admin_finance.schemas import (
 )
 from app.admin_finance.service import AdminFinanceService
 from app.auth.dependencies import get_current_admin, get_session
+from app.core.request_security import extract_client_ip
 from app.live_matches.service import ensure_live_match_hub
 from app.models.user import User
 from app.services.runtime_control_service import RuntimeControlService
 from app.wallets.providers.registry import paystack_enabled
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/finance", tags=["admin-finance"])
 webhook_router = APIRouter(prefix="/integrations/payments", tags=["payments"])
@@ -312,6 +316,47 @@ def get_payment_reconciliation_summary(
     return PaymentReconciliationSummaryView.model_validate(payload)
 
 
+def _webhook_correlation_id(request: Request) -> str | None:
+    correlation_id = getattr(request.state, "correlation_id", None)
+    if isinstance(correlation_id, str) and correlation_id.strip():
+        return correlation_id.strip()
+    header = request.headers.get("x-correlation-id") or request.headers.get("x-request-id")
+    return header.strip()[:128] if header and header.strip() else None
+
+
+def _log_webhook_outcome(
+    request: Request,
+    *,
+    provider: str,
+    result: str,
+    payload: dict[str, object] | None = None,
+    detail: str | None = None,
+) -> None:
+    """Record actor / resource / operation / outcome for a provider callback.
+
+    Deliberately logs only the provider reference and derived status - never the
+    raw body, the signature header, or any provider secret.
+    """
+    resolved = payload or {}
+    logger.info(
+        "payments.webhook.handled",
+        extra={
+            "correlation_id": _webhook_correlation_id(request),
+            "actor": f"provider:{provider}",
+            "operation": "payments.webhook",
+            "provider": provider,
+            "resource_type": "purchase_order",
+            "resource_id": resolved.get("purchase_order_id"),
+            "provider_reference": resolved.get("reference"),
+            "signature_verified": resolved.get("signature_verified"),
+            "order_status": resolved.get("order_status"),
+            "result": result,
+            "detail": detail,
+            "client_ip": extract_client_ip(request),
+        },
+    )
+
+
 @webhook_router.post("/paystack/webhook", response_model=AdminFinanceWebhookResultView)
 async def handle_paystack_webhook(
     request: Request,
@@ -335,8 +380,10 @@ async def handle_paystack_webhook(
             headers=dict(request.headers),
         )
     except ValueError as exc:
+        _log_webhook_outcome(request, provider="paystack", result="rejected", detail=str(exc))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     session.commit()
+    _log_webhook_outcome(request, provider="paystack", result=str(result.get("status") or "ok"), payload=result)
     return AdminFinanceWebhookResultView.model_validate(result)
 
 
@@ -357,8 +404,10 @@ async def _handle_korapay_webhook_impl(
             headers=dict(request.headers),
         )
     except ValueError as exc:
+        _log_webhook_outcome(request, provider="korapay", result="rejected", detail=str(exc))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     session.commit()
+    _log_webhook_outcome(request, provider="korapay", result=str(result.get("status") or "ok"), payload=result)
     return AdminFinanceWebhookResultView.model_validate(result)
 
 

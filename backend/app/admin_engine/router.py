@@ -48,7 +48,10 @@ def _map_reward_rule(item) -> AdminRewardRuleView:
 
 
 @router.get("/bootstrap", response_model=CompetitionScheduleBootstrapView)
-def get_admin_engine_bootstrap(session: Session = Depends(get_session)) -> CompetitionScheduleBootstrapView:
+def get_admin_engine_bootstrap(
+    _: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> CompetitionScheduleBootstrapView:
     service = AdminEngineService(session)
     return CompetitionScheduleBootstrapView(
         active_feature_flags=[_map_feature_flag(item) for item in service.list_feature_flags(active_only=True)],

@@ -206,6 +206,7 @@ def upsert_regional_pricing(
 
 @admin_router.get("/revenue-share-rules", response_model=list[RevenueShareRuleView])
 def list_revenue_share_rules(
+    _: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
     active_only: bool = Query(default=True),
 ) -> list[RevenueShareRuleView]:
@@ -228,6 +229,7 @@ def upsert_revenue_share_rule(
 
 @admin_router.get("/gift-combo-rules", response_model=list[GiftComboRuleView])
 def list_gift_combo_rules(
+    _: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
     active_only: bool = Query(default=True),
 ) -> list[GiftComboRuleView]:
@@ -250,6 +252,7 @@ def upsert_gift_combo_rule(
 
 @admin_router.get("/burn-events", response_model=list[EconomyBurnEventView])
 def list_burn_events(
+    _: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
     user_id: str | None = Query(default=None),
     source_type: str | None = Query(default=None),

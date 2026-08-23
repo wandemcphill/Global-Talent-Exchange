@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from app.auth.dependencies import get_current_user
+from app.models.user import User
 from app.ultimate_league.league_service import (
     GTexPrizePayout,
     LeagueCompetitor,
@@ -291,8 +293,10 @@ def upsert_tactical_preset(
 def purchase_tactical_preset(
     preset_id: str,
     payload: TacticalPresetPurchaseRequest,
+    _: User = Depends(get_current_user),
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
 ) -> TacticalPresetView:
+    # Purchases spend a competitor's balance; they must never be anonymous.
     try:
         preset = runtime.purchase_tactical_preset(
             preset_id=preset_id,

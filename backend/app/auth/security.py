@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -140,14 +141,31 @@ def _decode_token(
     except ValueError as exc:
         raise TokenError(malformed_message) from exc
 
-    signing_input = f"{encoded_header}.{encoded_payload}".encode("ascii")
+    try:
+        signing_input = f"{encoded_header}.{encoded_payload}".encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise TokenError(malformed_message) from exc
     expected_signature = hmac.new(_auth_secret(secret), signing_input, hashlib.sha256).digest()
-    signature = _urlsafe_b64decode(encoded_signature)
+    try:
+        signature = _urlsafe_b64decode(encoded_signature)
+    except (binascii.Error, ValueError) as exc:
+        # A non-base64 signature segment is a malformed token, not a server
+        # fault; without this it escapes as a bare binascii.Error and any
+        # unauthenticated caller can turn a junk bearer header into a 500.
+        raise TokenError(malformed_message) from exc
     if not hmac.compare_digest(signature, expected_signature):
         raise TokenError(invalid_signature_message)
 
-    payload = json.loads(_urlsafe_b64decode(encoded_payload))
-    expires_at = int(payload.get("exp", 0))
+    try:
+        payload = json.loads(_urlsafe_b64decode(encoded_payload))
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise TokenError(malformed_message) from exc
+    if not isinstance(payload, dict):
+        raise TokenError(malformed_message)
+    try:
+        expires_at = int(payload.get("exp", 0))
+    except (TypeError, ValueError) as exc:
+        raise TokenError(malformed_message) from exc
     if expires_at <= int(time.time()):
         raise TokenError(expired_message)
 

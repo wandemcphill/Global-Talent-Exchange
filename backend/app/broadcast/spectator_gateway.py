@@ -6,8 +6,9 @@ from dataclasses import dataclass, field
 import os
 from typing import Any
 
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 
+from app.auth.dependencies import get_current_user
 from app.auth.security import TokenError, decode_access_token
 from app.broadcast.broadcast_models import MatchSnapshot, SpectatorEvent, SpectatorPresenceView, TournamentEvent
 from app.broadcast.match_room_manager import MatchRoomManager, RoomClient
@@ -114,7 +115,13 @@ def ensure_broadcast_runtime(app) -> BroadcastRuntime:
 
 
 @router.get("/matches/{match_id}/spectators", response_model=SpectatorPresenceView)
-async def get_match_spectators(match_id: str, request: Request) -> SpectatorPresenceView:
+async def get_match_spectators(
+    match_id: str,
+    request: Request,
+    _: User = Depends(get_current_user),
+) -> SpectatorPresenceView:
+    # SpectatorPresenceView carries active_user_ids, i.e. the identity of every
+    # account currently watching. That is not public data.
     runtime = ensure_broadcast_runtime(request.app)
     return await runtime.presence_service.get_match_presence(match_id)
 
