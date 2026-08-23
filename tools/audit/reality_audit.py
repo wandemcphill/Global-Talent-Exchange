@@ -1295,13 +1295,13 @@ def _render_config_failures() -> list[str]:
         if "value:" in block:
             failures.append(f"render.yaml must not hard-code a value for secret env {key}.")
     notification_block = _render_key_block(render, "GTE_KORAPAY_NOTIFICATION_URL")
-    if not notification_block or "https://gtex-api-cijn.onrender.com/api/webhooks/korapay" not in notification_block:
+    if not notification_block or "https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook" not in notification_block:
         failures.append("render.yaml is missing the production KoraPay notification URL.")
     paystack_block = _render_key_block(render, "GTE_ENABLE_PAYSTACK")
     if not paystack_block or ('value: "false"' not in paystack_block and "value: false" not in paystack_block):
         failures.append("render.yaml does not explicitly disable Paystack.")
     api_base_block = _render_key_block(render, "GTE_API_BASE_URL")
-    if not api_base_block or "https://gtex-api-cijn.onrender.com" not in api_base_block:
+    if not api_base_block or "https://gtex-api-opea.onrender.com" not in api_base_block:
         failures.append("render.yaml gtex-web service does not point at the live API base URL.")
     backend_mode_block = _render_key_block(render, "GTE_BACKEND_MODE")
     if not backend_mode_block or (
