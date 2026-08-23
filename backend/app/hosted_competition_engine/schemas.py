@@ -22,8 +22,10 @@ class CompetitionTemplateView(BaseModel):
     gift_rules: dict[str, object] = Field(default_factory=dict)
     seeding_method: str
     is_user_hostable: bool
+    funding_mode: str
     entry_fee_fancoin: Decimal
     reward_pool_fancoin: Decimal
+    reward_pool_coin: Decimal
     platform_fee_bps: int
     metadata_json: dict[str, object] = Field(default_factory=dict)
     active: bool
@@ -43,8 +45,12 @@ class HostedCompetitionView(BaseModel):
     starts_at: datetime | None = None
     lock_at: datetime | None = None
     max_participants: int
+    funding_mode: str
     entry_fee_fancoin: Decimal
     reward_pool_fancoin: Decimal
+    reward_pool_coin: Decimal
+    host_funding_required_coin: Decimal
+    host_funding_escrowed_coin: Decimal
     platform_fee_amount: Decimal
     metadata_json: dict[str, object] = Field(default_factory=dict)
     created_at: datetime
@@ -102,6 +108,7 @@ class HostedCompetitionSettlementView(BaseModel):
     recipient_user_id: str | None = None
     settlement_type: str
     status: str
+    currency: str
     gross_amount: Decimal
     platform_fee_amount: Decimal
     net_amount: Decimal
@@ -136,6 +143,8 @@ class HostedCompetitionCreateRequest(BaseModel):
     max_participants: int | None = None
     entry_fee_fancoin: Decimal | None = None
     reward_pool_fancoin: Decimal | None = None
+    funding_mode: str = "fancoin_entry_pool"
+    reward_pool_coin: Decimal | None = None
     join_passcode: str | None = Field(default=None, max_length=64)
     metadata_json: dict[str, object] = Field(default_factory=dict)
 

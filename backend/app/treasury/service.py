@@ -34,6 +34,7 @@ from app.models.risk_ops import RiskSeverity, SystemEventSeverity
 from app.models.user import KycStatus, User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit, PayoutRequest, PayoutStatus
 from app.risk_ops_engine.service import RiskActionBlockedError, RiskOpsService
+from app.treasury.commission_policy import resolve_commission_policy
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -662,7 +663,7 @@ class TreasuryService:
             rate_value=rate_value,
             rate_direction=settings.withdrawal_rate_direction,
         )
-        commissions = self._commission_settings()
+        commission_policy = resolve_commission_policy(session)
         try:
             result = self.wallet_service.request_payout(
                 session,
@@ -671,8 +672,8 @@ class TreasuryService:
                 destination_reference=f"bank:{bank_account.id}",
                 unit=LedgerUnit.COIN,
                 source_scope=source_scope,
-                withdrawal_fee_bps=int(commissions.get("withdrawal_fee_bps", 1000) or 1000),
-                minimum_fee=Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000")),
+                withdrawal_fee_bps=commission_policy.withdrawal_fee_bps,
+                minimum_fee=commission_policy.minimum_withdrawal_fee_credits,
                 actor=user,
                 notes=notes,
                 extra_meta={

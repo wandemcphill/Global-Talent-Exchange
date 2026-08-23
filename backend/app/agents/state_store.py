@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.agents.agent_brain import AgentIdentity, AgentProfile, AgentStrategy
 from app.agents.agent_wallet import AgentWallet
 from app.agents.learning_engine import AgentLearningState, AgentPerformanceSignal
+from app.agents.ledger_service import AgentLedgerService
 from app.agents.models import (
     AgentLearningStateRecord,
     AgentPerformanceLogRecord,
@@ -18,6 +19,7 @@ from app.agents.models import (
     AgentStrategyRecord,
     AgentWalletRecord,
 )
+from app.models.wallet import LedgerSourceTag, LedgerUnit
 
 if TYPE_CHECKING:
     from app.agents.agent_manager import CreatorAgent
@@ -87,8 +89,6 @@ class AgentStateStore:
             record.last_generated_clip_id = agent.last_generated_clip_id
             record.last_generated_at = agent.last_generated_at
             record.state_version = 1
-            # Flush the parent row first so dependent agent tables never race
-            # ahead of the base agent insert under stricter databases.
             session.flush()
 
             strategy_record = session.get(AgentStrategyRecord, agent_id)
@@ -125,9 +125,18 @@ class AgentStateStore:
             if wallet_record is None:
                 wallet_record = AgentWalletRecord(agent_id=agent_id)
                 session.add(wallet_record)
-            wallet_record.balance = float(agent.wallet.balance)
-            wallet_record.lifetime_earnings = float(agent.wallet.lifetime_earnings)
-            wallet_record.boost_spend = float(agent.wallet.boost_spend)
+            ledger_service = AgentLedgerService()
+            ledger_account = ledger_service.get_or_create_account(session, agent_id=agent_id, unit=LedgerUnit.COIN)
+            ledger_balance = ledger_service.wallet_service.get_balance(session, ledger_account)
+            lifetime_earnings = ledger_service.tagged_total(
+                session, agent_id=agent_id, source_tag=LedgerSourceTag.AGENT_PERFORMANCE_EARNINGS
+            )
+            boost_spend = abs(
+                ledger_service.tagged_total(session, agent_id=agent_id, source_tag=LedgerSourceTag.AGENT_BOOST_SPEND)
+            )
+            wallet_record.balance = float(ledger_balance)
+            wallet_record.lifetime_earnings = float(lifetime_earnings)
+            wallet_record.boost_spend = float(boost_spend)
             wallet_record.roi = float(agent.wallet.roi)
             wallet_record.last_spend = float(agent.wallet.last_spend)
             wallet_record.last_earnings = float(agent.wallet.last_earnings)
@@ -201,13 +210,24 @@ class AgentStateStore:
             strategy_record.global_exposure_feedback = float(global_exposure_feedback)
             session.commit()
 
-    def _snapshot_for(self, session: Session, agent_id: str, *, record: AgentRecord | None = None) -> AgentStateSnapshot:
+    def _snapshot_for(
+        self, session: Session, agent_id: str, *, record: AgentRecord | None = None
+    ) -> AgentStateSnapshot:
         agent_record = record or session.get(AgentRecord, agent_id)
         if agent_record is None:
             raise KeyError(f"Unknown agent {agent_id}")
         strategy_record = session.get(AgentStrategyRecord, agent_id)
         learning_record = session.get(AgentLearningStateRecord, agent_id)
         wallet_record = session.get(AgentWalletRecord, agent_id)
+        ledger_service = AgentLedgerService()
+        ledger_account = ledger_service.get_or_create_account(session, agent_id=agent_id, unit=LedgerUnit.COIN)
+        ledger_balance = ledger_service.wallet_service.get_balance(session, ledger_account)
+        lifetime_earnings = ledger_service.tagged_total(
+            session, agent_id=agent_id, source_tag=LedgerSourceTag.AGENT_PERFORMANCE_EARNINGS
+        )
+        boost_spend = abs(
+            ledger_service.tagged_total(session, agent_id=agent_id, source_tag=LedgerSourceTag.AGENT_BOOST_SPEND)
+        )
         return AgentStateSnapshot(
             profile=AgentProfile(
                 identity=AgentIdentity(
@@ -222,11 +242,23 @@ class AgentStateStore:
                     avg_duration=int(strategy_record.avg_duration if strategy_record is not None else 12),
                     tempo=str(strategy_record.tempo if strategy_record is not None else "medium"),
                     audience_bias=str(strategy_record.audience_bias if strategy_record is not None else "general"),
-                    preferred_formats=tuple(str(item) for item in (strategy_record.preferred_formats_json or [])) if strategy_record is not None else (),
-                    event_focus=tuple(str(item) for item in (strategy_record.event_focus_json or [])) if strategy_record is not None else (),
+                    preferred_formats=(
+                        tuple(str(item) for item in (strategy_record.preferred_formats_json or []))
+                        if strategy_record is not None
+                        else ()
+                    ),
+                    event_focus=(
+                        tuple(str(item) for item in (strategy_record.event_focus_json or []))
+                        if strategy_record is not None
+                        else ()
+                    ),
                     cadence_minutes=int(strategy_record.cadence_minutes if strategy_record is not None else 8),
-                    experimental_share=float(strategy_record.experimental_share if strategy_record is not None else 0.3),
-                    global_exposure_feedback=float(strategy_record.global_exposure_feedback if strategy_record is not None else 0.0),
+                    experimental_share=float(
+                        strategy_record.experimental_share if strategy_record is not None else 0.3
+                    ),
+                    global_exposure_feedback=float(
+                        strategy_record.global_exposure_feedback if strategy_record is not None else 0.0
+                    ),
                     shared_brain=str(strategy_record.shared_brain if strategy_record is not None else "copilot"),
                 ),
             ),
@@ -239,7 +271,9 @@ class AgentStateStore:
                 total_posts=int(learning_record.total_posts if learning_record is not None else 0),
                 total_rewards=float(learning_record.total_rewards if learning_record is not None else 0.0),
                 total_penalties=float(learning_record.total_penalties if learning_record is not None else 0.0),
-                preferred_formats=dict(learning_record.preferred_formats_json or {}) if learning_record is not None else {},
+                preferred_formats=(
+                    dict(learning_record.preferred_formats_json or {}) if learning_record is not None else {}
+                ),
                 last_updated_at=(
                     self._with_utc(learning_record.last_updated_at) or datetime.now(UTC)
                     if learning_record is not None
@@ -247,16 +281,16 @@ class AgentStateStore:
                 ),
             ),
             wallet=AgentWallet(
-                balance=float(wallet_record.balance if wallet_record is not None else 12.0),
-                lifetime_earnings=float(wallet_record.lifetime_earnings if wallet_record is not None else 0.0),
-                boost_spend=float(wallet_record.boost_spend if wallet_record is not None else 0.0),
+                balance=float(ledger_balance),
+                lifetime_earnings=float(lifetime_earnings),
+                boost_spend=float(boost_spend),
                 roi=float(wallet_record.roi if wallet_record is not None else 0.0),
                 last_spend=float(wallet_record.last_spend if wallet_record is not None else 0.0),
                 last_earnings=float(wallet_record.last_earnings if wallet_record is not None else 0.0),
                 trust_score=float(wallet_record.trust_score if wallet_record is not None else 0.8),
                 quality_score=float(wallet_record.quality_score if wallet_record is not None else 0.65),
                 repetition_ratio=float(wallet_record.repetition_ratio if wallet_record is not None else 0.0),
-                payout_eligible=bool(wallet_record.payout_eligible if wallet_record is not None else True),
+                payout_eligible=bool(wallet_record.payout_eligible if wallet_record is not None else False),
                 last_block_reason=wallet_record.last_block_reason if wallet_record is not None else None,
             ),
             last_generated_clip_id=agent_record.last_generated_clip_id,

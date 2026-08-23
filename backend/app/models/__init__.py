@@ -2,6 +2,7 @@
 
 import app.ingestion.models  # noqa: F401
 import app.agents.models  # noqa: F401
+from app.agents.models import AgentRecord, AgentStrategyRecord
 import app.global_memory.models  # noqa: F401
 import app.models.event_backbone  # noqa: F401
 import app.models.scale_backbone  # noqa: F401
@@ -341,6 +342,7 @@ from app.models.community_engine import (
 from app.models.discovery_engine import FeaturedRail, SavedSearch
 from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
 from app.models.economy_config import GiftCatalogItem, ServicePricingRule
+from app.models.economic_conversion import EconomicConversion
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.economy_daily_stat import EconomyDailyStat
 from app.models.economy_governor import EconomyGovernorPolicy

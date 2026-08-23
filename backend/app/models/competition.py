@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, Index, Integer, JSON, String, event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.enums.competition_format import CompetitionFormat
@@ -104,5 +104,40 @@ class UserCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 Competition = UserCompetition
+
+
+def _validate_competition_economic_contract(_: Any, __: Any, competition: UserCompetition) -> None:
+    prize_mode = (competition.prize_mode or "entry_funded").strip().lower()
+    currency = (competition.currency or "").strip().lower()
+    entry_fee = int(competition.entry_fee_minor or 0)
+    host_prize = int(competition.host_funded_prize_total_minor or 0)
+    host_required = int(competition.host_funding_required_minor or 0)
+
+    if prize_mode == "host_funded_fixed":
+        if currency != "coin":
+            raise ValueError("Host-funded prize competitions must use GTEX Coin.")
+        if entry_fee != 0:
+            raise ValueError("Host-funded GTEX Coin competitions cannot charge a participant Coin entry fee.")
+        if host_prize <= 0 or host_required <= 0:
+            raise ValueError("Host-funded GTEX Coin competitions require a positive funded prize.")
+        return
+
+    if entry_fee > 0 and currency != "credit":
+        raise ValueError("Participant-funded competition entry fees must use FanCoin.")
+
+
+event.listen(
+    UserCompetition,
+    "before_insert",
+    _validate_competition_economic_contract,
+    propagate=True,
+)
+event.listen(
+    UserCompetition,
+    "before_update",
+    _validate_competition_economic_contract,
+    propagate=True,
+)
+
 
 __all__ = ["Competition", "UserCompetition"]
