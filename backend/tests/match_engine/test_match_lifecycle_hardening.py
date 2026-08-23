@@ -32,6 +32,7 @@ from app.core.events import InMemoryEventPublisher
 from app.match_engine.services.execution_runtime import (
     LocalMatchExecutionWorker,
     MatchResultPersistenceError,
+    _supports_row_locks,
 )
 from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.models.base import Base
@@ -227,6 +228,54 @@ def test_duplicate_simulation_of_a_settled_match_does_not_re_settle_it() -> None
         match = session.get(CompetitionMatch, FIXTURE_ID)
         assert (match.home_score, match.away_score) == (4, 0)
         assert match.winner_club_id == "club-home"
+
+
+def test_supports_row_locks_is_false_on_sqlite() -> None:
+    """SQLite (the test/dev backend) has no ``SELECT ... FOR UPDATE``.
+
+    ``_persist_match_viewer_payload`` gates ``with_for_update`` on this so the same
+    code path works unlocked in tests and row-locked against Postgres in production,
+    where duplicate simulation workers actually race for the same fixture.
+    """
+    factory = _session_factory()
+    with factory() as session:
+        assert _supports_row_locks(session) is False
+
+
+def test_two_workers_racing_to_settle_the_same_match_only_apply_one_result() -> None:
+    """`_claim_once` is process-local and cannot dedupe across worker processes.
+
+    Simulate two independent worker instances (as two separate processes would be)
+    both reaching ``_persist_match_viewer_payload`` for the same fixture with
+    different results. The DB-level guard (terminal/already-settled check under a
+    row lock on real backends) must ensure exactly one result sticks and the second
+    worker's conflicting write is rejected rather than silently overwriting it.
+    """
+    factory = _session_factory()
+    _seed_match(factory, status=MatchStatus.IN_PROGRESS.value)
+    worker_a, _publisher_a, _queue_a = _build_worker(factory)
+    worker_b, _publisher_b, _queue_b = _build_worker(factory)
+
+    job_a = _job(simulation_seed=11)
+    job_b = _job(simulation_seed=97)
+    replay_a = worker_a.match_service.build_replay_payload(worker_a.team_factory.build_request(job_a))
+    replay_b = worker_b.match_service.build_replay_payload(worker_b.team_factory.build_request(job_b))
+
+    worker_a._persist_match_viewer_payload(job_a, replay_a)
+
+    with factory() as session:
+        settled = session.get(CompetitionMatch, FIXTURE_ID)
+        settled_score = (settled.home_score, settled.away_score)
+
+    if settled_score == (replay_b.summary.home_score, replay_b.summary.away_score):
+        pytest.skip("simulation seeds produced identical scorelines; race is not observable")
+
+    with pytest.raises(MatchResultPersistenceError, match="already settled"):
+        worker_b._persist_match_viewer_payload(job_b, replay_b)
+
+    with factory() as session:
+        match = session.get(CompetitionMatch, FIXTURE_ID)
+        assert (match.home_score, match.away_score) == settled_score
 
 
 def test_abandoned_match_cannot_be_settled_by_a_late_worker() -> None:

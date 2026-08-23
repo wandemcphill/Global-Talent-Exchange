@@ -731,7 +731,14 @@ class LocalMatchExecutionWorker:
             return
         session = self.session_factory()
         try:
-            match = session.get(CompetitionMatch, job.fixture_id)
+            # Duplicate simulation workers (retry, redelivered queue message, a second
+            # process that also passed its in-memory `_claim_once` check) can reach this
+            # method for the same fixture concurrently. `_claim_once` is process-local, so
+            # it cannot prevent that across workers/processes. Lock the row for the
+            # duration of the read-check-write below so a second worker blocks until the
+            # first commits, then re-reads the now-COMPLETED status and takes the
+            # already-settled branch instead of racing to overwrite it.
+            match = session.get(CompetitionMatch, job.fixture_id, with_for_update=_supports_row_locks(session))
             if match is None:
                 # League fixtures are not backed by a CompetitionMatch row.
                 return
@@ -1368,3 +1375,9 @@ def _resolve_kickoff(job: MatchSimulationJob) -> datetime:
     if job.scheduled_kickoff_at is not None:
         return _normalize_timestamp(job.scheduled_kickoff_at)
     return datetime(job.match_date.year, job.match_date.month, job.match_date.day, 12, 0, tzinfo=UTC)
+
+
+def _supports_row_locks(session: Session) -> bool:
+    """SQLite (used in tests) has no ``SELECT ... FOR UPDATE``; every other backend does."""
+    bind = session.get_bind()
+    return bind is not None and bind.dialect.name != "sqlite"

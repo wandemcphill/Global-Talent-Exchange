@@ -751,7 +751,15 @@ def complete_match(
     _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionMatchView:
-    result = _handle_competition_errors(lambda: orchestrator.complete_match(competition_id, match_id, payload))
+    # CompetitionMatchService.complete_match raises plain ValueError for an
+    # already-settled/terminal match (see competition_match_service.py). That is a
+    # client-correctable conflict, not a server fault, so it must not fall through
+    # _handle_competition_errors (which only recognizes CompetitionActionError) and
+    # surface as an unhandled 500.
+    try:
+        result = _handle_competition_errors(lambda: orchestrator.complete_match(competition_id, match_id, payload))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if result is None:
         raise _not_found(competition_id)
     return result
