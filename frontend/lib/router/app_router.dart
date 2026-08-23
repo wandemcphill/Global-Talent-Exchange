@@ -846,6 +846,14 @@ List<RouteBase> _buildLegacyAliasRoutes({
           child: GtexMatchCenterScreenV2(
             matchId: matchId,
             repository: runtime.repositories.matches,
+            // Full time hands off to the already-registered match viewer
+            // route rather than dead-ending on the final scoreline.
+            onOpenReplay:
+                (String id) => context.go('/matches/viewer/$id'),
+            onExit:
+                () => context.go(
+                  const BroadcastDeskRouteData().toUri().toString(),
+                ),
           ),
         );
       },

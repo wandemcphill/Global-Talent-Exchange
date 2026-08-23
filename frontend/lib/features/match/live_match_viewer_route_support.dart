@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_spacing.dart';
 import '../../data/gte_api_repository.dart';
@@ -309,6 +310,8 @@ class MatchRouteBlockedScreen extends StatelessWidget {
     this.detailSubtitle =
         'This route stays visibly blocked until the mounted runtime can answer with real match-viewer data.',
     this.supplementalPanels = const <Widget>[],
+    this.actionLabel = 'Open matchday',
+    this.onAction,
   });
 
   final String title;
@@ -317,6 +320,14 @@ class MatchRouteBlockedScreen extends StatelessWidget {
   final String detailTitle;
   final String detailSubtitle;
   final List<Widget> supplementalPanels;
+
+  /// Label for the escape hatch out of this blocked route.
+  final String actionLabel;
+
+  /// Where the escape hatch goes. Defaults to the matchday hub, because every
+  /// one of these screens tells the user to "use the 2D viewer" and used to
+  /// leave them with no way to reach it.
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -347,11 +358,18 @@ class MatchRouteBlockedScreen extends StatelessWidget {
             message: reason,
             icon: Icons.error_outline_rounded,
             accentColor: Theme.of(context).colorScheme.error,
+            actionLabel: actionLabel,
+            onAction: onAction ?? () => _openMatchday(context),
           ),
         ),
         ...supplementalPanels,
       ],
     );
+  }
+
+  /// Sends the user to the registered matchday hub route.
+  static void _openMatchday(BuildContext context) {
+    GoRouter.of(context).go('/matches');
   }
 }
 
