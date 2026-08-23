@@ -31,6 +31,8 @@ from app.leagues.models import LeagueClub, LeagueFixture, LeaguePlayerContributi
 from app.leagues.service import LeagueSeasonLifecycleService
 from app.match_engine.schemas import MatchReplayPayloadView
 from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.common.enums.match_status import MatchStatus
+from app.matches.lifecycle import assert_transition, is_terminal
 from app.models.competition_match import CompetitionMatch
 from app.realtime.match_stream_service import MatchStreamService
 from app.services.match_timeline_service import MatchTimelineService
@@ -39,6 +41,15 @@ from app.match_engine.simulation.models import MatchEventType
 from app.services.player_lifecycle_service import PlayerLifecycleService
 
 logger = logging.getLogger(__name__)
+
+
+class MatchResultPersistenceError(RuntimeError):
+    """Raised when a simulated result cannot be durably persisted.
+
+    Surfacing this aborts the execution pipeline before advancement, notifications and
+    settlement are dispatched, so downstream consumers can never observe a result the
+    database does not hold.
+    """
 
 
 @dataclass(slots=True)
@@ -230,7 +241,24 @@ class LocalMatchExecutionWorker:
     def execute_match_simulation(self, job: MatchSimulationJob) -> MatchReplayPayloadView | None:
         claim_key = job.idempotency_key or job.fixture_id
         if not self._claim_once(self._completed_match_jobs, claim_key):
+            logger.info(
+                "match.execution.skipped match_id=%s competition_id=%s claim_key=%s reason=duplicate_claim",
+                job.fixture_id,
+                job.competition_id,
+                claim_key,
+            )
             return None
+        logger.info(
+            "match.execution.started match_id=%s competition_id=%s simulation_id=%s seed=%s "
+            "lifecycle_state=%s competition_type=%s round=%s",
+            job.fixture_id,
+            job.competition_id,
+            claim_key,
+            job.simulation_seed,
+            getattr(job.match_status, "value", job.match_status),
+            getattr(job.competition_type, "value", job.competition_type),
+            job.round_number,
+        )
         self._publish_match_lifecycle_event(
             "competition.match.execution.started",
             job,
@@ -369,6 +397,20 @@ class LocalMatchExecutionWorker:
                 replay_payload=replay_payload,
                 state=state,
             )
+            logger.info(
+                "match.execution.completed match_id=%s competition_id=%s simulation_id=%s "
+                "replay_id=%s seed=%s score=%s-%s event_count=%s lifecycle_state=%s settlement_status=%s",
+                job.fixture_id,
+                job.competition_id,
+                claim_key,
+                "replay:" + job.fixture_id,
+                replay_payload.seed,
+                replay_payload.summary.home_score,
+                replay_payload.summary.away_score,
+                len(replay_payload.timeline.events),
+                MatchStatus.COMPLETED.value,
+                "dispatched" if state is not None and state.status == "completed" else "not_due",
+            )
             return replay_payload
         except Exception as exc:
             self._publish_match_lifecycle_event(
@@ -378,6 +420,15 @@ class LocalMatchExecutionWorker:
                     "error_message": str(exc),
                     "error_type": type(exc).__name__,
                 },
+            )
+            logger.exception(
+                "match.execution.failed match_id=%s competition_id=%s simulation_id=%s "
+                "lifecycle_state=%s error_type=%s claim_released=true",
+                job.fixture_id,
+                job.competition_id,
+                claim_key,
+                MatchStatus.FAILED.value,
+                type(exc).__name__,
             )
             self._release_claim(self._completed_match_jobs, claim_key)
             raise
@@ -392,7 +443,19 @@ class LocalMatchExecutionWorker:
         away_team_name = job.away_club_name or job.away_club_id or "Away Club"
         frames = self._build_live_stream_frames(job, replay_payload)
         if not frames:
+            logger.warning(
+                "match.stream.empty match_id=%s competition_id=%s",
+                match_id,
+                job.competition_id,
+            )
             return
+        logger.info(
+            "match.stream.started match_id=%s competition_id=%s frame_count=%s interval_seconds=%s",
+            match_id,
+            job.competition_id,
+            len(frames),
+            self.stream_update_interval_seconds,
+        )
 
         cache = HotPathCache(self.cache_backend)
         cache.clear_match_events(match_id)
@@ -432,13 +495,16 @@ class LocalMatchExecutionWorker:
             item.event_id: item
             for item in (replay_payload.render_sync.events if replay_payload.render_sync is not None else [])
         }
-        timeline = sorted(
-            self._build_replay_timeline(replay_payload),
-            key=lambda item: (
-                int(item.get("minute") or 0),
-                str(item.get("event_id") or ""),
-            ),
-        )
+        # Order by minute, then by the generator's own emission order. The previous
+        # implementation sorted on the event_id *string*, which is only correct while
+        # the zero-padded sequence stays under 1000 ("...:1000" sorts before "...:999").
+        timeline = [
+            item
+            for _, item in sorted(
+                enumerate(self._build_replay_timeline(replay_payload)),
+                key=lambda entry: (int(entry[1].get("minute") or 0), entry[0]),
+            )
+        ]
         checkpoints = {0, 15, 30, 45, 60, 75, 90}
         checkpoints.update(int(item.get("minute") or 0) for item in timeline)
 
@@ -508,6 +574,11 @@ class LocalMatchExecutionWorker:
                 "away_team_name": job.away_club_name or job.away_club_id or "Away Club",
             }
         )
+        # A single monotonic sequence across every frame of the match. Consumers use it
+        # to order events that share a minute, to de-duplicate redelivered frames, and
+        # to resume from a cursor after a reconnect.
+        for sequence, frame in enumerate(frames, start=1):
+            frame["sequence"] = sequence
         return frames
 
     @staticmethod
@@ -537,6 +608,7 @@ class LocalMatchExecutionWorker:
             match_id,
             {
                 "event_id": frame.get("event_id"),
+                "sequence": frame.get("sequence"),
                 "type": frame.get("event_type"),
                 "event_type": frame.get("event_type"),
                 "minute": frame.get("minute"),
@@ -580,6 +652,7 @@ class LocalMatchExecutionWorker:
             "read_only": True,
             "spectator_count": 0,
             "event_count": event_count,
+            "last_sequence": int(frame.get("sequence") or event_count),
             "snapshot": {
                 "score": {
                     "home": int(frame.get("home_score") or 0),
@@ -600,6 +673,7 @@ class LocalMatchExecutionWorker:
             "match_id": match_id,
             "event_id": frame.get("event_id"),
             "source_event_id": frame.get("event_id"),
+            "sequence": int(frame["sequence"]) if frame.get("sequence") else None,
             "minute": int(frame.get("minute") or 0),
             "event_type": frame.get("event_type"),
             "source_event_type": frame.get("event_type"),
@@ -646,27 +720,101 @@ class LocalMatchExecutionWorker:
         job: MatchSimulationJob,
         replay_payload: MatchReplayPayloadView,
     ) -> None:
+        """Persist the replay payload and settle the match row in one transaction.
+
+        Phase B: this used to swallow every exception, so a failed write let the
+        pipeline continue on to standings, advancement and settlement with no durable
+        result. It also only wrote ``metadata_json``, leaving ``status``/scores at their
+        scheduled defaults, so nothing linked the archived replay to a settled result.
+        """
         if self.session_factory is None:
             return
         session = self.session_factory()
         try:
             match = session.get(CompetitionMatch, job.fixture_id)
             if match is None:
+                # League fixtures are not backed by a CompetitionMatch row.
                 return
+            summary = replay_payload.summary
+            replay_id = f"replay:{job.fixture_id}"
+            current_status = MatchStatus.coerce(match.status)
+
+            if current_status is MatchStatus.COMPLETED:
+                if (match.home_score, match.away_score) != (summary.home_score, summary.away_score):
+                    raise MatchResultPersistenceError(
+                        f"Match {job.fixture_id} is already settled "
+                        f"{match.home_score}-{match.away_score}; refusing to overwrite with "
+                        f"{summary.home_score}-{summary.away_score}."
+                    )
+                logger.info(
+                    "match.result.persist.skipped match_id=%s competition_id=%s replay_id=%s reason=already_settled",
+                    job.fixture_id,
+                    job.competition_id,
+                    replay_id,
+                )
+                return
+
+            if is_terminal(current_status):
+                # Abandoned/cancelled matches must never be settled by a late worker.
+                raise MatchResultPersistenceError(
+                    f"Match {job.fixture_id} is {current_status.value} and cannot be settled."
+                )
+
+            assert_transition(current_status, MatchStatus.COMPLETED, match_id=job.fixture_id)
+
             viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload)
             match.metadata_json = {
                 **(match.metadata_json or {}),
                 "match_viewer": viewer_payload.model_dump(mode="json"),
                 "replay_payload": replay_payload.model_dump(mode="json"),
-                "simulation_summary": replay_payload.summary.model_dump(mode="json"),
+                "simulation_summary": summary.model_dump(mode="json"),
                 "simulation_seed": replay_payload.seed,
+                "replay_id": replay_id,
+                "simulation_idempotency_key": job.idempotency_key,
             }
+            match.home_score = summary.home_score
+            match.away_score = summary.away_score
+            match.decided_by_penalties = bool(summary.decided_by_penalties)
+            match.winner_club_id = self._resolve_winner_club_id(job, replay_payload)
+            match.status = MatchStatus.COMPLETED.value
+            match.completed_at = datetime.now(UTC)
             session.commit()
+            logger.info(
+                "match.result.persisted match_id=%s competition_id=%s replay_id=%s seed=%s "
+                "score=%s-%s event_count=%s lifecycle_state=%s",
+                job.fixture_id,
+                job.competition_id,
+                replay_id,
+                replay_payload.seed,
+                summary.home_score,
+                summary.away_score,
+                len(replay_payload.timeline.events),
+                MatchStatus.COMPLETED.value,
+            )
         except Exception:
             session.rollback()
-            logger.exception("Failed to persist replay payload for match %s", job.fixture_id)
+            logger.exception(
+                "match.result.persist.failed match_id=%s competition_id=%s",
+                job.fixture_id,
+                job.competition_id,
+            )
+            raise
         finally:
             session.close()
+
+    @staticmethod
+    def _resolve_winner_club_id(
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> str | None:
+        summary = replay_payload.summary
+        if summary.winner_team_id:
+            return summary.winner_team_id
+        if summary.home_score > summary.away_score:
+            return job.home_club_id
+        if summary.away_score > summary.home_score:
+            return job.away_club_id
+        return None
 
     def execute_advancement(self, job: BracketAdvancementJob) -> None:
         claim_key = job.idempotency_key or job.source_fixture_id
