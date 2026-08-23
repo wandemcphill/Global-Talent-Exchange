@@ -48,6 +48,7 @@ MODEL_MODULES = (
     "app.regen_universe.models",
     "app.replay_archive.persistence",
     "app.team_dynamics.models",
+    "app.talent.models",
     "app.value_engine.read_models",
 )
 DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS = 10
