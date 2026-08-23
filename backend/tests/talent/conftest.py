@@ -152,7 +152,7 @@ def make_user(
         email=f"{username}@talent.test",
         username=username,
         full_name=username.replace("_", " ").title(),
-        password_hash="not-a-real-hash",
+        password_hash="not-a-real-hash",  # pragma: allowlist secret
         role=role,
     )
     session.add(user)

@@ -6,7 +6,7 @@ Additive only. No existing table is altered and no economic table is touched:
 write path into it.
 
 Revision ID: 20260823_0107_talent_exchange_foundation
-Revises: 20260724_0106_player_potential
+Revises: 20260822_0112_hosted_competition_funding_contract
 Create Date: 2026-08-23 00:00:00.000000
 """
 
@@ -16,7 +16,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "20260823_0107_talent_exchange_foundation"
-down_revision = "20260724_0106_player_potential"
+down_revision = "20260822_0112_hosted_competition_funding_contract"
 branch_labels = None
 depends_on = None
 
