@@ -46,10 +46,6 @@ def audit_holdings(*, database_url: str | None) -> dict[str, Any]:
                 or 0
             )
 
-            markets = {
-                row.id: (int(row.circulating_shares or 0), int(row.total_shares or 0))
-                for row in session.scalars(select(PlayerShareMarket)).all()
-            }
             holdings_by_player: dict[str, int] = {}
             for player_id, share_count in session.execute(
                 select(PlayerShareHolding.player_id, func.sum(PlayerShareHolding.share_count)).group_by(
@@ -59,7 +55,7 @@ def audit_holdings(*, database_url: str | None) -> dict[str, Any]:
                 holdings_by_player[str(player_id)] = int(share_count or 0)
 
             market_by_player = {
-                row.player_id: (row.id, int(row.circulating_shares or 0), int(row.total_shares or 0))
+                row.player_id: (int(row.circulating_shares or 0), int(row.total_shares or 0))
                 for row in session.scalars(select(PlayerShareMarket)).all()
             }
             holdings_over_circulation = 0
@@ -69,7 +65,7 @@ def audit_holdings(*, database_url: str | None) -> dict[str, Any]:
                 if market is None:
                     holdings_over_circulation += int(held > 0)
                     continue
-                _, circulating, total = market
+                circulating, total = market
                 holdings_over_circulation += int(held > circulating)
                 holdings_over_supply += int(held > total)
 
