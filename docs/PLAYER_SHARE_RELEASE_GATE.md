@@ -20,6 +20,10 @@ The command is **read-only**. It must never create markets, top up liquidity, al
 
 A missing market must fail with `market_not_found`.
 
+### Issuer boundary
+
+The bulk player-share issuer must use the explicit issuance path. It must not call the legacy `ensure_market()` bootstrap method. This prevents bulk issuance from being recorded as an auto-initialized market and keeps issuance provenance auditable.
+
 ### Lifecycle
 
 Every active market must satisfy all of these:
@@ -41,10 +45,6 @@ The certification also rejects:
 - aggregate holdings greater than market circulation
 - aggregate holdings greater than total market supply
 - holdings for a player with no corresponding market
-
-### Issuance
-
-Bulk issuance must be an explicit issuance operation. A bootstrap/issuer command must not disguise a newly created market as a trade-time auto-initialized market.
 
 ## Interpretation
 
