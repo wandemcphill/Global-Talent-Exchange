@@ -79,9 +79,7 @@ def _with_render_yaml(audit: ModuleType, tmp_path: Path, content: str):
     return original_root
 
 
-def test_valid_render_yaml_passes_even_with_key_name_reused_on_other_service(
-    audit: ModuleType, tmp_path: Path
-) -> None:
+def test_valid_render_yaml_passes_even_with_key_name_reused_on_other_service(audit: ModuleType, tmp_path: Path) -> None:
     original_root = _with_render_yaml(audit, tmp_path, VALID_RENDER_YAML)
     try:
         assert audit._render_config_failures() == []
@@ -159,9 +157,7 @@ def test_secret_env_missing_sync_false_fails(audit: ModuleType, tmp_path: Path) 
     original_root = _with_render_yaml(audit, tmp_path, broken)
     try:
         failures = audit._render_config_failures()
-        assert any(
-            "GTE_KORAPAY_SECRET_KEY" in failure and "sync: false" in failure for failure in failures
-        )
+        assert any("GTE_KORAPAY_SECRET_KEY" in failure and "sync: false" in failure for failure in failures)
     finally:
         audit.REPO_ROOT = original_root
 
@@ -174,9 +170,7 @@ def test_secret_env_hardcoded_value_fails(audit: ModuleType, tmp_path: Path) -> 
     original_root = _with_render_yaml(audit, tmp_path, broken)
     try:
         failures = audit._render_config_failures()
-        assert any(
-            "GTE_KORAPAY_SECRET_KEY" in failure and "hard-code" in failure for failure in failures
-        )
+        assert any("GTE_KORAPAY_SECRET_KEY" in failure and "hard-code" in failure for failure in failures)
     finally:
         audit.REPO_ROOT = original_root
 

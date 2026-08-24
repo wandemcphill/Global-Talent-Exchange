@@ -178,7 +178,9 @@ async def spectate_match(websocket: WebSocket, match_id: str) -> None:
         await runtime.match_room_manager.leave_room(match_id, client)
         await runtime.match_room_manager.publish(
             match_id,
-            SpectatorEvent(type="viewer_count", match_id=match_id, snapshot=_snapshot_from_presence(match_id, presence)),
+            SpectatorEvent(
+                type="viewer_count", match_id=match_id, snapshot=_snapshot_from_presence(match_id, presence)
+            ),
             delay_seconds=0,
         )
         with suppress(Exception):
@@ -213,7 +215,9 @@ async def stream_tournament(websocket: WebSocket, tournament_id: str) -> None:
             if str(message.get("type") or "").strip().lower() == "ping":
                 await runtime.tournament_hub.broadcast(
                     tournament_id,
-                    TournamentEvent(type="heartbeat", tournament_id=tournament_id, payload={"connection_id": client.connection_id}),
+                    TournamentEvent(
+                        type="heartbeat", tournament_id=tournament_id, payload={"connection_id": client.connection_id}
+                    ),
                     delay_seconds=0,
                 )
     except WebSocketDisconnect:

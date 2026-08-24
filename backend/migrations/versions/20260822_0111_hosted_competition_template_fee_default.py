@@ -34,16 +34,12 @@ def upgrade() -> None:
     # Template values are display/default metadata only. Actual execution reads
     # the active Admin reward policy, currently intended at 30%.
     _set_default("3000")
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE competition_templates
             SET platform_fee_bps = 3000
             WHERE active
               AND platform_fee_bps IN (1000, 2000)
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:

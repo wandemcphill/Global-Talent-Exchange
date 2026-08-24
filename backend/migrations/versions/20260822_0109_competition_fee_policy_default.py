@@ -36,27 +36,19 @@ def upgrade() -> None:
     # The product's current intended competition cut is 30%.
     # Admin remains free to change the active rule after migration.
     _set_default("3000")
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE admin_reward_rules
             SET competition_platform_fee_bps = 3000
             WHERE active
               AND competition_platform_fee_bps = 1000
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:
     _set_default("1000")
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE admin_reward_rules
             SET competition_platform_fee_bps = 1000
             WHERE active
               AND competition_platform_fee_bps = 3000
-            """
-        )
-    )
+            """))

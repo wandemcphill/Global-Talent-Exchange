@@ -41,17 +41,13 @@ def upgrade() -> None:
     # COALESCE guards the NOT NULL promotion below: a legacy row with a NULL
     # ledger_unit would otherwise leave the new columns NULL and abort the
     # alter_column that follows.
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE gift_transactions
             SET source_ledger_unit = COALESCE(source_ledger_unit, ledger_unit, 'credit'),
                 destination_ledger_unit = COALESCE(destination_ledger_unit, ledger_unit, 'coin')
             WHERE source_ledger_unit IS NULL
                OR destination_ledger_unit IS NULL
-            """
-        )
-    )
+            """))
 
     with op.batch_alter_table("gift_transactions") as batch_op:
         batch_op.alter_column(
