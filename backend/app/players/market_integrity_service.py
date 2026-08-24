@@ -50,14 +50,17 @@ class PlayerShareMarketIntegrityService:
     def _liquidity_account_code(player_id: str) -> str:
         return f"platform:player_share:{player_id}:liquidity"
 
-    def _liquidity_balance(self, player_id: str) -> Decimal:
-        account = self.session.scalar(
+    def _liquidity_account(self, player_id: str) -> LedgerAccount | None:
+        return self.session.scalar(
             select(LedgerAccount).where(
                 LedgerAccount.code == self._liquidity_account_code(player_id),
                 LedgerAccount.unit == LedgerUnit.COIN,
                 LedgerAccount.kind == LedgerAccountKind.SYSTEM,
             )
         )
+
+    def _liquidity_balance(self, player_id: str) -> Decimal:
+        account = self._liquidity_account(player_id)
         if account is None:
             return ZERO
         return self.wallet_service.get_balance(self.session, account)
@@ -69,7 +72,8 @@ class PlayerShareMarketIntegrityService:
         circulating = int(market.circulating_shares or 0)
         total = int(market.total_shares or 0)
         price = Decimal(str(market.share_price_coin or ZERO))
-        liquidity = self._liquidity_balance(market.player_id)
+        liquidity_account = self._liquidity_account(market.player_id)
+        liquidity = self.wallet_service.get_balance(self.session, liquidity_account) if liquidity_account else ZERO
 
         def add(code: str, severity: str, detail: str, **extra: Any) -> None:
             issues.append(
@@ -99,6 +103,8 @@ class PlayerShareMarketIntegrityService:
             add("negative_share_price", "critical", "Share price cannot be negative.")
         if market.status == "active" and price <= ZERO:
             add("active_zero_price", "critical", "An active market must have a positive share price.")
+        if market.status == "active" and liquidity_account is None:
+            add("missing_liquidity_account", "critical", "Active market has no authoritative liquidity ledger account.")
         if liquidity < ZERO:
             add("negative_liquidity", "critical", "Market liquidity ledger balance is negative.")
 
