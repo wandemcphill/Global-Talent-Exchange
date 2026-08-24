@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.db import get_session
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.tournaments.schemas import (
     TournamentCreateRequest,
     TournamentJoinRequest,
