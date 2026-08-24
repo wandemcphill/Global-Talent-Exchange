@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Player
-from app.talent.models import TalentProfile
+from app.models.talent import TalentProfile
 from app.talent.service import TalentExchangeService
 
 MAX_BATCH_SIZE = 500
@@ -94,7 +94,7 @@ class TalentBackfillRunner:
                 for player_id in player_ids:
                     self._process_player(player_id, report, recompute_rankings=recompute_rankings)
                 self.session.commit()
-            except Exception as exc:
+            except Exception:
                 self.session.rollback()
                 if not continue_on_error:
                     raise
@@ -112,7 +112,7 @@ class TalentBackfillRunner:
 
     def _process_player(self, player_id: str, report: TalentBackfillReport, *, recompute_rankings: bool) -> None:
         existing = self.session.scalar(select(TalentProfile).where(TalentProfile.player_id == player_id))
-        profile = self.service.sync_profile_from_player(player_id, as_of=self.as_of)
+        self.service.sync_profile_from_player(player_id, as_of=self.as_of)
         report.processed += 1
         if existing is None:
             report.created_profiles += 1
