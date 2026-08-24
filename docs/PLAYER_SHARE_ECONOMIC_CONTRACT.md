@@ -20,9 +20,19 @@ Player-share trades settle through the system-owned Coin ledger. The market liqu
 
 Trade mutations must lock the market row before calculating supply, price, or liquidity. Sell mutations must also lock the buyer/seller holding row before decrementing ownership. A stale read must never authorize a trade.
 
+## Retry safety
+
+Every economic trade request must be idempotent. A client retry of the same economic intent must resolve to the original settlement rather than create a second ledger transaction, second holding mutation, or second price move. Random UUIDs generated inside `buy_shares()` or `sell_shares()` are not valid idempotency keys because every retry would produce a new economic reference.
+
+`backend/scripts/audit_player_share_trade_idempotency.py` is a read-only static guard for this invariant.
+
 ## Read-only operational checks
 
-`backend/scripts/audit_player_share_integrity.py` is intentionally read-only. It detects active markets whose players are no longer eligible, zero-priced markets, invalid supply, and over-circulated markets.
+`backend/scripts/audit_player_share_integrity.py` detects active markets whose players are no longer eligible, zero-priced markets, invalid supply, and over-circulated markets.
+
+`backend/scripts/audit_player_share_lifecycle.py` additionally reconciles active-market issuance provenance and the Coin liquidity-account balance against the market's recorded liquidity metadata.
+
+`backend/scripts/audit_player_share_trade_boundary.py` detects direct implicit market initialization from the trade methods.
 
 `backend/scripts/verify_player_share_inventory.py` certifies the published market inventory against the platform's release threshold.
 
@@ -33,3 +43,5 @@ If a market does not exist, trading must return `market_not_found`. It must not 
 If liquidity is insufficient for a sale, the trade is rejected before ledger settlement.
 
 If a player becomes ineligible, the trade is rejected even if a legacy market row still exists.
+
+If an economic retry cannot be matched to an existing idempotency key, the system must reject rather than guess whether the request is a duplicate.
