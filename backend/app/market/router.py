@@ -562,9 +562,15 @@ def create_offer(
     market_engine: MarketEngine = Depends(get_market_engine),
 ) -> OfferView:
     try:
+        seller_user_id = payload.seller_user_id
+        if payload.listing_id:
+            listing = market_engine.get_listing(payload.listing_id)
+            seller_user_id = listing.seller_user_id
+            if payload.asset_id != listing.asset_id:
+                raise MarketValidationError("offer target does not match listing")
         offer = market_engine.create_offer(
             asset_id=payload.asset_id,
-            seller_user_id=payload.seller_user_id,
+            seller_user_id=seller_user_id,
             buyer_user_id=current_user.id,
             cash_amount=payload.cash_amount,
             offered_asset_ids=payload.offered_asset_ids,
