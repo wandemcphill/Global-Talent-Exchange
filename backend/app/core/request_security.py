@@ -67,12 +67,47 @@ def extract_access_token_subject(request: Request) -> str | None:
     return str(subject).strip() if isinstance(subject, str) and subject.strip() else None
 
 
+def _trusted_proxy_hops(request: Request) -> int:
+    """Number of reverse proxies GTEX operates in front of the app.
+
+    Only the right-most ``hops`` entries of ``X-Forwarded-For`` are written by
+    infrastructure we control; everything to the left of them is attacker
+    supplied. Render terminates TLS and appends the peer address, so the
+    default of one hop is correct for the production blueprint.
+    """
+    settings = getattr(getattr(request, "app", None), "state", None)
+    value = getattr(settings, "settings", None)
+    hops = getattr(value, "trusted_proxy_hops", None)
+    if hops is None:
+        return 1
+    try:
+        return max(0, int(hops))
+    except (TypeError, ValueError):
+        return 1
+
+
 def extract_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip()
-    if request.client is not None and request.client.host:
-        return str(request.client.host)
+    """Resolve the caller IP without trusting client-supplied forwarding data.
+
+    ``X-Forwarded-For`` is append-only: each proxy adds the address it received
+    the request from. Reading the left-most entry therefore returns whatever the
+    client sent, which lets anyone rotate their apparent IP per request and walk
+    straight past IP-keyed rate limits and audit trails. Count in from the right
+    instead, so only hops GTEX actually operates are honoured.
+    """
+    peer = str(request.client.host) if request.client is not None and request.client.host else None
+    hops = _trusted_proxy_hops(request)
+    if hops > 0:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            entries = [item.strip() for item in forwarded.split(",") if item.strip()]
+            if entries:
+                # entries[-1] was written by the closest proxy; step left one
+                # position per additional trusted hop, never past index 0.
+                index = max(0, len(entries) - hops)
+                return entries[index]
+    if peer:
+        return peer
     return "unknown"
 
 

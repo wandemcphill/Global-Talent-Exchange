@@ -3,7 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_admin, get_session
+from app.models.user import User
 from app.schemas.regen_ecosystem import (
     AcademyGenerationRequest,
     AcademyGenerationResultView,
@@ -237,8 +238,13 @@ def get_regen_lineage(
 @router.post("/regens/jobs/{job_name}")
 def run_regen_job(
     job_name: str,
+    _: User = Depends(get_current_admin),
     service: RegenEcosystemService = Depends(_service),
 ) -> dict[str, object]:
+    # These jobs bulk-generate academy intakes, scouting discoveries and career
+    # events across the whole player universe. Left open they are both an
+    # unauthenticated write to the regen population and a cheap amplification
+    # vector, so they are admin-only.
     try:
         if job_name == "academy-weekly":
             result = service.run_weekly_academy_generation()

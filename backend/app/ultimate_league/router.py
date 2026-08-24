@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from app.auth.dependencies import get_current_user
+from app.models.user import User
 from app.ultimate_league.league_service import (
     GTexPrizePayout,
     LeagueCompetitor,
@@ -57,10 +59,7 @@ def get_ultimate_league_runtime(request: Request) -> UltimateLeagueRuntime:
 def list_tiers(
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
 ) -> list[UltimateLeagueTierView]:
-    counts = {
-        definition.tier: len(runtime.standings(definition.tier))
-        for definition in runtime.list_tiers()
-    }
+    counts = {definition.tier: len(runtime.standings(definition.tier)) for definition in runtime.list_tiers()}
     return [
         _serialize_tier(definition, competitor_count=counts.get(definition.tier, 0))
         for definition in runtime.list_tiers()
@@ -73,9 +72,12 @@ def upsert_competitor(
     competitor_id: str,
     payload: UltimateLeagueCompetitorInput,
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
+    _: User = Depends(get_current_user),
 ) -> UltimateLeagueCompetitorView:
     if payload.competitor_id != competitor_id:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Path competitor_id must match payload competitor_id.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Path competitor_id must match payload competitor_id."
+        )
     competitor = runtime.upsert_competitor(
         LeagueCompetitor(
             competitor_id=payload.competitor_id,
@@ -128,6 +130,7 @@ def get_standings(
 def create_matchmaking_batch(
     payload: UltimateLeagueMatchmakingRequest,
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
+    _: User = Depends(get_current_user),
 ) -> UltimateLeagueMatchmakingResponse:
     try:
         batch = runtime.matchmaking(
@@ -150,7 +153,9 @@ def create_matchmaking_batch(
             )
             for proposal in batch.proposals
         ],
-        unmatched=[_serialize_competitor(runtime, runtime.get_competitor(item.competitor_id)) for item in batch.unmatched],
+        unmatched=[
+            _serialize_competitor(runtime, runtime.get_competitor(item.competitor_id)) for item in batch.unmatched
+        ],
     )
 
 
@@ -159,6 +164,7 @@ def create_matchmaking_batch(
 def submit_match_result(
     payload: UltimateLeagueMatchResultRequest,
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
+    _: User = Depends(get_current_user),
 ) -> UltimateLeagueMatchResultResponse:
     try:
         home, away, rating_update = runtime.record_match_result(
@@ -197,6 +203,7 @@ def submit_match_result(
 def create_tournament(
     payload: UltimateLeagueTournamentRequest,
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
+    _: User = Depends(get_current_user),
 ) -> UltimateLeagueTournamentView:
     try:
         tournament = runtime.create_tournament(
@@ -268,6 +275,7 @@ def list_tactical_presets(
 def upsert_tactical_preset(
     payload: TacticalPresetListingRequest,
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
+    _: User = Depends(get_current_user),
 ) -> TacticalPresetView:
     try:
         preset = runtime.upsert_tactical_preset(
@@ -291,8 +299,10 @@ def upsert_tactical_preset(
 def purchase_tactical_preset(
     preset_id: str,
     payload: TacticalPresetPurchaseRequest,
+    _: User = Depends(get_current_user),
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
 ) -> TacticalPresetView:
+    # Purchases spend a competitor's balance; they must never be anonymous.
     try:
         preset = runtime.purchase_tactical_preset(
             preset_id=preset_id,
@@ -340,7 +350,9 @@ def _serialize_tier(definition: LeagueTierDefinition, *, competitor_count: int) 
     )
 
 
-def _serialize_standing_entry(runtime: UltimateLeagueRuntime, entry: LeagueStandingEntry) -> UltimateLeagueStandingEntryView:
+def _serialize_standing_entry(
+    runtime: UltimateLeagueRuntime, entry: LeagueStandingEntry
+) -> UltimateLeagueStandingEntryView:
     return UltimateLeagueStandingEntryView(
         rank=entry.rank,
         tier=entry.tier,
@@ -352,7 +364,9 @@ def _serialize_standing_entry(runtime: UltimateLeagueRuntime, entry: LeagueStand
     )
 
 
-def _serialize_tournament(runtime: UltimateLeagueRuntime, tournament: LeagueTournamentPlan) -> UltimateLeagueTournamentView:
+def _serialize_tournament(
+    runtime: UltimateLeagueRuntime, tournament: LeagueTournamentPlan
+) -> UltimateLeagueTournamentView:
     entrants = [
         _serialize_competitor(runtime, runtime.get_competitor(entrant.competitor_id))
         for entrant in tournament.entrants

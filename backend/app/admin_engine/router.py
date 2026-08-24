@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.admin_engine.schemas import (
@@ -48,7 +48,10 @@ def _map_reward_rule(item) -> AdminRewardRuleView:
 
 
 @router.get("/bootstrap", response_model=CompetitionScheduleBootstrapView)
-def get_admin_engine_bootstrap(session: Session = Depends(get_session)) -> CompetitionScheduleBootstrapView:
+def get_admin_engine_bootstrap(
+    _: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> CompetitionScheduleBootstrapView:
     service = AdminEngineService(session)
     return CompetitionScheduleBootstrapView(
         active_feature_flags=[_map_feature_flag(item) for item in service.list_feature_flags(active_only=True)],
@@ -58,7 +61,9 @@ def get_admin_engine_bootstrap(session: Session = Depends(get_session)) -> Compe
 
 
 @admin_router.get("/feature-flags", response_model=list[AdminFeatureFlagView])
-def list_feature_flags(_: User = Depends(get_current_admin), session: Session = Depends(get_session)) -> list[AdminFeatureFlagView]:
+def list_feature_flags(
+    _: User = Depends(get_current_admin), session: Session = Depends(get_session)
+) -> list[AdminFeatureFlagView]:
     service = AdminEngineService(session)
     return [_map_feature_flag(item) for item in service.list_feature_flags()]
 
@@ -77,7 +82,9 @@ def upsert_feature_flag(
 
 
 @admin_router.get("/calendar-rules", response_model=list[AdminCalendarRuleView])
-def list_calendar_rules(_: User = Depends(get_current_admin), session: Session = Depends(get_session)) -> list[AdminCalendarRuleView]:
+def list_calendar_rules(
+    _: User = Depends(get_current_admin), session: Session = Depends(get_session)
+) -> list[AdminCalendarRuleView]:
     service = AdminEngineService(session)
     return [_map_calendar_rule(item) for item in service.list_calendar_rules()]
 
@@ -96,7 +103,9 @@ def upsert_calendar_rule(
 
 
 @admin_router.get("/reward-rules", response_model=list[AdminRewardRuleView])
-def list_reward_rules(_: User = Depends(get_current_admin), session: Session = Depends(get_session)) -> list[AdminRewardRuleView]:
+def list_reward_rules(
+    _: User = Depends(get_current_admin), session: Session = Depends(get_session)
+) -> list[AdminRewardRuleView]:
     service = AdminEngineService(session)
     return [_map_reward_rule(item) for item in service.list_reward_rules()]
 

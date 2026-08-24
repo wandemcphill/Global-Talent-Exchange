@@ -451,8 +451,18 @@ def create_competition_invite(
 @router.get("/{competition_id}/invites", response_model=CompetitionInvitesResponse)
 def list_competition_invites(
     competition_id: str,
+    request: Request,
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionInvitesResponse:
+    # Invite codes are the credential that lets a club into a private
+    # competition, and /invites/accept takes one straight from the request body.
+    # Listing them must therefore be restricted to the host (who issued them)
+    # and admins holding manage_competitions.
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = orchestrator.list_invites(competition_id)
     if result is None:
         raise _not_found(competition_id)

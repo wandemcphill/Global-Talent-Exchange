@@ -205,11 +205,11 @@ class MatchEconomyEngine:
         if funded_amount <= Decimal("0.0000"):
             raise MatchEconomyError("Treasury controls blocked this GTEX match funding request.")
 
-        rewards_pool_account = self.wallet_service.ensure_rewards_pool_account(self.session, match.prize_pool_unit)
-        rewards_pool_balance = self.wallet_service.get_balance(self.session, rewards_pool_account)
-        rewards_pool_top_up = self._normalize_amount(max(funded_amount - rewards_pool_balance, Decimal("0.0000")))
-        if rewards_pool_top_up > Decimal("0.0000"):
-            if not governor.can_fund_match(amount=rewards_pool_top_up, unit=match.prize_pool_unit):
+        promo_pool_account = self.wallet_service.ensure_promo_pool_account(self.session, match.prize_pool_unit)
+        promo_pool_balance = self.wallet_service.get_balance(self.session, promo_pool_account)
+        promo_pool_top_up = self._normalize_amount(max(funded_amount - promo_pool_balance, Decimal("0.0000")))
+        if promo_pool_top_up > Decimal("0.0000"):
+            if not governor.can_fund_match(amount=promo_pool_top_up, unit=match.prize_pool_unit):
                 raise MatchEconomyError("Treasury reserve would fall below the required 3x match buffer.")
             treasury_account = self.wallet_service.ensure_treasury_account(self.session, match.prize_pool_unit)
             self.wallet_service.append_transaction(
@@ -217,21 +217,21 @@ class MatchEconomyEngine:
                 postings=[
                     LedgerPosting(
                         account=treasury_account,
-                        amount=-rewards_pool_top_up,
+                        amount=-promo_pool_top_up,
                         source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
                         transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
                     ),
                     LedgerPosting(
-                        account=rewards_pool_account,
-                        amount=rewards_pool_top_up,
+                        account=promo_pool_account,
+                        amount=promo_pool_top_up,
                         source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
                         transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
                     ),
                 ],
                 reason=LedgerEntryReason.ADJUSTMENT,
                 source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
-                reference=f"gtex-rewards-topup:{match.match_id}:{generate_uuid()}",
-                external_reference=f"gtex-rewards-topup:{match.match_id}",
+                reference=f"gtex-promo-topup:{match.match_id}:{generate_uuid()}",
+                external_reference=f"gtex-promo-topup:{match.match_id}",
                 description=f"Treasury top-up for {match.title} rewards pool",
                 actor=actor,
                 transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
@@ -249,7 +249,7 @@ class MatchEconomyEngine:
             self.session,
             postings=[
                 LedgerPosting(
-                    account=rewards_pool_account,
+                    account=promo_pool_account,
                     amount=-funded_amount,
                     source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
                 ),
@@ -277,7 +277,7 @@ class MatchEconomyEngine:
             transaction_id=entries[0].transaction_id,
             reference=resolved_reference,
             funded_amount=funded_amount,
-            source_account_code=rewards_pool_account.code,
+            source_account_code=promo_pool_account.code,
             prize_pool_account_code=prize_pool_account.code,
             prize_pool_balance=self.wallet_service.get_balance(self.session, prize_pool_account),
         )
@@ -346,8 +346,8 @@ class MatchEconomyEngine:
         if reward_amount <= Decimal("0.0000"):
             raise MatchEconomyError("Treasury controls reduced the lottery reward below the minimum payout.")
 
-        rewards_pool_account = self.wallet_service.ensure_rewards_pool_account(self.session, LedgerUnit.COIN)
-        if self.wallet_service.get_balance(self.session, rewards_pool_account) < reward_amount:
+        promo_pool_account = self.wallet_service.ensure_promo_pool_account(self.session, LedgerUnit.COIN)
+        if self.wallet_service.get_balance(self.session, promo_pool_account) < reward_amount:
             raise MatchEconomyError("Rewards pool balance is lower than the lottery reward.")
 
         reference = f"lottery:{threshold_index}:{winner.id}"
@@ -376,7 +376,7 @@ class MatchEconomyEngine:
                     source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
                 ),
                 LedgerPosting(
-                    account=rewards_pool_account,
+                    account=promo_pool_account,
                     amount=-reward_amount,
                     source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
                 ),
@@ -454,9 +454,13 @@ class MatchEconomyEngine:
         normalized_amount = self._normalize_amount(amount)
         if normalized_amount <= Decimal("0.0000"):
             raise MatchEconomyError("Recorded match volume must be positive.")
-        if unit == LedgerUnit.COIN:
+        # Match-volume accounting is already expressed in the economic unit supplied by
+        # the caller.  Fan Coin is intentionally not reverse-convertible into GTEX Coin.
+        # Normalize the recorded volume directly rather than invoking the wallet
+        # conversion API, which correctly rejects CREDIT -> COIN conversion.
+        if unit in {LedgerUnit.COIN, LedgerUnit.CREDIT}:
             return normalized_amount
-        return self.economy_service.quote_conversion(amount=normalized_amount, source_unit=unit).target_amount
+        raise MatchEconomyError(f"Unsupported match volume unit: {unit!s}")
 
     @staticmethod
     def _threshold_index(amount: Decimal, threshold: Decimal) -> int:

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_user, get_session
 from app.core.cache_namespaces import COMPETITIONS_CACHE_NAMESPACE
 from app.core.pagination import build_pagination_meta, resolve_pagination
 from app.core.response_cache import get_response_cache
@@ -23,12 +23,23 @@ from app.global_memory.schemas import (
 )
 from app.global_memory.service import GlobalMemoryError, GlobalMemoryNotFoundError, GlobalMemoryService
 from app.ingestion.models import Competition, Country
+from app.models.user import User
 
 router = APIRouter(tags=["global-memory"])
 
 
 def _service(request: Request, session: Session = Depends(get_session)) -> GlobalMemoryService:
     return GlobalMemoryService(session, event_publisher=getattr(request.app.state, "event_publisher", None))
+
+
+def _bind_actor(payload, actor: User):
+    """Force a body-supplied ``user_id`` to match the authenticated caller."""
+    if payload.user_id and payload.user_id != actor.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authenticated user does not match the requested user_id.",
+        )
+    return payload.model_copy(update={"user_id": actor.id})
 
 
 def _raise_http(exc: GlobalMemoryError) -> None:
@@ -90,8 +101,13 @@ def list_competitions(
 @router.post("/enter", response_model=CompetitionEntryResultView)
 def enter_competition(
     payload: CompetitionEnterRequest,
+    actor: User = Depends(get_current_user),
     service: GlobalMemoryService = Depends(_service),
 ) -> CompetitionEntryResultView:
+    # user_id arrives in the request body, so it is bound to the authenticated
+    # caller here: otherwise anyone could write competition entries, award
+    # titles and drive regen promotion inside another user's dynasty.
+    payload = _bind_actor(payload, actor)
     try:
         result = service.enter_competition(payload)
     except GlobalMemoryError as exc:
@@ -103,8 +119,10 @@ def enter_competition(
 @router.post("/rent", response_model=PlayerRentResultView)
 def rent_player(
     payload: PlayerRentRequest,
+    actor: User = Depends(get_current_user),
     service: GlobalMemoryService = Depends(_service),
 ) -> PlayerRentResultView:
+    payload = _bind_actor(payload, actor)
     try:
         result = service.rent_player(payload)
     except GlobalMemoryError as exc:

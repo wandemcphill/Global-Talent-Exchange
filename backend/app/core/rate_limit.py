@@ -108,6 +108,23 @@ class ApiRateLimiter:
 
     EXEMPT_PREFIXES = ("/health", "/ready", "/version", "/docs", "/redoc", "/openapi.json")
     _WALLET_PREFIXES = ("/api/wallets", "/wallets", "/wallet")
+    # Credential-handling endpoints. Matched by suffix against every mounted auth
+    # prefix (/auth, /api/auth, /api/v2/auth) so adding a version alias can never
+    # silently drop an endpoint back to the permissive default bucket.
+    _AUTH_PATH_PREFIXES = ("/auth", "/api/auth", "/api/v2/auth")
+    _AUTH_PATH_SUFFIXES = (
+        "/login",
+        "/register",
+        "/signup",
+        "/signup/user",
+        "/signup/trader",
+        "/signup/creator",
+        "/refresh",
+        "/change-password",
+        "/confirm-email",
+        "/recovery/request",
+        "/recovery/reset",
+    )
 
     def check_request(self, request: Request) -> RateLimitDecision | None:
         if request.method.upper() == "OPTIONS":
@@ -161,7 +178,7 @@ class ApiRateLimiter:
     def _rule_for_request(self, request: Request) -> RateLimitRule:
         path = (request.url.path or "/").lower()
         method = request.method.upper()
-        if path in {"/auth/login", "/api/auth/login"}:
+        if self._is_auth_path(path):
             return self._rules()[0]
         if path in {
             "/market/buy",
@@ -185,6 +202,16 @@ class ApiRateLimiter:
                 return self._rules()[3]
             return self._rules()[4]
         return self._rules()[5]
+
+    @classmethod
+    def _is_auth_path(cls, path: str) -> bool:
+        for prefix in cls._AUTH_PATH_PREFIXES:
+            if not path.startswith(f"{prefix}/"):
+                continue
+            remainder = path[len(prefix) :]
+            if remainder in cls._AUTH_PATH_SUFFIXES:
+                return True
+        return False
 
     def _rules(self) -> tuple[RateLimitRule, ...]:
         return (

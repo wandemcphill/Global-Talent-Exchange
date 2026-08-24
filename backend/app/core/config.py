@@ -28,7 +28,7 @@ MEDIA_STORAGE_FILE = "media_storage.toml"
 SPONSORSHIP_INVENTORY_FILE = "sponsorship_inventory.toml"
 REGEN_GENERATION_FILE = "regen_generation.toml"
 NON_ALPHANUMERIC_RE = re.compile(r"[^a-z0-9]+")
-DEFAULT_CORS_ALLOWED_ORIGINS = ("https://gtex-web.onrender.com",)
+DEFAULT_CORS_ALLOWED_ORIGINS = ("https://gtex-web-tw6c.onrender.com",)
 DEFAULT_CORS_ALLOW_ORIGIN_REGEX = r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
 UNSAFE_SECRET_PLACEHOLDERS = frozenset(
     {
@@ -71,6 +71,10 @@ class SettingsSource(BaseModel):
         default=True,
         validation_alias="GTE_DISTRIBUTED_RATE_LIMIT_ENABLED",
     )
+    # How many reverse proxies GTEX runs in front of the app. Only this many
+    # right-most X-Forwarded-For entries are trusted when resolving a caller IP;
+    # anything further left is client-controlled. Render = 1.
+    trusted_proxy_hops: int = Field(default=1, validation_alias="GTE_TRUSTED_PROXY_HOPS")
     api_rate_limit_per_minute: int = Field(default=100, validation_alias="GTE_API_RATE_LIMIT_PER_MINUTE")
     auth_rate_limit_per_minute: int = Field(default=10, validation_alias="GTE_AUTH_RATE_LIMIT_PER_MINUTE")
     market_rate_limit_per_minute: int = Field(default=40, validation_alias="GTE_MARKET_RATE_LIMIT_PER_MINUTE")
@@ -769,6 +773,7 @@ class Settings:
     competitions_cache_ttl_seconds: int
     regen_universe_cache_ttl_seconds: int
     distributed_rate_limit_enabled: bool
+    trusted_proxy_hops: int
     api_rate_limit_per_minute: int
     auth_rate_limit_per_minute: int
     market_rate_limit_per_minute: int
@@ -1953,6 +1958,23 @@ def load_real_player_import_config(
     )
 
 
+def _resolve_cors_allow_origin_regex(value: str | None, *, app_env: str | None) -> str | None:
+    """Never leave the localhost dev regex active in a deployed environment.
+
+    ``DEFAULT_CORS_ALLOW_ORIGIN_REGEX`` exists so local Flutter/web dev servers
+    work without configuration. If it survives into production it silently
+    whitelists any ``http://localhost:*`` page, so drop it there unless an
+    operator explicitly set GTE_CORS_ALLOW_ORIGIN_REGEX to something else.
+    """
+    normalized = _normalized_optional_setting(value)
+    if normalized is None:
+        return None
+    environment = (app_env or "development").strip().lower()
+    if environment in {"production", "prod", "staging", "release"} and normalized == DEFAULT_CORS_ALLOW_ORIGIN_REGEX:
+        return None
+    return normalized
+
+
 def _normalized_optional_setting(value: str | None) -> str | None:
     if value is None:
         return None
@@ -2064,6 +2086,7 @@ def load_settings(
         competitions_cache_ttl_seconds=max(5, min(30, source.competitions_cache_ttl_seconds)),
         regen_universe_cache_ttl_seconds=max(5, min(30, source.regen_universe_cache_ttl_seconds)),
         distributed_rate_limit_enabled=source.distributed_rate_limit_enabled,
+        trusted_proxy_hops=max(0, source.trusted_proxy_hops),
         api_rate_limit_per_minute=max(1, source.api_rate_limit_per_minute),
         auth_rate_limit_per_minute=max(1, source.auth_rate_limit_per_minute),
         market_rate_limit_per_minute=max(1, source.market_rate_limit_per_minute),
@@ -2134,7 +2157,10 @@ def load_settings(
         observability_trace_sample_ratio=source.observability_trace_sample_ratio,
         observability_service_name=source.observability_service_name,
         cors_allowed_origins=source.cors_allowed_origins,
-        cors_allow_origin_regex=_normalized_optional_setting(source.cors_allow_origin_regex),
+        cors_allow_origin_regex=_resolve_cors_allow_origin_regex(
+            source.cors_allow_origin_regex,
+            app_env=source.app_env,
+        ),
         cors_allow_credentials=source.cors_allow_credentials,
         email=load_email_config(resolved_environ),
         real_player_import=load_real_player_import_config(
