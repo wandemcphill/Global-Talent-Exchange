@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-
-from scripts.audit_wallet_payments_treasury_release import audit
-
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.audit_wallet_payments_treasury_release import audit  # noqa: E402
 
 
 def test_wallet_payments_treasury_release_gate_passes() -> None:
