@@ -13,6 +13,9 @@ from app.players import legacy_token_service as _legacy
 PlayerTokenMarketError = _legacy.PlayerTokenMarketError
 
 _trade_reference: ContextVar[str | None] = ContextVar("player_share_trade_reference", default=None)
+_trade_market_override: ContextVar[PlayerShareMarket | None] = ContextVar(
+    "player_share_trade_market_override", default=None
+)
 _original_generate_uuid = _legacy.generate_uuid
 
 
@@ -36,8 +39,6 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
     callers. During buy/sell, the already-issued market is injected into the
     inherited implementation so it cannot create one implicitly.
     """
-
-    _trade_market_override: PlayerShareMarket | None = None
 
     @staticmethod
     def _trade_reference(
@@ -68,7 +69,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         return market
 
     def ensure_market(self, *, player_id: str, **kwargs: Any):
-        override = self._trade_market_override
+        override = _trade_market_override.get()
         if override is not None and override.player_id == player_id:
             return override
         return super().ensure_market(player_id=player_id, **kwargs)
@@ -90,13 +91,12 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             circulating_shares=int(market.circulating_shares or 0),
             share_count=share_count,
         )
-        previous_override = self._trade_market_override
         reference_token = _trade_reference.set(reference)
-        self._trade_market_override = market
+        market_token = _trade_market_override.set(market)
         try:
             return operation()
         finally:
-            self._trade_market_override = previous_override
+            _trade_market_override.reset(market_token)
             _trade_reference.reset(reference_token)
 
     def buy_shares(self, *, actor: User, player_id: str, share_count: int) -> dict[str, Any]:
