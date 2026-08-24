@@ -23,6 +23,7 @@ from sqlalchemy import select
 
 from app.core.database import get_session_factory, load_model_modules
 from app.ingestion.models import Player
+from app.talent.models import TalentProfile
 from app.talent.service import TalentExchangeError, TalentExchangeService
 
 logger = logging.getLogger("gtex.talent_backfill")
@@ -70,20 +71,11 @@ def run_backfill(
             service = TalentExchangeService(session)
             batch_created = batch_refreshed = batch_failed = 0
             for player_id in player_ids:
+                profile_before = session.scalar(
+                    select(TalentProfile).where(TalentProfile.player_id == player_id)
+                )
                 try:
-                    profile_before = service.session.execute(
-                        select(service._model_profile_class).where(
-                            service._model_profile_class.player_id == player_id
-                        )
-                    ).scalar_one_or_none()
-                except AttributeError:
-                    # Keep the runner coupled only to the public service API if
-                    # the profile implementation changes. A missing profile is
-                    # counted as created after sync in this fallback path.
-                    profile_before = None
-
-                try:
-                    profile = service.sync_profile_from_player(player_id)
+                    service.sync_profile_from_player(player_id)
                     if profile_before is None:
                         batch_created += 1
                     else:
