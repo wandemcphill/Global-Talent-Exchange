@@ -39,8 +39,7 @@ def inspect_trade_idempotency(source: str) -> dict[str, Any]:
 
     has_idempotency_reference = any(
         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "_idempotency_reference"
-        for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        for node in ast.walk(tree)
     )
     if not has_idempotency_reference:
         findings.append({"finding": "missing_idempotency_reference_builder"})
