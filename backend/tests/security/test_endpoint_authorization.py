@@ -189,3 +189,13 @@ def test_malformed_bearer_tokens_return_401_not_500(client, token: str):
 def test_tournament_mutations_require_authentication(client, method: str, path: str, payload: dict):
     response = getattr(client, method)(path, json=payload)
     _assert_gated(response, path)
+
+
+# --- club identity mutation surface ------------------------------------------
+
+@pytest.mark.parametrize(
+    "path",
+    [f"/api/clubs/{uuid4()}/identity", f"/api/clubs/{uuid4()}/jerseys"],
+)
+def test_club_identity_mutations_require_authentication(client, path: str):
+    _assert_gated(client.patch(path, json={}), path)
