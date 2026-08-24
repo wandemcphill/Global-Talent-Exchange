@@ -7,7 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
@@ -20,6 +20,7 @@ from app.models.player_token_market import PlayerShareMarket
 
 DEFAULT_MINIMUM = 5000
 DEFAULT_BATCH_SIZE = 1000
+DEFAULT_LIQUIDITY_FLOOR = Decimal("25.0000")
 
 
 def _has_context(player: Player) -> bool:
@@ -44,8 +45,9 @@ def _searchable(player: Player) -> bool:
 
 def _market_buyable(market: PlayerShareMarket) -> bool:
     available = int(market.total_shares or 0) - int(market.circulating_shares or 0)
-    liquidity = Decimal(str((market.metadata_json or {}).get("liquidity_coin", "0")))
-    required = Decimal(str((market.metadata_json or {}).get("initial_liquidity_coin", "0")))
+    metadata = market.metadata_json or {}
+    liquidity = Decimal(str(metadata.get("liquidity_coin", "0")))
+    required = max(Decimal(str(metadata.get("initial_liquidity_coin", "0"))), DEFAULT_LIQUIDITY_FLOOR)
     return bool(
         market.status == "active"
         and is_share_market_eligible(market.player)
@@ -72,17 +74,20 @@ def verify_inventory(
     session_factory = create_session_factory(engine)
     try:
         with session_factory() as session:
-            searchable = int(
-                session.scalar(
-                    select(func.count(Player.id)).where(
-                        Player.is_real_player.is_(True),
-                        Player.is_tradable.is_(True),
-                        Player.canonical_display_name.is_not(None),
-                        Player.country_id.is_not(None),
-                    )
-                )
-                or 0
-            )
+            searchable_filters = [
+                Player.is_real_player.is_(True),
+                Player.is_tradable.is_(True),
+                or_(Player.canonical_display_name.is_not(None), Player.full_name.is_not(None)),
+                Player.country_id.is_not(None),
+                or_(
+                    Player.current_club_id.is_not(None),
+                    Player.current_competition_id.is_not(None),
+                    Player.internal_league_id.is_not(None),
+                    Player.real_world_club_name.is_not(None),
+                    Player.real_world_league_name.is_not(None),
+                ),
+            ]
+            searchable = int(session.scalar(select(func.count(Player.id)).where(*searchable_filters)) or 0)
             total_markets = int(session.scalar(select(func.count(PlayerShareMarket.id))) or 0)
             active_markets = int(
                 session.scalar(select(func.count(PlayerShareMarket.id)).where(PlayerShareMarket.status == "active")) or 0
@@ -155,11 +160,7 @@ def main() -> int:
     args = parse_args()
     if args.minimum < 1 or args.batch_size < 1:
         raise SystemExit("--minimum and --batch-size must be positive")
-    report = verify_inventory(
-        database_url=args.database_url,
-        minimum=args.minimum,
-        batch_size=args.batch_size,
-    )
+    report = verify_inventory(database_url=args.database_url, minimum=args.minimum, batch_size=args.batch_size)
     print(json.dumps(report, indent=2, sort_keys=True, default=str))
     return 0 if report["pass"] else 1
 
