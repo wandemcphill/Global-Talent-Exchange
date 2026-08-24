@@ -12,6 +12,7 @@ issuance is attributable in the domain event/audit trail.
 """
 
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -19,19 +20,25 @@ from pathlib import Path
 from sqlalchemy import select
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_PATH = BACKEND_ROOT / "scripts" / "issue_player_share_markets.py"
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
+
+_spec = importlib.util.spec_from_file_location("player_share_issuance_plan", SCRIPT_PATH)
+if _spec is None or _spec.loader is None:
+    raise RuntimeError(f"Unable to load issuance planner: {SCRIPT_PATH}")
+_planner = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_planner)
 
 from app.core.database import create_database_engine, create_session_factory
 from app.models.user import User
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
-from app.scripts.issue_player_share_markets import (  # type: ignore[import-not-found]
-    DEFAULT_POLICY_PATH,
-    _base_query,
-    _build_plan,
-    _eligibility_block_reason,
-    _load_policy,
-)
+
+DEFAULT_POLICY_PATH = _planner.DEFAULT_POLICY_PATH
+_base_query = _planner._base_query
+_build_plan = _planner._build_plan
+_eligibility_block_reason = _planner._eligibility_block_reason
+_load_policy = _planner._load_policy
 
 
 def parse_args() -> argparse.Namespace:
