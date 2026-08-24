@@ -59,20 +59,6 @@ def _functions(key: str) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
     }
 
 
-def _decorator_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
-    names: set[str] = set()
-    for decorator in node.decorator_list:
-        if isinstance(decorator, ast.Call):
-            target = decorator.func
-        else:
-            target = decorator
-        if isinstance(target, ast.Name):
-            names.add(target.id)
-        elif isinstance(target, ast.Attribute):
-            names.add(target.attr)
-    return names
-
-
 def _add(findings: list[dict[str, str]], finding: str, surface: str) -> None:
     findings.append({"finding": finding, "surface": surface})
 
@@ -81,13 +67,14 @@ def audit() -> dict[str, object]:
     findings: list[dict[str, str]] = []
     warnings: list[dict[str, str]] = []
 
+    router_source = _source("godmode_router")
     router_functions = _functions("godmode_router")
     for function_name, capability in REQUIRED_GODMODE_MUTATIONS.items():
         node = router_functions.get(function_name)
         if node is None:
             _add(findings, "missing_admin_mutation_route", function_name)
             continue
-        source = ast.get_source_segment(_source("godmode_router"), node) or ""
+        source = ast.get_source_segment(router_source, node) or ""
         expected = f"AdminCapability.{capability}"
         if expected not in source:
             _add(findings, "mutation_missing_capability_gate", f"{function_name}:{capability}")
@@ -105,8 +92,10 @@ def audit() -> dict[str, object]:
     ):
         if f"{capability} =" not in capability_source:
             _add(findings, "missing_admin_capability", capability)
-    if "_assert_has_permission" not in capability_source:
-        _add(findings, "capability_authorization_boundary_missing", "capabilities")
+    if "def require_admin_capability(" not in capability_source:
+        _add(findings, "capability_authorization_boundary_missing", "require_admin_capability")
+    if "assert_admin_capability(" not in capability_source:
+        _add(findings, "capability_assertion_missing", "assert_admin_capability")
 
     godmode_service = _source("godmode_service")
     for marker in REQUIRED_AUDIT_MARKERS:
@@ -153,13 +142,12 @@ def audit() -> dict[str, object]:
     if "class AdminRuntimeState" not in runtime_state_source or "state_key" not in runtime_state_source:
         _add(findings, "missing_persistent_admin_runtime_state", "admin_runtime_states")
 
-    if "process-scoped" in godmode_service.lower():
-        warnings.append(
-            {
-                "finding": "runtime_controls_have_separate_process_local_guard",
-                "detail": "Database-backed admin state remains authoritative for persistent control policy.",
-            }
-        )
+    warnings.append(
+        {
+            "finding": "runtime_wallet_locks_have_process_local_operator_guard",
+            "detail": "Database row locks remain the authoritative economic safety boundary.",
+        }
+    )
 
     return {
         "group": "admin-control-plane",
