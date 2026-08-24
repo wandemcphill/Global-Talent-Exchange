@@ -186,3 +186,22 @@ def test_social_follow_match_share_and_live_match_surfaces(
     )
     assert chat_response.status_code == 201
     assert chat_response.json()["messages"][0]["body"] == "That goal was insane!"
+
+
+
+def test_identity_metrics_refresh_requires_club_owner(client, user_state) -> None:
+    user_state["user"] = None
+    response = client.post("/api/clubs/club-alpha/identity/metrics/refresh")
+    assert response.status_code == 403
+
+
+def test_identity_metrics_refresh_allows_owner(client, user_state) -> None:
+    response = client.post("/api/clubs/club-alpha/identity/metrics/refresh")
+    assert response.status_code == 200
+    assert response.json()["club_id"] == "club-alpha"
+
+
+def test_identity_metrics_refresh_rejects_other_owner(client, user_state, session) -> None:
+    user_state["user"] = session.get(User, "user-bravo")
+    response = client.post("/api/clubs/club-alpha/identity/metrics/refresh")
+    assert response.status_code == 403
