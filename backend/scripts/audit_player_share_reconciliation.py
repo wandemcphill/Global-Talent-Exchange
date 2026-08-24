@@ -4,7 +4,6 @@ import argparse
 import json
 from collections import defaultdict
 from dataclasses import asdict, dataclass
-from decimal import Decimal
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
