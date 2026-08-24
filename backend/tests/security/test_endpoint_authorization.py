@@ -168,3 +168,24 @@ def test_spectator_presence_does_not_leak_viewer_identities(client):
 def test_malformed_bearer_tokens_return_401_not_500(client, token: str):
     response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401, response.text
+
+
+# --- tournament mutation surface ---------------------------------------------
+
+@pytest.mark.parametrize(
+    "method,path,payload",
+    [
+        ("post", "/api/tournaments", {
+            "name": "Security Probe Tournament",
+            "game_type": "prediction",
+            "entry_fee": 0,
+            "max_players": 4,
+        }),
+        ("post", f"/api/tournaments/{uuid4()}/join", {"user_id": str(uuid4())}),
+        ("post", f"/api/tournaments/{uuid4()}/matches/{uuid4()}/result", {"winner_user_id": str(uuid4())}),
+        ("post", f"/api/tournaments/{uuid4()}/advance", {}),
+    ],
+)
+def test_tournament_mutations_require_authentication(client, method: str, path: str, payload: dict):
+    response = getattr(client, method)(path, json=payload)
+    _assert_gated(response, path)
