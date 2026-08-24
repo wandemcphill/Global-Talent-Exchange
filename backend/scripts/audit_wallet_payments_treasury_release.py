@@ -31,6 +31,10 @@ def _functions(source: str) -> set[str]:
     }
 
 
+def _add_finding(findings: list[dict[str, str]], finding: str, surface: str) -> None:
+    findings.append({"finding": finding, "surface": surface})
+
+
 def audit() -> dict[str, object]:
     findings: list[dict[str, str]] = []
     warnings: list[dict[str, str]] = []
@@ -68,91 +72,65 @@ def audit() -> dict[str, object]:
     }
     for label, (names, function_name) in required.items():
         if function_name not in names:
-            findings.append(
-                {"finding": "missing_required_surface", "surface": label}
-            )
+            _add_finding(findings, "missing_required_surface", label)
 
     provider_registry = _source("provider_registry")
     if '"korapay": ProviderRegistration' not in provider_registry:
-        findings.append(
-            {"finding": "korapay_not_registered_live", "surface": "provider_registry"}
-        )
+        _add_finding(findings, "korapay_not_registered_live", "provider_registry")
     if (
         "def paystack_enabled()" not in provider_registry
         or "return False" not in provider_registry
     ):
-        findings.append(
-            {"finding": "paystack_not_fail_closed", "surface": "provider_registry"}
-        )
+        _add_finding(findings, "paystack_not_fail_closed", "provider_registry")
 
     admin_source = _source("admin_finance")
-    protected_checks = (
+    for check in (
         "_verify_korapay_webhook",
         "_verify_paystack_webhook",
         "_signature_optional",
         "_is_protected_environment",
-    )
-    for check in protected_checks:
+    ):
         if check not in admin_source:
-            findings.append(
-                {"finding": "missing_webhook_security_boundary", "surface": check}
-            )
+            _add_finding(findings, "missing_webhook_security_boundary", check)
 
     rail_source = _source("rail_service")
-    replay_markers = (
+    for marker in (
         'idempotency_key=f"purchase-order:{order.id}:settle"',
         "Duplicate provider reference detected",
         "provider_reference",
-    )
-    for marker in replay_markers:
+    ):
         if marker not in rail_source:
-            findings.append(
-                {"finding": "missing_payment_replay_guard", "surface": marker}
-            )
+            _add_finding(findings, "missing_payment_replay_guard", marker)
 
-    reconciliation_markers = (
+    for marker in (
         "settled_purchase_order_missing_ledger",
         "verified_payment_event_missing_ledger",
         "confirmed_deposit_missing_ledger",
         "duplicate_provider_reference",
-    )
-    for marker in reconciliation_markers:
+    ):
         if marker not in admin_source:
-            findings.append(
-                {"finding": "missing_reconciliation_mismatch", "surface": marker}
-            )
+            _add_finding(findings, "missing_reconciliation_mismatch", marker)
 
     treasury_source = _source("treasury_service")
-    batch_markers = (
+    for marker in (
         '"batch_id"',
         "TreasuryWithdrawalStatus.PROCESSING",
         "treasury.withdrawal.batch.created",
-    )
-    for marker in batch_markers:
+    ):
         if marker not in treasury_source:
-            findings.append(
-                {"finding": "missing_withdrawal_batch_contract", "surface": marker}
-            )
+            _add_finding(findings, "missing_withdrawal_batch_contract", marker)
 
     finance_router = _source("finance_router")
     if "/korapay/webhook" not in finance_router:
-        findings.append(
-            {"finding": "missing_korapay_http_route", "surface": "finance_router"}
-        )
+        _add_finding(findings, "missing_korapay_http_route", "finance_router")
     if "/paystack/webhook" not in finance_router:
-        findings.append(
-            {"finding": "missing_paystack_http_route", "surface": "finance_router"}
-        )
+        _add_finding(findings, "missing_paystack_http_route", "finance_router")
 
     payment_router = _source("payment_router")
     if "acquire_wallet_transaction_lock" not in payment_router:
-        findings.append(
-            {"finding": "payment_order_missing_wallet_lock", "surface": "payment_router"}
-        )
+        _add_finding(findings, "payment_order_missing_wallet_lock", "payment_router")
     if "release_wallet_transaction_lock" not in payment_router:
-        findings.append(
-            {"finding": "payment_order_lock_not_released", "surface": "payment_router"}
-        )
+        _add_finding(findings, "payment_order_lock_not_released", "payment_router")
 
     warnings.append(
         {
