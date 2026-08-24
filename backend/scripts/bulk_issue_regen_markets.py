@@ -94,6 +94,14 @@ def compute_plans(conn) -> list[RegenPlan]:
               AND COALESCE(p.dna_profile ->> 'player_share_block', 'false') <> 'true'
               AND COALESCE(p.dna_profile ->> 'share_market_blocked', 'false') <> 'true'
               AND psm.player_id IS NULL
+              -- A pre-existing liquidity wallet indicates a partial prior run.
+              -- Do not replay the fixed top-up transaction and debit clearing twice.
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM wallets existing_liquidity
+                    WHERE existing_liquidity.code =
+                        'platform:player_share:' || p.id || ':liquidity'
+                  )
             ORDER BY p.id
             """,
             (REGEN_PROVIDER,),
