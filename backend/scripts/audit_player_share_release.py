@@ -3,7 +3,7 @@ from __future__ import annotations
 """Single local certification entry point for the player-share economy.
 
 The command is intentionally read-only. It combines static source-boundary
-checks with the existing database audit scripts when a database URL is
+checks with the existing database lifecycle audit when a database URL is
 available. It never creates markets, changes balances, or mutates production.
 """
 
@@ -42,14 +42,13 @@ def _boundary_check() -> dict[str, object]:
     return {"passed": not violations, "violations": violations}
 
 
-def _run_audit(script: Path, database_url: str | None) -> dict[str, object]:
+def _run_audit(script: Path, database_url: str | None = None) -> dict[str, object]:
     command = [sys.executable, str(script)]
-    if database_url:
+    if database_url is not None:
         command.extend(["--database-url", database_url])
     completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
-    payload: object
     try:
-        payload = json.loads(completed.stdout) if completed.stdout.strip() else {}
+        payload: object = json.loads(completed.stdout) if completed.stdout.strip() else {}
     except json.JSONDecodeError:
         payload = {"stdout": completed.stdout[-4000:], "stderr": completed.stderr[-4000:]}
     return {"passed": completed.returncode == 0, "result": payload}
@@ -64,11 +63,11 @@ def main() -> int:
         "read_only": True,
         "boundary": _boundary_check(),
         "database_audits": {},
+        "trade_boundary_audit": _run_audit(TRADE_AUDIT),
     }
     if args.database_url:
         report["database_audits"] = {
             "lifecycle": _run_audit(LIFECYCLE_AUDIT, args.database_url),
-            "trade_boundary": _run_audit(TRADE_AUDIT, args.database_url),
         }
     else:
         report["database_audits"] = {
@@ -77,13 +76,14 @@ def main() -> int:
         }
 
     boundary_passed = bool(report["boundary"]["passed"])
+    trade_passed = bool(report["trade_boundary_audit"]["passed"])
     db = report["database_audits"]
     db_passed = all(
         bool(value.get("passed"))
         for value in db.values()
         if isinstance(value, dict) and "passed" in value
     )
-    report["certified"] = boundary_passed and db_passed
+    report["certified"] = boundary_passed and trade_passed and db_passed
     print(json.dumps(report, indent=2, sort_keys=True, default=str))
     return 0 if report["certified"] else 1
 
