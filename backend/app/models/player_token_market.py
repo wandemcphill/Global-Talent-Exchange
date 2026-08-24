@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
+from app.market.player_eligibility_policy import is_share_market_eligible
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
 from app.players.token_market_defaults import resolve_player_share_market_config
 
@@ -121,7 +122,7 @@ def _auto_initialize_player_share_markets(session: Session, _flush_context, _ins
     for pending in tuple(session.new):
         if not isinstance(pending, Player):
             continue
-        if pending.share_market is not None:
+        if pending.share_market is not None or not is_share_market_eligible(pending):
             continue
 
         config = resolve_player_share_market_config(pending)
