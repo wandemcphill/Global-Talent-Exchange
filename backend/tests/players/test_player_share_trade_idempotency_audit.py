@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from scripts.audit_player_share_trade_idempotency import inspect_router, inspect_trade_idempotency
+from scripts.audit_player_share_trade_idempotency import (
+    inspect_router,
+    inspect_trade_idempotency,
+)
 
 
 def test_trade_methods_are_flagged_when_missing_idempotency_contract() -> None:
