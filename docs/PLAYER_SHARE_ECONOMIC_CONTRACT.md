@@ -22,9 +22,15 @@ Trade mutations must lock the market row before calculating supply, price, or li
 
 ## Retry safety
 
-Every economic trade request must be idempotent. A client retry of the same economic intent must resolve to the original settlement rather than create a second ledger transaction, second holding mutation, or second price move. Random UUIDs generated inside `buy_shares()` or `sell_shares()` are not valid idempotency keys because every retry would produce a new economic reference.
+Every economic trade request must be idempotent. A client retry of the same economic intent must resolve to the original settlement rather than create a second ledger transaction, second holding mutation, or second price move. The trade service now accepts a bounded caller idempotency key, scopes it to actor/player/side, and resolves retries from the durable ledger transaction reference.
 
-`backend/scripts/audit_player_share_trade_idempotency.py` is a read-only static guard for this invariant.
+The public request schemas expose `idempotency_key` for buy and sell. The trade boundary carries the key into the service. The remaining HTTP-router forwarding is protected by `backend/scripts/audit_player_share_trade_idempotency.py` and must remain green before release.
+
+## Talent projection operations
+
+Talent profile creation and ranking backfill is deliberately separate from market issuance. `backend/app/talent/backfill.py` provides a bounded, cursor-based runner capped at 500 players per batch. It can resume after a player id, process only missing profiles, isolate failures to individual players, and recompute deterministic rankings without writing to the economic value engine.
+
+The operational entry point is `backend/scripts/backfill_talent_exchange.py`. It supports `--after-player-id`, `--all`, `--no-recompute`, a fixed `--as-of` date, and fail-fast mode. The runner never invents football attributes: absent evidence remains absent and the ranking pipeline handles that state explicitly.
 
 ## Read-only operational checks
 
@@ -33,6 +39,8 @@ Every economic trade request must be idempotent. A client retry of the same econ
 `backend/scripts/audit_player_share_lifecycle.py` additionally reconciles active-market issuance provenance and the Coin liquidity-account balance against the market's recorded liquidity metadata.
 
 `backend/scripts/audit_player_share_trade_boundary.py` detects direct implicit market initialization from the trade methods.
+
+`backend/scripts/audit_player_share_trade_idempotency.py` statically checks the trade service and HTTP endpoints for idempotency-key propagation.
 
 `backend/scripts/verify_player_share_inventory.py` certifies the published market inventory against the platform's release threshold.
 
