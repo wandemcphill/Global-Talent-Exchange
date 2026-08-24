@@ -8,7 +8,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
-USER_SERVICE = BACKEND / "app" / "users" / "service.py"
 IDENTITY_SERVICE = BACKEND / "app" / "identity" / "compliance_service.py"
 
 
@@ -31,9 +30,21 @@ def _direct_verified_writes(path: Path) -> list[str]:
     return violations
 
 
+def _scan_application() -> list[str]:
+    violations: list[str] = []
+    for path in sorted((BACKEND / "app").rglob("*.py")):
+        if path == IDENTITY_SERVICE or path.name == "__init__.py":
+            continue
+        try:
+            violations.extend(_direct_verified_writes(path))
+        except SyntaxError as exc:
+            violations.append(f"{path.relative_to(ROOT)}:{exc.lineno}: syntax error: {exc.msg}")
+    return violations
+
+
 def main() -> int:
-    violations = _direct_verified_writes(USER_SERVICE)
-    identity_source = IDENTITY_SERVICE.read_text(encoding="utf-8")
+    violations = _scan_application()
+    identity_source = IDENTITY_SERVICE.read_text(encoding="utf-8") if IDENTITY_SERVICE.exists() else ""
     required_markers = (
         "provider",
         "provider_subject",
@@ -48,6 +59,7 @@ def main() -> int:
 
     report = {
         "read_only": True,
+        "scanned_application_files": len(list((BACKEND / "app").rglob("*.py"))),
         "verified_projection_direct_write_violations": violations,
         "identity_service_present": IDENTITY_SERVICE.exists(),
         "passed": not violations and IDENTITY_SERVICE.exists(),
