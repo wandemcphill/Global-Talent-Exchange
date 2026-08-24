@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from scripts.audit_player_share_lifecycle import classify_market
+from decimal import Decimal
+
+from scripts.audit_player_share_lifecycle import _amount, _expected_liquidity_code, classify_market
 
 
 def test_explicit_issue_is_not_auto_initialized() -> None:
@@ -54,3 +56,11 @@ def test_closed_market_does_not_trigger_active_gates() -> None:
     )
     assert state["active"] is False
     assert state["blocked_active"] is False
+
+
+def test_liquidity_account_code_is_deterministic() -> None:
+    assert _expected_liquidity_code("player-123") == "platform:player_share:player-123:liquidity"
+
+
+def test_liquidity_amount_is_quantized() -> None:
+    assert _amount("12.34567") == Decimal("12.3457")
