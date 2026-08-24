@@ -63,9 +63,7 @@ class TournamentService:
             self.lock_service = build_distributed_lock_service()
 
     def list_tournaments(self) -> list[dict[str, object]]:
-        tournament_ids = self.session.scalars(
-            select(Tournament.id).order_by(Tournament.created_at.desc())
-        ).all()
+        tournament_ids = self.session.scalars(select(Tournament.id).order_by(Tournament.created_at.desc())).all()
         views: list[dict[str, object]] = []
         for tournament_id in tournament_ids:
             views.append(self.get_tournament(tournament_id))
@@ -147,6 +145,8 @@ class TournamentService:
         tournament_id: str,
         match_id: str,
         payload: TournamentMatchResultRequest,
+        *,
+        actor_user_id: str | None = None,
     ) -> dict[str, object]:
         with self._state_lock(tournament_id) as acquired:
             if not acquired:
@@ -173,6 +173,10 @@ class TournamentService:
             participants = {match.player_one_user_id, match.player_two_user_id}
             if payload.winner_user_id not in participants:
                 raise TournamentValidationError("Winner must be part of the match.", reason="invalid_winner")
+            if actor_user_id is not None and actor_user_id not in participants:
+                raise TournamentValidationError(
+                    "Only a participant in this match may report its result.", reason="not_a_participant"
+                )
 
             self._complete_match(
                 match,
@@ -249,7 +253,9 @@ class TournamentService:
         return self.session.scalars(
             select(TournamentMatch)
             .where(TournamentMatch.tournament_id == tournament_id)
-            .order_by(TournamentMatch.round_number.asc(), TournamentMatch.slot_index.asc(), TournamentMatch.created_at.asc())
+            .order_by(
+                TournamentMatch.round_number.asc(), TournamentMatch.slot_index.asc(), TournamentMatch.created_at.asc()
+            )
         ).all()
 
     def _round_matches(self, tournament_id: str, round_number: int) -> list[TournamentMatch]:
@@ -303,7 +309,9 @@ class TournamentService:
                 metadata={"tournament_id": tournament.id},
             )
         except InsufficientBalanceError as exc:
-            raise TournamentValidationError("Insufficient wallet balance for tournament entry.", reason="insufficient_balance") from exc
+            raise TournamentValidationError(
+                "Insufficient wallet balance for tournament entry.", reason="insufficient_balance"
+            ) from exc
         return entries[0].transaction_id if entries else None
 
     def _synchronize_prize_pool(self, tournament: Tournament) -> None:
@@ -340,7 +348,9 @@ class TournamentService:
     def _start_tournament(self, tournament: Tournament) -> None:
         players = self._list_players(tournament.id)
         if len(players) < 2:
-            raise TournamentValidationError("At least two players are required to start.", reason="insufficient_players")
+            raise TournamentValidationError(
+                "At least two players are required to start.", reason="insufficient_players"
+            )
         if tournament.status == TournamentStatus.ACTIVE.value:
             return
         tournament.status = TournamentStatus.ACTIVE.value
@@ -387,7 +397,9 @@ class TournamentService:
                         continue
                     winner_user_id = self._timeout_winner(match)
                     if winner_user_id is None:
-                        raise TournamentValidationError("Unable to resolve timed out match.", reason="timeout_resolution_failed")
+                        raise TournamentValidationError(
+                            "Unable to resolve timed out match.", reason="timeout_resolution_failed"
+                        )
                     self._complete_match(match, winner_user_id=winner_user_id, resolution="timeout")
 
             current_round.status = TournamentRoundStatus.COMPLETED.value
@@ -556,7 +568,9 @@ class TournamentService:
             "players": [
                 {
                     "user_id": player.user_id,
-                    "display_name": users_by_id.get(player.user_id).display_name if users_by_id.get(player.user_id) else None,
+                    "display_name": (
+                        users_by_id.get(player.user_id).display_name if users_by_id.get(player.user_id) else None
+                    ),
                     "bracket_slot": player.bracket_slot,
                     "status": player.status,
                     "joined_at": player.joined_at,

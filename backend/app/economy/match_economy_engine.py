@@ -28,6 +28,7 @@ from app.services.spending_control_service import SpendingControlService
 from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
+COIN_TO_CREDIT_RATE = Decimal("100.0000")
 DEFAULT_LOTTERY_TRIGGER_STEP = Decimal("10000.0000")
 DEFAULT_LOTTERY_REWARDS: tuple[Decimal, ...] = (
     Decimal("10.0000"),
@@ -205,11 +206,11 @@ class MatchEconomyEngine:
         if funded_amount <= Decimal("0.0000"):
             raise MatchEconomyError("Treasury controls blocked this GTEX match funding request.")
 
-        rewards_pool_account = self.wallet_service.ensure_rewards_pool_account(self.session, match.prize_pool_unit)
-        rewards_pool_balance = self.wallet_service.get_balance(self.session, rewards_pool_account)
-        rewards_pool_top_up = self._normalize_amount(max(funded_amount - rewards_pool_balance, Decimal("0.0000")))
-        if rewards_pool_top_up > Decimal("0.0000"):
-            if not governor.can_fund_match(amount=rewards_pool_top_up, unit=match.prize_pool_unit):
+        promo_pool_account = self.wallet_service.ensure_promo_pool_account(self.session, match.prize_pool_unit)
+        promo_pool_balance = self.wallet_service.get_balance(self.session, promo_pool_account)
+        promo_pool_top_up = self._normalize_amount(max(funded_amount - promo_pool_balance, Decimal("0.0000")))
+        if promo_pool_top_up > Decimal("0.0000"):
+            if not governor.can_fund_match(amount=promo_pool_top_up, unit=match.prize_pool_unit):
                 raise MatchEconomyError("Treasury reserve would fall below the required 3x match buffer.")
             treasury_account = self.wallet_service.ensure_treasury_account(self.session, match.prize_pool_unit)
             self.wallet_service.append_transaction(
@@ -217,13 +218,13 @@ class MatchEconomyEngine:
                 postings=[
                     LedgerPosting(
                         account=treasury_account,
-                        amount=-rewards_pool_top_up,
+                        amount=-promo_pool_top_up,
                         source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
                         transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
                     ),
                     LedgerPosting(
-                        account=rewards_pool_account,
-                        amount=rewards_pool_top_up,
+                        account=promo_pool_account,
+                        amount=promo_pool_top_up,
                         source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
                         transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
                     ),
@@ -232,14 +233,14 @@ class MatchEconomyEngine:
                 source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
                 reference=f"gtex-rewards-topup:{match.match_id}:{generate_uuid()}",
                 external_reference=f"gtex-rewards-topup:{match.match_id}",
-                description=f"Treasury top-up for {match.title} rewards pool",
+                description=f"Treasury top-up for {match.title} promo pool",
                 actor=actor,
                 transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
                 metadata={
                     "match_economy": {
                         "match_id": match.match_id,
                         "match_type": str(match.match_type),
-                        "flow": "treasury_to_rewards_pool",
+                        "flow": "treasury_to_promo_pool",
                     }
                 },
             )
@@ -249,7 +250,7 @@ class MatchEconomyEngine:
             self.session,
             postings=[
                 LedgerPosting(
-                    account=rewards_pool_account,
+                    account=promo_pool_account,
                     amount=-funded_amount,
                     source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
                 ),
@@ -277,7 +278,7 @@ class MatchEconomyEngine:
             transaction_id=entries[0].transaction_id,
             reference=resolved_reference,
             funded_amount=funded_amount,
-            source_account_code=rewards_pool_account.code,
+            source_account_code=promo_pool_account.code,
             prize_pool_account_code=prize_pool_account.code,
             prize_pool_balance=self.wallet_service.get_balance(self.session, prize_pool_account),
         )
@@ -346,9 +347,9 @@ class MatchEconomyEngine:
         if reward_amount <= Decimal("0.0000"):
             raise MatchEconomyError("Treasury controls reduced the lottery reward below the minimum payout.")
 
-        rewards_pool_account = self.wallet_service.ensure_rewards_pool_account(self.session, LedgerUnit.COIN)
-        if self.wallet_service.get_balance(self.session, rewards_pool_account) < reward_amount:
-            raise MatchEconomyError("Rewards pool balance is lower than the lottery reward.")
+        promo_pool_account = self.wallet_service.ensure_promo_pool_account(self.session, LedgerUnit.COIN)
+        if self.wallet_service.get_balance(self.session, promo_pool_account) < reward_amount:
+            raise MatchEconomyError("Promo pool balance is lower than the lottery reward.")
 
         reference = f"lottery:{threshold_index}:{winner.id}"
         control_reference = f"lottery-control:{threshold_index}:{winner.id}"
@@ -376,7 +377,7 @@ class MatchEconomyEngine:
                     source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
                 ),
                 LedgerPosting(
-                    account=rewards_pool_account,
+                    account=promo_pool_account,
                     amount=-reward_amount,
                     source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
                 ),
@@ -456,6 +457,8 @@ class MatchEconomyEngine:
             raise MatchEconomyError("Recorded match volume must be positive.")
         if unit == LedgerUnit.COIN:
             return normalized_amount
+        if unit == LedgerUnit.CREDIT:
+            return self._normalize_amount(normalized_amount / COIN_TO_CREDIT_RATE)
         return self.economy_service.quote_conversion(amount=normalized_amount, source_unit=unit).target_amount
 
     @staticmethod

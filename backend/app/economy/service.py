@@ -85,7 +85,7 @@ DEFAULT_SERVICE_PRICING: tuple[dict[str, object], ...] = (
         "active": True,
     },
     {
-        "service_key": "highlight-download",
+        "service_key": "premium-highlight-download",
         "title": "Highlight Download",
         "description": "Download a premium highlight clip or replay asset.",
         "price_coin": Decimal("1.0000"),
