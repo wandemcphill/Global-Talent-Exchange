@@ -48,13 +48,14 @@ def _create_user(session, *, user_id: str, role: UserRole = UserRole.USER) -> Us
     return user
 
 
-def _create_player(session, *, player_id: str) -> Player:
+def _create_player(session, *, player_id: str, is_tradable: bool | None = None) -> Player:
     player = Player(
         id=player_id,
         source_provider="test",
         provider_external_id=f"provider-{player_id}",
         full_name="Token Test Player",
         canonical_display_name="Token Test Player",
+        **({"is_tradable": is_tradable} if is_tradable is not None else {}),
     )
     session.add(player)
     session.flush()
@@ -132,6 +133,19 @@ def test_player_share_market_auto_initializes_for_new_players(session) -> None:
     assert market["total_shares"] == 1000
     assert Decimal(str(market["share_price_coin"])) > Decimal("0.0000")
     assert Decimal(str(market["liquidity_coin"])) > Decimal("0.0000")
+
+
+def test_ineligible_new_player_does_not_auto_create_share_market(session) -> None:
+    player = _create_player(session, player_id="player-token-blocked", is_tradable=False)
+
+    assert player.share_market is None
+    from app.models.player_token_market import PlayerShareMarket
+
+    assert session.query(PlayerShareMarket).filter_by(player_id=player.id).first() is None
+
+    service = PlayerTokenMarketService(session=session)
+    with pytest.raises(PlayerTokenMarketError, match="not eligible for the share market"):
+        service.get_market_view(player_id=player.id)
 
 
 def test_player_share_market_sell_flow_updates_holding_and_price(session) -> None:
