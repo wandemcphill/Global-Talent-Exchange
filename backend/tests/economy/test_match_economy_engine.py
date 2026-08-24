@@ -268,7 +268,7 @@ def test_record_match_volume_triggers_lottery_for_recently_active_users(session)
     engine = MatchEconomyEngine(session=session, wallet_service=wallet)
 
     result = engine.record_match_volume(
-        amount=Decimal("500.0000"),
+        amount=Decimal("5.0000"),
         unit=LedgerUnit.CREDIT,
         actor=admin,
         trigger_step=Decimal("5.0000"),
