@@ -63,7 +63,9 @@ def _add(findings: list[dict[str, str]], finding: str, surface: str) -> None:
     findings.append({"finding": finding, "surface": surface})
 
 
-def _has_capability_dependency(node: ast.FunctionDef | ast.AsyncFunctionDef, capability: str) -> bool:
+def _has_capability_dependency(
+    node: ast.FunctionDef | ast.AsyncFunctionDef, capability: str
+) -> bool:
     """Verify the FastAPI Depends(require_admin_capability(...)) boundary."""
     for child in ast.walk(node):
         if not isinstance(child, ast.Call):
