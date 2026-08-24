@@ -9,7 +9,15 @@ from sqlalchemy.pool import StaticPool
 import pytest
 
 from app.auth.service import AuthService
-from app.models import Base, CountryFeaturePolicy, KycStatus, LedgerEntryReason, LedgerUnit, TreasuryAuditEvent
+from app.models import (
+    AdminRuntimeState,
+    Base,
+    CountryFeaturePolicy,
+    KycStatus,
+    LedgerEntryReason,
+    LedgerUnit,
+    TreasuryAuditEvent,
+)
 from app.models.risk_ops import AmlCase, SystemEvent
 from app.models.treasury import PaymentMode, RateDirection, TreasuryWithdrawalStatus
 from app.models.withdrawal_review import WithdrawalReview
@@ -57,6 +65,24 @@ def _seed_policy(session) -> None:
         active=True,
     )
     session.add(policy)
+    session.add(
+        AdminRuntimeState(
+            state_key="admin_god_mode",
+            payload_json={
+                "commissions": {
+                    "withdrawal_fee_bps": 1000,
+                    "minimum_withdrawal_fee_credits": "5.0000",
+                },
+                "withdrawal_controls": {
+                    "egame_withdrawals_enabled": False,
+                    "trade_withdrawals_enabled": True,
+                    "processor_mode": "manual_bank_transfer",
+                    "deposits_via_bank_transfer": True,
+                    "payouts_via_bank_transfer": True,
+                },
+            },
+        )
+    )
     session.commit()
 
 
