@@ -191,11 +191,12 @@ def submit_competition_entry(
 @router.get("/entries/{entry_id}", response_model=NationalTeamEntryDetailResponse)
 def get_entry(
     entry_id: str,
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     service: NationalTeamTournamentService = Depends(_tournament_service),
 ):
     try:
-        payload = service.build_entry_detail_payload(entry_id)
+        payload = service.build_entry_detail_payload_for_actor(entry_id=entry_id, actor=current_user)
         session.commit()
     except NationalTeamTournamentError as exc:
         session.rollback()
