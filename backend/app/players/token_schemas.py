@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.core.pagination import PaginationMeta
+from app.players.trade_context import set_player_share_idempotency_key
 
 
 class PlayerShareMarketView(BaseModel):
@@ -45,6 +47,9 @@ class PlayerSharePurchaseRequest(BaseModel):
     share_count: int = Field(ge=1)
     idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
 
+    def model_post_init(self, __context: Any) -> None:
+        set_player_share_idempotency_key(self.idempotency_key)
+
 
 class PlayerShareHoldingView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -72,6 +77,9 @@ class PlayerSharePurchaseView(BaseModel):
 class PlayerShareSaleRequest(BaseModel):
     share_count: int = Field(ge=1)
     idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
+
+    def model_post_init(self, __context: Any) -> None:
+        set_player_share_idempotency_key(self.idempotency_key)
 
 
 class PlayerShareSaleView(BaseModel):
