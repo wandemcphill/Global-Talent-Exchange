@@ -14,6 +14,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.core.database import create_database_engine, create_session_factory
 from app.models.player_token_market import PlayerShareHolding, PlayerShareMarket
+from app.players.market_integrity_service import PlayerShareMarketIntegrityService
 from scripts.audit_player_share_event_reconciliation import audit as audit_event_reconciliation
 from scripts.audit_player_share_issuer_boundary import audit as audit_issuer_boundary
 from scripts.audit_player_share_lifecycle import audit_lifecycle
@@ -30,18 +31,11 @@ def audit_holdings(*, database_url: str | None) -> dict[str, Any]:
                 session.scalar(select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.share_count < 0)) or 0
             )
             negative_costs = int(
-                session.scalar(
-                    select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.average_cost_coin < 0)
-                )
-                or 0
+                session.scalar(select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.average_cost_coin < 0)) or 0
             )
             negative_dividends = int(
-                session.scalar(
-                    select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.dividends_earned_coin < 0)
-                )
-                or 0
+                session.scalar(select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.dividends_earned_coin < 0)) or 0
             )
-
             market_rows = session.scalars(select(PlayerShareMarket)).all()
             market_by_player = {row.player_id: row for row in market_rows}
             active_markets = [row for row in market_rows if row.status == "active"]
@@ -112,9 +106,40 @@ def audit_holdings(*, database_url: str | None) -> dict[str, Any]:
         engine.dispose()
 
 
+def audit_market_integrity(*, database_url: str | None) -> dict[str, Any]:
+    engine = create_database_engine(database_url)
+    session_factory = create_session_factory(engine)
+    try:
+        with session_factory() as session:
+            report = PlayerShareMarketIntegrityService(session).audit()
+            issues = [
+                {
+                    "code": issue.code,
+                    "severity": issue.severity,
+                    "player_id": issue.player_id,
+                    "market_id": issue.market_id,
+                    "detail": issue.detail,
+                    "metadata": issue.metadata,
+                }
+                for issue in report.issues
+            ]
+            return {
+                "markets_scanned": report.markets_scanned,
+                "active_markets": report.active_markets,
+                "healthy_markets": report.healthy_markets,
+                "issue_count": report.issue_count,
+                "issues": issues,
+                "pass": report.healthy,
+                "read_only": True,
+            }
+    finally:
+        engine.dispose()
+
+
 def certify(*, database_url: str | None, batch_size: int) -> dict[str, Any]:
     lifecycle = audit_lifecycle(database_url=database_url, batch_size=batch_size)
     holdings = audit_holdings(database_url=database_url)
+    market_integrity = audit_market_integrity(database_url=database_url)
     event_reconciliation = audit_event_reconciliation(database_url=database_url)
     trade_boundary = audit_trade_boundary()
     trade_idempotency = audit_trade_idempotency()
@@ -124,6 +149,7 @@ def certify(*, database_url: str | None, batch_size: int) -> dict[str, Any]:
         "trade_idempotency": bool(trade_idempotency["pass"]),
         "issuer_boundary": bool(issuer_boundary["pass"]),
         "event_reconciliation": bool(event_reconciliation["pass"]),
+        "market_integrity": bool(market_integrity["pass"]),
         **{f"lifecycle_{name}": bool(value) for name, value in lifecycle["gates"].items()},
         **{f"holdings_{name}": bool(value) for name, value in holdings["gates"].items()},
     }
@@ -132,6 +158,7 @@ def certify(*, database_url: str | None, batch_size: int) -> dict[str, Any]:
         "read_only": True,
         "lifecycle": lifecycle,
         "holdings": holdings,
+        "market_integrity": market_integrity,
         "event_reconciliation": event_reconciliation,
         "trade_boundary": trade_boundary,
         "trade_idempotency": trade_idempotency,
