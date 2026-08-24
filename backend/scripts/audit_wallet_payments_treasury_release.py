@@ -1,3 +1,5 @@
+# fmt: off
+
 from __future__ import annotations
 
 import ast
@@ -163,3 +165,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# fmt: on
