@@ -65,7 +65,11 @@ def create_tournament(
     session: Session = Depends(get_session),
     service: TournamentService = Depends(_service),
 ) -> TournamentView:
-    del current_user
+    if current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators may create platform tournaments.",
+        )
     try:
         tournament = service.create_tournament(payload)
         session.commit()
