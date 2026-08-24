@@ -51,21 +51,36 @@ def audit() -> dict[str, object]:
         "rail.handle_provider_event": (rail_functions, "handle_provider_event"),
         "treasury.create_withdrawal_batch": (treasury_functions, "create_withdrawal_batch"),
         "treasury.list_withdrawal_batches": (treasury_functions, "list_withdrawal_batches"),
-        "treasury.review_withdrawal_status": (treasury_functions, "review_withdrawal_status"),
+        "treasury.review_withdrawal_status": (
+            treasury_functions,
+            "review_withdrawal_status",
+        ),
         "admin.handle_korapay_webhook": (admin_functions, "handle_korapay_webhook"),
         "admin.handle_paystack_webhook": (admin_functions, "handle_paystack_webhook"),
-        "admin.payment_reconciliation_summary": (admin_functions, "payment_reconciliation_summary"),
-        "runtime.wallet_transaction_lock": (runtime_functions, "acquire_wallet_transaction_lock"),
+        "admin.payment_reconciliation_summary": (
+            admin_functions,
+            "payment_reconciliation_summary",
+        ),
+        "runtime.wallet_transaction_lock": (
+            runtime_functions,
+            "acquire_wallet_transaction_lock",
+        ),
     }
     for label, (names, function_name) in required.items():
         if function_name not in names:
-            findings.append({"finding": "missing_required_surface", "surface": label})
+            findings.append(
+                {"finding": "missing_required_surface", "surface": label}
+            )
 
     provider_registry = _source("provider_registry")
     if '"korapay": ProviderRegistration' not in provider_registry:
-        findings.append({"finding": "korapay_not_registered_live", "surface": "provider_registry"})
-    if 'def paystack_enabled()' not in provider_registry or "return False" not in provider_registry:
-        findings.append({"finding": "paystack_not_fail_closed", "surface": "provider_registry"})
+        findings.append(
+            {"finding": "korapay_not_registered_live", "surface": "provider_registry"}
+        )
+    if "def paystack_enabled()" not in provider_registry or "return False" not in provider_registry:
+        findings.append(
+            {"finding": "paystack_not_fail_closed", "surface": "provider_registry"}
+        )
 
     admin_source = _source("admin_finance")
     protected_checks = (
@@ -76,16 +91,21 @@ def audit() -> dict[str, object]:
     )
     for check in protected_checks:
         if check not in admin_source:
-            findings.append({"finding": "missing_webhook_security_boundary", "surface": check})
+            findings.append(
+                {"finding": "missing_webhook_security_boundary", "surface": check}
+            )
 
     rail_source = _source("rail_service")
-    for marker in (
+    replay_markers = (
         'idempotency_key=f"purchase-order:{order.id}:settle"',
         "Duplicate provider reference detected",
         "provider_reference",
-    ):
+    )
+    for marker in replay_markers:
         if marker not in rail_source:
-            findings.append({"finding": "missing_payment_replay_guard", "surface": marker})
+            findings.append(
+                {"finding": "missing_payment_replay_guard", "surface": marker}
+            )
 
     reconciliation_markers = (
         "settled_purchase_order_missing_ledger",
@@ -95,39 +115,58 @@ def audit() -> dict[str, object]:
     )
     for marker in reconciliation_markers:
         if marker not in admin_source:
-            findings.append({"finding": "missing_reconciliation_mismatch", "surface": marker})
+            findings.append(
+                {"finding": "missing_reconciliation_mismatch", "surface": marker}
+            )
 
     treasury_source = _source("treasury_service")
-    for marker in (
+    batch_markers = (
         '"batch_id"',
         "TreasuryWithdrawalStatus.PROCESSING",
         "treasury.withdrawal.batch.created",
-    ):
+    )
+    for marker in batch_markers:
         if marker not in treasury_source:
-            findings.append({"finding": "missing_withdrawal_batch_contract", "surface": marker})
+            findings.append(
+                {"finding": "missing_withdrawal_batch_contract", "surface": marker}
+            )
 
     finance_router = _source("finance_router")
     if "/korapay/webhook" not in finance_router:
-        findings.append({"finding": "missing_korapay_http_route", "surface": "finance_router"})
+        findings.append(
+            {"finding": "missing_korapay_http_route", "surface": "finance_router"}
+        )
     if "/paystack/webhook" not in finance_router:
-        findings.append({"finding": "missing_paystack_http_route", "surface": "finance_router"})
+        findings.append(
+            {"finding": "missing_paystack_http_route", "surface": "finance_router"}
+        )
 
     payment_router = _source("payment_router")
     if "acquire_wallet_transaction_lock" not in payment_router:
-        findings.append({"finding": "payment_order_missing_wallet_lock", "surface": "payment_router"})
+        findings.append(
+            {"finding": "payment_order_missing_wallet_lock", "surface": "payment_router"}
+        )
     if "release_wallet_transaction_lock" not in payment_router:
-        findings.append({"finding": "payment_order_lock_not_released", "surface": "payment_router"})
+        findings.append(
+            {"finding": "payment_order_lock_not_released", "surface": "payment_router"}
+        )
 
     warnings.append(
         {
             "finding": "runtime_wallet_locks_are_process_scoped",
-            "detail": "Persistent row locks remain the database safety boundary; runtime controls provide an operator/request guard."
+            "detail": (
+                "Persistent row locks remain the database safety boundary; "
+                "runtime controls provide an operator/request guard."
+            ),
         }
     )
 
     return {
         "group": "wallet-payments-treasury",
-        "contract": "all live money movement must terminate in the authoritative ledger, be replay-safe, reconciliable, and operator-controllable",
+        "contract": (
+            "all live money movement must terminate in the authoritative ledger, "
+            "be replay-safe, reconciliable, and operator-controllable"
+        ),
         "violations": findings,
         "warnings": warnings,
         "pass": not findings,
