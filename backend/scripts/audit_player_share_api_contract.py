@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ROUTER = ROOT / "backend" / "app" / "players" / "router.py"
 SCHEMAS = ROOT / "backend" / "app" / "players" / "token_schemas.py"
 SERVICE = ROOT / "backend" / "app" / "players" / "token_service.py"
+CONTEXT = ROOT / "backend" / "app" / "players" / "trade_context.py"
 
 
 def _read(path: Path) -> str:
@@ -19,6 +20,7 @@ def audit() -> tuple[list[str], list[str]]:
     router_source = _read(ROUTER)
     schema_source = _read(SCHEMAS)
     service_source = _read(SERVICE)
+    context_source = _read(CONTEXT)
 
     for request_name in ("PlayerSharePurchaseRequest", "PlayerShareSaleRequest"):
         marker = f"class {request_name}"
@@ -30,7 +32,15 @@ def audit() -> tuple[list[str], list[str]]:
         block = schema_source[start:] if end < 0 else schema_source[start:end]
         if "idempotency_key" not in block:
             errors.append(f"{request_name} must expose idempotency_key")
+        if "model_post_init" not in block or "set_player_share_idempotency_key" not in block:
+            errors.append(f"{request_name} must capture idempotency_key in request-local trade context")
 
+    if "def set_player_share_idempotency_key" not in context_source:
+        errors.append("missing request-local player-share idempotency context setter")
+    if "def consume_player_share_idempotency_key" not in context_source:
+        errors.append("missing request-local player-share idempotency context consumer")
+    if "consume_player_share_idempotency_key" not in service_source:
+        errors.append("trade service must consume the request-local idempotency key")
     if "def _run_trade_with_boundary" not in service_source:
         errors.append("trade service must have the strict trade boundary")
     if "def _require_trade_market" not in service_source:
@@ -50,8 +60,8 @@ def audit() -> tuple[list[str], list[str]]:
         block = router_source[start:] if next_route < 0 else router_source[start:next_route]
         if "idempotency_key" not in block:
             warnings.append(
-                f"{route_name} does not forward payload.idempotency_key to {method}(); "
-                "the service still uses its deterministic trade reference fallback"
+                f"{route_name} does not pass idempotency_key as an explicit service argument; "
+                "the request model captures it into request-local trade context"
             )
 
     return errors, warnings
@@ -65,9 +75,7 @@ def main() -> int:
         print(f"FAIL: {error}")
     if errors:
         return 1
-    print("PASS: player-share API contract has a fail-closed trade boundary")
-    if warnings:
-        print("NOTE: optional client idempotency-key forwarding remains a follow-up integration item")
+    print("PASS: player-share API contract has a fail-closed trade boundary and request-local idempotency bridge")
     return 0
 
 
