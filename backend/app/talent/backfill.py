@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Player
-from app.models.talent import TalentProfile
+from app.talent.models import TalentProfile
 from app.talent.service import TalentExchangeService
 
 MAX_BATCH_SIZE = 500
