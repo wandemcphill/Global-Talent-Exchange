@@ -181,10 +181,10 @@ def create_competition(
 )
 def create_competition_alias(
     payload: CompetitionCreateRequest,
-    actor: User | None = Depends(get_optional_current_user),
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    resolved = _legacy_user_competition_payload(payload, actor)
+    resolved = _user_competition_payload(payload, actor)
     return _handle_competition_errors(lambda: orchestrator.create(resolved))
 
 
