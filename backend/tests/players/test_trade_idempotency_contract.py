@@ -7,16 +7,20 @@ from app.players.token_service import PlayerTokenMarketService
 from app.players.trade_boundary import PlayerShareTradeBoundary
 
 
+def _constraint(field):
+    return next(item for item in field.metadata if hasattr(item, "max_length"))
+
+
 def test_trade_requests_expose_bounded_idempotency_keys():
     purchase = PlayerSharePurchaseRequest.model_fields["idempotency_key"]
     sale = PlayerShareSaleRequest.model_fields["idempotency_key"]
 
     assert purchase.default is None
     assert sale.default is None
-    assert purchase.metadata[0].min_length == 8
-    assert purchase.metadata[0].max_length == 128
-    assert sale.metadata[0].min_length == 8
-    assert sale.metadata[0].max_length == 128
+    assert _constraint(purchase).min_length == 8
+    assert _constraint(purchase).max_length == 128
+    assert _constraint(sale).min_length == 8
+    assert _constraint(sale).max_length == 128
 
 
 def test_trade_service_and_boundary_accept_idempotency_keys():
