@@ -2,6 +2,16 @@
 
 This document defines the local certification sequence for the player-share economy. It is intentionally independent of GitHub Actions so the economic surface can still be audited while CI quota is unavailable.
 
+## Gate 0: composite release gate
+
+Run from the repository root:
+
+```bash
+python backend/scripts/audit_player_share_release_gate.py --strict
+```
+
+This is a read-only composite gate. It combines the lifecycle and trade-boundary checks and returns non-zero when either gate fails.
+
 ## Gate 1: lifecycle integrity
 
 Run:
@@ -39,7 +49,7 @@ The command is read-only and fails when persisted market or holding share counts
 Run:
 
 ```bash
-python backend/scripts/audit_player_share_trade_boundary.py
+python backend/scripts/audit_player_share_trade_boundary.py --strict
 ```
 
 This is a source-level guard against accidentally restoring implicit market issuance inside the trade service.
@@ -54,6 +64,7 @@ This is a source-level guard against accidentally restoring implicit market issu
 6. Economic settlement remains ledger-authoritative.
 7. Repeated requests must not create duplicate economic effects.
 8. A failed economic precondition must fail closed without provisioning a market.
+9. The composite release gate must remain read-only.
 
 ## CI limitation
 
