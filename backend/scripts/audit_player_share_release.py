@@ -22,6 +22,15 @@ LIFECYCLE_AUDIT = BACKEND / "scripts" / "audit_player_share_lifecycle.py"
 TRADE_AUDIT = BACKEND / "scripts" / "audit_player_share_trade_boundary.py"
 
 
+def _called_methods(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    return {
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+
+
 def _boundary_check() -> dict[str, object]:
     source = TOKEN_SERVICE.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(TOKEN_SERVICE))
@@ -34,11 +43,12 @@ def _boundary_check() -> dict[str, object]:
                 continue
             if call.func.attr == "ensure_market":
                 violations.append(f"{node.name} directly calls ensure_market()")
-    issuer_source = ISSUER.read_text(encoding="utf-8")
-    if "issue_market(" not in issuer_source:
+
+    issuer_calls = _called_methods(ISSUER)
+    if "issue_market" not in issuer_calls:
         violations.append("strict issuer does not call issue_market()")
-    if "ensure_market(" in issuer_source:
-        violations.append("strict issuer references ensure_market()")
+    if "ensure_market" in issuer_calls:
+        violations.append("strict issuer calls ensure_market()")
     return {"passed": not violations, "violations": violations}
 
 
