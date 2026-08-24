@@ -11,6 +11,7 @@ from app.models.player_token_market import PlayerShareMarket
 from app.models.user import User
 from app.models.wallet import LedgerEntry, LedgerTransaction
 from app.players import legacy_token_service as _legacy
+from app.players.trade_context import consume_player_share_idempotency_key
 
 PlayerTokenMarketError = _legacy.PlayerTokenMarketError
 
@@ -29,18 +30,11 @@ def _ledger_reference_token() -> str:
     return _original_generate_uuid()
 
 
-# Issuance/bootstrap keeps its legacy UUID behavior. Only trade calls receive
-# the deterministic reference through the request-scoped context below.
 _legacy.generate_uuid = _ledger_reference_token
 
 
 class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
-    """Production-facing player-share service with a strict trade boundary.
-
-    Legacy ``ensure_market`` remains available to explicit issuance/bootstrap
-    callers. During buy/sell, the already-issued market is injected into the
-    inherited implementation so it cannot create one implicitly.
-    """
+    """Production-facing player-share service with a strict trade boundary."""
 
     @staticmethod
     def _trade_reference(
@@ -114,7 +108,11 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
 
         if side == "buy":
             gross_entry = next(
-                (entry for entry in entries if entry.amount > 0 and "trade_fee_revenue" not in str(entry.account.code)),
+                (
+                    entry
+                    for entry in entries
+                    if entry.amount > 0 and "trade_fee_revenue" not in str(entry.account.code)
+                ),
                 None,
             )
             debit_entry = next((entry for entry in entries if entry.amount < 0), None)
@@ -128,7 +126,11 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         else:
             gross_entry = next((entry for entry in entries if entry.amount < 0), None)
             credit_entry = next(
-                (entry for entry in entries if entry.amount > 0 and "trade_fee_revenue" not in str(entry.account.code)),
+                (
+                    entry
+                    for entry in entries
+                    if entry.amount > 0 and "trade_fee_revenue" not in str(entry.account.code)
+                ),
                 None,
             )
             if gross_entry is None or credit_entry is None:
@@ -171,14 +173,17 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         idempotency_key: str | None,
         operation: Callable[[], dict[str, Any]],
     ) -> dict[str, Any]:
+        # The legacy router currently calls the service without explicitly
+        # forwarding this optional field. The request-local context bridges
+        # that contract without weakening the authoritative service boundary.
+        resolved_idempotency_key = idempotency_key or consume_player_share_idempotency_key()
         market = self._require_trade_market(player_id)
-        if idempotency_key:
-            normalized_key = idempotency_key.strip()
+        if resolved_idempotency_key:
             reference = self._idempotency_reference(
                 actor_id=actor.id,
                 player_id=player_id,
                 side=side,
-                key=normalized_key,
+                key=resolved_idempotency_key.strip(),
             )
         else:
             reference = self._trade_reference(
@@ -192,7 +197,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         reference_token = _trade_reference.set(reference)
         market_token = _trade_market_override.set(market)
         try:
-            if idempotency_key:
+            if resolved_idempotency_key:
                 replay = self._replay_idempotent_trade(
                     reference=reference,
                     actor=actor,
