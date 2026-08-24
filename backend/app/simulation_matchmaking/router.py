@@ -129,8 +129,14 @@ def get_fast_match_entitlement(
 @api_router.post("/quick-tournament", response_model=QuickTournamentResponse)
 def create_quick_tournament(
     payload: QuickTournamentRequest,
+    current_user: User = Depends(get_current_user),
     service: SimulationMatchmakingService = Depends(get_simulation_matchmaking_service),
 ) -> QuickTournamentResponse:
+    if payload.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Quick tournaments can only be created for the authenticated user.",
+        )
     try:
         return service.create_quick_tournament(payload)
     except ProfileNotFoundError as exc:
@@ -143,8 +149,14 @@ def create_quick_tournament(
 @api_router.post("/hosted-competitions/preview", response_model=HostedCompetitionPreviewResponse)
 def preview_hosted_competition(
     payload: HostedCompetitionPreviewRequest,
+    current_user: User = Depends(get_current_user),
     service: SimulationMatchmakingService = Depends(get_simulation_matchmaking_service),
 ) -> HostedCompetitionPreviewResponse:
+    if payload.host_user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Hosted competition previews can only be created for the authenticated host.",
+        )
     try:
         return service.preview_hosted_competition(payload)
     except ProfileNotFoundError as exc:

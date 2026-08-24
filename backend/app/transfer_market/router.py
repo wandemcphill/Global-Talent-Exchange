@@ -221,8 +221,12 @@ def list_transfer_hub_offers(
     service: TransferMarketService = Depends(_service),
     current_user: User = Depends(get_current_user),
 ) -> list[TransferHubOfferView]:
-    del current_user
-    return service.list_hub_offers(listing_id=listing_id, club_id=club_id, status=status_filter)
+    return service.list_hub_offers(
+        actor=current_user,
+        listing_id=listing_id,
+        club_id=club_id,
+        status=status_filter,
+    )
 
 
 @router.post("/api/transfer-hub/listings/{listing_id}/offers", response_model=TransferHubOfferView, status_code=status.HTTP_201_CREATED)

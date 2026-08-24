@@ -172,9 +172,13 @@ def get_challenge(challenge_id: str, service: ClubSocialService = Depends(get_se
 
 
 @router.get("/api/clubs/{club_id}/identity/metrics", response_model=ClubIdentityMetricsView)
-def get_identity_metrics(club_id: str, service: ClubSocialService = Depends(get_service)) -> ClubIdentityMetricsView:
+def get_identity_metrics(
+    club_id: str,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> ClubIdentityMetricsView:
     try:
-        metrics = service.refresh_identity_metrics(club_id=club_id)
+        metrics = service.refresh_identity_metrics_for_actor(actor=current_user, club_id=club_id)
         service.session.commit()
     except ClubSocialError as exc:
         _raise(exc)
@@ -182,9 +186,13 @@ def get_identity_metrics(club_id: str, service: ClubSocialService = Depends(get_
 
 
 @router.post("/api/clubs/{club_id}/identity/metrics/refresh", response_model=ClubIdentityMetricsView)
-def refresh_identity_metrics(club_id: str, service: ClubSocialService = Depends(get_service)) -> ClubIdentityMetricsView:
+def refresh_identity_metrics(
+    club_id: str,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> ClubIdentityMetricsView:
     try:
-        metrics = service.refresh_identity_metrics(club_id=club_id)
+        metrics = service.refresh_identity_metrics_for_actor(actor=current_user, club_id=club_id)
         service.session.commit()
     except ClubSocialError as exc:
         _raise(exc)

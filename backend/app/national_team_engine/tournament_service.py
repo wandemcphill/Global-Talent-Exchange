@@ -2031,6 +2031,12 @@ class NationalTeamTournamentService:
         self._refresh_entry_squad_size(entry)
         return self._entry_detail_payload(entry)
 
+    def build_entry_detail_payload_for_actor(self, *, entry_id: str, actor: User) -> dict[str, Any]:
+        """Return entry details only to its owner or assigned manager."""
+        entry = self._require_managed_entry(entry_id, actor)
+        self._refresh_entry_squad_size(entry)
+        return self._entry_detail_payload(entry)
+
     def _competition_payload(self, competition: NationalTeamCompetition) -> dict[str, Any]:
         return {
             "id": competition.id,

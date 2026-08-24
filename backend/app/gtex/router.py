@@ -14,6 +14,7 @@ from app.auth.dependencies import (
     get_optional_current_user,
     get_session,
 )
+from app.core.request_security import extract_client_ip
 from app.gtex.runtime import apply_gtex_runtime_settings, ensure_gtex_runtime
 from app.gtex.schemas import (
     AdminBanUserRequest,
@@ -51,13 +52,8 @@ def get_runtime(request: Request):
     return ensure_gtex_runtime(request.app)
 
 
-def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for") or request.headers.get("cf-connecting-ip")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip() or None
-    if request.client is not None and request.client.host:
-        return str(request.client.host)
-    return None
+def _client_ip(request: Request) -> str:
+    return extract_client_ip(request)
 
 
 def raise_gtex_http_exception(exc: GtexError) -> Never:

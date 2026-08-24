@@ -47,6 +47,11 @@ class ClubSocialError(ValueError):
 class ClubSocialService:
     session: Session
 
+    def refresh_identity_metrics_for_actor(self, *, actor: User, club_id: str) -> ClubIdentityMetrics:
+        """Refresh mutable club metrics only for the club owner."""
+        self._require_owned_club(actor.id, club_id)
+        return self.refresh_identity_metrics(club_id=club_id)
+
     def create_challenge(
         self,
         *,

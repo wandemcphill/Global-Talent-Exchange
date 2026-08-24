@@ -112,7 +112,7 @@ def get_national_association(
 def review_national_eligibility(
     country_code: str,
     payload: NationalEligibilityReviewRequest,
-    _current_user: User = Depends(get_current_user),
+    _current_user: User = Depends(get_current_admin),
     service: FederationService = Depends(_service),
 ) -> NationalEligibilityReviewView:
     try:
@@ -293,7 +293,7 @@ def cast_vote(
 def apply_sanction(
     federation_id: str,
     payload: FederationSanctionCreateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
     service: FederationService = Depends(_service),
 ) -> FederationSanctionView:
     try:
@@ -348,7 +348,7 @@ def validate_action(
 def distribute_revenue(
     federation_id: str,
     payload: FederationRevenueDistributionRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin),
     service: FederationService = Depends(_service),
 ) -> FederationTreasuryEntryView:
     del current_user

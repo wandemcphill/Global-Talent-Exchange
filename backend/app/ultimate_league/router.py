@@ -78,6 +78,11 @@ def upsert_competitor(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Path competitor_id must match payload competitor_id."
         )
+    if payload.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Competitor ownership must match the authenticated user.",
+        )
     competitor = runtime.upsert_competitor(
         LeagueCompetitor(
             competitor_id=payload.competitor_id,
@@ -167,6 +172,13 @@ def submit_match_result(
     _: User = Depends(get_current_user),
 ) -> UltimateLeagueMatchResultResponse:
     try:
+        home_candidate = runtime.get_competitor(payload.home_competitor_id)
+        away_candidate = runtime.get_competitor(payload.away_competitor_id)
+        if current_user.id not in {home_candidate.user_id, away_candidate.user_id}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only a participant may submit an Ultimate League match result.",
+            )
         home, away, rating_update = runtime.record_match_result(
             home_competitor_id=payload.home_competitor_id,
             away_competitor_id=payload.away_competitor_id,

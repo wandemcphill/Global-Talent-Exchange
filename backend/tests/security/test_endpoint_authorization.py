@@ -168,3 +168,61 @@ def test_spectator_presence_does_not_leak_viewer_identities(client):
 def test_malformed_bearer_tokens_return_401_not_500(client, token: str):
     response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401, response.text
+
+
+# --- tournament mutation surface ---------------------------------------------
+
+@pytest.mark.parametrize(
+    "method,path,payload",
+    [
+        ("post", "/api/tournaments", {
+            "name": "Security Probe Tournament",
+            "game_type": "prediction",
+            "entry_fee": 0,
+            "max_players": 4,
+        }),
+        ("post", f"/api/tournaments/{uuid4()}/join", {"user_id": str(uuid4())}),
+        ("post", f"/api/tournaments/{uuid4()}/matches/{uuid4()}/result", {"winner_user_id": str(uuid4())}),
+        ("post", f"/api/tournaments/{uuid4()}/advance", {}),
+    ],
+)
+def test_tournament_mutations_require_authentication(client, method: str, path: str, payload: dict):
+    response = getattr(client, method)(path, json=payload)
+    _assert_gated(response, path)
+
+
+# --- club identity mutation surface ------------------------------------------
+
+@pytest.mark.parametrize(
+    "path",
+    [f"/api/clubs/{uuid4()}/identity", f"/api/clubs/{uuid4()}/jerseys"],
+)
+def test_club_identity_mutations_require_authentication(client, path: str):
+    _assert_gated(client.patch(path, json={}), path)
+
+
+# --- competition lifecycle mutation ownership -------------------------------
+
+def test_competition_creation_alias_requires_authentication(client):
+    response = client.post(
+        "/api/competitions/create",
+        json={
+            "creator_id": str(uuid4()),
+            "creator_name": "Security Probe",
+            "name": "Anonymous Competition",
+            "game_type": "prediction",
+            "entry_fee": 0,
+            "max_players": 4,
+        },
+    )
+    _assert_gated(response, "/api/competitions/create")
+
+
+def test_competition_leave_cannot_target_another_user(client, member_headers):
+    competition_id = str(uuid4())
+    response = client.post(
+        f"/api/competitions/{competition_id}/leave",
+        json={"user_id": str(uuid4())},
+        headers=member_headers,
+    )
+    assert response.status_code == 403, response.text
