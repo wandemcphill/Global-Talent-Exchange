@@ -1,0 +1,48 @@
+name: Phase A Economic Regressions
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase-a-economic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  economic-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.txt pytest
+      - name: Run Phase A economic regression suite
+        run: >
+          python -m pytest
+          backend/tests/agents/test_agent_ledger_service.py
+          backend/tests/agents/test_agent_state_store_fail_closed.py
+          backend/tests/agents/test_agent_wallet_economic_safety.py
+          backend/tests/economy/test_competition_funding_policy.py
+          backend/tests/economy/test_competition_model_economic_guard.py
+          backend/tests/economy/test_currency_policy.py
+          backend/tests/economy/test_economic_conversion_service.py
+          backend/tests/economy/test_hosted_competition_coin_escrow.py
+          backend/tests/economy/test_hosted_competition_fee_fail_closed.py
+          backend/tests/economy/test_hosted_competition_funding_contract.py
+          backend/tests/economy/test_phase_a_hosted_competition_db_roundtrip.py
+          backend/tests/economy/test_withdrawal_currency_guard.py
+          backend/tests/gift_engine/test_fan_coin_to_gtex_coin_conversion.py
+          backend/tests/hosted_competition_engine/test_coin_aware_fee_freeze.py
+          backend/tests/hosted_competition_engine/test_coin_aware_service.py
+          backend/tests/treasury/test_commission_policy.py
+          -q

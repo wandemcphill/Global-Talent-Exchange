@@ -6,7 +6,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_admin, get_session
+from app.models.user import User
 from app.value_engine.schemas import (
     ValueDailyCloseResponse,
     ValueDailyCloseView,
@@ -214,7 +215,10 @@ def _build_daily_close_view(record: Any) -> ValueDailyCloseView:
 def rebuild_value_snapshots(
     payload: ValueSnapshotRebuildRequest,
     request: Request,
+    _: User = Depends(get_current_admin),
 ) -> ValueSnapshotBatchResponse:
+    # Recomputing valuation snapshots rewrites pricing inputs for arbitrary
+    # player sets and is expensive; it is an operator action, not a public one.
     bridge = request.app.state.value_engine_bridge
     snapshots = bridge.run(
         as_of=payload.as_of,

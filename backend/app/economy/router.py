@@ -18,7 +18,13 @@ from app.economy.schemas import (
     ServicePricingRuleUpsertRequest,
     ServicePricingRuleView,
 )
-from app.economy.fx_schemas import FxQuoteView, FxRateUpsertRequest, FxRateView, RegionalPricingRuleUpsertRequest, RegionalPricingRuleView
+from app.economy.fx_schemas import (
+    FxQuoteView,
+    FxRateUpsertRequest,
+    FxRateView,
+    RegionalPricingRuleUpsertRequest,
+    RegionalPricingRuleView,
+)
 from app.economy.fx_service import FxPricingError, FxPricingService
 from app.economy.governor_schemas import (
     EconomyGovernorApplyRequest,
@@ -38,13 +44,18 @@ admin_router = APIRouter(prefix="/admin/economy", tags=["admin-economy"])
 @router.get("/gift-catalog", response_model=list[GiftCatalogItemView])
 def list_gift_catalog(session: Session = Depends(get_session)) -> list[GiftCatalogItemView]:
     service = EconomyConfigService(session)
-    return [GiftCatalogItemView.model_validate(item, from_attributes=True) for item in service.list_gifts(active_only=True)]
+    return [
+        GiftCatalogItemView.model_validate(item, from_attributes=True) for item in service.list_gifts(active_only=True)
+    ]
 
 
 @router.get("/service-pricing", response_model=list[ServicePricingRuleView])
 def list_service_pricing(session: Session = Depends(get_session)) -> list[ServicePricingRuleView]:
     service = EconomyConfigService(session)
-    return [ServicePricingRuleView.model_validate(item, from_attributes=True) for item in service.list_service_pricing(active_only=True)]
+    return [
+        ServicePricingRuleView.model_validate(item, from_attributes=True)
+        for item in service.list_service_pricing(active_only=True)
+    ]
 
 
 @router.get("/fx/quote", response_model=FxQuoteView)
@@ -206,11 +217,14 @@ def upsert_regional_pricing(
 
 @admin_router.get("/revenue-share-rules", response_model=list[RevenueShareRuleView])
 def list_revenue_share_rules(
+    _: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
     active_only: bool = Query(default=True),
 ) -> list[RevenueShareRuleView]:
     service = EconomyConfigService(session)
-    return [RevenueShareRuleView.model_validate(item) for item in service.list_revenue_share_rules(active_only=active_only)]
+    return [
+        RevenueShareRuleView.model_validate(item) for item in service.list_revenue_share_rules(active_only=active_only)
+    ]
 
 
 @admin_router.post("/revenue-share-rules", response_model=RevenueShareRuleView)
@@ -228,6 +242,7 @@ def upsert_revenue_share_rule(
 
 @admin_router.get("/gift-combo-rules", response_model=list[GiftComboRuleView])
 def list_gift_combo_rules(
+    _: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
     active_only: bool = Query(default=True),
 ) -> list[GiftComboRuleView]:
@@ -250,6 +265,7 @@ def upsert_gift_combo_rule(
 
 @admin_router.get("/burn-events", response_model=list[EconomyBurnEventView])
 def list_burn_events(
+    _: User = Depends(get_current_admin),
     session: Session = Depends(get_session),
     user_id: str | None = Query(default=None),
     source_type: str | None = Query(default=None),

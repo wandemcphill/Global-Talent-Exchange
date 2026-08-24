@@ -54,6 +54,11 @@ namespace FStudio.GTEX.VisualBridge
         [SerializeField] private bool preferBackendFeedWhenAvailable = true;
         [SerializeField] private bool logVisualCommands;
         [SerializeField] private GtexOriginalVisualStartupMode startupMode = GtexOriginalVisualStartupMode.VisualSmoke;
+        // When false, the local-sim feed does NOT script on-pitch pass/shoot choreography onto the
+        // asset players; the asset's own native football AI plays the ball and GTEX only syncs
+        // clock + score. Scripting the events caused looping balls, failed traps, and loose-ball
+        // chasing because the scripted geometry drifts from the asset players' real positions.
+        [SerializeField] private bool scriptOnPitchEvents = false;
 
         private readonly HashSet<string> consumedEvents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private GtexMatchConfig config;
@@ -160,6 +165,11 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             activeDirector = this;
+
+            // Unify the two switches: when we are NOT scripting on-pitch pass/shoot choreography,
+            // the asset's own match AI plays autonomously (native kickoff, dribble/pass/shoot,
+            // throw-ins/corners). When scripting is on, fall back to the legacy command-driven hold.
+            FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.NativeAutonomousPlay = !scriptOnPitchEvents;
         }
 
         public static bool TryAutoStart(GtexMatchConfig startupConfig)
@@ -1103,8 +1113,14 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            StopLocalReplayRoutine();
-            localReplayRoutine = StartCoroutine(ReplayLocalSimulationEvent(matchEvent));
+            // Option A: let the asset's native AI play the ball. Only script the on-pitch
+            // pass/shoot choreography when explicitly enabled. Either way, keep the scoreboard /
+            // clock / commentary in sync from the GTEX sim via the snapshot below.
+            if (scriptOnPitchEvents)
+            {
+                StopLocalReplayRoutine();
+                localReplayRoutine = StartCoroutine(ReplayLocalSimulationEvent(matchEvent));
+            }
             PublishLocalSimulationSnapshot(true, matchEvent.Summary);
         }
 
@@ -2112,12 +2128,19 @@ namespace FStudio.GTEX.VisualBridge
                     break;
                 case "shot":
                 case "shoot":
+                case "shot_on_target":
                 case "missed_chance":
+                case "missed_big_chance":
+                case "penalty_missed":
+                case "penalty_miss":
+                case "woodwork":
                     command.type = GtexVisualCommandType.Shoot;
                     break;
                 case "save":
                 case "keeper_save":
                 case "keepersave":
+                case "goalkeeper_save":
+                case "double_save":
                     command.type = GtexVisualCommandType.KeeperSave;
                     break;
                 case "claim":
@@ -2126,10 +2149,22 @@ namespace FStudio.GTEX.VisualBridge
                     command.type = GtexVisualCommandType.KeeperClaim;
                     break;
                 case "goal":
+                case "penalty_scored":
+                case "penalty_goal":
                     command.type = GtexVisualCommandType.Goal;
                     break;
                 case "foul":
+                case "tactical_foul":
+                case "yellow_card":
+                case "red_card":
                     command.type = GtexVisualCommandType.Foul;
+                    break;
+                case "possession_swing":
+                case "dangerous_attack":
+                case "counter_attack":
+                case "set_piece_chance":
+                case "defensive_error":
+                    command.type = GtexVisualCommandType.CarryBall;
                     break;
                 case "outofplay":
                 case "out_of_play":

@@ -6,6 +6,8 @@ import subprocess
 import os
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_LIB_ROOT = REPO_ROOT / "frontend" / "lib"
 KORAPAY_SECRET_ENV_KEYS = (
@@ -1282,31 +1284,72 @@ def _strict_live_failures() -> list[str]:
     return failures
 
 
+def _render_services() -> dict[str, dict[str, dict]]:
+    """Structurally parse render.yaml into {service_name: {env_key: env_entry}}.
+
+    Uses a real YAML parser (not string/line slicing) so lookups are correctly
+    scoped to the service that declares them, even when the same env key name
+    is reused across multiple services (e.g. DATABASE_URL, GTE_AUTH_SECRET).
+    """
+    document = yaml.safe_load(_read("render.yaml")) or {}
+    services: dict[str, dict[str, dict]] = {}
+    for service in document.get("services", []) or []:
+        name = service.get("name")
+        if not name:
+            continue
+        env_vars: dict[str, dict] = {}
+        for entry in service.get("envVars", []) or []:
+            key = entry.get("key")
+            if key:
+                env_vars[key] = entry
+        services[name] = env_vars
+    return services
+
+
 def _render_config_failures() -> list[str]:
-    render = _read("render.yaml")
     failures: list[str] = []
+    try:
+        services = _render_services()
+    except yaml.YAMLError as error:
+        return [f"render.yaml is not valid YAML: {error}"]
+
+    api_env = services.get("gtex-api")
+    if api_env is None:
+        return ["render.yaml is missing the gtex-api service definition."]
+
     for key in (*KORAPAY_SECRET_ENV_KEYS, *TREASURY_SECRET_ENV_KEYS):
-        block = _render_key_block(render, key)
-        if not block:
+        entry = api_env.get(key)
+        if entry is None:
             failures.append(f"render.yaml is missing secret env declaration for {key}.")
             continue
-        if "sync: false" not in block:
+        if entry.get("sync") is not False:
             failures.append(f"render.yaml must keep {key} env-only with sync: false.")
-        if "value:" in block:
+        if "value" in entry:
             failures.append(f"render.yaml must not hard-code a value for secret env {key}.")
-    notification_block = _render_key_block(render, "GTE_KORAPAY_NOTIFICATION_URL")
-    if not notification_block or "https://gtex-api-cijn.onrender.com/api/webhooks/korapay" not in notification_block:
+
+    notification_entry = api_env.get("GTE_KORAPAY_NOTIFICATION_URL")
+    notification_value = str(notification_entry.get("value", "")) if notification_entry else ""
+    if "https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook" not in notification_value:
         failures.append("render.yaml is missing the production KoraPay notification URL.")
-    paystack_block = _render_key_block(render, "GTE_ENABLE_PAYSTACK")
-    if not paystack_block or ('value: "false"' not in paystack_block and "value: false" not in paystack_block):
+
+    paystack_entry = api_env.get("GTE_ENABLE_PAYSTACK")
+    paystack_value = str(paystack_entry.get("value", "")).strip().lower() if paystack_entry else ""
+    if paystack_value != "false":
         failures.append("render.yaml does not explicitly disable Paystack.")
-    api_base_block = _render_key_block(render, "GTE_API_BASE_URL")
-    if not api_base_block or "https://gtex-api-cijn.onrender.com" not in api_base_block:
+
+    web_env = services.get("gtex-web")
+    if web_env is None:
+        failures.append("render.yaml is missing the gtex-web service definition.")
+        return failures
+
+    api_base_entry = web_env.get("GTE_API_BASE_URL")
+    api_base_value = str(api_base_entry.get("value", "")) if api_base_entry else ""
+    if "https://gtex-api-opea.onrender.com" not in api_base_value:
         failures.append("render.yaml gtex-web service does not point at the live API base URL.")
-    backend_mode_block = _render_key_block(render, "GTE_BACKEND_MODE")
-    if not backend_mode_block or (
-        "value: live" not in backend_mode_block and "value: strict_live" not in backend_mode_block
-    ):
+
+    backend_mode_entry = web_env.get("GTE_BACKEND_MODE")
+    backend_mode_value = str(backend_mode_entry.get("value", "")).strip().lower() if backend_mode_entry else ""
+    if backend_mode_value not in ("live", "strict_live"):
         failures.append("render.yaml gtex-web service does not force live backend mode.")
     return failures
 
@@ -1397,18 +1440,6 @@ def _slice_between(text: str, start: str, end: str | None = None) -> str:
     if end_index < 0:
         return text[start_index:]
     return text[start_index:end_index]
-
-
-def _render_key_block(render: str, key: str) -> str:
-    marker = f"- key: {key}"
-    start = render.find(marker)
-    if start < 0:
-        return ""
-    next_key = render.find("\n      - key:", start + len(marker))
-    next_service = render.find("\n  - name:", start + len(marker))
-    candidates = [index for index in (next_key, next_service) if index > start]
-    end = min(candidates) if candidates else len(render)
-    return render[start:end]
 
 
 if __name__ == "__main__":

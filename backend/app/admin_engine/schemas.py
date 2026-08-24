@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.common.enums.competition_type import CompetitionType
-from app.common.enums.fixture_window import FixtureWindow
 from app.common.schemas.competition import CompetitionSchedulePlan, CompetitionScheduleRequest
 
 
@@ -157,7 +155,8 @@ class AdminRewardRuleUpsertRequest(BaseModel):
     gift_platform_rake_bps: int = Field(default=3000, ge=0, le=5000)
     withdrawal_fee_bps: int = Field(default=1000, ge=0, le=5000)
     minimum_withdrawal_fee_credits: Decimal = Field(default=Decimal("5.0000"), ge=0)
-    competition_platform_fee_bps: int = Field(default=1000, ge=0, le=5000)
+    # Product default is 30%; Admin may change it without code changes.
+    competition_platform_fee_bps: int = Field(default=3000, ge=0, le=5000)
     stability_controls: AdminRewardRuleStabilityControls = Field(default_factory=AdminRewardRuleStabilityControls)
     active: bool = True
 
@@ -176,13 +175,3 @@ class CompetitionScheduleBootstrapView(BaseModel):
     active_feature_flags: list[AdminFeatureFlagView]
     active_calendar_rules: list[AdminCalendarRuleView]
     active_reward_rules: list[AdminRewardRuleView]
-
-
-class QuickCompetitionScheduleRequest(BaseModel):
-    competition_id: str = Field(min_length=1)
-    competition_type: CompetitionType
-    requested_dates: list[date]
-    preferred_windows: list[FixtureWindow] = Field(default_factory=list)
-    required_windows: int = Field(default=1, ge=1, le=8)
-    priority: int = Field(default=100, ge=0, le=10_000)
-    requires_exclusive_windows: bool = False

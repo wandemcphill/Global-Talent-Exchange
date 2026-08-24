@@ -27,6 +27,14 @@ namespace FStudio.GTEX.Core
 
         public static bool AllowGtexTransformPlayback => !IsOriginalVisualRuntime();
 
+        // When true (default), the original-visual runtime lets the asset's OWN match engine play
+        // autonomously: native kickoff fires, the asset AI dribbles/passes/shoots/tackles, and
+        // out-of-play is resolved into throw-ins/corners by the asset's BallActionDetector ? exactly
+        // like the asset's standalone demo. GTEX then only overlays clock/score/teams. Set false to
+        // return to the legacy command-driven puppeteer (GTEX scripts every pass/shot). Wired from
+        // GtexVisualMatchDirector.scriptOnPitchEvents.
+        public static bool NativeAutonomousPlay = true;
+
         public static bool IsOriginalVisualRuntimeScene()
         {
             return string.Equals(SceneManager.GetActiveScene().name, SceneName, StringComparison.Ordinal);

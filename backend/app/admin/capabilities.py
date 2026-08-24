@@ -4,13 +4,16 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, HTTPException, Request, status
 
 from app.auth.dependencies import get_current_admin
 from app.models.user import User, UserRole
 from app.wallets.service import WalletService
+
+if TYPE_CHECKING:
+    from app.admin_godmode.service import AdminGodModeService
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,7 @@ class AdminCapability(StrEnum):
     MANAGE_REGEN_AWARDS = "manage_regen_awards"
     MANAGE_REGEN_GENERATION = "manage_regen_generation"
     MANAGE_PLAYERS = "manage_players"
+    MANAGE_TALENT_EXCHANGE = "manage_talent_exchange"
 
 
 ADMIN_CAPABILITY_VALUES: tuple[str, ...] = tuple(item.value for item in AdminCapability)

@@ -75,7 +75,8 @@ class AgentWalletRecord(TimestampMixin, Base):
         ForeignKey("agents.agent_id", ondelete="CASCADE"),
         primary_key=True,
     )
-    balance: Mapped[float] = mapped_column(Float, nullable=False, default=12.0, server_default="12")
+    # Compatibility projection only. Canonical monetary authority is the ledger.
+    balance: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     lifetime_earnings: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     boost_spend: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     roi: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
@@ -87,8 +88,8 @@ class AgentWalletRecord(TimestampMixin, Base):
     payout_eligible: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        default=True,
-        server_default=expression.true(),
+        default=False,
+        server_default=expression.false(),
     )
     last_block_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
@@ -116,8 +117,8 @@ class AgentPerformanceLogRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     payout_eligible: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        default=True,
-        server_default=expression.true(),
+        default=False,
+        server_default=expression.false(),
     )
     payout_block_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     view_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

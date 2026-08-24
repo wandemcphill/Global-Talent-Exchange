@@ -537,7 +537,8 @@ namespace FStudio.MatchEngine {
         }
 
         private async void StartKickoffCounter() {
-            if (FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime())
+            if (FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime()
+                && !FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.NativeAutonomousPlay)
             {
                 CancelKickoffCounter();
                 MatchFlags = MatchStatus.WaitingForKickOff;
@@ -1915,11 +1916,19 @@ namespace FStudio.MatchEngine {
 
             void runFunction () {
                 // start transition.
-                CameraTransition.Current.StartTransition(() => {
+                if (CameraTransition.Current != null) {
+                    CameraTransition.Current.StartTransition(() => {
+                        new TimerAction(1).GetQuery().Start(this, () => {
+                            MatchFlags = MatchStatus.WaitingForKickOff;
+                        });
+                    });
+                } else {
+                    // GTEX original-visual runtime has no asset CameraTransition singleton; flip the
+                    // state directly so the restart (throw-in/goal-kick) is not stuck in Freeze forever.
                     new TimerAction(1).GetQuery().Start(this, () => {
                         MatchFlags = MatchStatus.WaitingForKickOff;
                     });
-                });
+                }
 
                 onCameraTransition?.Invoke();
 
@@ -2074,15 +2083,25 @@ namespace FStudio.MatchEngine {
             async void runFunction () {
                 EventManager.Trigger(new RefereeShortWhistleEvent());
 
-                var currentCameraType = CameraSystem.Current.CurrentCameraType;
+                var currentCameraType = CameraSystem.Current != null ? CameraSystem.Current.CurrentCameraType : null;
                 // start transition.
-                CameraTransition.Current.StartTransition(() => {
-                    new TimerAction(1).GetQuery().Start(this, async () => {
-                        MatchFlags = MatchStatus.WaitingForKickOff;
+                if (CameraTransition.Current != null) {
+                    CameraTransition.Current.StartTransition(() => {
+                        new TimerAction(1).GetQuery().Start(this, async () => {
+                            MatchFlags = MatchStatus.WaitingForKickOff;
 
-                        await CameraSystem.Current.SwitchCamera(currentCameraType);
+                            if (CameraSystem.Current != null && currentCameraType != null) {
+                                await CameraSystem.Current.SwitchCamera(currentCameraType);
+                            }
+                        });
                     });
-                });
+                } else {
+                    // GTEX original-visual runtime (Cinemachine camera, no asset CameraTransition):
+                    // flip the state directly so the corner restart is not stuck in Freeze forever.
+                    new TimerAction(1).GetQuery().Start(this, () => {
+                        MatchFlags = MatchStatus.WaitingForKickOff;
+                    });
+                }
 
                 var ballPosition = cornerSpots[cornerIndex].position;
 

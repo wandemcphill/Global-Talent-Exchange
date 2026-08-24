@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.common.enums.match_status import MatchStatus
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.matches.lifecycle import is_terminal
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.models.competition_participant import CompetitionParticipant
@@ -68,8 +69,24 @@ class CompetitionMatchService:
         decided_by_penalties: bool = False,
         winner_club_id: str | None = None,
     ) -> CompetitionMatch:
-        if match.status == MatchStatus.COMPLETED.value:
+        current_status = MatchStatus.coerce(match.status)
+        if current_status is MatchStatus.COMPLETED:
+            # The match is already settled — by an operator command or by the simulation
+            # worker, which persists the result before advancement is dispatched. Do not
+            # re-settle it, but do make sure the standings side-effect ran: whichever
+            # path settled the row may not have applied it, and `_apply_match_result` is
+            # itself guarded by `stats_applied`, so this stays idempotent.
+            if (match.home_score, match.away_score) != (home_score, away_score):
+                raise ValueError(
+                    f"Match {match.id} is already settled {match.home_score}-{match.away_score} "
+                    f"and cannot be re-settled as {home_score}-{away_score}."
+                )
+            self._apply_match_result(match=match, rule_set=rule_set)
+            self.session.flush()
             return match
+        if is_terminal(current_status):
+            # Abandoned/cancelled matches never produce a result.
+            raise ValueError(f"Match {match.id} is {current_status.value} and cannot be completed.")
         match.home_score = home_score
         match.away_score = away_score
         match.decided_by_penalties = decided_by_penalties

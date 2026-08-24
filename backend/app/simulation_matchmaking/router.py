@@ -43,10 +43,18 @@ def get_simulation_matchmaking_service(request: Request) -> SimulationMatchmakin
 def upsert_simulation_profile(
     user_id: str,
     payload: SimulationGameProfileInput,
+    actor: User = Depends(get_current_user),
     service: SimulationMatchmakingService = Depends(get_simulation_matchmaking_service),
 ) -> SimulationGameProfileView:
     if payload.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Path user_id must match payload user_id.")
+    # The profile drives matchmaking placement, so writing someone else's is a
+    # direct competitive-integrity problem as well as a plain IDOR.
+    if user_id != actor.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Simulation profiles can only be updated by their owner.",
+        )
     return service.upsert_profile(payload)
 
 

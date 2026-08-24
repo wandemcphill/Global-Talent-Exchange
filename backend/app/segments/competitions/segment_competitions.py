@@ -451,8 +451,18 @@ def create_competition_invite(
 @router.get("/{competition_id}/invites", response_model=CompetitionInvitesResponse)
 def list_competition_invites(
     competition_id: str,
+    request: Request,
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionInvitesResponse:
+    # Invite codes are the credential that lets a club into a private
+    # competition, and /invites/accept takes one straight from the request body.
+    # Listing them must therefore be restricted to the host (who issued them)
+    # and admins holding manage_competitions.
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = orchestrator.list_invites(competition_id)
     if result is None:
         raise _not_found(competition_id)
@@ -751,7 +761,15 @@ def complete_match(
     _: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionMatchView:
-    result = _handle_competition_errors(lambda: orchestrator.complete_match(competition_id, match_id, payload))
+    # CompetitionMatchService.complete_match raises plain ValueError for an
+    # already-settled/terminal match (see competition_match_service.py). That is a
+    # client-correctable conflict, not a server fault, so it must not fall through
+    # _handle_competition_errors (which only recognizes CompetitionActionError) and
+    # surface as an unhandled 500.
+    try:
+        result = _handle_competition_errors(lambda: orchestrator.complete_match(competition_id, match_id, payload))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if result is None:
         raise _not_found(competition_id)
     return result

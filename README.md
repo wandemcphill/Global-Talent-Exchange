@@ -6,6 +6,15 @@ See also:
 - `DEPLOYMENT_GUIDE.md`
 - `ADMIN_SETUP_GUIDE.md`
 
+## Canonical production deployment
+
+The current Render Blueprint uses:
+- Web: `https://gtex-web-tw6c.onrender.com`
+- API: `https://gtex-api-opea.onrender.com`
+- KoraPay webhook: `https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook`
+
+The production frontend is configured for the canonical API above. Local/demo instructions below remain explicitly local-only.
+
 Local backend workflow for SQLite demos, seeded exchange liquidity, deterministic simulation ticks, and repeatable verification.
 
 ## Local setup
@@ -124,12 +133,6 @@ python backend/scripts/dev.py reset-db
 python backend/scripts/dev.py migrate
 python backend/scripts/dev.py rebuild-demo-market --seed 20260311
 python backend/scripts/dev.py runserver --demo-simulation --seed 20260311
-```
-
-Refresh only the world/demo visibility slice without resetting the database:
-
-```powershell
-python backend/scripts/dev.py seed-world-visibility --seed 20260311
 ```
 
 Notes:

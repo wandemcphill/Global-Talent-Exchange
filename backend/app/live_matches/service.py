@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import logging
 import math
 from threading import RLock, Thread
 import time
@@ -39,6 +40,8 @@ from app.match_engine.simulation.models import MatchEventType
 from app.models.spectator_session import SpectatorSession
 from app.schemas.match_viewer import MatchViewStateView
 from app.services.match_timeline_service import MatchTimelineService
+
+logger = logging.getLogger(__name__)
 
 
 def utcnow() -> datetime:
@@ -341,6 +344,9 @@ class LiveMatchHub:
             return None
 
     def get_events_since(self, match_id: str, cursor: int) -> tuple[list[LiveMatchStreamEventView], int]:
+        # A negative cursor would slice from the end of the log and silently replay the
+        # tail of the match to a reconnecting spectator, so clamp before indexing.
+        cursor = max(0, int(cursor or 0))
         with self._lock:
             runtime = self._matches.get(match_id)
             if runtime is not None:
@@ -349,11 +355,23 @@ class LiveMatchHub:
         if not cached_events:
             return [], cursor
         events: list[LiveMatchStreamEventView] = []
+        dropped = 0
         for item in cached_events[cursor:]:
             try:
                 events.append(LiveMatchStreamEventView.model_validate(item))
             except Exception:
+                # Skipping keeps the stream moving, but a silent skip hides real data
+                # loss from operators: the cursor still advances past the bad entry.
+                dropped += 1
                 continue
+        if dropped:
+            logger.warning(
+                "live_match.stream.malformed_cached_events match_id=%s dropped=%s cursor=%s cached=%s",
+                match_id,
+                dropped,
+                cursor,
+                len(cached_events),
+            )
         return events, len(cached_events)
 
     def get_playback_context(self, match_id: str) -> LiveMatchPlaybackContext | None:

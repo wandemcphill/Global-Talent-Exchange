@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 import json
 import logging
 from typing import Any
-from uuid import uuid4
 
 from redis import Redis
 from redis.exceptions import RedisError
@@ -96,7 +95,7 @@ class MatchStreamService:
         style: str | None = None,
     ) -> list[dict[str, Any]]:
         published: list[dict[str, Any]] = []
-        for event in replay_payload.timeline.events:
+        for sequence, event in enumerate(replay_payload.timeline.events, start=1):
             published.append(
                 self.publish_event(
                     match_id,
@@ -105,6 +104,7 @@ class MatchStreamService:
                         event=event,
                         home_team_name=home_team_name,
                         away_team_name=away_team_name,
+                        sequence=sequence,
                     ),
                     style=style,
                 )
@@ -126,6 +126,7 @@ class MatchStreamService:
             "match_id": match_id,
             "channel": match_event_channel(match_id),
             "event_id": normalized["event_id"],
+            "sequence": normalized["sequence"],
             "event_type": normalized["type"],
             "source_event_type": normalized["source_event_type"],
             "minute": normalized["minute"],
@@ -178,13 +179,21 @@ class MatchStreamService:
     def _normalize_event(self, *, match_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
         payload = make_json_safe(dict(event))
         event_type = self._map_event_type(payload.get("type") or payload.get("event_type"))
-        clock = str(payload.get("clock") or payload.get("clock_label") or f"{int(payload.get('minute') or 0)}'")
+        minute = int(payload.get("minute") or 0)
+        clock = str(payload.get("clock") or payload.get("clock_label") or f"{minute}'")
+        source_event_type = str(payload.get("event_type") or payload.get("type") or event_type)
         return {
-            "event_id": str(payload.get("event_id") or uuid4().hex),
+            "event_id": self._resolve_event_id(
+                match_id=match_id,
+                payload=payload,
+                minute=minute,
+                source_event_type=source_event_type,
+            ),
+            "sequence": self._resolve_sequence(payload),
             "match_id": match_id,
             "type": event_type,
-            "source_event_type": str(payload.get("event_type") or payload.get("type") or event_type),
-            "minute": int(payload.get("minute") or 0),
+            "source_event_type": source_event_type,
+            "minute": minute,
             "clock": clock,
             "team_id": _optional_string(payload.get("team_id")),
             "team": _optional_string(payload.get("team") or payload.get("team_name") or payload.get("club_name")),
@@ -209,11 +218,13 @@ class MatchStreamService:
         event: MatchEventView,
         home_team_name: str | None,
         away_team_name: str | None,
+        sequence: int | None = None,
     ) -> dict[str, Any]:
         return self._normalize_event(
             match_id=match_id,
             event={
                 "event_id": event.event_id,
+                "sequence": sequence,
                 "event_type": getattr(event.event_type, "value", event.event_type),
                 "minute": event.minute,
                 "clock": event.clock_label,
@@ -231,6 +242,40 @@ class MatchStreamService:
                 "metadata": event.metadata,
             },
         )
+
+    @classmethod
+    def _resolve_event_id(
+        cls,
+        *,
+        match_id: str,
+        payload: Mapping[str, Any],
+        minute: int,
+        source_event_type: str,
+    ) -> str:
+        """Return a stable key for the event.
+
+        Previously a missing ``event_id`` fell back to ``uuid4()``, so the same event
+        republished after a retry or reconnect arrived with a different identity and
+        could not be de-duplicated by consumers. The fallback is now derived from the
+        event's own content, which keeps it stable across redeliveries.
+        """
+        explicit = str(payload.get("event_id") or "").strip()
+        if explicit:
+            return explicit
+        sequence = cls._resolve_sequence(payload)
+        if sequence is not None:
+            return f"{match_id}:{sequence:05d}"
+        return f"{match_id}:{minute:03d}:{source_event_type}"
+
+    @staticmethod
+    def _resolve_sequence(payload: Mapping[str, Any]) -> int | None:
+        raw = payload.get("sequence")
+        if raw is None:
+            return None
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _map_event_type(value: Any) -> str:
