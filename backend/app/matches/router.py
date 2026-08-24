@@ -23,6 +23,7 @@ from .service import (
     MatchCommandError,
     MatchCommandNotFoundError,
     MatchCommandService,
+    MatchCommandStateError,
     MatchReplayNotFoundError,
     ReplayService,
 )
@@ -95,6 +96,8 @@ def start_match(
 ) -> MatchCommandAcceptedView:
     try:
         return service.start_match(payload)
+    except MatchCommandStateError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except MatchCommandError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -109,6 +112,8 @@ def complete_match(
         return service.complete_match(payload)
     except MatchCommandNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MatchCommandStateError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except MatchCommandError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

@@ -90,6 +90,10 @@ class LiveMatchStreamEventView(CommonSchema):
     clock_label: str | None = None
     presentation_second: int | None = Field(default=None, ge=0)
     importance_score: float = Field(default=0.0, ge=0.0)
+    #: Emitted by the execution worker's cached live events. Declared here because
+    #: ``CommonSchema`` forbids extra keys, and an undeclared field made every cached
+    #: event fail validation on read-back — silently emptying the spectator replay path.
+    is_penalty: bool = False
     highlight_eligible: bool = False
     audio_stem_channels: list[str] = Field(default_factory=lambda: ["commentary", "crowd", "stadium_fx"])
     position: LiveMatchRenderPointView | None = None
@@ -118,6 +122,12 @@ class LiveMatchStateView(CommonSchema):
     read_only: bool = True
     spectator_count: int = Field(default=0, ge=0)
     event_count: int = Field(default=0, ge=0)
+    #: Highest stream sequence published for this match; a reconnecting client resumes here.
+    last_sequence: int = Field(default=0, ge=0)
+    #: Carried on the cached state so a client joining mid-match can label the scoreline
+    #: without a second lookup. Same extra-key constraint as ``is_penalty`` above.
+    home_team_name: str | None = None
+    away_team_name: str | None = None
     snapshot: LiveMatchSnapshotView
     crowd_state: MatchCrowdStateView | None = None
     spectator_sync: MatchSpectatorSyncView | None = None

@@ -114,6 +114,50 @@ class MatchHighlightBuilder:
             key_moments=self.key_moment_selector.select(result),
         )
 
+    @staticmethod
+    def _select_candidates(
+        candidates: list,
+        target_duration: int,
+        profile: MatchHighlightProfile,
+    ) -> list:
+        """Pick which moments make the package, then restore chronological order.
+
+        The clip loop below fills a fixed second budget and stops once it is spent. When
+        candidates were fed in purely chronological order, a busy match spent that budget
+        on early, low-importance moments and silently dropped the decisive ones — a
+        90th-minute winner could be cut while a routine first-half save survived.
+
+        Selection is therefore importance-first (goals and red cards before saves and
+        substitutions, later moments before earlier ones at equal weight), and the chosen
+        set is re-sorted by minute so playback still runs in match order.
+        """
+        budget = max(0, target_duration)
+        if profile is MatchHighlightProfile.ELITE_FINAL:
+            # Walkout and trophy bookends consume part of the budget.
+            budget = max(0, budget - 60)
+
+        ranked = sorted(
+            candidates,
+            key=lambda event: (
+                -_highlight_weight(event),
+                -int(event.metadata.get("importance", 3)),
+                -event.minute,
+                event.sequence,
+            ),
+        )
+
+        chosen: list = []
+        spent = 0
+        for event in ranked:
+            duration = _clip_duration_for_event(event.event_type) + 2
+            if chosen and spent + duration > budget:
+                continue
+            chosen.append(event)
+            spent += duration
+        if not chosen:
+            chosen = ranked[:1]
+        return sorted(chosen, key=lambda event: (event.minute, event.sequence))
+
     def _build_clips(self, result: SimulationResult, target_duration: int, profile: MatchHighlightProfile) -> list[MatchHighlightClipView]:
         candidates = [event for event in result.events if event.event_type in _HIGHLIGHT_EVENT_TYPES]
         if not candidates:
@@ -126,7 +170,7 @@ class MatchHighlightBuilder:
                     event_type=MatchEventType.KICKOFF,
                 )
             ]
-        candidates = sorted(candidates, key=lambda event: (event.minute, event.sequence))
+        candidates = self._select_candidates(candidates, target_duration, profile)
         clips: list[MatchHighlightClipView] = []
         cursor = 0
         if profile is MatchHighlightProfile.ELITE_FINAL:
@@ -831,15 +875,43 @@ _HIGHLIGHT_EVENT_TYPES = {
     MatchEventType.PENALTY_SCORED,
     MatchEventType.PENALTY_MISSED,
     MatchEventType.RED_CARD,
+    MatchEventType.YELLOW_CARD,
     MatchEventType.INJURY,
     MatchEventType.WOODWORK,
     MatchEventType.DOUBLE_SAVE,
     MatchEventType.GOALKEEPER_SAVE,
     MatchEventType.TACTICAL_CHANGE,
     MatchEventType.TACTICAL_SWING,
+    MatchEventType.SUBSTITUTION,
     MatchEventType.SUBSTITUTION_IMPACT,
     MatchEventType.MISSED_BIG_CHANCE,
 }
+
+#: Relative pull of each moment when the highlight budget cannot hold everything.
+#: Higher wins. Goals and dismissals must never be displaced by filler.
+_HIGHLIGHT_WEIGHTS: dict[MatchEventType, int] = {
+    MatchEventType.GOAL: 100,
+    MatchEventType.PENALTY_GOAL: 100,
+    MatchEventType.PENALTY_SCORED: 100,
+    MatchEventType.PENALTY_MISS: 90,
+    MatchEventType.PENALTY_MISSED: 90,
+    MatchEventType.RED_CARD: 80,
+    MatchEventType.MISSED_BIG_CHANCE: 60,
+    MatchEventType.WOODWORK: 55,
+    MatchEventType.DOUBLE_SAVE: 50,
+    MatchEventType.GOALKEEPER_SAVE: 40,
+    MatchEventType.INJURY: 35,
+    MatchEventType.TACTICAL_SWING: 30,
+    MatchEventType.TACTICAL_CHANGE: 30,
+    MatchEventType.SUBSTITUTION_IMPACT: 25,
+    MatchEventType.YELLOW_CARD: 20,
+    MatchEventType.SUBSTITUTION: 15,
+}
+
+
+def _highlight_weight(event) -> int:
+    return _HIGHLIGHT_WEIGHTS.get(event.event_type, 10)
+
 
 _CRITICAL_SNAPSHOT_TYPES = {
     MatchEventType.GOAL,
@@ -889,6 +961,8 @@ def _clip_duration_for_event(event_type: MatchEventType) -> int:
         return 18
     if event_type in {MatchEventType.TACTICAL_CHANGE, MatchEventType.TACTICAL_SWING, MatchEventType.SUBSTITUTION_IMPACT}:
         return 14
+    if event_type in {MatchEventType.YELLOW_CARD, MatchEventType.SUBSTITUTION}:
+        return 10
     return 16
 
 

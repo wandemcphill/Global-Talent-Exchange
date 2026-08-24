@@ -149,6 +149,66 @@ def test_standings_update_after_match_completion(
     assert leader["wins"] == 1
 
 
+def test_re_settling_a_completed_match_with_a_different_score_returns_409(
+    client,
+    competition_admin_headers,
+    auth_user_factory,
+    competition_club_factory,
+) -> None:
+    """A duplicate/late ``.../result`` call with a conflicting scoreline is a client-fixable
+
+    conflict (the match is already settled), not a server fault. Before this fix,
+    ``CompetitionMatchService.complete_match``'s plain ``ValueError`` fell through the
+    router's ``_handle_competition_errors`` (which only recognizes
+    ``CompetitionActionError``) and surfaced as an unhandled 500.
+    """
+    host = auth_user_factory(suffix="league-resettle-host")
+    competition_id = _create_competition(
+        client, host=host, name="League Resettle", format="league", capacity=2
+    )
+    entrants = []
+    for index in range(1, 3):
+        entrant = auth_user_factory(suffix=f"league-resettle-{index}")
+        entrant["club_id"] = competition_club_factory(owner_user_id=entrant["user_id"])
+        entrants.append(entrant)
+    _publish_and_join(client, competition_id, competition_admin_headers, entrants)
+
+    seed = client.post(
+        f"/api/competitions/{competition_id}/seed",
+        headers=competition_admin_headers,
+        json={"seed_method": "random"},
+    )
+    assert seed.status_code == 200
+    launch = client.post(
+        f"/api/competitions/{competition_id}/launch",
+        headers=competition_admin_headers,
+    )
+    assert launch.status_code == 200
+
+    fixtures = client.get(f"/api/competitions/{competition_id}/fixtures").json()
+    match = fixtures[0]
+
+    first = client.post(
+        f"/api/competitions/{competition_id}/matches/{match['id']}/result",
+        headers=competition_admin_headers,
+        json={"home_score": 2, "away_score": 1},
+    )
+    assert first.status_code == 200
+
+    conflicting = client.post(
+        f"/api/competitions/{competition_id}/matches/{match['id']}/result",
+        headers=competition_admin_headers,
+        json={"home_score": 0, "away_score": 4},
+    )
+    assert conflicting.status_code == 409, conflicting.text
+    assert "already settled" in conflicting.json()["detail"]
+
+    # The original settled result must be untouched by the rejected replay.
+    standings = client.get(f"/api/competitions/{competition_id}/standings").json()
+    leader = next(row for row in standings if row["club_id"] == match["home_club_id"])
+    assert leader["points"] == 3
+
+
 def test_cup_playoff_progression_and_settlement(
     client,
     competition_admin_headers,

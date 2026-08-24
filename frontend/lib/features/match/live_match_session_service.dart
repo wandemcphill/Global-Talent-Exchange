@@ -21,14 +21,23 @@ class LiveMatchSessionService {
   final GteExchangeApiClient _api;
 
   Future<LiveMatchSpectateSession?> resolveSession(String matchId) async {
-    if (_config.activeShellBackendMode == GteBackendMode.fixture) {
+    final String requestedMatchId = matchId.trim();
+    if (requestedMatchId.isEmpty ||
+        _config.activeShellBackendMode == GteBackendMode.fixture) {
       return null;
     }
     try {
-      final Map<String, Object?> payload = await _api.joinMatchSpectateSession(
-        matchId,
-      );
-      return LiveMatchSpectateSession.fromJson(payload);
+      final Map<String, Object?> payload = await _api
+          .joinMatchSpectateSession(requestedMatchId)
+          .timeout(const Duration(seconds: 8));
+      final LiveMatchSpectateSession session =
+          LiveMatchSpectateSession.fromJson(payload);
+      if (session.matchId.trim() != requestedMatchId ||
+          session.id.trim().isEmpty ||
+          session.websocketPath.trim().isEmpty) {
+        return null;
+      }
+      return session;
     } catch (_) {
       return null;
     }
@@ -39,24 +48,44 @@ class LiveMatchSessionService {
     if (trimmedPath == null || trimmedPath.isEmpty) {
       return null;
     }
+
     final Uri? base = Uri.tryParse(_config.apiBaseUrl);
     if (base == null || !base.hasScheme || base.host.trim().isEmpty) {
       return null;
     }
+
     final String scheme = switch (base.scheme) {
       'https' => 'wss',
       'http' => 'ws',
       'ws' || 'wss' => base.scheme,
       _ => 'wss',
     };
-    final Uri resolved = Uri.parse(trimmedPath);
-    if (resolved.hasScheme) {
-      return resolved;
+
+    final Uri? resolved = Uri.tryParse(trimmedPath);
+    if (resolved == null) {
+      return null;
     }
+
+    if (resolved.hasScheme) {
+      if (resolved.scheme != 'ws' && resolved.scheme != 'wss') {
+        return null;
+      }
+      if (resolved.host.trim().isEmpty) {
+        return null;
+      }
+      return resolved.replace(fragment: null);
+    }
+
+    final String path = resolved.path.trim();
+    if (path.isEmpty) {
+      return null;
+    }
+
     return base.replace(
       scheme: scheme,
-      path: resolved.path,
+      path: path.startsWith('/') ? path : '/$path',
       query: resolved.hasQuery ? resolved.query : null,
+      fragment: null,
     );
   }
 }

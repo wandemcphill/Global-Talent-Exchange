@@ -531,7 +531,8 @@ namespace FStudio.GTEX.VisualBridge
                 return;
             }
 
-            MatchManager.SetGlobalCommandDrivenVisualHold(true);
+            var nativePlay = FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.NativeAutonomousPlay;
+            MatchManager.SetGlobalCommandDrivenVisualHold(!nativePlay);
             manager.SetExternalPlayback(false);
             manager.MatchFlags = MatchStatus.WaitingForKickOff;
 
@@ -559,8 +560,23 @@ namespace FStudio.GTEX.VisualBridge
             ConfigureOriginalRuntime();
             if (MatchManager.Current != null)
             {
-                MatchManager.SetGlobalCommandDrivenVisualHold(true);
+                // Native autonomous play: drop the command-driven hold so the asset AI runs freely.
+                // Force Playing so out-of-play detection (throw-ins/corners) and AI decisions are live
+                // immediately; the asset's nearest player picks up the centre ball and open play emerges.
+                var nativePlay = FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.NativeAutonomousPlay;
+                MatchManager.SetGlobalCommandDrivenVisualHold(!nativePlay);
                 MatchManager.Current.MatchFlags = MatchStatus.Playing;
+
+                if (nativePlay)
+                {
+                    // The original-visual bootstrap leaves the goal/sideline trigger volumes disabled
+                    // (SetExternalPlayback(false) never re-enables them). Without these the ball never
+                    // trips the GoalAction/OutAction/ThrowInAction triggers, so goals/throw-ins/corners
+                    // are never detected and the ball just rolls out and the match stalls. Re-enable them
+                    // exactly like the asset's native match init does.
+                    MatchManager.Current.SetGoalColliders(true);
+                    MatchManager.Current.SetOutColliders(true);
+                }
             }
         }
 
