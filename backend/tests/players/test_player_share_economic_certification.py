@@ -3,7 +3,20 @@ from __future__ import annotations
 from scripts.certify_player_share_economy import certify
 
 
-def test_certification_combines_trade_and_lifecycle_gates(monkeypatch):
+def _passing_holdings_report():
+    return {
+        "gates": {
+            "no_negative_holdings": True,
+            "no_negative_average_costs": True,
+            "no_negative_dividend_balances": True,
+            "holdings_do_not_exceed_circulation": True,
+            "holdings_do_not_exceed_total_supply": True,
+        },
+        "read_only": True,
+    }
+
+
+def test_certification_combines_trade_lifecycle_and_holdings_gates(monkeypatch):
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_lifecycle",
         lambda **_: {
@@ -17,6 +30,10 @@ def test_certification_combines_trade_and_lifecycle_gates(monkeypatch):
             },
             "read_only": True,
         },
+    )
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_holdings",
+        lambda **_: _passing_holdings_report(),
     )
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_trade_boundary",
@@ -34,6 +51,10 @@ def test_certification_fails_closed_when_trade_boundary_fails(monkeypatch):
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_lifecycle",
         lambda **_: {"gates": {"all_active_markets_explicitly_issued": True}},
+    )
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_holdings",
+        lambda **_: _passing_holdings_report(),
     )
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_trade_boundary",
