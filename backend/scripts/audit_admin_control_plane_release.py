@@ -59,12 +59,33 @@ def _functions(key: str) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
     }
 
 
-def _decorator_texts(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
-    return {ast.unparse(item) for item in node.decorator_list}
-
-
 def _add(findings: list[dict[str, str]], finding: str, surface: str) -> None:
     findings.append({"finding": finding, "surface": surface})
+
+
+def _has_capability_dependency(node: ast.FunctionDef | ast.AsyncFunctionDef, capability: str) -> bool:
+    """Verify the FastAPI Depends(require_admin_capability(...)) boundary."""
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        if not isinstance(child.func, ast.Name) or child.func.id != "Depends" or not child.args:
+            continue
+        dependency = child.args[0]
+        if not isinstance(dependency, ast.Call):
+            continue
+        if not isinstance(dependency.func, ast.Name) or dependency.func.id != "require_admin_capability":
+            continue
+        if not dependency.args:
+            continue
+        capability_arg = dependency.args[0]
+        if (
+            isinstance(capability_arg, ast.Attribute)
+            and isinstance(capability_arg.value, ast.Name)
+            and capability_arg.value.id == "AdminCapability"
+            and capability_arg.attr == capability
+        ):
+            return True
+    return False
 
 
 def audit() -> dict[str, object]:
@@ -77,9 +98,7 @@ def audit() -> dict[str, object]:
         if node is None:
             _add(findings, "missing_admin_mutation_route", function_name)
             continue
-        expected = f"require_admin_capability(AdminCapability.{capability})"
-        decorators = _decorator_texts(node)
-        if expected not in decorators:
+        if not _has_capability_dependency(node, capability):
             _add(findings, "mutation_missing_capability_gate", f"{function_name}:{capability}")
 
     capability_source = _source("capabilities")
