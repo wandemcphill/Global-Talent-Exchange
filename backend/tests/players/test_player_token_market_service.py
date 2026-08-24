@@ -123,16 +123,16 @@ def test_player_share_market_lifecycle(session) -> None:
     assert len(events) >= 4
 
 
-def test_player_share_market_auto_initializes_for_new_players(session) -> None:
+def test_player_share_market_read_does_not_auto_create_or_fund_new_players(session) -> None:
     player = _create_player(session, player_id="player-token-auto")
 
-    market = PlayerTokenMarketService(session=session).get_market_view(player_id=player.id)
+    service = PlayerTokenMarketService(session=session)
+    with pytest.raises(PlayerTokenMarketError, match="market was not found"):
+        service.get_market_view(player_id=player.id)
 
-    assert market["player_id"] == player.id
-    assert market["status"] == "active"
-    assert market["total_shares"] == 1000
-    assert Decimal(str(market["share_price_coin"])) > Decimal("0.0000")
-    assert Decimal(str(market["liquidity_coin"])) > Decimal("0.0000")
+    from app.models.player_token_market import PlayerShareMarket
+
+    assert session.query(PlayerShareMarket).filter_by(player_id=player.id).first() is None
 
 
 def test_ineligible_new_player_does_not_auto_create_share_market(session) -> None:
