@@ -20,7 +20,11 @@ def source(key: str) -> str:
 
 def functions(key: str) -> set[str]:
     tree = ast.parse(source(key))
-    return {node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
 
 
 def audit() -> dict[str, object]:
@@ -28,10 +32,21 @@ def audit() -> dict[str, object]:
     warnings: list[dict[str, str]] = []
 
     if "simulate" not in functions("simulation"):
-        violations.append({"finding": "simulation_entrypoint_missing", "surface": "event_generator.simulate"})
+        violations.append(
+            {"finding": "simulation_entrypoint_missing", "surface": "event_generator.simulate"}
+        )
 
     strength_source = source("strength").lower()
-    for marker in ("form", "morale", "motivation", "fatigue", "chemistry", "coach", "tactical", "adaptability"):
+    for marker in (
+        "form",
+        "morale",
+        "motivation",
+        "fatigue",
+        "chemistry",
+        "coach",
+        "tactical",
+        "adaptability",
+    ):
         if marker not in strength_source:
             violations.append({"finding": "strength_factor_missing", "surface": marker})
 
@@ -44,7 +59,12 @@ def audit() -> dict[str, object]:
     competition_functions = functions("competition")
     for function_name in ("complete_match", "_apply_match_result"):
         if function_name not in competition_functions:
-            violations.append({"finding": "competition_settlement_boundary_missing", "surface": function_name})
+            violations.append(
+                {
+                    "finding": "competition_settlement_boundary_missing",
+                    "surface": function_name,
+                }
+            )
     for marker in ("is_terminal", "stats_applied", "already settled", "cannot be re-settled"):
         if marker not in competition_source:
             violations.append({"finding": "settlement_guard_missing", "surface": marker})
@@ -53,7 +73,9 @@ def audit() -> dict[str, object]:
     economy_functions = functions("economy")
     for function_name in ("join_match", "fund_gtex_match", "record_match_volume", "run_lottery"):
         if function_name not in economy_functions:
-            violations.append({"finding": "match_economy_surface_missing", "surface": function_name})
+            violations.append(
+                {"finding": "match_economy_surface_missing", "surface": function_name}
+            )
     for marker in (
         "idempotency_key=idempotency_key",
         "EconomyGovernorService",
