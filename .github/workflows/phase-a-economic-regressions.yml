@@ -51,6 +51,7 @@ jobs:
           backend/tests/admin_finance/test_admin_finance_router.py
           backend/tests/admin_finance/test_payment_webhook_fraud_regressions.py
           backend/tests/admin_godmode/test_payment_rails_truth.py
+          backend/tests/admin_godmode/test_admin_control_plane_release_gate.py
           backend/tests/players/test_market_integrity_service.py
           backend/tests/players/test_player_share_lifecycle_audit.py
           backend/tests/players/test_player_share_market_creation_boundary.py
@@ -68,3 +69,4 @@ jobs:
           python scripts/audit_player_share_trade_idempotency.py --strict
           python scripts/audit_player_share_issuer_boundary.py
           python scripts/audit_wallet_payments_treasury_release.py
+          python scripts/audit_admin_control_plane_release.py
