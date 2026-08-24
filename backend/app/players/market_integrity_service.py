@@ -40,12 +40,7 @@ class MarketIntegrityReport:
 
 
 class PlayerShareMarketIntegrityService:
-    """Read-only reconciliation service for the player-share economy.
-
-    This service deliberately performs no repairs and never creates a market,
-    wallet account, or ledger transaction. It is safe to run against production
-    as a release gate or scheduled audit.
-    """
+    """Read-only reconciliation service for the player-share economy."""
 
     def __init__(self, session: Session, *, wallet_service: WalletService | None = None) -> None:
         self.session = session
@@ -53,7 +48,7 @@ class PlayerShareMarketIntegrityService:
 
     @staticmethod
     def _liquidity_account_code(player_id: str) -> str:
-        return f"player-share:{player_id}:liquidity"
+        return f"platform:player_share:{player_id}:liquidity"
 
     def _liquidity_balance(self, player_id: str) -> Decimal:
         account = self.session.scalar(
@@ -107,12 +102,15 @@ class PlayerShareMarketIntegrityService:
         if liquidity < ZERO:
             add("negative_liquidity", "critical", "Market liquidity ledger balance is negative.")
 
-        explicit_issuance = metadata.get("issuance")
-        if market.status == "active" and not isinstance(explicit_issuance, dict):
+        if market.status == "active" and (
+            metadata.get("market_issued") is not True or metadata.get("auto_initialized") is True
+        ):
             add(
                 "missing_issuance_provenance",
                 "high",
-                "Active market has no explicit issuance provenance.",
+                "Active market is not proven to have been explicitly issued.",
+                market_issued=metadata.get("market_issued"),
+                auto_initialized=metadata.get("auto_initialized"),
             )
 
         if player is None:
@@ -165,22 +163,23 @@ class PlayerShareMarketIntegrityService:
             raise ValueError("limit must be positive")
         markets = list(
             self.session.scalars(
-                select(PlayerShareMarket)
-                .options()
-                .order_by(PlayerShareMarket.id.asc())
-                .limit(limit)
+                select(PlayerShareMarket).order_by(PlayerShareMarket.id.asc()).limit(limit)
             ).all()
         )
         issues: list[MarketIntegrityIssue] = []
         active = 0
+        healthy = 0
         for market in markets:
             if market.status == "active":
                 active += 1
-            issues.extend(self.inspect_market(market))
+            market_issues = self.inspect_market(market)
+            issues.extend(market_issues)
+            if not market_issues:
+                healthy += 1
         return MarketIntegrityReport(
             markets_scanned=len(markets),
             active_markets=active,
-            healthy_markets=sum(1 for market in markets if not self.inspect_market(market)),
+            healthy_markets=healthy,
             issue_count=len(issues),
             issues=tuple(issues),
         )
