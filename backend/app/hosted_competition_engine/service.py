@@ -519,7 +519,9 @@ class HostedCompetitionService:
         recipient_emails: Iterable[str],
         message: str = "",
     ) -> tuple[UserHostedCompetition, list[dict[str, object]]]:
-        competition = self.get_competition(competition_id)
+        competition = self.session.scalar(
+            select(UserHostedCompetition).where(UserHostedCompetition.id == competition_id).with_for_update()
+        )
         if competition is None:
             raise HostedCompetitionError("Hosted competition was not found.")
         self._require_host_or_admin(competition=competition, actor=actor)
@@ -667,7 +669,9 @@ class HostedCompetitionService:
         passcode: str | None = None,
         invite_required_bypass: bool = False,
     ) -> tuple[UserHostedCompetition, UserHostedCompetitionParticipant]:
-        competition = self.get_competition(competition_id)
+        competition = self.session.scalar(
+            select(UserHostedCompetition).where(UserHostedCompetition.id == competition_id).with_for_update()
+        )
         if competition is None:
             raise HostedCompetitionError("Hosted competition was not found.")
         if competition.status not in {HostedCompetitionStatus.OPEN, HostedCompetitionStatus.DRAFT}:
