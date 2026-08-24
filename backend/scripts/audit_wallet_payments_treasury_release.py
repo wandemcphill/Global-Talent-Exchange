@@ -77,7 +77,10 @@ def audit() -> dict[str, object]:
         findings.append(
             {"finding": "korapay_not_registered_live", "surface": "provider_registry"}
         )
-    if "def paystack_enabled()" not in provider_registry or "return False" not in provider_registry:
+    if (
+        "def paystack_enabled()" not in provider_registry
+        or "return False" not in provider_registry
+    ):
         findings.append(
             {"finding": "paystack_not_fail_closed", "surface": "provider_registry"}
         )
