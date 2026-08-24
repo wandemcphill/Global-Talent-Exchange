@@ -121,7 +121,15 @@ class PlayerTokenMarketService:
         )
 
     def get_market(self, *, player_id: str) -> PlayerShareMarket:
-        return self.ensure_market(player_id=player_id)
+        market = self.session.scalar(
+            select(PlayerShareMarket).where(PlayerShareMarket.player_id == player_id)
+        )
+        if market is None:
+            raise PlayerTokenMarketError(
+                "Player share market was not found.",
+                reason="market_not_found",
+            )
+        return market
 
     def get_market_view(self, *, player_id: str) -> dict[str, Any]:
         return self._serialize_market_view(self.get_market(player_id=player_id))
@@ -177,7 +185,7 @@ class PlayerTokenMarketService:
         }
 
     def list_events(self, *, player_id: str, limit: int = 50) -> list[PlayerShareEvent]:
-        self.ensure_market(player_id=player_id)
+        self.get_market(player_id=player_id)
         return list(
             self.session.scalars(
                 select(PlayerShareEvent)
