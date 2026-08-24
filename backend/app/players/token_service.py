@@ -207,6 +207,13 @@ class PlayerTokenMarketService:
 
     def buy_shares(self, *, actor: User, player_id: str, share_count: int) -> dict[str, Any]:
         market = self.ensure_market(player_id=player_id)
+        market = self.session.scalar(
+            select(PlayerShareMarket)
+            .where(PlayerShareMarket.id == market.id)
+            .with_for_update()
+        )
+        if market is None:
+            raise PlayerTokenMarketError("Player share market was not found.", reason="market_not_found")
         if market.status != "active":
             raise PlayerTokenMarketError("Player share market is not active.", reason="market_inactive")
         if share_count <= 0:
@@ -331,7 +338,14 @@ class PlayerTokenMarketService:
         if share_count <= 0:
             raise PlayerTokenMarketError("Share count must be greater than zero.", reason="share_count_invalid")
 
-        holding = self.get_holding(user_id=actor.id, player_id=player_id)
+        holding = self.session.scalar(
+            select(PlayerShareHolding)
+            .where(
+                PlayerShareHolding.user_id == actor.id,
+                PlayerShareHolding.player_id == player_id,
+            )
+            .with_for_update()
+        )
         if holding is None or int(holding.share_count or 0) <= 0:
             raise PlayerTokenMarketError("No player share holding was found.", reason="holding_not_found")
         if int(holding.share_count or 0) < int(share_count):
