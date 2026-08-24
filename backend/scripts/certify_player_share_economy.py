@@ -14,6 +14,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.core.database import create_database_engine, create_session_factory
 from app.models.player_token_market import PlayerShareHolding, PlayerShareMarket
+from scripts.audit_player_share_issuer_boundary import audit as audit_issuer_boundary
 from scripts.audit_player_share_lifecycle import audit_lifecycle
 from scripts.audit_player_share_trade_boundary import audit as audit_trade_boundary
 
@@ -93,8 +94,10 @@ def certify(*, database_url: str | None, batch_size: int) -> dict[str, Any]:
     lifecycle = audit_lifecycle(database_url=database_url, batch_size=batch_size)
     holdings = audit_holdings(database_url=database_url)
     trade_boundary = audit_trade_boundary()
+    issuer_boundary = audit_issuer_boundary()
     gates = {
         "trade_boundary": bool(trade_boundary["pass"]),
+        "issuer_boundary": bool(issuer_boundary["pass"]),
         **{f"lifecycle_{name}": bool(value) for name, value in lifecycle["gates"].items()},
         **{f"holdings_{name}": bool(value) for name, value in holdings["gates"].items()},
     }
@@ -104,6 +107,7 @@ def certify(*, database_url: str | None, batch_size: int) -> dict[str, Any]:
         "lifecycle": lifecycle,
         "holdings": holdings,
         "trade_boundary": trade_boundary,
+        "issuer_boundary": issuer_boundary,
         "gates": gates,
         "pass": all(gates.values()),
     }
