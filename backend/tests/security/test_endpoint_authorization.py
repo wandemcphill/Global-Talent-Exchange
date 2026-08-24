@@ -226,3 +226,7 @@ def test_competition_leave_cannot_target_another_user(client, member_headers):
         headers=member_headers,
     )
     assert response.status_code == 403, response.text
+
+
+# Regression: a buyer must not be able to redirect an offer at an arbitrary
+# seller when a real listing already establishes the seller of record.
