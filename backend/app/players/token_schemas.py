@@ -43,6 +43,7 @@ class PlayerShareMarketIssueRequest(BaseModel):
 
 class PlayerSharePurchaseRequest(BaseModel):
     share_count: int = Field(ge=1)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 class PlayerShareHoldingView(BaseModel):
@@ -70,6 +71,7 @@ class PlayerSharePurchaseView(BaseModel):
 
 class PlayerShareSaleRequest(BaseModel):
     share_count: int = Field(ge=1)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
 
 
 class PlayerShareSaleView(BaseModel):
