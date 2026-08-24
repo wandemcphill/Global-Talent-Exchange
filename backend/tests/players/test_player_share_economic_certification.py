@@ -30,7 +30,11 @@ def _passing_lifecycle_report():
     }
 
 
-def test_certification_combines_all_economic_gates(monkeypatch):
+def _passing_market_integrity_report():
+    return {"pass": True, "read_only": True}
+
+
+def _patch_common_gates(monkeypatch):
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_lifecycle",
         lambda **_: _passing_lifecycle_report(),
@@ -39,6 +43,14 @@ def test_certification_combines_all_economic_gates(monkeypatch):
         "scripts.certify_player_share_economy.audit_holdings",
         lambda **_: _passing_holdings_report(),
     )
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_market_integrity",
+        lambda **_: _passing_market_integrity_report(),
+    )
+
+
+def test_certification_combines_all_economic_gates(monkeypatch):
+    _patch_common_gates(monkeypatch)
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_trade_boundary",
         lambda: {"pass": True, "read_only": True},
@@ -56,14 +68,7 @@ def test_certification_combines_all_economic_gates(monkeypatch):
 
 
 def test_certification_fails_closed_when_trade_boundary_fails(monkeypatch):
-    monkeypatch.setattr(
-        "scripts.certify_player_share_economy.audit_lifecycle",
-        lambda **_: _passing_lifecycle_report(),
-    )
-    monkeypatch.setattr(
-        "scripts.certify_player_share_economy.audit_holdings",
-        lambda **_: _passing_holdings_report(),
-    )
+    _patch_common_gates(monkeypatch)
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_trade_boundary",
         lambda: {"pass": False, "read_only": True},
@@ -80,14 +85,7 @@ def test_certification_fails_closed_when_trade_boundary_fails(monkeypatch):
 
 
 def test_certification_fails_closed_when_issuer_boundary_fails(monkeypatch):
-    monkeypatch.setattr(
-        "scripts.certify_player_share_economy.audit_lifecycle",
-        lambda **_: _passing_lifecycle_report(),
-    )
-    monkeypatch.setattr(
-        "scripts.certify_player_share_economy.audit_holdings",
-        lambda **_: _passing_holdings_report(),
-    )
+    _patch_common_gates(monkeypatch)
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_trade_boundary",
         lambda: {"pass": True, "read_only": True},
