@@ -17,6 +17,12 @@ class UserService:
         return user
 
     def set_kyc_status(self, session: Session, user: User, *, kyc_status: KycStatus) -> User:
-        user.kyc_status = kyc_status
-        session.flush()
-        return user
+        """Reject direct KYC projection mutation.
+
+        Verification must go through ``IdentityComplianceService`` so that a
+        verified state always has provider evidence and an audit record.
+        Non-verified state changes are also intentionally routed through the
+        identity boundary to keep one authoritative decision path.
+        """
+        del session, user, kyc_status
+        raise RuntimeError("Direct KYC status mutation is disabled; use IdentityComplianceService.")
