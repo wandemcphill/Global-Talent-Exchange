@@ -39,6 +39,7 @@ jobs:
           backend/tests/economy/test_hosted_competition_coin_escrow.py
           backend/tests/economy/test_hosted_competition_fee_fail_closed.py
           backend/tests/economy/test_hosted_competition_funding_contract.py
+          backend/tests/economy/test_match_economy_engine.py
           backend/tests/economy/test_phase_a_hosted_competition_db_roundtrip.py
           backend/tests/economy/test_withdrawal_currency_guard.py
           backend/tests/gift_engine/test_fan_coin_to_gtex_coin_conversion.py
@@ -60,6 +61,8 @@ jobs:
           backend/tests/players/test_player_share_trade_boundary_audit.py
           backend/tests/players/test_player_share_trade_reference_boundary.py
           backend/tests/players/test_player_share_trade_context.py
+          backend/tests/matches/test_competition_match_settlement_guard.py
+          backend/tests/match_engine/test_match_engine_competition_economy_release_audit.py
           -q
       - name: Run read-only economic static gates
         working-directory: backend
@@ -70,3 +73,4 @@ jobs:
           python scripts/audit_player_share_issuer_boundary.py
           python scripts/audit_wallet_payments_treasury_release.py
           python scripts/audit_admin_control_plane_release.py
+          python scripts/audit_match_engine_competition_economy_release.py
