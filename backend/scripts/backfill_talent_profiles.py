@@ -24,7 +24,7 @@ from sqlalchemy import select
 from app.core.database import get_session_factory, load_model_modules
 from app.ingestion.models import Player
 from app.talent.models import TalentProfile
-from app.talent.service import TalentExchangeError, TalentExchangeService
+from app.talent.service import TalentExchangeService
 
 logger = logging.getLogger("gtex.talent_backfill")
 
@@ -71,21 +71,21 @@ def run_backfill(
             service = TalentExchangeService(session)
             batch_created = batch_refreshed = batch_failed = 0
             for player_id in player_ids:
-                profile_before = session.scalar(
-                    select(TalentProfile).where(TalentProfile.player_id == player_id)
-                )
                 try:
-                    service.sync_profile_from_player(player_id)
-                    if profile_before is None:
-                        batch_created += 1
-                    else:
-                        batch_refreshed += 1
-                    last_player_id = player_id
-                    scanned += 1
-                except TalentExchangeError:
+                    with session.begin_nested():
+                        profile_before = session.scalar(
+                            select(TalentProfile).where(TalentProfile.player_id == player_id)
+                        )
+                        service.sync_profile_from_player(player_id)
+                        if profile_before is None:
+                            batch_created += 1
+                        else:
+                            batch_refreshed += 1
+                except Exception:
                     batch_failed += 1
                     failed += 1
                     logger.exception("talent_backfill.player_failed player_id=%s", player_id)
+                finally:
                     last_player_id = player_id
                     scanned += 1
 
