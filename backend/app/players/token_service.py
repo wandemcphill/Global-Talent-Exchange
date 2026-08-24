@@ -214,6 +214,7 @@ class PlayerTokenMarketService:
         )
         if market is None:
             raise PlayerTokenMarketError("Player share market was not found.", reason="market_not_found")
+        self._assert_share_market_eligible(market.player)
         if market.status != "active":
             raise PlayerTokenMarketError("Player share market is not active.", reason="market_inactive")
         if share_count <= 0:
@@ -333,6 +334,10 @@ class PlayerTokenMarketService:
 
     def sell_shares(self, *, actor: User, player_id: str, share_count: int) -> dict[str, Any]:
         market = self.ensure_market(player_id=player_id)
+        market = self.session.scalar(select(PlayerShareMarket).options(selectinload(PlayerShareMarket.player)).where(PlayerShareMarket.id == market.id).with_for_update())
+        if market is None:
+            raise PlayerTokenMarketError("Player share market was not found.", reason="market_not_found")
+        self._assert_share_market_eligible(market.player)
         if market.status != "active":
             raise PlayerTokenMarketError("Player share market is not active.", reason="market_inactive")
         if share_count <= 0:
@@ -612,6 +617,8 @@ class PlayerTokenMarketService:
             self._require_admin(actor)
 
         player = self._get_player(player_id)
+        if not is_share_market_eligible(player):
+            raise PlayerTokenMarketError("Player is not eligible for a share market.", reason="market_ineligible")
         if total_shares is not None and int(total_shares) <= 0:
             raise PlayerTokenMarketError("Total shares must be greater than zero.", reason="total_shares_invalid")
         if share_price_coin is not None and self._amount(share_price_coin) <= Decimal("0.0000"):
@@ -682,6 +689,10 @@ class PlayerTokenMarketService:
             )
         self.session.flush()
         return market
+
+    def _assert_share_market_eligible(self, player: Player | None) -> None:
+        if not is_share_market_eligible(player):
+            raise PlayerTokenMarketError("Player is not eligible for a share market.", reason="market_ineligible")
 
     def _synchronize_market_defaults(
         self,
