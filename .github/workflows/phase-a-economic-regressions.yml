@@ -45,4 +45,24 @@ jobs:
           backend/tests/hosted_competition_engine/test_coin_aware_fee_freeze.py
           backend/tests/hosted_competition_engine/test_coin_aware_service.py
           backend/tests/treasury/test_commission_policy.py
+          backend/tests/players/test_market_integrity_service.py
+          backend/tests/players/test_player_share_economic_certification.py
+          backend/tests/players/test_player_share_lifecycle_audit.py
+          backend/tests/players/test_player_share_market_creation_boundary.py
+          backend/tests/players/test_player_share_release_audit.py
+          backend/tests/players/test_player_share_strict_issuer.py
+          backend/tests/players/test_player_share_trade_boundary_audit.py
+          backend/tests/players/test_player_share_trade_idempotency_audit.py
+          backend/tests/players/test_player_share_trade_reference_boundary.py
+          backend/tests/players/test_player_token_market_service.py
+          backend/tests/players/test_trade_boundary.py
+          backend/tests/players/test_trade_idempotency_contract.py
+          backend/tests/players/test_player_share_trade_context.py
           -q
+      - name: Run read-only player-share static gates
+        working-directory: backend
+        run: |
+          python scripts/audit_player_share_api_contract.py
+          python scripts/audit_player_share_trade_boundary.py
+          python scripts/audit_player_share_trade_idempotency.py --strict
+          python scripts/audit_player_share_issuer_boundary.py
