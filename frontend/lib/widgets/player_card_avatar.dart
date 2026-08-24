@@ -54,6 +54,12 @@ String? resolvePlayerCardImageUrl(String? imageUrl) {
   return candidate;
 }
 
+/// Decode headroom over the logical display size.
+///
+/// 2x keeps portraits crisp on high-DPI screens while still capping decode
+/// cost, which matters when a discovery grid mounts hundreds of them at once.
+const double _decodeScale = 2.0;
+
 const List<String> _blockedPlayerImagePlaceholders = <String>[
   'assets/branding/',
   'placeholder',
@@ -115,6 +121,11 @@ class _PortraitImage extends StatelessWidget {
         fit: BoxFit.cover,
         gaplessPlayback: true,
         filterQuality: FilterQuality.medium,
+        // Decode at display resolution. Discovery grids render hundreds of
+        // portraits, and decoding each at full source size is what turned a
+        // scroll through the talent list into an image storm.
+        cacheWidth: (size * _decodeScale).round(),
+        cacheHeight: (size * _decodeScale).round(),
         errorBuilder: (_, __, ___) => fallback,
       );
     } else {

@@ -74,7 +74,8 @@ class _GtexGlobalSearchSheetState extends State<GtexGlobalSearchSheet> {
                     'Search players, clubs, staff, sponsors, federations, clips',
                 autofocus: true,
                 onChanged: widget.controller.search,
-                onSubmitted: widget.controller.search,
+                // Enter should not wait out the debounce window.
+                onSubmitted: widget.controller.searchNow,
               ),
               const SizedBox(height: GtexSpacing.md),
               Expanded(
@@ -92,6 +93,8 @@ class _GtexGlobalSearchSheetState extends State<GtexGlobalSearchSheet> {
                         message: widget.controller.error!,
                         icon: Icons.search_off_outlined,
                         accent: GtexColors.red,
+                        actionLabel: 'Retry search',
+                        onAction: widget.controller.retry,
                       );
                     }
                     if (widget.controller.query.trim().length < 2) {

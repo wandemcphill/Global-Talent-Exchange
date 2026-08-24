@@ -5,6 +5,7 @@ import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/gtex_competition_repository.dart';
 import '../models/gtex_competition_models.dart';
+import '../widgets/gtex_competition_lifecycle_rail.dart';
 
 class GtexCompetitionsHubScreenV2 extends StatefulWidget {
   const GtexCompetitionsHubScreenV2({
@@ -383,6 +384,11 @@ class _GtexCompetitionsHubScreenV2State
                       ),
                     ],
                   ),
+                  const SizedBox(height: GtexSpacing.md),
+                  // Makes the competition's position in its own lifecycle
+                  // explicit: upcoming → registration → live → completed →
+                  // settled, plus this club's own outcome where known.
+                  GtexCompetitionLifecycleRail(summary: summary),
                   const SizedBox(height: GtexSpacing.md),
                   Wrap(
                     spacing: GtexSpacing.sm,
