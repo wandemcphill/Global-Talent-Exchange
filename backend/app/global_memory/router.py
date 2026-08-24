@@ -168,10 +168,16 @@ def get_player_history_by_path(
 @router.get("/dynasty", response_model=UserDynastyView)
 def get_dynasty(
     user_id: str = Query(...),
+    actor: User = Depends(get_current_user),
     service: GlobalMemoryService = Depends(_service),
 ) -> UserDynastyView:
+    if user_id != actor.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authenticated user does not match the requested user_id.",
+        )
     try:
-        return service.get_dynasty(user_id)
+        return service.get_dynasty(actor.id)
     except GlobalMemoryError as exc:
         _raise_http(exc)
     raise AssertionError("unreachable")
