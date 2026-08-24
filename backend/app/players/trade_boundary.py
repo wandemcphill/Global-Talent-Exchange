@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.ingestion.models import Player
 from app.models.player_token_market import PlayerShareMarket
-from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.models.user import User
+from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 
 
 class PlayerShareTradeBoundary:
@@ -37,10 +37,34 @@ class PlayerShareTradeBoundary:
             )
         return market
 
-    def buy(self, *, actor: User, player_id: str, share_count: int):
+    def buy(
+        self,
+        *,
+        actor: User,
+        player_id: str,
+        share_count: int,
+        idempotency_key: str | None = None,
+    ):
         self.require_issued_market(player_id)
-        return self.service.buy_shares(actor=actor, player_id=player_id, share_count=share_count)
+        return self.service.buy_shares(
+            actor=actor,
+            player_id=player_id,
+            share_count=share_count,
+            idempotency_key=idempotency_key,
+        )
 
-    def sell(self, *, actor: User, player_id: str, share_count: int):
+    def sell(
+        self,
+        *,
+        actor: User,
+        player_id: str,
+        share_count: int,
+        idempotency_key: str | None = None,
+    ):
         self.require_issued_market(player_id)
-        return self.service.sell_shares(actor=actor, player_id=player_id, share_count=share_count)
+        return self.service.sell_shares(
+            actor=actor,
+            player_id=player_id,
+            share_count=share_count,
+            idempotency_key=idempotency_key,
+        )
