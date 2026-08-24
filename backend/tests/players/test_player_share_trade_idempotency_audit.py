@@ -14,7 +14,8 @@ class Service:
 """
     )
     assert report["pass"] is False
-    assert {item["method"] for item in report["violations"]} == {"buy_shares", "sell_shares"}
+    methods = {item["method"] for item in report["violations"] if "method" in item}
+    assert methods == {"buy_shares", "sell_shares"}
 
 
 def test_trade_methods_pass_when_reference_is_caller_keyed() -> None:
@@ -25,10 +26,16 @@ class Service:
         return None
     def _idempotency_reference(self):
         return 'trade:deterministic'
+    def _replay_idempotent_trade(self):
+        return None
+    def _bind_trade_idempotency(self):
+        return None
     def buy_shares(self, idempotency_key=None):
         return self._run_trade_with_boundary()
     def sell_shares(self, idempotency_key=None):
         return self._run_trade_with_boundary()
+    def consume_player_share_idempotency_key(self):
+        return None
 """
     )
     assert report["pass"] is True
