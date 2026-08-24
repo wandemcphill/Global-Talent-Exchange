@@ -31,6 +31,17 @@ Every active market must satisfy all of these:
 - the persisted liquidity balance is non-negative
 - persisted liquidity metadata reconciles with the ledger projection
 
+### Holdings
+
+The certification also rejects:
+
+- negative share holdings
+- negative average acquisition cost
+- negative dividend balances
+- aggregate holdings greater than market circulation
+- aggregate holdings greater than total market supply
+- holdings for a player with no corresponding market
+
 ### Issuance
 
 Bulk issuance must be an explicit issuance operation. A bootstrap/issuer command must not disguise a newly created market as a trade-time auto-initialized market.
