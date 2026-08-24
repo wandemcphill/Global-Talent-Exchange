@@ -5,6 +5,7 @@ from typing import Never
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.request_security import extract_client_ip
 from app.auth.dependencies import get_current_trading_user, get_current_user
 from app.auth.dependencies import get_session
 from app.core.app_state import get_optional_app_settings
@@ -72,13 +73,8 @@ def get_market_engine(request: Request) -> MarketEngine:
     return market_engine
 
 
-def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for") or request.headers.get("cf-connecting-ip")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip() or None
-    if request.client is not None and request.client.host:
-        return str(request.client.host)
-    return None
+def _client_ip(request: Request) -> str:
+    return extract_client_ip(request)
 
 
 def get_market_player_query_service(
