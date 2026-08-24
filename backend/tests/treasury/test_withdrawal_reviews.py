@@ -65,23 +65,24 @@ def _seed_policy(session) -> None:
         active=True,
     )
     session.add(policy)
-    state = AdminRuntimeState(
-        state_key="admin_god_mode",
-        payload_json={
-            "commissions": {
-                "withdrawal_fee_bps": 1000,
-                "minimum_withdrawal_fee_credits": "5.0000",
+    session.add(
+        AdminRuntimeState(
+            state_key="admin_god_mode",
+            payload_json={
+                "commissions": {
+                    "withdrawal_fee_bps": 1000,
+                    "minimum_withdrawal_fee_credits": "5.0000",
+                },
+                "withdrawal_controls": {
+                    "egame_withdrawals_enabled": False,
+                    "trade_withdrawals_enabled": True,
+                    "processor_mode": "manual_bank_transfer",
+                    "deposits_via_bank_transfer": True,
+                    "payouts_via_bank_transfer": True,
+                },
             },
-            "withdrawal_controls": {
-                "egame_withdrawals_enabled": False,
-                "trade_withdrawals_enabled": True,
-                "processor_mode": "manual_bank_transfer",
-                "deposits_via_bank_transfer": True,
-                "payouts_via_bank_transfer": True,
-            },
-        },
+        )
     )
-    session.add(state)
     session.commit()
 
 
@@ -127,3 +128,254 @@ def _configure_withdrawal_settings(session) -> None:
     session.flush()
 
 
+def test_withdrawal_review_creates_review_and_audit(session) -> None:
+    _seed_policy(session)
+    user = _create_user(session, email="withdrawal@example.com", username="withdrawaluser")
+    admin = _create_user(session, email="admin@example.com", username="adminuser")
+    user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+    _accept_required_policies(session, user)
+    _configure_withdrawal_settings(session)
+    _seed_balance(session, user=user, amount=Decimal("100.0000"))
+
+    treasury = TreasuryService()
+    bank_account = treasury.create_user_bank_account(
+        session,
+        user=user,
+        bank_name="Test Bank",
+        account_number="1234567890",
+        account_name="Test User",
+        bank_code="001",
+        currency_code="NGN",
+        set_active=True,
+    )
+    session.commit()
+
+    withdrawal = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("10.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="payout",
+    )
+    session.commit()
+
+    reviewed = treasury.review_withdrawal_status(
+        session,
+        actor=admin,
+        withdrawal_id=withdrawal.id,
+        status=TreasuryWithdrawalStatus.APPROVED,
+        admin_notes="approved",
+    )
+    session.commit()
+
+    review = session.scalar(
+        select(WithdrawalReview)
+        .where(WithdrawalReview.withdrawal_request_id == withdrawal.id)
+        .order_by(WithdrawalReview.created_at.desc())
+    )
+    assert reviewed.status == TreasuryWithdrawalStatus.APPROVED
+    assert review is not None
+    assert review.status_from == TreasuryWithdrawalStatus.PENDING_REVIEW.value
+    assert review.status_to == TreasuryWithdrawalStatus.APPROVED.value
+    assert review.fee_amount == withdrawal.fee_amount
+    assert review.net_amount == withdrawal.net_amount
+
+    audit = session.scalar(select(TreasuryAuditEvent).where(TreasuryAuditEvent.resource_id == withdrawal.id))
+    assert audit is not None
+
+
+def test_hybrid_withdrawal_request_persists_manual_bank_transfer_mode(session) -> None:
+    _seed_policy(session)
+    user = _create_user(session, email="hybrid-withdrawal@example.com", username="hybridwithdrawal")
+    user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+    _accept_required_policies(session, user)
+    _configure_withdrawal_settings(session)
+    settings = TreasuryService().ensure_settings(session)
+    settings.withdrawal_mode = PaymentMode.HYBRID
+    session.commit()
+    _seed_balance(session, user=user, amount=Decimal("100.0000"))
+
+    treasury = TreasuryService()
+    bank_account = treasury.create_user_bank_account(
+        session,
+        user=user,
+        bank_name="Hybrid Bank",
+        account_number="2222222222",
+        account_name="Hybrid User",
+        bank_code="004",
+        currency_code="NGN",
+        set_active=True,
+    )
+    session.commit()
+
+    withdrawal = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("10.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="hybrid payout",
+    )
+    session.commit()
+
+    payout_request = session.get(PayoutRequest, withdrawal.payout_request_id)
+    assert withdrawal.processor_mode == "manual_bank_transfer"
+    assert withdrawal.payout_channel == "bank_transfer"
+    assert payout_request is not None
+    payout_meta = json.loads(payout_request.notes or "{}")
+    assert payout_meta["processor_mode"] == "manual_bank_transfer"
+    assert payout_meta["payout_channel"] == "bank_transfer"
+
+
+def test_withdrawal_risk_flags_and_dispute_event(session) -> None:
+    _seed_policy(session)
+    user = _create_user(session, email="risk@example.com", username="riskuser")
+    admin = _create_user(session, email="riskadmin@example.com", username="riskadmin")
+    user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+    _accept_required_policies(session, user)
+    _configure_withdrawal_settings(session)
+    _seed_balance(session, user=user, amount=Decimal("7000.0000"))
+
+    treasury = TreasuryService()
+    bank_account = treasury.create_user_bank_account(
+        session,
+        user=user,
+        bank_name="Risk Bank",
+        account_number="9999999999",
+        account_name="Risk User",
+        bank_code="002",
+        currency_code="NGN",
+        set_active=True,
+    )
+    session.commit()
+
+    withdrawal = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("6000.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="large payout",
+    )
+    session.commit()
+
+    aml_case = session.scalar(select(AmlCase).where(AmlCase.user_id == user.id))
+    assert aml_case is not None
+
+    treasury.review_withdrawal_status(
+        session,
+        actor=admin,
+        withdrawal_id=withdrawal.id,
+        status=TreasuryWithdrawalStatus.DISPUTED,
+        admin_notes="disputed",
+    )
+    session.commit()
+
+    system_event = session.scalar(select(SystemEvent).where(SystemEvent.subject_id == withdrawal.id))
+    assert system_event is not None
+
+
+def test_withdrawal_batching_moves_approved_requests_to_processing(session) -> None:
+    _seed_policy(session)
+    user = _create_user(session, email="batching@example.com", username="batchinguser")
+    admin = _create_user(session, email="batch-admin@example.com", username="batchadmin")
+    user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+    _accept_required_policies(session, user)
+    _configure_withdrawal_settings(session)
+    _seed_balance(session, user=user, amount=Decimal("250.0000"))
+
+    treasury = TreasuryService()
+    bank_account = treasury.create_user_bank_account(
+        session,
+        user=user,
+        bank_name="Batch Bank",
+        account_number="1111111111",
+        account_name="Batch User",
+        bank_code="003",
+        currency_code="NGN",
+        set_active=True,
+    )
+    session.commit()
+
+    withdrawal_one = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("10.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="batch-one",
+    )
+    withdrawal_two = treasury.create_withdrawal_request(
+        session,
+        user=user,
+        amount_coin=Decimal("15.0000"),
+        bank_account_id=bank_account.id,
+        source_scope="trade",
+        notes="batch-two",
+    )
+    session.commit()
+
+    treasury.review_withdrawal_status(
+        session,
+        actor=admin,
+        withdrawal_id=withdrawal_one.id,
+        status=TreasuryWithdrawalStatus.APPROVED,
+        admin_notes="approved-one",
+    )
+    treasury.review_withdrawal_status(
+        session,
+        actor=admin,
+        withdrawal_id=withdrawal_two.id,
+        status=TreasuryWithdrawalStatus.APPROVED,
+        admin_notes="approved-two",
+    )
+    session.commit()
+
+    batch = treasury.create_withdrawal_batch(
+        session,
+        actor=admin,
+        statuses=(TreasuryWithdrawalStatus.APPROVED,),
+        limit=10,
+        notes="first payout run",
+    )
+    session.commit()
+
+    assert batch["item_count"] == 2
+    assert set(batch["withdrawal_ids"]) == {withdrawal_one.id, withdrawal_two.id}
+
+    refreshed_one = session.get(type(withdrawal_one), withdrawal_one.id)
+    refreshed_two = session.get(type(withdrawal_two), withdrawal_two.id)
+    assert refreshed_one is not None
+    assert refreshed_two is not None
+    assert refreshed_one.status == TreasuryWithdrawalStatus.PROCESSING
+    assert refreshed_two.status == TreasuryWithdrawalStatus.PROCESSING
+
+    payout_one = session.get(PayoutRequest, refreshed_one.payout_request_id)
+    payout_two = session.get(PayoutRequest, refreshed_two.payout_request_id)
+    assert payout_one is not None
+    assert payout_two is not None
+    assert payout_one.status == PayoutStatus.PROCESSING
+    assert payout_two.status == PayoutStatus.PROCESSING
+
+    reviews = session.scalars(
+        select(WithdrawalReview)
+        .where(WithdrawalReview.withdrawal_request_id.in_([withdrawal_one.id, withdrawal_two.id]))
+        .order_by(WithdrawalReview.created_at.desc())
+    ).all()
+    assert len(reviews) >= 4
+    batched_reviews = [item for item in reviews if (item.metadata_json or {}).get("batch_id") == batch["batch_id"]]
+    assert len(batched_reviews) == 2
+
+    listed_batches = treasury.list_withdrawal_batches(session, limit=10)
+    listed = next(item for item in listed_batches if item["batch_id"] == batch["batch_id"])
+    assert listed["item_count"] == 2
+    assert listed["statuses"] == [TreasuryWithdrawalStatus.PROCESSING]
+    assert listed["notes"] == "first payout run"
+
+    audit = session.scalar(select(TreasuryAuditEvent).where(TreasuryAuditEvent.resource_id == batch["batch_id"]))
+    assert audit is not None
