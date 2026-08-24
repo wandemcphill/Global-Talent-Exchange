@@ -3,12 +3,10 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint, event
-from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+from sqlalchemy import ForeignKey, Integer, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.market.player_eligibility_policy import is_share_market_eligible
 from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
-from app.players.token_market_defaults import resolve_player_share_market_config
 
 if TYPE_CHECKING:
     from app.ingestion.models import Player
@@ -113,30 +111,3 @@ class PlayerShareEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 
 __all__ = ["PlayerShareEvent", "PlayerShareHolding", "PlayerShareMarket"]
-
-
-@event.listens_for(Session, "before_flush")
-def _auto_initialize_player_share_markets(session: Session, _flush_context, _instances) -> None:
-    from app.ingestion.models import Player
-
-    for pending in tuple(session.new):
-        if not isinstance(pending, Player):
-            continue
-        if pending.share_market is not None or not is_share_market_eligible(pending):
-            continue
-
-        config = resolve_player_share_market_config(pending)
-        pending.share_market = PlayerShareMarket(
-            total_shares=config.total_shares,
-            share_price_coin=config.share_price_coin,
-            status=config.status,
-            metadata_json={
-                "player_name": pending.canonical_display_name or pending.full_name,
-                "is_real_player": bool(pending.is_real_player),
-                "real_player_tier": pending.real_player_tier,
-                "market_issued": True,
-                "auto_initialized": True,
-                "liquidity_coin": str(config.liquidity_coin),
-                "initial_liquidity_coin": str(config.liquidity_coin),
-            },
-        )
