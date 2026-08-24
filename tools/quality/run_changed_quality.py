@@ -102,7 +102,14 @@ def changed_files(base: str, head: str | None) -> list[str]:
     if head:
         if base == NULL_SHA:
             files.update(
-                git_stdout("diff-tree", "--root", "--no-commit-id", "--name-only", "-r", head)
+                git_stdout(
+                    "diff-tree",
+                    "--root",
+                    "--no-commit-id",
+                    "--name-only",
+                    "-r",
+                    head,
+                )
             )
         else:
             files.update(
