@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = {
-    "simulation": ROOT / "app" / "match_engine" / "services" / "match_simulation_service.py",
+    "simulation": ROOT / "app" / "match_engine" / "simulation" / "event_generator.py",
     "strength": ROOT / "app" / "match_engine" / "simulation" / "strength.py",
     "events": ROOT / "app" / "match_engine" / "simulation" / "event_generator.py",
     "competition": ROOT / "app" / "services" / "competition_match_service.py",
@@ -20,24 +20,15 @@ def source(key: str) -> str:
 
 def functions(key: str) -> set[str]:
     tree = ast.parse(source(key))
-    return {
-        node.name
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+    return {node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
 
 def audit() -> dict[str, object]:
     violations: list[dict[str, str]] = []
     warnings: list[dict[str, str]] = []
 
-    required_simulation = {
-        "simulate_match",
-        "simulate",
-    }
-    sim_functions = functions("simulation")
-    if not (required_simulation & sim_functions):
-        violations.append({"finding": "simulation_entrypoint_missing", "surface": "match_simulation_service"})
+    if "simulate" not in functions("simulation"):
+        violations.append({"finding": "simulation_entrypoint_missing", "surface": "event_generator.simulate"})
 
     strength_source = source("strength").lower()
     for marker in ("form", "morale", "motivation", "fatigue", "chemistry", "coach", "tactical", "adaptability"):
