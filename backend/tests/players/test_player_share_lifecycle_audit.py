@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.scripts.audit_player_share_lifecycle import classify_market
+from scripts.audit_player_share_lifecycle import classify_market
 
 
 def test_explicit_issue_is_not_auto_initialized() -> None:
