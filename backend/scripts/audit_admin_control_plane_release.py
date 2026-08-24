@@ -59,6 +59,10 @@ def _functions(key: str) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
     }
 
 
+def _decorator_texts(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    return {ast.unparse(item) for item in node.decorator_list}
+
+
 def _add(findings: list[dict[str, str]], finding: str, surface: str) -> None:
     findings.append({"finding": finding, "surface": surface})
 
@@ -67,16 +71,15 @@ def audit() -> dict[str, object]:
     findings: list[dict[str, str]] = []
     warnings: list[dict[str, str]] = []
 
-    router_source = _source("godmode_router")
     router_functions = _functions("godmode_router")
     for function_name, capability in REQUIRED_GODMODE_MUTATIONS.items():
         node = router_functions.get(function_name)
         if node is None:
             _add(findings, "missing_admin_mutation_route", function_name)
             continue
-        source = ast.get_source_segment(router_source, node) or ""
-        expected = f"AdminCapability.{capability}"
-        if expected not in source:
+        expected = f"require_admin_capability(AdminCapability.{capability})"
+        decorators = _decorator_texts(node)
+        if expected not in decorators:
             _add(findings, "mutation_missing_capability_gate", f"{function_name}:{capability}")
 
     capability_source = _source("capabilities")
@@ -94,7 +97,7 @@ def audit() -> dict[str, object]:
             _add(findings, "missing_admin_capability", capability)
     if "def require_admin_capability(" not in capability_source:
         _add(findings, "capability_authorization_boundary_missing", "require_admin_capability")
-    if "assert_admin_capability(" not in capability_source:
+    if "def assert_admin_capability(" not in capability_source:
         _add(findings, "capability_assertion_missing", "assert_admin_capability")
 
     godmode_service = _source("godmode_service")
