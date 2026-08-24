@@ -217,9 +217,14 @@ def admin_dispatch_competition_reminders(
 def update_competition(
     competition_id: str,
     payload: CompetitionUpdateRequest,
-    _: User = Depends(get_current_user),
+    request: Request,
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = _handle_competition_errors(lambda: orchestrator.update(competition_id, payload))
     if result is None:
         raise _not_found(competition_id)
@@ -418,10 +423,15 @@ def _join_competition_response(
 def leave_competition(
     competition_id: str,
     payload: CompetitionLeaveRequest,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
-    result = _handle_competition_errors(lambda: orchestrator.leave(competition_id, user_id=payload.user_id))
+    if payload.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authenticated user does not match competition leave payload.",
+        )
+    result = _handle_competition_errors(lambda: orchestrator.leave(competition_id, user_id=current_user.id))
     if result is None:
         raise _not_found(competition_id)
     return result
@@ -431,13 +441,13 @@ def leave_competition(
 def create_competition_invite(
     competition_id: str,
     payload: CompetitionInviteCreateRequest,
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionInviteView:
     result = _handle_competition_errors(
         lambda: orchestrator.create_invite(
             competition_id,
-            issued_by=payload.issued_by,
+            issued_by=current_user.id,
             max_uses=payload.max_uses,
             expires_at=payload.expires_at,
             note=payload.note,
@@ -622,9 +632,14 @@ def get_competition_standings(
 def seed_competition(
     competition_id: str,
     payload: CompetitionSeedRequest,
-    _: User = Depends(get_current_user),
+    request: Request,
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = _handle_competition_errors(lambda: orchestrator.seed_competition(competition_id, payload))
     if result is None:
         raise _not_found(competition_id)
@@ -652,9 +667,14 @@ def launch_competition(
 def advance_competition(
     competition_id: str,
     payload: CompetitionAdvanceRequest,
-    _: User = Depends(get_current_user),
+    request: Request,
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = _handle_competition_errors(lambda: orchestrator.advance_competition(competition_id, payload))
     if result is None:
         raise _not_found(competition_id)
@@ -665,9 +685,14 @@ def advance_competition(
 def finalize_competition(
     competition_id: str,
     payload: CompetitionFinalizeRequest,
-    _: User = Depends(get_current_user),
+    request: Request,
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionSummaryView:
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = _handle_competition_errors(lambda: orchestrator.finalize_competition(competition_id, payload))
     if result is None:
         raise _not_found(competition_id)
@@ -691,9 +716,14 @@ def preview_competition_schedule(
 def create_competition_schedule_job(
     competition_id: str,
     payload: CompetitionScheduleJobRequest,
-    _: User = Depends(get_current_user),
+    request: Request,
+    actor: User = Depends(get_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionScheduleJobView:
+    competition = orchestrator.session.get(Competition, competition_id)
+    if competition is None:
+        raise _not_found(competition_id)
+    _require_manage_competitions_or_creator(request, actor, competition)
     result = _handle_competition_errors(lambda: orchestrator.create_schedule_job(competition_id, payload))
     if result is None:
         raise _not_found(competition_id)
