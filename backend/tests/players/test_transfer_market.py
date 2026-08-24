@@ -792,3 +792,52 @@ def test_transfer_market_mutations_require_authentication(
     )
 
     assert response.status_code == 401
+
+
+def test_transfer_hub_offer_list_is_scoped_to_authenticated_club(
+    transfer_market_api: TestClient, transfer_market_session: Session
+) -> None:
+    context = seed_transfer_market_context(transfer_market_session)
+    seller_headers = _auth_headers(transfer_market_session, user_id=context["seller_user_id"])
+    buyer_headers = _auth_headers(transfer_market_session, user_id=context["buyer_user_id"])
+    listing_response = transfer_market_api.post(
+        "/api/transfer-hub/listings",
+        json={
+            "player_id": context["player_id"],
+            "base_price": "800000.00",
+            "expires_at": (datetime.now(UTC) + timedelta(hours=3)).isoformat(),
+            "window_id": context["window_id"],
+        },
+        headers=seller_headers,
+    )
+    assert listing_response.status_code == 201
+    listing_id = listing_response.json()["id"]
+    offer_response = transfer_market_api.post(
+        f"/api/transfer-hub/listings/{listing_id}/offers",
+        json={
+            "bidder_club_id": context["buyer_club_id"],
+            "offer_type": "cash",
+            "cash_amount": "900000.00",
+        },
+        headers=buyer_headers,
+    )
+    assert offer_response.status_code == 201
+
+    buyer_list = transfer_market_api.get("/api/transfer-hub/offers", headers=buyer_headers)
+    assert buyer_list.status_code == 200
+    assert len(buyer_list.json()) == 1
+
+    stranger = User(
+        id="user-stranger",
+        email="stranger@example.com",
+        username="stranger",
+        display_name="Stranger",
+        password_hash="x",
+        role=UserRole.USER,
+        kyc_status=KycStatus.FULLY_VERIFIED,
+    )
+    transfer_market_session.add(stranger)
+    transfer_market_session.commit()
+    stranger_headers = _auth_headers(transfer_market_session, user_id=stranger.id)
+    stranger_list = transfer_market_api.get("/api/transfer-hub/offers", headers=stranger_headers)
+    assert stranger_list.status_code == 403
