@@ -23,7 +23,6 @@ _original_generate_uuid = _legacy.generate_uuid
 
 
 def _ledger_reference_token() -> str:
-    """Return the request-scoped durable trade reference token, never a fresh UUID."""
     reference = _trade_reference.get()
     if reference:
         return reference
@@ -37,14 +36,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
     """Production-facing player-share service with a strict trade boundary."""
 
     @staticmethod
-    def _trade_reference(
-        *,
-        market_id: str,
-        actor_id: str,
-        side: str,
-        circulating_shares: int,
-        share_count: int,
-    ) -> str:
+    def _trade_reference(*, market_id: str, actor_id: str, side: str, circulating_shares: int, share_count: int) -> str:
         return (
             f"market:{market_id}:actor:{actor_id}:side:{side}:"
             f"before:{int(circulating_shares)}:shares:{int(share_count)}"
@@ -63,11 +55,36 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             .with_for_update()
         )
         if market is None:
-            raise PlayerTokenMarketError(
-                "Player share market has not been issued.",
-                reason="market_not_found",
-            )
+            raise PlayerTokenMarketError("Player share market has not been issued.", reason="market_not_found")
         return market
+
+    def _bind_trade_idempotency(
+        self,
+        *,
+        transaction_id: str,
+        reference: str,
+        actor: User,
+        player_id: str,
+        side: str,
+        share_count: int,
+    ) -> None:
+        transaction = self.session.get(LedgerTransaction, transaction_id)
+        if transaction is None:
+            raise PlayerTokenMarketError(
+                "Player-share trade ledger transaction was not found.", reason="trade_integrity_error"
+            )
+        transaction.idempotency_key = reference
+        transaction.metadata_json = {
+            **(transaction.metadata_json or {}),
+            "player_share_trade": {
+                "actor_user_id": actor.id,
+                "player_id": player_id,
+                "side": side,
+                "share_count": int(share_count),
+                "idempotency_reference": reference,
+            },
+        }
+        self.session.flush()
 
     def _replay_idempotent_trade(
         self,
@@ -76,6 +93,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         actor: User,
         player_id: str,
         side: str,
+        share_count: int,
     ) -> dict[str, Any] | None:
         transaction = self.session.scalar(
             select(LedgerTransaction)
@@ -85,69 +103,49 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         if transaction is None:
             return None
 
-        entries = list(
-            self.session.scalars(
-                select(LedgerEntry).where(LedgerEntry.transaction_id == transaction.id)
-            ).all()
-        )
-        if not entries:
+        trade_meta = (transaction.metadata_json or {}).get("player_share_trade")
+        if isinstance(trade_meta, dict) and (
+            str(trade_meta.get("actor_user_id") or "") != actor.id
+            or str(trade_meta.get("player_id") or "") != player_id
+            or str(trade_meta.get("side") or "") != side
+            or int(trade_meta.get("share_count") or 0) != int(share_count)
+        ):
             raise PlayerTokenMarketError(
-                "Existing player-share trade has no ledger entries.",
-                reason="trade_integrity_error",
+                "Idempotency key was already used for a different player-share trade.",
+                reason="trade_idempotency_conflict",
             )
 
-        fee_amount = next(
-            (
-                abs(entry.amount)
-                for entry in entries
-                if "trade_fee_revenue" in str(entry.account.code)
-            ),
-            0,
-        )
-        fee_amount = self._amount(fee_amount)
+        entries = list(self.session.scalars(select(LedgerEntry).where(LedgerEntry.transaction_id == transaction.id)).all())
+        if not entries:
+            raise PlayerTokenMarketError("Existing player-share trade has no ledger entries.", reason="trade_integrity_error")
 
+        fee_amount = next((abs(entry.amount) for entry in entries if "trade_fee_revenue" in str(entry.account.code)), 0)
+        fee_amount = self._amount(fee_amount)
         if side == "buy":
             gross_entry = next(
-                (
-                    entry
-                    for entry in entries
-                    if entry.amount > 0 and "trade_fee_revenue" not in str(entry.account.code)
-                ),
+                (entry for entry in entries if entry.amount > 0 and "trade_fee_revenue" not in str(entry.account.code)),
                 None,
             )
             debit_entry = next((entry for entry in entries if entry.amount < 0), None)
             if gross_entry is None or debit_entry is None:
-                raise PlayerTokenMarketError(
-                    "Existing player-share purchase has incomplete ledger postings.",
-                    reason="trade_integrity_error",
-                )
+                raise PlayerTokenMarketError("Existing player-share purchase has incomplete ledger postings.", reason="trade_integrity_error")
             gross_amount = self._amount(gross_entry.amount)
             total_debit = self._amount(abs(debit_entry.amount))
         else:
             gross_entry = next((entry for entry in entries if entry.amount < 0), None)
             credit_entry = next(
-                (
-                    entry
-                    for entry in entries
-                    if entry.amount > 0 and "trade_fee_revenue" not in str(entry.account.code)
-                ),
+                (entry for entry in entries if entry.amount > 0 and "trade_fee_revenue" not in str(entry.account.code)),
                 None,
             )
             if gross_entry is None or credit_entry is None:
-                raise PlayerTokenMarketError(
-                    "Existing player-share sale has incomplete ledger postings.",
-                    reason="trade_integrity_error",
-                )
+                raise PlayerTokenMarketError("Existing player-share sale has incomplete ledger postings.", reason="trade_integrity_error")
             gross_amount = self._amount(abs(gross_entry.amount))
             total_debit = self._amount(credit_entry.amount + fee_amount)
 
         market = self.get_market(player_id=player_id)
         holding = self.get_holding(user_id=actor.id, player_id=player_id)
         if holding is None:
-            raise PlayerTokenMarketError(
-                "Existing player-share trade has no holding projection.",
-                reason="trade_integrity_error",
-            )
+            raise PlayerTokenMarketError("Existing player-share trade has no holding projection.", reason="trade_integrity_error")
         return {
             "market": self._serialize_market_view(market),
             "holding": holding,
@@ -173,9 +171,6 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         idempotency_key: str | None,
         operation: Callable[[], dict[str, Any]],
     ) -> dict[str, Any]:
-        # The legacy router currently calls the service without explicitly
-        # forwarding this optional field. The request-local context bridges
-        # that contract without weakening the authoritative service boundary.
         resolved_idempotency_key = idempotency_key or consume_player_share_idempotency_key()
         market = self._require_trade_market(player_id)
         if resolved_idempotency_key:
@@ -203,10 +198,21 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
                     actor=actor,
                     player_id=player_id,
                     side=side,
+                    share_count=share_count,
                 )
                 if replay is not None:
                     return replay
-            return operation()
+            result = operation()
+            if resolved_idempotency_key:
+                self._bind_trade_idempotency(
+                    transaction_id=str(result["transaction_id"]),
+                    reference=reference,
+                    actor=actor,
+                    player_id=player_id,
+                    side=side,
+                    share_count=share_count,
+                )
+            return result
         finally:
             _trade_market_override.reset(market_token)
             _trade_reference.reset(reference_token)
@@ -226,9 +232,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             side="buy",
             idempotency_key=idempotency_key,
             operation=lambda: super(PlayerTokenMarketService, self).buy_shares(
-                actor=actor,
-                player_id=player_id,
-                share_count=share_count,
+                actor=actor, player_id=player_id, share_count=share_count
             ),
         )
 
@@ -247,9 +251,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             side="sell",
             idempotency_key=idempotency_key,
             operation=lambda: super(PlayerTokenMarketService, self).sell_shares(
-                actor=actor,
-                player_id=player_id,
-                share_count=share_count,
+                actor=actor, player_id=player_id, share_count=share_count
             ),
         )
 
