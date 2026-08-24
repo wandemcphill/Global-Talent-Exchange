@@ -58,15 +58,17 @@ def test_verification_requires_explicit_verified_decision():
 def test_verified_state_requires_and_records_provider_evidence():
     session = _Session()
     user = _user()
+    evidence = _evidence()
 
-    IdentityComplianceService(session).verify(user=user, evidence=_evidence(), actor_user_id=user.id)
+    IdentityComplianceService(session).verify(user=user, evidence=evidence, actor_user_id=user.id)
 
     assert user.kyc_status is KycStatus.VERIFIED
     assert session.flush_count == 1
     audit = next(item for item in session.added if isinstance(item, AuditLog))
     assert audit.action_key == "identity.kyc.verify"
     assert audit.metadata_json["provider"] == "didit"
-    assert audit.metadata_json["provider_subject"] == "didit-subject-123"
+    assert audit.metadata_json["evidence_fingerprint"] == evidence.fingerprint()
+    assert "provider_subject" not in audit.metadata_json
 
 
 def test_rejection_requires_reason_and_is_audited():
