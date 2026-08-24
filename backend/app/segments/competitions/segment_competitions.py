@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.admin.capabilities import AdminCapability, assert_admin_capability
-from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user
+from app.auth.dependencies import get_current_admin, get_current_user
 from app.competitions.creator_league_router import router as creator_league_router
 from app.common.enums.competition_format import CompetitionFormat
 from app.models.user import User
@@ -103,31 +103,6 @@ def _user_competition_payload(payload: CompetitionCreateRequest, actor: User) ->
         update={
             "creator_id": actor.id,
             "creator_name": payload.creator_name or _display_name_for(actor),
-            "host_type": CompetitionHostType.USER_HOSTED,
-            "source_type": CompetitionHostType.USER_HOSTED.value,
-            "type": CompetitionHostType.USER_HOSTED.value,
-            "currency": "credit",
-        }
-    )
-
-
-def _legacy_user_competition_payload(
-    payload: CompetitionCreateRequest,
-    actor: User | None,
-) -> CompetitionCreateRequest:
-    creator_id = actor.id if actor is not None else payload.creator_id
-    if creator_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication credentials or creator_id are required.",
-        )
-    creator_name = payload.creator_name
-    if not creator_name:
-        creator_name = _display_name_for(actor) if actor is not None else creator_id
-    return payload.model_copy(
-        update={
-            "creator_id": creator_id,
-            "creator_name": creator_name,
             "host_type": CompetitionHostType.USER_HOSTED,
             "source_type": CompetitionHostType.USER_HOSTED.value,
             "type": CompetitionHostType.USER_HOSTED.value,
