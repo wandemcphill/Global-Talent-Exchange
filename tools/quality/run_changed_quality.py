@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
-import shutil
 import shlex
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NULL_SHA = "0" * 40
