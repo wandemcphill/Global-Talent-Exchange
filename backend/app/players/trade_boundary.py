@@ -3,7 +3,6 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.ingestion.models import Player
 from app.models.player_token_market import PlayerShareMarket
 from app.models.user import User
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
