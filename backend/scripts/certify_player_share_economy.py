@@ -18,6 +18,7 @@ from scripts.audit_player_share_event_reconciliation import audit as audit_event
 from scripts.audit_player_share_issuer_boundary import audit as audit_issuer_boundary
 from scripts.audit_player_share_lifecycle import audit_lifecycle
 from scripts.audit_player_share_trade_boundary import audit as audit_trade_boundary
+from scripts.audit_player_share_trade_idempotency import audit as audit_trade_idempotency
 
 
 def audit_holdings(*, database_url: str | None) -> dict[str, Any]:
@@ -25,21 +26,41 @@ def audit_holdings(*, database_url: str | None) -> dict[str, Any]:
     session_factory = create_session_factory(engine)
     try:
         with session_factory() as session:
-            negative_holdings = int(session.scalar(select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.share_count < 0)) or 0)
-            negative_costs = int(session.scalar(select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.average_cost_coin < 0)) or 0)
-            negative_dividends = int(session.scalar(select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.dividends_earned_coin < 0)) or 0)
+            negative_holdings = int(
+                session.scalar(select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.share_count < 0)) or 0
+            )
+            negative_costs = int(
+                session.scalar(
+                    select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.average_cost_coin < 0)
+                )
+                or 0
+            )
+            negative_dividends = int(
+                session.scalar(
+                    select(func.count(PlayerShareHolding.id)).where(PlayerShareHolding.dividends_earned_coin < 0)
+                )
+                or 0
+            )
 
             market_rows = session.scalars(select(PlayerShareMarket)).all()
             market_by_player = {row.player_id: row for row in market_rows}
             active_markets = [row for row in market_rows if row.status == "active"]
-            negative_market_supply = sum(int((row.total_shares or 0) < 0 or (row.circulating_shares or 0) < 0) for row in market_rows)
-            circulation_over_supply = sum(int((row.circulating_shares or 0) > (row.total_shares or 0)) for row in market_rows)
-            active_zero_price = sum(int(row.share_price_coin is None or row.share_price_coin <= 0) for row in active_markets)
+            negative_market_supply = sum(
+                int((row.total_shares or 0) < 0 or (row.circulating_shares or 0) < 0) for row in market_rows
+            )
+            circulation_over_supply = sum(
+                int((row.circulating_shares or 0) > (row.total_shares or 0)) for row in market_rows
+            )
+            active_zero_price = sum(
+                int(row.share_price_coin is None or row.share_price_coin <= 0) for row in active_markets
+            )
             active_negative_liquidity = sum(int(row.liquidity_coin < 0) for row in active_markets)
 
             holdings_by_player: dict[str, int] = {}
             for player_id, share_count in session.execute(
-                select(PlayerShareHolding.player_id, func.sum(PlayerShareHolding.share_count)).group_by(PlayerShareHolding.player_id)
+                select(PlayerShareHolding.player_id, func.sum(PlayerShareHolding.share_count)).group_by(
+                    PlayerShareHolding.player_id
+                )
             ).all():
                 holdings_by_player[str(player_id)] = int(share_count or 0)
 
@@ -96,9 +117,11 @@ def certify(*, database_url: str | None, batch_size: int) -> dict[str, Any]:
     holdings = audit_holdings(database_url=database_url)
     event_reconciliation = audit_event_reconciliation(database_url=database_url)
     trade_boundary = audit_trade_boundary()
+    trade_idempotency = audit_trade_idempotency()
     issuer_boundary = audit_issuer_boundary()
     gates = {
         "trade_boundary": bool(trade_boundary["pass"]),
+        "trade_idempotency": bool(trade_idempotency["pass"]),
         "issuer_boundary": bool(issuer_boundary["pass"]),
         "event_reconciliation": bool(event_reconciliation["pass"]),
         **{f"lifecycle_{name}": bool(value) for name, value in lifecycle["gates"].items()},
@@ -111,6 +134,7 @@ def certify(*, database_url: str | None, batch_size: int) -> dict[str, Any]:
         "holdings": holdings,
         "event_reconciliation": event_reconciliation,
         "trade_boundary": trade_boundary,
+        "trade_idempotency": trade_idempotency,
         "issuer_boundary": issuer_boundary,
         "gates": gates,
         "pass": all(gates.values()),
