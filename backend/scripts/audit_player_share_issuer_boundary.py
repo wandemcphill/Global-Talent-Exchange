@@ -15,7 +15,11 @@ def inspect_issuer(source: str) -> dict[str, Any]:
     ensure_calls: list[ast.Call] = []
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "ensure_market":
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "ensure_market"
+        ):
             ensure_calls.append(node)
 
     issue_function = next(
@@ -29,14 +33,20 @@ def inspect_issuer(source: str) -> dict[str, Any]:
     if issue_function is None:
         violations.append({"finding": "issuer_entrypoint_missing"})
     else:
-        issue_lines = {node.lineno for node in ast.walk(issue_function)}
+        issue_lines = {
+            node.lineno
+            for node in ast.walk(issue_function)
+            if hasattr(node, "lineno")
+        }
         if any(call.lineno not in issue_lines for call in ensure_calls):
             violations.append({"finding": "issuer_service_call_outside_issue_markets"})
 
     source_lines = source.splitlines()
     ensure_lines = {call.lineno for call in ensure_calls}
     for line_no in ensure_lines:
-        context = "\n".join(source_lines[max(0, line_no - 12) : min(len(source_lines), line_no + 2)])
+        context = "\n".join(
+            source_lines[max(0, line_no - 12) : min(len(source_lines), line_no + 2)]
+        )
         if "if not dry_run" not in context:
             violations.append(
                 {
@@ -65,7 +75,9 @@ def audit(path: Path = ISSUER) -> dict[str, Any]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Audit the explicit player-share bulk issuer boundary.")
+    parser = argparse.ArgumentParser(
+        description="Audit the explicit player-share bulk issuer boundary."
+    )
     parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
     report = audit()
