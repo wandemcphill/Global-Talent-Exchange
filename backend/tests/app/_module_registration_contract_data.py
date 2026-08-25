@@ -514,7 +514,7 @@ MOUNTED_MODULE_ROUTE_CASES = [
     ("GET", "/managers", None, None, 200),
     ("POST", "/simulation-matchmaking/quick-game", {}, None, 401),
     ("GET", "/ultimate-league/tiers", None, None, 200),
-    ("POST", "/ultimate-league/tournaments", {}, None, 422),
+    ("POST", "/ultimate-league/tournaments", {}, None, 401),
     ("GET", "/api/competitive-integrity/managers", None, None, 401),
     ("GET", "/api/notifications/me", None, None, 401),
     ("GET", "/api/admin/notifications/announcements", None, None, 401),

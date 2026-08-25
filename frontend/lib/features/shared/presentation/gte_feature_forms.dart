@@ -31,7 +31,7 @@ Future<Map<String, String>?> showGteFormSheet(
       field.key: TextEditingController(text: field.initialValue),
   };
   try {
-    return showModalBottomSheet<Map<String, String>>(
+    return await showModalBottomSheet<Map<String, String>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,

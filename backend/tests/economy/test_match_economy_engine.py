@@ -13,7 +13,11 @@ import app.models.economy_daily_stat  # noqa: F401
 import app.models.reward_settlement  # noqa: F401
 import app.models.wallet  # noqa: F401
 from app.core.database import ensure_database_schema_current
-from app.economy.match_economy_engine import MatchEconomyContext, MatchEconomyEngine, MatchEconomyType
+from app.economy.match_economy_engine import (
+    MatchEconomyContext,
+    MatchEconomyEngine,
+    MatchEconomyType,
+)
 from app.models.base import utcnow
 from app.models.economy_daily_stat import EconomyDailyStat
 from app.models.reward_settlement import RewardSettlement
@@ -79,8 +83,16 @@ def _seed_balance(session, wallet: WalletService, *, user: User, unit: LedgerUni
     wallet.append_transaction(
         session,
         postings=[
-            LedgerPosting(account=user_account, amount=amount, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
-            LedgerPosting(account=platform_account, amount=-amount, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
+            LedgerPosting(
+                account=user_account,
+                amount=amount,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            ),
+            LedgerPosting(
+                account=platform_account,
+                amount=-amount,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            ),
         ],
         reason=wallet.trade_settlement_reason,
         source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
@@ -102,8 +114,16 @@ def _seed_system_balance(
     wallet.append_transaction(
         session,
         postings=[
-            LedgerPosting(account=account, amount=amount, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
-            LedgerPosting(account=operations_account, amount=-amount, source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
+            LedgerPosting(
+                account=account,
+                amount=amount,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            ),
+            LedgerPosting(
+                account=operations_account,
+                amount=-amount,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            ),
         ],
         reason=wallet.trade_settlement_reason,
         source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
@@ -120,7 +140,13 @@ def test_join_match_collects_user_hosted_entry_fee_into_prize_pool(session) -> N
         email="user-hosted@example.com",
         username="user-hosted-player",
     )
-    _seed_balance(session, wallet, user=user, unit=LedgerUnit.CREDIT, amount=Decimal("500.0000"))
+    _seed_balance(
+        session,
+        wallet,
+        user=user,
+        unit=LedgerUnit.CREDIT,
+        amount=Decimal("500.0000"),
+    )
 
     engine = MatchEconomyEngine(session=session, wallet_service=wallet)
     match = MatchEconomyContext(
@@ -268,7 +294,7 @@ def test_record_match_volume_triggers_lottery_for_recently_active_users(session)
     engine = MatchEconomyEngine(session=session, wallet_service=wallet)
 
     result = engine.record_match_volume(
-        amount=Decimal("500.0000"),
+        amount=Decimal("5.0000"),
         unit=LedgerUnit.CREDIT,
         actor=admin,
         trigger_step=Decimal("5.0000"),
@@ -284,7 +310,9 @@ def test_record_match_volume_triggers_lottery_for_recently_active_users(session)
     assert result.current_volume == Decimal("5.0000")
     assert len(result.triggered_rewards) == 1
     assert result.triggered_rewards[0].winner_user_id == eligible_user.id
-    assert wallet.get_balance(session, wallet.get_user_account(session, eligible_user, LedgerUnit.COIN)) == Decimal("3.0000")
+    assert wallet.get_balance(session, wallet.get_user_account(session, eligible_user, LedgerUnit.COIN)) == Decimal(
+        "3.0000"
+    )
     assert settlement is not None
     assert settlement.net_amount == Decimal("3.0000")
     assert daily_stat is not None

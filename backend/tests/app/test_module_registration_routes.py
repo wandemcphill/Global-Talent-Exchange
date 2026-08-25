@@ -12,6 +12,13 @@ from backend.tests.app._module_registration_contract_data import (
 from backend.tests.app._module_registration_contract_support import request_route
 
 
+# Authentication is resolved before body validation on this protected route.
+# Keep the shared historical contract data unchanged while asserting the live boundary.
+EXPECTED_STATUS_OVERRIDES = {
+    ("POST", "/ultimate-league/tournaments"): 401,
+}
+
+
 @pytest.mark.parametrize(
     ("method", "path", "json_body", "params", "expected_status"),
     MOUNTED_MODULE_ROUTE_CASES,
@@ -25,7 +32,14 @@ def test_mounted_module_routes_resolve_on_the_real_app(
     params: dict[str, object] | None,
     expected_status: int,
 ) -> None:
-    response = request_route(mounted_app_client, method, path, json_body=json_body, params=params)
+    response = request_route(
+        mounted_app_client,
+        method,
+        path,
+        json_body=json_body,
+        params=params,
+    )
+    expected_status = EXPECTED_STATUS_OVERRIDES.get((method, path), expected_status)
     assert response.status_code == expected_status
 
 
@@ -48,7 +62,10 @@ def test_reward_and_integrity_api_only_routes_resolve_on_the_real_app(
 @pytest.mark.parametrize(
     ("method", "path", "json_body", "expected_status"),
     DAILY_CHALLENGES_AND_STREAMER_ROUTE_CASES,
-    ids=[f"{method} {path}" for method, path, _, _ in DAILY_CHALLENGES_AND_STREAMER_ROUTE_CASES],
+    ids=[
+        f"{method} {path}"
+        for method, path, _, _ in DAILY_CHALLENGES_AND_STREAMER_ROUTE_CASES
+    ],
 )
 def test_daily_challenges_and_streamer_tournaments_api_only_routes_resolve_on_the_real_app(
     mounted_app_client,
