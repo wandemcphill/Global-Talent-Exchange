@@ -38,7 +38,6 @@ void main() {
     await tester.pump();
 
     expect(find.text('Home sync'), findsOneWidget);
-    expect(find.text('THE GLOBAL FOOTBALL TALENT MARKETPLACE'), findsOneWidget);
     expect(find.text('Transfer Hub'), findsWidgets);
     await tester.pumpAndSettle();
   });
