@@ -1,61 +1,62 @@
 # Blueprint Environment Variable Protection — render.yaml
 
-Date: 2026-06-14
-Branch: deployment/supabase-cloudflare
+Date: 2026-08-25
+Branch: main
 
 ## Goal
 
-Ensure the Blueprint cannot overwrite operator-managed secrets and connection
-strings on each sync. Anything with `sync: false` is owned by the dashboard;
-Blueprint reads it but never writes it.
+Keep operator-managed secrets and external connection strings out of source
+control while allowing Blueprint to own infrastructure-managed configuration.
 
-## Protected keys (now `sync: false` on every service that uses them)
+## Protected dashboard-managed values
 
-| Key | Category | Before | After |
-|---|---|---|---|
-| DATABASE_URL | DB connection (Supabase) | sync: false | sync: false ✓ |
-| GTE_REDIS_URL | Redis connection | `fromService` (Blueprint-managed) | **sync: false** |
-| CLOUDINARY_URL | Media credential | sync: false | sync: false ✓ |
-| GTE_AUTH_SECRET | JWT secret | api: sync:false / workers: `fromService` | **sync: false everywhere** |
-| GTE_MEDIA_SIGNING_SECRET | Signing secret | api: sync:false / workers: `fromService` | **sync: false everywhere** |
-| GTE_KORAPAY_* (4) | Payment API keys | sync: false | sync: false ✓ |
-| TREASURY_* (3) | Payout config | sync: false | sync: false ✓ |
-| SPORTMONKS_API_TOKEN | Ingestion API key | sync: false | sync: false ✓ |
-| ELEVENLABS_API_KEY | Media API key | sync: false | sync: false ✓ |
-| SENTRY_DSN | Observability | sync: false | sync: false ✓ |
+| Key | Category | Blueprint ownership |
+|---|---|---|
+| DATABASE_URL | Supabase connection | `sync: false` |
+| GTE_AUTH_SECRET | JWT secret | `sync: false` on every consumer |
+| GTE_MEDIA_SIGNING_SECRET | Signing secret | `sync: false` on every consumer |
+| GTE_PAYSTACK_SECRET_KEY | Paystack credential | `sync: false` |
+| GTE_PAYSTACK_WEBHOOK_SECRET | Paystack webhook secret | `sync: false` |
+| GTE_PAYSTACK_CALLBACK_URL | Frontend callback URL | `sync: false` |
+| GTE_KORAPAY_* | Payment credentials | `sync: false` |
+| TREASURY_* | Treasury configuration | `sync: false` |
+| CLOUDINARY_* | Media credentials | `sync: false` |
+| SPORTMONKS_API_TOKEN | Ingestion credential | `sync: false` |
+| ELEVENLABS_API_KEY | Media credential | `sync: false` |
+| SENTRY_DSN | Observability credential | `sync: false` |
 
-## Blueprint-managed references removed
+## Blueprint-managed infrastructure values
 
-Previously the three Python workers pulled `GTE_AUTH_SECRET` and
-`GTE_MEDIA_SIGNING_SECRET` from `gtex-api` via `fromService`, and all five
-services pulled `GTE_REDIS_URL` from the `gtex-cache` service via `fromService`.
-Those cross-references made Blueprint the owner of those values. **All
-`fromService` / `fromDatabase` references are now removed** — verified: zero remain.
+`gtex-cache` is now a Blueprint-managed Render Key Value resource. Redis
+consumers receive `GTE_REDIS_URL` through `fromService`, because the connection
+string belongs to infrastructure provisioned by the Blueprint rather than an
+operator-supplied secret.
 
-## ⚠️ Required operator action (consequence of removing the secret cross-refs)
+The shared Redis consumers are:
 
-Because the worker secrets are no longer auto-derived from `gtex-api`, you MUST
-set the **same** value on every service:
+- gtex-api
+- gtex-rq-worker
+- gtex-simulation-worker
+- gtex-outbox-relay
+- gtex-player-ingestion-worker
 
-- `GTE_AUTH_SECRET` — identical on gtex-api + all 3 Python workers
-- `GTE_MEDIA_SIGNING_SECRET` — identical on gtex-api + all 3 Python workers
-- `GTE_REDIS_URL` — the manual Render Redis `rediss://` string on all 5 services
-- `DATABASE_URL` — the Supabase `postgresql://...?sslmode=require` string on all 5
+## Environment groups
 
-Mismatched `GTE_AUTH_SECRET` between api and a worker will cause cross-service
-auth tokens to fail validation. A missing required secret fails the service boot
-(fail-safe, not silent).
+The repository does **not** use Render `envVarGroups` / `fromGroup` today.
+Environment values are declared directly per service. Existing dashboard values
+not represented in the Blueprint should be reviewed separately before any future
+cleanup or migration into environment groups.
 
-## Non-secret `value:` keys (intentionally left as `value:`)
+## Operator rule
 
-Config flags such as `REDIS_ENABLED`, `GTE_APP_ENV`, `WEB_CONCURRENCY`,
-`GTE_INGESTION_PROVIDER`, cron schedules, and feature toggles remain inline
-`value:` entries. These are non-sensitive defaults; Blueprint managing them is
-the intended behavior and carries no secret-overwrite risk.
+Never commit real credentials into `render.yaml`, `.env.production.example`, or
+any other repository file. `sync: false` entries are populated from the Render
+Dashboard.
 
-## Verification
+## Verification target
 
-```
-remaining Blueprint-managed env refs (fromService/fromDatabase): NONE
-secret/conn keys NOT sync:false: NONE
-```
+- No production payment secret is hardcoded.
+- Supabase remains the database owner.
+- Render Key Value owns the production Redis connection.
+- Paystack can only become ready when its runtime flag and credentials are
+  present.
