@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/app/gte_frontend_app.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
@@ -55,9 +59,13 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GteLoginScreen(controller: controller),
+      GteFrontendApp(
+        controller: controller,
+        config: const GteAppConfig(
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+        ),
+        initialPath: gtexLoginRoute,
       ),
     );
     await tester.pumpAndSettle();
@@ -68,8 +76,8 @@ void main() {
     await tester.tap(find.text('Apply for creator access'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Creator access request'), findsOneWidget);
-    expect(find.text('Create account to continue'), findsOneWidget);
+    expect(find.text('Creator signup'), findsOneWidget);
+    expect(find.text('Public creator identity'), findsOneWidget);
   });
 
   testWidgets(
