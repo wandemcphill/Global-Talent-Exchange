@@ -2061,7 +2061,7 @@ class GteModeAwareApiRepository implements GteApiRepository {
           requiresAuth &&
           allowRefresh &&
           await _attemptTokenRefresh()) {
-        return _request(
+        return await _request(
           method,
           path,
           query: query,
