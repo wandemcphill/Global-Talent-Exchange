@@ -90,6 +90,16 @@ def test_paystack_webhook_is_blocked_before_signature_validation(
     assert "paystack is unavailable" in response.json()["detail"].lower()
 
 
+# Compatibility name retained for CI/release gates that still reference the
+# pre-hard-block test identifier. The production contract is now stronger:
+# Paystack must be rejected before signature validation even when credentials
+# or legacy enable flags are present.
+def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
+    webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    test_paystack_webhook_is_blocked_before_signature_validation(webhook_client, monkeypatch)
+
+
 def test_paystack_webhook_is_blocked_when_signature_is_missing(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
