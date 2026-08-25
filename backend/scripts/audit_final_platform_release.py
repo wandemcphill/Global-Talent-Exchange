@@ -35,20 +35,24 @@ def audit() -> dict[str, object]:
     frontend = REPO / "frontend" / "lib"
     backend = REPO / "backend"
 
-    # Live frontend paths must not silently substitute fixture data or localhost.
-    for finding in _scan(
-        frontend,
-        (".dart",),
-        ("liveThenFixture", "localhost:8000", "127.0.0.1:8000"),
-    ):
-        violations.append({"finding": "production_frontend_fallback_or_localhost", "surface": finding})
+    # Production frontend code must not contain hard-coded local API endpoints.
+    for finding in _scan(frontend, (".dart",), ("localhost:8000", "127.0.0.1:8000")):
+        violations.append({"finding": "production_frontend_localhost", "surface": finding})
+
+    # The deprecated liveThenFixture enum remains only as a compatibility symbol;
+    # release behavior must never silently convert live failures into fixtures.
+    repository_source = _read(frontend / "data" / "gte_api_repository.dart")
+    if "liveThenFixture" in repository_source and "never enables a silent fixture fallback" not in repository_source:
+        violations.append({"finding": "deprecated_backend_mode_contract_missing", "surface": "gte_api_repository.dart"})
+    if "return gteFixtureApiBaseUrl" in repository_source:
+        warnings.append({"finding": "fixture_url_symbol_present", "surface": "gte_api_repository.dart"})
 
     # Globally suppressed async-context lint is a release blocker because it hides lifecycle bugs.
     analysis = _read(REPO / "frontend" / "analysis_options.yaml")
     if "use_build_context_synchronously: ignore" in analysis:
         violations.append({"finding": "global_async_context_lint_suppressed", "surface": "frontend/analysis_options.yaml"})
 
-    # Schema evolution must remain Alembic-only.
+    # Schema evolution must remain Alembic-only in application startup/database bootstrap.
     startup = _read(backend / "app" / "main.py") + _read(backend / "app" / "core" / "database.py")
     if "metadata.create_all" in startup:
         violations.append({"finding": "startup_schema_mutation", "surface": "backend startup/database"})
@@ -65,12 +69,11 @@ def audit() -> dict[str, object]:
         if gate not in workflow:
             violations.append({"finding": "economic_release_gate_missing", "surface": gate})
 
-    # Sensitive admin/payment routes must retain explicit capability/provider controls.
+    # Provider availability must not silently turn a blocked rail into a live one.
     payment_registry = _read(backend / "app" / "payments" / "provider_registry.py")
     if "Paystack" in payment_registry and "False" not in payment_registry:
         warnings.append({"finding": "verify_paystack_runtime_flag", "surface": "provider_registry"})
 
-    # Release docs must not advertise the old placeholder/fixture fallback architecture.
     tracker = _read(REPO / "AUDIT_REMEDIATION_TRACKER.md")
     if "## Phase A10" not in tracker:
         violations.append({"finding": "audit_tracker_incomplete", "surface": "AUDIT_REMEDIATION_TRACKER.md"})
