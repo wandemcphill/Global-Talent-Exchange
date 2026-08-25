@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
@@ -98,17 +99,6 @@ void main() {
         marketTradingEnabled: false,
         platformRewardWithdrawalsEnabled: false,
         requiredPolicyAcceptancesMissing: 1,
-        missingPolicyAcceptances: <GtePolicyRequirementSummary>[
-          GtePolicyRequirementSummary(
-            documentKey: 'wallet-policy',
-            title: 'Wallet policy acceptance',
-            versionLabel: 'v2',
-            isMandatory: true,
-          ),
-        ],
-        canDeposit: false,
-        canWithdrawPlatformRewards: false,
-        canTradeMarket: false,
       );
 
       await tester.pumpWidget(
@@ -119,16 +109,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Session active'), findsOneWidget);
-      expect(find.text('You are in'), findsNothing);
-      expect(
-        find.text(
-          'Signed in as fixture-user. Some actions remain limited until compliance review is complete.',
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('Compliance action required'), findsOneWidget);
-      expect(find.text('Open compliance'), findsOneWidget);
+      expect(find.text('Trading unavailable'), findsOneWidget);
+      expect(find.text('Withdrawals unavailable'), findsOneWidget);
+      expect(find.text('Use demo credentials'), findsNothing);
+      expect(find.text('Use admin credentials'), findsNothing);
     },
   );
 }
@@ -136,24 +120,15 @@ void main() {
 GteAuthSession _authenticatedSession({
   required String userId,
   required String userName,
-  String? clubId,
-  String? clubName,
+  required String clubId,
+  required String clubName,
 }) {
-  return GteAuthSession.fromJson(<String, Object?>{
-    'access_token': 'test-token',
-    'session_id': 'test-session',
-    'token_type': 'bearer',
-    'expires_in': 3600,
-    if (clubId != null) 'current_club_id': clubId,
-    if (clubName != null) 'current_club_name': clubName,
-    'user': <String, Object?>{
-      'id': userId,
-      'email': '$userId@gtex.test',
-      'username': userId,
-      'display_name': userName,
-      'role': 'user',
-      if (clubId != null) 'current_club_id': clubId,
-      if (clubName != null) 'current_club_name': clubName,
-    },
-  });
+  return GteAuthSession(
+    userId: userId,
+    userName: userName,
+    email: 'fixture@example.com',
+    clubId: clubId,
+    clubName: clubName,
+    backendMode: GteBackendMode.fixture,
+  );
 }
