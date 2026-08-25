@@ -70,12 +70,19 @@ def _has_capability_dependency(
     for child in ast.walk(node):
         if not isinstance(child, ast.Call):
             continue
-        if not isinstance(child.func, ast.Name) or child.func.id != "Depends" or not child.args:
+        if (
+            not isinstance(child.func, ast.Name)
+            or child.func.id != "Depends"
+            or not child.args
+        ):
             continue
         dependency = child.args[0]
         if not isinstance(dependency, ast.Call):
             continue
-        if not isinstance(dependency.func, ast.Name) or dependency.func.id != "require_admin_capability":
+        if (
+            not isinstance(dependency.func, ast.Name)
+            or dependency.func.id != "require_admin_capability"
+        ):
             continue
         if not dependency.args:
             continue
@@ -101,7 +108,11 @@ def audit() -> dict[str, object]:
             _add(findings, "missing_admin_mutation_route", function_name)
             continue
         if not _has_capability_dependency(node, capability):
-            _add(findings, "mutation_missing_capability_gate", f"{function_name}:{capability}")
+            _add(
+                findings,
+                "mutation_missing_capability_gate",
+                f"{function_name}:{capability}",
+            )
 
     capability_source = _source("capabilities")
     for capability in (
@@ -117,7 +128,11 @@ def audit() -> dict[str, object]:
         if f"{capability} =" not in capability_source:
             _add(findings, "missing_admin_capability", capability)
     if "def require_admin_capability(" not in capability_source:
-        _add(findings, "capability_authorization_boundary_missing", "require_admin_capability")
+        _add(
+            findings,
+            "capability_authorization_boundary_missing",
+            "require_admin_capability",
+        )
     if "def assert_admin_capability(" not in capability_source:
         _add(findings, "capability_assertion_missing", "assert_admin_capability")
 
@@ -163,7 +178,10 @@ def audit() -> dict[str, object]:
             _add(findings, "missing_runtime_control", marker)
 
     runtime_state_source = _source("runtime_state")
-    if "class AdminRuntimeState" not in runtime_state_source or "state_key" not in runtime_state_source:
+    if (
+        "class AdminRuntimeState" not in runtime_state_source
+        or "state_key" not in runtime_state_source
+    ):
         _add(findings, "missing_persistent_admin_runtime_state", "admin_runtime_states")
 
     warnings.append(
