@@ -26,6 +26,11 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r backend/requirements.txt pytest
 
@@ -44,6 +49,10 @@ jobs:
           backend/tests/matches/test_competition_match_settlement_guard.py
           -q
 
+      - name: Frontend dependencies
+        working-directory: frontend
+        run: flutter pub get
+
       - name: Frontend dependency graph
         working-directory: frontend
         run: python tool/audit_dependency_graph.py
@@ -54,4 +63,4 @@ jobs:
 
       - name: Flutter unit/widget tests
         working-directory: frontend
-        run: flutter test --no-pub
+        run: flutter test
