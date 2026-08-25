@@ -46,7 +46,9 @@ async def run(
     )
     timeout = httpx.Timeout(15.0)
     async with httpx.AsyncClient(limits=limits, timeout=timeout) as client:
-        samples = await asyncio.gather(*(probe(client, url) for _ in range(requests)))
+        samples = await asyncio.gather(
+            *(probe(client, url) for _ in range(requests))
+        )
 
     latencies = [sample.latency_ms for sample in samples]
     successes = sum(sample.ok for sample in samples)
