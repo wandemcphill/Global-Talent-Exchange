@@ -33,7 +33,10 @@ def audit() -> dict[str, object]:
 
     if "simulate" not in functions("simulation"):
         violations.append(
-            {"finding": "simulation_entrypoint_missing", "surface": "event_generator.simulate"}
+            {
+                "finding": "simulation_entrypoint_missing",
+                "surface": "event_generator.simulate",
+            }
         )
 
     strength_source = source("strength").lower()
@@ -48,12 +51,16 @@ def audit() -> dict[str, object]:
         "adaptability",
     ):
         if marker not in strength_source:
-            violations.append({"finding": "strength_factor_missing", "surface": marker})
+            violations.append(
+                {"finding": "strength_factor_missing", "surface": marker}
+            )
 
     events_source = source("events").lower()
     for marker in ("goal", "card", "substitution", "injury"):
         if marker not in events_source:
-            violations.append({"finding": "event_family_missing", "surface": marker})
+            violations.append(
+                {"finding": "event_family_missing", "surface": marker}
+            )
 
     competition_source = source("competition")
     competition_functions = functions("competition")
@@ -65,13 +72,25 @@ def audit() -> dict[str, object]:
                     "surface": function_name,
                 }
             )
-    for marker in ("is_terminal", "stats_applied", "already settled", "cannot be re-settled"):
+    for marker in (
+        "is_terminal",
+        "stats_applied",
+        "already settled",
+        "cannot be re-settled",
+    ):
         if marker not in competition_source:
-            violations.append({"finding": "settlement_guard_missing", "surface": marker})
+            violations.append(
+                {"finding": "settlement_guard_missing", "surface": marker}
+            )
 
     economy_source = source("economy")
     economy_functions = functions("economy")
-    for function_name in ("join_match", "fund_gtex_match", "record_match_volume", "run_lottery"):
+    for function_name in (
+        "join_match",
+        "fund_gtex_match",
+        "record_match_volume",
+        "run_lottery",
+    ):
         if function_name not in economy_functions:
             violations.append(
                 {"finding": "match_economy_surface_missing", "surface": function_name}
@@ -84,7 +103,9 @@ def audit() -> dict[str, object]:
         "PLATFORM_COMPETITION_REWARD",
     ):
         if marker not in economy_source:
-            violations.append({"finding": "match_economy_control_missing", "surface": marker})
+            violations.append(
+                {"finding": "match_economy_control_missing", "surface": marker}
+            )
 
     return {
         "group": "match-engine-competition-economy",
