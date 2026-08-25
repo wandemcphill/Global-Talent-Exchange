@@ -36,3 +36,7 @@ The following are deliberately **OPEN/BLOCKED**, because repository code cannot 
 ## Launch rule
 
 Do not convert an OPEN/BLOCKED runtime item to GREEN merely because the repository contains the corresponding code or test. Group 6 is fully launch-certified only after the runtime lane has real evidence for every mandatory item.
+
+## CI synchronization
+
+The Group 6 branch contains the latest certification fixes. This ledger change intentionally triggers a fresh pull-request merge ref so Quality Gates evaluate the current branch head rather than an obsolete merge ref.
