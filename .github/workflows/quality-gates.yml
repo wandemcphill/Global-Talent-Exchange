@@ -42,5 +42,6 @@ jobs:
       - run: python tools/audit/check_api_contract_violations.py
       - run: python tools/audit/reality_audit.py
       - run: python frontend/tool/audit_dependency_graph.py
+      - run: python backend/scripts/audit_final_platform_release.py
       - run: python tools/quality/run_changed_quality.py --base "$QUALITY_BASE_SHA" --head "$QUALITY_HEAD_SHA"
         shell: bash

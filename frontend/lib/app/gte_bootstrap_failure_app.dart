@@ -59,11 +59,12 @@ class GteBootstrapFailure {
             'mounted, and the 3D lane never opened.',
         command:
             'flutter run -d <device> '
-            '--dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 '
+            '--dart-define=GTE_API_BASE_URL=<reachable-backend-url> '
             '--dart-define=GTE_BACKEND_MODE=live',
         followUp:
-            'If the backend is running on this PC, pair the run with '
-            '`adb reverse tcp:8000 tcp:8000` or use a reachable LAN URL.',
+            'Provide the deployed or otherwise reachable backend URL for the '
+            'target device. Local development may use a guarded fixture or '
+            'device-specific transport configuration outside production builds.',
       );
     }
     return GteBootstrapFailure(
