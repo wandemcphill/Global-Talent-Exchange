@@ -18,7 +18,7 @@ jobs:
           python-version: "3.14"
       - run: python -m pip install black
       - run: |
-          python -m black --diff --color=false \
+          python -m black --diff \
             backend/scripts/audit_admin_control_plane_release.py \
             backend/scripts/audit_match_engine_competition_economy_release.py \
             backend/tests/economy/test_match_economy_engine.py \
