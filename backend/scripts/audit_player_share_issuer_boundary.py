@@ -6,7 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-ISSUER = Path(__file__).resolve().parents[1] / "scripts" / "issue_player_share_markets.py"
+ISSUER = (
+    Path(__file__).resolve().parents[1]
+    / "scripts"
+    / "issue_player_share_markets.py"
+)
 
 
 def inspect_issuer(source: str) -> dict[str, Any]:
@@ -39,7 +43,9 @@ def inspect_issuer(source: str) -> dict[str, Any]:
             if hasattr(node, "lineno")
         }
         if any(call.lineno not in issue_lines for call in ensure_calls):
-            violations.append({"finding": "issuer_service_call_outside_issue_markets"})
+            violations.append(
+                {"finding": "issuer_service_call_outside_issue_markets"}
+            )
 
     source_lines = source.splitlines()
     ensure_lines = {call.lineno for call in ensure_calls}
