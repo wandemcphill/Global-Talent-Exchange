@@ -210,7 +210,11 @@ def main() -> int:
                     f"info={total_counts['info']}\n"
                 )
                 return 1
-            if completed.returncode == 0 or (completed.returncode == 1 and analyzer_completed):
+            # This gate is explicitly a hard-error gate. Flutter/Dart may return
+            # a non-zero status for warning-only analysis; once a completion
+            # marker is present and no errors were detected, preserve the warning
+            # count but do not turn it into a hard failure.
+            if completed.returncode == 0 or analyzer_completed:
                 for severity, count in chunk_counts.items():
                     total_counts[severity] += count
                 break
