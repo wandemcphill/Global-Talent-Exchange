@@ -8,9 +8,7 @@ MODULE_PATH = (
     / "scripts"
     / "audit_group6_production_readiness.py"
 )
-SPEC = importlib.util.spec_from_file_location(
-    "audit_group6_production_readiness", MODULE_PATH
-)
+SPEC = importlib.util.spec_from_file_location("audit_group6_production_readiness", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
