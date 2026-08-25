@@ -1,47 +1,53 @@
 # Blueprint Cost Audit — render.yaml
 
-Date: 2026-06-14
-Branch: deployment/supabase-cloudflare
-Scope: infrastructure only — no business logic, no deploy.
+Date: 2026-08-25
+Branch: main
+Scope: production infrastructure and required runtime resources.
 
 ## Objective
 
-Prevent the Render Blueprint from silently creating paid resources or upgrading
-plans on `render.yaml` sync.
+Keep the production stack explicit and prevent accidental plan escalation while
+provisioning the infrastructure the application actually requires.
 
-## Before → After
+## Production resources
 
-| Service | Type | Plan before | Plan after |
-|---|---|---|---|
-| gtex-api | web (python) | standard | **starter** |
-| gtex-web | static | — (free static) | — (unchanged) |
-| gtex-rq-worker | worker | standard | **starter** |
-| gtex-simulation-worker | worker | standard | **starter** |
-| gtex-outbox-relay | worker | standard | **starter** |
-| gtex-player-ingestion-worker | worker (node) | standard | **starter** |
-| gtex-cache (Redis) | keyvalue | standard | **block removed** |
-| gtex-postgres | database | basic-1gb | already removed (Supabase) |
-
-## Paid-resource auto-creation — eliminated
-
-| Resource | Was Blueprint creating it? | Now |
+| Resource | Type | Plan |
 |---|---|---|
-| Render PostgreSQL | No (removed earlier — Supabase) | No `databases:` block |
-| Render Redis / Key-Value | **Yes** (`type: keyvalue` block) | **Block removed** — Redis is created manually |
-| Web/worker services | Yes (always, by design) | Still declared, but on `starter`, not `standard` |
+| gtex-api | web / Python | starter |
+| gtex-web | static | static hosting |
+| gtex-rq-worker | worker / Python | starter |
+| gtex-simulation-worker | worker / Python | starter |
+| gtex-outbox-relay | worker / Python | starter |
+| gtex-player-ingestion-worker | worker / Node | starter |
+| gtex-realplayer-ingest | cron / Python | starter |
+| gtex-sofifa-import | cron / Python | starter |
+| gtex-appreciation-reprice | cron / Python | starter |
+| gtex-regen-rebuild | cron / Python | starter |
+| gtex-squad-tier-backfill | cron / Python | starter |
+| gtex-cache | Render Key Value | starter |
 
-## Plan rationale
+## Paid resources
 
-All long-running services dropped from `standard` to `starter`. `starter` is the
-lowest always-on paid tier (no cold-start suspension, unlike free). The static
-`gtex-web` carries no plan (served free by Render static hosting / superseded by
-Cloudflare Pages).
+The Blueprint intentionally provisions the paid resources required for a
+production runtime. The additional paid datastore is `gtex-cache`, because Redis /
+Valkey is required for queues, cache coordination, outbox processing, and the
+Node ingestion worker.
 
-## Net effect
+PostgreSQL is **not** provisioned by Render. The production database remains on
+Supabase, referenced through dashboard-managed `DATABASE_URL`.
 
-- Blueprint can no longer provision a managed database (none declared).
-- Blueprint can no longer provision Redis (no `keyvalue` block).
-- Blueprint can no longer push services onto `standard`; they pin to `starter`.
-- Operator explicitly creates the one Redis instance once, by hand.
+## Cache configuration
 
-**No paid resource is auto-created beyond the service containers themselves.**
+`gtex-cache` is internal-only (`ipAllowList: []`), uses `noeviction` to protect
+queued jobs, and uses Journal + Snapshot persistence. All Redis consumers receive
+the internal connection string through Blueprint `fromService` wiring.
+
+## Plan discipline
+
+All always-on application services remain pinned to `starter`. No service is
+silently promoted to `standard` or higher by the Blueprint.
+
+## Verdict
+
+**Cost-controlled production Blueprint: required services and required cache are
+managed as code; Supabase remains the external database provider.**
