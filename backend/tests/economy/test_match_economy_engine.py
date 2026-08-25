@@ -77,9 +77,7 @@ def _create_user(
     return user
 
 
-def _seed_balance(
-    session, wallet: WalletService, *, user: User, unit: LedgerUnit, amount: Decimal
-) -> None:
+def _seed_balance(session, wallet: WalletService, *, user: User, unit: LedgerUnit, amount: Decimal) -> None:
     user_account = wallet.get_user_account(session, user, unit)
     platform_account = wallet.ensure_platform_account(session, unit)
     wallet.append_transaction(
@@ -168,9 +166,7 @@ def test_join_match_collects_user_hosted_entry_fee_into_prize_pool(session) -> N
     assert result.prize_pool_account_code == prize_pool_account.code
     assert wallet.get_balance(session, prize_pool_account) == Decimal("200.0000")
     assert wallet.get_balance(session, treasury_account) == Decimal("50.0000")
-    assert wallet.get_balance(
-        session, wallet.get_user_account(session, user, LedgerUnit.CREDIT)
-    ) == Decimal("250.0000")
+    assert wallet.get_balance(session, wallet.get_user_account(session, user, LedgerUnit.CREDIT)) == Decimal("250.0000")
 
 
 def test_join_match_is_free_for_gtex_hosted_matches(session) -> None:
@@ -196,9 +192,7 @@ def test_join_match_is_free_for_gtex_hosted_matches(session) -> None:
     assert result.transaction_id is None
     assert result.charged_amount == Decimal("0.0000")
     assert result.prize_pool_balance == Decimal("0.0000")
-    assert wallet.get_balance(
-        session, wallet.get_user_account(session, user, LedgerUnit.COIN)
-    ) == Decimal("0.0000")
+    assert wallet.get_balance(session, wallet.get_user_account(session, user, LedgerUnit.COIN)) == Decimal("0.0000")
 
 
 def test_fund_gtex_match_uses_promo_pool_as_controlled_source(session) -> None:
@@ -223,9 +217,7 @@ def test_fund_gtex_match_uses_promo_pool_as_controlled_source(session) -> None:
         title="GTEX Final",
     )
 
-    result = engine.fund_gtex_match(
-        match=match, prize_amount=Decimal("7.5000"), actor=admin
-    )
+    result = engine.fund_gtex_match(match=match, prize_amount=Decimal("7.5000"), actor=admin)
 
     prize_pool_account = engine.ensure_prize_pool_account(match)
     promo_pool_account = wallet.ensure_promo_pool_account(session, LedgerUnit.COIN)
@@ -261,9 +253,7 @@ def test_fund_gtex_match_can_top_up_rewards_pool_from_treasury(session) -> None:
         title="GTEX Treasury Match",
     )
 
-    result = engine.fund_gtex_match(
-        match=match, prize_amount=Decimal("10.0000"), actor=admin
-    )
+    result = engine.fund_gtex_match(match=match, prize_amount=Decimal("10.0000"), actor=admin)
 
     prize_pool_account = engine.ensure_prize_pool_account(match)
     rewards_pool_account = wallet.ensure_rewards_pool_account(session, LedgerUnit.COIN)
@@ -313,18 +303,16 @@ def test_record_match_volume_triggers_lottery_for_recently_active_users(session)
     )
 
     settlement = session.scalar(
-        select(RewardSettlement).where(
-            RewardSettlement.reward_source == "lottery_volume_trigger"
-        )
+        select(RewardSettlement).where(RewardSettlement.reward_source == "lottery_volume_trigger")
     )
     daily_stat = session.get(EconomyDailyStat, utcnow().date())
     assert result.previous_volume == Decimal("0.0000")
     assert result.current_volume == Decimal("5.0000")
     assert len(result.triggered_rewards) == 1
     assert result.triggered_rewards[0].winner_user_id == eligible_user.id
-    assert wallet.get_balance(
-        session, wallet.get_user_account(session, eligible_user, LedgerUnit.COIN)
-    ) == Decimal("3.0000")
+    assert wallet.get_balance(session, wallet.get_user_account(session, eligible_user, LedgerUnit.COIN)) == Decimal(
+        "3.0000"
+    )
     assert settlement is not None
     assert settlement.net_amount == Decimal("3.0000")
     assert daily_stat is not None
