@@ -148,7 +148,10 @@ def audit() -> dict[str, object]:
         )
     if "return gteFixtureApiBaseUrl" in repository_source:
         warnings.append(
-            {"finding": "fixture_url_symbol_present", "surface": "gte_api_repository.dart"}
+            {
+                "finding": "fixture_url_symbol_present",
+                "surface": "gte_api_repository.dart",
+            }
         )
 
     analysis = _read(REPO / "frontend" / "analysis_options.yaml")
@@ -192,7 +195,10 @@ def audit() -> dict[str, object]:
     tracker = _read(REPO / "AUDIT_REMEDIATION_TRACKER.md")
     if "## Phase A10" not in tracker:
         violations.append(
-            {"finding": "audit_tracker_incomplete", "surface": "AUDIT_REMEDIATION_TRACKER.md"}
+            {
+                "finding": "audit_tracker_incomplete",
+                "surface": "AUDIT_REMEDIATION_TRACKER.md",
+            }
         )
 
     return {
