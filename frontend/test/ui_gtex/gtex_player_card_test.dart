@@ -72,7 +72,7 @@ void main() {
     expect(find.text('REAL PLAYER'), findsWidgets);
     expect(find.text('SCOUTING PROFILE'), findsOneWidget);
     expect(find.text('For Sale'), findsOneWidget);
-    expect(find.byIcon(Icons.person_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.badge_rounded), findsOneWidget);
   });
 
   testWidgets('player card uses micro layout in tight tiles', (
