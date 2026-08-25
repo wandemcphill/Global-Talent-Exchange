@@ -66,7 +66,9 @@ def check() -> dict[str, object]:
     if "/integrations/payments/korapay/webhook" not in production_env:
         violations.append("korapay_notification_route_contract_missing")
 
-    evidence["frontend_live_boot_guarded"] = ': "${GTE_API_BASE_URL:?' in render_build
+    evidence["frontend_live_boot_guarded"] = (
+        ': "${GTE_API_BASE_URL:?' in render_build
+    )
     if not evidence["frontend_live_boot_guarded"]:
         violations.append("frontend_release_missing_live_api_guard")
 
@@ -101,9 +103,7 @@ def check() -> dict[str, object]:
     if not all(evidence["admin_db_state"].values()):
         violations.append("admin_runtime_state_not_database_backed")
     if "_save_file_state" in admin_service:
-        warnings.append(
-            "legacy_file_state_fallback_retained_for_non_database_bootstrap"
-        )
+        warnings.append("legacy_file_state_fallback_retained_for_non_database_bootstrap")
 
     evidence["market_discovery"] = {
         "sql_tradable_filter": "Player.is_tradable.is_(True)" in market_repo,
