@@ -25,7 +25,7 @@ _REGISTRY: dict[str, ProviderRegistration] = {
     "apple_pay": ProviderRegistration(adapter=ApplePayProviderAdapter(), is_live=False, status="stubbed"),
     "google_pay": ProviderRegistration(adapter=GooglePayProviderAdapter(), is_live=False, status="stubbed"),
     "korapay": ProviderRegistration(adapter=KoraPayProviderAdapter(), is_live=True, status="live"),
-    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=False, status="blocked"),
+    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live"),
     "regional_rails": ProviderRegistration(adapter=RegionalRailsProviderAdapter(), is_live=False, status="stubbed"),
     "crypto_fiat": ProviderRegistration(adapter=CryptoFiatProviderAdapter(), is_live=False, status="stubbed"),
 }
@@ -87,7 +87,7 @@ def provider_secret_configured(provider_key: str) -> bool:
 def provider_webhook_secret_configured(provider_key: str) -> bool:
     normalized = provider_key.strip().lower()
     env_names = {
-        "paystack": ("GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET"),
+        "paystack": ("GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET", "GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"),
         "korapay": (
             "GTE_KORAPAY_WEBHOOK_SECRET",
             "KORAPAY_WEBHOOK_SECRET",
@@ -120,7 +120,8 @@ def is_production_environment() -> bool:
 
 
 def paystack_enabled() -> bool:
-    return False
+    raw = (os.getenv("GTE_ENABLE_PAYSTACK") or os.getenv("ENABLE_PAYSTACK") or "false").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def provider_runtime_status(
