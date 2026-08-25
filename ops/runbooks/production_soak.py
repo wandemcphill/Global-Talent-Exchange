@@ -36,17 +36,26 @@ async def probe(client: httpx.AsyncClient, url: str) -> Sample:
         )
 
 
-async def run(base_url: str, path: str, concurrency: int, requests: int) -> dict[str, object]:
+async def run(
+    base_url: str, path: str, concurrency: int, requests: int
+) -> dict[str, object]:
     url = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
-    limits = httpx.Limits(max_connections=concurrency, max_keepalive_connections=concurrency)
+    limits = httpx.Limits(
+        max_connections=concurrency,
+        max_keepalive_connections=concurrency,
+    )
     timeout = httpx.Timeout(15.0)
     async with httpx.AsyncClient(limits=limits, timeout=timeout) as client:
-        samples = await asyncio.gather(*(probe(client, url) for _ in range(requests)))
+        samples = await asyncio.gather(
+            *(probe(client, url) for _ in range(requests))
+        )
 
     latencies = [sample.latency_ms for sample in samples]
     successes = sum(sample.ok for sample in samples)
     ordered = sorted(latencies)
-    p95_index = min(len(ordered) - 1, max(0, int(len(ordered) * 0.95) - 1))
+    p95_index = min(
+        len(ordered) - 1, max(0, int(len(ordered) * 0.95) - 1)
+    )
     return {
         "url": url,
         "requests": requests,
@@ -65,7 +74,9 @@ async def run(base_url: str, path: str, concurrency: int, requests: int) -> dict
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run a bounded GTEX HTTP production/staging soak probe.")
+    parser = argparse.ArgumentParser(
+        description="Run a bounded GTEX HTTP production/staging soak probe."
+    )
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--path", default="/health")
     parser.add_argument("--concurrency", type=int, default=10)
@@ -73,7 +84,9 @@ def main() -> int:
     args = parser.parse_args()
     if args.concurrency < 1 or args.requests < 1:
         parser.error("concurrency and requests must be positive")
-    report = asyncio.run(run(args.base_url, args.path, args.concurrency, args.requests))
+    report = asyncio.run(
+        run(args.base_url, args.path, args.concurrency, args.requests)
+    )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["success_rate"] == 1.0 else 1
 
