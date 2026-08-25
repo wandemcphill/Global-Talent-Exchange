@@ -1,14 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter_test/flutter_test.dart';
-
-/// Keep the shared test executable hook limited to test-runner setup.
+/// Keep the shared test executable hook completely passive.
 ///
-/// Widget trees must be mounted from individual `testWidgets` bodies. Calling
-/// `runApp()` here executes outside an active Flutter test and can trigger
-/// AutomatedTestWidgetsFlutterBinding's `inTest` assertion and race the
-/// stream-channel shutdown with flutter_tools.
+/// Do not initialize a widget binding or mount a widget tree here. The
+/// `flutter_test` runner initializes the appropriate binding when a
+/// `testWidgets` case starts. Initializing it from this global hook can make
+/// plain `test` cases participate in widget-test lifecycle management and can
+/// race flutter_tools' test stream during teardown.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
-  TestWidgetsFlutterBinding.ensureInitialized();
   await testMain();
 }
