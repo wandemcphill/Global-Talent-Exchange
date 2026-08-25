@@ -2,28 +2,32 @@ from __future__ import annotations
 
 import ast
 import json
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
-FRONTEND = ROOT / "frontend"
 
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
-def python_has_dependency(path: Path, function_name: str, dependency_name: str) -> bool:
+def python_has_dependency(
+    path: Path, function_name: str, dependency_name: str
+) -> bool:
     tree = ast.parse(read(path))
     for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name != function_name:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name != function_name:
             continue
         for child in ast.walk(node):
-            if isinstance(child, ast.Call) and isinstance(child.func, ast.Name) and child.func.id == dependency_name:
-                return True
-            if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute) and child.func.attr == dependency_name:
-                return True
+            if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
+                if child.func.id == dependency_name:
+                    return True
+            if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
+                if child.func.attr == dependency_name:
+                    return True
         source = ast.get_source_segment(read(path), node) or ""
         return dependency_name in source
     return False
@@ -51,23 +55,31 @@ def check() -> dict[str, object]:
         "GTE_KORAPAY_REDIRECT_URL",
         "GTE_KORAPAY_NOTIFICATION_URL",
     )
-    evidence["korapay_env_contract"] = {key: key in production_env and key in k8s_secret for key in required_korapay}
+    evidence["korapay_env_contract"] = {
+        key: key in production_env and key in k8s_secret for key in required_korapay
+    }
     for key in required_korapay:
         if key not in production_env or key not in k8s_secret:
             violations.append(f"missing_korapay_env_contract:{key}")
     if "/integrations/payments/korapay/webhook" not in production_env:
         violations.append("korapay_notification_route_contract_missing")
 
-    evidence["frontend_live_boot_guarded"] = ": \"${GTE_API_BASE_URL:?" in render_build
+    evidence["frontend_live_boot_guarded"] = ': "${GTE_API_BASE_URL:?' in render_build
     if not evidence["frontend_live_boot_guarded"]:
         violations.append("frontend_release_missing_live_api_guard")
 
     evidence["player_trade_dependency_guard"] = {
-        "buy": python_has_dependency(players_router, "buy_player_shares", "get_current_trading_user"),
-        "sell": python_has_dependency(players_router, "sell_player_shares", "get_current_trading_user"),
+        "buy": python_has_dependency(
+            players_router, "buy_player_shares", "get_current_trading_user"
+        ),
+        "sell": python_has_dependency(
+            players_router, "sell_player_shares", "get_current_trading_user"
+        ),
     }
     if not all(evidence["player_trade_dependency_guard"].values()):
-        violations.append("player_share_trade_routes_missing_trading_compliance_dependency")
+        violations.append(
+            "player_share_trade_routes_missing_trading_compliance_dependency"
+        )
 
     evidence["hosted_invites"] = {
         "router": any(token in hosted_router for token in ("invite", "invites")),
@@ -92,7 +104,10 @@ def check() -> dict[str, object]:
         "full_python_filter_marker": "filtered_records = [" in market_service,
     }
     if evidence["market_discovery"]["full_python_filter_marker"]:
-        warnings.append("market_discovery_still_performs_post-load_python_filtering; large-market_sql_optimization remains open")
+        warnings.append(
+            "market_discovery_still_performs_post-load_python_filtering; "
+            "large-market_sql_optimization remains open"
+        )
 
     evidence["unity_gate"] = {
         "workflow_present": "unity-windows-build:" in deploy_workflow,
