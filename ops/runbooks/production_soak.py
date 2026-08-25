@@ -46,16 +46,12 @@ async def run(
     )
     timeout = httpx.Timeout(15.0)
     async with httpx.AsyncClient(limits=limits, timeout=timeout) as client:
-        samples = await asyncio.gather(
-            *(probe(client, url) for _ in range(requests))
-        )
+        samples = await asyncio.gather(*(probe(client, url) for _ in range(requests)))
 
     latencies = [sample.latency_ms for sample in samples]
     successes = sum(sample.ok for sample in samples)
     ordered = sorted(latencies)
-    p95_index = min(
-        len(ordered) - 1, max(0, int(len(ordered) * 0.95) - 1)
-    )
+    p95_index = min(len(ordered) - 1, max(0, int(len(ordered) * 0.95) - 1))
     return {
         "url": url,
         "requests": requests,
@@ -84,9 +80,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.concurrency < 1 or args.requests < 1:
         parser.error("concurrency and requests must be positive")
-    report = asyncio.run(
-        run(args.base_url, args.path, args.concurrency, args.requests)
-    )
+    report = asyncio.run(run(args.base_url, args.path, args.concurrency, args.requests))
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["success_rate"] == 1.0 else 1
 
