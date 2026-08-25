@@ -14,7 +14,7 @@ def _read(path: Path) -> str:
 
 def _guarded_fixture_ranges(text: str) -> list[tuple[int, int]]:
     ranges: list[tuple[int, int]] = []
-    for match in re.finditer(r"factory\s+[A-Za-z0-9_]+\.fixture\(\)\s*\{", text):
+    for match in re.finditer(r"factory\s+[A-Za-z0-9_]+\.fixture\([^)]*\)\s*\{", text):
         start = match.start()
         brace = 0
         in_string = False
