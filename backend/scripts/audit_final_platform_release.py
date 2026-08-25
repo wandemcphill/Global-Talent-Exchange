@@ -14,14 +14,52 @@ def _read(path: Path) -> str:
 
 def _guarded_fixture_ranges(text: str) -> list[tuple[int, int]]:
     ranges: list[tuple[int, int]] = []
-    for match in re.finditer(r"factory\s+[A-Za-z0-9_]+\.fixture\([^)]*\)\s*\{", text):
+    factory_pattern = re.compile(
+        r"factory\s+[A-Za-z0-9_]+\s*\.\s*fixture\s*\(",
+    )
+    for match in factory_pattern.finditer(text):
         start = match.start()
-        brace = 0
+        paren_start = match.end() - 1
+        paren_depth = 0
+        in_string = False
+        quote = ""
+        escaped = False
+        close_paren = None
+        for index in range(paren_start, len(text)):
+            char = text[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    in_string = False
+                continue
+            if char in ("'", '"'):
+                in_string = True
+                quote = char
+            elif char == "(":
+                paren_depth += 1
+            elif char == ")":
+                paren_depth -= 1
+                if paren_depth == 0:
+                    close_paren = index
+                    break
+        if close_paren is None:
+            continue
+
+        brace_start = close_paren + 1
+        while brace_start < len(text) and text[brace_start].isspace():
+            brace_start += 1
+        if brace_start >= len(text) or text[brace_start] != "{":
+            continue
+
+        brace_depth = 0
         in_string = False
         quote = ""
         escaped = False
         end = len(text)
-        for index in range(start, len(text)):
+        for index in range(brace_start, len(text)):
             char = text[index]
             if in_string:
                 if escaped:
@@ -35,10 +73,10 @@ def _guarded_fixture_ranges(text: str) -> list[tuple[int, int]]:
                 in_string = True
                 quote = char
             elif char == "{":
-                brace += 1
+                brace_depth += 1
             elif char == "}":
-                brace -= 1
-                if brace == 0:
+                brace_depth -= 1
+                if brace_depth == 0:
                     end = index + 1
                     break
         if "assertFixtureFactoryAllowed" in text[start:end]:
