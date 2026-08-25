@@ -20,11 +20,7 @@ def source(key: str) -> str:
 
 def functions(key: str) -> set[str]:
     tree = ast.parse(source(key))
-    return {
-        node.name
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+    return {node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
 
 def audit() -> dict[str, object]:
@@ -51,16 +47,12 @@ def audit() -> dict[str, object]:
         "adaptability",
     ):
         if marker not in strength_source:
-            violations.append(
-                {"finding": "strength_factor_missing", "surface": marker}
-            )
+            violations.append({"finding": "strength_factor_missing", "surface": marker})
 
     events_source = source("events").lower()
     for marker in ("goal", "card", "substitution", "injury"):
         if marker not in events_source:
-            violations.append(
-                {"finding": "event_family_missing", "surface": marker}
-            )
+            violations.append({"finding": "event_family_missing", "surface": marker})
 
     competition_source = source("competition")
     competition_functions = functions("competition")
@@ -79,9 +71,7 @@ def audit() -> dict[str, object]:
         "cannot be re-settled",
     ):
         if marker not in competition_source:
-            violations.append(
-                {"finding": "settlement_guard_missing", "surface": marker}
-            )
+            violations.append({"finding": "settlement_guard_missing", "surface": marker})
 
     economy_source = source("economy")
     economy_functions = functions("economy")
@@ -92,9 +82,7 @@ def audit() -> dict[str, object]:
         "run_lottery",
     ):
         if function_name not in economy_functions:
-            violations.append(
-                {"finding": "match_economy_surface_missing", "surface": function_name}
-            )
+            violations.append({"finding": "match_economy_surface_missing", "surface": function_name})
     for marker in (
         "idempotency_key=idempotency_key",
         "EconomyGovernorService",
@@ -103,9 +91,7 @@ def audit() -> dict[str, object]:
         "PLATFORM_COMPETITION_REWARD",
     ):
         if marker not in economy_source:
-            violations.append(
-                {"finding": "match_economy_control_missing", "surface": marker}
-            )
+            violations.append({"finding": "match_economy_control_missing", "surface": marker})
 
     return {
         "group": "match-engine-competition-economy",
