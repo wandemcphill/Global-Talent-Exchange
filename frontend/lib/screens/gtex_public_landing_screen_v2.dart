@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../features/onboarding_redesign/gtex_public_landing_screen_v2.dart';
+import '../features/onboarding_redesign/gtex_22_home_screen.dart';
 
 class GtexPublicLandingRouteScreenV2 extends StatelessWidget {
   const GtexPublicLandingRouteScreenV2({
@@ -20,7 +20,7 @@ class GtexPublicLandingRouteScreenV2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GtexPublicLandingScreenV2(
+    return Gtex22HomeScreen(
       onSignup: onSignup,
       onLogin: onLogin,
       onCreatorSignup: onCreatorSignup,
