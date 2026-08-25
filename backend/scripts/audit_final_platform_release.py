@@ -168,11 +168,16 @@ def audit() -> dict[str, object]:
     )
     if "metadata.create_all" in startup:
         violations.append(
-            {"finding": "startup_schema_mutation", "surface": "backend startup/database"}
+            {
+                "finding": "startup_schema_mutation",
+                "surface": "backend startup/database",
+            }
         )
 
     workflow = " ".join(
-        _read(REPO / ".github" / "workflows" / "phase-a-economic-regressions.yml").split()
+        _read(
+            REPO / ".github" / "workflows" / "phase-a-economic-regressions.yml"
+        ).split()
     )
     required_gates = (
         "test_player_share_release_audit.py",
@@ -189,7 +194,10 @@ def audit() -> dict[str, object]:
     payment_registry = _read(backend / "app" / "payments" / "provider_registry.py")
     if "Paystack" in payment_registry and "False" not in payment_registry:
         warnings.append(
-            {"finding": "verify_paystack_runtime_flag", "surface": "provider_registry"}
+            {
+                "finding": "verify_paystack_runtime_flag",
+                "surface": "provider_registry",
+            }
         )
 
     tracker = _read(REPO / "AUDIT_REMEDIATION_TRACKER.md")
