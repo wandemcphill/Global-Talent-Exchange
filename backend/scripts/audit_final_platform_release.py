@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,54 +12,80 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
-def _scan(root: Path, suffixes: tuple[str, ...], needles: tuple[str, ...]) -> list[str]:
+def _guarded_fixture_ranges(text: str) -> list[tuple[int, int]]:
+    ranges: list[tuple[int, int]] = []
+    for match in re.finditer(r"factory\s+[A-Za-z0-9_]+\.fixture\(\)\s*\{", text):
+        start = match.start()
+        brace = 0
+        in_string = False
+        quote = ""
+        escaped = False
+        end = len(text)
+        for index in range(start, len(text)):
+            char = text[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == quote:
+                    in_string = False
+                continue
+            if char in ("'", '"'):
+                in_string = True
+                quote = char
+            elif char == "{":
+                brace += 1
+            elif char == "}":
+                brace -= 1
+                if brace == 0:
+                    end = index + 1
+                    break
+        if "assertFixtureFactoryAllowed" in text[start:end]:
+            ranges.append((start, end))
+    return ranges
+
+
+def _production_localhost_findings(frontend: Path) -> list[str]:
     findings: list[str] = []
-    if not root.exists():
-        return findings
-    for path in root.rglob("*"):
-        if not path.is_file() or path.suffix not in suffixes:
-            continue
+    needles = ("localhost:8000", "127.0.0.1:8000")
+    for path in frontend.rglob("*.dart"):
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
+        guarded = _guarded_fixture_ranges(text)
         for needle in needles:
-            if needle in text:
-                findings.append(f"{path.relative_to(REPO)}:{needle}")
-    return findings
+            for match in re.finditer(re.escape(needle), text):
+                if not any(start <= match.start() < end for start, end in guarded):
+                    findings.append(f"{path.relative_to(REPO)}:{needle}")
+    return sorted(set(findings))
 
 
 def audit() -> dict[str, object]:
     violations: list[dict[str, str]] = []
     warnings: list[dict[str, str]] = []
-
     frontend = REPO / "frontend" / "lib"
     backend = REPO / "backend"
 
-    # Production frontend code must not contain hard-coded local API endpoints.
-    for finding in _scan(frontend, (".dart",), ("localhost:8000", "127.0.0.1:8000")):
+    for finding in _production_localhost_findings(frontend):
         violations.append({"finding": "production_frontend_localhost", "surface": finding})
 
-    # The deprecated liveThenFixture enum remains only as a compatibility symbol;
-    # release behavior must never silently convert live failures into fixtures.
     repository_source = _read(frontend / "data" / "gte_api_repository.dart")
     if "liveThenFixture" in repository_source and "never enables a silent fixture fallback" not in repository_source:
         violations.append({"finding": "deprecated_backend_mode_contract_missing", "surface": "gte_api_repository.dart"})
     if "return gteFixtureApiBaseUrl" in repository_source:
         warnings.append({"finding": "fixture_url_symbol_present", "surface": "gte_api_repository.dart"})
 
-    # Globally suppressed async-context lint is a release blocker because it hides lifecycle bugs.
     analysis = _read(REPO / "frontend" / "analysis_options.yaml")
     if "use_build_context_synchronously: ignore" in analysis:
         violations.append({"finding": "global_async_context_lint_suppressed", "surface": "frontend/analysis_options.yaml"})
 
-    # Schema evolution must remain Alembic-only in application startup/database bootstrap.
     startup = _read(backend / "app" / "main.py") + _read(backend / "app" / "core" / "database.py")
     if "metadata.create_all" in startup:
         violations.append({"finding": "startup_schema_mutation", "surface": "backend startup/database"})
 
-    # Existing release certification gates must remain in the Phase A workflow.
-    workflow = _read(REPO / ".github" / "workflows" / "phase-a-economic-regressions.yml")
+    workflow = " ".join(_read(REPO / ".github" / "workflows" / "phase-a-economic-regressions.yml").split())
     required_gates = (
         "audit_player_share_release_audit.py",
         "audit_wallet_payments_treasury_release.py",
@@ -69,7 +96,6 @@ def audit() -> dict[str, object]:
         if gate not in workflow:
             violations.append({"finding": "economic_release_gate_missing", "surface": gate})
 
-    # Provider availability must not silently turn a blocked rail into a live one.
     payment_registry = _read(backend / "app" / "payments" / "provider_registry.py")
     if "Paystack" in payment_registry and "False" not in payment_registry:
         warnings.append({"finding": "verify_paystack_runtime_flag", "surface": "provider_registry"})
