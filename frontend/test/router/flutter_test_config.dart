@@ -1,9 +1,14 @@
 import 'dart:async';
 
-/// Route coverage tests must not mutate the Flutter test binding from the
-/// test executable hook. `testExecutable` runs outside an individual test,
-/// so calling `runApp()` here violates `AutomatedTestWidgetsFlutterBinding`
-///'s `inTest` assertion and can also race the stream-channel shutdown.
+import 'package:flutter_test/flutter_test.dart';
+
+/// Keep the shared test executable hook limited to test-runner setup.
+///
+/// Widget trees must be mounted from individual `testWidgets` bodies. Calling
+/// `runApp()` here executes outside an active Flutter test and can trigger
+/// AutomatedTestWidgetsFlutterBinding's `inTest` assertion and race the
+/// stream-channel shutdown with flutter_tools.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
+  TestWidgetsFlutterBinding.ensureInitialized();
   await testMain();
 }
