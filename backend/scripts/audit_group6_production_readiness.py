@@ -43,7 +43,9 @@ def check() -> dict[str, object]:
     render_build = read(ROOT / "ops/render/build-frontend.sh")
     players_router = BACKEND / "app/players/router.py"
     hosted_router = read(BACKEND / "app/hosted_competition_engine/router.py")
-    hosted_invite_tests = BACKEND / "tests/hosted_competition_engine/test_invites.py"
+    hosted_invite_tests = (
+        BACKEND / "tests/hosted_competition_engine/test_invites.py"
+    )
     admin_service = read(BACKEND / "app/admin_godmode/service.py")
     market_repo = read(BACKEND / "app/market/repositories.py")
     market_service = read(BACKEND / "app/market/service.py")
@@ -85,7 +87,10 @@ def check() -> dict[str, object]:
         "router": any(token in hosted_router for token in ("invite", "invites")),
         "tests": hosted_invite_tests.exists(),
     }
-    if not evidence["hosted_invites"]["router"] or not evidence["hosted_invites"]["tests"]:
+    if (
+        not evidence["hosted_invites"]["router"]
+        or not evidence["hosted_invites"]["tests"]
+    ):
         violations.append("hosted_competition_invite_surface_incomplete")
 
     evidence["admin_db_state"] = {
@@ -96,11 +101,14 @@ def check() -> dict[str, object]:
     if not all(evidence["admin_db_state"].values()):
         violations.append("admin_runtime_state_not_database_backed")
     if "_save_file_state" in admin_service:
-        warnings.append("legacy_file_state_fallback_retained_for_non_database_bootstrap")
+        warnings.append(
+            "legacy_file_state_fallback_retained_for_non_database_bootstrap"
+        )
 
     evidence["market_discovery"] = {
         "sql_tradable_filter": "Player.is_tradable.is_(True)" in market_repo,
-        "service_pagination": "next_cursor" in market_service and "has_more" in market_service,
+        "service_pagination": "next_cursor" in market_service
+        and "has_more" in market_service,
         "full_python_filter_marker": "filtered_records = [" in market_service,
     }
     if evidence["market_discovery"]["full_python_filter_marker"]:
@@ -111,7 +119,8 @@ def check() -> dict[str, object]:
 
     evidence["unity_gate"] = {
         "workflow_present": "unity-windows-build:" in deploy_workflow,
-        "license_failure_classified": "No valid Unity Editor license found" in deploy_workflow,
+        "license_failure_classified": "No valid Unity Editor license found"
+        in deploy_workflow,
     }
     if not evidence["unity_gate"]["workflow_present"]:
         violations.append("unity_windows_release_gate_missing")
