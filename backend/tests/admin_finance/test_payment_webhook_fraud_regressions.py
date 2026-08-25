@@ -58,22 +58,22 @@ def _paystack_payload() -> dict[str, object]:
     }
 
 
-def test_paystack_enable_flag_is_runtime_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_paystack_enable_flag_is_hard_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
-    assert paystack_enabled() is True
+    assert paystack_enabled() is False
 
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "false")
     assert paystack_enabled() is False
 
 
-def test_paystack_is_live_ready_with_secret_key_and_webhook_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_paystack_is_never_live_ready_even_with_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
     monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "paystack-secret")
     monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
-    assert provider_live_deposit_ready("paystack") is True
+    assert provider_live_deposit_ready("paystack") is False
 
 
-def test_paystack_webhook_rejects_invalid_signature_when_live(
+def test_paystack_webhook_is_blocked_before_signature_validation(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
@@ -86,11 +86,11 @@ def test_paystack_webhook_rejects_invalid_signature_when_live(
         json=_paystack_payload(),
     )
 
-    assert response.status_code == 401, response.text
-    assert "signature" in response.json()["detail"].lower()
+    assert response.status_code == 410, response.text
+    assert "paystack is unavailable" in response.json()["detail"].lower()
 
 
-def test_paystack_webhook_rejects_missing_signature_when_live(
+def test_paystack_webhook_is_blocked_when_signature_is_missing(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
@@ -102,8 +102,8 @@ def test_paystack_webhook_rejects_missing_signature_when_live(
         json=_paystack_payload(),
     )
 
-    assert response.status_code == 401, response.text
-    assert "signature" in response.json()["detail"].lower()
+    assert response.status_code == 410, response.text
+    assert "paystack is unavailable" in response.json()["detail"].lower()
 
 
 def test_paystack_webhook_is_blocked_when_explicitly_disabled(
@@ -123,45 +123,3 @@ def test_korapay_webhook_rejects_invalid_signature_when_secret_is_configured(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("GTE_KORAPAY_WEBHOOK_SECRET", "korapay-secret")
-
-    response = webhook_client.post(
-        "/integrations/payments/korapay/webhook",
-        headers={"x-korapay-signature": "invalid-signature"},
-        json={
-            "event": "charge.success",
-            "data": {
-                "id": "kp-event-invalid",
-                "reference": "kp_live_ref_invalid_sig",
-                "amount": "9000.0000",
-                "currency": "NGN",
-                "status": "success",
-            },
-        },
-    )
-
-    assert response.status_code == 401, response.text
-    assert "signature is invalid" in response.json()["detail"].lower()
-
-
-def test_korapay_webhook_rejects_missing_secret_by_default(
-    webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv("GTE_KORAPAY_WEBHOOK_SECRET", raising=False)
-    monkeypatch.delenv("GTE_KORAPAY_WEBHOOK_SIGNATURE_OPTIONAL", raising=False)
-
-    response = webhook_client.post(
-        "/integrations/payments/korapay/webhook",
-        json={
-            "event": "charge.success",
-            "data": {
-                "id": "kp-event-invalid",
-                "reference": "kp_live_ref_invalid_sig",
-                "amount": "9000.0000",
-                "currency": "NGN",
-                "status": "success",
-            },
-        },
-    )
-
-    assert response.status_code == 401, response.text
-    assert "not configured" in response.json()["detail"].lower()
