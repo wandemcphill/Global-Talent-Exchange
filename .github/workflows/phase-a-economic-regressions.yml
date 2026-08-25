@@ -71,6 +71,7 @@ jobs:
           python scripts/audit_player_share_trade_boundary.py
           python scripts/audit_player_share_trade_idempotency.py --strict
           python scripts/audit_player_share_issuer_boundary.py
+          python scripts/audit_player_share_release_audit.py
           python scripts/audit_wallet_payments_treasury_release.py
           python scripts/audit_admin_control_plane_release.py
           python scripts/audit_match_engine_competition_economy_release.py
