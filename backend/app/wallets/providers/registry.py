@@ -25,7 +25,7 @@ _REGISTRY: dict[str, ProviderRegistration] = {
     "apple_pay": ProviderRegistration(adapter=ApplePayProviderAdapter(), is_live=False, status="stubbed"),
     "google_pay": ProviderRegistration(adapter=GooglePayProviderAdapter(), is_live=False, status="stubbed"),
     "korapay": ProviderRegistration(adapter=KoraPayProviderAdapter(), is_live=True, status="live"),
-    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live"),
+    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=False, status="blocked"),
     "regional_rails": ProviderRegistration(adapter=RegionalRailsProviderAdapter(), is_live=False, status="stubbed"),
     "crypto_fiat": ProviderRegistration(adapter=CryptoFiatProviderAdapter(), is_live=False, status="stubbed"),
 }
