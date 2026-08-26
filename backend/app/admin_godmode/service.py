@@ -143,7 +143,7 @@ KORAPAY_UNAVAILABLE_MESSAGE = (
 
 
 def _paystack_enabled() -> bool:
-    return False
+    return provider_live_deposit_ready("paystack")
 
 
 def _default_payment_rail(provider: str) -> dict[str, Any]:
