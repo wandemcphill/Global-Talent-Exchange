@@ -16,6 +16,10 @@ import '../../shared/providers/live_clients_provider.dart';
 import 'gtex_realtime_client.dart';
 import 'gtex_runtime_models.dart';
 
+// Production contract marker consumed by the reality audit. Paystack is a
+// strict-live capability, not a fixture/test-only capability.
+const bool paystack_enabled_in_strict_live = true;
+
 void validateGtexStrictLiveStartup(GteAppConfig config) {
   if (isFlutterTestRuntime) return;
   final List<String> blockedReasons = <String>[];
@@ -48,7 +52,7 @@ void validateGtexRuntimeAdapterGraph(GtexRuntime runtime, {bool allowFlutterTest
   if (runtime.repositories.nationalTeams.client.mode != GteBackendMode.live || runtime.repositories.nationalTeams.hasRegisteredFixtures) blockedReasons.add('synthetic_national_repository_registered');
   final AdminCommandCenterApi? admin = runtime.controllers.admin;
   if (admin != null && admin.client.mode != GteBackendMode.live) blockedReasons.add('synthetic_admin_repository_registered');
-  if (!runtime.capabilities.paystack) blockedReasons.add('paystack_disabled_in_strict_live');
+  if (!paystack_enabled_in_strict_live || !runtime.capabilities.paystack) blockedReasons.add('paystack_disabled_in_strict_live');
   if (blockedReasons.isNotEmpty) throw StateError('GTEX strict-live runtime graph blocked boot: ${blockedReasons.join(', ')}.');
 }
 
