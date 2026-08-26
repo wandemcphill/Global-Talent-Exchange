@@ -3,12 +3,14 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/features/app_routes/gte_app_route_registry.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_hub/presentation/club_hub_screen.dart';
@@ -344,7 +346,11 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
+      _screenHost(
+        dependencies: _dependencies(
+          clubId: 'ibadan-lions',
+          clubName: 'Ibadan Lions FC',
+        ),
         home: HomeDashboardScreen(
           exchangeController: controller,
           apiBaseUrl: 'http://127.0.0.1:8000',
@@ -531,7 +537,8 @@ void main() {
     await controller.bootstrap();
 
     await tester.pumpWidget(
-      MaterialApp(
+      _screenHost(
+        dependencies: _dependencies(),
         home: GteCompetitionsHubScreen(
           controller: controller,
           currentDestination: CompetitionHubDestination.overview,
@@ -567,7 +574,12 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
+      _screenHost(
+        dependencies: _dependencies(
+          isAuthenticated: true,
+          clubId: 'royal-lagos-fc',
+          clubName: 'Royal Lagos FC',
+        ),
         home: ClubHubScreen(
           clubId: 'royal-lagos-fc',
           clubName: 'Royal Lagos FC',
@@ -706,6 +718,44 @@ GteNavigationDependencies _dependencies({
   );
 }
 
+/// Hosts [home] inside the central GoRouter runtime that
+/// [GteNavigationHelpers.pushRoute] requires. The legacy material-route
+/// fallback is disabled in strict live mode, so a bare `MaterialApp` host makes
+/// every push fail with a StateError before the target screen can mount. Any
+/// GTEX route pushed from [home] resolves through the same registry the
+/// production router uses.
+Widget _screenHost({
+  required Widget home,
+  required GteNavigationDependencies dependencies,
+}) {
+  final GoRouter router = GoRouter(
+    initialLocation: '/',
+    routes: <RouteBase>[
+      GoRoute(
+        path: '/',
+        builder: (BuildContext context, GoRouterState state) => home,
+      ),
+      GoRoute(
+        path: '/:rest(.*)',
+        builder: (BuildContext context, GoRouterState state) {
+          final GteAppRouteData? route = GteNavigationHelpers.parseDeepLink(
+            state.uri.toString(),
+          );
+          if (route == null) {
+            return const Scaffold(
+              body: Center(child: Text('Route unavailable')),
+            );
+          }
+          return GteAppRouteRegistry(
+            dependencies: dependencies,
+          ).guardedScreenFor(route);
+        },
+      ),
+    ],
+  );
+  return MaterialApp.router(routerConfig: router);
+}
+
 class _RouteLauncherHost extends StatelessWidget {
   const _RouteLauncherHost({
     required this.dependencies,
@@ -719,25 +769,46 @@ class _RouteLauncherHost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Builder(
-            builder: (BuildContext context) {
-              return FilledButton(
-                onPressed:
-                    () => GteNavigationHelpers.pushRoute<void>(
-                      context,
-                      route: route,
-                      dependencies: dependencies,
-                    ),
-                child: Text(label),
-              );
-            },
-          ),
+    // GteNavigationHelpers.pushRoute requires the central GoRouter runtime;
+    // the legacy material-route fallback is disabled in strict live mode, so a
+    // plain MaterialApp host would make every push fail with a StateError.
+    // Mirror production by serving the route under test through GoRouter,
+    // delegating to the same registry the real router uses.
+    final GoRouter router = GoRouter(
+      initialLocation: '/',
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/',
+          builder:
+              (BuildContext context, GoRouterState state) => Scaffold(
+                body: Center(
+                  child: Builder(
+                    builder: (BuildContext context) {
+                      return FilledButton(
+                        onPressed:
+                            () => GteNavigationHelpers.pushRoute<void>(
+                              context,
+                              route: route,
+                              dependencies: dependencies,
+                            ),
+                        child: Text(label),
+                      );
+                    },
+                  ),
+                ),
+              ),
         ),
-      ),
+        GoRoute(
+          path: route.toUri().path,
+          builder:
+              (BuildContext context, GoRouterState state) =>
+                  GteAppRouteRegistry(
+                    dependencies: dependencies,
+                  ).guardedScreenFor(route),
+        ),
+      ],
     );
+    return MaterialApp.router(routerConfig: router);
   }
 }
 
