@@ -99,11 +99,9 @@ def is_production_environment() -> bool:
 
 
 def paystack_enabled() -> bool:
-    return (
-        _env_flag_enabled("GTE_ENABLE_PAYSTACK")
-        and provider_secret_configured("paystack")
-        and provider_webhook_secret_configured("paystack")
-    )
+    secret_configured = any((os.getenv(name) or "").strip() for name in ("GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"))
+    webhook_configured = any((os.getenv(name) or "").strip() for name in ("GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET"))
+    return _env_flag_enabled("GTE_ENABLE_PAYSTACK") and secret_configured and webhook_configured
 
 
 def _env_flag_enabled(name: str) -> bool:
