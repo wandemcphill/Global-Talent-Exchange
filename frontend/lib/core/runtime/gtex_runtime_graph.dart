@@ -88,7 +88,7 @@ final Provider<GtexRuntime> gtexRuntimeProvider = Provider<GtexRuntime>((Ref ref
     capabilities: GtexRuntimeCapabilities(
       korapay: !fixtureMode,
       manualPayment: !fixtureMode,
-      paystack: !fixtureMode,
+      paystack: true,
       fixtureMode: fixtureMode,
     ),
     readiness: GtexRuntimeReadiness(
