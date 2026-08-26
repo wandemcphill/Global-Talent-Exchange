@@ -112,7 +112,7 @@ GtexRuntime _runtime({
     capabilities: const GtexRuntimeCapabilities(
       korapay: true,
       manualPayment: true,
-      paystack: false,
+      paystack: true,
       fixtureMode: false,
     ),
     readiness: const GtexRuntimeReadiness(
