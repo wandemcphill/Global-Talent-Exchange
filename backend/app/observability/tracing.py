@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI
+
 try:
     from opentelemetry import propagate, trace
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
@@ -100,11 +101,7 @@ def configure_tracing(
 
 
 def enrich_trace_headers(headers: Mapping[str, Any] | None = None) -> dict[str, str]:
-    carrier = {
-        str(key): str(value)
-        for key, value in dict(headers or {}).items()
-        if value is not None
-    }
+    carrier = {str(key): str(value) for key, value in dict(headers or {}).items() if value is not None}
     if not _TRACING_BACKEND_AVAILABLE:
         return carrier
     propagate.inject(carrier)
@@ -112,11 +109,7 @@ def enrich_trace_headers(headers: Mapping[str, Any] | None = None) -> dict[str, 
 
 
 def extract_context_from_carrier(carrier: Mapping[str, Any] | None) -> Any:
-    normalized = {
-        str(key): str(value)
-        for key, value in dict(carrier or {}).items()
-        if value is not None
-    }
+    normalized = {str(key): str(value) for key, value in dict(carrier or {}).items() if value is not None}
     if not _TRACING_BACKEND_AVAILABLE:
         return None
     return propagate.extract(normalized)
