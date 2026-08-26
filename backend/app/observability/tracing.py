@@ -123,7 +123,7 @@ def extract_context_from_carrier(carrier: Mapping[str, Any] | None) -> Any:
 
 
 def _get_tracer(name: str = "gtex.observability") -> Any:
-    if not _TRACING_BACKEND_AVAILABLE:
+    if not _TRACING_BACKEND_AVAILABLE or SpanKind is None:
         return _NoopTracer()
     return trace.get_tracer(name)
 
@@ -136,7 +136,11 @@ def start_consumer_span(
     attributes: Mapping[str, Any] | None = None,
 ) -> Any:
     context = extract_context_from_carrier(carrier)
-    with _get_tracer().start_as_current_span(name, context=context, kind=SpanKind.CONSUMER) as span:
+    tracer = _get_tracer()
+    kwargs = {"context": context} if context is not None else {}
+    if SpanKind is not None:
+        kwargs["kind"] = SpanKind.CONSUMER
+    with tracer.start_as_current_span(name, **kwargs) as span:
         for key, value in dict(attributes or {}).items():
             if value is not None:
                 span.set_attribute(key, value)
@@ -149,7 +153,11 @@ def start_internal_span(
     *,
     attributes: Mapping[str, Any] | None = None,
 ) -> Any:
-    with _get_tracer().start_as_current_span(name, kind=SpanKind.INTERNAL) as span:
+    tracer = _get_tracer()
+    kwargs = {}
+    if SpanKind is not None:
+        kwargs["kind"] = SpanKind.INTERNAL
+    with tracer.start_as_current_span(name, **kwargs) as span:
         for key, value in dict(attributes or {}).items():
             if value is not None:
                 span.set_attribute(key, value)
@@ -164,7 +172,11 @@ def start_producer_span(
     attributes: Mapping[str, Any] | None = None,
 ) -> Any:
     context = extract_context_from_carrier(carrier)
-    with _get_tracer().start_as_current_span(name, context=context, kind=SpanKind.PRODUCER) as span:
+    tracer = _get_tracer()
+    kwargs = {"context": context} if context is not None else {}
+    if SpanKind is not None:
+        kwargs["kind"] = SpanKind.PRODUCER
+    with tracer.start_as_current_span(name, **kwargs) as span:
         for key, value in dict(attributes or {}).items():
             if value is not None:
                 span.set_attribute(key, value)

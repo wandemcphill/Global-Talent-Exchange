@@ -79,13 +79,14 @@ class _ExplodingPersistenceWorker(LocalMatchExecutionWorker):
         raise RuntimeError("database is gone")
 
 
-@dataclass(slots=True)
 class _FlakyPersistenceWorker(LocalMatchExecutionWorker):
     """Worker whose result persistence fails once, then succeeds."""
 
-    attempts: int = 0
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.attempts: int = 0
 
-    def _persist_match_viewer_payload(self, job, replay_payload) -> None:  # type: ignore[override]
+    def _persist_match_viewer_payload(self, job: Any, replay_payload: Any) -> None:  # type: ignore[override]
         self.attempts += 1
         if self.attempts == 1:
             raise RuntimeError("transient write failure")
