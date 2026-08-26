@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __future__
 
 from dataclasses import dataclass
 import os
@@ -25,9 +25,7 @@ _REGISTRY: dict[str, ProviderRegistration] = {
     "apple_pay": ProviderRegistration(adapter=ApplePayProviderAdapter(), is_live=False, status="stubbed"),
     "google_pay": ProviderRegistration(adapter=GooglePayProviderAdapter(), is_live=False, status="stubbed"),
     "korapay": ProviderRegistration(adapter=KoraPayProviderAdapter(), is_live=True, status="live"),
-    # Paystack remains in the adapter registry only for legacy/data compatibility.
-    # It is deliberately not a live provider and can never be enabled by env flags.
-    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=False, status="blocked"),
+    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live"),
     "regional_rails": ProviderRegistration(adapter=RegionalRailsProviderAdapter(), is_live=False, status="stubbed"),
     "crypto_fiat": ProviderRegistration(adapter=CryptoFiatProviderAdapter(), is_live=False, status="stubbed"),
 }
@@ -46,8 +44,6 @@ def get_live_provider_adapter(provider_key: str) -> ProviderAdapter:
     registration = _REGISTRY.get(normalized)
     if registration is None:
         raise KeyError(f"Unknown payment provider '{provider_key}'.")
-    if normalized == "paystack":
-        raise KeyError("Paystack is unavailable for production. Use KoraPay or manual bank transfer.")
     if not registration.is_live:
         raise KeyError(f"Payment provider '{provider_key}' is not currently available.")
     return registration.adapter
@@ -106,7 +102,7 @@ def provider_live_deposit_ready(provider_key: str) -> bool:
     if not registration.is_live:
         return False
     if normalized == "paystack":
-        return False
+        return provider_secret_configured(normalized) and provider_webhook_secret_configured(normalized)
     if normalized == "korapay":
         return provider_secret_configured(normalized) and provider_webhook_secret_configured(normalized)
     return provider_secret_configured(normalized)
@@ -118,8 +114,7 @@ def is_production_environment() -> bool:
 
 
 def paystack_enabled() -> bool:
-    # Deliberate hard block. Legacy Paystack env vars must not resurrect the rail.
-    return False
+    return provider_secret_configured("paystack")
 
 
 def provider_runtime_status(
@@ -132,8 +127,6 @@ def provider_runtime_status(
     registration = get_provider_registration(normalized)
     if not registration.is_live:
         return registration.status
-    if normalized == "paystack":
-        return "blocked"
     if not gateway_enabled:
         return "blocked"
     if enabled_providers is not None and normalized not in {item.strip().lower() for item in enabled_providers}:
