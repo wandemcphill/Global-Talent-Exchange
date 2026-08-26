@@ -42,9 +42,7 @@ def get_provider_adapter(provider_key: str) -> ProviderAdapter:
 def get_live_provider_adapter(provider_key: str) -> ProviderAdapter:
     normalized = provider_key.strip().lower()
     registration = _REGISTRY.get(normalized)
-    if registration is None:
-        raise KeyError(f"Unknown payment provider '{provider_key}'.")
-    if not registration.is_live:
+    if registration is None or not registration.is_live:
         raise KeyError(f"Payment provider '{provider_key}' is not currently available.")
     return registration.adapter
 
@@ -58,26 +56,18 @@ def get_provider_registration(provider_key: str) -> ProviderRegistration:
 
 
 def list_provider_keys(*, live_only: bool = False) -> list[str]:
-    keys = (key for key, registration in _REGISTRY.items() if not live_only or registration.is_live)
-    return sorted(keys)
+    return sorted(key for key, registration in _REGISTRY.items() if not live_only or registration.is_live)
 
 
 def list_provider_registrations(*, live_only: bool = False) -> dict[str, ProviderRegistration]:
-    return {
-        key: registration for key, registration in sorted(_REGISTRY.items()) if not live_only or registration.is_live
-    }
+    return {key: registration for key, registration in sorted(_REGISTRY.items()) if not live_only or registration.is_live}
 
 
 def provider_secret_configured(provider_key: str) -> bool:
     normalized = provider_key.strip().lower()
     env_names = {
         "paystack": ("GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"),
-        "korapay": (
-            "GTE_KORAPAY_SECRET_KEY",
-            "KORAPAY_SECRET_KEY",
-            "GTE_KORAPAY_PRIVATE_KEY",
-            "KORAPAY_PRIVATE_KEY",
-        ),
+        "korapay": ("GTE_KORAPAY_SECRET_KEY", "KORAPAY_SECRET_KEY", "GTE_KORAPAY_PRIVATE_KEY", "KORAPAY_PRIVATE_KEY"),
     }.get(normalized, ())
     return any((os.getenv(name) or "").strip() for name in env_names)
 
@@ -86,12 +76,7 @@ def provider_webhook_secret_configured(provider_key: str) -> bool:
     normalized = provider_key.strip().lower()
     env_names = {
         "paystack": ("GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET", "GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"),
-        "korapay": (
-            "GTE_KORAPAY_WEBHOOK_SECRET",
-            "KORAPAY_WEBHOOK_SECRET",
-            "GTE_KORAPAY_ENCRYPTION_KEY",
-            "KORAPAY_ENCRYPTION_KEY",
-        ),
+        "korapay": ("GTE_KORAPAY_WEBHOOK_SECRET", "KORAPAY_WEBHOOK_SECRET", "GTE_KORAPAY_ENCRYPTION_KEY", "KORAPAY_ENCRYPTION_KEY"),
     }.get(normalized, (f"GTE_{normalized.upper()}_WEBHOOK_SECRET",))
     return any((os.getenv(name) or "").strip() for name in env_names)
 
@@ -101,9 +86,7 @@ def provider_live_deposit_ready(provider_key: str) -> bool:
     registration = get_provider_registration(normalized)
     if not registration.is_live:
         return False
-    if normalized == "paystack":
-        return provider_secret_configured(normalized) and provider_webhook_secret_configured(normalized)
-    if normalized == "korapay":
+    if normalized in {"paystack", "korapay"}:
         return provider_secret_configured(normalized) and provider_webhook_secret_configured(normalized)
     return provider_secret_configured(normalized)
 
@@ -114,15 +97,14 @@ def is_production_environment() -> bool:
 
 
 def paystack_enabled() -> bool:
-    return provider_secret_configured("paystack")
+    return _env_flag_enabled("GTE_ENABLE_PAYSTACK") and provider_live_deposit_ready("paystack")
 
 
-def provider_runtime_status(
-    provider_key: str,
-    *,
-    gateway_enabled: bool = True,
-    enabled_providers: set[str] | None = None,
-) -> str:
+def _env_flag_enabled(name: str) -> bool:
+    return str(os.getenv(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def provider_runtime_status(provider_key: str, *, gateway_enabled: bool = True, enabled_providers: set[str] | None = None) -> str:
     normalized = provider_key.strip().lower()
     registration = get_provider_registration(normalized)
     if not registration.is_live:
@@ -131,40 +113,15 @@ def provider_runtime_status(
         return "blocked"
     if enabled_providers is not None and normalized not in {item.strip().lower() for item in enabled_providers}:
         return "blocked"
+    if normalized == "paystack" and not _env_flag_enabled("GTE_ENABLE_PAYSTACK"):
+        return "blocked"
     if provider_live_deposit_ready(normalized):
         return "ready"
     return "unavailable"
 
 
-def provider_runtime_statuses(
-    *,
-    gateway_enabled: bool = True,
-    enabled_providers: set[str] | None = None,
-    include_stubbed: bool = True,
-) -> dict[str, str]:
-    return {
-        key: provider_runtime_status(
-            key,
-            gateway_enabled=gateway_enabled,
-            enabled_providers=enabled_providers,
-        )
-        for key, registration in list_provider_registrations().items()
-        if include_stubbed or registration.is_live
-    }
+def provider_runtime_statuses(*, gateway_enabled: bool = True, enabled_providers: set[str] | None = None, include_stubbed: bool = True) -> dict[str, str]:
+    return {key: provider_runtime_status(key, gateway_enabled=gateway_enabled, enabled_providers=enabled_providers) for key, registration in list_provider_registrations().items() if include_stubbed or registration.is_live}
 
 
-__all__ = [
-    "ProviderRegistration",
-    "get_provider_adapter",
-    "get_live_provider_adapter",
-    "paystack_enabled",
-    "get_provider_registration",
-    "is_production_environment",
-    "list_provider_keys",
-    "list_provider_registrations",
-    "provider_live_deposit_ready",
-    "provider_runtime_status",
-    "provider_runtime_statuses",
-    "provider_secret_configured",
-    "provider_webhook_secret_configured",
-]
+__all__ = ["ProviderRegistration", "get_provider_adapter", "get_live_provider_adapter", "paystack_enabled", "get_provider_registration", "is_production_environment", "list_provider_keys", "list_provider_registrations", "provider_live_deposit_ready", "provider_runtime_status", "provider_runtime_statuses", "provider_secret_configured", "provider_webhook_secret_configured"]
