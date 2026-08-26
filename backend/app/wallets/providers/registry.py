@@ -25,7 +25,7 @@ _REGISTRY: dict[str, ProviderRegistration] = {
     "apple_pay": ProviderRegistration(adapter=ApplePayProviderAdapter(), is_live=False, status="stubbed"),
     "google_pay": ProviderRegistration(adapter=GooglePayProviderAdapter(), is_live=False, status="stubbed"),
     "korapay": ProviderRegistration(adapter=KoraPayProviderAdapter(), is_live=True, status="live"),
-    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=False, status="blocked"),
+    "paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live"),
     "regional_rails": ProviderRegistration(adapter=RegionalRailsProviderAdapter(), is_live=False, status="stubbed"),
     "crypto_fiat": ProviderRegistration(adapter=CryptoFiatProviderAdapter(), is_live=False, status="stubbed"),
 }
@@ -86,7 +86,9 @@ def provider_live_deposit_ready(provider_key: str) -> bool:
     registration = get_provider_registration(normalized)
     if not registration.is_live:
         return False
-    if normalized in {"paystack", "korapay"}:
+    if normalized == "paystack":
+        return paystack_enabled()
+    if normalized == "korapay":
         return provider_secret_configured(normalized) and provider_webhook_secret_configured(normalized)
     return provider_secret_configured(normalized)
 
@@ -97,7 +99,11 @@ def is_production_environment() -> bool:
 
 
 def paystack_enabled() -> bool:
-    return _env_flag_enabled("GTE_ENABLE_PAYSTACK") and provider_live_deposit_ready("paystack")
+    return (
+        _env_flag_enabled("GTE_ENABLE_PAYSTACK")
+        and provider_secret_configured("paystack")
+        and provider_webhook_secret_configured("paystack")
+    )
 
 
 def _env_flag_enabled(name: str) -> bool:
@@ -113,7 +119,7 @@ def provider_runtime_status(provider_key: str, *, gateway_enabled: bool = True, 
         return "blocked"
     if enabled_providers is not None and normalized not in {item.strip().lower() for item in enabled_providers}:
         return "blocked"
-    if normalized == "paystack" and not _env_flag_enabled("GTE_ENABLE_PAYSTACK"):
+    if normalized == "paystack" and not paystack_enabled():
         return "blocked"
     if provider_live_deposit_ready(normalized):
         return "ready"
