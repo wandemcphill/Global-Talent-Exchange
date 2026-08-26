@@ -1,0 +1,119 @@
+name: Repair Paystack Reality Audit
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconcile Paystack production contract
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import subprocess
+
+          path = Path('tools/audit/reality_audit.py')
+          text = path.read_text(encoding='utf-8')
+
+          old_provider = '''    provider_registry = _read("backend/app/wallets/providers/registry.py")
+    if (
+        '\"paystack\": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=False, status=\"blocked\")'
+        not in provider_registry
+    ):
+        failures.append("Payment provider registry does not mark Paystack as blocked.")
+    paystack_enabled_body = _slice_between(
+        provider_registry,
+        "def paystack_enabled()",
+        "def provider_runtime_status(",
+    )
+    if "return False" not in paystack_enabled_body:
+        failures.append("Paystack availability is not hard-blocked.")
+    wallet_constants = _read("backend/app/wallets/constants.py")
+    if 'SUPPORTED_TOP_UP_PROVIDER_KEYS: tuple[str, ...] = (\"korapay\",)' not in wallet_constants:
+        failures.append("Wallet top-up provider constants still expose Paystack as a selectable top-up provider.")
+'''
+          new_provider = '''    provider_registry = _read("backend/app/wallets/providers/registry.py")
+    paystack_registration = _slice_between(provider_registry, '"paystack": ProviderRegistration', '"regional_rails":')
+    if '"paystack": ProviderRegistration(adapter=PaystackProviderAdapter(), is_live=True, status="live")' not in paystack_registration:
+        failures.append("Payment provider registry does not mark Paystack as live.")
+    paystack_enabled_body = _slice_between(
+        provider_registry,
+        "def paystack_enabled()",
+        "def _env_flag_enabled(",
+    )
+    if "GTE_ENABLE_PAYSTACK" not in paystack_enabled_body or "provider_live_deposit_ready(\"paystack\")" not in paystack_enabled_body:
+        failures.append("Paystack availability does not require the production enable flag and live credential readiness.")
+    paystack_readiness_body = _slice_between(
+        provider_registry,
+        "def provider_live_deposit_ready(",
+        "def is_production_environment(",
+    )
+    if '"paystack"' not in paystack_readiness_body or "provider_secret_configured" not in paystack_readiness_body or "provider_webhook_secret_configured" not in paystack_readiness_body:
+        failures.append("Paystack live deposit readiness does not require secret and webhook configuration.")
+    wallet_constants = _read("backend/app/wallets/constants.py")
+    if "paystack" not in wallet_constants:
+        failures.append("Wallet top-up provider constants do not expose Paystack.")
+'''
+          if old_provider not in text:
+              raise SystemExit('Expected legacy Paystack provider audit block was not found')
+          text = text.replace(old_provider, new_provider, 1)
+
+          old_render = '''    paystack_entry = api_env.get("GTE_ENABLE_PAYSTACK")
+    paystack_value = str(paystack_entry.get("value", "")).strip().lower() if paystack_entry else ""
+    if paystack_value != "false":
+        failures.append("render.yaml does not explicitly disable Paystack.")
+'''
+          new_render = '''    paystack_entry = api_env.get("GTE_ENABLE_PAYSTACK")
+    paystack_value = str(paystack_entry.get("value", "")).strip().lower() if paystack_entry else ""
+    if paystack_value != "true":
+        failures.append("render.yaml does not explicitly enable Paystack for production.")
+    for key in ("GTE_PAYSTACK_SECRET_KEY", "GTE_PAYSTACK_WEBHOOK_SECRET"):
+        entry = api_env.get(key)
+        if entry is None:
+            failures.append(f"render.yaml is missing Paystack secret env declaration for {key}.")
+        elif entry.get("sync") is not False or "value" in entry:
+            failures.append(f"render.yaml must keep {key} env-only with sync: false and no hard-coded value.")
+'''
+          if old_render not in text:
+              raise SystemExit('Expected legacy Render Paystack audit block was not found')
+          text = text.replace(old_render, new_render, 1)
+
+          old_runtime = '''    if "paystack: false" not in runtime:
+        failures.append("Runtime capabilities do not explicitly disable Paystack.")
+'''
+          new_runtime = '''    if "paystack: true" not in runtime:
+        failures.append("Runtime capabilities do not explicitly enable Paystack.")
+    if "paystack_enabled_in_strict_live" not in runtime:
+        failures.append("Runtime graph does not validate Paystack enablement in strict-live mode.")
+'''
+          if old_runtime in text:
+              text = text.replace(old_runtime, new_runtime, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Validate audit script syntax
+        run: python -m py_compile tools/audit/reality_audit.py
+
+      - name: Run reality audit
+        run: python tools/audit/reality_audit.py
+
+      - name: Commit repaired audit and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/repair-paystack-reality-audit.yml
+          git add tools/audit/reality_audit.py
+          git commit -m 'fix: reconcile reality audit with live Paystack rail'
+          git push
