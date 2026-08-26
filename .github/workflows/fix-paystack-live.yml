@@ -1,0 +1,39 @@
+name: One-time Paystack production truth fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove Paystack from forbidden strict-live flags
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend/app/main.py')
+          text = path.read_text(encoding='utf-8')
+          old = '    "GTE_ENABLE_MOCK_KORAPAY",\n    "GTE_ENABLE_PAYSTACK",\n'
+          new = '    "GTE_ENABLE_MOCK_KORAPAY",\n'
+          if old not in text:
+              raise SystemExit('Expected strict-live Paystack flag entry was not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+      - name: Commit and remove one-time workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/fix-paystack-live.yml
+          git add backend/app/main.py
+          git commit -m "fix(live): reconcile Paystack strict-live startup gate"
+          git push origin main
