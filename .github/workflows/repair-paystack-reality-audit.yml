@@ -17,11 +17,10 @@ jobs:
           fetch-depth: 0
 
       - name: Reconcile Paystack production contract
-        shell: python
+        shell: bash
         run: |
+          python3 - <<'PY'
           from pathlib import Path
-          import re
-          import subprocess
 
           path = Path('tools/audit/reality_audit.py')
           text = path.read_text(encoding='utf-8')
@@ -101,12 +100,13 @@ jobs:
               text = text.replace(old_runtime, new_runtime, 1)
 
           path.write_text(text, encoding='utf-8')
+          PY
 
       - name: Validate audit script syntax
-        run: python -m py_compile tools/audit/reality_audit.py
+        run: python3 -m py_compile tools/audit/reality_audit.py
 
       - name: Run reality audit
-        run: python tools/audit/reality_audit.py
+        run: python3 tools/audit/reality_audit.py
 
       - name: Commit repaired audit and remove one-shot workflow
         shell: bash
