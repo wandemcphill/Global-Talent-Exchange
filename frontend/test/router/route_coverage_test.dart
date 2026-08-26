@@ -205,7 +205,7 @@ void main() {
       expect(find.byType(GteLoginScreen), findsOneWidget);
     });
 
-    testWidgets('landing Enter GTEX navigates to user signup', (
+    testWidgets('landing Create free account navigates to user signup', (
       WidgetTester tester,
     ) async {
       tester.view.physicalSize = const Size(1200, 2600);
@@ -231,7 +231,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Enter GTEX').first);
+      await tester.tap(find.text('Create free account'));
       await tester.pumpAndSettle();
 
       expect(find.byType(GtexUserSignupScreen), findsOneWidget);
