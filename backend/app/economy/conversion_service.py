@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.economy.currency_policy import CurrencyPolicyError, FANCOIN, GTEX_COIN
+from app.economy.economic_policy import resolve_economic_policy
 from app.models.economic_conversion import (
     EconomicConversion,
     EconomicConversionStatus,
@@ -79,6 +80,12 @@ class FanCoinGiftConversionService:
         if FANCOIN is GTEX_COIN:
             raise CurrencyPolicyError("FanCoin and GTEX Coin must remain distinct economic units.")
 
+        policy = resolve_economic_policy(self.session)
+        if fee_rule_key is None:
+            fee_rule_key = policy.rule.rule_key
+        if fee_rule_version is None or fee_rule_version == "1":
+            fee_rule_version = policy.policy_version
+
         source_user = self.session.get(User, source_user_id)
         recipient_user = self.session.get(User, recipient_user_id)
         if source_user is None or recipient_user is None:
@@ -138,46 +145,23 @@ class FanCoinGiftConversionService:
                 "burn_amount": str(burn),
                 "coin_bridge_account_code": GIFT_CONVERSION_BRIDGE_COIN_CODE,
                 "conversion_authority": "fan_coin_gift_conversion",
+                "policy_rule_key": fee_rule_key,
+                "policy_version": fee_rule_version,
+                "policy_effective_at": policy.effective_at.isoformat(),
             },
         )
         self.session.add(conversion)
         self.session.flush()
 
         postings = [
-            LedgerPosting(
-                account=source_account,
-                amount=-gross,
-                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-            ),
-            LedgerPosting(
-                account=platform_fancoin_revenue,
-                amount=fee,
-                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-            ),
-            LedgerPosting(
-                account=bridge_fancoin,
-                amount=destination,
-                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-            ),
-            LedgerPosting(
-                account=bridge_coin,
-                amount=-destination,
-                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-            ),
-            LedgerPosting(
-                account=recipient_account,
-                amount=destination,
-                source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
-            ),
+            LedgerPosting(account=source_account, amount=-gross, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(account=platform_fancoin_revenue, amount=fee, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(account=bridge_fancoin, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(account=bridge_coin, amount=-destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(account=recipient_account, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
         ]
         if burn_account is not None:
-            postings.append(
-                LedgerPosting(
-                    account=burn_account,
-                    amount=burn,
-                    source_tag=LedgerSourceTag.GIFT_RAKE_BURN,
-                )
-            )
+            postings.append(LedgerPosting(account=burn_account, amount=burn, source_tag=LedgerSourceTag.GIFT_RAKE_BURN))
 
         entries = self.wallet_service.append_transaction(
             self.session,
@@ -199,6 +183,9 @@ class FanCoinGiftConversionService:
                 "burn_amount": str(burn),
                 "destination_amount": str(destination),
                 "coin_bridge_account_code": GIFT_CONVERSION_BRIDGE_COIN_CODE,
+                "policy_rule_key": fee_rule_key,
+                "policy_version": fee_rule_version,
+                "policy_effective_at": policy.effective_at.isoformat(),
             },
         )
 
