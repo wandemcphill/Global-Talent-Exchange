@@ -10,7 +10,7 @@ from app.economy.service import EconomyConfigService
 from app.gift_engine.service import GiftEngineError, GiftEngineService as LegacyGiftEngineService
 from app.models.base import generate_uuid
 from app.models.economy_burn_event import EconomyBurnEvent
-from app.models.economic_conversion import EconomicConversion
+from app.models.economy_config import GiftCatalogItem
 from app.models.gift_combo_event import GiftComboEvent
 from app.models.gift_transaction import GiftTransaction
 from app.models.notification_record import NotificationRecord
@@ -22,12 +22,7 @@ from app.wallets.service import InsufficientBalanceError
 
 
 class CanonicalGiftEngineService(LegacyGiftEngineService):
-    """Canonical gift accounting: FanCoin is spent and the recipient receives GTEX Coin.
-
-    A successful gift is one atomic database ledger transaction. The currency
-    conversion itself is represented by EconomicConversion, while the wallet
-    transaction contains both currency legs and their authoritative provenance.
-    """
+    """Canonical gift accounting: FanCoin is spent and the recipient receives GTEX Coin."""
 
     @staticmethod
     def _normalize_scope(source_scope: str | None) -> str:
@@ -102,11 +97,9 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
 
         gift_key = str(kwargs.get("gift_key") or "").strip()
         gift = self.session.scalar(
-            select(type(next(iter(self.list_catalog(active_only=True), []), None)))
-            if False
-            else select(self._gift_catalog_model()).where(
-                self._gift_catalog_model().key == gift_key,
-                self._gift_catalog_model().active.is_(True),
+            select(GiftCatalogItem).where(
+                GiftCatalogItem.key == gift_key,
+                GiftCatalogItem.active.is_(True),
             )
         )
         if gift is None:
@@ -144,9 +137,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             platform_rake = self._normalize_amount(platform_rake - combo_bonus)
             recipient_net = self._normalize_amount(recipient_net + combo_bonus)
 
-        source_account = self.wallet_service.get_user_account(
-            self.session, sender, LedgerUnit.CREDIT
-        )
+        source_account = self.wallet_service.get_user_account(self.session, sender, LedgerUnit.CREDIT)
         if self.wallet_service.get_balance(self.session, source_account) < gross_amount:
             raise InsufficientBalanceError("Available FanCoin balance is lower than the gift total.")
 
@@ -170,9 +161,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         except SpendingControlViolation as exc:
             raise GiftEngineError(exc.detail, reason="spending_controls_blocked") from exc
 
-        gift_transaction_id = generate_uuid()
         transaction = GiftTransaction(
-            id=gift_transaction_id,
+            id=generate_uuid(),
             sender_user_id=sender.id,
             recipient_user_id=recipient.id,
             gift_catalog_item_id=gift.id,
@@ -306,7 +296,6 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             },
         )
 
-        unit_label = "GTEX Coin"
         notification_metadata = {
             "gift_transaction_id": transaction.id,
             "gift_key": gift.key,
@@ -319,7 +308,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             "ledger_unit": LedgerUnit.COIN.value,
             "source_ledger_unit": LedgerUnit.CREDIT.value,
             "destination_ledger_unit": LedgerUnit.COIN.value,
-            "unit_label": unit_label,
+            "unit_label": "GTEX Coin",
             "source_scope": requested_scope,
             "ledger_transaction_id": ledger_transaction_id,
             "economic_conversion_id": conversion.id,
@@ -333,7 +322,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 template_key="GIFT_RECEIVED",
                 resource_type="gift_transaction",
                 resource_id=transaction.id,
-                message=f"{sender_label} sent you {gift.display_name} worth {recipient_net} {unit_label}.",
+                message=f"{sender_label} sent you {gift.display_name} worth {recipient_net} GTEX Coin.",
                 metadata_json=notification_metadata,
             )
         )
@@ -390,7 +379,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     "quantity": str(normalized_quantity),
                     "gross_amount": str(gross_amount),
                     "ledger_unit": LedgerUnit.COIN.value,
-                    "currency_label": unit_label,
+                    "currency_label": "GTEX Coin",
                     "source_scope": requested_scope,
                     "animation_key": gift.animation_key,
                     "sound_key": gift.sound_key,
@@ -403,14 +392,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     "economic_conversion_id": conversion.id,
                 },
             )
-        )
         return transaction
-
-    @staticmethod
-    def _gift_catalog_model():
-        from app.models.economy_config import GiftCatalogItem
-
-        return GiftCatalogItem
 
 
 GiftEngineService = CanonicalGiftEngineService
