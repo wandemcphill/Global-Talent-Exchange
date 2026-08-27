@@ -6,7 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/features/club_sale_market/presentation/club_sale_market_screen.dart';
+import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
+import 'package:gte_frontend/ui_gtex/layout/gtex_app_shell.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/wallet/gte_wallet_overview_screen.dart';
 import 'package:gte_frontend/theme/gte_theme_controller.dart';
@@ -36,48 +39,40 @@ void main() {
       expect(appSource, contains("this.initialPath = '/app/home',"));
     });
 
-    test(
-      'navigation shell preserves protected lane order and utility access',
-      () {
-        final String shellSource = _readSource(
-          'lib/features/navigation/presentation/gte_navigation_shell_screen.dart',
-        );
-        final String routeAdapterSource = _readSource(
-          'lib/ui_gtex/routes/gtex_current_route_adapter.dart',
-        );
-
-        final int home = _indexOfOrThrow(
-          shellSource,
-          'GtePrimaryDestination.home,',
-        );
-        final int market = _indexOfOrThrow(
-          shellSource,
-          'GtePrimaryDestination.market,',
-        );
-        final int play = _indexOfOrThrow(
-          shellSource,
-          'GtePrimaryDestination.competitions,',
-        );
-        final int club = _indexOfOrThrow(
-          shellSource,
-          'GtePrimaryDestination.club,',
-        );
-        final int hub = _indexOfOrThrow(
-          shellSource,
-          'GtePrimaryDestination.hub,',
-        );
-
-        expect(home, lessThan(market));
-        expect(market, lessThan(play));
-        expect(play, lessThan(club));
-        expect(club, lessThan(hub));
-        expect(shellSource, contains('_buildThemePickerAction(context)'));
-        expect(shellSource, contains('_buildCapitalAction()'));
-        expect(shellSource, contains("tooltip: 'Club funds'"));
-        expect(shellSource, contains('GteThemePickerSheet'));
-        expect(routeAdapterSource, contains('label: destination.label,'));
+    testWidgets(
+      'navigation shell orders primary lanes per workspace role',
+      (WidgetTester tester) async {
+        // Lane order is a per-role architectural contract, not a source
+        // layout one: the shell keeps a distinct destination list for each
+        // workspace, so assert the rendered rail rather than the byte
+        // offsets of the first matching enum literal in the file.
+        for (final _WorkspaceLaneCase laneCase in _workspaceLaneCases) {
+          final List<String> lanes = await _renderShellLanes(
+            tester,
+            session: laneCase.session,
+          );
+          expect(lanes, orderedEquals(laneCase.lanes), reason: laneCase.role);
+          expect(lanes.first, 'Home', reason: laneCase.role);
+          expect(lanes.toSet(), hasLength(lanes.length), reason: laneCase.role);
+        }
       },
     );
+
+    testWidgets('navigation shell keeps theme and capital utilities reachable', (
+      WidgetTester tester,
+    ) async {
+      await _renderShellLanes(tester, session: _roleSession(role: 'user'));
+
+      expect(find.byTooltip('Club funds'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (Widget widget) =>
+              widget is IconButton &&
+              (widget.tooltip?.startsWith('Theme: ') ?? false),
+        ),
+        findsOneWidget,
+      );
+    });
 
     test('home dashboard preserves hero to secondary information order', () {
       final String homeSource = _readSource(
@@ -174,6 +169,16 @@ void main() {
         expect(find.text(definition.metadata.label), findsOneWidget);
       }
 
+      // The loop above finishes on the last theme in the sheet, which
+      // evicts Ultra Red from the virtualized list, so bring it back into
+      // view before tapping it.
+      await tester.scrollUntilVisible(
+        find.text('Ultra Red'),
+        -200,
+        scrollable: pickerScrollView,
+      );
+      await tester.pumpAndSettle();
+
       await tester.tap(find.text('Ultra Red'));
       await tester.pumpAndSettle();
 
@@ -269,6 +274,144 @@ class _ThemePickerHarness extends StatelessWidget {
       ),
     );
   }
+}
+
+class _WorkspaceLaneCase {
+  const _WorkspaceLaneCase({
+    required this.role,
+    required this.session,
+    required this.lanes,
+  });
+
+  final String role;
+  final GteAuthSession? session;
+  final List<String> lanes;
+}
+
+final List<_WorkspaceLaneCase> _workspaceLaneCases = <_WorkspaceLaneCase>[
+  const _WorkspaceLaneCase(
+    role: 'guest',
+    session: null,
+    lanes: <String>['Home', 'Club', 'Transfer Hub', 'Matchday', 'Community'],
+  ),
+  _WorkspaceLaneCase(
+    role: 'admin',
+    session: _roleSession(role: 'admin'),
+    lanes: const <String>[
+      'Home',
+      'Transfer Hub',
+      'Matchday',
+      'Club',
+      'Wallet',
+      'Studio',
+      'Community',
+    ],
+  ),
+  _WorkspaceLaneCase(
+    role: 'coin trader',
+    session: _roleSession(role: 'coin_trader'),
+    lanes: const <String>['Home', 'Wallet', 'Transfer Hub', 'Community'],
+  ),
+  _WorkspaceLaneCase(
+    role: 'creator',
+    session: _roleSession(role: 'creator'),
+    lanes: const <String>[
+      'Home',
+      'Studio',
+      'Community',
+      'Transfer Hub',
+      'Wallet',
+    ],
+  ),
+  _WorkspaceLaneCase(
+    role: 'club owner',
+    session: _roleSession(role: 'user', clubId: 'royal-lagos-fc'),
+    lanes: const <String>[
+      'Home',
+      'Club',
+      'Transfer Hub',
+      'Matchday',
+      'Wallet',
+      'Studio',
+      'Community',
+    ],
+  ),
+  _WorkspaceLaneCase(
+    role: 'staff',
+    session: _roleSession(role: 'scout'),
+    lanes: const <String>[
+      'Home',
+      'Transfer Hub',
+      'Club',
+      'Wallet',
+      'Community',
+    ],
+  ),
+  _WorkspaceLaneCase(
+    role: 'authenticated without a club',
+    session: _roleSession(role: 'user'),
+    lanes: const <String>[
+      'Home',
+      'Transfer Hub',
+      'Club',
+      'Matchday',
+      'Wallet',
+      'Community',
+    ],
+  ),
+];
+
+Future<List<String>> _renderShellLanes(
+  WidgetTester tester, {
+  required GteAuthSession? session,
+}) async {
+  tester.view.physicalSize = const Size(1600, 2200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  final GteExchangeController controller = GteExchangeController(
+    api: GteExchangeApiClient.fixture(),
+  );
+  controller.session = session;
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: GteNavigationShellScreen(
+        controller: controller,
+        apiBaseUrl: 'http://127.0.0.1:8000',
+        backendMode: GteBackendMode.fixture,
+        initialRoute: const GteNavigationRoute.home(),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  final GtexAppShell shell = tester.widget<GtexAppShell>(
+    find.byType(GtexAppShell),
+  );
+  return shell.destinations
+      .map((GtexShellDestination destination) => destination.label)
+      .toList(growable: false);
+}
+
+GteAuthSession _roleSession({required String role, String? clubId}) {
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'contract-token',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    if (clubId != null) 'current_club_id': clubId,
+    'user': <String, Object?>{
+      'id': 'contract-$role',
+      'email': 'contract-$role@gtex.test',
+      'username': 'contract-$role',
+      'display_name': 'Contract $role',
+      'role': role,
+      if (clubId != null) 'current_club_id': clubId,
+    },
+  });
 }
 
 String _readSource(String relativePath) {
