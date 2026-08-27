@@ -22,8 +22,17 @@ DEFAULT_USER_FULL_NAME = "GTEX Unity Live"
 DEFAULT_USER_PHONE = "08000000000"
 DEFAULT_USER_REGION = "NG"
 DEFAULT_USER_USERNAME = "unitylive"
-AUTH_LOGIN_PATHS: Final[tuple[str, ...]] = ("/api/auth/login", "/auth/login", "/api/v1/auth/login")
-AUTH_REGISTER_PATHS: Final[tuple[str, ...]] = ("/api/auth/register", "/auth/register", "/api/v1/auth/register")
+AUTH_LOGIN_PATHS: Final[tuple[str, ...]] = (
+    "/api/v2/auth/login",
+    "/api/auth/login",
+    "/auth/login",
+    "/api/v1/auth/login",
+)
+AUTH_REGISTER_PATHS: Final[tuple[str, ...]] = (
+    "/api/v2/auth/signup/user",
+    "/api/auth/signup/user",
+    "/auth/signup/user",
+)
 LOCAL_PROFILE: Final[str] = "local"
 STAGING_PROFILE: Final[str] = "staging"
 PRODUCTION_PROFILE: Final[str] = "production"
@@ -253,17 +262,22 @@ def ensure_user_access_token(
             "provide --user-access-token, or pass --allow-register."
         )
 
+    country_code = str(region_code or "").strip().upper() or "NG"
+    resolved_full_name = str(full_name or "").strip() or "GTEX Unity Live"
+    resolved_username = str(username or "").strip() or "unitylive"
     register_response = post_first_available(
         client,
         AUTH_REGISTER_PATHS,
         json_payload={
             "email": email,
-            "full_name": full_name,
-            "phone_number": phone_number,
-            "is_over_18": True,
-            "region_code": region_code,
-            "username": username,
+            "username": resolved_username,
             "password": password,
+            "full_name": resolved_full_name,
+            "country": country_code,
+            "club_name": f"{resolved_full_name} Club",
+            "club_short_tag": "GLM",
+            "club_country": country_code,
+            "club_type": "community",
         },
     )
     if register_response.status_code < 300:
