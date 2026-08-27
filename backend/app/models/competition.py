@@ -30,32 +30,14 @@ class UserCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     competition_type: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        default=CompetitionFormat.LEAGUE.value,
-        server_default=CompetitionFormat.LEAGUE.value,
+        String(32), nullable=False, default=CompetitionFormat.LEAGUE.value, server_default=CompetitionFormat.LEAGUE.value
     )
     source_type: Mapped[str | None] = mapped_column(String(48), nullable=True, index=True)
     source_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     format: Mapped[str] = mapped_column(String(24), nullable=False)
-    visibility: Mapped[str] = mapped_column(
-        String(24),
-        nullable=False,
-        default=CompetitionVisibility.PUBLIC.value,
-        server_default=CompetitionVisibility.PUBLIC.value,
-    )
-    status: Mapped[str] = mapped_column(
-        String(24),
-        nullable=False,
-        default=CompetitionStatus.DRAFT.value,
-        server_default=CompetitionStatus.DRAFT.value,
-    )
-    start_mode: Mapped[str] = mapped_column(
-        String(24),
-        nullable=False,
-        default=CompetitionStartMode.SCHEDULED.value,
-        server_default=CompetitionStartMode.SCHEDULED.value,
-    )
+    visibility: Mapped[str] = mapped_column(String(24), nullable=False, default=CompetitionVisibility.PUBLIC.value, server_default=CompetitionVisibility.PUBLIC.value)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default=CompetitionStatus.DRAFT.value, server_default=CompetitionStatus.DRAFT.value)
+    start_mode: Mapped[str] = mapped_column(String(24), nullable=False, default=CompetitionStartMode.SCHEDULED.value, server_default=CompetitionStartMode.SCHEDULED.value)
     scheduled_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     registration_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -63,12 +45,7 @@ class UserCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     launched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    stage: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        default="registration",
-        server_default="registration",
-    )
+    stage: Mapped[str] = mapped_column(String(32), nullable=False, default="registration", server_default="registration")
 
     currency: Mapped[str] = mapped_column(String(12), nullable=False)
     entry_fee_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
@@ -78,15 +55,9 @@ class UserCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     gross_pool_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     net_prize_pool_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     is_ranked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
-    competition_mode: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="competition", server_default="competition"
-    )
-    prize_mode: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="entry_funded", server_default="entry_funded"
-    )
-    payout_mode: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="winner_takes_all", server_default="winner_takes_all"
-    )
+    competition_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="competition", server_default="competition")
+    prize_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="entry_funded", server_default="entry_funded")
+    payout_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="winner_takes_all", server_default="winner_takes_all")
     host_funded_prize_total_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     host_funding_required_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     host_funding_escrowed_minor: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
@@ -128,7 +99,7 @@ def _validate_competition_economic_contract(_: Any, __: Any, competition: UserCo
 
 @event.listens_for(UserCompetition, "before_insert", propagate=True)
 def _enforce_active_admin_competition_fee(mapper: Any, connection: Any, competition: UserCompetition) -> None:
-    """Replace caller/template fee drift with the active Admin economic policy at creation."""
+    """Apply and persist the authoritative Admin competition fee and its derived totals."""
     if (competition.prize_mode or "entry_funded").strip().lower() == "host_funded_fixed":
         return
     if (competition.currency or "").strip().lower() != "credit" or int(competition.entry_fee_minor or 0) <= 0:
@@ -141,29 +112,24 @@ def _enforce_active_admin_competition_fee(mapper: Any, connection: Any, competit
         policy = resolve_economic_policy(session)
     except EconomicPolicyUnavailableError:
         return
-    competition.platform_fee_bps = policy.competition_platform_fee_bps
+    fee_bps = policy.competition_platform_fee_bps
+    competition.platform_fee_bps = fee_bps
+    gross_pool = int(competition.gross_pool_minor or 0)
+    platform_fee_minor = gross_pool * fee_bps // 10_000
+    host_fee_minor = gross_pool * int(competition.host_fee_bps or 0) // 10_000
+    competition.net_prize_pool_minor = max(0, gross_pool - platform_fee_minor - host_fee_minor)
     metadata = dict(competition.metadata_json or {})
     metadata["economic_policy"] = {
         "rule_key": policy.rule.rule_key,
         "version": policy.policy_version,
         "effective_at": policy.effective_at.isoformat(),
-        "competition_platform_fee_bps": policy.competition_platform_fee_bps,
+        "competition_platform_fee_bps": fee_bps,
     }
     competition.metadata_json = metadata
 
 
-event.listen(
-    UserCompetition,
-    "before_insert",
-    _validate_competition_economic_contract,
-    propagate=True,
-)
-event.listen(
-    UserCompetition,
-    "before_update",
-    _validate_competition_economic_contract,
-    propagate=True,
-)
+for _event in ("before_insert", "before_update"):
+    event.listen(UserCompetition, _event, _validate_competition_economic_contract, propagate=True)
 
 
 __all__ = ["Competition", "UserCompetition"]
