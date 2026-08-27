@@ -144,7 +144,21 @@ def _apply_local_environment(args: argparse.Namespace) -> dict[str, str]:
         "GTE_INFINITE_LEAGUE_INITIAL_MATCH_COUNT": "1",
     }
 
-    return _apply_environment(defaults, prefer_existing=True)
+    applied = _apply_environment(defaults, prefer_existing=True)
+    # These three controls define the isolated evidence-run contract. Force them
+    # for the local profile so an inherited shell environment cannot re-enable
+    # background match generation or inflate startup work.
+    os.environ["GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE"] = "true"
+    os.environ["GTE_INFINITE_LEAGUE_AUTO_ADVANCE"] = "false"
+    os.environ["GTE_INFINITE_LEAGUE_INITIAL_MATCH_COUNT"] = "1"
+    applied.update(
+        {
+            "GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE": os.environ["GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE"],
+            "GTE_INFINITE_LEAGUE_AUTO_ADVANCE": os.environ["GTE_INFINITE_LEAGUE_AUTO_ADVANCE"],
+            "GTE_INFINITE_LEAGUE_INITIAL_MATCH_COUNT": os.environ["GTE_INFINITE_LEAGUE_INITIAL_MATCH_COUNT"],
+        }
+    )
+    return applied
 
 
 def _apply_non_local_environment(args: argparse.Namespace) -> dict[str, str]:
