@@ -26,7 +26,6 @@ def replace_method(text: str, signature_pattern: str, replacement: str) -> str:
 
 runtime_path = ROOT / 'Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs'
 runtime = runtime_path.read_text(encoding='utf-8-sig')
-
 runtime = runtime.replace(
     '            config = cfg;\n',
     '            config = cfg;\n            GtexRuntimeState.MarkStarted(GtexRuntimeMode.LivePlayback, nameof(GtexMatchRuntime));\n',
@@ -37,7 +36,6 @@ runtime = runtime.replace(
     'return normalized + "/api/v2/ws/match/" + Uri.EscapeDataString(matchId) + "?format=unity";',
     1,
 )
-
 runtime = replace_method(
     runtime,
     r'\s*private float ApplyLivePlayerState\(',
@@ -152,7 +150,6 @@ runtime = replace_method(
         }
 ''',
 )
-
 runtime = replace_method(
     runtime,
     r'\s*private void TryStartSyntheticBallTransit\(',
@@ -164,7 +161,6 @@ runtime = replace_method(
         }
 ''',
 )
-
 runtime = replace_method(
     runtime,
     r'\s*private bool TryDriveSyntheticBallTransit\(',
@@ -175,7 +171,6 @@ runtime = replace_method(
         }
 ''',
 )
-
 runtime = replace_method(
     runtime,
     r'\s*private void DriveBall\(',
@@ -215,10 +210,9 @@ runtime = replace_method(
         }
 ''',
 )
-
 runtime_path.write_text(runtime + '\n', encoding='utf-8')
 
-player_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs'
+player_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/PlayerBase.cs'
 player = player_path.read_text(encoding='utf-8-sig')
 marker = '        public void ProcessBehaviours (in float time) {\n'
 guard = '''        public void ProcessBehaviours (in float time) {
@@ -307,7 +301,7 @@ ball = replace_method(
     r'\s*private void FixedUpdate\(\)',
     '''        private void FixedUpdate()
         {
-            // GTEX external playback is updated from the authoritative render loop.
+            // GTEX external playback is driven by the authoritative update loop.
             // Do not run a second FixedUpdate trajectory solver.
             if (ExternalPlaybackEnabled)
             {
@@ -316,50 +310,37 @@ ball = replace_method(
         }
 ''',
 )
-old_apply = '''            if (!hasExternalPlaybackTarget ||
-                Vector3.Distance(rigidbody.position, targetPosition) >= ResolveExternalPlaybackTeleportDistance())
-            {
-                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
-                    transform,
-                    rigidbody,
-                    targetPosition,
-                    externalPlaybackTargetRotation);
-            }
-
-            hasExternalPlaybackTarget = true;
-'''
-new_apply = '''            // Every authoritative frame must be applied. Never skip an update
-            // merely because the target is within an arbitrary teleport distance.
+ball, applied = re.subn(
+    r'''\s*if \(!hasExternalPlaybackTarget\s*\|\|\s*Vector3\.Distance\(rigidbody\.position, targetPosition\)\s*>=\s*ResolveExternalPlaybackTeleportDistance\(\)\)\s*\{\s*GtexPlaybackPhysicsUtil\.ApplyExternalPlaybackPosition\(\s*transform,\s*rigidbody,\s*targetPosition,\s*externalPlaybackTargetRotation\);\s*\}\s*\s*hasExternalPlaybackTarget\s*=\s*true;''',
+    '''
+            // Apply every authoritative frame. Do not skip near targets based on a
+            // teleport threshold.
             GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
                 transform,
                 rigidbody,
                 targetPosition,
                 externalPlaybackTargetRotation);
-            hasExternalPlaybackTarget = true;
-'''
-if old_apply not in ball:
-    raise SystemExit('Ball no-holder external state branch not found')
-ball = ball.replace(old_apply, new_apply, 1)
-old_holder = '''                if (holderChanged ||
-                    Vector3.Distance(rigidbody.position, ResolveExternalPlaybackHolderAnchor(holder)) >= ResolveExternalPlaybackHolderSnapDistance() * 1.75f)
-                {
-                    SnapExternalPlaybackHolderAnchor(holder);
-                }
-
-                return;
-'''
-new_holder = '''                var holderAnchor = ResolveExternalPlaybackHolderAnchor(holder);
+            hasExternalPlaybackTarget = true;''',
+    ball,
+    count=1,
+)
+if applied != 1:
+    raise SystemExit(f'Ball no-holder external state branch replacements={applied}')
+ball, applied = re.subn(
+    r'''\s*if \(holderChanged\s*\|\|\s*Vector3\.Distance\(rigidbody\.position, ResolveExternalPlaybackHolderAnchor\(holder\)\)\s*>=\s*ResolveExternalPlaybackHolderSnapDistance\(\) \* 1\.75f\)\s*\{\s*SnapExternalPlaybackHolderAnchor\(holder\);\s*\}\s*\s*return;''',
+    '''
+                var holderAnchor = ResolveExternalPlaybackHolderAnchor(holder);
                 transform.position = holderAnchor;
                 rigidbody.position = holderAnchor;
-                return;
-'''
-if old_holder not in ball:
-    raise SystemExit('Ball external holder branch not found')
-ball = ball.replace(old_holder, new_holder, 1)
+                return;''',
+    ball,
+    count=1,
+)
+if applied != 1:
+    raise SystemExit(f'Ball holder external state branch replacements={applied}')
 ball_path.write_text(ball + '\n', encoding='utf-8')
 
-# Strict source-level gates. The migration should fail rather than silently create
-# a partially authoritative renderer.
+# Strict source-level gates.
 runtime_check = runtime_path.read_text(encoding='utf-8')
 apply_match = re.search(r'private float ApplyLivePlayerState\([\s\S]*?\n        }\n\s*private Vector3 ResolveBehaviorAnchorPosition', runtime_check)
 if not apply_match:
@@ -374,6 +355,7 @@ assert 'ClearSyntheticBallTransit();' in re.search(r'private void TryStartSynthe
 assert 'return false;' in re.search(r'private bool TryDriveSyntheticBallTransit\([\s\S]*?\n        }', runtime_check).group(0)
 assert 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' in player
 assert 'rb.MovePosition(nextPosition)' not in physics_path.read_text(encoding='utf-8')
-assert 'Every authoritative frame must be applied' in ball_path.read_text(encoding='utf-8')
+assert 'ResolveExternalPlaybackTeleportDistance()' not in re.search(r'public void ApplyExternalState\([\s\S]*?\n        }', ball_path.read_text(encoding='utf-8')).group(0)
+assert 'ApplyExternalPlaybackPosition(' in ball_path.read_text(encoding='utf-8')
 
 subprocess.run(['git', 'diff', '--check'], check=True)
