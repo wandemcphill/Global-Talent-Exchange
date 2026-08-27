@@ -73,6 +73,24 @@ function Test-BackendPort {
     } catch { return $false }
 }
 
+function Resolve-ExistingLiveMatchId {
+    param([Parameter(Mandatory = $true)][string]$BaseUrl)
+    try {
+        $response = Invoke-RestMethod -Method Get -Uri ($BaseUrl.TrimEnd('/') + "/infinite-league/matches?limit=1") -TimeoutSec 180
+        $matches = @($response.matches)
+        foreach ($match in $matches) {
+            $matchId = [string]$match.match_id
+            if (-not [string]::IsNullOrWhiteSpace($matchId)) {
+                return $matchId.Trim()
+            }
+        }
+        return ""
+    } catch {
+        Write-Host "[!] Could not resolve a seeded Infinite League match; provisioning will fall back to generation. $($_.Exception.Message)" -ForegroundColor DarkYellow
+        return ""
+    }
+}
+
 $python = Resolve-PythonExecutable -ExplicitPath $PythonExe
 $exe = Resolve-UnityExecutable -ExplicitPath $ExePath
 if ($null -eq $exe) {
@@ -121,8 +139,15 @@ try {
         Write-Host "[+] Backend started (PID $($backend.Id))" -ForegroundColor Green
     }
 
-    Write-Host "[*] Provisioning authoritative GTEX live match..." -ForegroundColor Yellow
-    & $python (Join-Path $repoRoot "tools\provision_gtex_live_match.py") --profile local --base-url $baseUrl --persist-access-token
+    Write-Host "[*] Preparing authoritative GTEX live match..." -ForegroundColor Yellow
+    $existingMatchId = Resolve-ExistingLiveMatchId -BaseUrl $baseUrl
+    if (-not [string]::IsNullOrWhiteSpace($existingMatchId)) {
+        Write-Host "[+] Reusing seeded Infinite League match $existingMatchId" -ForegroundColor Green
+        & $python (Join-Path $repoRoot "tools\provision_gtex_live_match.py") --profile local --base-url $baseUrl --match-id $existingMatchId --persist-access-token
+    } else {
+        Write-Host "[*] No reusable seeded match found; provisioning will generate one." -ForegroundColor Yellow
+        & $python (Join-Path $repoRoot "tools\provision_gtex_live_match.py") --profile local --base-url $baseUrl --persist-access-token
+    }
     if ($LASTEXITCODE -ne 0) { throw "Live match provisioning failed with exit code $LASTEXITCODE." }
     Write-Host "[+] Live match provisioned; Unity bootstrap/config updated." -ForegroundColor Green
 
