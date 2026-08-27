@@ -133,6 +133,10 @@ def _apply_local_environment(args: argparse.Namespace) -> dict[str, str]:
         "GTE_PROJECTION_WORKERS_ENABLED": "false",
         "GTE_LIVE_COMMENTARY_LLM_ENABLED": "false",
         "GTE_SOCIAL_CONTENT_LLM_ENABLED": "false",
+        # The local Unity evidence path intentionally consumes the generated
+        # infinite-league render-sync stream. This development-only flag enables
+        # that bridge; staging/production are never assigned it by the local profile.
+        "GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE": "true",
     }
 
     return _apply_environment(defaults, prefer_existing=True)
