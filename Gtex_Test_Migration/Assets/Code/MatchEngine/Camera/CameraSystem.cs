@@ -13,7 +13,7 @@ namespace FStudio.MatchEngine.Cameras {
         public new Camera camera = default;
 #pragma warning restore 0109
 
-        [SerializeField] private SerializableAssetCollection<string, MatchCamera> matchCameras = 
+        [SerializeField] private SerializableAssetCollection<string, MatchCamera> matchCameras =
             new SerializableAssetCollection<string, MatchCamera>();
 
         [SerializeField] public Transform target = default;
@@ -29,7 +29,6 @@ namespace FStudio.MatchEngine.Cameras {
         private bool instantTransitionInNextFrame = false;
 
         [SerializeField] private float transitionSpeed = 0.5f;
-
 
         [Header("Camera Speed")]
         public float CameraPositionSpeed = 4;
@@ -57,17 +56,42 @@ namespace FStudio.MatchEngine.Cameras {
         }
 
         public async Task SwitchCamera(string cameraType, bool instant = true) {
-            Debug.Log($"[CameraSystem] Switch Camera: {cameraType}");
-            CurrentCamera = await matchCameras.FindAsync(cameraType);
-            CurrentCameraType = cameraType;
+            var resolvedCameraType = ResolveCameraAlias(cameraType);
+            Debug.Log($"[CameraSystem] Switch Camera: {cameraType} -> {resolvedCameraType}");
+            var resolvedCamera = await matchCameras.FindAsync(resolvedCameraType);
+            if (resolvedCamera == null && !string.Equals(resolvedCameraType, "Stadium", System.StringComparison.OrdinalIgnoreCase)) {
+                resolvedCameraType = "Stadium";
+                resolvedCamera = await matchCameras.FindAsync(resolvedCameraType);
+            }
+
+            if (resolvedCamera == null) {
+                Debug.LogWarning($"[CameraSystem] Camera asset not found for requested type '{cameraType}'.");
+                return;
+            }
+
+            CurrentCamera = resolvedCamera;
+            CurrentCameraType = resolvedCameraType;
             isInTransition = false;
             instantTransitionInNextFrame = instant;
 
             ActiveCameraChanged();
         }
 
+        private static string ResolveCameraAlias(string cameraType) {
+            var normalized = (cameraType ?? string.Empty).Trim();
+            if (string.Equals(normalized, "Broadcast", System.StringComparison.OrdinalIgnoreCase)) {
+                return "TVBroadcast";
+            }
+
+            return normalized;
+        }
+
         private async void Start() {
-            await SwitchCamera("Stadium"); // default camera.
+            // GTEX's live broadcast director uses the semantic camera name
+            // "Broadcast". The original asset collection ships the actual
+            // production camera as "TVBroadcast". Resolve that alias here so
+            // live play never silently falls back to the generic Stadium camera.
+            await SwitchCamera("TVBroadcast");
         }
 
         /// <summary>
@@ -126,7 +150,6 @@ namespace FStudio.MatchEngine.Cameras {
 
                 var (position, rotation, zoom) = CurrentCamera.Behave(in dT, targetPos);
 
-                
                 if (instantTransitionInNextFrame) {
                     instantTransitionInNextFrame = false;
 
