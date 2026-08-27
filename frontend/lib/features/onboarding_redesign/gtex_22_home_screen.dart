@@ -117,65 +117,76 @@ class _Hero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mobile = MediaQuery.sizeOf(context).width < 760;
-    return SizedBox(
-      height: mobile ? 690 : 620,
+    return Container(
+      constraints: const BoxConstraints(minHeight: 580),
       child: Stack(
-        fit: StackFit.expand,
+        alignment: Alignment.centerLeft,
         children: <Widget>[
-          Image.asset('assets/media/gtex_landing_single_poster.png', fit: BoxFit.cover, alignment: Alignment.centerRight),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: <Color>[_ink, Color(0xE8050709), Color(0x75050709), Color(0x15050709)],
+          Positioned.fill(
+            child: Image.asset('assets/media/gtex_landing_single_poster.png', fit: BoxFit.cover, alignment: Alignment.centerRight),
+          ),
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: <Color>[_ink, Color(0xE8050709), Color(0x75050709), Color(0x15050709)],
+                ),
               ),
             ),
           ),
           Padding(
-            padding: EdgeInsets.fromLTRB(mobile ? 24 : 120, 56, 24, 40),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 700),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const _Eyebrow('THE LIVING FOOTBALL ECONOMY'),
-                    const SizedBox(height: 18),
-                    Text(
-                      'FOOTBALL,\nREBUILT.',
-                      style: TextStyle(color: _white, fontSize: mobile ? 62 : 92, height: .84, fontWeight: FontWeight.w900, letterSpacing: -3),
+            padding: EdgeInsets.fromLTRB(mobile ? 24 : 120, 48, 24, 48),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 700),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const _Eyebrow('THE LIVING FOOTBALL ECONOMY'),
+                  const SizedBox(height: 14),
+                  Text(
+                    'GTEX',
+                    style: TextStyle(
+                      color: _white,
+                      fontSize: mobile ? 28 : 36,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 3,
                     ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Discover talent. Build clubs. Trade assets. Play matches. Connect with a football world that never stops moving.',
-                      style: TextStyle(color: _muted, fontSize: 19, height: 1.45),
-                    ),
-                    const SizedBox(height: 28),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: <Widget>[
-                        _GlowButton(label: 'Create your GTEX identity', onPressed: onSignup, large: true),
-                        _GhostButton(label: 'Explore the exchange', onPressed: onExplore),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-                    const Wrap(
-                      spacing: 9,
-                      runSpacing: 9,
-                      children: <Widget>[
-                        _MicroBadge(icon: Icons.search_rounded, text: 'Scout'),
-                        _MicroBadge(icon: Icons.stadium_rounded, text: 'Build'),
-                        _MicroBadge(icon: Icons.candlestick_chart_rounded, text: 'Trade'),
-                        _MicroBadge(icon: Icons.sports_soccer_rounded, text: 'Compete'),
-                        _MicroBadge(icon: Icons.forum_rounded, text: 'Connect'),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'FOOTBALL,\nREBUILT.',
+                    style: TextStyle(color: _white, fontSize: mobile ? 42 : 72, height: .88, fontWeight: FontWeight.w900, letterSpacing: -2),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Discover talent. Build clubs. Trade assets. Play matches. Connect with a football world that never stops moving.',
+                    style: TextStyle(color: _muted, fontSize: 16, height: 1.45),
+                  ),
+                  const SizedBox(height: 22),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: <Widget>[
+                      _GlowButton(label: 'Create free account', onPressed: onSignup, large: true),
+                      _GhostButton(label: 'Explore the exchange', onPressed: onExplore),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                  const Wrap(
+                    spacing: 9,
+                    runSpacing: 9,
+                    children: <Widget>[
+                      _MicroBadge(icon: Icons.search_rounded, text: 'Scout'),
+                      _MicroBadge(icon: Icons.stadium_rounded, text: 'Build'),
+                      _MicroBadge(icon: Icons.candlestick_chart_rounded, text: 'Trade'),
+                      _MicroBadge(icon: Icons.sports_soccer_rounded, text: 'Compete'),
+                      _MicroBadge(icon: Icons.forum_rounded, text: 'Connect'),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
