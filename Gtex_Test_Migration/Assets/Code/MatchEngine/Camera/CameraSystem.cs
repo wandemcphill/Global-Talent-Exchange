@@ -57,6 +57,9 @@ namespace FStudio.MatchEngine.Cameras
             string.Equals(CurrentCameraType, "TVBroadcast", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(CurrentCameraType, "Broadcast", StringComparison.OrdinalIgnoreCase);
 
+        private Vector3 broadcastFocus;
+        private bool hasBroadcastFocus;
+
         private void ActiveCameraChanged()
         {
             if (target == null)
@@ -98,6 +101,7 @@ namespace FStudio.MatchEngine.Cameras
             transitionValue = 1f;
             instantTransitionInNextFrame = instant;
             TargetPosition = null;
+            hasBroadcastFocus = false;
             ActiveCameraChanged();
         }
 
@@ -126,6 +130,7 @@ namespace FStudio.MatchEngine.Cameras
             instantTransitionInNextFrame = instant;
             isInTransition = false;
             transitionValue = 1f;
+            hasBroadcastFocus = false;
         }
 
         public void FocusToPosition(Vector3 position, bool instant = true)
@@ -243,17 +248,16 @@ namespace FStudio.MatchEngine.Cameras
             var desiredFocus = Vector3.Lerp(fieldCenter, ballPoint, broadcastFollowWeight);
             desiredFocus = Vector3.Lerp(desiredFocus, fieldCenter, broadcastCenterBias * 0.35f);
 
-            if (_broadcastFocus == Vector3.zero)
+            if (!hasBroadcastFocus)
             {
-                _broadcastFocus = desiredFocus;
+                broadcastFocus = desiredFocus;
+                hasBroadcastFocus = true;
             }
 
             var followT = 1f - Mathf.Exp(-broadcastPositionSpeed * Mathf.Max(dT, 0.001f));
-            _broadcastFocus = Vector3.Lerp(_broadcastFocus, desiredFocus, followT);
-            return _broadcastFocus;
+            broadcastFocus = Vector3.Lerp(broadcastFocus, desiredFocus, followT);
+            return broadcastFocus;
         }
-
-        private Vector3 _broadcastFocus = Vector3.zero;
 
         private void ApplyGtexBroadcastCamera(Vector3 focus, float dT)
         {
@@ -266,8 +270,6 @@ namespace FStudio.MatchEngine.Cameras
             var field = MatchManager.Current != null
                 ? MatchManager.Current.SizeOfField
                 : new Vector2(105f, 68f);
-            var halfLength = Mathf.Max(1f, field.x * 0.5f);
-            var halfWidth = Mathf.Max(1f, field.y * 0.5f);
 
             var velocity = ball.Velocity;
             velocity.y = 0f;
@@ -275,21 +277,16 @@ namespace FStudio.MatchEngine.Cameras
                 ? velocity.normalized
                 : Vector3.right;
 
-            var side = new Vector3(-playDirection.z, 0f, playDirection.x);
-            if (side.sqrMagnitude < 0.04f)
-            {
-                side = Vector3.back;
-            }
-            side.Normalize();
+            // A real broadcast camera stays on one touchline. It should not
+            // jump sides when the ball changes direction, which was one of
+            // the causes of the unstable framing in the previous pass.
+            var desiredPosition = new Vector3(
+                focus.x - playDirection.x * broadcastAlongPlayOffset,
+                broadcastHeight,
+                focus.z - broadcastSidelineOffset);
 
-            var along = new Vector3(playDirection.x, 0f, playDirection.z) * -broadcastAlongPlayOffset;
-            var desiredPosition = focus + side * broadcastSidelineOffset + along;
-            desiredPosition.y = broadcastHeight;
-
-            var xPadding = 8f;
-            var zPadding = 4f;
-            desiredPosition.x = Mathf.Clamp(desiredPosition.x, -xPadding, field.x + xPadding);
-            desiredPosition.z = Mathf.Clamp(desiredPosition.z, -broadcastSidelineOffset, field.y + broadcastSidelineOffset);
+            desiredPosition.x = Mathf.Clamp(desiredPosition.x, -8f, field.x + 8f);
+            desiredPosition.z = Mathf.Clamp(desiredPosition.z, -broadcastSidelineOffset, field.y + 8f);
 
             var lookTarget = focus + Vector3.up * 0.75f;
             var desiredRotation = Quaternion.LookRotation(lookTarget - desiredPosition, Vector3.up);
@@ -301,7 +298,6 @@ namespace FStudio.MatchEngine.Cameras
 
             var ballSpeedRatio = Mathf.Clamp01(velocity.magnitude / 15f);
             var desiredFov = Mathf.Lerp(broadcastMaxFieldOfView, broadcastMinFieldOfView, ballSpeedRatio);
-            desiredFov = Mathf.Clamp(desiredFov, broadcastMinFieldOfView, broadcastMaxFieldOfView);
             camera.fieldOfView = Mathf.Lerp(
                 camera.fieldOfView,
                 desiredFov,
