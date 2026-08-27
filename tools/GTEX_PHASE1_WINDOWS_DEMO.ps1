@@ -103,12 +103,21 @@ try {
         $backend = Start-Process -FilePath $python -ArgumentList $backendArgString -WorkingDirectory $repoRoot -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr -PassThru
         $startedBackend = $true
         $ready = $false
-        for ($i = 0; $i -lt 60; $i++) {
+        $backendWaitSeconds = 180
+        for ($i = 0; $i -lt ($backendWaitSeconds * 2); $i++) {
             Start-Sleep -Milliseconds 500
             if (Test-BackendPort -Port $BackendPort) { $ready = $true; break }
             if ($backend.HasExited) { throw "GTEX backend exited with code $($backend.ExitCode). See $backendOut and $backendErr" }
         }
-        if (-not $ready) { throw "Timed out waiting for GTEX backend on port $BackendPort. See $backendOut and $backendErr" }
+        if (-not $ready) {
+            $outTail = if (Test-Path $backendOut) { (Get-Content $backendOut -Tail 20) -join [Environment]::NewLine } else { "<stdout log missing>" }
+            $errTail = if (Test-Path $backendErr) { (Get-Content $backendErr -Tail 40) -join [Environment]::NewLine } else { "<stderr log missing>" }
+            Write-Host "===== Backend stdout (tail) =====" -ForegroundColor DarkGray
+            Write-Host $outTail -ForegroundColor DarkGray
+            Write-Host "===== Backend stderr (tail) =====" -ForegroundColor DarkGray
+            Write-Host $errTail -ForegroundColor DarkGray
+            throw "Timed out waiting for GTEX backend on port $BackendPort after ${backendWaitSeconds}s. See $backendOut and $backendErr"
+        }
         Write-Host "[+] Backend started (PID $($backend.Id))" -ForegroundColor Green
     }
 
