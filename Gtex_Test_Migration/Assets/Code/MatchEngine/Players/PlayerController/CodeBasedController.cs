@@ -213,32 +213,19 @@ namespace FStudio.MatchEngine.Players.PlayerController
             hasExternalPlaybackPose = false;
         }
 
-        public void SetExternalPlaybackPose(Vector3 position, Quaternion rotation, bool snap = false)
+                public void SetExternalPlaybackPose(Vector3 position, Quaternion rotation, bool snap = false)
         {
             rotation = Quaternion.Euler(0f, rotation.eulerAngles.y, 0f);
-
             externalPlaybackTargetPosition = position;
             externalPlaybackTargetRotation = rotation;
             hasExternalPlaybackPose = true;
-
             if (!externalPlaybackEnabled || rigidbody == null)
             {
                 SetInstantPosition(position);
                 SetInstantRotation(rotation);
                 return;
             }
-
-            // GTEX has already performed the visual interpolation step before
-            // handing us the pose. Apply exactly that pose here. Do not run a
-            // second speed-limited chase in FixedUpdate and do not infer a snap
-            // merely from target distance. Large-distance correction is an
-            // explicit decision made by the authoritative playback layer.
-            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
-                transform,
-                rigidbody,
-                position,
-                rotation,
-                snap);
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform, rigidbody, position, rotation, snap);
             lastKnownPosition = transform.position;
         }
 

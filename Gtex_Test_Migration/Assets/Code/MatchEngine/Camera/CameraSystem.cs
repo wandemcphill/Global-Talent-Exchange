@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using FStudio.Utilities;
 using FStudio.MatchEngine.Balls;
 using FStudio.Events;
@@ -183,6 +183,12 @@ namespace FStudio.MatchEngine.Cameras {
                     targetPos = target.position;
                 }
 
+                if (IsBroadcastCamera && Ball.Current != null)
+                {
+                    ApplyGtexBroadcastCamera(targetPos, dT);
+                    return;
+                }
+
                 var (position, rotation, zoom) = CurrentCamera.Behave(in dT, targetPos);
 
                 if (instantTransitionInNextFrame) {
@@ -216,4 +222,24 @@ namespace FStudio.MatchEngine.Cameras {
             }
         }
     }
+        private void ApplyGtexBroadcastCamera(Vector3 targetPos, float dT)
+        {
+            var ball = Ball.Current;
+            if (ball == null) return;
+            var velocity = ball.Velocity;
+            velocity.y = 0f;
+            var direction = velocity.sqrMagnitude > 0.04f ? velocity.normalized : Vector3.right;
+            var target = targetPos;
+            target.y = 0f;
+            var desiredPosition = new Vector3(target.x - Mathf.Clamp(direction.x * 3.5f, -3.5f, 3.5f), 18f, Mathf.Clamp(target.z - 27f, -46f, 46f));
+            var lookAt = target + Vector3.up * 0.8f;
+            var desiredRotation = Quaternion.LookRotation(lookAt - desiredPosition, Vector3.up);
+            var positionT = 1f - Mathf.Exp(-7.5f * Mathf.Max(dT, 0.001f));
+            var rotationT = 1f - Mathf.Exp(-12f * Mathf.Max(dT, 0.001f));
+            transform.position = Vector3.Lerp(transform.position, desiredPosition, positionT);
+            transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, rotationT);
+            var desiredFov = Mathf.Lerp(52f, 47f, Mathf.Clamp01(velocity.magnitude / 12f));
+            camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, desiredFov, Mathf.Clamp01(dT * CameraZoomSpeed));
+        }
+
 }

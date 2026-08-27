@@ -1,4 +1,4 @@
-﻿
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -364,6 +364,13 @@ namespace FStudio.MatchEngine.Players {
         };
 
         public void ProcessBehaviours (in float time) {
+            if (GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback)
+            {
+                ActiveBehaviour = null;
+                NextBehaviour = 0;
+                return;
+            }
+
             if (GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntime() &&
                 GtexRuntimeState.ActiveMode == GtexRuntimeMode.OriginalVisualRuntime &&
                 GtexVisualAuthority.ShouldSuppressAutonomousDecision(this)) {

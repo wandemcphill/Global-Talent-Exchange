@@ -1,4 +1,4 @@
-﻿using FStudio.Animation;
+using FStudio.Animation;
 using FStudio.GTEX.Engine;
 using FStudio.GTEX.Core;
 using FStudio.MatchEngine.Players;
@@ -47,6 +47,7 @@ namespace FStudio.MatchEngine.Balls {
         private Vector3 externalPlaybackTargetPosition;
         private Quaternion externalPlaybackTargetRotation = Quaternion.identity;
         private float nextExternalPlaybackValidationAt;
+        private Vector3 externalPlaybackPresentationVelocity;
 
         [SerializeField] private float externalPlaybackMoveSpeed = 30f;
         [SerializeField] private float externalPlaybackTeleportDistance = 6f;
@@ -222,34 +223,17 @@ namespace FStudio.MatchEngine.Balls {
             }
         }
 
-        private void FixedUpdate()
+                private void FixedUpdate()
         {
-            if (!ExternalPlaybackEnabled || rigidbody == null)
+            if (ExternalPlaybackEnabled && GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback)
             {
                 return;
             }
-
-            if (HolderPlayer != null)
-            {
-                DriveExternalPlaybackHolderAnchor();
-                return;
-            }
-
-            if (!hasExternalPlaybackTarget)
-            {
-                return;
-            }
-
-            var nextPosition = Vector3.MoveTowards(
-                rigidbody.position,
-                externalPlaybackTargetPosition,
-                externalPlaybackMoveSpeed * Time.fixedDeltaTime);
-
-            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
-                transform,
-                rigidbody,
-                nextPosition,
-                externalPlaybackTargetRotation);
+            if (!ExternalPlaybackEnabled || rigidbody == null) return;
+            if (HolderPlayer != null) { DriveExternalPlaybackHolderAnchor(); return; }
+            if (!hasExternalPlaybackTarget) return;
+            var nextPosition = Vector3.MoveTowards(rigidbody.position, externalPlaybackTargetPosition, externalPlaybackMoveSpeed * Time.fixedDeltaTime);
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform, rigidbody, nextPosition, externalPlaybackTargetRotation);
         }
 
         /// <summary>
@@ -431,13 +415,24 @@ namespace FStudio.MatchEngine.Balls {
             externalPlaybackTargetPosition = targetPosition;
             externalPlaybackTargetRotation = ResolveExternalPlaybackRotation(targetVelocity);
 
-            if (!hasExternalPlaybackTarget ||
-                Vector3.Distance(rigidbody.position, targetPosition) >= ResolveExternalPlaybackTeleportDistance()) {
-                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
-                    transform,
-                    rigidbody,
-                    targetPosition,
-                    externalPlaybackTargetRotation);
+            if (GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback)
+            {
+                if (!hasExternalPlaybackTarget)
+                {
+                    GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform, rigidbody, targetPosition, externalPlaybackTargetRotation, true);
+                    externalPlaybackPresentationVelocity = Vector3.zero;
+                }
+                else
+                {
+                    var maxVisualSpeed = Mathf.Clamp(Mathf.Max(externalPlaybackVelocity.magnitude * 1.35f, 18f), 18f, 28f);
+                    var smoothed = Vector3.SmoothDamp(transform.position, targetPosition, ref externalPlaybackPresentationVelocity, 0.055f, maxVisualSpeed, Mathf.Max(Time.unscaledDeltaTime, 1f / 60f));
+                    smoothed.y = targetPosition.y;
+                    GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform, rigidbody, smoothed, externalPlaybackTargetRotation, false);
+                }
+            }
+            else if (!hasExternalPlaybackTarget || Vector3.Distance(rigidbody.position, targetPosition) >= ResolveExternalPlaybackTeleportDistance())
+            {
+                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform, rigidbody, targetPosition, externalPlaybackTargetRotation);
             }
 
             hasExternalPlaybackTarget = true;

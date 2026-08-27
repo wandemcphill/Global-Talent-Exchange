@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: quality-gates-${{ github.ref }}
@@ -25,22 +25,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply GTEX 3D renderer repair once
-        if: ${{ hashFiles('tools/_gtex_3d_renderer_fix.py') != '' }}
-        shell: bash
-        run: |
-          set -e
-          python tools/_gtex_3d_renderer_fix.py
-          cp tools/_quality_gates_original.yml .github/workflows/quality-gates.yml
-          rm -f tools/_gtex_3d_renderer_fix.py tools/_quality_gates_original.yml
-          git rm -r --ignore-unmatch .github/workflows/gtex-3d-final-repair.yml .github/workflows/gtex-main-finalize.yml .github/workflows/gtex-authoritative-finalize.yml .github/workflows/gtex-3d-renderer-repair.yml .github/workflows/gtex-3d-pr-finalize.yml tools/.gtex-renderer-repair-trigger tools/.gtex-pr-finalizer-trigger
-          git add -u
-          git add Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerController/CodeBasedController.cs Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs Gtex_Test_Migration/Assets/Code/MatchEngine/Camera/CameraSystem.cs
-          git diff --cached --check
-          git config user.name 'GTEX Automation'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'fix: complete GTEX authoritative 3D renderer [gtex-main-final]'
-          git push origin main
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
