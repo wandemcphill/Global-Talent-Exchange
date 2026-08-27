@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from tools.provision_gtex_live_match import (
-    AUTH_LOGIN_PATHS,
     AUTH_REGISTER_PATHS,
     ensure_user_access_token,
     write_bootstrap_file,

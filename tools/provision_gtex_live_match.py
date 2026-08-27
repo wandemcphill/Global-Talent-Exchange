@@ -22,7 +22,12 @@ DEFAULT_USER_FULL_NAME = "GTEX Unity Live"
 DEFAULT_USER_PHONE = "08000000000"
 DEFAULT_USER_REGION = "NG"
 DEFAULT_USER_USERNAME = "unitylive"
-AUTH_LOGIN_PATHS: Final[tuple[str, ...]] = ("/api/v2/auth/login", "/api/auth/login", "/auth/login", "/api/v1/auth/login")
+AUTH_LOGIN_PATHS: Final[tuple[str, ...]] = (
+    "/api/v2/auth/login",
+    "/api/auth/login",
+    "/auth/login",
+    "/api/v1/auth/login",
+)
 AUTH_REGISTER_PATHS: Final[tuple[str, ...]] = (
     "/api/v2/auth/signup/user",
     "/api/auth/signup/user",
