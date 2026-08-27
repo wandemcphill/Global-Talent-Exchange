@@ -75,8 +75,7 @@ runtime = replace_method(
             var targetDelta = targetPosition - startPosition;
             targetDelta.y = 0f;
             var targetDistance = targetDelta.magnitude;
-            var hardSnapDistance = ResolveHardSnapDistance(suppressBoundaryMotion);
-            var hardSnap = snap || targetDistance >= hardSnapDistance;
+            var hardSnap = snap;
             var presentationSpeed = liveVelocity.magnitude;
 
             Vector3 appliedPosition;
@@ -86,12 +85,11 @@ runtime = replace_method(
             }
             else
             {
-                var minimumSpeed = livePlayer.active ? LivePlayerMinSpeedUnitsPerSecond : 0f;
-                var maximumSpeed = Mathf.Max(LivePlayerMaxSpeedUnitsPerSecond, minimumSpeed);
-                presentationSpeed = Mathf.Clamp(presentationSpeed, minimumSpeed, maximumSpeed);
                 var catchupSpeed = Mathf.Max(
                     presentationSpeed,
-                    targetDistance / Mathf.Max(LivePlayerCatchUpSeconds, 0.05f));
+                    Mathf.Min(
+                        LivePlayerMaxSpeedUnitsPerSecond,
+                        targetDistance / Mathf.Max(LivePlayerCatchUpSeconds, 0.05f)));
                 appliedPosition = Vector3.MoveTowards(
                     startPosition,
                     targetPosition,
@@ -210,7 +208,6 @@ runtime = replace_method(
             }
 
             // One source of truth: authoritative backend position + velocity.
-            // There is no low-pass target solver and no synthetic ball flight here.
             GtexMatchController.BallAdapter.ApplyExternalState(
                 targetPosition,
                 ballVelocity,
@@ -225,9 +222,9 @@ player_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/Player
 player = player_path.read_text(encoding='utf-8-sig')
 marker = '        public void ProcessBehaviours (in float time) {\n'
 guard = '''        public void ProcessBehaviours (in float time) {
-            // GTEX LivePlayback is a presentation of authoritative backend decisions,
-            // not an additional local football simulation. The original behaviour
-            // stack remains available to the standalone asset and simulation modes.
+            // GTEX LivePlayback is authoritative playback, not a second local AI
+            // simulation. The original behaviour stack remains available in the
+            // standalone asset and simulation modes.
             if (GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback)
             {
                 ActiveBehaviour = null;
@@ -319,6 +316,30 @@ ball = replace_method(
         }
 ''',
 )
+old_apply = '''            if (!hasExternalPlaybackTarget ||
+                Vector3.Distance(rigidbody.position, targetPosition) >= ResolveExternalPlaybackTeleportDistance())
+            {
+                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                    transform,
+                    rigidbody,
+                    targetPosition,
+                    externalPlaybackTargetRotation);
+            }
+
+            hasExternalPlaybackTarget = true;
+'''
+new_apply = '''            // Every authoritative frame must be applied. Never skip an update
+            // merely because the target is within an arbitrary teleport distance.
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                transform,
+                rigidbody,
+                targetPosition,
+                externalPlaybackTargetRotation);
+            hasExternalPlaybackTarget = true;
+'''
+if old_apply not in ball:
+    raise SystemExit('Ball no-holder external state branch not found')
+ball = ball.replace(old_apply, new_apply, 1)
 old_holder = '''                if (holderChanged ||
                     Vector3.Distance(rigidbody.position, ResolveExternalPlaybackHolderAnchor(holder)) >= ResolveExternalPlaybackHolderSnapDistance() * 1.75f)
                 {
@@ -328,12 +349,8 @@ old_holder = '''                if (holderChanged ||
                 return;
 '''
 new_holder = '''                var holderAnchor = ResolveExternalPlaybackHolderAnchor(holder);
-                transform.SetPositionAndRotation(
-                    holderAnchor,
-                    ResolveExternalPlaybackRotation(targetVelocity));
+                transform.position = holderAnchor;
                 rigidbody.position = holderAnchor;
-                rigidbody.rotation = transform.rotation;
-
                 return;
 '''
 if old_holder not in ball:
@@ -341,19 +358,22 @@ if old_holder not in ball:
 ball = ball.replace(old_holder, new_holder, 1)
 ball_path.write_text(ball + '\n', encoding='utf-8')
 
-# Source-level gates. These are intentionally strict so the migration fails rather
-# than silently producing a partially authoritative runtime.
+# Strict source-level gates. The migration should fail rather than silently create
+# a partially authoritative renderer.
 runtime_check = runtime_path.read_text(encoding='utf-8')
 apply_match = re.search(r'private float ApplyLivePlayerState\([\s\S]*?\n        }\n\s*private Vector3 ResolveBehaviorAnchorPosition', runtime_check)
 if not apply_match:
     raise SystemExit('could not locate patched ApplyLivePlayerState')
 assert 'ResolveBehaviorDrivenFieldPosition' not in apply_match.group(0)
+assert 'ResolveBehaviorAnchorPosition' not in apply_match.group(0)
+assert 'ApplyStructuredTeamSpacing' not in apply_match.group(0)
+assert 'FilterLivePlayerTarget' not in apply_match.group(0)
 assert '/api/v2/ws/match/' in runtime_check
 assert 'GtexRuntimeState.MarkStarted(GtexRuntimeMode.LivePlayback' in runtime_check
 assert 'ClearSyntheticBallTransit();' in re.search(r'private void TryStartSyntheticBallTransit\([\s\S]*?\n        }', runtime_check).group(0)
 assert 'return false;' in re.search(r'private bool TryDriveSyntheticBallTransit\([\s\S]*?\n        }', runtime_check).group(0)
 assert 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' in player
 assert 'rb.MovePosition(nextPosition)' not in physics_path.read_text(encoding='utf-8')
-assert 'if (ExternalPlaybackEnabled)' in ball_path.read_text(encoding='utf-8')
+assert 'Every authoritative frame must be applied' in ball_path.read_text(encoding='utf-8')
 
 subprocess.run(['git', 'diff', '--check'], check=True)
