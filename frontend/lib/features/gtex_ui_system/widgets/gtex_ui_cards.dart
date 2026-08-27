@@ -223,10 +223,18 @@ class GtexPlayerTile extends StatelessWidget {
 }
 
 class GtexRegenCard extends StatelessWidget {
-  const GtexRegenCard({super.key, required this.player, required this.onOpen});
+  const GtexRegenCard({
+    super.key,
+    required this.player,
+    required this.onOpen,
+    this.generation = 'Gen-1',
+    this.trajectory,
+  });
 
   final GtexPlayerCardData player;
   final VoidCallback onOpen;
+  final String generation;
+  final String? trajectory;
 
   @override
   Widget build(BuildContext context) {
@@ -238,30 +246,158 @@ class GtexRegenCard extends StatelessWidget {
       rating: player.rating,
       image: '',
       position: player.position,
-      subtitle: '${player.country} | ${player.clubName}',
+      subtitle: '${player.country} | ${player.clubName} • $generation',
       accentColor: accent,
       avatarSize: 72,
       onTap: onOpen,
       badgeLabels: <String>[
         player.position,
-        '${player.potential} POT',
+        'POT ${player.potential}',
+        generation,
         ...player.badges.take(2),
       ],
       metrics: <PlayerCardMetric>[
-        PlayerCardMetric(label: 'Potential', value: '${player.potential}'),
+        PlayerCardMetric(label: 'Trajectory', value: trajectory ?? '${player.rating} → ${player.potential}'),
         PlayerCardMetric(label: 'Age', value: '${player.age}'),
         PlayerCardMetric(
           label: 'Value',
           value: gtexCompactCurrency(player.price),
         ),
       ],
-      footer: Text(
-        player.bidStatus,
-        style: Theme.of(context).textTheme.bodyMedium,
+      footer: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              player.bidStatus,
+              style: Theme.of(context).textTheme.bodyMedium,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          GtexBadgeIcon(
+            label: 'REGEN PROSPECT',
+            color: accent,
+          ),
+        ],
       ),
       actions: <Widget>[
-        FilledButton.tonal(onPressed: onOpen, child: const Text('Open')),
+        OutlinedButton(onPressed: onOpen, child: const Text('Scout')),
+        FilledButton(onPressed: onOpen, child: const Text('Develop')),
       ],
+    );
+  }
+}
+
+class GtexClubAssetCard extends StatelessWidget {
+  const GtexClubAssetCard({
+    super.key,
+    required this.clubName,
+    required this.leagueName,
+    required this.squadRating,
+    required this.squadValue,
+    required this.clubValuation,
+    required this.sharePrice,
+    required this.shareMovement,
+    this.onTap,
+    this.onTradeShares,
+  });
+
+  final String clubName;
+  final String leagueName;
+  final int squadRating;
+  final double squadValue;
+  final double clubValuation;
+  final double sharePrice;
+  final double shareMovement;
+  final VoidCallback? onTap;
+  final VoidCallback? onTradeShares;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final bool isUp = shareMovement >= 0;
+    final Color trendColor = isUp ? tokens.accent : tokens.accentWarm;
+
+    return GteSurfacePanel(
+      accentColor: tokens.accentClub,
+      padding: const EdgeInsets.all(18),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: LinearGradient(
+                    colors: <Color>[tokens.accentClub, tokens.panelElevated],
+                  ),
+                ),
+                child: Icon(Icons.shield_outlined, color: tokens.textInverse),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(clubName, style: Theme.of(context).textTheme.titleLarge),
+                    Text(leagueName, style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              GtexBadgeIcon(
+                label: 'OVR $squadRating',
+                color: tokens.accentClub,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              GtexMetricPill(
+                label: 'Club Value',
+                value: '₦${gtexCompactCurrency(clubValuation)}',
+                icon: Icons.account_balance_outlined,
+                color: tokens.accentClub,
+              ),
+              GtexMetricPill(
+                label: 'Share Price',
+                value: '₦${sharePrice.toStringAsFixed(2)}',
+                icon: Icons.show_chart_rounded,
+                color: trendColor,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: <Widget>[
+              Icon(
+                isUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                size: 16,
+                color: trendColor,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${isUp ? '+' : ''}${shareMovement.toStringAsFixed(1)}% 24h',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: trendColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const Spacer(),
+              if (onTradeShares != null)
+                FilledButton.tonal(
+                  onPressed: onTradeShares,
+                  child: const Text('Trade Shares'),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
