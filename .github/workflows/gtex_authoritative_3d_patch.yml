@@ -20,7 +20,7 @@ jobs:
       - name: Apply and validate patch
         run: python3 tools/apply_gtex_authoritative_playback_fix.py
 
-      - name: Commit and push patched source
+      - name: Commit, remove patch tooling, and push
         run: |
           git config user.name "GTEX Automation"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -28,6 +28,7 @@ jobs:
                   Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs \
                   Gtex_Test_Migration/Assets/Code/GTEX/Engine/GtexPlaybackPhysicsUtil.cs \
                   Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs
+          git rm -f .github/workflows/gtex_authoritative_3d_patch.yml tools/apply_gtex_authoritative_playback_fix.py
           git diff --cached --check
           git diff --cached --stat
           git commit -m "fix: make GTEX 3D playback authoritative and intentional"
