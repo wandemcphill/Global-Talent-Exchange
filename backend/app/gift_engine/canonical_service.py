@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import select
 
+from app.core.events import DomainEvent
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
 from app.economy.service import EconomyConfigService
 from app.gift_engine.service import GiftEngineError, GiftEngineService as LegacyGiftEngineService
