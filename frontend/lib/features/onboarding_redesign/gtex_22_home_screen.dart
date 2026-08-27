@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -78,7 +80,7 @@ class _Nav extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            SvgPicture.asset('assets/branding/gtex_wordmark_22.svg', width: 140, height: 32),
+            SvgPicture.asset('assets/branding/gtex_wordmark_22.svg', width: 140, height: 32, semanticsLabel: 'GTEX'),
             const SizedBox(width: 24),
             if (MediaQuery.sizeOf(context).width >= 780) ...const <Widget>[
               _NavLink('Discover'),
@@ -204,7 +206,9 @@ class _Eyebrow extends StatelessWidget {
   Widget build(BuildContext context) => Row(children: <Widget>[
         Container(width: 7, height: 7, decoration: const BoxDecoration(color: _lime, shape: BoxShape.circle)),
         const SizedBox(width: 9),
-        Text(text, style: const TextStyle(color: _lime, fontSize: 11, letterSpacing: 1.7, fontWeight: FontWeight.w700)),
+        Flexible(
+          child: Text(text, style: const TextStyle(color: _lime, fontSize: 11, letterSpacing: 1.7, fontWeight: FontWeight.w700)),
+        ),
       ]);
 }
 
@@ -273,16 +277,7 @@ class _PlatformMap extends StatelessWidget {
         const SizedBox(height: 16),
         const Text('GTEX brings talent, clubs, markets, matches, money and community into one connected football ecosystem.', style: TextStyle(color: _muted, fontSize: 16, height: 1.55)),
         const SizedBox(height: 34),
-        LayoutBuilder(builder: (BuildContext context, BoxConstraints constraints) {
-          final columns = constraints.maxWidth > 1050 ? 3 : constraints.maxWidth > 650 ? 2 : 1;
-          return GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, crossAxisSpacing: 14, mainAxisSpacing: 14, childAspectRatio: columns == 1 ? 2.5 : 1.45),
-            itemBuilder: (BuildContext _, int index) => _FeatureCard(items[index]),
-          );
-        }),
+        _FeatureGrid(items: items),
         const SizedBox(height: 24),
         _GhostButton(label: 'See the football world', onPressed: onSignup),
       ]),
@@ -298,6 +293,48 @@ class _Feature {
   final Color accent;
 }
 
+/// Content-height feature grid. A fixed `childAspectRatio` grid sized the
+/// cells independently of their copy, so cards clipped their body text at
+/// most widths; rows size to their tallest card instead.
+class _FeatureGrid extends StatelessWidget {
+  const _FeatureGrid({required this.items});
+  final List<_Feature> items;
+
+  static const double _gap = 14;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (BuildContext context, BoxConstraints constraints) {
+      final int columns = constraints.maxWidth > 1050
+          ? 3
+          : constraints.maxWidth > 650
+              ? 2
+              : 1;
+      final List<Widget> rows = <Widget>[];
+      for (int start = 0; start < items.length; start += columns) {
+        if (rows.isNotEmpty) rows.add(const SizedBox(height: _gap));
+        final int end = math.min(start + columns, items.length);
+        rows.add(IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              for (int column = 0; column < columns; column++) ...<Widget>[
+                if (column > 0) const SizedBox(width: _gap),
+                Expanded(
+                  child: start + column < end
+                      ? _FeatureCard(items[start + column])
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ],
+          ),
+        ));
+      }
+      return Column(children: rows);
+    });
+  }
+}
+
 class _FeatureCard extends StatelessWidget {
   const _FeatureCard(this.feature);
   final _Feature feature;
@@ -305,8 +342,8 @@ class _FeatureCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(color: _panel, borderRadius: BorderRadius.circular(18), border: Border.all(color: _line)),
-        child: SingleChildScrollView(
-          physics: const NeverScrollableScrollPhysics(),
+        child: Align(
+          alignment: Alignment.topLeft,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -393,17 +430,21 @@ class _AudienceSection extends StatelessWidget {
           const SizedBox(height: 15),
           const Text('Enter GTEX your way.', style: TextStyle(color: _white, fontSize: 54, fontWeight: FontWeight.w900)),
           const SizedBox(height: 28),
-          Wrap(spacing: 14, runSpacing: 14, children: <Widget>[
-            _RoleCard(icon: Icons.sports_soccer, title: 'Player / Fan', body: 'Build your identity, follow football and compete.', button: 'Join GTEX', onPressed: onSignup, accent: _lime),
-            _RoleCard(icon: Icons.stadium, title: 'Creator / Community', body: 'Publish, connect, grow an audience and shape culture.', button: 'Create', onPressed: onCreatorSignup, accent: _blue),
-            _RoleCard(icon: Icons.candlestick_chart, title: 'Trader / Builder', body: 'Explore talent, markets, clubs and football assets.', button: 'Explore', onPressed: onTraderSignup, accent: _gold),
-          ]),
+          LayoutBuilder(builder: (BuildContext context, BoxConstraints constraints) {
+            final double cardWidth = math.min(320, constraints.maxWidth);
+            return Wrap(spacing: 14, runSpacing: 14, children: <Widget>[
+              _RoleCard(width: cardWidth, icon: Icons.sports_soccer, title: 'Player / Fan', body: 'Build your identity, follow football and compete.', button: 'Join GTEX', onPressed: onSignup, accent: _lime),
+              _RoleCard(width: cardWidth, icon: Icons.stadium, title: 'Creator / Community', body: 'Publish, connect, grow an audience and shape culture.', button: 'Create', onPressed: onCreatorSignup, accent: _blue),
+              _RoleCard(width: cardWidth, icon: Icons.candlestick_chart, title: 'Trader / Builder', body: 'Explore talent, markets, clubs and football assets.', button: 'Explore', onPressed: onTraderSignup, accent: _gold),
+            ]);
+          }),
         ]),
       );
 }
 
 class _RoleCard extends StatelessWidget {
-  const _RoleCard({required this.icon, required this.title, required this.body, required this.button, required this.onPressed, required this.accent});
+  const _RoleCard({required this.width, required this.icon, required this.title, required this.body, required this.button, required this.onPressed, required this.accent});
+  final double width;
   final IconData icon;
   final String title;
   final String body;
@@ -412,7 +453,7 @@ class _RoleCard extends StatelessWidget {
   final Color accent;
   @override
   Widget build(BuildContext context) => Container(
-        width: 320,
+        width: width,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(color: _panel, borderRadius: BorderRadius.circular(20), border: Border.all(color: _line)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
@@ -473,7 +514,7 @@ class _FinalCta extends StatelessWidget {
         decoration: const BoxDecoration(gradient: RadialGradient(center: Alignment.center, radius: 1.1, colors: <Color>[Color(0x2036E38A), _ink])),
         child: Center(
           child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
-            SvgPicture.asset('assets/branding/gtex_mark_22.svg', width: 76, height: 76),
+            SvgPicture.asset('assets/branding/gtex_mark_22.svg', width: 76, height: 76, semanticsLabel: 'GTEX'),
             const SizedBox(height: 22),
             const Text('YOUR FOOTBALL WORLD\nSTARTS HERE.', textAlign: TextAlign.center, style: TextStyle(color: _white, fontSize: 58, height: .88, fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
@@ -493,8 +534,10 @@ class _Footer extends StatelessWidget {
         decoration: const BoxDecoration(color: _panel, border: Border(top: BorderSide(color: _line))),
         child: const Row(children: <Widget>[
           Text('GTEX', style: TextStyle(color: _white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2)),
-          Spacer(),
-          Text('GLOBAL TALENT EXCHANGE', style: TextStyle(color: _muted, fontSize: 10, letterSpacing: 1.3)),
+          SizedBox(width: 16),
+          Expanded(
+            child: Text('GLOBAL TALENT EXCHANGE', textAlign: TextAlign.right, style: TextStyle(color: _muted, fontSize: 10, letterSpacing: 1.3)),
+          ),
         ]),
       );
 }
