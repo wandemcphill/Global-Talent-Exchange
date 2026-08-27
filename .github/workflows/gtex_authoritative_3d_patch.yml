@@ -59,8 +59,6 @@ jobs:
           runtime_path = ROOT / 'Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs'
           runtime = runtime_path.read_text(encoding='utf-8')
 
-          # The action hook can be called during bootstrap with null previous state.
-          # Guard before the dedupe key reads ballPosition.
           runtime = runtime.replace(
               '''        private void TryTriggerLiveBallAction(MatchResponse previousState, MatchResponse nextState)
         {
@@ -78,8 +76,6 @@ jobs:
             var liveBallEvent =''',
               1)
 
-          # Smooth between authoritative ball samples. This is presentation
-          # interpolation only, never a client-created pass/shot trajectory.
           runtime = replace_method(
               runtime,
               r'\s*private void DriveBall\(',
@@ -104,10 +100,12 @@ jobs:
             var ballVelocity = ResolvePlaybackBallVelocity(currentState.ballPosition, suppressBoundaryMotion);
             runtimeTraceBallSpeed = new Vector3(ballVelocity.x, 0f, ballVelocity.z).magnitude;
 
-            var currentBallPosition = GtexMatchController.BallAdapter.Position;
+            // Presentation interpolation only. The backend remains the sole source
+            // of the actual football trajectory and action decision.
             var desiredPosition = authoritativeTarget;
             if (ballHolder == null && !suppressBoundaryMotion)
             {
+                var currentBallPosition = GtexMatchController.BallAdapter.Position;
                 var delta = authoritativeTarget - currentBallPosition;
                 var distance = delta.magnitude;
                 if (distance > 0.01f)
@@ -117,7 +115,9 @@ jobs:
                     var minSpeed = shotLike ? 5f : 4f;
                     var maxSpeed = shotLike ? LiveBallPlaybackMaxShotSpeed : LiveBallPlaybackMaxPassSpeed;
                     var velocitySpeed = new Vector3(ballVelocity.x, 0f, ballVelocity.z).magnitude;
-                    var catchupSpeed = Mathf.Min(maxSpeed, Mathf.Max(minSpeed, velocitySpeed, distance / 0.16f));
+                    var catchupSpeed = Mathf.Min(
+                        maxSpeed,
+                        Mathf.Max(minSpeed, Mathf.Max(velocitySpeed, distance / 0.16f)));
                     desiredPosition = Vector3.MoveTowards(
                         currentBallPosition,
                         authoritativeTarget,
@@ -126,7 +126,6 @@ jobs:
             }
 
             desiredPosition = ClampToFieldBounds(desiredPosition, true);
-
             if (Time.unscaledTime - runtimeTraceLastBallSampleAt >= PlaybackTraceSampleIntervalSeconds)
             {
                 runtimeTraceLastBallSampleAt = Time.unscaledTime;
@@ -140,8 +139,6 @@ jobs:
         }
 ''')
 
-          # Make ball holder anchoring continuous during GTEX playback rather than
-          # using a hidden snap threshold.
           ball_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs'
           ball = ball_path.read_text(encoding='utf-8')
           ball = re.sub(
@@ -156,8 +153,6 @@ jobs:
               raise SystemExit('holder snap gate still present')
           ball_path.write_text(ball + '\n', encoding='utf-8')
 
-          # Dedicated GTEX broadcast camera transform. It deliberately bypasses the
-          # legacy StadiumCamera curve when the semantic camera is TVBroadcast.
           camera_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Camera/CameraSystem.cs'
           camera = camera_path.read_text(encoding='utf-8-sig')
           camera = replace_method(
@@ -176,7 +171,6 @@ jobs:
             }
 
             var dt = Mathf.Max(0.001f, Time.unscaledDeltaTime);
-
             if (isInTransition)
             {
                 transitionValue += dt * transitionSpeed;
@@ -197,25 +191,22 @@ jobs:
 
             if (IsBroadcastCamera && Ball.Current != null)
             {
-                var ballPosition = Ball.Current.transform.position;
+                var focus = Ball.Current.transform.position;
                 var velocity = Ball.Current.Velocity;
                 velocity.y = 0f;
-
-                var focus = ballPosition;
                 if (velocity.sqrMagnitude > 0.0001f)
                 {
-                    focus += Vector3.ClampMagnitude(velocity.normalized * broadcastLookAheadDistance, broadcastLookAheadDistance);
+                    focus += Vector3.ClampMagnitude(
+                        velocity.normalized * broadcastLookAheadDistance,
+                        broadcastLookAheadDistance);
                 }
 
-                // GTEX pitch space is a centred 105m x 68m field. Keep the action
-                // away from the camera's physical edge while preserving the full
-                // attacking direction in frame.
+                // GTEX runtime pitch space is centred at the world origin.
                 focus.x = Mathf.Clamp(focus.x, -45.5f, 45.5f);
                 focus.z = Mathf.Clamp(focus.z, -27f, 27f);
                 focus.y = 0.8f;
 
-                var cameraOffset = new Vector3(0f, 34f, -43f);
-                var desiredPosition = focus + cameraOffset;
+                var desiredPosition = focus + new Vector3(0f, 34f, -43f);
                 var desiredRotation = Quaternion.LookRotation(focus - desiredPosition, Vector3.up);
                 const float broadcastFov = 46f;
 
@@ -245,16 +236,7 @@ jobs:
                 return;
             }
 
-            Vector3 targetPos;
-            if (TargetPosition.HasValue)
-            {
-                targetPos = TargetPosition.Value;
-            }
-            else
-            {
-                targetPos = target.position;
-            }
-
+            var targetPos = TargetPosition ?? target.position;
             var (position, rotation, zoom) = CurrentCamera.Behave(in dt, targetPos);
             if (instantTransitionInNextFrame)
             {
@@ -269,8 +251,10 @@ jobs:
                 var rawRotationDifference = Quaternion.Angle(transform.rotation, rotation) + 1f;
                 var positionDifference = Mathf.Clamp(rawPositionDifference, 1f, 8f) * transitionValue;
                 var rotationDifference = Mathf.Clamp(rawRotationDifference, 1f, 24f) * transitionValue;
-                var positionLerp = Mathf.Clamp01(dt * CameraPositionSpeed * positionDifference * positionDifferencePower);
-                var rotationLerp = Mathf.Clamp01(dt * CameraRotationSpeed * rotationDifference * rotationDifferencePower);
+                var positionLerp = Mathf.Clamp01(
+                    dt * CameraPositionSpeed * positionDifference * positionDifferencePower);
+                var rotationLerp = Mathf.Clamp01(
+                    dt * CameraRotationSpeed * rotationDifference * rotationDifferencePower);
                 transform.position = Vector3.Lerp(transform.position, position, positionLerp);
                 transform.rotation = Quaternion.Lerp(transform.rotation, rotation, rotationLerp);
                 camera.fieldOfView = Mathf.Lerp(
@@ -282,10 +266,10 @@ jobs:
 ''')
           camera_path.write_text(camera + '\n', encoding='utf-8')
 
-          # Disable GTEX's autonomous goalkeeper MonoBehaviour during authoritative
-          # live playback. Backend position/events remain the source of truth.
           gk_path = ROOT / 'Gtex_Test_Migration/Assets/Code/GTEX/Engine/GtexGoalkeeperBehavior.cs'
           gk = gk_path.read_text(encoding='utf-8-sig')
+          if 'using FStudio.GTEX.Core;' not in gk:
+              gk = gk.replace('using FStudio.GTEX;\n', 'using FStudio.GTEX;\nusing FStudio.GTEX.Core;\n', 1)
           gk = gk.replace(
               '''        private void LateUpdate()
         {
@@ -297,16 +281,12 @@ jobs:
                 GtexRuntimeFlags.IsOriginalVisualRuntime)
             {''',
               1)
-          gk = gk.replace('using FStudio.GTEX;\n', 'using FStudio.GTEX;\nusing FStudio.GTEX.Core;\n', 1)
           gk_path.write_text(gk + '\n', encoding='utf-8')
 
-          # Restore README exactly from main, undoing only the temporary trigger edit.
-          readme_path = ROOT / 'README.md'
           subprocess.run(['git', 'checkout', 'origin/main', '--', 'README.md'], check=True)
 
-          # Final source-level gates.
           r = runtime_path.read_text(encoding='utf-8')
-          p = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs'
+          p = (ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs').read_text(encoding='utf-8')
           b = ball_path.read_text(encoding='utf-8')
           c = camera_path.read_text(encoding='utf-8-sig')
           g = gk_path.read_text(encoding='utf-8-sig')
@@ -314,13 +294,21 @@ jobs:
 
           assert '/api/v2/ws/match/' in r
           assert 'GtexRuntimeState.MarkStarted(GtexRuntimeMode.LivePlayback' in r
-          assert 'ResolveBehaviorDrivenFieldPosition' not in method_span = (lambda x: x)(r[r.find('private float ApplyLivePlayerState'):r.find('private Vector3 ResolveBehaviorAnchorPosition')])
-          assert 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' in p.read_text(encoding='utf-8')
+          start = r.find('private float ApplyLivePlayerState')
+          end = r.find('private Vector3 ResolveBehaviorAnchorPosition')
+          assert start >= 0 and end > start
+          apply_method = r[start:end]
+          assert 'ResolveBehaviorDrivenFieldPosition' not in apply_method
+          assert 'ApplyStructuredTeamSpacing' not in apply_method
+          assert 'FilterLivePlayerTarget' not in apply_method
+          assert 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' in p
           assert 'rb.MovePosition(nextPosition)' not in phy
-          assert 'ResolveExternalPlaybackTeleportDistance()' not in b[b.find('public void ApplyExternalState'):b.find('public Vector3 ResolveExternalPlaybackReleaseAnchor')]
-          assert 'TVBroadcast' in c and 'cameraOffset = new Vector3(0f, 34f, -43f)' in c
+          span = b[b.find('public void ApplyExternalState'):b.find('public Vector3 ResolveExternalPlaybackReleaseAnchor')]
+          assert 'ResolveExternalPlaybackTeleportDistance()' not in span
+          assert 'TVBroadcast' in c and 'new Vector3(0f, 34f, -43f)' in c
           assert 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' in g
           assert 'lastLiveBallActionKey' in r and 'lastLiveEventActionKey' in r
+          assert 'private void TryDriveSyntheticBallTransit' in r
 
           subprocess.run(['git', 'diff', '--check'], check=True)
           PY
