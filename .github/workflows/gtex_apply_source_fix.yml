@@ -4,242 +4,28 @@ on:
   push:
     branches:
       - fix/gtex-authoritative-3d-playback
+  pull_request:
 
 permissions:
   contents: write
 
 jobs:
   repair:
-    if: "!contains(github.event.head_commit.message, '[gtex-source-final]')"
+    if: "!contains(github.event.head_commit.message || '', '[gtex-source-final]')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/gtex-authoritative-3d-playback
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Patch GTEX authoritative playback source
-        shell: bash
+      - name: Inspect repair target
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
-          ROOT = Path('.')
-
-          def replace_method(text, needle, replacement):
-              start = text.find(needle)
-              if start < 0:
-                  raise SystemExit(f'missing method: {needle}')
-              brace = text.find('{', start)
-              if brace < 0:
-                  raise SystemExit(f'missing opening brace: {needle}')
-              depth = 0
-              for i in range(brace, len(text)):
-                  if text[i] == '{': depth += 1
-                  elif text[i] == '}':
-                      depth -= 1
-                      if depth == 0:
-                          return text[:start] + replacement + text[i + 1:]
-              raise SystemExit(f'unclosed method: {needle}')
-
-          # GTEX runtime: authoritative player presentation only.
-          rp = ROOT / 'Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs'
-          r = rp.read_text(encoding='utf-8-sig')
-          r = replace_method(r, 'private float ApplyLivePlayerState(', '''        private float ApplyLivePlayerState(
-            PlayerPosition livePlayer,
-            GtexLegacyPlayerHandle player,
-            float dt,
-            float predictionSeconds,
-            bool snap,
-            bool traceSample,
-            bool suppressBoundaryMotion)
-        {
-            if (livePlayer == null || player == null || !player.IsValid)
-            {
-                return 0f;
-            }
-
-            var currentPosition = player.Position;
-            var conversion = ConvertIncomingPlaybackPosition(livePlayer, currentState);
-            var velocity = snap ? Vector3.zero : ResolveLiveFieldVelocity(livePlayer);
-            velocity.y = 0f;
-            var targetPosition = snap || suppressBoundaryMotion
-                ? conversion.ClampedWorld
-                : ResolvePredictedFieldPosition(livePlayer, predictionSeconds);
-            targetPosition = ClampToFieldBounds(targetPosition, false);
-
-            var delta = targetPosition - currentPosition;
-            delta.y = 0f;
-            var distance = delta.magnitude;
-            var hardSnap = snap || distance >= LivePlayerSnapDistance;
-
-            var lookDirection = ResolveLookDirection(livePlayer, delta, player);
-            var rotation = player.Rotation;
-            if (lookDirection.sqrMagnitude > 0.0001f)
-            {
-                var desiredRotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
-                rotation = hardSnap
-                    ? desiredRotation
-                    : Quaternion.Slerp(
-                        player.Rotation,
-                        desiredRotation,
-                        1f - Mathf.Exp(-LivePlayerRotationLerpSpeed * Mathf.Max(dt, 0f)));
-            }
-
-            var appliedPosition = hardSnap
-                ? targetPosition
-                : Vector3.MoveTowards(
-                    currentPosition,
-                    targetPosition,
-                    Mathf.Max(
-                        velocity.magnitude,
-                        Mathf.Min(
-                            LivePlayerMaxSpeedUnitsPerSecond,
-                            distance / Mathf.Max(LivePlayerCatchUpSeconds, LiveTraceDtFloorSeconds))) *
-                    Mathf.Max(dt, 0f));
-            appliedPosition = ClampToFieldBounds(appliedPosition, false);
-
-            if (traceSample)
-            {
-                AppendRuntimeTrace(
-                    "pitch-sample",
-                    "player=" + DescribeLivePlayer(livePlayer) +
-                    " raw=" + FormatPlaybackVector(conversion.RawIncoming) +
-                    " converted=" + FormatPlaybackVector(conversion.ConvertedWorld) +
-                    " clamped=" + FormatPlaybackVector(conversion.ClampedWorld));
-            }
-
-            player.SetExternalPlaybackPose(appliedPosition, rotation, hardSnap);
-            ApplyLiveAnimatorState(
-                livePlayer,
-                player,
-                appliedPosition - currentPosition,
-                velocity,
-                dt,
-                hardSnap,
-                (livePlayer.state ?? string.Empty).Trim().ToLowerInvariant(),
-                1f,
-                false);
-
-            if (hardSnap || dt <= 0f)
-            {
-                return 0f;
-            }
-
-            var frameMovement = appliedPosition - currentPosition;
-            frameMovement.y = 0f;
-            return frameMovement.magnitude / Mathf.Max(dt, LiveTraceDtFloorSeconds);
-        }
-''')
-
-          r = replace_method(r, 'private void TryStartSyntheticBallTransit(', '''        private void TryStartSyntheticBallTransit(MatchResponse previousState, MatchResponse nextState, bool forceSnap)
-        {
-            ClearSyntheticBallTransit();
-        }
-''')
-
-          r = replace_method(r, 'private bool TryDriveSyntheticBallTransit(', '''        private bool TryDriveSyntheticBallTransit()
-        {
-            return false;
-        }
-''')
-
-          r = replace_method(r, 'private void DriveBall(', '''        private void DriveBall()
-        {
-            if (currentState == null ||
-                currentState.ballPosition == null ||
-                !GtexMatchController.BallAdapter.IsAvailable)
-            {
-                ClearSyntheticBallTransit();
-                hasFilteredBallTarget = false;
-                runtimeTraceBallSpeed = 0f;
-                return;
-            }
-
-            var holder = ResolveBallHolder(currentState.ballPosition);
-            var conversion = ConvertIncomingPlaybackPosition(currentState.ballPosition, currentState);
-            var velocity = ResolvePlaybackBallVelocity(currentState.ballPosition, false);
-            runtimeTraceBallSpeed = new Vector3(velocity.x, 0f, velocity.z).magnitude;
-            GtexMatchController.BallAdapter.ApplyExternalState(
-                conversion.ClampedWorld,
-                velocity,
-                holder);
-        }
-''')
-          r = r.replace('/api/v1/ws/match/', '/api/v2/ws/match/', 1)
-          rp.write_text(r + '\n', encoding='utf-8')
-
-          # PlayerBase: no autonomous local behaviour solver in live playback.
-          pp = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs'
-          p = pp.read_text(encoding='utf-8-sig')
-          marker = '        public void ProcessBehaviours (in float time) {\n'
-          guard = marker + '            if (GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback)\n            {\n                ActiveBehaviour = null;\n                NextBehaviour = 0;\n                return;\n            }\n'
-          if marker not in p:
-              raise SystemExit('PlayerBase ProcessBehaviours marker not found')
-          if guard not in p:
-              p = p.replace(marker, guard, 1)
-          pp.write_text(p + '\n', encoding='utf-8')
-
-          # Ball: no second external solver and no distance-based external teleport gate.
-          bp = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs'
-          b = bp.read_text(encoding='utf-8-sig')
-          b = replace_method(b, 'private void FixedUpdate()', '''        private void FixedUpdate()
-        {
-            if (ExternalPlaybackEnabled)
-            {
-                return;
-            }
-        }
-''')
-          token = 'ResolveExternalPlaybackTeleportDistance()'
-          while token in b:
-              idx = b.find(token)
-              start = b.rfind('if', 0, idx)
-              if start < 0:
-                  raise SystemExit('teleport gate start not found')
-              brace = b.find('{', idx)
-              if brace < 0:
-                  raise SystemExit('teleport gate opening brace not found')
-              depth = 0
-              end = -1
-              for i in range(brace, len(b)):
-                  if b[i] == '{': depth += 1
-                  elif b[i] == '}':
-                      depth -= 1
-                      if depth == 0:
-                          end = i + 1
-                          break
-              if end < 0:
-                  raise SystemExit('teleport gate closing brace not found')
-              replacement = 'GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(\n                transform,\n                rigidbody,\n                targetPosition,\n                externalPlaybackTargetRotation);'
-              b = b[:start] + replacement + b[end:]
-          bp.write_text(b + '\n', encoding='utf-8')
-
-          # Remove redundant permanent guard file when present.
-          gp = ROOT / 'Gtex_Test_Migration/Assets/Code/GTEX/Authoritative/GtexAuthoritativePlaybackGuard.cs'
-          if gp.exists():
-              gp.unlink()
-
-          print('GTEX authoritative source patch completed')
+          p=Path('Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs')
+          s=p.read_text(encoding='utf-8-sig')
+          bad = [x for x in ('ResolveBehaviorDrivenFieldPosition','ApplyStructuredTeamSpacing','FilterLivePlayerTarget','ResolveLiveMovementUrgency') if x in s]
+          print('live playback client-decision helpers present:', bad)
+          print('api v1 present:', '/api/v1/ws/match/' in s)
+          print('api v2 present:', '/api/v2/ws/match/' in s)
           PY
-      - name: Validate source patch
-        shell: bash
-        run: |
-          set -e
-          git diff --check
-          ! grep -q 'ResolveExternalPlaybackTeleportDistance()' Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs
-          ! grep -A110 -B4 'private float ApplyLivePlayerState' Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs | grep -Eq 'ResolveBehaviorDrivenFieldPosition|ApplyStructuredTeamSpacing|FilterLivePlayerTarget|ResolveLiveMovementUrgency|ResolveLivePlayerMoveSpeed|ResolveLegalPlayerVelocity'
-          grep -q '/api/v2/ws/match/' Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs
-          grep -q 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs
-      - name: Commit permanent source changes and remove runner
-        shell: bash
-        run: |
-          rm -f .github/workflows/gtex_apply_source_fix.yml
-          git config user.name "GTEX Automation"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --check
-          git commit -m "fix: finalize GTEX authoritative 3D playback [gtex-source-final]"
-          git push origin HEAD:fix/gtex-authoritative-3d-playback
