@@ -289,7 +289,9 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
         owned: false,
       );
     } on StateError {
-      _ownedProviderContainer ??= ProviderContainer();
+      _ownedProviderContainer ??= ProviderContainer(
+        overrides: [appConfigProvider.overrideWithValue(_config)],
+      );
       return (container: _ownedProviderContainer!, owned: true);
     }
   }

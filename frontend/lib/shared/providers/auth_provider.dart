@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/gte_app_config.dart';
@@ -271,8 +273,23 @@ class AppSessionController extends Notifier<AuthSession?> {
       return;
     }
     final AuthSession merged = current.mergeProfile(profileJson);
+    // Re-emitting an identical session still notifies every provider that
+    // watches this notifier -- including [sessionHydrationProvider], which
+    // merges its failure metadata back in here. That feedback loop re-runs
+    // the hydration request with zero delay, forever.
+    if (_hasSamePayload(current, merged)) {
+      return;
+    }
     state = merged;
     await ref.read(authSessionStoreProvider).writeSession(merged);
+  }
+
+  static bool _hasSamePayload(AuthSession a, AuthSession b) {
+    try {
+      return jsonEncode(a.rawJson) == jsonEncode(b.rawJson);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> clear() => updateSession(null);
