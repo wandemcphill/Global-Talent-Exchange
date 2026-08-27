@@ -17,6 +17,7 @@ from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransact
 from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
+GIFT_CONVERSION_BRIDGE_COIN_CODE = "platform:coin:gift_conversion_bridge"
 
 
 class EconomicConversionError(ValueError):
@@ -98,7 +99,13 @@ class FanCoinGiftConversionService:
             unit=FANCOIN,
             allow_negative=False,
         )
-        bridge_coin = self.wallet_service.ensure_platform_account(self.session, GTEX_COIN)
+        bridge_coin = self.wallet_service.ensure_named_system_account(
+            self.session,
+            code=GIFT_CONVERSION_BRIDGE_COIN_CODE,
+            label="Platform GTEX Coin Gift Conversion Bridge",
+            unit=GTEX_COIN,
+            allow_negative=True,
+        )
         platform_fancoin_revenue = self.wallet_service.ensure_named_system_account(
             self.session,
             code="platform:credit:gift_conversion_fee_revenue",
@@ -126,7 +133,12 @@ class FanCoinGiftConversionService:
             fee_rule_key=fee_rule_key,
             fee_rule_version=fee_rule_version,
             idempotency_key=idempotency_key,
-            metadata_json={**(metadata or {}), "burn_amount": str(burn)},
+            metadata_json={
+                **(metadata or {}),
+                "burn_amount": str(burn),
+                "coin_bridge_account_code": GIFT_CONVERSION_BRIDGE_COIN_CODE,
+                "conversion_authority": "fan_coin_gift_conversion",
+            },
         )
         self.session.add(conversion)
         self.session.flush()
@@ -186,6 +198,7 @@ class FanCoinGiftConversionService:
                 "platform_fee_amount": str(fee),
                 "burn_amount": str(burn),
                 "destination_amount": str(destination),
+                "coin_bridge_account_code": GIFT_CONVERSION_BRIDGE_COIN_CODE,
             },
         )
 
@@ -201,4 +214,8 @@ class FanCoinGiftConversionService:
         return Decimal(str(value)).quantize(AMOUNT_QUANTUM)
 
 
-__all__ = ["EconomicConversionError", "FanCoinGiftConversionService"]
+__all__ = [
+    "EconomicConversionError",
+    "FanCoinGiftConversionService",
+    "GIFT_CONVERSION_BRIDGE_COIN_CODE",
+]
