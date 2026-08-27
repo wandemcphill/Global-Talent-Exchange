@@ -65,7 +65,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('cup-lift-hero')), findsNothing);
-    expect(find.text('Build your club command center'), findsOneWidget);
+    // c45d422d replaced the hand-rolled workspace entry with HomeScreen's
+    // persona desk; a signed-in session without a club lands on the no-club
+    // desk and its club-creation prompt.
+    expect(find.text('No-club user command desk'), findsOneWidget);
+    expect(find.text('GET READY TO OWN A FOOTBALL OPERATION'), findsOneWidget);
     expect(find.text('Transfer Hub'), findsWidgets);
   });
 

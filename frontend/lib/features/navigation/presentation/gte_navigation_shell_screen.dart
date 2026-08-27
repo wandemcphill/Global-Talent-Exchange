@@ -4,46 +4,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/controllers/creator_application_controller.dart';
 import 'package:gte_frontend/controllers/creator_controller.dart';
-import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/controllers/referral_controller.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/core/gte_session_identity.dart';
 import 'package:gte_frontend/data/club_creation_api.dart';
+import 'package:gte_frontend/data/community_api.dart';
 import 'package:gte_frontend/data/competition_api.dart';
-import 'package:gte_frontend/data/creator_application_api.dart';
 import 'package:gte_frontend/data/creator_api.dart';
+import 'package:gte_frontend/data/creator_application_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/referral_api.dart';
-import 'package:gte_frontend/data/community_api.dart';
-import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen_v2.dart';
-import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen_v2.dart';
+import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
 import 'package:gte_frontend/features/global_search_redesign/global_search_redesign.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
 import 'package:gte_frontend/features/social/social_screen.dart';
 import 'package:gte_frontend/features/world/widgets/football_world_pulse_widgets.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
-import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
-import 'package:gte_frontend/screens/gte_login_screen.dart';
-import 'package:gte_frontend/screens/gte_market_players_screen_v2.dart';
-import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
-import 'package:gte_frontend/screens/creators/gtex_studio_hub_screen_v2.dart';
+import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/clubs/create_club_screen.dart';
 import 'package:gte_frontend/screens/clubs/gtex_club_owner_dashboard_screen_v2.dart';
-import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
+import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
+import 'package:gte_frontend/screens/creators/gtex_studio_hub_screen_v2.dart';
+import 'package:gte_frontend/screens/gte_login_screen.dart';
+import 'package:gte_frontend/screens/gte_market_players_screen_v2.dart';
 import 'package:gte_frontend/screens/notifications/gte_notifications_screen_v2.dart';
 import 'package:gte_frontend/screens/profile/gtex_live_profile_screen.dart';
 import 'package:gte_frontend/screens/wallet/gte_funding_flow_screen.dart';
 import 'package:gte_frontend/screens/wallet/gte_withdrawal_flow_screen.dart';
 import 'package:gte_frontend/screens/wallet/gtex_wallet_overview_screen_v2.dart';
 import 'package:gte_frontend/services/ambient_audio_controller.dart';
+import 'package:gte_frontend/shared/providers/auth_provider.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
 import 'package:gte_frontend/ui_gtex/components/gtex_button.dart';
 import 'package:gte_frontend/ui_gtex/components/gtex_metric_tile.dart';
@@ -53,8 +55,8 @@ import 'package:gte_frontend/ui_gtex/routes/gtex_current_route_adapter.dart';
 import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 import 'package:gte_frontend/ui_gtex/theme/gtex_spacing.dart';
 import 'package:gte_frontend/widgets/ambient_audio_toggle_button.dart';
-import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
+import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 
 class GteNavigationShellScreen extends StatefulWidget {
@@ -123,8 +125,15 @@ Color _routeAccentFor(BuildContext context, GtePrimaryDestination destination) {
 }
 
 class _NavigationProviderScopeBoundary extends StatefulWidget {
-  const _NavigationProviderScopeBoundary({required this.child});
+  const _NavigationProviderScopeBoundary({
+    required this.config,
+    required this.child,
+  });
 
+  /// Seeds the fallback container when the shell is hosted without a
+  /// [ProviderScope]. Without it Riverpod surfaces inside the shell resolve
+  /// `appConfigProvider` to its unroutable default host.
+  final GteAppConfig config;
   final Widget child;
 
   @override
@@ -150,7 +159,10 @@ class _NavigationProviderScopeBoundaryState
       _container = null;
       return widget.child;
     } on StateError {
-      final ProviderContainer container = _container ??= ProviderContainer();
+      final ProviderContainer container =
+          _container ??= ProviderContainer(
+            overrides: [appConfigProvider.overrideWithValue(widget.config)],
+          );
       return UncontrolledProviderScope(
         container: container,
         child: widget.child,
@@ -244,6 +256,10 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
             : const EdgeInsets.fromLTRB(20, 12, 20, 0);
     final bool showShellStatusCard = !compactViewport;
     return _NavigationProviderScopeBoundary(
+      config: GteAppConfig(
+        apiBaseUrl: widget.apiBaseUrl,
+        backendMode: widget.backendMode,
+      ),
       child: AnimatedBuilder(
         animation: widget.controller,
         builder: (BuildContext context, Widget? child) {
@@ -490,9 +506,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     }
     final String? canonicalClubId = _canonicalClubId()?.trim();
     if (canonicalClubId == null || canonicalClubId.isEmpty) {
-      if (widget.controller.isAuthenticated) {
-        return const HomeScreen(key: PageStorageKey<String>('home-command'));
-      }
+      // HomeScreen resolves its own persona (guest / no-club / creator /
+      // coin trader / admin), so both session states share this destination.
       return const HomeScreen(key: PageStorageKey<String>('home-command'));
     }
     return GtexClubOwnerDashboardScreenV2(
@@ -1594,20 +1609,6 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return '$accessLabel, $clubLabel';
   }
 
-  String _workspaceRoleLabel() {
-    if (_isCoinTraderSession) {
-      return 'Coin trader workspace';
-    }
-    if (_isStaffSession) {
-      return 'Staff marketplace workspace';
-    }
-    final String rawRole = _sessionRole.replaceAll('_', ' ').trim();
-    if (rawRole.isEmpty || rawRole == 'guest') {
-      return 'Fan workspace';
-    }
-    return '${rawRole[0].toUpperCase()}${rawRole.substring(1)} workspace';
-  }
-
   Future<void> _openCreateClubFlow() async {
     if (!widget.controller.isAuthenticated) {
       final bool signedIn = await _openLogin(
@@ -1854,132 +1855,6 @@ class _GtexCommandHomeEntry extends StatelessWidget {
                     icon: Icons.auto_awesome_outlined,
                     accent: GtexColors.mint,
                     onTap: onOpenWorld,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _GtexUserWorkspaceHomeEntry extends StatelessWidget {
-  const _GtexUserWorkspaceHomeEntry({
-    required this.userLabel,
-    required this.roleLabel,
-    required this.onOpenMarket,
-    required this.onOpenCompetitions,
-    required this.onOpenWallet,
-    required this.onOpenCommunity,
-    required this.onOpenProfile,
-    required this.onCreateClub,
-  });
-
-  final String userLabel;
-  final String roleLabel;
-  final VoidCallback onOpenMarket;
-  final VoidCallback onOpenCompetitions;
-  final VoidCallback onOpenWallet;
-  final VoidCallback onOpenCommunity;
-  final VoidCallback onOpenProfile;
-  final VoidCallback onCreateClub;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool compact = constraints.maxWidth < 760;
-        final double laneWidth = compact ? constraints.maxWidth : 360;
-        return SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            compact ? GtexSpacing.md : GtexSpacing.xl,
-            GtexSpacing.lg,
-            compact ? GtexSpacing.md : GtexSpacing.xl,
-            120,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              GtexPanel(
-                title: 'Build your club command center',
-                subtitle: '$userLabel - $roleLabel',
-                accent: GtexColors.pitch,
-                trailing: const Icon(
-                  Icons.account_circle_outlined,
-                  color: GtexColors.pitch,
-                ),
-                child: Wrap(
-                  spacing: GtexSpacing.sm,
-                  runSpacing: GtexSpacing.sm,
-                  children: <Widget>[
-                    GtexButton(
-                      label: 'Wallet readiness',
-                      icon: Icons.account_balance_wallet_outlined,
-                      onPressed: onOpenWallet,
-                    ),
-                    GtexButton(
-                      label: 'Transfer Hub',
-                      icon: Icons.storefront_outlined,
-                      variant: GtexButtonVariant.secondary,
-                      onPressed: onOpenMarket,
-                    ),
-                    GtexButton(
-                      label: 'Create club',
-                      icon: Icons.shield_outlined,
-                      variant: GtexButtonVariant.secondary,
-                      onPressed: onCreateClub,
-                    ),
-                    GtexButton(
-                      label: 'Profile',
-                      icon: Icons.manage_accounts_outlined,
-                      variant: GtexButtonVariant.ghost,
-                      onPressed: onOpenProfile,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: GtexSpacing.lg),
-              Wrap(
-                spacing: GtexSpacing.md,
-                runSpacing: GtexSpacing.md,
-                children: <Widget>[
-                  _HomeLanePanel(
-                    width: laneWidth,
-                    title: 'Market',
-                    subtitle:
-                        'Browse players, coin traders, transfer activity and orders.',
-                    icon: Icons.storefront_outlined,
-                    accent: GtexColors.pitch,
-                    onTap: onOpenMarket,
-                  ),
-                  _HomeLanePanel(
-                    width: laneWidth,
-                    title: 'Competitions',
-                    subtitle:
-                        'Join matchday, follow brackets, and host eligible tournaments.',
-                    icon: Icons.emoji_events_outlined,
-                    accent: GtexColors.cyan,
-                    onTap: onOpenCompetitions,
-                  ),
-                  _HomeLanePanel(
-                    width: laneWidth,
-                    title: 'Community',
-                    subtitle:
-                        'Follow clubs, fan wars, creator activity, and social signals.',
-                    icon: Icons.forum_outlined,
-                    accent: GtexColors.mint,
-                    onTap: onOpenCommunity,
-                  ),
-                  _HomeLanePanel(
-                    width: laneWidth,
-                    title: 'Create a club',
-                    subtitle:
-                        'Start the club owner loop when you are ready to build.',
-                    icon: Icons.shield_outlined,
-                    accent: GtePrimaryDestination.club.accentColor,
-                    onTap: onCreateClub,
                   ),
                 ],
               ),

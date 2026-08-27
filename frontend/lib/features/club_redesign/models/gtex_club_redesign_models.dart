@@ -164,9 +164,21 @@ class GtexClubWorkspaceSnapshot {
     );
   }
 
+  /// Workspace served by the fixture runtime (`GteBackendMode.fixture`),
+  /// where no live club API is reachable.
+  static GtexClubWorkspaceSnapshot fixtureSeed({
+    String clubId = 'gtex-club-demo',
+    String? clubName,
+  }) => _seeded(clubId: clubId, clubName: clubName);
+
   @visibleForTesting
   static GtexClubWorkspaceSnapshot demo({
     String clubId = 'gtex-club-demo',
+    String? clubName,
+  }) => _seeded(clubId: clubId, clubName: clubName);
+
+  static GtexClubWorkspaceSnapshot _seeded({
+    required String clubId,
     String? clubName,
   }) {
     final String resolvedName =

@@ -87,7 +87,14 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
     required GteAuthedApi client,
     ClubSaleMarketRepository? fixtures,
   }) : _client = client,
-       _fixtures = fixtures;
+       // _withFallback defers to fixtures whenever the client is in fixture
+       // mode, so seed them here rather than leaving direct callers to throw
+       // "fixtures are not registered" on every read.
+       _fixtures =
+           fixtures ??
+           (client.mode == GteBackendMode.fixture
+               ? ClubSaleMarketFixtureRepository()
+               : null);
 
   factory ClubSaleMarketApiRepository.standard({
     required String baseUrl,

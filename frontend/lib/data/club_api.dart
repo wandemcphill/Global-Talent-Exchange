@@ -221,6 +221,15 @@ class ClubApi {
     required String clubId,
     String? clubName,
   }) async {
+    if (config.mode == GteBackendMode.fixture) {
+      // No club API is reachable in the fixture runtime, and the owner
+      // workspace fails closed on a snapshot error, so serve the seeded
+      // workspace instead of attempting the live request.
+      return GtexClubWorkspaceSnapshot.fixtureSeed(
+        clubId: clubId,
+        clubName: clubName,
+      );
+    }
     final Map<String, String> headers = <String, String>{
       'Accept': 'application/json',
     };
