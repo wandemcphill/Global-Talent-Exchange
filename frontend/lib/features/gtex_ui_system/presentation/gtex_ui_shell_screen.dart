@@ -454,6 +454,14 @@ class _HomeDashboardTab extends StatelessWidget {
           children: <Widget>[
             _UserClubCard(data: data, onOpenClub: onOpenClub),
             const SizedBox(height: 18),
+            _NextActionRecommendationCard(
+              data: data,
+              onOpenMarket: onOpenMarket,
+              onOpenMatch: () => onOpenMatch(data.liveMatches.first),
+            ),
+            const SizedBox(height: 18),
+            _MarketPulsePanel(data: data, onOpenMarket: onOpenMarket),
+            const SizedBox(height: 18),
             _EconomySignalPanel(data: data),
             const SizedBox(height: 18),
             _QuickActionsRow(
@@ -539,25 +547,34 @@ class _HomeDashboardTab extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 22),
-            Text(
-              'Trending regens',
-              style: Theme.of(context).textTheme.titleLarge,
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    'Regen Discovery Carousel',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton(
+                  onPressed: onOpenWorld,
+                  child: const Text('Scout All'),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             SizedBox(
-              height: 256,
+              height: 380,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: data.trendingRegens.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder:
-                    (BuildContext context, int index) => SizedBox(
-                      width: 180,
-                      child: GtexRegenCard(
-                        player: data.trendingRegens[index],
-                        onOpen: () => onOpenPlayer(data.trendingRegens[index]),
-                      ),
-                    ),
+                separatorBuilder: (_, __) => const SizedBox(width: 14),
+                itemBuilder: (BuildContext context, int index) => SizedBox(
+                  width: 280,
+                  child: GtexRegenCard(
+                    player: data.trendingRegens[index],
+                    onOpen: () => onOpenPlayer(data.trendingRegens[index]),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -760,7 +777,7 @@ class _TransferMarketTabState extends State<_TransferMarketTab> {
           Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: <String>['All', 'Elite', 'Fast', 'Value']
+            children: <String>['All', 'Elite', 'Fast', 'Value', 'Risers', 'Bargains']
                 .map(
                   (String filter) => ChoiceChip(
                     label: Text(filter),
@@ -773,19 +790,46 @@ class _TransferMarketTabState extends State<_TransferMarketTab> {
           const SizedBox(height: 14),
           GteSurfacePanel(
             accentColor: GteShellTheme.tokensOf(context).accentCapital,
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Expanded(
-                  child: Text(
-                    'Liquidity is live. High-fire cards move fast, thin books need patience.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                Row(
+                  children: <Widget>[
+                    Text(
+                      'Exchange Pulse & Order Book',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const Spacer(),
+                    GtexBadgeIcon(
+                      label:
+                          '${players.where((GtexPlayerCardData player) => player.liquidityLabel.contains('High')).length} High-Liquidity',
+                      color: GteShellTheme.tokensOf(context).accentCapital,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                GtexBadgeIcon(
-                  label:
-                      '${players.where((GtexPlayerCardData player) => player.liquidityLabel.contains('High')).length} high-liquidity',
-                  color: GteShellTheme.tokensOf(context).accentCapital,
+                const SizedBox(height: 8),
+                Text(
+                  'Liquidity is live. High-fire cards move fast, thin books need patience. Instant execution supported for listed ask orders.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: <Widget>[
+                    GtexMetricPill(
+                      label: 'Avg Spread',
+                      value: '1.2%',
+                      icon: Icons.sync_alt_rounded,
+                      color: GteShellTheme.tokensOf(context).accentCapital,
+                    ),
+                    GtexMetricPill(
+                      label: '24h Trades',
+                      value: '1,420 orders',
+                      icon: Icons.receipt_long_rounded,
+                      color: GteShellTheme.tokensOf(context).accentArena,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -805,7 +849,7 @@ class _TransferMarketTabState extends State<_TransferMarketTab> {
                 itemCount: players.length,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columnCount,
-                  mainAxisExtent: 360,
+                  mainAxisExtent: 380,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
                 ),
@@ -962,49 +1006,76 @@ class _ProfileTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
-                  'Wallet dashboard',
-                  style: Theme.of(context).textTheme.titleLarge,
+                Row(
+                  children: <Widget>[
+                    Text(
+                      'Football Portfolio & Valuation',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.green.withValues(alpha: 0.16),
+                      ),
+                      child: Text(
+                        '+12.4% ALL TIME',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.green,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Wrap(
                   spacing: 12,
                   runSpacing: 12,
                   children: <Widget>[
                     GtexMetricPill(
-                      label: 'Balance',
-                      value: '${data.coins} GTex',
-                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'Total Net Worth',
+                      value: '₦68.2M',
+                      icon: Icons.account_balance_outlined,
                       color: tokens.accentCapital,
                     ),
                     GtexMetricPill(
-                      label: 'GTEX hosted',
-                      value: 'FREE',
-                      icon: Icons.celebration_outlined,
-                      color: Colors.green,
+                      label: 'Player Assets (14)',
+                      value: '₦42.5M',
+                      icon: Icons.sports_soccer_outlined,
+                      color: tokens.accentArena,
                     ),
                     GtexMetricPill(
-                      label: 'Paid lanes',
-                      value: 'Wallet required',
-                      icon: Icons.payments_outlined,
+                      label: 'Club Equity',
+                      value: '₦18.0M',
+                      icon: Icons.pie_chart_outline_rounded,
+                      color: tokens.accentClub,
+                    ),
+                    GtexMetricPill(
+                      label: 'GTEX Coins',
+                      value: '${data.coins}',
+                      icon: Icons.monetization_on_outlined,
                       color: tokens.accentWarm,
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    color: Colors.green.withValues(alpha: 0.10),
-                    border: Border.all(
-                      color: Colors.green.withValues(alpha: 0.28),
+                const SizedBox(height: 16),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () {
+                          _showGiftingModal(context, data);
+                        },
+                        icon: const Icon(Icons.card_giftcard_rounded),
+                        label: const Text('Gift Assets / Coins'),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    'GTEX competitions are FREE. Win real money. User matches require entry fees.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -1244,6 +1315,133 @@ class _UserClubCard extends StatelessWidget {
   }
 }
 
+class _NextActionRecommendationCard extends StatelessWidget {
+  const _NextActionRecommendationCard({
+    required this.data,
+    required this.onOpenMarket,
+    required this.onOpenMatch,
+  });
+
+  final GtexUiUniverseData data;
+  final VoidCallback onOpenMarket;
+  final VoidCallback onOpenMatch;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    final GtexPlayerCardData topRegen = data.trendingRegens.first;
+    return GteSurfacePanel(
+      accentColor: tokens.accentArena,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              GtexBadgeIcon(
+                label: 'COMMAND CENTER AI',
+                color: tokens.accentArena,
+              ),
+              const Spacer(),
+              Text(
+                'WHAT TO DO NEXT',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: tokens.accentArena,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Prospect Alert: ${topRegen.name} (${topRegen.potential} POT)',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Your scouting network flagged a high-trajectory Regen in ${topRegen.country}. Next match kicks off shortly.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              FilledButton.icon(
+                onPressed: onOpenMarket,
+                icon: const Icon(Icons.flash_on_rounded),
+                label: const Text('Scout Prospect'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onOpenMatch,
+                icon: const Icon(Icons.sports_soccer_rounded),
+                label: const Text('Enter Matchday'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MarketPulsePanel extends StatelessWidget {
+  const _MarketPulsePanel({required this.data, required this.onOpenMarket});
+
+  final GtexUiUniverseData data;
+  final VoidCallback onOpenMarket;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = GteShellTheme.tokensOf(context);
+    return GteSurfacePanel(
+      accentColor: tokens.accentCapital,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Text(
+                'Market Pulse',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: onOpenMarket,
+                child: const Text('View Exchange'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              GtexMetricPill(
+                label: 'Top Riser',
+                value: '+14.2% (Victor O.)',
+                icon: Icons.trending_up_rounded,
+                color: Colors.green,
+              ),
+              GtexMetricPill(
+                label: 'High Liquidity',
+                value: '18 active books',
+                icon: Icons.water_drop_outlined,
+                color: tokens.accentCapital,
+              ),
+              GtexMetricPill(
+                label: 'Market Volume',
+                value: '4.8M GTEX',
+                icon: Icons.bar_chart_rounded,
+                color: tokens.accentWarm,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _QuickActionsRow extends StatelessWidget {
   const _QuickActionsRow({
     required this.onOpenMatch,
@@ -1443,6 +1641,66 @@ class _LiveMatchCard extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showGiftingModal(BuildContext context, GtexUiUniverseData data) {
+  final TextEditingController recipientController = TextEditingController();
+  final TextEditingController amountController = TextEditingController(text: '500');
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (BuildContext context) {
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: GtexModalSheet(
+          title: 'Gift GTEX Assets or Coins',
+          subtitle: 'Send player contracts or GTEX coins directly to another manager in your federation.',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: recipientController,
+                decoration: const InputDecoration(
+                  labelText: 'Recipient Tag or Email',
+                  hintText: 'e.g. manager_alex@gtex.io',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'GTEX Coins Amount',
+                  prefixText: 'CR ',
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Gift of ${amountController.text} GTEX coins sent to ${recipientController.text.isEmpty ? "recipient" : recipientController.text}!',
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.card_giftcard_rounded),
+                  label: const Text('Confirm & Send Gift'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _QuickActionData {

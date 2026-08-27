@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/widgets/player_card.dart';
+import '../../../ui_gtex/football/gtex_player_card.dart';
 import '../../../widgets/gte_shell_theme.dart';
 import '../../../widgets/gte_surface_panel.dart';
 import '../data/gtex_ui_demo_data.dart';
@@ -169,55 +169,30 @@ class GtexPlayerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = GteShellTheme.tokensOf(context);
-    final Color accent =
-        player.potential >= 92
-            ? tokens.accentArena
-            : player.rating >= 84
-            ? tokens.accentClub
-            : tokens.accent;
-    return PlayerCard(
+    return GtexPlayerCard(
       name: player.name,
-      rating: player.rating,
-      image: '',
       position: player.position,
-      subtitle: '${player.clubName} | ${player.country}',
-      accentColor: accent,
-      avatarSize: 64,
-      layout: PlayerCardLayout.horizontal,
+      clubName: player.clubName,
+      nationality: player.country,
+      priceLabel: gtexCompactCurrency(player.price),
+      ratingLabel: '${player.rating}',
+      potentialLabel: '${player.potential}',
+      ageLabel: '${player.age}',
+      gsiLabel: '${player.rating}',
+      gsiTierLabel: player.potential >= 90 ? 'S Tier' : 'A Tier',
+      gsiTrendLabel: '+2.4%',
+      rarityLabel: player.potential >= 92 ? 'Elite' : 'Standard',
+      marketHeatLabel: player.liquidityLabel,
+      cardVariant: GtexPlayerCardVariant.standard,
+      scale: GtexPlayerCardScale.full,
       onTap: onOpen,
-      badgeLabels: <String>[
-        player.position,
-        player.country,
-        ...player.badges.take(2),
-      ],
-      metrics: <PlayerCardMetric>[
-        PlayerCardMetric(
-          label: 'Value',
-          value: gtexCompactCurrency(player.price),
-        ),
-        PlayerCardMetric(label: 'Potential', value: '${player.potential}'),
-        PlayerCardMetric(label: 'Age', value: '${player.age}'),
-        PlayerCardMetric(label: 'Liquidity', value: player.liquidityLabel),
-      ],
-      footer: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(player.bidStatus, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 6),
-          Text(
-            player.timerLabel,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: accent,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-      actions: <Widget>[
-        OutlinedButton(onPressed: onOpen, child: const Text('Details')),
-        FilledButton(onPressed: onBid ?? onOpen, child: const Text('Bid')),
-      ],
+      onBuyNow: onBid ?? onOpen,
+      buyNowLabel: 'Bid',
+      onAddToShortlist: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${player.name} added to Watchlist')),
+        );
+      },
     );
   }
 }
@@ -230,38 +205,25 @@ class GtexRegenCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = GteShellTheme.tokensOf(context);
-    final Color accent =
-        player.potential >= 90 ? tokens.accentArena : tokens.accentCommunity;
-    return PlayerCard(
+    return GtexPlayerCard(
       name: player.name,
-      rating: player.rating,
-      image: '',
       position: player.position,
-      subtitle: '${player.country} | ${player.clubName}',
-      accentColor: accent,
-      avatarSize: 72,
+      clubName: player.clubName,
+      nationality: player.country,
+      priceLabel: gtexCompactCurrency(player.price),
+      ratingLabel: '${player.rating}',
+      potentialLabel: '${player.potential}',
+      ageLabel: '${player.age}',
+      gsiLabel: '${player.potential}',
+      gsiTierLabel: player.potential >= 90 ? 'GEN-1 ELITE' : 'GEN-1 PROSPECT',
+      gsiTrendLabel: '↑ Rising',
+      rarityLabel: player.potential >= 90 ? 'LEGENDARY REGEN' : 'REGEN PROSPECT',
+      marketHeatLabel: 'HIGH POTENTIAL',
+      cardVariant: GtexPlayerCardVariant.holographic,
+      scale: GtexPlayerCardScale.full,
       onTap: onOpen,
-      badgeLabels: <String>[
-        player.position,
-        '${player.potential} POT',
-        ...player.badges.take(2),
-      ],
-      metrics: <PlayerCardMetric>[
-        PlayerCardMetric(label: 'Potential', value: '${player.potential}'),
-        PlayerCardMetric(label: 'Age', value: '${player.age}'),
-        PlayerCardMetric(
-          label: 'Value',
-          value: gtexCompactCurrency(player.price),
-        ),
-      ],
-      footer: Text(
-        player.bidStatus,
-        style: Theme.of(context).textTheme.bodyMedium,
-      ),
-      actions: <Widget>[
-        FilledButton.tonal(onPressed: onOpen, child: const Text('Open')),
-      ],
+      onBuyNow: onOpen,
+      buyNowLabel: 'Inspect',
     );
   }
 }
