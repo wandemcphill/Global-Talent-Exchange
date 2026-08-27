@@ -3,6 +3,8 @@ name: GTEX authoritative 3D playback migration
 on:
   push:
     branches: [fix/gtex-authoritative-3d-playback]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
@@ -309,7 +311,6 @@ jobs:
           assert 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' in g
           assert 'lastLiveBallActionKey' in r and 'lastLiveEventActionKey' in r
           assert 'private void TryDriveSyntheticBallTransit' in r
-
           subprocess.run(['git', 'diff', '--check'], check=True)
           PY
 
