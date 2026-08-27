@@ -1,6 +1,8 @@
-﻿using FStudio.Events;
+using FStudio.Events;
 
-namespace FStudio.MatchEngine.Events {
-    internal class MatchCameraActiveEvent : IBaseEvent {
+namespace FStudio.MatchEngine.Cameras
+{
+    internal sealed class MatchCameraActiveEvent : IBaseEvent
+    {
     }
 }
