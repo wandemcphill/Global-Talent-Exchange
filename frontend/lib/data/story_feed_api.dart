@@ -121,7 +121,7 @@ class _StoryFeedFixtures {
         id: 'story-1',
         storyType: 'announcement',
         title: 'Matchday watchlist opens',
-        body: 'Tonightâ€™s matchday feed is now live with cinematic loops.',
+        body: 'Tonight’s matchday feed is now live with cinematic loops.',
         audience: 'all',
         subjectType: null,
         subjectId: null,
