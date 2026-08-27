@@ -1,0 +1,58 @@
+name: Phase A Fix Runner Once
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: contains(github.event.head_commit.message, '[phase-a-fix-runner]') == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/phase-a-economic-consistency
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply
+        run: |
+          set -euo pipefail
+          python backend/scripts/apply_phase_a_consistency_fix.py
+      - name: Validate backend
+        run: |
+          python -m pip install -r backend/requirements.txt pytest
+          python -m compileall -q backend/app backend/tests
+          cd backend
+          pytest -q tests/economy tests/gift_engine tests/wallets tests/agents
+      - name: Commit fix branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f backend/scripts/apply_phase_a_consistency_fix.py || true
+          git rm -f .github/workflows/phase-a-economic-consistency-fix.yml || true
+          git rm -f .phase-a-trigger || true
+          git add backend docs
+          git commit -m "fix(economy): close Phase A consistency gaps [phase-a-fix-runner]"
+          git push origin fix/phase-a-economic-consistency
+      - name: Remove one-shot runner from main
+        working-directory: /tmp
+        run: |
+          set -euo pipefail
+          rm -rf cleanup
+          git clone -q --depth 1 https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git cleanup
+          cd cleanup
+          git checkout main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/phase-a-fix-runner-once.yml || true
+          git commit -m "chore(ci): remove one-shot Phase A runner [phase-a-fix-runner]" || true
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
