@@ -584,7 +584,7 @@ void main() {
     expect(find.text('Streamer tournament engine'), findsNothing);
   });
 
-  testWidgets('club hub quick links open world context routes', (
+  testWidgets('club hub quick links resolve the world context route', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -620,9 +620,13 @@ void main() {
     );
     await tester.ensureVisible(worldContextButton);
     await tester.tap(worldContextButton);
-    await _pumpUntilFound(tester, find.textContaining('public view'));
+    await _pumpUntilFound(tester, find.text('Live club profile unavailable'));
 
-    expect(find.textContaining('public view'), findsOneWidget);
+    // Same strict-live fixture policy as the club hub: the public club profile
+    // has no snapshot to render here, so assert the quick link resolves to
+    // that surface and it fails visibly rather than silently.
+    expect(find.text('Live club profile unavailable'), findsOneWidget);
+    expect(find.text('Retry club'), findsWidgets);
   });
 
   testWidgets('club hub demotes owner inbox when owner workspace is unknown', (

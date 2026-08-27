@@ -7,9 +7,10 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/screens/clubs/gtex_club_owner_dashboard_screen_v2.dart';
 
 void main() {
-  testWidgets('club hub exposes the canonical workspace quick links', (
+  testWidgets('club hub mounts the owner workspace and fails visibly without live data', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 2200);
@@ -39,12 +40,17 @@ void main() {
         initialPath: '/app/club',
       ),
     );
-    await _pumpUntilFound(tester, find.text('Club command'));
+    await _pumpUntilFound(tester, find.text('Live club snapshot unavailable'));
+
+    // ClubApi.standard() is a strict-live path and registers no fixtures, so
+    // the owner workspace has no snapshot to render in the fixture runtime.
+    // The contract here is that /app/club resolves to the owner dashboard with
+    // the club context intact and fails visibly; the dashboard's own content
+    // is covered by club_redesign tests that inject a snapshot directly.
+    expect(find.byType(GtexClubOwnerDashboardScreenV2), findsOneWidget);
     expect(find.text('Club HQ'), findsWidgets);
-    expect(find.text('Overview'), findsWidgets);
-    expect(find.text('Transfers'), findsWidgets);
-    expect(find.text('Trophies'), findsWidgets);
-    expect(find.text('Today inside your club'), findsOneWidget);
+    expect(find.text('Live club snapshot unavailable'), findsOneWidget);
+    expect(find.text('Retry club'), findsWidgets);
   });
 }
 

@@ -6,11 +6,10 @@ import 'package:gte_frontend/features/club_sale_market/presentation/club_sale_ma
 
 void main() {
   test('fixture mode loads owner offers and sale history', () async {
-    final ClubSaleMarketController controller =
-        ClubSaleMarketController.standard(
-      baseUrl: 'http://127.0.0.1:8000',
-      backendMode: GteBackendMode.fixture,
-      accessToken: 'token-123',
+    // .standard() is a strict-live path and no longer registers fixtures, so
+    // a test that wants fixture data asks for the fixture factory directly.
+    final ClubSaleMarketController controller = ClubSaleMarketController(
+      repository: ClubSaleMarketApiRepository.fixture(),
     );
 
     await controller.loadPublicSnapshot('royal-lagos-fc');

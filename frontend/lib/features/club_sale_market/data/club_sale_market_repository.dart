@@ -1,3 +1,5 @@
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+
 import '../../../data/gte_api_repository.dart';
 import '../../../data/gte_authed_api.dart';
 import '../../shared/data/gte_feature_support.dart';
@@ -101,10 +103,19 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
         mode: resolvedMode,
         accessToken: accessToken,
       ),
-      fixtures:
-          resolvedMode == GteBackendMode.fixture
-              ? ClubSaleMarketFixtureRepository()
-              : null,
+      fixtures: null,
+    );
+  }
+
+  factory ClubSaleMarketApiRepository.fixture() {
+    assertFixtureFactoryAllowed('ClubSaleMarketApiRepository.fixture');
+    return ClubSaleMarketApiRepository(
+      client: createFeatureApi(
+        baseUrl: 'http://127.0.0.1:8000',
+        mode: GteBackendMode.fixture,
+        accessToken: 'fixture-token',
+      ),
+      fixtures: ClubSaleMarketFixtureRepository(),
     );
   }
 

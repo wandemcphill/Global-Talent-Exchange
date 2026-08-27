@@ -80,32 +80,48 @@ class ClubApi {
         config: config,
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        fixtures:
-            resolvedMode == GteBackendMode.fixture
-                ? StubTrophyCabinetRepository()
-                : null,
+        fixtures: null,
       ),
       identityRepository: _ClubIdentityApiRepository(
         config: config,
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        fixtures:
-            resolvedMode == GteBackendMode.fixture
-                ? MockClubIdentityRepository()
-                : null,
+        fixtures: null,
       ),
-      fixtures:
-          resolvedMode == GteBackendMode.fixture
-              ? _ClubFixtureStore.seeded()
-              : null,
+      fixtures: null,
     );
   }
 
   factory ClubApi.fixture() {
     assertFixtureFactoryAllowed('ClubApi.fixture');
-    return ClubApi.standard(
+    const GteRepositoryConfig config = GteRepositoryConfig(
       baseUrl: 'http://127.0.0.1:8000',
       mode: GteBackendMode.fixture,
+    );
+    return ClubApi(
+      config: config,
+      transport: GteHttpTransport(),
+      reputationRepository: ReputationApiRepository.standard(
+        baseUrl: config.baseUrl,
+        mode: GteBackendMode.fixture,
+      ),
+      dynastyRepository: DynastyApiRepository.standard(
+        baseUrl: config.baseUrl,
+        mode: GteBackendMode.fixture,
+      ),
+      trophyRepository: _ClubTrophyApiRepository(
+        config: config,
+        transport: GteHttpTransport(),
+        accessToken: null,
+        fixtures: StubTrophyCabinetRepository(),
+      ),
+      identityRepository: _ClubIdentityApiRepository(
+        config: config,
+        transport: GteHttpTransport(),
+        accessToken: null,
+        fixtures: MockClubIdentityRepository(),
+      ),
+      fixtures: _ClubFixtureStore.seeded(),
     );
   }
 
