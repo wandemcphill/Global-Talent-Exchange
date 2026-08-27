@@ -366,33 +366,33 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     bonus_amount=combo_bonus,
                 )
             )
-        self.event_publisher.publish(
-            DomainEvent(
-                name="gift_sent",
-                payload={
-                    "gift_transaction_id": transaction.id,
-                    "sender_user_id": sender.id,
-                    "recipient_user_id": recipient.id,
-                    "gift_key": gift.key,
-                    "gift_name": gift.display_name,
-                    "fallback_gift_name": gift.fallback_display_name,
-                    "rarity": gift.rarity,
-                    "quantity": str(normalized_quantity),
-                    "gross_amount": str(gross_amount),
-                    "ledger_unit": LedgerUnit.COIN.value,
-                    "currency_label": "GTEX Coin",
-                    "source_scope": requested_scope,
-                    "animation_key": gift.animation_key,
-                    "sound_key": gift.sound_key,
-                    "chat_thread_id": chat_thread_id,
-                    "discussion_thread_id": discussion_thread_id,
-                    "discussion_reply_id": discussion_reply_id,
-                    "match_id": kwargs.get("match_id"),
-                    "competition_id": kwargs.get("competition_id"),
-                    "transaction_id": ledger_transaction_id,
-                    "economic_conversion_id": conversion.id,
-                },
-            )
+        event = DomainEvent(
+            name="gift_sent",
+            payload={
+                "gift_transaction_id": transaction.id,
+                "sender_user_id": sender.id,
+                "recipient_user_id": recipient.id,
+                "gift_key": gift.key,
+                "gift_name": gift.display_name,
+                "fallback_gift_name": gift.fallback_display_name,
+                "rarity": gift.rarity,
+                "quantity": str(normalized_quantity),
+                "gross_amount": str(gross_amount),
+                "ledger_unit": LedgerUnit.COIN.value,
+                "currency_label": "GTEX Coin",
+                "source_scope": requested_scope,
+                "animation_key": gift.animation_key,
+                "sound_key": gift.sound_key,
+                "chat_thread_id": chat_thread_id,
+                "discussion_thread_id": discussion_thread_id,
+                "discussion_reply_id": discussion_reply_id,
+                "match_id": kwargs.get("match_id"),
+                "competition_id": kwargs.get("competition_id"),
+                "transaction_id": ledger_transaction_id,
+                "economic_conversion_id": conversion.id,
+            },
+        )
+        self.event_publisher.publish(event)
         return transaction
 
 
