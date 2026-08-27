@@ -1,0 +1,175 @@
+name: GTEX 3D permanent renderer repair
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Apply source repair
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('.')
+          def method(text,sig,repl):
+              s=text.find(sig)
+              if s<0: raise SystemExit(f'missing {sig}')
+              b=text.find('{',s); d=0; e=-1
+              for i in range(b,len(text)):
+                  if text[i]=='{': d+=1
+                  elif text[i]=='}':
+                      d-=1
+                      if d==0: e=i+1; break
+              if e<0: raise SystemExit(f'unclosed {sig}')
+              return text[:s]+repl.rstrip()+text[e:]
+          def write(p,t): p.write_text(t.rstrip()+'\n',encoding='utf-8')
+
+          p=root/'Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs'; t=p.read_text(encoding='utf-8-sig')
+          if 'filteredPlayerVelocities' not in t:
+              t=t.replace('private readonly Dictionary<string, Vector3> filteredPlayerTargets = new();','private readonly Dictionary<string, Vector3> filteredPlayerTargets = new();\n        private readonly Dictionary<string, Vector3> filteredPlayerVelocities = new();',1)
+          t=method(t,'private float ApplyLivePlayerState(','''        private float ApplyLivePlayerState(
+            PlayerPosition livePlayer,
+            GtexLegacyPlayerHandle player,
+            float dt,
+            float predictionSeconds,
+            bool snap,
+            bool traceSample,
+            bool suppressBoundaryMotion)
+        {
+            if (livePlayer == null || player == null || !player.IsValid) return 0f;
+            var safeDt=Mathf.Max(dt,LiveTraceDtFloorSeconds);
+            var current=player.Position;
+            var conversion=ConvertIncomingPlaybackPosition(livePlayer,currentState);
+            var target=ClampToFieldBounds(conversion.ClampedWorld,false);
+            var backendVelocity=snap?Vector3.zero:ResolveLiveFieldVelocity(livePlayer); backendVelocity.y=0f;
+            var delta=target-current; delta.y=0f;
+            var key=livePlayer.playerId??string.Empty;
+            var velocityRef=filteredPlayerVelocities.TryGetValue(key,out var saved)?saved:Vector3.zero;
+            var maxSpeed=Mathf.Clamp(Mathf.Max(backendVelocity.magnitude*1.25f,delta.magnitude/safeDt,LivePlayerMinSpeedUnitsPerSecond),LivePlayerMinSpeedUnitsPerSecond,10.5f);
+            Vector3 applied;
+            if(snap||!filteredPlayerTargets.ContainsKey(key)){applied=target; velocityRef=Vector3.zero;}
+            else{applied=Vector3.SmoothDamp(current,target,ref velocityRef,0.10f,maxSpeed,safeDt);}
+            applied=ClampToFieldBounds(applied,false);
+            var presentationVelocity=(applied-current)/safeDt; presentationVelocity.y=0f;
+            filteredPlayerTargets[key]=target; filteredPlayerVelocities[key]=velocityRef;
+            var look=presentationVelocity.sqrMagnitude>0.01f?presentationVelocity.normalized:(backendVelocity.sqrMagnitude>0.0001f?backendVelocity.normalized:player.Forward); look.y=0f;
+            var rotation=player.Rotation;
+            if(look.sqrMagnitude>0.0001f) rotation=Quaternion.Slerp(player.Rotation,Quaternion.LookRotation(look,Vector3.up),1f-Mathf.Exp(-LivePlayerRotationLerpSpeed*safeDt));
+            player.SetExternalPlaybackPose(applied,rotation,snap);
+            ApplyLiveAnimatorState(livePlayer,player,applied-current,presentationVelocity,safeDt,snap,(livePlayer.state??string.Empty).Trim().ToLowerInvariant(),1f,false);
+            return presentationVelocity.magnitude;
+        }
+''')
+          t=method(t,'private void TryStartSyntheticBallTransit(','''        private void TryStartSyntheticBallTransit(MatchResponse previousState, MatchResponse nextState, bool forceSnap)
+        {
+            ClearSyntheticBallTransit();
+        }
+''')
+          t=method(t,'private bool TryDriveSyntheticBallTransit(','''        private bool TryDriveSyntheticBallTransit()
+        {
+            return false;
+        }
+''')
+          t=method(t,'private void DriveBall(','''        private void DriveBall()
+        {
+            if(currentState==null||currentState.ballPosition==null||!GtexMatchController.BallAdapter.IsAvailable){ClearSyntheticBallTransit();hasFilteredBallTarget=false;runtimeTraceBallSpeed=0f;return;}
+            var target=ClampToFieldBounds(ConvertIncomingPlaybackPosition(currentState.ballPosition,currentState).ClampedWorld,true);
+            var velocity=ResolvePlaybackBallVelocity(currentState.ballPosition,false); velocity.y=0f; runtimeTraceBallSpeed=velocity.magnitude;
+            GtexMatchController.BallAdapter.ApplyExternalState(target,velocity,ResolveBallHolder(currentState.ballPosition));
+        }
+''')
+          t=t.replace('/api/v1/ws/match/','/api/v2/ws/match/',1)
+          if 'GtexRuntimeState.MarkStarted(GtexRuntimeMode.LivePlayback' not in t and '            matchLoaded = true;\n' in t:
+              t=t.replace('            matchLoaded = true;\n','            matchLoaded = true;\n            GtexRuntimeState.MarkStarted(GtexRuntimeMode.LivePlayback, nameof(GtexMatchRuntime));\n',1)
+          write(p,t)
+
+          p=root/'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs'; t=p.read_text(encoding='utf-8-sig')
+          marker='        public void ProcessBehaviours (in float time) {\n'; guard=marker+'''            if (GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback)
+            {
+                ActiveBehaviour = null;
+                NextBehaviour = 0;
+                return;
+            }
+'''
+          if marker not in t: raise SystemExit('missing ProcessBehaviours')
+          if 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' not in t[t.find(marker):t.find(marker)+700]: t=t.replace(marker,guard,1)
+          write(p,t)
+
+          p=root/'Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs'; t=p.read_text(encoding='utf-8-sig')
+          if 'private Vector3 externalPlaybackPresentationVelocity;' not in t: t=t.replace('        private float nextExternalPlaybackValidationAt;\n','        private float nextExternalPlaybackValidationAt;\n        private Vector3 externalPlaybackPresentationVelocity;\n',1)
+          t=method(t,'private void FixedUpdate()','''        private void FixedUpdate()
+        {
+            if (ExternalPlaybackEnabled && GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback)
+            {
+                return;
+            }
+            if (!ExternalPlaybackEnabled || rigidbody == null) return;
+            if (HolderPlayer != null) { DriveExternalPlaybackHolderAnchor(); return; }
+            if (!hasExternalPlaybackTarget) return;
+            var nextPosition=Vector3.MoveTowards(rigidbody.position,externalPlaybackTargetPosition,externalPlaybackMoveSpeed*Time.fixedDeltaTime);
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform,rigidbody,nextPosition,externalPlaybackTargetRotation);
+        }
+''')
+          old='''            if (!hasExternalPlaybackTarget ||\n                Vector3.Distance(rigidbody.position, targetPosition) >= ResolveExternalPlaybackTeleportDistance()) {\n                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(\n                    transform,\n                    rigidbody,\n                    targetPosition,\n                    externalPlaybackTargetRotation);\n            }\n\n            hasExternalPlaybackTarget = true;'''
+          new='''            if (GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback)\n            {\n                if (!hasExternalPlaybackTarget)\n                {\n                    GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform,rigidbody,targetPosition,externalPlaybackTargetRotation,true);\n                    externalPlaybackPresentationVelocity=Vector3.zero;\n                }\n                else\n                {\n                    var maxVisualSpeed=Mathf.Clamp(Mathf.Max(externalPlaybackVelocity.magnitude*1.35f,18f),18f,28f);\n                    var smoothed=Vector3.SmoothDamp(transform.position,targetPosition,ref externalPlaybackPresentationVelocity,0.055f,maxVisualSpeed,Mathf.Max(Time.unscaledDeltaTime,1f/60f));\n                    smoothed.y=targetPosition.y;\n                    GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform,rigidbody,smoothed,externalPlaybackTargetRotation,false);\n                }\n            }\n            else if (!hasExternalPlaybackTarget || Vector3.Distance(rigidbody.position,targetPosition) >= ResolveExternalPlaybackTeleportDistance())\n            {\n                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform,rigidbody,targetPosition,externalPlaybackTargetRotation);\n            }\n\n            hasExternalPlaybackTarget=true;'''
+          if old not in t: raise SystemExit('missing Ball state tail')
+          t=t.replace(old,new,1); write(p,t)
+
+          p=root/'Gtex_Test_Migration/Assets/Code/MatchEngine/Camera/CameraSystem.cs'; t=p.read_text(encoding='utf-8-sig')
+          needle='                var (position, rotation, zoom) = CurrentCamera.Behave(in dT, targetPos);'
+          if needle not in t: raise SystemExit('missing camera behave')
+          t=t.replace(needle,'''                if (IsBroadcastCamera && Ball.Current != null)
+                {
+                    ApplyGtexBroadcastCamera(targetPos, dT);
+                    return;
+                }
+
+                var (position, rotation, zoom) = CurrentCamera.Behave(in dT, targetPos);''',1)
+          if 'private void ApplyGtexBroadcastCamera(' not in t:
+              idx=t.rfind('    }\n}')
+              helper='''\n        private void ApplyGtexBroadcastCamera(Vector3 targetPos, float dT)\n        {\n            var ball=Ball.Current; if(ball==null) return;\n            var velocity=ball.Velocity; velocity.y=0f;\n            var direction=velocity.sqrMagnitude>0.04f?velocity.normalized:Vector3.right;\n            var target=targetPos; target.y=0f;\n            var desiredPosition=new Vector3(target.x-Mathf.Clamp(direction.x*3.5f,-3.5f,3.5f),18f,Mathf.Clamp(target.z-27f,-46f,46f));\n            var lookAt=target+Vector3.up*0.8f;\n            var desiredRotation=Quaternion.LookRotation(lookAt-desiredPosition,Vector3.up);\n            var pT=1f-Mathf.Exp(-7.5f*Mathf.Max(dT,0.001f));\n            var rT=1f-Mathf.Exp(-12f*Mathf.Max(dT,0.001f));\n            transform.position=Vector3.Lerp(transform.position,desiredPosition,pT);\n            transform.rotation=Quaternion.Slerp(transform.rotation,desiredRotation,rT);\n            var desiredFov=Mathf.Lerp(52f,47f,Mathf.Clamp01(velocity.magnitude/12f));\n            camera.fieldOfView=Mathf.Lerp(camera.fieldOfView,desiredFov,Mathf.Clamp01(dT*CameraZoomSpeed));\n        }\n'''
+              t=t[:idx]+'    }'+helper+'\n}'
+          write(p,t)
+          PY
+
+      - name: Validate repaired source
+        shell: bash
+        run: |
+          set -e
+          python3 -m pytest tools/test_gtex_authoritative_playback_source.py -q
+          python3 - <<'PY'
+          from pathlib import Path
+          checks = {
+              'Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs': ['/api/v2/ws/match/'],
+              'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs': ['GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback'],
+              'Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs': ['Vector3.SmoothDamp'],
+              'Gtex_Test_Migration/Assets/Code/MatchEngine/Camera/CameraSystem.cs': ['ApplyGtexBroadcastCamera'],
+          }
+          for file, needles in checks.items():
+              text=Path(file).read_text(encoding='utf-8-sig')
+              for needle in needles: assert needle in text,(file,needle)
+          print('GTEX 3D source validation PASS')
+          PY
+          git diff --check
+
+      - name: Commit permanent repair and remove bootstrap workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/gtex-3d-final-repair.yml .github/workflows/gtex-main-finalize.yml .github/workflows/gtex-authoritative-finalize.yml .github/workflows/gtex-3d-renderer-repair.yml .github/workflows/gtex-3d-pr-finalize.yml tools/.gtex-renderer-repair-trigger tools/.gtex-pr-finalizer-trigger
+          git config user.name 'GTEX Automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs Gtex_Test_Migration/Assets/Code/MatchEngine/Camera/CameraSystem.cs tools/test_gtex_authoritative_playback_source.py .github/workflows/gtex-3d-final-repair.yml .github/workflows/gtex-main-finalize.yml .github/workflows/gtex-authoritative-finalize.yml .github/workflows/gtex-3d-renderer-repair.yml .github/workflows/gtex-3d-pr-finalize.yml tools/.gtex-renderer-repair-trigger tools/.gtex-pr-finalizer-trigger
+          git diff --cached --check
+          git commit -m 'fix: complete GTEX authoritative 3D renderer [gtex-main-final]'
+          git push origin main
