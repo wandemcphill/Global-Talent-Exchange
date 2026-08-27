@@ -26,7 +26,7 @@ from app.models import (  # noqa: E402
     LedgerUnit,
     PayoutRequest,
 )
-from app.models.treasury import RateDirection, TreasuryWithdrawalStatus  # noqa: E402
+from app.models.treasury import PaymentMode, RateDirection, TreasuryWithdrawalStatus  # noqa: E402
 from app.policies.service import PolicyService  # noqa: E402
 from app.treasury.service import TreasuryService  # noqa: E402
 from app.wallets.service import LedgerPosting, WalletService  # noqa: E402
@@ -128,7 +128,7 @@ def _configure_withdrawal(session) -> None:
     settings.withdrawal_rate_direction = RateDirection.FIAT_PER_COIN
     settings.min_withdrawal = Decimal("10.0000")
     settings.max_withdrawal = Decimal("100000.0000")
-    settings.withdrawal_mode = "manual"
+    settings.withdrawal_mode = PaymentMode.MANUAL
     session.commit()
 
 
@@ -159,7 +159,7 @@ def test_manual_withdrawal_complete_path_reconciles_ledger() -> None:
         session.commit()
         _accept_required_policies(session, user)
         _configure_withdrawal(session)
-        _seed_coin_balance(session, user, Decimal("105.0000"))
+        _seed_coin_balance(session, user, Decimal("110.0000"))
 
         treasury = TreasuryService()
         bank_account = treasury.create_user_bank_account(
@@ -200,7 +200,7 @@ def test_manual_withdrawal_complete_path_reconciles_ledger() -> None:
 
         user_coin = treasury.wallet_service.get_user_account(session, user, LedgerUnit.COIN)
         user_escrow = treasury.wallet_service.get_user_escrow_account(session, user, LedgerUnit.COIN)
-        assert treasury.wallet_service.get_balance(session, user_coin) == Decimal("-5.0000")
+        assert treasury.wallet_service.get_balance(session, user_coin) == Decimal("0.0000")
         assert treasury.wallet_service.get_balance(session, user_escrow) == Decimal("110.0000")
 
         treasury.review_withdrawal_status(
@@ -244,7 +244,7 @@ def test_manual_withdrawal_complete_path_reconciles_ledger() -> None:
         withdrawal_clearing = treasury.wallet_service.ensure_withdrawal_clearing_account(
             session, LedgerUnit.COIN
         )
-        assert treasury.wallet_service.get_balance(session, user_coin) == Decimal("-5.0000")
+        assert treasury.wallet_service.get_balance(session, user_coin) == Decimal("0.0000")
         assert treasury.wallet_service.get_balance(session, user_escrow) == Decimal("0.0000")
         assert treasury.wallet_service.get_balance(session, withdrawal_clearing) == Decimal("110.0000")
 
