@@ -92,18 +92,20 @@ try {
     if (Test-BackendPort -Port $BackendPort) {
         Write-Host "[+] Backend already running at $baseUrl" -ForegroundColor Green
     } else {
-        $backendLog = Join-Path $repoRoot "tmp\gtex_live_backend_demo.log"
-        New-Item -ItemType Directory -Force -Path (Split-Path $backendLog -Parent) | Out-Null
-        $backendArgs = @((Join-Path $repoRoot "tools\run_gtex_live_backend.py"), "--profile", "local", "--port", $BackendPort, "--log-level", "info")
-        $backend = Start-Process -FilePath $python -ArgumentList $backendArgs -WorkingDirectory $repoRoot -RedirectStandardOutput $backendLog -RedirectStandardError $backendLog -PassThru
+        $backendOut = Join-Path $repoRoot "tmp\gtex_live_backend_demo.log"
+        $backendErr = Join-Path $repoRoot "tmp\gtex_live_backend_demo.err.log"
+        New-Item -ItemType Directory -Force -Path (Split-Path $backendOut -Parent) | Out-Null
+        $backendScript = Join-Path $repoRoot "tools\run_gtex_live_backend.py"
+        $backendArgs = @($backendScript, "--profile", "local", "--port", $BackendPort, "--log-level", "info")
+        $backend = Start-Process -FilePath $python -ArgumentList $backendArgs -WorkingDirectory $repoRoot -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr -PassThru
         $startedBackend = $true
         $ready = $false
         for ($i = 0; $i -lt 60; $i++) {
             Start-Sleep -Milliseconds 500
             if (Test-BackendPort -Port $BackendPort) { $ready = $true; break }
-            if ($backend.HasExited) { throw "GTEX backend exited with code $($backend.ExitCode). See $backendLog" }
+            if ($backend.HasExited) { throw "GTEX backend exited with code $($backend.ExitCode). See $backendOut and $backendErr" }
         }
-        if (-not $ready) { throw "Timed out waiting for GTEX backend on port $BackendPort." }
+        if (-not $ready) { throw "Timed out waiting for GTEX backend on port $BackendPort. See $backendOut and $backendErr" }
         Write-Host "[+] Backend started (PID $($backend.Id))" -ForegroundColor Green
     }
 
