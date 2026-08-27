@@ -73,11 +73,21 @@ class LiveMatchSessionService {
       if (resolved.host.trim().isEmpty) {
         return null;
       }
-      return resolved.replace(fragment: null);
+      // Check for malformed URI characters in explicit URIs
+      if (trimmedPath.contains('%%%') || trimmedPath.contains('%%')) {
+        return null;
+      }
+      return Uri.parse(
+        resolved
+            .replace(fragment: '')
+            .toString()
+            .split('#')
+            .first,
+      );
     }
 
     final String path = resolved.path.trim();
-    if (path.isEmpty) {
+    if (path.isEmpty || path.contains('%')) {
       return null;
     }
 

@@ -259,9 +259,6 @@ class GtexPlayerDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = GteShellTheme.tokensOf(context);
-    final String trajectory =
-        '${player.rating - 3} → ${player.rating} → ${player.potential} POT';
-
     return DefaultTabController(
       length: 4,
       child: Container(
@@ -269,20 +266,7 @@ class GtexPlayerDetailScreen extends StatelessWidget {
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: Text('${player.name} Asset Intelligence'),
-            actions: <Widget>[
-              IconButton(
-                tooltip: 'Share Asset',
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Asset link for ${player.name} copied.'),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.share_outlined),
-              ),
-            ],
+            title: const Text('Player Detail'),
           ),
           body: SafeArea(
             top: false,
@@ -312,33 +296,9 @@ class GtexPlayerDetailScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    '${player.position} • ${player.clubName} • ${player.country} • Age ${player.age}',
+                                    '${player.position} • ${player.country} • ${player.age}',
                                     style:
                                         Theme.of(context).textTheme.bodyMedium,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      color: tokens.accentArena.withValues(alpha: 0.16),
-                                      border: Border.all(
-                                        color: tokens.accentArena.withValues(alpha: 0.32),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'Trajectory: $trajectory',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: tokens.accentArena,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
                                   ),
                                   const SizedBox(height: 10),
                                   Wrap(
@@ -364,7 +324,7 @@ class GtexPlayerDetailScreen extends StatelessWidget {
                           runSpacing: 12,
                           children: <Widget>[
                             GtexMetricPill(
-                              label: 'OVR Rating',
+                              label: 'Rating',
                               value: '${player.rating}',
                               icon: Icons.star_outline_rounded,
                               color: tokens.accentArena,
@@ -376,64 +336,10 @@ class GtexPlayerDetailScreen extends StatelessWidget {
                               color: tokens.accentCommunity,
                             ),
                             GtexMetricPill(
-                              label: 'Market Price',
+                              label: 'Market Value',
                               value: gtexCompactCurrency(player.price),
                               icon: Icons.payments_outlined,
                               color: tokens.accentCapital,
-                            ),
-                            GtexMetricPill(
-                              label: 'Liquidity',
-                              value: player.liquidityLabel,
-                              icon: Icons.water_drop_outlined,
-                              color: tokens.accentWarm,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: FilledButton.icon(
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Order placed for ${player.name} at ${gtexCompactCurrency(player.price)}.',
-                                      ),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.flash_on_rounded),
-                                label: const Text('Buy Now'),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${player.name} added to your watchlist.',
-                                    ),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.star_border_rounded),
-                              label: const Text('Watch'),
-                            ),
-                            const SizedBox(width: 10),
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Gifting flow initiated for ${player.name}.',
-                                    ),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.card_giftcard_rounded),
-                              label: const Text('Gift'),
                             ),
                           ],
                         ),
@@ -445,10 +351,10 @@ class GtexPlayerDetailScreen extends StatelessWidget {
                 const TabBar(
                   isScrollable: true,
                   tabs: <Tab>[
-                    Tab(text: 'Stats & Radar'),
-                    Tab(text: 'Story Arc'),
-                    Tab(text: 'Career Path'),
-                    Tab(text: 'Order Book'),
+                    Tab(text: 'Stats'),
+                    Tab(text: 'Story'),
+                    Tab(text: 'Career'),
+                    Tab(text: 'Offers'),
                   ],
                 ),
                 Expanded(
@@ -456,12 +362,12 @@ class GtexPlayerDetailScreen extends StatelessWidget {
                     children: <Widget>[
                       _StatsTab(player: player),
                       _TimelineTab(
-                        title: 'Story Arc & Development',
+                        title: 'Story arc',
                         items: player.storyMoments,
                         color: tokens.accentArena,
                       ),
                       _TimelineTab(
-                        title: 'Career & Club History',
+                        title: 'Career path',
                         items: player.careerMoments,
                         color: tokens.accentClub,
                       ),
@@ -488,32 +394,18 @@ class GtexClubManagementScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = GteShellTheme.tokensOf(context);
     final List<GtexPlayerCardData> squad =
         data.marketPlayers.take(math.min(11, data.marketPlayers.length)).toList(
               growable: false,
             );
     return DefaultTabController(
-      length: 5,
+      length: 4,
       child: Container(
         decoration: gteBackdropDecoration(),
         child: Scaffold(
           backgroundColor: Colors.transparent,
           appBar: AppBar(
-            title: Text('${data.club.name} Football Club Operations'),
-            actions: <Widget>[
-              IconButton(
-                tooltip: 'Trade Club Shares',
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Club share order book opened for ${data.club.name}.'),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.show_chart_rounded),
-              ),
-            ],
+            title: Text('${data.club.name} Club Management'),
           ),
           body: Column(
             children: <Widget>[
@@ -521,60 +413,30 @@ class GtexClubManagementScreen extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                 child: GteSurfacePanel(
                   emphasized: true,
-                  accentColor: tokens.accentClub,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  accentColor: GteShellTheme.tokensOf(context).accentClub,
+                  child: Row(
                     children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          GtexAnimatedAvatar(
-                            label: data.club.name,
-                            accent: tokens.accentClub,
-                            size: 72,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  data.club.name,
-                                  style: Theme.of(context).textTheme.headlineSmall,
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'League Position #${data.club.leaguePosition} • ${data.club.regionLabel} • ${data.club.points} pts',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                      GtexAnimatedAvatar(
+                        label: data.club.name,
+                        accent: GteShellTheme.tokensOf(context).accentClub,
+                        size: 72,
                       ),
-                      const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: <Widget>[
-                          GtexMetricPill(
-                            label: 'Squad Rating',
-                            value: '84 OVR',
-                            icon: Icons.shield_outlined,
-                            color: tokens.accentClub,
-                          ),
-                          GtexMetricPill(
-                            label: 'Club Valuation',
-                            value: '₦48.5M',
-                            icon: Icons.account_balance_outlined,
-                            color: tokens.accentCapital,
-                          ),
-                          GtexMetricPill(
-                            label: 'Share Price',
-                            value: '₦125.0 (+4.2%)',
-                            icon: Icons.trending_up_rounded,
-                            color: Colors.green,
-                          ),
-                        ],
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              data.club.name,
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${data.club.regionLabel} • ${data.club.points} pts',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -585,9 +447,8 @@ class GtexClubManagementScreen extends StatelessWidget {
                 isScrollable: true,
                 tabs: <Tab>[
                   Tab(text: 'Squad'),
-                  Tab(text: 'Academy & Regens'),
-                  Tab(text: 'Club Shares'),
                   Tab(text: 'Finances'),
+                  Tab(text: 'Fans'),
                   Tab(text: 'Identity'),
                 ],
               ),
@@ -595,9 +456,8 @@ class GtexClubManagementScreen extends StatelessWidget {
                 child: TabBarView(
                   children: <Widget>[
                     _ClubSquadTab(squad: squad),
-                    _ClubAcademyTab(data: data),
-                    _ClubSharesTab(data: data),
                     _ClubFinanceTab(data: data),
+                    _ClubFansTab(data: data),
                     _ClubIdentityTab(data: data),
                   ],
                 ),
@@ -1581,184 +1441,6 @@ class _ClubFansTab extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ClubAcademyTab extends StatelessWidget {
-  const _ClubAcademyTab({
-    required this.data,
-  });
-
-  final GtexUiUniverseData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = GteShellTheme.tokensOf(context);
-    final List<GtexPlayerCardData> prospects = data.trendingRegens;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      children: <Widget>[
-        GteSurfacePanel(
-          emphasized: true,
-          accentColor: tokens.accentArena,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Youth Academy & Regen Pipeline',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Develop local talent and uncover high-potential Regens before they hit the open market.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 14),
-              GtexStatBar(
-                label: 'Academy Capacity',
-                value: '14 / 20 Prospects',
-                progress: 0.70,
-                color: tokens.accentArena,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Top Academy Prospects',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 12),
-        ...prospects.map(
-          (GtexPlayerCardData player) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: GteSurfacePanel(
-              accentColor: tokens.accentArena,
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          player.name,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${player.position} • Age ${player.age} • Potential ${player.potential}',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                  FilledButton.tonal(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            '${player.name} promoted to First Team squad!',
-                          ),
-                        ),
-                      );
-                    },
-                    child: const Text('Promote'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ClubSharesTab extends StatelessWidget {
-  const _ClubSharesTab({
-    required this.data,
-  });
-
-  final GtexUiUniverseData data;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = GteShellTheme.tokensOf(context);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      children: <Widget>[
-        GteSurfacePanel(
-          emphasized: true,
-          accentColor: tokens.accentCapital,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Club Share Market & Equity',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: <Widget>[
-                  GtexMetricPill(
-                    label: 'Share Price',
-                    value: '₦125.0',
-                    icon: Icons.show_chart_rounded,
-                    color: tokens.accentCapital,
-                  ),
-                  GtexMetricPill(
-                    label: '24h Change',
-                    value: '+4.2%',
-                    icon: Icons.trending_up_rounded,
-                    color: Colors.green,
-                  ),
-                  GtexMetricPill(
-                    label: 'Shares Issued',
-                    value: '100,000',
-                    icon: Icons.pie_chart_outline_rounded,
-                    color: tokens.accentCommunity,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Buy order submitted for 100 shares.'),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.add_shopping_cart_rounded),
-                      label: const Text('Buy Shares'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Sell order submitted for 50 shares.'),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.sell_outlined),
-                      label: const Text('Sell Shares'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ),
         ),
       ],
