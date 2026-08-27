@@ -112,11 +112,11 @@ Color _routeAccentFor(BuildContext context, GtePrimaryDestination destination) {
       return tokens.accent;
     case GtePrimaryDestination.competitions:
       return tokens.accentArena;
+    case GtePrimaryDestination.club:
+      return tokens.accentClub;
     case GtePrimaryDestination.hub:
     case GtePrimaryDestination.community:
       return tokens.accentCommunity;
-    case GtePrimaryDestination.club:
-      return tokens.accentClub;
     case GtePrimaryDestination.wallet:
       return tokens.accentCapital;
   }

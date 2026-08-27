@@ -64,7 +64,8 @@ class GteBootstrapFailure {
         followUp:
             'Provide the deployed or otherwise reachable backend URL for the '
             'target device. Local development may use a guarded fixture or '
-            'device-specific transport configuration outside production builds.',
+            'device-specific transport configuration outside production builds. '
+            'For Android emulator or physical device against localhost: adb reverse tcp:8000 tcp:8000.',
       );
     }
     return GteBootstrapFailure(
