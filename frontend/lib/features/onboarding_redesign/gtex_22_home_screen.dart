@@ -58,29 +58,36 @@ class _Nav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool wide = MediaQuery.sizeOf(context).width >= 780;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+      padding: EdgeInsets.symmetric(horizontal: wide ? 28 : 16, vertical: 16),
       decoration: const BoxDecoration(
         color: Color(0xF0050709),
         border: Border(bottom: BorderSide(color: _line)),
       ),
-      child: Row(
-        children: <Widget>[
-          SvgPicture.asset('assets/branding/gtex_wordmark_22.svg', width: 178, height: 42),
-          const Spacer(),
-          if (MediaQuery.sizeOf(context).width >= 780) ...const <Widget>[
-            _NavLink('Discover'),
-            _NavLink('Exchange'),
-            _NavLink('Matches'),
-            _NavLink('Clubs'),
-            _NavLink('Competitions'),
-            _NavLink('World'),
-            SizedBox(width: 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: <Widget>[
+            const Text(
+              'GTEX',
+              style: TextStyle(color: _white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+            ),
+            const SizedBox(width: 16),
+            if (wide) ...const <Widget>[
+              _NavLink('Discover'),
+              _NavLink('Exchange'),
+              _NavLink('Matches'),
+              _NavLink('Clubs'),
+              _NavLink('Competitions'),
+              _NavLink('World'),
+              SizedBox(width: 10),
+            ],
+            TextButton(onPressed: onLogin, child: const Text('Sign in', style: TextStyle(color: _white))),
+            const SizedBox(width: 8),
+            _GlowButton(label: 'Enter GTEX', onPressed: onSignup),
           ],
-          TextButton(onPressed: onLogin, child: const Text('Sign in', style: TextStyle(color: _white))),
-          const SizedBox(width: 8),
-          _GlowButton(label: 'Enter GTEX', onPressed: onSignup),
-        ],
+        ),
       ),
     );
   }
@@ -104,55 +111,60 @@ class _Hero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mobile = MediaQuery.sizeOf(context).width < 760;
-    return SizedBox(
-      height: mobile ? 690 : 620,
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          Image.asset('assets/media/gtex_landing_single_poster.png', fit: BoxFit.cover, alignment: Alignment.centerRight),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: <Color>[_ink, Color(0xE8050709), Color(0x75050709), Color(0x15050709)],
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Container(
+        constraints: BoxConstraints(minHeight: mobile ? 690 : 620),
+        child: Stack(
+          alignment: Alignment.centerLeft,
+          children: <Widget>[
+            Positioned.fill(
+              child: Image.asset('assets/media/gtex_landing_single_poster.png', fit: BoxFit.cover, alignment: Alignment.centerRight),
+            ),
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: <Color>[_ink, Color(0xE8050709), Color(0x75050709), Color(0x15050709)],
+                  ),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(mobile ? 24 : 120, 56, 24, 40),
-            child: Align(
-              alignment: Alignment.centerLeft,
+            Padding(
+              padding: EdgeInsets.fromLTRB(mobile ? 24 : 120, 40, 24, 40),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 700),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     const _Eyebrow('THE LIVING FOOTBALL ECONOMY'),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 12),
                     Text(
                       'FOOTBALL,\nREBUILT.',
-                      style: TextStyle(color: _white, fontSize: mobile ? 62 : 92, height: .84, fontWeight: FontWeight.w900, letterSpacing: -3),
+                      style: TextStyle(color: _white, fontSize: mobile ? 48 : 82, height: .88, fontWeight: FontWeight.w900, letterSpacing: -2),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     const Text(
                       'Discover talent. Build clubs. Trade assets. Play matches. Connect with a football world that never stops moving.',
-                      style: TextStyle(color: _muted, fontSize: 19, height: 1.45),
+                      style: TextStyle(color: _muted, fontSize: 16, height: 1.4),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
                     Wrap(
                       spacing: 12,
                       runSpacing: 12,
                       children: <Widget>[
-                        _GlowButton(label: 'Create your GTEX identity', onPressed: onSignup, large: true),
+                        _GlowButton(label: 'Create free account', onPressed: onSignup, large: true),
                         _GhostButton(label: 'Explore the exchange', onPressed: onExplore),
                       ],
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
                     const Wrap(
-                      spacing: 9,
-                      runSpacing: 9,
+                      spacing: 8,
+                      runSpacing: 8,
                       children: <Widget>[
                         _MicroBadge(icon: Icons.search_rounded, text: 'Scout'),
                         _MicroBadge(icon: Icons.stadium_rounded, text: 'Build'),
@@ -165,9 +177,9 @@ class _Hero extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-          const Positioned(right: 24, bottom: 24, child: _LiveSignal()),
-        ],
+            const Positioned(right: 24, bottom: 24, child: _LiveSignal()),
+          ],
+        ),
       ),
     );
   }
@@ -279,15 +291,27 @@ class _FeatureCard extends StatelessWidget {
   final _Feature feature;
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(color: _panel, borderRadius: BorderRadius.circular(18), border: Border.all(color: _line)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-          Container(width: 46, height: 46, decoration: BoxDecoration(color: feature.accent.withOpacity(.10), borderRadius: BorderRadius.circular(13), border: Border.all(color: feature.accent.withOpacity(.25))), child: Icon(feature.icon, color: feature.accent, size: 23)),
-          const Spacer(),
-          Text(feature.title, style: const TextStyle(color: _white, fontSize: 24, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(feature.body, style: const TextStyle(color: _muted, fontSize: 13, height: 1.45)),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            Container(width: 40, height: 40, decoration: BoxDecoration(color: feature.accent.withOpacity(.10), borderRadius: BorderRadius.circular(12), border: Border.all(color: feature.accent.withOpacity(.25))), child: Icon(feature.icon, color: feature.accent, size: 20)),
+            const SizedBox(height: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  Text(feature.title, style: const TextStyle(color: _white, fontSize: 20, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(feature.body, style: const TextStyle(color: _muted, fontSize: 12, height: 1.35), maxLines: 3, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
       );
 }
 
