@@ -23,6 +23,8 @@ def build_windows_websocket_url(base_url: str, match_id: str) -> str:
 def force_windows_live_playback_config() -> None:
     """Make the Windows evidence player consume GTEX live render-sync playback."""
     config_path = PROJECT_ROOT / "Gtex_Test_Migration" / "Assets" / "Resources" / "GTEX" / "match-config.json"
+    bootstrap_path = PROJECT_ROOT / "Gtex_Test_Migration" / "tmp" / "gtex-live-bootstrap.json"
+
     if not config_path.exists():
         raise RuntimeError(f"Unity match config not found: {config_path}")
 
@@ -49,8 +51,16 @@ def force_windows_live_playback_config() -> None:
             "use3DPlaybackForLocalSimulation": True,
         }
     )
-
     config_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    if bootstrap_path.exists():
+        bootstrap = json.loads(bootstrap_path.read_text(encoding="utf-8"))
+        if not isinstance(bootstrap, dict):
+            raise RuntimeError("GTEX live bootstrap must contain a JSON object.")
+        bootstrap["runtimeMode"] = "live"
+        bootstrap["environment"] = payload.get("environment", "local")
+        bootstrap["baseUrl"] = payload.get("localBaseUrl", "http://127.0.0.1:8000")
+        bootstrap_path.write_text(json.dumps(bootstrap, indent=2) + "\n", encoding="utf-8")
 
 
 provisioning.build_websocket_url = build_windows_websocket_url
