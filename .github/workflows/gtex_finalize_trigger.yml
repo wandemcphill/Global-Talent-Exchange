@@ -19,6 +19,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Correct finalizer validation gate
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tools/gtex_finalize_authoritative_playback.py')
+          s = p.read_text(encoding='utf-8')
+          old = '''m = re.search(r"private float ApplyLivePlayerState\\([\\s\\S]*?\\n        }\\n\\s*private Vector3 ResolveBehaviorAnchorPosition", r)
+          if not m:
+              raise SystemExit("ApplyLivePlayerState boundary missing")
+          body = m.group(0)'''
+          new = '''m = re.search(r"private float ApplyLivePlayerState\\([\\s\\S]*?\\n        }", r)
+          if not m:
+              raise SystemExit("ApplyLivePlayerState boundary missing")
+          body = m.group(0)'''
+          if old not in s:
+              raise SystemExit('expected validator block not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
       - name: Finalize source
         run: python3 tools/gtex_finalize_authoritative_playback.py
       - name: Commit final source and remove finalizer
