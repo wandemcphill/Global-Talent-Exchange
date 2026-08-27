@@ -221,7 +221,7 @@ namespace FStudio.MatchEngine.Cameras {
                 }
             }
         }
-    }
+
         private void ApplyGtexBroadcastCamera(Vector3 targetPos, float dT)
         {
             var ball = Ball.Current;
@@ -241,5 +241,5 @@ namespace FStudio.MatchEngine.Cameras {
             var desiredFov = Mathf.Lerp(52f, 47f, Mathf.Clamp01(velocity.magnitude / 12f));
             camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, desiredFov, Mathf.Clamp01(dT * CameraZoomSpeed));
         }
-
+    }
 }
