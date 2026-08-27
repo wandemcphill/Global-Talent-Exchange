@@ -397,7 +397,12 @@ void main() {
         find.byType(GtexFeatureFlagsLaunchControlScreenV2),
         findsOneWidget,
       );
-      expect(find.text('Feature flags'), findsOneWidget);
+      // 696e3bb4 removed fixture registration from strict-live APIs, so the
+      // admin data surfaces have nothing to render in the fixture runtime.
+      // The route contract is that it resolves to its screen and fails
+      // visibly rather than silently.
+      expect(find.text('Launch control unavailable'), findsOneWidget);
+      expect(find.text('Retry'), findsWidgets);
     });
 
     testWidgets('admin trust-ops route mounts for admin sessions', (
@@ -522,8 +527,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(GtexAdminNotificationMatrixScreen), findsOneWidget);
-      expect(find.text('Admin Notification Matrix'), findsOneWidget);
-      expect(find.text('Test dispatch'), findsOneWidget);
+      // Same strict-live fixture policy as the launch-control route above.
+      expect(find.text('Notification matrix unavailable'), findsOneWidget);
+      expect(find.text('Retry'), findsWidgets);
     });
 
     testWidgets(

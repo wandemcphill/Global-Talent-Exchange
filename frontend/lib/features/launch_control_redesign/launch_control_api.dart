@@ -320,6 +320,7 @@ class GtexLaunchControlFixtures {
         allowedRegions: const <String>[],
         betaOnly: false,
         killSwitchEnabled: false,
+        maintenanceMessage: null,
         metadata: const <String, Object?>{'route': '/creator-stadium/matches'},
         route: '/creator-stadium/matches',
         updatedAt: now,
@@ -336,6 +337,7 @@ class GtexLaunchControlFixtures {
         allowedRegions: const <String>[],
         betaOnly: false,
         killSwitchEnabled: false,
+        maintenanceMessage: null,
         metadata: const <String, Object?>{'route': '/player-cards'},
         route: '/player-cards',
         updatedAt: now,
@@ -352,6 +354,7 @@ class GtexLaunchControlFixtures {
         allowedRegions: const <String>[],
         betaOnly: false,
         killSwitchEnabled: false,
+        maintenanceMessage: null,
         metadata: const <String, Object?>{'route': '/clubs/sale-market'},
         route: '/clubs/sale-market',
         updatedAt: now,
@@ -385,6 +388,7 @@ class GtexLaunchControlFixtures {
         allowedRegions: const <String>[],
         betaOnly: false,
         killSwitchEnabled: false,
+        maintenanceMessage: null,
         metadata: const <String, Object?>{'route': '/viral-feed'},
         route: '/viral-feed',
         updatedAt: now,
@@ -402,6 +406,7 @@ class GtexLaunchControlFixtures {
         allowedRegions: const <String>[],
         betaOnly: false,
         killSwitchEnabled: false,
+        maintenanceMessage: null,
         metadata: const <String, Object?>{'route': '/world/federations'},
         route: '/world/federations',
         updatedAt: now,
@@ -435,33 +440,94 @@ class GtexLaunchControlFixtures {
             createdAt: now,
           ),
         ],
-        commandRoutes: const <GtexAdminCommandRoute>[],
+        commandRoutes: const <GtexAdminCommandRoute>[
+          GtexAdminCommandRoute(
+            moduleKey: 'launch_control',
+            title: 'Launch Control',
+            description: 'Batch 34 rollout state control.',
+            route: '/admin/launch-control',
+            featureKey: 'launch_control',
+            launchState: GtexLaunchState.internal,
+            enabled: true,
+          ),
+          GtexAdminCommandRoute(
+            moduleKey: 'transfer_hub',
+            title: 'Transfer Hub',
+            description: 'Loan, swap, and transfer launch surface.',
+            route: '/app/market',
+            featureKey: 'transfer_hub',
+            launchState: GtexLaunchState.internal,
+            enabled: false,
+          ),
+        ],
+        moduleHealth: const <GtexModuleHealth>[
+          GtexModuleHealth(
+            moduleKey: 'launch_control',
+            status: 'gated',
+            detail: 'Feature is enabled for internal rollout access.',
+            featureKey: 'launch_control',
+            launchState: GtexLaunchState.internal,
+            killSwitchEnabled: false,
+          ),
+          GtexModuleHealth(
+            moduleKey: 'broadcast',
+            status: 'kill_switch',
+            detail: 'Kill switch is active; client actions are blocked.',
+            featureKey: 'broadcast',
+            launchState: GtexLaunchState.maintenance,
+            killSwitchEnabled: true,
+          ),
+        ],
       ),
     );
   }
 
   Future<GtexLaunchControlSnapshot> dashboard() async => _snapshot;
 
+  Future<List<GtexClientFeatureFlag>> clientFlags() async {
+    return _snapshot.flags
+        .where(
+          (GtexLaunchControlFlag flag) =>
+              flag.launchState != GtexLaunchState.hidden &&
+              flag.launchState != GtexLaunchState.disabled &&
+              flag.launchState != GtexLaunchState.internal,
+        )
+        .map(
+          (GtexLaunchControlFlag flag) => GtexClientFeatureFlag(
+            featureKey: flag.featureKey,
+            title: flag.title,
+            enabled: flag.effectivelyEnabled,
+            launchState: flag.launchState,
+            route: flag.route,
+            maintenanceMessage:
+                flag.launchState == GtexLaunchState.maintenance
+                    ? flag.maintenanceMessage
+                    : null,
+          ),
+        )
+        .toList(growable: false);
+  }
+
   Future<GtexLaunchControlFlag> setFlagEnabled({
     required String featureKey,
     required bool enabled,
   }) async {
-    _snapshot = _updateFlag(
+    final GtexLaunchControlFlag flag = _findFlag(
       featureKey,
-      (GtexLaunchControlFlag flag) => flag.copyWith(enabled: enabled),
-    );
-    return _snapshot.flags.firstWhere((GtexLaunchControlFlag flag) => flag.featureKey == featureKey);
+    ).copyWith(enabled: enabled);
+    _snapshot = _snapshot.replaceFlag(flag);
+    return flag;
   }
 
   Future<GtexLaunchControlFlag> setKillSwitch({
     required String featureKey,
     required bool enabled,
   }) async {
-    _snapshot = _updateFlag(
+    final GtexLaunchControlFlag flag = _findFlag(
       featureKey,
-      (GtexLaunchControlFlag flag) => flag.copyWith(killSwitchEnabled: enabled),
-    );
-    return _snapshot.flags.firstWhere((GtexLaunchControlFlag flag) => flag.featureKey == featureKey);
+    ).copyWith(killSwitchEnabled: enabled);
+    _snapshot = _snapshot.replaceFlag(flag);
+    return flag;
   }
 
   Future<GtexLaunchControlFlag> updateFlag({
@@ -469,30 +535,12 @@ class GtexLaunchControlFixtures {
     GtexLaunchState? launchState,
     bool? betaOnly,
   }) async {
-    _snapshot = _updateFlag(
+    final GtexLaunchControlFlag flag = _findFlag(
       featureKey,
-      (GtexLaunchControlFlag flag) => flag.copyWith(
-        launchState: launchState,
-        betaOnly: betaOnly,
-      ),
-    );
-    return _snapshot.flags.firstWhere((GtexLaunchControlFlag flag) => flag.featureKey == featureKey);
+    ).copyWith(launchState: launchState, betaOnly: betaOnly);
+    _snapshot = _snapshot.replaceFlag(flag);
+    return flag;
   }
-
-  Future<List<GtexClientFeatureFlag>> clientFlags() async =>
-      _snapshot.flags
-          .where((GtexLaunchControlFlag flag) => flag.enabled)
-          .map(
-            (GtexLaunchControlFlag flag) => GtexClientFeatureFlag(
-              featureKey: flag.featureKey,
-              enabled: flag.enabled,
-              launchState: flag.launchState,
-              betaOnly: flag.betaOnly,
-              killSwitchEnabled: flag.killSwitchEnabled,
-              route: flag.route,
-            ),
-          )
-          .toList(growable: false);
 
   Future<GtexBetaAccessGrant> grantBetaAccess({
     required String featureKey,
@@ -500,23 +548,19 @@ class GtexLaunchControlFixtures {
     String? notes,
     DateTime? expiresAt,
   }) async {
+    final DateTime now = DateTime.now().toUtc();
     final GtexBetaAccessGrant grant = GtexBetaAccessGrant(
-      id: 'grant-${_snapshot.betaGrants.length + 1}',
+      id: 'grant-$featureKey-$userId',
       featureKey: featureKey,
       userId: userId,
       active: true,
       notes: notes,
       expiresAt: expiresAt,
       grantedByUserId: 'admin-fixture',
-      createdAt: DateTime.now().toUtc(),
-      updatedAt: DateTime.now().toUtc(),
+      createdAt: now,
+      updatedAt: now,
     );
-    _snapshot = _snapshot.copyWith(
-      betaGrants: <GtexBetaAccessGrant>[...
-        _snapshot.betaGrants,
-        grant,
-      ],
-    );
+    _snapshot = _snapshot.replaceGrant(grant);
     return grant;
   }
 
@@ -524,58 +568,30 @@ class GtexLaunchControlFixtures {
     required String featureKey,
     required String userId,
   }) async {
-    final int index = _snapshot.betaGrants.indexWhere(
+    final GtexBetaAccessGrant existing = _snapshot.betaGrants.firstWhere(
       (GtexBetaAccessGrant grant) =>
           grant.featureKey == featureKey && grant.userId == userId,
+      orElse:
+          () => GtexBetaAccessGrant(
+            id: 'grant-$featureKey-$userId',
+            featureKey: featureKey,
+            userId: userId,
+            active: true,
+            notes: null,
+            expiresAt: null,
+            grantedByUserId: 'admin-fixture',
+            createdAt: DateTime.now().toUtc(),
+            updatedAt: DateTime.now().toUtc(),
+          ),
     );
-    if (index == -1) {
-      return GtexBetaAccessGrant(
-        id: 'revoked-$featureKey-$userId',
-        featureKey: featureKey,
-        userId: userId,
-        active: false,
-        notes: 'Not previously granted',
-        expiresAt: null,
-        grantedByUserId: 'admin-fixture',
-        createdAt: DateTime.now().toUtc(),
-        updatedAt: DateTime.now().toUtc(),
-      );
-    }
-    final GtexBetaAccessGrant existing = _snapshot.betaGrants[index];
-    final GtexBetaAccessGrant revoked = GtexBetaAccessGrant(
-      id: existing.id,
-      featureKey: existing.featureKey,
-      userId: existing.userId,
-      active: false,
-      notes: existing.notes,
-      expiresAt: existing.expiresAt,
-      grantedByUserId: existing.grantedByUserId,
-      createdAt: existing.createdAt,
-      updatedAt: DateTime.now().toUtc(),
-    );
-    final List<GtexBetaAccessGrant> next =
-        List<GtexBetaAccessGrant>.of(_snapshot.betaGrants);
-    next[index] = revoked;
-    _snapshot = _snapshot.copyWith(betaGrants: next);
-    return revoked;
+    final GtexBetaAccessGrant grant = existing.copyWith(active: false);
+    _snapshot = _snapshot.replaceGrant(grant);
+    return grant;
   }
 
-  GtexLaunchControlSnapshot _updateSnapshot(
-    List<GtexLaunchControlFlag> flags,
-  ) {
-    return _snapshot.copyWith(flags: flags);
-  }
-
-  GtexLaunchControlSnapshot _updateFlag(
-    String featureKey,
-    GtexLaunchControlFlag Function(GtexLaunchControlFlag flag) update,
-  ) {
-    final List<GtexLaunchControlFlag> flags = _snapshot.flags
-        .map(
-          (GtexLaunchControlFlag flag) =>
-              flag.featureKey == featureKey ? update(flag) : flag,
-        )
-        .toList(growable: false);
-    return _updateSnapshot(flags);
+  GtexLaunchControlFlag _findFlag(String featureKey) {
+    return _snapshot.flags.firstWhere(
+      (GtexLaunchControlFlag flag) => flag.featureKey == featureKey,
+    );
   }
 }
