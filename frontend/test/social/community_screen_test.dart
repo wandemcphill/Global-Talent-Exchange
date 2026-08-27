@@ -132,7 +132,7 @@ void main() {
   );
 
   testWidgets(
-    'community route mounts the live community surface instead of hub aliasing',
+    'community route mounts CommunityScreen instead of hub aliasing',
     (WidgetTester tester) async {
       _setLargeViewport(tester);
       final GteExchangeController controller = GteExchangeController(
@@ -158,16 +158,23 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('GTEX Social'), findsOneWidget);
-      expect(find.text('Live threads'), findsWidgets);
-      expect(find.text('Fan wars'), findsWidgets);
+      // CommunityScreen.build() calls CommunityApi.standard() when no api is
+      // injected (social_screen.dart:_buildApi), and .standard() is a
+      // strict-live path that registers no fixtures (0a6eb1a4, "Enforce
+      // strict-live runtime phase 2"). The fixture runtime has nothing for
+      // the community route to render, so - same policy as the club hub and
+      // world context routes - assert the route resolves to the real screen
+      // and fails visibly, not hub-aliased and not seeded content. Content
+      // coverage for CommunityScreen lives in the first test in this file,
+      // which injects CommunityApi.fixture() directly.
+      expect(find.byType(CommunityScreen), findsOneWidget);
       expect(find.text('Maya Scout community desk'), findsNothing);
+      expect(find.text('Community unavailable'), findsOneWidget);
       expect(
-        find.text(
-          'Live community threads, watchlists, follows, and direct messages from GTEX APIs.',
-        ),
+        find.text('Community fixtures are not registered in strict-live runtime.'),
         findsOneWidget,
       );
+      expect(find.text('Retry'), findsWidgets);
     },
   );
 
@@ -176,12 +183,18 @@ void main() {
   ) async {
     _setLargeViewport(tester);
 
+    // CommunityScreen builds its own CommunityApi.standard() when api is
+    // null (social_screen.dart:_buildApi), and that factory registers no
+    // fixtures under strict-live policy - it would only reach the blocked
+    // "Community unavailable" state and never expose the Overview tab this
+    // test taps through. Inject the fixture factory directly, same as the
+    // first test in this file.
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
-        home: const Scaffold(
+        home: Scaffold(
           body: CommunityScreen(
-            api: null,
+            api: CommunityApi.fixture(),
             baseUrl: 'http://127.0.0.1:8000',
             backendMode: GteBackendMode.fixture,
             accessToken: 'fixture-token',
