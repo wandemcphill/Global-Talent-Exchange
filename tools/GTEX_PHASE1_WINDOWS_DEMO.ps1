@@ -126,7 +126,7 @@ try {
     Write-Host "    Player log: $playerLog" -ForegroundColor Gray
 
     if ($LeaveUnityRunning.IsPresent) {
-        Write-Host "[+] Leaving Unity running." -ForegroundColor Green
+        Write-Host "[+] Leaving Unity and the backend running." -ForegroundColor Green
     } else {
         Write-Host "[*] Press ENTER to stop the demo." -ForegroundColor Yellow
         [void](Read-Host)
@@ -138,7 +138,7 @@ finally {
         Start-Sleep -Seconds 2
         if (-not $unity.HasExited) { Stop-Process -Id $unity.Id -Force -ErrorAction SilentlyContinue }
     }
-    if ($startedBackend -and -not $KeepBackendRunning.IsPresent -and $null -ne $backend -and -not $backend.HasExited) {
+    if ($startedBackend -and -not $KeepBackendRunning.IsPresent -and -not $LeaveUnityRunning.IsPresent -and $null -ne $backend -and -not $backend.HasExited) {
         Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
     }
 }
