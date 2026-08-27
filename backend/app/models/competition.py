@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Index, Integer, JSON, String, event
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, object_session
 
 from app.common.enums.competition_format import CompetitionFormat
 from app.common.enums.competition_start_mode import CompetitionStartMode
@@ -124,6 +124,32 @@ def _validate_competition_economic_contract(_: Any, __: Any, competition: UserCo
 
     if entry_fee > 0 and currency != "credit":
         raise ValueError("Participant-funded competition entry fees must use FanCoin.")
+
+
+@event.listens_for(UserCompetition, "before_insert", propagate=True)
+def _enforce_active_admin_competition_fee(mapper: Any, connection: Any, competition: UserCompetition) -> None:
+    """Replace caller/template fee drift with the active Admin economic policy at creation."""
+    if (competition.prize_mode or "entry_funded").strip().lower() == "host_funded_fixed":
+        return
+    if (competition.currency or "").strip().lower() != "credit" or int(competition.entry_fee_minor or 0) <= 0:
+        return
+    session = object_session(competition)
+    if session is None:
+        return
+    try:
+        from app.economy.economic_policy import EconomicPolicyUnavailableError, resolve_economic_policy
+        policy = resolve_economic_policy(session)
+    except EconomicPolicyUnavailableError:
+        return
+    competition.platform_fee_bps = policy.competition_platform_fee_bps
+    metadata = dict(competition.metadata_json or {})
+    metadata["economic_policy"] = {
+        "rule_key": policy.rule.rule_key,
+        "version": policy.policy_version,
+        "effective_at": policy.effective_at.isoformat(),
+        "competition_platform_fee_bps": policy.competition_platform_fee_bps,
+    }
+    competition.metadata_json = metadata
 
 
 event.listen(
