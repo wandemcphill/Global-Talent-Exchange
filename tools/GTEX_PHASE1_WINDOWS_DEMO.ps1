@@ -143,10 +143,10 @@ try {
     $existingMatchId = Resolve-ExistingLiveMatchId -BaseUrl $baseUrl
     if (-not [string]::IsNullOrWhiteSpace($existingMatchId)) {
         Write-Host "[+] Reusing seeded Infinite League match $existingMatchId" -ForegroundColor Green
-        & $python (Join-Path $repoRoot "tools\provision_gtex_live_match_windows.py") --profile local --base-url $baseUrl --match-id $existingMatchId --persist-access-token
+        & $python (Join-Path $repoRoot "tools\provision_gtex_live_match.py") --profile local --base-url $baseUrl --match-id $existingMatchId --persist-access-token
     } else {
         Write-Host "[*] No reusable seeded match found; provisioning will generate one." -ForegroundColor Yellow
-        & $python (Join-Path $repoRoot "tools\provision_gtex_live_match_windows.py") --profile local --base-url $baseUrl --persist-access-token
+        & $python (Join-Path $repoRoot "tools\provision_gtex_live_match.py") --profile local --base-url $baseUrl --persist-access-token
     }
     if ($LASTEXITCODE -ne 0) { throw "Live match provisioning failed with exit code $LASTEXITCODE." }
     Write-Host "[+] Live match provisioned; Unity bootstrap/config updated." -ForegroundColor Green
