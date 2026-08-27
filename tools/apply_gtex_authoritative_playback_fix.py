@@ -212,7 +212,7 @@ runtime = replace_method(
 )
 runtime_path.write_text(runtime + '\n', encoding='utf-8')
 
-player_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/PlayerBase.cs'
+player_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs'
 player = player_path.read_text(encoding='utf-8-sig')
 marker = '        public void ProcessBehaviours (in float time) {\n'
 guard = '''        public void ProcessBehaviours (in float time) {
