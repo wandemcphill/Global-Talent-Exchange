@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using FStudio.Utilities;
 using FStudio.MatchEngine;
 using FStudio.MatchEngine.Balls;
+using FStudio.MatchEngine.Events;
 using FStudio.Events;
 using FStudio.UI.Events;
 using UnityEngine;
@@ -277,9 +278,6 @@ namespace FStudio.MatchEngine.Cameras
                 ? velocity.normalized
                 : Vector3.right;
 
-            // A real broadcast camera stays on one touchline. It should not
-            // jump sides when the ball changes direction, which was one of
-            // the causes of the unstable framing in the previous pass.
             var desiredPosition = new Vector3(
                 focus.x - playDirection.x * broadcastAlongPlayOffset,
                 broadcastHeight,
