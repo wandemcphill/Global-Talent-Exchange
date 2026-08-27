@@ -1,0 +1,359 @@
+name: GTEX authoritative 3D playback finalizer
+
+on:
+  push:
+    branches:
+      - fix/gtex-authoritative-playback-final
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: "!contains(github.event.head_commit.message || '', '[gtex-final]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/gtex-authoritative-playback-final
+
+      - name: Apply authoritative playback source changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          ROOT = Path('.')
+
+          def replace_method(text: str, needle: str, replacement: str) -> str:
+              start = text.find(needle)
+              if start < 0:
+                  raise SystemExit(f'missing method: {needle}')
+              brace = text.find('{', start)
+              if brace < 0:
+                  raise SystemExit(f'missing opening brace: {needle}')
+              depth = 0
+              end = None
+              for i in range(brace, len(text)):
+                  if text[i] == '{':
+                      depth += 1
+                  elif text[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          break
+              if end is None:
+                  raise SystemExit(f'unclosed method: {needle}')
+              return text[:start] + replacement.rstrip() + text[end:]
+
+          def write(path: Path, text: str):
+              path.write_text(text.rstrip() + '\n', encoding='utf-8')
+
+          runtime_path = ROOT / 'Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs'
+          runtime = runtime_path.read_text(encoding='utf-8-sig')
+          runtime = replace_method(runtime, 'private float ApplyLivePlayerState(', '''        private float ApplyLivePlayerState(
+            PlayerPosition livePlayer,
+            GtexLegacyPlayerHandle player,
+            float dt,
+            float predictionSeconds,
+            bool snap,
+            bool traceSample,
+            bool suppressBoundaryMotion)
+        {
+            if (livePlayer == null || player == null || !player.IsValid)
+            {
+                return 0f;
+            }
+
+            var currentPosition = player.Position;
+            var conversion = ConvertIncomingPlaybackPosition(livePlayer, currentState);
+            var liveVelocity = snap ? Vector3.zero : ResolveLiveFieldVelocity(livePlayer);
+            liveVelocity.y = 0f;
+
+            var targetPosition = snap || suppressBoundaryMotion
+                ? conversion.ClampedWorld
+                : ResolvePredictedFieldPosition(livePlayer, predictionSeconds);
+            targetPosition = ClampToFieldBounds(targetPosition, false);
+
+            var targetDelta = targetPosition - currentPosition;
+            targetDelta.y = 0f;
+            var targetDistance = targetDelta.magnitude;
+            var requiresHardSnap = snap || targetDistance >= LivePlayerSnapDistance;
+
+            var desiredLookDirection = ResolveLookDirection(livePlayer, targetDelta, player);
+            var rotation = player.Rotation;
+            if (desiredLookDirection.sqrMagnitude > 0.0001f)
+            {
+                var desiredRotation = Quaternion.LookRotation(desiredLookDirection.normalized, Vector3.up);
+                rotation = requiresHardSnap
+                    ? desiredRotation
+                    : Quaternion.Slerp(
+                        player.Rotation,
+                        desiredRotation,
+                        1f - Mathf.Exp(-LivePlayerRotationLerpSpeed * Mathf.Max(dt, 0f)));
+            }
+
+            Vector3 appliedPosition;
+            if (requiresHardSnap)
+            {
+                appliedPosition = targetPosition;
+            }
+            else
+            {
+                var presentationSpeed = Mathf.Max(
+                    liveVelocity.magnitude,
+                    Mathf.Min(
+                        LivePlayerMaxSpeedUnitsPerSecond,
+                        targetDistance / Mathf.Max(LivePlayerCatchUpSeconds, LiveTraceDtFloorSeconds)));
+                appliedPosition = Vector3.MoveTowards(
+                    currentPosition,
+                    targetPosition,
+                    presentationSpeed * Mathf.Max(dt, 0f));
+            }
+            appliedPosition = ClampToFieldBounds(appliedPosition, false);
+
+            if (traceSample)
+            {
+                AppendRuntimeTrace(
+                    "pitch-sample",
+                    "player=" + DescribeLivePlayer(livePlayer) +
+                    " raw=" + FormatPlaybackVector(conversion.RawIncoming) +
+                    " converted=" + FormatPlaybackVector(conversion.ConvertedWorld) +
+                    " clamped=" + FormatPlaybackVector(conversion.ClampedWorld));
+            }
+
+            player.SetExternalPlaybackPose(appliedPosition, rotation, requiresHardSnap);
+            ApplyLiveAnimatorState(
+                livePlayer,
+                player,
+                appliedPosition - currentPosition,
+                liveVelocity,
+                dt,
+                requiresHardSnap,
+                (livePlayer.state ?? string.Empty).Trim().ToLowerInvariant(),
+                1f,
+                false);
+
+            if (requiresHardSnap || dt <= 0f)
+            {
+                return 0f;
+            }
+
+            var frameMovement = appliedPosition - currentPosition;
+            frameMovement.y = 0f;
+            return frameMovement.magnitude / Mathf.Max(dt, LiveTraceDtFloorSeconds);
+        }
+''')
+
+          runtime = replace_method(runtime, 'private void TryStartSyntheticBallTransit(', '''        private void TryStartSyntheticBallTransit(MatchResponse previousState, MatchResponse nextState, bool forceSnap)
+        {
+            ClearSyntheticBallTransit();
+        }
+''')
+
+          runtime = replace_method(runtime, 'private bool TryDriveSyntheticBallTransit(', '''        private bool TryDriveSyntheticBallTransit()
+        {
+            return false;
+        }
+''')
+
+          runtime = replace_method(runtime, 'private void DriveBall(', '''        private void DriveBall()
+        {
+            if (currentState == null ||
+                currentState.ballPosition == null ||
+                !GtexMatchController.BallAdapter.IsAvailable)
+            {
+                ClearSyntheticBallTransit();
+                hasFilteredBallTarget = false;
+                runtimeTraceBallSpeed = 0f;
+                return;
+            }
+
+            var holder = ResolveBallHolder(currentState.ballPosition);
+            var conversion = ConvertIncomingPlaybackPosition(currentState.ballPosition, currentState);
+            var velocity = ResolvePlaybackBallVelocity(currentState.ballPosition, false);
+            runtimeTraceBallSpeed = new Vector3(velocity.x, 0f, velocity.z).magnitude;
+
+            GtexMatchController.BallAdapter.ApplyExternalState(
+                conversion.ClampedWorld,
+                velocity,
+                holder);
+        }
+''')
+
+          runtime = runtime.replace('/api/v1/ws/match/', '/api/v2/ws/match/', 1)
+          marker = '            matchLoaded = true;\n'
+          mark = '            matchLoaded = true;\n            GtexRuntimeState.MarkStarted(GtexRuntimeMode.LivePlayback, nameof(GtexMatchRuntime));\n'
+          if 'GtexRuntimeState.MarkStarted(GtexRuntimeMode.LivePlayback' not in runtime and marker in runtime:
+              runtime = runtime.replace(marker, mark, 1)
+          write(runtime_path, runtime)
+
+          player_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs'
+          player = player_path.read_text(encoding='utf-8-sig')
+          marker = '        public void ProcessBehaviours (in float time) {\n'
+          guard = marker + '''            if (GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback)
+            {
+                ActiveBehaviour = null;
+                NextBehaviour = 0;
+                return;
+            }
+'''
+          if marker not in player:
+              raise SystemExit('PlayerBase ProcessBehaviours marker missing')
+          if guard not in player:
+              player = player.replace(marker, guard, 1)
+          write(player_path, player)
+
+          ball_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs'
+          ball = ball_path.read_text(encoding='utf-8-sig')
+          ball = replace_method(ball, 'private void FixedUpdate()', '''        private void FixedUpdate()
+        {
+            // LivePlayback is rendered from authoritative runtime samples.
+            // The rendered pose has already been interpolated by GtexMatchRuntime.
+            // Do not run a second physics chase in the FixedUpdate clock.
+            if (ExternalPlaybackEnabled)
+            {
+                return;
+            }
+
+            // Non-live/original runtime keeps its existing physics loop below this guard.
+        }
+''')
+          teleport_gate = re.compile(
+              r'\n\s*if \(!hasExternalPlaybackTarget \|\|\s*'
+              r'\n\s*Vector3\.Distance\(rigidbody\.position, targetPosition\) >= ResolveExternalPlaybackTeleportDistance\(\)\)\s*'
+              r'\n\s*\{\s*'
+              r'\n\s*GtexPlaybackPhysicsUtil\.ApplyExternalPlaybackPosition\(\s*'
+              r'\n\s*transform,\s*'
+              r'\n\s*rigidbody,\s*'
+              r'\n\s*targetPosition,\s*'
+              r'\n\s*externalPlaybackTargetRotation\);\s*'
+              r'\n\s*\}', re.MULTILINE)
+          if 'ResolveExternalPlaybackTeleportDistance()' in ball:
+              ball, count = teleport_gate.subn(
+                  '''\n            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(\n                transform,\n                rigidbody,\n                targetPosition,\n                externalPlaybackTargetRotation);''',
+                  ball,
+                  count=1)
+              if count != 1:
+                  raise SystemExit('Ball distance teleport gate could not be removed safely')
+          write(ball_path, ball)
+
+          controller_path = ROOT / 'Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerController/CodeBasedController.cs'
+          controller = controller_path.read_text(encoding='utf-8-sig')
+          if 'private void FixedUpdate()' in controller and 'externalPlaybackEnabled' in controller:
+              controller = replace_method(controller, 'private void FixedUpdate()', '''        private void FixedUpdate()
+        {
+            // LivePlayback movement is applied once by the GTEX runtime presentation layer.
+            // Never run the legacy controller chase on top of authoritative samples.
+            if (externalPlaybackEnabled)
+            {
+                return;
+            }
+        }
+''')
+          if 'public void SetExternalPlaybackPose(' in controller:
+              controller = replace_method(controller, 'public void SetExternalPlaybackPose(', '''        public void SetExternalPlaybackPose(Vector3 position, Quaternion rotation, bool snap = false)
+        {
+            if (!externalPlaybackEnabled || rigidbody == null)
+            {
+                return;
+            }
+
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                transform,
+                rigidbody,
+                position,
+                rotation,
+                snap);
+            lastKnownPosition = transform.position;
+        }
+''')
+          write(controller_path, controller)
+
+          print('GTEX authoritative playback changes applied')
+          PY
+
+      - name: Validate source contract and regression tests
+        shell: bash
+        run: |
+          set -e
+          git diff --check
+          grep -q '/api/v2/ws/match/' Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs
+          grep -q 'GtexRuntimeState.MarkStarted(GtexRuntimeMode.LivePlayback' Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs
+          grep -q 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs
+          grep -q 'if (externalPlaybackEnabled)' Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerController/CodeBasedController.cs
+          ! grep -q 'ResolveExternalPlaybackTeleportDistance()' Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs
+          cat > tools/test_gtex_authoritative_playback_source.py <<'PY'
+          from pathlib import Path
+
+          ROOT = Path(__file__).resolve().parents[1]
+
+          def read(path: str) -> str:
+              return (ROOT / path).read_text(encoding='utf-8-sig')
+
+          def method(source: str, signature: str) -> str:
+              start = source.index(signature)
+              brace = source.index('{', start)
+              depth = 0
+              for i in range(brace, len(source)):
+                  if source[i] == '{':
+                      depth += 1
+                  elif source[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          return source[start:i + 1]
+              raise AssertionError(signature)
+
+          def test_runtime_uses_authoritative_live_ws_and_mode():
+              source = read('Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs')
+              assert '/api/v2/ws/match/' in source
+              assert 'GtexRuntimeState.MarkStarted(GtexRuntimeMode.LivePlayback' in source
+
+          def test_player_behaviour_solver_is_disabled_in_live_playback():
+              source = read('Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs')
+              live = source[source.index('public void ProcessBehaviours (in float time)'):]
+              live = live[:live.index('\n        }', 1) + len('\n        }')]
+              assert 'GtexRuntimeState.ActiveMode == GtexRuntimeMode.LivePlayback' in live
+              assert 'return;' in live
+
+          def test_legacy_player_fixedupdate_does_not_chase_authoritative_pose():
+              source = read('Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerController/CodeBasedController.cs')
+              fixed = method(source, 'private void FixedUpdate()')
+              assert 'if (externalPlaybackEnabled)' in fixed
+              assert 'MoveTowards' not in fixed
+              assert 'ApplyExternalPlaybackPosition' not in fixed
+
+          def test_ball_fixedupdate_does_not_chase_authoritative_pose():
+              source = read('Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs')
+              fixed = method(source, 'private void FixedUpdate()')
+              assert 'ExternalPlaybackEnabled' in fixed
+              assert 'MoveTowards' not in fixed
+              assert 'ApplyExternalPlaybackPosition' not in fixed
+              assert 'ResolveExternalPlaybackTeleportDistance()' not in source
+
+          def test_live_ball_runtime_uses_backend_sample_directly():
+              source = read('Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs')
+              drive = method(source, 'private void DriveBall()')
+              assert 'ApplyExternalState(' in drive
+              assert 'TryDriveSyntheticBallTransit' not in drive
+          PY
+          python3 -m pytest tools/test_gtex_authoritative_playback_source.py -q
+
+      - name: Commit permanent repair and remove finalizer workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/gtex-authoritative-finalize.yml
+          git config user.name 'GTEX Automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Gtex_Test_Migration/Assets/Code/GTEX/GtexMatchRuntime.cs \
+                  Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerBase.cs \
+                  Gtex_Test_Migration/Assets/Code/MatchEngine/Players/PlayerController/CodeBasedController.cs \
+                  Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs \
+                  tools/test_gtex_authoritative_playback_source.py \
+                  .github/workflows/gtex-authoritative-finalize.yml
+          git diff --cached --check
+          git commit -m 'fix: finalize authoritative GTEX 3D playback [gtex-final]'
+          git push origin HEAD:fix/gtex-authoritative-playback-final
