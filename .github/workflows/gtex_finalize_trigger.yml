@@ -33,15 +33,86 @@ jobs:
           if not m:
               raise SystemExit("ApplyLivePlayerState boundary missing")
           body = m.group(0)'''
-          if old not in s:
-              raise SystemExit('expected validator block not found')
-          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          if old in s:
+              s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Harden ball playback source before finalizer validation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('Gtex_Test_Migration/Assets/Code/MatchEngine/Ball/Ball.cs')
+          s = p.read_text(encoding='utf-8-sig')
+
+          # External LivePlayback must not run a second FixedUpdate movement solver.
+          m = re.search(r'private void FixedUpdate\(\)', s)
+          if not m:
+              raise SystemExit('Ball FixedUpdate not found')
+          brace = s.find('{', m.end())
+          depth = 0
+          end = None
+          for i in range(brace, len(s)):
+              if s[i] == '{': depth += 1
+              elif s[i] == '}':
+                  depth -= 1
+                  if depth == 0:
+                      end = i + 1
+                      break
+          if end is None:
+              raise SystemExit('Ball FixedUpdate body not closed')
+          s = s[:m.start()] + '''private void FixedUpdate()
+        {
+            // Authoritative GTEX LivePlayback is driven by the incoming state
+            // sample. Never integrate the external target again from FixedUpdate.
+            if (ExternalPlaybackEnabled)
+            {
+                return;
+            }
+        }''' + s[end:]
+
+          # Remove every remaining external playback teleport-distance conditional.
+          pattern = re.compile(
+              r'if\s*\(\s*!hasExternalPlaybackTarget\s*\|\|\s*Vector3\.Distance\s*\([^)]*\)\s*>=\s*ResolveExternalPlaybackTeleportDistance\(\)\s*\)\s*\{\s*GtexPlaybackPhysicsUtil\.ApplyExternalPlaybackPosition\(\s*transform\s*,\s*rigidbody\s*,\s*targetPosition\s*,\s*externalPlaybackTargetRotation\s*\)\s*;?\s*\}',
+              re.MULTILINE,
+          )
+          s, n = pattern.subn('''GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                transform,
+                rigidbody,
+                targetPosition,
+                externalPlaybackTargetRotation);''', s, count=10)
+          if n == 0 and 'ResolveExternalPlaybackTeleportDistance()' in s:
+              # Fallback: remove the containing if statement by walking braces.
+              idx = s.find('ResolveExternalPlaybackTeleportDistance()')
+              start = s.rfind('if', 0, idx)
+              brace = s.find('{', idx)
+              depth = 0
+              end = None
+              for i in range(brace, len(s)):
+                  if s[i] == '{': depth += 1
+                  elif s[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          break
+              if start >= 0 and end:
+                  s = s[:start] + '''GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                transform,
+                rigidbody,
+                targetPosition,
+                externalPlaybackTargetRotation);''' + s[end:]
+
+          if 'ResolveExternalPlaybackTeleportDistance()' in s:
+              raise SystemExit('external playback teleport distance gate remains')
+          p.write_text(s + '\n', encoding='utf-8')
           PY
       - name: Finalize source
         run: python3 tools/gtex_finalize_authoritative_playback.py
       - name: Commit final source and remove finalizer
         run: |
           rm -f .github/workflows/gtex_finalize_trigger.yml tools/gtex_finalize_authoritative_playback.py
+          rm -f .github/workflows/gtex_authoritative_final_repair.yml
           git config user.name "GTEX Automation"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
