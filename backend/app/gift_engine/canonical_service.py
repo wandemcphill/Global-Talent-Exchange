@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.core.events import DomainEvent
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
-from app.economy.service import EconomyConfigService
+from app.economy.economic_policy import compute_gift_split
 from app.gift_engine.service import GiftEngineError, GiftEngineService as LegacyGiftEngineService
 from app.models.base import generate_uuid
 from app.models.economy_burn_event import EconomyBurnEvent
@@ -52,20 +52,6 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
     def send_gift(self, *, sender: User, **kwargs: Any):  # type: ignore[override]
         requested_scope = self._normalize_scope(kwargs.get("source_scope"))
         recipient_user_id = kwargs.get("recipient_user_id")
-
-        if requested_scope == "gtex_competition" and recipient_user_id:
-            recent_pair_count = self._match_scope_gift_count(
-                sender_id=sender.id,
-                recipient_id=str(recipient_user_id),
-                source_scope=requested_scope,
-                window_seconds=60,
-            )
-            if recent_pair_count >= 5:
-                raise GiftEngineError(
-                    "Match gifting is rate limited to 5 gifts per minute for each sender-recipient pair.",
-                    reason="match_gift_rate_limited",
-                )
-
         self.ensure_football_gift_catalog()
         normalized_idempotency_key = kwargs.get("idempotency_key")
         normalized_idempotency_key = (
@@ -114,11 +100,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         if gross_amount <= Decimal("0.0000"):
             raise GiftEngineError("Gift gross amount must be positive.")
 
-        split = EconomyConfigService(self.session).compute_revenue_split(
-            scope="gift",
-            gross_amount=gross_amount,
-            fallback_platform_bps=self._active_gift_rake_bps(),
-        )
+        split = compute_gift_split(self.session, gross_amount)
         platform_rake = self._normalize_amount(split.platform_amount)
         recipient_net = self._normalize_amount(split.recipient_amount)
         burn_amount = self._normalize_amount(split.burn_amount)
@@ -197,6 +179,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 "currency_semantics": "fan_coin_gift_converted_to_gtex_coin",
                 "source_ledger_unit": LedgerUnit.CREDIT.value,
                 "destination_ledger_unit": LedgerUnit.COIN.value,
+                "fee_policy_rule_key": split.rule_key,
+                "fee_policy_version": split.policy_version,
             },
         )
         self.session.add(transaction)
@@ -216,7 +200,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 conversion_key=conversion_key,
                 gift_transaction_id=transaction.id,
                 fee_rule_key=split.rule_key,
-                fee_rule_version="1",
+                fee_rule_version=split.policy_version,
                 idempotency_key=conversion_key,
                 metadata={
                     "gift_key": gift.key,
@@ -280,6 +264,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             "conversion_destination_amount": str(conversion.destination_amount),
             "conversion_fee_amount": str(conversion.platform_fee_amount),
             "ledger_transaction_id": ledger_transaction_id,
+            "fee_policy_rule_key": conversion.fee_rule_key,
+            "fee_policy_version": conversion.fee_rule_version,
         }
         self.session.flush()
 
@@ -313,6 +299,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             "source_scope": requested_scope,
             "ledger_transaction_id": ledger_transaction_id,
             "economic_conversion_id": conversion.id,
+            "fee_policy_rule_key": split.rule_key,
+            "fee_policy_version": split.policy_version,
         }
         sender_label = sender.display_name or sender.username or "A supporter"
         recipient_label = recipient.display_name or recipient.username or "recipient"
@@ -390,9 +378,11 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 "competition_id": kwargs.get("competition_id"),
                 "transaction_id": ledger_transaction_id,
                 "economic_conversion_id": conversion.id,
+                "fee_policy_rule_key": split.rule_key,
+                "fee_policy_version": split.policy_version,
             },
         )
-        self.event_publisher.publish(event)
+        self.wallet_service._stage_domain_event(self.session, event=event, durable=True)
         return transaction
 
 
