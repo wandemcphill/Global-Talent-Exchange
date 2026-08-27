@@ -64,23 +64,36 @@ class _Nav extends StatelessWidget {
         color: Color(0xF0050709),
         border: Border(bottom: BorderSide(color: _line)),
       ),
-      child: Row(
-        children: <Widget>[
-          SvgPicture.asset('assets/branding/gtex_wordmark_22.svg', width: 178, height: 42),
-          const Spacer(),
-          if (MediaQuery.sizeOf(context).width >= 780) ...const <Widget>[
-            _NavLink('Discover'),
-            _NavLink('Exchange'),
-            _NavLink('Matches'),
-            _NavLink('Clubs'),
-            _NavLink('Competitions'),
-            _NavLink('World'),
-            SizedBox(width: 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: <Widget>[
+            Text(
+              'GTEX',
+              style: const TextStyle(
+                color: _white,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(width: 12),
+            SvgPicture.asset('assets/branding/gtex_wordmark_22.svg', width: 140, height: 32),
+            const SizedBox(width: 24),
+            if (MediaQuery.sizeOf(context).width >= 780) ...const <Widget>[
+              _NavLink('Discover'),
+              _NavLink('Exchange'),
+              _NavLink('Matches'),
+              _NavLink('Clubs'),
+              _NavLink('Competitions'),
+              _NavLink('World'),
+              SizedBox(width: 10),
+            ],
+            TextButton(onPressed: onLogin, child: const Text('Sign in', style: TextStyle(color: _white))),
+            const SizedBox(width: 8),
+            _GlowButton(label: 'Enter GTEX', onPressed: onSignup),
           ],
-          TextButton(onPressed: onLogin, child: const Text('Sign in', style: TextStyle(color: _white))),
-          const SizedBox(width: 8),
-          _GlowButton(label: 'Enter GTEX', onPressed: onSignup),
-        ],
+        ),
       ),
     );
   }
@@ -281,13 +294,20 @@ class _FeatureCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(color: _panel, borderRadius: BorderRadius.circular(18), border: Border.all(color: _line)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
-          Container(width: 46, height: 46, decoration: BoxDecoration(color: feature.accent.withOpacity(.10), borderRadius: BorderRadius.circular(13), border: Border.all(color: feature.accent.withOpacity(.25))), child: Icon(feature.icon, color: feature.accent, size: 23)),
-          const Spacer(),
-          Text(feature.title, style: const TextStyle(color: _white, fontSize: 24, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(feature.body, style: const TextStyle(color: _muted, fontSize: 13, height: 1.45)),
-        ]),
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(width: 46, height: 46, decoration: BoxDecoration(color: feature.accent.withOpacity(.10), borderRadius: BorderRadius.circular(13), border: Border.all(color: feature.accent.withOpacity(.25))), child: Icon(feature.icon, color: feature.accent, size: 23)),
+              const SizedBox(height: 16),
+              Text(feature.title, style: const TextStyle(color: _white, fontSize: 22, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Text(feature.body, style: const TextStyle(color: _muted, fontSize: 13, height: 1.45)),
+            ],
+          ),
+        ),
       );
 }
 
