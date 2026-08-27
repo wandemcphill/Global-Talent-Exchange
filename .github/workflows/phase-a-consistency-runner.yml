@@ -1,0 +1,47 @@
+name: Phase A Consistency Repair Runner
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.ref == 'fix/phase-a-economic-consistency' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/phase-a-economic-consistency
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -r backend/requirements.txt pytest
+      - name: Apply repair
+        run: python backend/scripts/phase_a_consistency_repair.py
+      - name: Compile backend
+        run: python -m compileall -q backend/app backend/tests
+      - name: Targeted Phase A regression suite
+        working-directory: backend
+        run: pytest -q tests/economy/test_phase_a_policy_consistency.py tests/economy tests/gift_engine tests/wallets tests/agents
+      - name: Commit repair and remove runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/phase-a-consistency-runner.yml
+          git rm -f backend/scripts/phase_a_consistency_repair.py
+          git rm -f .phase-a-consistency-trigger 2>/dev/null || true
+          git add backend docs
+          if git diff --cached --quiet; then
+            echo "No repair changes detected"
+            exit 0
+          fi
+          git commit -m "fix(economy): close Phase A consistency gaps [phase-a-consistency-runner]"
+          git push origin fix/phase-a-economic-consistency
