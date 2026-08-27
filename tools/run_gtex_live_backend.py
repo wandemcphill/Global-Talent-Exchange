@@ -56,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--media-root",
         default="",
-        help="Backend media storage root. Required for non-local profiles.",
+        help="Media storage root. Required for non-local profiles.",
     )
     parser.add_argument("--auth-secret", default="", help="Auth secret. Required for non-local profiles.")
     parser.add_argument(
@@ -137,9 +137,28 @@ def _apply_local_environment(args: argparse.Namespace) -> dict[str, str]:
         # infinite-league render-sync stream. This development-only flag enables
         # that bridge; staging/production are never assigned it by the local profile.
         "GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE": "true",
+        # Prevent the background Infinite League worker from advancing the same
+        # SQLite-backed runtime while the evidence provisioner creates a match.
+        # This removes cross-thread/file-lock contention during local demos.
+        "GTE_INFINITE_LEAGUE_AUTO_ADVANCE": "false",
+        "GTE_INFINITE_LEAGUE_INITIAL_MATCH_COUNT": "1",
     }
 
-    return _apply_environment(defaults, prefer_existing=True)
+    applied = _apply_environment(defaults, prefer_existing=True)
+    # These three controls define the isolated evidence-run contract. Force them
+    # for the local profile so an inherited shell environment cannot re-enable
+    # background match generation or inflate startup work.
+    os.environ["GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE"] = "true"
+    os.environ["GTE_INFINITE_LEAGUE_AUTO_ADVANCE"] = "false"
+    os.environ["GTE_INFINITE_LEAGUE_INITIAL_MATCH_COUNT"] = "1"
+    applied.update(
+        {
+            "GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE": os.environ["GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE"],
+            "GTE_INFINITE_LEAGUE_AUTO_ADVANCE": os.environ["GTE_INFINITE_LEAGUE_AUTO_ADVANCE"],
+            "GTE_INFINITE_LEAGUE_INITIAL_MATCH_COUNT": os.environ["GTE_INFINITE_LEAGUE_INITIAL_MATCH_COUNT"],
+        }
+    )
+    return applied
 
 
 def _apply_non_local_environment(args: argparse.Namespace) -> dict[str, str]:
