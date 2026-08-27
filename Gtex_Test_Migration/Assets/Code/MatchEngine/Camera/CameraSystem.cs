@@ -13,7 +13,7 @@ namespace FStudio.MatchEngine.Cameras {
         public new Camera camera = default;
 #pragma warning restore 0109
 
-        [SerializeField] private SerializableAssetCollection<string, MatchCamera> matchCameras =
+        [SerializeField] private SerializableAssetCollection<string, MatchCamera> matchCameras = 
             new SerializableAssetCollection<string, MatchCamera>();
 
         [SerializeField] public Transform target = default;
@@ -29,6 +29,7 @@ namespace FStudio.MatchEngine.Cameras {
         private bool instantTransitionInNextFrame = false;
 
         [SerializeField] private float transitionSpeed = 0.5f;
+
 
         [Header("Camera Speed")]
         public float CameraPositionSpeed = 4;
@@ -150,6 +151,7 @@ namespace FStudio.MatchEngine.Cameras {
 
                 var (position, rotation, zoom) = CurrentCamera.Behave(in dT, targetPos);
 
+                
                 if (instantTransitionInNextFrame) {
                     instantTransitionInNextFrame = false;
 
