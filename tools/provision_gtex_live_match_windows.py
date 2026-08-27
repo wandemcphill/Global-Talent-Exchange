@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -19,9 +20,44 @@ def build_windows_websocket_url(base_url: str, match_id: str) -> str:
     return websocket_url + f"/api/v2/ws/match/{match_id}?format=unity"
 
 
+def force_windows_live_playback_config() -> None:
+    """Make the Windows evidence player consume GTEX live render-sync playback."""
+    config_path = PROJECT_ROOT / "Gtex_Test_Migration" / "Assets" / "Resources" / "GTEX" / "match-config.json"
+    if not config_path.exists():
+        raise RuntimeError(f"Unity match config not found: {config_path}")
+
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError("Unity match config must contain a JSON object.")
+
+    payload.update(
+        {
+            "runtimeMode": "live",
+            "autoStartOnBoot": True,
+            "enabled": True,
+            "preserveOriginalScenePresentation": False,
+            "enableStadiumUpgrade": True,
+            "showBroadcastScaffolding": False,
+            "showCrowd": True,
+            "stadiumVariant": "broadcast",
+            "useOriginalMatchCamera": False,
+            "verboseLogging": False,
+            "enableRuntimeComparisonLogging": False,
+            "showRuntimeDebugOverlay": False,
+            "continueClockWhenTransportStalls": False,
+            "stalledClockAdvanceMinutesPerSecond": 0.0,
+            "use3DPlaybackForLocalSimulation": True,
+        }
+    )
+
+    config_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 provisioning.build_websocket_url = build_windows_websocket_url
 
 
 if __name__ == "__main__":
     sys.argv[0] = provisioning.__file__
     provisioning.main()
+    force_windows_live_playback_config()
+    print("[GTEX] Windows evidence config forced to authoritative live playback mode.")
