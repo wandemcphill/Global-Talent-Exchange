@@ -151,11 +151,18 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Live match provisioning failed with exit code $LASTEXITCODE." }
     Write-Host "[+] Live match provisioned; Unity bootstrap/config updated." -ForegroundColor Green
 
+    # The Unity config supports environment-variable overrides. Force the
+    # evidence player into live playback so an old developer-shell override
+    # cannot silently select OriginalVisualRuntime again.
+    $env:GTEX_RUNTIME_MODE = "live"
+    $env:GTEX_ENVIRONMENT = "local"
+    $env:GTEX_BASE_URL = $baseUrl
+
     $playerLog = Join-Path $repoRoot "tmp\gtex_windows_demo_player.log"
     New-Item -ItemType Directory -Force -Path (Split-Path $playerLog -Parent) | Out-Null
     $unityArgs = @("-popupwindow", "-screen-fullscreen", "0", "-screen-width", "1280", "-screen-height", "720", "-logFile", $playerLog)
     $unityArgString = ConvertTo-QuotedArgumentString -ArgumentValues $unityArgs
-    Write-Host "[*] Launching 3D player..." -ForegroundColor Yellow
+    Write-Host "[*] Launching 3D player in authoritative live mode..." -ForegroundColor Yellow
     $unity = Start-Process -FilePath $exe -ArgumentList $unityArgString -WorkingDirectory (Split-Path $exe -Parent) -PassThru
 
     Write-Host "[+] GTEX 3D player launched. PID=$($unity.Id)" -ForegroundColor Green
