@@ -35,11 +35,22 @@ namespace FStudio.MatchEngine.Cameras {
         public float CameraRotationSpeed = 20;
         public float CameraZoomSpeed = 4;
 
+        [Header("GTEX Broadcast Presentation")]
+        [SerializeField] private float broadcastMinFieldOfView = 42f;
+        [SerializeField] private float broadcastMaxFieldOfView = 55f;
+        [SerializeField] private float broadcastLookAheadDistance = 3.5f;
+        [SerializeField] private float broadcastPositionSpeed = 7f;
+        [SerializeField] private float broadcastRotationSpeed = 24f;
+
         public MatchCamera CurrentCamera { get; private set; }
 
         public string CurrentCameraType { get; private set; }
 
         public Vector3? TargetPosition;
+
+        private bool IsBroadcastCamera =>
+            string.Equals(CurrentCameraType, "TVBroadcast", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(CurrentCameraType, "Broadcast", System.StringComparison.OrdinalIgnoreCase);
 
         private void ActiveCameraChanged () {
             if (target == null) {
@@ -73,6 +84,7 @@ namespace FStudio.MatchEngine.Cameras {
             CurrentCameraType = resolvedCameraType;
             isInTransition = false;
             instantTransitionInNextFrame = instant;
+            TargetPosition = null;
 
             ActiveCameraChanged();
         }
@@ -95,9 +107,13 @@ namespace FStudio.MatchEngine.Cameras {
         }
 
         /// <summary>
-        /// Make the transition instant.
+        /// Make the transition instant and bind the camera to the live ball.
         /// </summary>
         public void FocusToBall (bool instant = true) {
+            if (Ball.Current == null) {
+                return;
+            }
+
             SetTarget(Ball.Current.transform);
             TargetPosition = null;
 
@@ -117,9 +133,18 @@ namespace FStudio.MatchEngine.Cameras {
 
         private void OnValidate() {
             camera = GetComponent<Camera>();
+            broadcastMinFieldOfView = Mathf.Clamp(broadcastMinFieldOfView, 25f, 75f);
+            broadcastMaxFieldOfView = Mathf.Max(broadcastMinFieldOfView, broadcastMaxFieldOfView);
+            broadcastLookAheadDistance = Mathf.Clamp(broadcastLookAheadDistance, 0f, 10f);
+            broadcastPositionSpeed = Mathf.Max(1f, broadcastPositionSpeed);
+            broadcastRotationSpeed = Mathf.Max(1f, broadcastRotationSpeed);
         }
 
         private void Update() {
+            if (target == null && Ball.Current != null) {
+                target = Ball.Current.transform;
+            }
+
             if (target == null) {
                 return;
             }
@@ -138,13 +163,23 @@ namespace FStudio.MatchEngine.Cameras {
 
             if (CurrentCamera != null) {
                 Vector3 targetPos;
-                if (TargetPosition.HasValue) {
+                if (IsBroadcastCamera && Ball.Current != null) {
+                    // The broadcast camera must follow the actual live ball every frame.
+                    // Do not allow a stale TargetPosition from an action/replay cue to
+                    // pin the camera to a static world coordinate.
+                    TargetPosition = null;
+                    targetPos = Ball.Current.transform.position;
+
+                    var ballVelocity = Ball.Current.GetComponent<Rigidbody>() != null
+                        ? Ball.Current.GetComponent<Rigidbody>().linearVelocity
+                        : Vector3.zero;
+                    ballVelocity.y = 0f;
+                    if (ballVelocity.sqrMagnitude > 0.0001f) {
+                        targetPos += Vector3.ClampMagnitude(ballVelocity.normalized * broadcastLookAheadDistance, broadcastLookAheadDistance);
+                    }
+                } else if (TargetPosition.HasValue) {
                     targetPos = TargetPosition.Value;
                 } else {
-                    if (target == null) {
-                        return;
-                    }
-
                     targetPos = target.position;
                 }
 
@@ -155,18 +190,28 @@ namespace FStudio.MatchEngine.Cameras {
 
                     transform.position = position;
                     transform.rotation = rotation;
-                    camera.fieldOfView = zoom / (ZoomMultiplier + 1);
+                    var instantFov = zoom / (ZoomMultiplier + 1);
+                    camera.fieldOfView = IsBroadcastCamera
+                        ? Mathf.Clamp(instantFov, broadcastMinFieldOfView, broadcastMaxFieldOfView)
+                        : instantFov;
                 } else {
                     var rawPositionDifference = Vector3.Distance(transform.position, position) + 1f;
                     var rawRotationDifference = Quaternion.Angle(transform.rotation, rotation) + 1f;
                     var positionDifference = Mathf.Clamp(rawPositionDifference, 1f, 8f) * transitionValue;
                     var rotationDifference = Mathf.Clamp(rawRotationDifference, 1f, 24f) * transitionValue;
-                    var positionLerp = Mathf.Clamp01(dT * CameraPositionSpeed * positionDifference * positionDifferencePower);
-                    var rotationLerp = Mathf.Clamp01(dT * CameraRotationSpeed * rotationDifference * rotationDifferencePower);
+                    var positionSpeed = IsBroadcastCamera ? broadcastPositionSpeed : CameraPositionSpeed;
+                    var rotationSpeed = IsBroadcastCamera ? broadcastRotationSpeed : CameraRotationSpeed;
+                    var positionLerp = Mathf.Clamp01(dT * positionSpeed * positionDifference * positionDifferencePower);
+                    var rotationLerp = Mathf.Clamp01(dT * rotationSpeed * rotationDifference * rotationDifferencePower);
                     transform.position = Vector3.Lerp(transform.position, position, positionLerp);
                     transform.rotation = Quaternion.Lerp(transform.rotation, rotation, rotationLerp);
 
-                    camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, zoom / (ZoomMultiplier + 1), dT * CameraZoomSpeed);
+                    var desiredFov = zoom / (ZoomMultiplier + 1);
+                    if (IsBroadcastCamera) {
+                        desiredFov = Mathf.Clamp(desiredFov, broadcastMinFieldOfView, broadcastMaxFieldOfView);
+                    }
+
+                    camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, desiredFov, Mathf.Clamp01(dT * CameraZoomSpeed));
                 }
             }
         }
