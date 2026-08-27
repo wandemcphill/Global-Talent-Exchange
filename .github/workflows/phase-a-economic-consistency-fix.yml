@@ -1,0 +1,188 @@
+name: Phase A Economic Consistency Fix
+
+on:
+  push:
+    branches:
+      - fix/phase-a-economic-consistency
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: contains(github.event.head_commit.message, '[phase-a-economic-fix]') == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/phase-a-economic-consistency
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply consistency sweep
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/apply_phase_a_fix.py <<'PY'
+          from pathlib import Path
+          import re
+
+          ROOT = Path.cwd()
+
+          def read(path):
+              return (ROOT / path).read_text(encoding='utf-8')
+
+          def write(path, text):
+              (ROOT / path).write_text(text, encoding='utf-8')
+
+          def replace_once(path, old, new):
+              text = read(path)
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, got {count}: {old[:120]!r}')
+              write(path, text.replace(old, new))
+
+          # 1. Central economic policy authority. One active AdminRewardRule only,
+          #    deterministic policy fingerprint/version, and fail-closed resolution.
+          policy_path = 'backend/app/economy/economic_policy.py'
+          write(policy_path, '''from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom datetime import datetime\nfrom decimal import Decimal\nimport hashlib\nimport json\n\nfrom sqlalchemy import select\nfrom sqlalchemy.orm import Session\n\nfrom app.models.admin_rules import AdminRewardRule\n\n\nclass EconomicPolicyUnavailableError(RuntimeError):\n    \"\"\"Raised when the authoritative economic policy cannot be resolved safely.\"\"\"\n\n\n@dataclass(frozen=True, slots=True)\nclass EconomicPolicy:\n    rule: AdminRewardRule\n    policy_version: str\n    effective_at: datetime\n\n    @property\n    def trading_fee_bps(self) -> int:\n        return int(self.rule.trading_fee_bps)\n\n    @property\n    def gift_platform_rake_bps(self) -> int:\n        return int(self.rule.gift_platform_rake_bps)\n\n    @property\n    def withdrawal_fee_bps(self) -> int:\n        return int(self.rule.withdrawal_fee_bps)\n\n    @property\n    def minimum_withdrawal_fee_credits(self) -> Decimal:\n        return Decimal(str(self.rule.minimum_withdrawal_fee_credits))\n\n    @property\n    def competition_platform_fee_bps(self) -> int:\n        return int(self.rule.competition_platform_fee_bps)\n\n    @property\n    def stability_controls_json(self) -> dict[str, object]:\n        return dict(self.rule.stability_controls_json or {})\n\n\n@dataclass(frozen=True, slots=True)\nclass EconomicGiftSplit:\n    gross_amount: Decimal\n    platform_amount: Decimal\n    recipient_amount: Decimal\n    creator_amount: Decimal\n    burn_amount: Decimal\n    rule_key: str\n    policy_version: str\n\n\ndef resolve_economic_policy(session: Session) -> EconomicPolicy:\n    rows = list(\n        session.scalars(\n            select(AdminRewardRule)\n            .where(AdminRewardRule.active.is_(True))\n            .order_by(AdminRewardRule.updated_at.desc(), AdminRewardRule.id.asc())\n        ).all()\n    )\n    if not rows:\n        raise EconomicPolicyUnavailableError('No active Admin economic policy exists.')\n    if len(rows) != 1:\n        raise EconomicPolicyUnavailableError('Exactly one active Admin economic policy is required.')\n    rule = rows[0]\n    payload = {\n        'rule_key': rule.rule_key,\n        'trading_fee_bps': int(rule.trading_fee_bps),\n        'gift_platform_rake_bps': int(rule.gift_platform_rake_bps),\n        'withdrawal_fee_bps': int(rule.withdrawal_fee_bps),\n        'minimum_withdrawal_fee_credits': str(Decimal(str(rule.minimum_withdrawal_fee_credits))),\n        'competition_platform_fee_bps': int(rule.competition_platform_fee_bps),\n        'stability_controls_json': rule.stability_controls_json or {},\n        'effective_at': rule.updated_at.isoformat() if rule.updated_at else None,\n    }\n    policy_version = hashlib.sha256(\n        json.dumps(payload, sort_keys=True, separators=(',', ':')).encode('utf-8')\n    ).hexdigest()[:16]\n    effective_at = rule.updated_at\n    return EconomicPolicy(rule=rule, policy_version=policy_version, effective_at=effective_at)\n\n\ndef compute_gift_split(session: Session, gross_amount: Decimal) -> EconomicGiftSplit:\n    quant = Decimal('0.0001')\n    gross = Decimal(str(gross_amount)).quantize(quant)\n    if gross <= 0:\n        raise EconomicPolicyUnavailableError('Gift gross amount must be positive.')\n    policy = resolve_economic_policy(session)\n    platform_bps = policy.gift_platform_rake_bps\n    if platform_bps < 0 or platform_bps > 10_000:\n        raise EconomicPolicyUnavailableError('Admin gift rake is outside the valid range.')\n    platform_amount = (gross * Decimal(platform_bps) / Decimal(10_000)).quantize(quant)\n    burn_bps = 0\n    try:\n        from app.economy.governor_service import EconomyGovernorService\n        burn_bps = max(0, min(10_000, int(EconomyGovernorService(session).burn_bonus_bps())))\n    except Exception:\n        burn_bps = 0\n    burn_amount = (gross * Decimal(burn_bps) / Decimal(10_000)).quantize(quant)\n    if platform_amount + burn_amount > gross:\n        burn_amount = max(Decimal('0.0000'), gross - platform_amount)\n    recipient_amount = (gross - platform_amount - burn_amount).quantize(quant)\n    return EconomicGiftSplit(\n        gross_amount=gross,\n        platform_amount=platform_amount,\n        recipient_amount=recipient_amount,\n        creator_amount=Decimal('0.0000'),\n        burn_amount=burn_amount,\n        rule_key=policy.rule.rule_key,\n        policy_version=policy.policy_version,\n    )\n\n\ndef policy_metadata(policy: EconomicPolicy) -> dict[str, object]:\n    return {\n        'policy_rule_key': policy.rule.rule_key,\n        'policy_version': policy.policy_version,\n        'policy_effective_at': policy.effective_at.isoformat(),\n    }\n\n\n__all__ = [\n    'EconomicGiftSplit',\n    'EconomicPolicy',\n    'EconomicPolicyUnavailableError',\n    'compute_gift_split',\n    'policy_metadata',\n    'resolve_economic_policy',\n]\n''')
+
+          # 2. Make the Admin seed itself agree with the constitutional 30% default.
+          replace_once('backend/app/admin_engine/service.py', '"competition_platform_fee_bps": 1000,', '"competition_platform_fee_bps": 3000,')
+          replace_once(
+              'backend/app/admin_engine/service.py',
+              '''    def get_active_reward_rule(self) -> AdminRewardRule | None:\n        return next(iter(self.list_reward_rules(active_only=True)), None)\n''',
+              '''    def get_active_reward_rule(self) -> AdminRewardRule | None:\n        rows = list(\n            self.session.scalars(\n                select(AdminRewardRule)\n                .where(AdminRewardRule.active.is_(True))\n                .order_by(AdminRewardRule.updated_at.desc(), AdminRewardRule.id.asc())\n            ).all()\n        )\n        if len(rows) > 1:\n            raise ValueError("Exactly one active Admin reward/economic policy is required.")\n        return rows[0] if rows else None\n'''
+          )
+          replace_once(
+              'backend/app/admin_engine/service.py',
+              '''        record.stability_controls_json = self.normalize_stability_controls_payload(payload.stability_controls)\n        record.active = payload.active\n        record.updated_by_user_id = actor.id\n''',
+              '''        record.stability_controls_json = self.normalize_stability_controls_payload(payload.stability_controls)\n        record.active = payload.active\n        if payload.active:\n            self.session.query(AdminRewardRule).filter(\n                AdminRewardRule.active.is_(True),\n                AdminRewardRule.id != record.id,\n            ).update({AdminRewardRule.active: False}, synchronize_session=False)\n        record.updated_by_user_id = actor.id\n'''
+          )
+
+          # 3. Tighten Admin schema to the same max as execution.
+          replace_once('backend/app/admin_engine/schemas.py', 'competition_platform_fee_bps: int = Field(default=3000, ge=0, le=5000)', 'competition_platform_fee_bps: int = Field(default=3000, ge=0, le=3000)')
+
+          # 4. Withdrawals use the same central Admin policy, with no hardcoded fee authority.
+          write('backend/app/treasury/commission_policy.py', '''from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom decimal import Decimal\n\nfrom sqlalchemy.orm import Session\n\nfrom app.economy.economic_policy import EconomicPolicyUnavailableError, resolve_economic_policy\n\n\nclass CommissionPolicyUnavailableError(RuntimeError):\n    \"\"\"Raised when the authoritative Admin commission policy cannot be resolved.\"\"\"\n\n\n@dataclass(frozen=True, slots=True)\nclass CommissionPolicy:\n    withdrawal_fee_bps: int\n    minimum_withdrawal_fee_credits: Decimal\n    policy_rule_key: str\n    policy_version: str\n    effective_at: object\n\n\ndef resolve_commission_policy(session: Session) -> CommissionPolicy:\n    try:\n        policy = resolve_economic_policy(session)\n    except EconomicPolicyUnavailableError as exc:\n        raise CommissionPolicyUnavailableError(str(exc)) from exc\n    return CommissionPolicy(\n        withdrawal_fee_bps=policy.withdrawal_fee_bps,\n        minimum_withdrawal_fee_credits=policy.minimum_withdrawal_fee_credits,\n        policy_rule_key=policy.rule.rule_key,\n        policy_version=policy.policy_version,\n        effective_at=policy.effective_at,\n    )\n\n\n__all__ = ['CommissionPolicy', 'CommissionPolicyUnavailableError', 'resolve_commission_policy']\n''')
+
+          # 5. Competition creation/validation cannot accept an arbitrary client fee.
+          vpath = 'backend/app/services/competition_validation_service.py'
+          text = read(vpath)
+          if 'from app.economy.economic_policy import resolve_economic_policy' not in text:
+              text = text.replace('from app.common.enums.competition_status import CompetitionStatus\n', 'from app.common.enums.competition_status import CompetitionStatus\nfrom app.economy.economic_policy import EconomicPolicyUnavailableError, resolve_economic_policy\n')
+          old = '''        errors.extend(self._validate_financial_bounds(payload.financials))\n        if rule_summary is not None:\n'''
+          new = '''        errors.extend(self._validate_financial_bounds(payload.financials))\n        try:\n            policy = resolve_economic_policy(self._session_for_policy())\n            if int(payload.financials.platform_fee_bps) != policy.competition_platform_fee_bps:\n                errors.append(\n                    f"competition platform fee must equal the active Admin policy ({policy.competition_platform_fee_bps} bps)"\n                )\n        except EconomicPolicyUnavailableError as exc:\n            errors.append(str(exc))\n            policy = None\n        if rule_summary is not None:\n'''
+          # The validator historically had no Session. Add an optional session and use it when available.
+          if old not in text:
+              raise SystemExit('competition_validation_service: financial bounds insertion point not found')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              '''class CompetitionValidationService:\n    def __init__(self, rules_engine: CompetitionRulesEngine | None = None) -> None:\n        self._rules_engine = rules_engine or CompetitionRulesEngine()\n''',
+              '''class CompetitionValidationService:\n    def __init__(self, rules_engine: CompetitionRulesEngine | None = None, session=None) -> None:\n        self._rules_engine = rules_engine or CompetitionRulesEngine()\n        self._session = session\n\n    def _session_for_policy(self):\n        if self._session is None:\n            raise EconomicPolicyUnavailableError("Economic policy resolution requires a database session.")\n        return self._session\n''', 1)
+          write(vpath, text)
+
+          cpath = 'backend/app/services/competition_creation_service.py'
+          text = read(cpath)
+          text = text.replace('from app.common.enums.competition_format import CompetitionFormat\n', 'from app.common.enums.competition_format import CompetitionFormat\nfrom app.economy.economic_policy import resolve_economic_policy\n')
+          text = text.replace(
+              'self._validation_service = validation_service or CompetitionValidationService(self._rules_engine)\n',
+              'self._validation_service = validation_service or CompetitionValidationService(self._rules_engine)\n'
+          )
+          old = '''        validation = self._validation_service.validate_creation(payload)\n        competition_id = generate_uuid()\n\n        competition = Competition(\n'''
+          new = '''        validation = self._validation_service.validate_creation(payload)\n        competition_id = generate_uuid()\n\n        competition_policy = resolve_economic_policy(self._validation_service._session_for_policy())\n        competition = Competition(\n'''
+          if old not in text:
+              raise SystemExit('competition_creation_service: policy insertion point not found')
+          text = text.replace(old, new, 1)
+          text = text.replace('platform_fee_bps=payload.financials.platform_fee_bps,', 'platform_fee_bps=competition_policy.competition_platform_fee_bps,', 1)
+          text = text.replace('            net_prize_pool_minor=validation.fee_summary.net_prize_pool_minor,\n', '            net_prize_pool_minor=validation.fee_summary.net_prize_pool_minor,\n            metadata_json={\n                "economic_policy": {\n                    "rule_key": competition_policy.rule.rule_key,\n                    "version": competition_policy.policy_version,\n                    "effective_at": competition_policy.effective_at.isoformat(),\n                    "competition_platform_fee_bps": competition_policy.competition_platform_fee_bps,\n                }\n            },\n', 1)
+          write(cpath, text)
+
+          # 6. Gift economics use the central policy; legacy code remains only as a compatibility implementation.
+          for path in ['backend/app/gift_engine/canonical_service.py', 'backend/app/gift_engine/service.py']:
+              text = read(path)
+              if 'from app.economy.economic_policy import compute_gift_split' not in text:
+                  anchor = 'from app.economy.service import EconomyConfigService\n'
+                  if anchor in text:
+                      text = text.replace(anchor, anchor + 'from app.economy.economic_policy import compute_gift_split\n', 1)
+                  else:
+                      text = text.replace('from app.models.base import generate_uuid, utcnow\n', 'from app.models.base import generate_uuid, utcnow\nfrom app.economy.economic_policy import compute_gift_split\n', 1)
+              exact = '''        split = EconomyConfigService(self.session).compute_revenue_split(\n            scope="gift",\n            gross_amount=gross_amount,\n            fallback_platform_bps=self._active_gift_rake_bps(),\n        )\n'''
+              if exact in text:
+                  text = text.replace(exact, '        split = compute_gift_split(self.session, gross_amount)\n', 1)
+              text = text.replace('                "conversion_source_amount": str(conversion.source_amount),\n', '                "conversion_source_amount": str(conversion.source_amount),\n')
+              text = text.replace('                "ledger_transaction_id": ledger_transaction_id,\n', '                "ledger_transaction_id": ledger_transaction_id,\n                "fee_rule_key": conversion.fee_rule_key,\n                "fee_rule_version": conversion.fee_rule_version,\n', 1) if 'conversion.fee_rule_key' in text else text
+              text = text.replace('        self.event_publisher.publish(event)\n', '        self.wallet_service._stage_domain_event(self.session, event=event, durable=True)\n', 1)
+              write(path, text)
+
+          # 7. Conversion provenance uses the actual policy version rather than a constant "1".
+          replace_once('backend/app/gift_engine/canonical_service.py', 'fee_rule_version="1",', 'fee_rule_version=split.policy_version,')
+
+          # 8. Remove the raw WalletService 1000-bps fallback. None means resolve the central policy.
+          wpath = 'backend/app/wallets/service.py'
+          text = read(wpath)
+          text = text.replace('        withdrawal_fee_bps: int = 1000,\n        minimum_fee: Decimal = Decimal("5.0000"),\n', '        withdrawal_fee_bps: int | None = None,\n        minimum_fee: Decimal | None = None,\n', 1)
+          old = '''        fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN\n        fee_amount = self._normalize_amount(\n            max(\n                (normalized_amount * Decimal(withdrawal_fee_bps) / Decimal(10_000)), self._normalize_amount(minimum_fee)\n            )\n        )\n'''
+          new = '''        fee_tag = LedgerSourceTag.WITHDRAWAL_FEE_BURN\n        if withdrawal_fee_bps is None or minimum_fee is None:\n            from app.economy.economic_policy import resolve_economic_policy\n            policy = resolve_economic_policy(session)\n            if withdrawal_fee_bps is None:\n                withdrawal_fee_bps = policy.withdrawal_fee_bps\n            if minimum_fee is None:\n                minimum_fee = policy.minimum_withdrawal_fee_credits\n        fee_amount = self._normalize_amount(\n            max(\n                (normalized_amount * Decimal(withdrawal_fee_bps) / Decimal(10_000)), self._normalize_amount(minimum_fee)\n            )\n        )\n'''
+          if old not in text:
+              raise SystemExit('wallet service: withdrawal fee block not found')
+          text = text.replace(old, new, 1)
+          # Include the fee policy identity in the withdrawal ledger provenance.
+          oldmeta = '''                    "fee_amount": str(fee_amount),\n                    "total_debit": str(total_debit),\n'''
+          newmeta = '''                    "fee_amount": str(fee_amount),\n                    "total_debit": str(total_debit),\n                    "fee_policy_rule_key": (policy.rule.rule_key if 'policy' in locals() else None),\n                    "fee_policy_version": (policy.policy_version if 'policy' in locals() else None),\n                    "fee_policy_effective_at": (policy.effective_at.isoformat() if 'policy' in locals() else None),\n'''
+          text = text.replace(oldmeta, newmeta, 1)
+          write(wpath, text)
+
+          # 9. Agent compatibility wallet is projection-only. Monetary mutation APIs fail closed.
+          apath = 'backend/app/agents/agent_wallet.py'
+          text = read(apath)
+          start = text.index('    def apply_spend(')
+          end = text.index('    @staticmethod\n    def _roi', start)
+          replacement = '''    def apply_spend(self, wallet: AgentWallet, amount: float) -> AgentWallet:\n        raise RuntimeError(\n            "AgentWallet is a ledger projection only. Use AgentLedgerService for monetary spend."\n        )\n\n    def settle(\n        self,\n        wallet: AgentWallet,\n        *,\n        earnings: float,\n        quality_score: float,\n        trust_score: float,\n        repetition_ratio: float,\n    ) -> tuple[AgentWallet, WalletSettlementDecision]:\n        raise RuntimeError(\n            "AgentWallet is a ledger projection only. Use AgentLedgerService for settlement and payout authorization."\n        )\n\n'''
+          text = text[:start] + replacement + text[end:]
+          write(apath, text)
+
+          # 10. Remove hard-coded 5/min match gift rate; Admin SpendingControl is the sole control-plane authority.
+          for path in ['backend/app/gift_engine/canonical_service.py', 'backend/app/gift_engine/service.py']:
+              text = read(path)
+              text = re.sub(r'\n        if requested_scope == "gtex_competition" and recipient_user_id:\n            recent_pair_count = self\._match_scope_gift_count\([\s\S]*?\n                raise GiftEngineError\(\n                    "Match gifting is rate limited to 5 gifts per minute for each sender-recipient pair\."[\s\S]*?\n\n', '\n', text, count=1)
+              text = re.sub(r'\n        if normalized_scope == "gtex_competition":\n            recent_pair_count = self\._match_scope_gift_count\([\s\S]*?\n                raise GiftEngineError\(\n                    "Match gifting is rate limited to 5 gifts per minute for each sender-recipient pair\."[\s\S]*?\n\n', '\n', text, count=1)
+              write(path, text)
+
+          # 11. Data cleanup migration: normalize stale default and collapse duplicate active policy rows.
+          write('backend/migrations/versions/20260827_0114_economic_policy_authority.py', '''\"\"\"Enforce the Phase A single active economic-policy baseline.\n\nRevision ID: 20260827_0114_economic_policy_authority\nRevises: 20260827_0113_economic_policy_consistency\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom alembic import op\nimport sqlalchemy as sa\n\nrevision = \"20260827_0114_economic_policy_authority\"\ndown_revision = \"20260827_0113_economic_policy_consistency\"\nbranch_labels = None\ndepends_on = None\n\n\ndef upgrade() -> None:\n    connection = op.get_bind()\n    connection.execute(sa.text(\"UPDATE admin_reward_rules SET competition_platform_fee_bps = 3000 WHERE rule_key = 'platform-economy-defaults' AND competition_platform_fee_bps IN (1000, 2000)\"))\n    connection.execute(sa.text(\"UPDATE admin_reward_rules SET active = FALSE WHERE active AND id <> (SELECT id FROM admin_reward_rules WHERE active ORDER BY updated_at DESC, id ASC LIMIT 1)\"))\n    connection.execute(sa.text(\"UPDATE competition_templates SET platform_fee_bps = 3000 WHERE platform_fee_bps IN (1000, 2000)\"))\n\n\ndef downgrade() -> None:\n    pass\n''')
+
+          # 12. Update Phase A handoff truth after the consistency sweep.
+          hpath = 'docs/implementation/PHASE_A_LATEST_HANDOFF_ADDENDUM_20260822.md'
+          text = read(hpath)
+          if 'single Admin economic policy authority' not in text:
+              text += '''\n\n## Phase A consistency sweep 2026-08-27\n\nThe economic authority is now centralized on the active AdminRewardRule. Competition creation cannot supply an arbitrary fee; gifting and withdrawals resolve the same policy; the policy identity is fingerprinted per economic operation; compatibility AgentWallet mutation APIs fail closed; and gift events are staged durably until database commit.\n\nRemaining Phase A certification gates are the DB-backed hosted competition settlement proof, final clean branch-head Quality Gates, and independent red-team sign-off.\n'''
+          write(hpath, text)
+          print('Phase A consistency sweep applied.')
+          PY
+          python /tmp/apply_phase_a_fix.py
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt pytest
+
+      - name: Compile backend
+        run: python -m compileall -q backend/app backend/tests
+
+      - name: Targeted Phase A backend tests
+        run: |
+          cd backend
+          pytest -q tests/economy tests/gift_engine tests/wallets tests/agents
+
+      - name: Commit consistency sweep
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/phase-a-economic-consistency-fix.yml
+          git add backend docs
+          git commit -m "fix(economy): close Phase A consistency gaps [phase-a-economic-fix]"
+          git push origin fix/phase-a-economic-consistency
