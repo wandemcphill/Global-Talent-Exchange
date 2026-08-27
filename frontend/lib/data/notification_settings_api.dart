@@ -25,10 +25,7 @@ class NotificationSettingsApi {
         accessToken: accessToken,
         mode: resolvedMode,
       ),
-      fixtures:
-          resolvedMode == GteBackendMode.fixture
-              ? _NotificationFixtures.seed()
-              : null,
+      fixtures: null,
     );
   }
 

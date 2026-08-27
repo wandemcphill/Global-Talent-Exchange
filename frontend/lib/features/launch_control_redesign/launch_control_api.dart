@@ -28,10 +28,7 @@ class GtexLaunchControlApi {
             accessToken: accessToken,
             mode: resolvedMode,
           ),
-      fixtures:
-          resolvedMode == GteBackendMode.fixture
-              ? GtexLaunchControlFixtures.seed()
-              : null,
+      fixtures: null,
     );
   }
 
