@@ -164,8 +164,8 @@ class GtexClubWorkspaceSnapshot {
     );
   }
 
-  /// Workspace served by the fixture runtime (`GteBackendMode.fixture`),
-  /// where no live club API is reachable.
+  /// Seed workspace served by [ClubApi]'s fixture store. Kept separate from
+  /// [demo] so the runtime never reaches for a `@visibleForTesting` member.
   static GtexClubWorkspaceSnapshot fixtureSeed({
     String clubId = 'gtex-club-demo',
     String? clubName,

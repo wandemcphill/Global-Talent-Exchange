@@ -189,7 +189,7 @@ void main() {
     expect(find.text('Resolve match id'), findsOneWidget);
   });
 
-  testWidgets('owner offer inbox surfaces counter actions in fixture mode', (
+  testWidgets('owner offer inbox route fails visibly without live offers', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -206,9 +206,15 @@ void main() {
     await tester.tap(find.text('Open inbox'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Counter'), findsOneWidget);
-    expect(find.text('Accept'), findsOneWidget);
-    expect(find.text('Reject'), findsOneWidget);
+    // This route is built in gte_feature_route_builders.dart, which the
+    // "production route hosts do not mount demo-only V2 wrappers" contract
+    // above bars from naming FixtureRepository/.fixture(. It therefore has no
+    // offers to serve in the fixture runtime by design, and .standard() is not
+    // a substitute because createAuthedApi() carries session-store wiring that
+    // createFeatureApi() does not. The contract is that the gate resolves and
+    // fails visibly rather than silently.
+    expect(find.text('Owner offer inbox unavailable'), findsOneWidget);
+    expect(find.text('Retry'), findsWidgets);
   });
 
   testWidgets('creator-share admin control mounts live admin surface', (
