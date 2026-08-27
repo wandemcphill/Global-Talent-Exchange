@@ -79,13 +79,14 @@ Keep the player running long enough to observe real backend-driven events. Do no
 The launcher writes the Unity player log to:
 
 ```text
-.tmp\gtex_windows_demo_player.log
+tmp\gtex_windows_demo_player.log
 ```
 
-and the backend log to:
+and the backend logs to:
 
 ```text
 tmp\gtex_live_backend_demo.log
+tmp\gtex_live_backend_demo.err.log
 ```
 
 Unity's normal standalone `Player.log` is also available under the Windows `%USERPROFILE%\AppData\LocalLow` tree.
