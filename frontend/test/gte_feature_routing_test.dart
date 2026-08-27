@@ -308,7 +308,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Build your club command center'), findsOneWidget);
+      // c45d422d replaced the hand-rolled workspace entry with HomeScreen's
+      // persona desk. Hosted bare (no ProviderScope) the shell seeds its own
+      // container, so assert the shell-level onboarding contract here; the
+      // persona copy itself is covered by premium_media_test, which mounts
+      // Home the way production does.
+      expect(find.text('Home sync'), findsOneWidget);
       expect(find.text('Create club'), findsWidgets);
       expect(find.text('Transfer Hub'), findsWidgets);
       expect(find.text('No canonical club is selected'), findsNothing);
@@ -368,14 +373,16 @@ void main() {
 
     expect(find.text('Expansion lanes'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
-    final Finder fanPredictionsButton = find.widgetWithText(
-      FilledButton,
-      'Fan predictions (live match only)',
+    // 0a6eb1a4 retired the permanently-disabled "Fan predictions (live match
+    // only)" control in favour of copy that explains the gate. The lane must
+    // still offer no launch route from Home.
+    expect(
+      find.widgetWithText(FilledButton, 'Fan predictions (live match only)'),
+      findsNothing,
     );
-    expect(tester.widget<FilledButton>(fanPredictionsButton).onPressed, isNull);
     expect(
       find.text(
-        'Fan predictions unlock from live-match routes after a canonical match id is present.',
+        'Fan predictions open from live-match routes after a canonical match id is present.',
       ),
       findsOneWidget,
     );
@@ -555,14 +562,15 @@ void main() {
     );
 
     expect(find.text('Competition routes'), findsWidgets);
-    final Finder fanPredictionsButton = find.widgetWithText(
-      FilledButton,
-      'Fan predictions (live match only)',
+    // Same retirement as the Home expansion lane: no dead control, and the
+    // arena explains why predictions only open from live-match cards.
+    expect(
+      find.widgetWithText(FilledButton, 'Fan predictions (live match only)'),
+      findsNothing,
     );
-    expect(tester.widget<FilledButton>(fanPredictionsButton).onPressed, isNull);
     expect(
       find.text(
-        'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
+        'Fan predictions open from live-match cards once a canonical match id is present.',
       ),
       findsOneWidget,
     );
