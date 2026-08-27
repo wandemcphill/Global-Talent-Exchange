@@ -17,6 +17,8 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
+. (Join-Path $PSScriptRoot "GTEX_Launcher_Common.ps1")
+
 function Resolve-PythonExecutable {
     param([string]$ExplicitPath)
     if (-not [string]::IsNullOrWhiteSpace($ExplicitPath)) {
@@ -97,7 +99,8 @@ try {
         New-Item -ItemType Directory -Force -Path (Split-Path $backendOut -Parent) | Out-Null
         $backendScript = Join-Path $repoRoot "tools\run_gtex_live_backend.py"
         $backendArgs = @($backendScript, "--profile", "local", "--port", $BackendPort, "--log-level", "info")
-        $backend = Start-Process -FilePath $python -ArgumentList $backendArgs -WorkingDirectory $repoRoot -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr -PassThru
+        $backendArgString = ConvertTo-QuotedArgumentString -ArgumentValues $backendArgs
+        $backend = Start-Process -FilePath $python -ArgumentList $backendArgString -WorkingDirectory $repoRoot -RedirectStandardOutput $backendOut -RedirectStandardError $backendErr -PassThru
         $startedBackend = $true
         $ready = $false
         for ($i = 0; $i -lt 60; $i++) {
@@ -117,8 +120,9 @@ try {
     $playerLog = Join-Path $repoRoot "tmp\gtex_windows_demo_player.log"
     New-Item -ItemType Directory -Force -Path (Split-Path $playerLog -Parent) | Out-Null
     $unityArgs = @("-popupwindow", "-screen-fullscreen", "0", "-screen-width", "1280", "-screen-height", "720", "-logFile", $playerLog)
+    $unityArgString = ConvertTo-QuotedArgumentString -ArgumentValues $unityArgs
     Write-Host "[*] Launching 3D player..." -ForegroundColor Yellow
-    $unity = Start-Process -FilePath $exe -ArgumentList $unityArgs -WorkingDirectory (Split-Path $exe -Parent) -PassThru
+    $unity = Start-Process -FilePath $exe -ArgumentList $unityArgString -WorkingDirectory (Split-Path $exe -Parent) -PassThru
 
     Write-Host "[+] GTEX 3D player launched. PID=$($unity.Id)" -ForegroundColor Green
     Write-Host "    Recording: Win+Alt+R" -ForegroundColor Yellow
