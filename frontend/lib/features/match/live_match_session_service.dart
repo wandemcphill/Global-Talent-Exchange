@@ -49,6 +49,17 @@ class LiveMatchSessionService {
       return null;
     }
 
+    if (trimmedPath.contains('%') && !trimmedPath.contains('%20')) {
+      try {
+        final String decoded = Uri.decodeFull(trimmedPath);
+        if (decoded != trimmedPath && decoded.contains('%')) {
+          return null;
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+
     final Uri? base = Uri.tryParse(_config.apiBaseUrl);
     if (base == null || !base.hasScheme || base.host.trim().isEmpty) {
       return null;
@@ -73,16 +84,16 @@ class LiveMatchSessionService {
       if (resolved.host.trim().isEmpty) {
         return null;
       }
-      // Check for malformed URI characters in explicit URIs
       if (trimmedPath.contains('%%%') || trimmedPath.contains('%%')) {
         return null;
       }
-      return Uri.parse(
-        resolved
-            .replace(fragment: '')
-            .toString()
-            .split('#')
-            .first,
+      return Uri(
+        scheme: resolved.scheme,
+        userInfo: resolved.userInfo,
+        host: resolved.host,
+        port: resolved.hasPort ? resolved.port : null,
+        path: resolved.path,
+        query: resolved.hasQuery ? resolved.query : null,
       );
     }
 
@@ -91,11 +102,13 @@ class LiveMatchSessionService {
       return null;
     }
 
-    return base.replace(
+    return Uri(
       scheme: scheme,
+      userInfo: base.userInfo,
+      host: base.host,
+      port: base.hasPort ? base.port : null,
       path: path.startsWith('/') ? path : '/$path',
       query: resolved.hasQuery ? resolved.query : null,
-      fragment: null,
     );
   }
 }
