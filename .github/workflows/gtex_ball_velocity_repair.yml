@@ -24,9 +24,10 @@ jobs:
           from pathlib import Path
           p = Path("backend/app/live_matches/router.py")
           text = p.read_text(encoding="utf-8")
-          old = '''    velocity_x = _float_or_default(velocity.x if velocity is not None else None)\n    velocity_z = _float_or_default(velocity.z if velocity is not None else None, default=1.0)\n    return {'''
-          new = '''    velocity_x = _float_or_default(velocity.x if velocity is not None else None)\n    velocity_z = _float_or_default(velocity.z if velocity is not None else None, default=0.0)\n    speed = (velocity_x * velocity_x + velocity_z * velocity_z) ** 0.5\n    return {'''
-          if old not in text:\n              raise SystemExit("ball velocity anchor not found")
+          old = """    velocity_x = _float_or_default(velocity.x if velocity is not None else None)\n    velocity_z = _float_or_default(velocity.z if velocity is not None else None, default=1.0)\n    return {"""
+          new = """    velocity_x = _float_or_default(velocity.x if velocity is not None else None)\n    velocity_z = _float_or_default(velocity.z if velocity is not None else None, default=0.0)\n    speed = (velocity_x * velocity_x + velocity_z * velocity_z) ** 0.5\n    return {"""
+          if old not in text:
+              raise SystemExit("ball velocity anchor not found")
           text = text.replace(old, new, 1)
           text = text.replace('"speedRatio": 1.0 if velocity is not None else 0.0,', '"speedRatio": min(1.0, speed / 18.0),', 1)
           text = text.replace('"facingX": round(velocity_x, 3),\n        "facingZ": round(velocity_z, 3),', '"facingX": round(velocity_x / speed, 3) if speed > 0.001 else 0.0,\n        "facingZ": round(velocity_z / speed, 3) if speed > 0.001 else 0.0,', 1)
