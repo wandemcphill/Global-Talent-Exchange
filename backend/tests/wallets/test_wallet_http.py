@@ -16,6 +16,7 @@ import app.ingestion.models  # noqa: F401
 import app.ledger.models  # noqa: F401
 import app.models  # noqa: F401
 import app.orders.models  # noqa: F401
+from app.admin_engine.service import AdminEngineService
 from app.admin_godmode.runtime_paths import admin_godmode_state_path
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
@@ -50,6 +51,7 @@ def api_context():
         password="SuperSecret1",
     )
     session.commit()
+    AdminEngineService(session).seed_defaults()
     _seed_policy_defaults(session, current_user)
 
     app = FastAPI()

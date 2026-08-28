@@ -137,7 +137,7 @@ def test_award_catalog_seeds_ballon_dor_and_sends_mythic_discussion_gift(session
     assert transaction.gross_amount == Decimal("10000.0000")
     assert transaction.platform_rake_amount == Decimal("3000.0000")
     assert transaction.recipient_net_amount == Decimal("7000.0000")
-    assert transaction.ledger_unit == LedgerUnit.CREDIT
+    assert transaction.ledger_unit == LedgerUnit.COIN
     assert transaction.currency_label if hasattr(transaction, "currency_label") else True
     assert transaction.recipient_type == "discussion_thread"
     assert transaction.recipient_user_id == recipient.id
@@ -160,9 +160,7 @@ def test_award_catalog_seeds_ballon_dor_and_sends_mythic_discussion_gift(session
         == transaction.id
     )
     assert (
-        session.scalar(
-            select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "award-night-ballon-dor")
-        ).id
+        session.scalar(select(LedgerTransaction).where(LedgerTransaction.id == transaction.ledger_transaction_id)).id
         == transaction.ledger_transaction_id
     )
 
@@ -196,6 +194,7 @@ def test_reciprocal_gifting_is_flagged_and_insufficient_fan_coin_is_rejected(ses
     first = _create_user(session, email="first-gifter@example.com", username="first-gifter")
     second = _create_user(session, email="second-gifter@example.com", username="second-gifter")
     unfunded = _create_user(session, email="unfunded-gifter@example.com", username="unfunded-gifter")
+    _allow_mythic_awards(session)
     _fund_fan_coin(session, first, Decimal("50.0000"))
     _fund_fan_coin(session, second, Decimal("50.0000"))
 

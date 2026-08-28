@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
+from app.admin_engine.service import AdminEngineService
 from app.auth.service import AuthService
 from app.models import (
     AdminRuntimeState,
@@ -37,6 +38,7 @@ def session():
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db_session:
+        AdminEngineService(db_session).seed_defaults()
         yield db_session
 
 

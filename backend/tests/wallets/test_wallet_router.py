@@ -186,18 +186,19 @@ def test_create_payment_event_route_returns_pending_event(session) -> None:
     _seed_global_policy(session)
     _enable_automatic_deposits(session)
 
-    payload = create_payment_event(
-        PaymentEventCreate(
-            provider="korapay",
-            provider_reference="korapay-ref-001",
-            amount=Decimal("50"),
-            pack_code="starter-50",
-        ),
-        session=session,
-        current_user=current_user,
-    )
-    assert payload.status.value == "pending"
-    assert Decimal(payload.amount) == Decimal("50.0000")
+    with pytest.raises(HTTPException) as exc_info:
+        create_payment_event(
+            PaymentEventCreate(
+                provider="korapay",
+                provider_reference="korapay-ref-001",
+                amount=Decimal("50"),
+                pack_code="starter-50",
+            ),
+            session=session,
+            current_user=current_user,
+        )
+    assert exc_info.value.status_code == 410
+    assert "Client-authored payment events are disabled" in exc_info.value.detail
 
 
 def test_quote_wallet_conversion_returns_fixed_rate_quote(session) -> None:

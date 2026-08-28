@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.admin_engine.service import AdminEngineService
 from app.auth.dependencies import get_current_admin, get_session
 from app.auth.service import AuthService
 from app.gift_engine.router import admin_gifts_router
@@ -87,6 +88,7 @@ def client(session: Session) -> Iterator[TestClient]:
 
 
 def test_admin_can_manage_catalog_events_flags_and_refunds(client: TestClient, session: Session) -> None:
+    AdminEngineService(session).seed_defaults()
     sender = _create_user(session, email="sender-phase5@example.com", username="sender-phase5")
     recipient = _create_user(session, email="recipient-phase5@example.com", username="recipient-phase5")
     _fund_fan_coin(session, sender, Decimal("100.0000"))

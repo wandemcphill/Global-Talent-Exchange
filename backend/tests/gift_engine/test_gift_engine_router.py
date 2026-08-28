@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.admin_engine.service import AdminEngineService
 from app.auth.dependencies import get_current_user, get_session
 from app.auth.service import AuthService
 from app.gift_engine.router import router
@@ -62,6 +63,7 @@ def _fund_fan_coin(session: Session, user: User, amount: Decimal) -> None:
 
 @pytest.fixture()
 def state(session: Session) -> dict[str, User]:
+    AdminEngineService(session).seed_defaults()
     sender = _create_user(session, email="sender@example.com", username="sender")
     recipient = _create_user(session, email="recipient@example.com", username="recipient")
     _fund_fan_coin(session, sender, Decimal("100.0000"))

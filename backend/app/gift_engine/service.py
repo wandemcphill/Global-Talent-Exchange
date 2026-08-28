@@ -567,10 +567,9 @@ class GiftEngineService:
                 self.session.add(stats)
                 self.session.flush()
             stats.total_gifts_received += 1
-            if transaction.ledger_unit == LedgerUnit.CREDIT:
-                stats.total_fan_coin_received = self._normalize_amount(
-                    Decimal(stats.total_fan_coin_received) + Decimal(transaction.recipient_net_amount)
-                )
+            stats.total_fan_coin_received = self._normalize_amount(
+                Decimal(stats.total_fan_coin_received) + Decimal(transaction.recipient_net_amount)
+            )
             stats.top_gift_code = gift.key
             if gift.rarity == "mythic":
                 stats.mythic_gifts_received += 1

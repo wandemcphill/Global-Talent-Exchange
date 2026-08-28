@@ -17,6 +17,7 @@ import app.ledger.models  # noqa: F401
 import app.models  # noqa: F401
 import app.orders.models  # noqa: F401
 from app.admin_godmode.router import router as admin_router
+from app.admin_engine.service import AdminEngineService
 from app.admin_godmode.service import AdminGodModeService
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.auth.service import AuthService
@@ -40,6 +41,7 @@ def admin_wallet_context(tmp_path: Path):
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    AdminEngineService(session).seed_defaults()
     auth = AuthService()
     admin_user = auth.register_user(
         session,

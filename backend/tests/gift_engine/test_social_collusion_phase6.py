@@ -14,6 +14,7 @@ from app.auth.service import AuthService
 from app.common.enums.competition_format import CompetitionFormat
 from app.common.enums.competition_status import CompetitionStatus
 from app.common.enums.competition_visibility import CompetitionVisibility
+from app.admin_engine.service import AdminEngineService
 from app.common.enums.match_status import MatchStatus
 from app.gift_engine.service import GiftEngineService
 from app.models import (
@@ -193,6 +194,7 @@ def _record_ranked_win(session: Session, *, host: User, home: ClubProfile, away:
 
 
 def test_repeated_ranked_matches_plus_reciprocal_gifts_create_combined_collusion_flags(session: Session) -> None:
+    AdminEngineService(session).seed_defaults()
     host = _create_user(session, email="phase6-host@example.com", username="phase6-host")
     opponent_owner = _create_user(session, email="phase6-opponent@example.com", username="phase6-opponent")
     home = _create_club(session, owner=host, name="Phase Six Home FC")
@@ -244,6 +246,7 @@ def test_repeated_ranked_matches_plus_reciprocal_gifts_create_combined_collusion
 
 
 def test_single_normal_gift_after_one_ranked_match_does_not_create_combined_collusion(session: Session) -> None:
+    AdminEngineService(session).seed_defaults()
     host = _create_user(session, email="phase6-clean-host@example.com", username="phase6-clean-host")
     opponent_owner = _create_user(session, email="phase6-clean-opponent@example.com", username="phase6-clean-opponent")
     home = _create_club(session, owner=host, name="Clean Gift Home FC")

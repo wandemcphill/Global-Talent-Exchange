@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.admin_engine.service import AdminEngineService
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.hosted_competition_engine.router import admin_router as hosted_admin_router
 from app.hosted_competition_engine.router import router as hosted_router
@@ -21,6 +22,8 @@ from app.models.hosted_competition import (
     UserHostedCompetition,
 )
 from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.wallets.service import LedgerPosting, WalletService
 
 import app.models.hosted_competition  # noqa: F401
 import app.models.user  # noqa: F401
@@ -49,6 +52,7 @@ def test_private_hosted_competition_requires_invite_and_accepts_invited_user() -
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    AdminEngineService(session).seed_defaults()
     try:
         host = _create_user(session, user_id="host-user")
         guest = _create_user(session, user_id="guest-user")
@@ -66,6 +70,7 @@ def test_private_hosted_competition_requires_invite_and_accepts_invited_user() -
             gift_rules={},
             seeding_method="random",
             is_user_hostable=True,
+            funding_mode="fancoin_entry_pool",
             entry_fee_fancoin=Decimal("0.0000"),
             reward_pool_fancoin=Decimal("0.0000"),
             platform_fee_bps=0,
@@ -152,6 +157,7 @@ def test_passcode_competition_requires_valid_passcode_to_join() -> None:
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    AdminEngineService(session).seed_defaults()
     try:
         host = _create_user(session, user_id="host-passcode")
         guest = _create_user(session, user_id="guest-passcode")
@@ -237,8 +243,23 @@ def test_admin_can_create_free_gtex_hosted_competition() -> None:
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    AdminEngineService(session).seed_defaults()
     try:
         admin = _create_user(session, user_id="admin-host", role=UserRole.ADMIN)
+        wallet_service = WalletService()
+        admin_coin_account = wallet_service.get_user_account(session, admin, LedgerUnit.COIN)
+        platform_coin_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+        wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=admin_coin_account, amount=Decimal("100.0000")),
+                LedgerPosting(account=platform_coin_account, amount=Decimal("-100.0000")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference="seed-admin-gtex-prize",
+            actor=admin,
+        )
+        session.commit()
         template = CompetitionTemplate(
             template_key="admin-cup",
             title="Admin Cup",
@@ -252,7 +273,7 @@ def test_admin_can_create_free_gtex_hosted_competition() -> None:
             gift_rules={},
             seeding_method="random",
             is_user_hostable=True,
-            entry_fee_fancoin=Decimal("200.0000"),
+            entry_fee_fancoin=Decimal("0.0000"),
             reward_pool_fancoin=Decimal("0.0000"),
             platform_fee_bps=0,
             metadata_json={},
@@ -280,14 +301,17 @@ def test_admin_can_create_free_gtex_hosted_competition() -> None:
                     "template_key": "admin-cup",
                     "title": "Official GTEX Cup",
                     "gtex_hosted": True,
+                    "funding_mode": "host_funded_gtex_coin_prize",
+                    "reward_pool_coin": "100.0000",
                     "join_passcode": "VIP",
                 },
             )
 
         assert response.status_code == 200, response.text
         payload = response.json()
-        assert payload["host_participation_created"] is False
+        assert payload["host_participation_created"] is True
         assert payload["competition"]["entry_fee_fancoin"] == "0.0000"
+        assert payload["competition"]["reward_pool_coin"] == "100.0000"
         assert payload["competition"]["visibility"] == "passcode"
         assert payload["competition"]["metadata_json"]["gtex_hosted"] is True
         assert payload["competition"]["metadata_json"]["join_passcode_required"] is True

@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import pytest
 
+from app.admin_engine.service import AdminEngineService
 from app.admin_engine.schemas import AdminRewardRuleStabilityControls
 from app.auth.service import AuthService
 from app.gift_engine.service import GiftEngineError, GiftEngineService
@@ -51,6 +52,7 @@ def _create_user(session, *, email: str, username: str):
 
 
 def test_gift_combo_applies_bonus(session) -> None:
+    AdminEngineService(session).seed_defaults()
     sender = _create_user(session, email="sender@example.com", username="sender")
     recipient = _create_user(session, email="recipient@example.com", username="recipient")
 
@@ -105,7 +107,7 @@ def test_gift_combo_applies_bonus(session) -> None:
     session.commit()
 
     service = GiftEngineService(session)
-    first_tx = service.send_gift(
+    service.send_gift(
         sender=sender,
         recipient_user_id=recipient.id,
         gift_key="cheer",
@@ -224,6 +226,7 @@ def test_gift_controls_flag_near_limit_and_block_daily_sender_cap(session) -> No
 
 
 def test_match_scope_gift_rate_limit_blocks_the_sixth_sender_recipient_pair_gift(session) -> None:
+    AdminEngineService(session).seed_defaults()
     sender = _create_user(session, email="stadium-sender@example.com", username="stadium-sender")
     recipient = _create_user(session, email="stadium-recipient@example.com", username="stadium-recipient")
 
@@ -252,8 +255,8 @@ def test_match_scope_gift_rate_limit_blocks_the_sixth_sender_recipient_pair_gift
     session.commit()
 
     wallet_service = WalletService()
-    sender_account = wallet_service.get_user_account(session, sender, LedgerUnit.COIN)
-    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+    sender_account = wallet_service.get_user_account(session, sender, LedgerUnit.CREDIT)
+    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
     wallet_service.append_transaction(
         session,
         postings=[
