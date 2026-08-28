@@ -1793,6 +1793,7 @@ class MatchTimelineService:
         )
         return MatchTimelineFrameView(
 
+
             frame_id=f"{match_id}:{int(round(time_seconds * 100))}:{stage}",
             time_seconds=round(max(0.0, time_seconds), 2),
             clock_minute=round(max(0.0, min(120.0, clock_minute)), 2),
