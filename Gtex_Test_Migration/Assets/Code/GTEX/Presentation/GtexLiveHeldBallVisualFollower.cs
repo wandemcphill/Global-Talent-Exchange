@@ -13,7 +13,7 @@ namespace FStudio.GTEX.Presentation
     /// Keeps a held authoritative ball visually attached to its current carrier
     /// between network snapshots. It does not change possession or match state.
     /// </summary>
-    [DefaultExecutionOrder(9995)]
+    [DefaultExecutionOrder(10030)]
     public sealed class GtexLiveHeldBallVisualFollower : MonoBehaviour
     {
         private static GtexLiveHeldBallVisualFollower instance;
