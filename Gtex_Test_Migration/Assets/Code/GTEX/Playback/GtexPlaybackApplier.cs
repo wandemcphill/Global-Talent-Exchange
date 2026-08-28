@@ -6,6 +6,8 @@ namespace FStudio.GTEX.Playback
 {
     public sealed class GtexPlaybackApplier
     {
+        private const float ClockRegressionToleranceMinutes = 0.10f;
+
         private readonly Func<bool> isSceneReady;
         private readonly Func<bool> needsBindingRefresh;
         private readonly Action bindPlayers;
@@ -68,6 +70,21 @@ namespace FStudio.GTEX.Playback
             if (state == null)
             {
                 return false;
+            }
+
+            if (!forceSnap && CurrentState != null)
+            {
+                if (!string.IsNullOrWhiteSpace(state.frameId) &&
+                    !string.IsNullOrWhiteSpace(CurrentState.frameId) &&
+                    string.Equals(state.frameId, CurrentState.frameId, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                if (state.clockMinute + ClockRegressionToleranceMinutes < CurrentState.clockMinute)
+                {
+                    return false;
+                }
             }
 
             PreviousState = CurrentState;
