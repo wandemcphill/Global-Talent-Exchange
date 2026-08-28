@@ -58,9 +58,7 @@ def _payload(rule_key: str, *, competition_bps: int, active: bool = True) -> Adm
 
 
 def _active_keys(session) -> list[str]:
-    return sorted(
-        session.scalars(select(AdminRewardRule.rule_key).where(AdminRewardRule.active.is_(True))).all()
-    )
+    return sorted(session.scalars(select(AdminRewardRule.rule_key).where(AdminRewardRule.active.is_(True))).all())
 
 
 def test_activating_a_brand_new_rule_leaves_exactly_that_rule_active() -> None:
@@ -91,9 +89,7 @@ def test_updating_the_existing_rule_keeps_it_active() -> None:
         service.seed_defaults()
         session.flush()
 
-        service.upsert_reward_rule(
-            actor=actor, payload=_payload("platform-economy-defaults", competition_bps=2500)
-        )
+        service.upsert_reward_rule(actor=actor, payload=_payload("platform-economy-defaults", competition_bps=2500))
         session.flush()
 
         assert _active_keys(session) == ["platform-economy-defaults"]
@@ -111,9 +107,7 @@ def test_policy_version_changes_when_the_rate_changes() -> None:
         session.flush()
         before = resolve_economic_policy(session).policy_version
 
-        service.upsert_reward_rule(
-            actor=actor, payload=_payload("platform-economy-defaults", competition_bps=2200)
-        )
+        service.upsert_reward_rule(actor=actor, payload=_payload("platform-economy-defaults", competition_bps=2200))
         session.flush()
 
         assert resolve_economic_policy(session).policy_version != before

@@ -35,20 +35,15 @@ CANONICAL_RULE_KEY = "platform-economy-defaults"
 def upgrade() -> None:
     connection = op.get_bind()
 
-    connection.execute(
-        sa.text(
-            """
+    connection.execute(sa.text("""
             UPDATE admin_reward_rules
             SET competition_platform_fee_bps = 3000
             WHERE active
               AND competition_platform_fee_bps IN (1000, 2000)
-            """
-        )
-    )
+            """))
 
     survivor = connection.execute(
-        sa.text(
-            """
+        sa.text("""
             SELECT id
             FROM admin_reward_rules
             WHERE active
@@ -57,20 +52,17 @@ def upgrade() -> None:
                 updated_at DESC,
                 id ASC
             LIMIT 1
-            """
-        ),
+            """),
         {"canonical": CANONICAL_RULE_KEY},
     ).first()
 
     if survivor is not None:
         connection.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE admin_reward_rules
                 SET active = FALSE
                 WHERE active AND id <> :survivor_id
-                """
-            ),
+                """),
             {"survivor_id": survivor[0]},
         )
 

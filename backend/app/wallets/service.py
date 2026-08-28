@@ -986,9 +986,7 @@ class WalletService:
             actor=actor or user,
             transaction_type=LedgerTransactionType.WITHDRAWAL,
             idempotency_key=(
-                f"withdrawal-hold:{normalized_idempotency_key}"
-                if normalized_idempotency_key is not None
-                else None
+                f"withdrawal-hold:{normalized_idempotency_key}" if normalized_idempotency_key is not None else None
             ),
             metadata={
                 "withdrawal": {

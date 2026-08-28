@@ -61,9 +61,7 @@ def _user(session, *, email, username):
 
 
 def _send_gift(session, sender, recipient):
-    session.add(
-        GiftCatalogItem(key="bridge-star", display_name="Bridge Star", fancoin_price=GROSS, active=True)
-    )
+    session.add(GiftCatalogItem(key="bridge-star", display_name="Bridge Star", fancoin_price=GROSS, active=True))
     session.commit()
     wallet = WalletService()
     wallet.append_transaction(

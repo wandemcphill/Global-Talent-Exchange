@@ -155,9 +155,7 @@ def test_user_hosted_gift_is_one_atomic_fan_coin_to_gtex_coin_ledger_transaction
         _assert_converted(session, WalletService(), tx, sender, recipient)
         transaction_count = session.scalar(select(func.count(LedgerTransaction.id)))
         gift_ledger_count = session.scalar(
-            select(func.count(LedgerTransaction.id)).where(
-                LedgerTransaction.id == tx.ledger_transaction_id
-            )
+            select(func.count(LedgerTransaction.id)).where(LedgerTransaction.id == tx.ledger_transaction_id)
         )
         assert transaction_count == 2
         assert gift_ledger_count == 1

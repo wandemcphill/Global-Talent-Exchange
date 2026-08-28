@@ -39,9 +39,7 @@ def build_report(*, database_url: str | None = None, batch_size: int = DEFAULT_B
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Run the read-only player-share economic release gate."
-    )
+    parser = argparse.ArgumentParser(description="Run the read-only player-share economic release gate.")
     parser.add_argument(
         "--strict",
         action="store_true",

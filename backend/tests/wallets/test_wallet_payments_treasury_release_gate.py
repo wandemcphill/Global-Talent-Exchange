@@ -249,9 +249,7 @@ def test_manual_withdrawal_complete_path_reconciles_ledger() -> None:
         assert payout.status.value == "completed"
         assert payout.settlement_transaction_id is not None
 
-        withdrawal_clearing = treasury.wallet_service.ensure_withdrawal_clearing_account(
-            session, LedgerUnit.COIN
-        )
+        withdrawal_clearing = treasury.wallet_service.ensure_withdrawal_clearing_account(session, LedgerUnit.COIN)
         assert treasury.wallet_service.get_balance(session, user_coin) == Decimal("0.0000")
         assert treasury.wallet_service.get_balance(session, user_escrow) == Decimal("0.0000")
         assert treasury.wallet_service.get_balance(session, withdrawal_clearing) == Decimal("110.0000")
@@ -264,8 +262,12 @@ def test_manual_withdrawal_complete_path_reconciles_ledger() -> None:
         assert len(settlement_entries) == 4
         assert {entry.unit for entry in settlement_entries} == {LedgerUnit.COIN}
         assert sum(Decimal(entry.amount) for entry in settlement_entries) == Decimal("0.0000")
-        assert sum(Decimal(entry.amount) for entry in settlement_entries if entry.account_id == user_escrow.id) == Decimal("-110.0000")
-        assert sum(Decimal(entry.amount) for entry in settlement_entries if entry.account_id == withdrawal_clearing.id) == Decimal("110.0000")
+        assert sum(
+            Decimal(entry.amount) for entry in settlement_entries if entry.account_id == user_escrow.id
+        ) == Decimal("-110.0000")
+        assert sum(
+            Decimal(entry.amount) for entry in settlement_entries if entry.account_id == withdrawal_clearing.id
+        ) == Decimal("110.0000")
 
         withdrawal_transactions = session.scalar(
             select(func.count(LedgerTransaction.id)).where(LedgerTransaction.id == payout.settlement_transaction_id)

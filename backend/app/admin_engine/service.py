@@ -329,7 +329,9 @@ class AdminEngineService:
         return list(self.session.scalars(statement).all())
 
     def upsert_feature_flag(self, *, actor: User, payload: AdminFeatureFlagUpsertRequest) -> AdminFeatureFlag:
-        record = self.session.scalar(select(AdminFeatureFlag).where(AdminFeatureFlag.feature_key == payload.feature_key))
+        record = self.session.scalar(
+            select(AdminFeatureFlag).where(AdminFeatureFlag.feature_key == payload.feature_key)
+        )
         if record is None:
             record = AdminFeatureFlag(feature_key=payload.feature_key)
             self.session.add(record)
@@ -342,7 +344,9 @@ class AdminEngineService:
         return record
 
     def list_calendar_rules(self, *, active_only: bool = False) -> list[AdminCalendarRule]:
-        statement = select(AdminCalendarRule).order_by(AdminCalendarRule.priority.asc(), AdminCalendarRule.rule_key.asc())
+        statement = select(AdminCalendarRule).order_by(
+            AdminCalendarRule.priority.asc(), AdminCalendarRule.rule_key.asc()
+        )
         if active_only:
             statement = statement.where(AdminCalendarRule.active.is_(True))
         return list(self.session.scalars(statement).all())
@@ -426,8 +430,7 @@ class AdminEngineService:
             )
             if active_count != 1:
                 raise ValueError(
-                    "Activating an Admin economic policy must leave exactly one active rule, "
-                    f"found {active_count}."
+                    "Activating an Admin economic policy must leave exactly one active rule, " f"found {active_count}."
                 )
         return record
 

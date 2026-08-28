@@ -155,10 +155,18 @@ class FanCoinGiftConversionService:
 
         postings = [
             LedgerPosting(account=source_account, amount=-gross, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=platform_fancoin_revenue, amount=fee, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=bridge_fancoin, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=bridge_coin, amount=-destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=recipient_account, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(
+                account=platform_fancoin_revenue, amount=fee, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
+            ),
+            LedgerPosting(
+                account=bridge_fancoin, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
+            ),
+            LedgerPosting(
+                account=bridge_coin, amount=-destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
+            ),
+            LedgerPosting(
+                account=recipient_account, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
+            ),
         ]
         if burn_account is not None:
             postings.append(LedgerPosting(account=burn_account, amount=burn, source_tag=LedgerSourceTag.GIFT_RAKE_BURN))
@@ -259,9 +267,15 @@ class FanCoinGiftConversionService:
 
         postings = [
             LedgerPosting(account=source_account, amount=gross, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=bridge_fancoin, amount=-destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=bridge_coin, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
-            LedgerPosting(account=recipient_account, amount=-destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
+            LedgerPosting(
+                account=bridge_fancoin, amount=-destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
+            ),
+            LedgerPosting(
+                account=bridge_coin, amount=destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
+            ),
+            LedgerPosting(
+                account=recipient_account, amount=-destination, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
+            ),
         ]
         if fee > Decimal("0"):
             postings.append(

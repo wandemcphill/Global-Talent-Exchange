@@ -77,17 +77,36 @@ class TreasurySettingsUpdate(BaseModel):
     maintenance_message: str | None = Field(default=None, max_length=255)
     whatsapp_number: str | None = Field(default=None, max_length=32)
     active_bank_account_id: str | None = None
-    @field_validator("min_trader_buy_rate_fiat", "max_trader_buy_rate_fiat", "min_trader_sell_rate_fiat", "max_trader_sell_rate_fiat", "max_trader_spread_fiat", "max_buy_above_withdrawal_fiat", "max_sell_below_deposit_fiat", mode="after")
+
+    @field_validator(
+        "min_trader_buy_rate_fiat",
+        "max_trader_buy_rate_fiat",
+        "min_trader_sell_rate_fiat",
+        "max_trader_sell_rate_fiat",
+        "max_trader_spread_fiat",
+        "max_buy_above_withdrawal_fiat",
+        "max_sell_below_deposit_fiat",
+        mode="after",
+    )
     @classmethod
     def validate_non_negative_guardrail(cls, value: Decimal | None) -> Decimal | None:
         if value is not None and value < 0:
             raise ValueError("Trader pricing guardrails must be non-negative.")
         return value
+
     @model_validator(mode="after")
     def validate_trader_guardrail_pairs(self) -> "TreasurySettingsUpdate":
-        if self.min_trader_buy_rate_fiat is not None and self.max_trader_buy_rate_fiat is not None and self.min_trader_buy_rate_fiat > self.max_trader_buy_rate_fiat:
+        if (
+            self.min_trader_buy_rate_fiat is not None
+            and self.max_trader_buy_rate_fiat is not None
+            and self.min_trader_buy_rate_fiat > self.max_trader_buy_rate_fiat
+        ):
             raise ValueError("Minimum trader buy rate cannot exceed maximum trader buy rate.")
-        if self.min_trader_sell_rate_fiat is not None and self.max_trader_sell_rate_fiat is not None and self.min_trader_sell_rate_fiat > self.max_trader_sell_rate_fiat:
+        if (
+            self.min_trader_sell_rate_fiat is not None
+            and self.max_trader_sell_rate_fiat is not None
+            and self.min_trader_sell_rate_fiat > self.max_trader_sell_rate_fiat
+        ):
             raise ValueError("Minimum trader sell rate cannot exceed maximum trader sell rate.")
         return self
 
@@ -99,6 +118,7 @@ class TreasuryBankAccountCreate(BaseModel):
     bank_code: str | None = Field(default=None, max_length=32)
     currency_code: str = Field(default="NGN", max_length=8)
     is_active: bool = True
+
     @field_validator("bank_name", "account_number", "account_name", "bank_code")
     @classmethod
     def normalize_text(cls, value: str | None) -> str | None:
@@ -121,6 +141,7 @@ class TreasuryBankAccountUpdate(BaseModel):
 class DepositQuoteRequest(BaseModel):
     amount: Decimal
     input_unit: str = Field(default="fiat")
+
     @field_validator("input_unit")
     @classmethod
     def validate_input_unit(cls, value: str) -> str:
@@ -128,6 +149,7 @@ class DepositQuoteRequest(BaseModel):
         if candidate not in {"fiat", "coin"}:
             raise ValueError("input_unit must be fiat or coin")
         return candidate
+
     @field_validator("amount")
     @classmethod
     def validate_amount(cls, value: Decimal) -> Decimal:
@@ -168,6 +190,7 @@ class DepositSubmitRequest(BaseModel):
     sender_bank: str | None = Field(default=None, max_length=120)
     transfer_reference: str | None = Field(default=None, max_length=128)
     proof_attachment_id: str | None = None
+
     @field_validator("payer_name", "sender_bank", "transfer_reference")
     @classmethod
     def normalize_optional(cls, value: str | None) -> str | None:
@@ -208,6 +231,7 @@ class WithdrawalSourceScope(str, Enum):
 class WithdrawalQuoteRequest(BaseModel):
     amount_coin: Decimal
     source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
+
     @field_validator("amount_coin")
     @classmethod
     def validate_amount(cls, value: Decimal) -> Decimal:
@@ -258,6 +282,7 @@ class WithdrawalRequestCreate(BaseModel):
     # at the public API boundary. The router namespaces this key by user before
     # it reaches the globally-unique payout idempotency column.
     idempotency_key: str = Field(min_length=1, max_length=80)
+
     @field_validator("idempotency_key")
     @classmethod
     def normalize_idempotency_key(cls, value: str) -> str:
@@ -265,6 +290,7 @@ class WithdrawalRequestCreate(BaseModel):
         if not candidate:
             raise ValueError("idempotency_key must not be blank.")
         return candidate
+
     @field_validator("amount_coin")
     @classmethod
     def validate_amount(cls, value: Decimal) -> Decimal:
@@ -382,6 +408,7 @@ class KycSubmitRequest(BaseModel):
     selfie_attachment_id: str | None = Field(default=None, max_length=255)
     proof_of_address_attachment_id: str | None = Field(default=None, max_length=255)
     country_confirmation: str | None = Field(default=None, max_length=120)
+
     @model_validator(mode="after")
     def require_nin_or_bvn(self) -> "KycSubmitRequest":
         if not (self.nin or self.bvn or self.government_id_attachment_id or self.id_document_attachment_id):
@@ -396,6 +423,7 @@ class KycSubmitRequest(BaseModel):
 class KycReviewRequest(BaseModel):
     status: KycStatus
     rejection_reason: str | None = Field(default=None, max_length=255)
+
     @field_validator("status")
     @classmethod
     def validate_status(cls, value: KycStatus) -> KycStatus:

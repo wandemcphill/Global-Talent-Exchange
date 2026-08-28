@@ -34,8 +34,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
     def _normalize_scope(source_scope: str | None) -> str:
         normalized = (source_scope or "user_hosted").strip().lower()
         if any(
-            token in normalized
-            for token in {"gtex", "platform", "official", "national", "qualifier", "international"}
+            token in normalized for token in {"gtex", "platform", "official", "national", "qualifier", "international"}
         ):
             return "gtex_competition"
         if normalized in {
@@ -59,9 +58,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         recipient_user_id = kwargs.get("recipient_user_id")
         self.ensure_football_gift_catalog()
         normalized_idempotency_key = kwargs.get("idempotency_key")
-        normalized_idempotency_key = (
-            normalized_idempotency_key.strip() if normalized_idempotency_key else None
-        )
+        normalized_idempotency_key = normalized_idempotency_key.strip() if normalized_idempotency_key else None
         if normalized_idempotency_key:
             existing_transaction = self.session.scalar(
                 select(GiftTransaction).where(GiftTransaction.idempotency_key == normalized_idempotency_key)
@@ -135,9 +132,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         )
         combo_bonus = Decimal("0.0000")
         if combo_rule is not None and combo_rule.bonus_bps:
-            combo_bonus = self._normalize_amount(
-                gross_amount * Decimal(combo_rule.bonus_bps) / Decimal(10_000)
-            )
+            combo_bonus = self._normalize_amount(gross_amount * Decimal(combo_rule.bonus_bps) / Decimal(10_000))
             if combo_bonus > platform_rake:
                 combo_bonus = platform_rake
             platform_rake = self._normalize_amount(platform_rake - combo_bonus)
@@ -211,9 +206,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
 
         conversion_key = f"gift-conversion:{transaction.id}"
         try:
-            conversion = FanCoinGiftConversionService(
-                self.session, wallet_service=self.wallet_service
-            ).convert(
+            conversion = FanCoinGiftConversionService(self.session, wallet_service=self.wallet_service).convert(
                 source_user_id=sender.id,
                 recipient_user_id=recipient.id,
                 gross_fancoin=gross_amount,
@@ -235,9 +228,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             raise GiftEngineError(str(exc), reason="gift_conversion_failed") from exc
 
         if conversion.status.value != "settled":
-            raise GiftEngineError(
-                "Gift conversion did not settle atomically.", reason="gift_conversion_unsettled"
-            )
+            raise GiftEngineError("Gift conversion did not settle atomically.", reason="gift_conversion_unsettled")
 
         ledger_transaction_id = conversion.source_ledger_transaction_id
         if not ledger_transaction_id:
@@ -252,9 +243,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             (entry for entry in ledger_entries if entry.account_id == source_account.id and entry.amount < 0),
             None,
         )
-        destination_account = self.wallet_service.get_user_account(
-            self.session, recipient, LedgerUnit.COIN
-        )
+        destination_account = self.wallet_service.get_user_account(self.session, recipient, LedgerUnit.COIN)
         credit_entry = next(
             (entry for entry in ledger_entries if entry.account_id == destination_account.id and entry.amount > 0),
             None,
@@ -267,11 +256,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             allow_negative=False,
         )
         platform_fee_entry = next(
-            (
-                entry
-                for entry in ledger_entries
-                if entry.account_id == platform_fee_account.id and entry.amount > 0
-            ),
+            (entry for entry in ledger_entries if entry.account_id == platform_fee_account.id and entry.amount > 0),
             None,
         )
 
