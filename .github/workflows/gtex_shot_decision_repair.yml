@@ -20,55 +20,22 @@ jobs:
         run: |
           set -euo pipefail
           FILE="Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs"
-          grep -n -A6 -B2 'shotCorridor' "$FILE"
-          python - <<'PY'
-          from pathlib import Path
-          p = Path("Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs")
-          text = p.read_text(encoding="utf-8")
-          marker = 'shotCorridor'
-          idx = text.find(marker)
-          if idx < 0:
-              raise SystemExit("shotCorridor not found")
-          carry = text.find('action = "carry";', idx)
-          if carry < 0 or carry - idx > 300:
-              raise SystemExit("shot action assignment not found near shotCorridor")
-          text = text[:carry] + text[carry:].replace('action = "carry";', 'action = "shoot";', 1)
-          method = text.find('private void ApplyDecisionPlan')
-          carry_branch = text.find('if (plan.Action == "carry")', method)
-          if method < 0 or carry_branch < 0:
-              raise SystemExit("ApplyDecisionPlan carry branch not found")
-          if 'if (plan.Action == "shoot")' not in text[method:carry_branch]:
-              shot_branch = '''if (plan.Action == "shoot")
-            {
-                var shotTarget = ResolveGoalMouthTarget(source.TeamSide, false);
-                RegisterEvent("shot", currentMinute, source.TeamSide, "Shot on goal.", 0, 0, source.PlayerId);
-                StartTransit(
-                    source.PlayerId,
-                    shotTarget,
-                    currentMinute,
-                    ShotDurationMinutes,
-                    1.0f,
-                    "shot",
-                    OppositeSide(source.TeamSide) + "-1",
-                    OppositeSide(source.TeamSide));
-                currentDecision = default;
-                nextDecisionMinute = currentMinute + 0.26f;
-                currentCameraPreset = "broadcast";
-                currentCameraPresetUntilMinute = currentMinute + 0.24f;
-                return;
-            }
-
-            '''
-              text = text[:carry_branch] + shot_branch + text[carry_branch:]
-          p.write_text(text, encoding="utf-8")
-          PY
-          grep -n -A22 -B6 'plan.Action == "shoot"' "$FILE"
+          line=$(grep -n 'shotCorridor' "$FILE" | head -1 | cut -d: -f1)
+          test -n "$line"
+          end=$((line + 10))
+          sed -i "${line},${end}s/action = \"carry\";/action = \"shoot\";/" "$FILE"
+          start=$(grep -n 'private void ApplyDecisionPlan' "$FILE" | head -1 | cut -d: -f1)
+          carry=$(grep -n 'if (plan.Action == \"carry\")' "$FILE" | awk -F: -v s="$start" '$1 > s {print $1; exit}')
+          test -n "$start"
+          test -n "$carry"
+          sed -i "${carry}i\\            if (plan.Action == \"shoot\")\\n            {\\n                var shotTarget = ResolveGoalMouthTarget(source.TeamSide, false);\\n                RegisterEvent(\"shot\", currentMinute, source.TeamSide, \"Shot on goal.\", 0, 0, source.PlayerId);\\n                StartTransit(\\n                    source.PlayerId,\\n                    shotTarget,\\n                    currentMinute,\\n                    ShotDurationMinutes,\\n                    1.0f,\\n                    \"shot\",\\n                    OppositeSide(source.TeamSide) + \"-1\",\\n                    OppositeSide(source.TeamSide));\\n                currentDecision = default;\\n                nextDecisionMinute = currentMinute + 0.26f;\\n                currentCameraPreset = \"broadcast\";\\n                currentCameraPresetUntilMinute = currentMinute + 0.24f;\\n                return;\\n            }\\n" "$FILE"
           git diff --check
+          git diff -- "$FILE"
           rm Gtex_Test_Migration/Assets/Code/GTEX/Simulation/README_shot_repair.md
           rm .github/workflows/gtex_shot_decision_repair.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs
+          git add "$FILE"
           git add -u .github/workflows/gtex_shot_decision_repair.yml Gtex_Test_Migration/Assets/Code/GTEX/Simulation/README_shot_repair.md
           git commit -m "fix(gtex): execute shot decisions in shipped simulator"
           git push origin HEAD:fix/gtex-shot-decision
