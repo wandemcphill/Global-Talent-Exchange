@@ -16,7 +16,6 @@ if str(ROOT) not in sys.path:
 from scripts.audit_wallet_payments_treasury_release import audit  # noqa: E402
 from app.auth.service import AuthService  # noqa: E402
 from app.models import (  # noqa: E402
-    AdminRewardRule,
     AdminRuntimeState,
     Base,
     CountryFeaturePolicy,
@@ -31,6 +30,7 @@ from app.models.treasury import PaymentMode, RateDirection, TreasuryWithdrawalSt
 from app.policies.service import PolicyService  # noqa: E402
 from app.treasury.service import TreasuryService  # noqa: E402
 from app.wallets.service import LedgerPosting, WalletService  # noqa: E402
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 def test_wallet_payments_treasury_release_gate_passes() -> None:
@@ -59,7 +59,10 @@ def _make_session():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
+    session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
+    seed_economic_policy(session)
+    session.commit()
+    return session
 
 
 def _create_user(session, *, email: str, username: str):
@@ -74,20 +77,9 @@ def _create_user(session, *, email: str, username: str):
 
 
 def _seed_withdrawal_policy(session) -> None:
-    session.add(
-        AdminRewardRule(
-            rule_key="withdrawal-e2e",
-            title="Withdrawal E2E economic policy",
-            description="Explicit economic policy for treasury withdrawal regression tests.",
-            trading_fee_bps=2000,
-            gift_platform_rake_bps=3000,
-            withdrawal_fee_bps=1000,
-            minimum_withdrawal_fee_credits=Decimal("5.0000"),
-            competition_platform_fee_bps=3000,
-            stability_controls_json={},
-            active=True,
-        )
-    )
+    # _make_session() already seeds the single canonical active policy. A
+    # second active AdminRewardRule here would make resolve_economic_policy()
+    # fail closed on "more than one active" instead of resolving.
     session.add(
         CountryFeaturePolicy(
             country_code="GLOBAL",
@@ -256,9 +248,7 @@ def test_manual_withdrawal_complete_path_reconciles_ledger() -> None:
         assert payout.status.value == "completed"
         assert payout.settlement_transaction_id is not None
 
-        withdrawal_clearing = treasury.wallet_service.ensure_withdrawal_clearing_account(
-            session, LedgerUnit.COIN
-        )
+        withdrawal_clearing = treasury.wallet_service.ensure_withdrawal_clearing_account(session, LedgerUnit.COIN)
         assert treasury.wallet_service.get_balance(session, user_coin) == Decimal("0.0000")
         assert treasury.wallet_service.get_balance(session, user_escrow) == Decimal("0.0000")
         assert treasury.wallet_service.get_balance(session, withdrawal_clearing) == Decimal("110.0000")
@@ -271,8 +261,12 @@ def test_manual_withdrawal_complete_path_reconciles_ledger() -> None:
         assert len(settlement_entries) == 4
         assert {entry.unit for entry in settlement_entries} == {LedgerUnit.COIN}
         assert sum(Decimal(entry.amount) for entry in settlement_entries) == Decimal("0.0000")
-        assert sum(Decimal(entry.amount) for entry in settlement_entries if entry.account_id == user_escrow.id) == Decimal("-110.0000")
-        assert sum(Decimal(entry.amount) for entry in settlement_entries if entry.account_id == withdrawal_clearing.id) == Decimal("110.0000")
+        assert sum(
+            Decimal(entry.amount) for entry in settlement_entries if entry.account_id == user_escrow.id
+        ) == Decimal("-110.0000")
+        assert sum(
+            Decimal(entry.amount) for entry in settlement_entries if entry.account_id == withdrawal_clearing.id
+        ) == Decimal("110.0000")
 
         withdrawal_transactions = session.scalar(
             select(func.count(LedgerTransaction.id)).where(LedgerTransaction.id == payout.settlement_transaction_id)

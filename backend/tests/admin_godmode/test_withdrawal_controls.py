@@ -28,6 +28,7 @@ from app.treasury.service import GTEX_PLATFORM_POSITIONING, TreasuryService
 from app.wallets.router import router as wallet_router
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 @pytest.fixture()
@@ -40,6 +41,8 @@ def admin_wallet_context(tmp_path: Path):
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    seed_economic_policy(session)
+    session.commit()
     auth = AuthService()
     admin_user = auth.register_user(
         session,

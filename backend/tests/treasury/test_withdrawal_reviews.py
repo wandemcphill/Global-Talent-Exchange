@@ -25,6 +25,7 @@ from app.models.wallet import PayoutRequest, PayoutStatus
 from app.policies.service import PolicyService
 from app.treasury.service import TreasuryService
 from app.wallets.service import LedgerPosting, WalletService
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 @pytest.fixture()
@@ -37,6 +38,8 @@ def session():
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db_session:
+        seed_economic_policy(db_session)
+        db_session.commit()
         yield db_session
 
 

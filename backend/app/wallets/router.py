@@ -95,6 +95,10 @@ from app.treasury.schemas import (
     WithdrawalRequestCreate as TreasuryWithdrawalRequestCreate,
     WithdrawalRequestView as TreasuryWithdrawalRequestView,
 )
+from app.treasury.commission_policy import (
+    CommissionPolicyUnavailableError,
+    resolve_commission_policy,
+)
 from app.treasury.service import TreasuryConflictError, TreasuryError, TreasuryService
 
 router = APIRouter()
@@ -260,9 +264,20 @@ def _build_withdrawal_quote(
     treasury = _build_treasury_service(request)
     settings = treasury.ensure_settings(session)
     eligibility = treasury.get_withdrawal_eligibility(session, current_user)
-    commissions = _commission_settings(request)
-    fee_bps = int(commissions.get("withdrawal_fee_bps", 1000) or 1000)
-    minimum_fee = Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000"))
+    # Price the quote from the same authority that will debit the user
+    # (TreasuryService -> resolve_commission_policy -> AdminRewardRule). This
+    # previously read the admin god-mode commissions block -- an unrelated store
+    # with its own 1000bps fallback -- so the fee shown before confirmation
+    # could differ from the fee actually charged.
+    try:
+        commission_policy = resolve_commission_policy(session)
+    except CommissionPolicyUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Withdrawal fees cannot be quoted until an active Admin economic policy is configured.",
+        ) from exc
+    fee_bps = int(commission_policy.withdrawal_fee_bps)
+    minimum_fee = Decimal(str(commission_policy.minimum_withdrawal_fee_credits))
     fee_amount = max((Decimal(amount_coin) * Decimal(fee_bps) / Decimal(10000)), minimum_fee).quantize(
         Decimal("0.0001")
     )
@@ -1457,6 +1472,15 @@ def create_withdrawal_request(
                 bank_account_id=payload.bank_account_id,
                 source_scope=payload.source_scope.value,
                 notes=payload.notes,
+                # Namespace the caller's key by user. The unique index on
+                # payout_requests.idempotency_key is global, so two users
+                # picking the same key ("1", a shared uuid) would otherwise
+                # collide on submission.
+                idempotency_key=(
+                    f"u:{current_user.id}:{payload.idempotency_key.strip()}"
+                    if payload.idempotency_key and payload.idempotency_key.strip()
+                    else None
+                ),
             )
             session.commit()
             session.refresh(withdrawal)

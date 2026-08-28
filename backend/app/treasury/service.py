@@ -628,6 +628,7 @@ class TreasuryService:
         bank_account_id: str | None,
         source_scope: str = "trade",
         notes: str | None = None,
+        idempotency_key: str | None = None,
     ) -> TreasuryWithdrawalRequest:
         settings = self.ensure_settings(session)
         use_manual_payout = settings.withdrawal_mode in {PaymentMode.MANUAL, PaymentMode.HYBRID}
@@ -676,10 +677,25 @@ class TreasuryService:
                 minimum_fee=commission_policy.minimum_withdrawal_fee_credits,
                 actor=user,
                 notes=notes,
+                idempotency_key=idempotency_key,
                 extra_meta={
                     "processor_mode": processor_mode,
                     "payout_channel": payout_channel,
                     "source_scope": source_scope,
+                    # Snapshot the exact fee policy this withdrawal was priced
+                    # under. PHASE_A_WITHDRAWAL_CONTRACT requires the policy
+                    # id/version and rate on every request; without it a later
+                    # Admin rate change leaves no way to prove which policy
+                    # produced a historical fee.
+                    "fee_policy_rule_key": commission_policy.policy_rule_key,
+                    "fee_policy_version": commission_policy.policy_version,
+                    "fee_policy_withdrawal_fee_bps": int(commission_policy.withdrawal_fee_bps),
+                    "fee_policy_minimum_fee_credits": str(commission_policy.minimum_withdrawal_fee_credits),
+                    "fee_policy_effective_at": (
+                        commission_policy.effective_at.isoformat()
+                        if getattr(commission_policy.effective_at, "isoformat", None)
+                        else None
+                    ),
                     "kyc_tier": eligibility.kyc_tier,
                     "per_request_limit_fiat": (
                         str(eligibility.per_request_limit_fiat)
@@ -692,6 +708,19 @@ class TreasuryService:
             )
         except InsufficientBalanceError as exc:
             raise TreasuryConflictError(str(exc)) from exc
+
+        # A replayed submission gets the same PayoutRequest back from
+        # request_payout. treasury_withdrawal_requests.payout_request_id is
+        # unique, so building a second row here would raise IntegrityError --
+        # and would re-notify and re-track an event the user already saw.
+        # Return the withdrawal the first submission created instead.
+        existing_withdrawal = session.scalar(
+            select(TreasuryWithdrawalRequest).where(
+                TreasuryWithdrawalRequest.payout_request_id == result.payout_request.id
+            )
+        )
+        if existing_withdrawal is not None:
+            return existing_withdrawal
 
         reference = self._generate_reference(session, prefix="WDL", model=TreasuryWithdrawalRequest)
         withdrawal = TreasuryWithdrawalRequest(

@@ -30,6 +30,7 @@ from app.wallets.router import router
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.models.user import KycStatus
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 @pytest.fixture()
@@ -42,6 +43,8 @@ def api_context():
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    seed_economic_policy(session)
+    session.commit()
     current_user = AuthService().register_user(
         session,
         email="wallet-http@example.com",
@@ -640,3 +643,52 @@ def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None
     assert Decimal(str(receipt["fee_amount"])) == Decimal("5.0000")
     assert Decimal(str(receipt["total_debit"])) == Decimal("25.0000")
     assert receipt["platform_positioning"] == GTEX_PLATFORM_POSITIONING
+
+
+def test_withdrawal_submission_is_idempotent_per_intent_key(api_context) -> None:
+    """A replayed submission returns the first payout and holds the balance once."""
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
+
+    wallet_service = WalletService()
+    account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+    opening = wallet_service.get_balance(session, account)
+
+    body = {"amount_coin": "20.0000", "source_scope": "trade", "idempotency_key": "submit-once"}
+    first = client.post("/api/wallets/withdrawals", json=body)
+    second = client.post("/api/wallets/withdrawals", json=body)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["payout_request_id"] == first.json()["payout_request_id"]
+    # 20 net + 5 minimum fee, debited once rather than twice.
+    assert wallet_service.get_balance(session, account) == opening - Decimal("25.0000")
+
+
+def test_two_users_may_reuse_the_same_withdrawal_intent_key(api_context) -> None:
+    """The intent key is namespaced per user, so the global unique index cannot collide."""
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
+
+    other = AuthService().register_user(
+        session,
+        email="wallet-http-second@example.com",
+        region_code="NG",
+        username="wallethttpsecond",
+        password="SuperSecret1",
+    )
+    session.commit()
+    _seed_policy_defaults(session, other)
+    _fund_user(session, other, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, other)
+
+    body = {"amount_coin": "20.0000", "source_scope": "trade", "idempotency_key": "shared-key"}
+    mine = client.post("/api/wallets/withdrawals", json=body)
+    client.app.dependency_overrides[get_current_user] = lambda: other
+    theirs = client.post("/api/wallets/withdrawals", json=body)
+
+    assert mine.status_code == 201
+    assert theirs.status_code == 201
+    assert theirs.json()["payout_request_id"] != mine.json()["payout_request_id"]

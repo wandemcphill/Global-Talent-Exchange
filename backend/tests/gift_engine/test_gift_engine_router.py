@@ -16,6 +16,7 @@ from app.gift_engine.router import router
 from app.models import Base, GiftCatalogItem, LedgerEntryReason, LedgerUnit, RevenueShareRule
 from app.models.user import User
 from app.wallets.service import LedgerPosting, WalletService
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 @pytest.fixture()
@@ -28,6 +29,8 @@ def session() -> Iterator[Session]:
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db_session:
+        seed_economic_policy(db_session)
+        db_session.commit()
         yield db_session
     engine.dispose()
 

@@ -298,6 +298,11 @@ class PayoutRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         String(36), ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True, index=True
     )
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Replay protection for withdrawal submission. Nullable so historical rows
+    # and internal callers that supply no intent key stay valid; the unique
+    # index makes a duplicate submission fail at the database rather than
+    # creating a second hold and a second payout record.
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True, unique=True)
 
     user: Mapped["User"] = relationship(back_populates="payout_requests")
     account: Mapped["LedgerAccount"] = relationship(back_populates="payout_requests")

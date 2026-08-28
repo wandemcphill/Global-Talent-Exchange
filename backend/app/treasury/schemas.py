@@ -14,7 +14,6 @@ from app.models.wallet import LedgerUnit
 
 class TreasuryBankAccountView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     currency_code: str
     bank_name: str
@@ -28,7 +27,6 @@ class TreasuryBankAccountView(BaseModel):
 
 class TreasurySettingsView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     settings_key: str
     currency_code: str
@@ -58,7 +56,6 @@ class TreasurySettingsView(BaseModel):
 
 class TreasurySettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     currency_code: str | None = Field(default=None, max_length=8)
     deposit_rate_value: Decimal | None = None
     deposit_rate_direction: RateDirection | None = None
@@ -133,7 +130,6 @@ class TreasuryBankAccountCreate(BaseModel):
 
 class TreasuryBankAccountUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     bank_name: str | None = Field(default=None, max_length=120)
     account_number: str | None = Field(default=None, max_length=32)
     account_name: str | None = Field(default=None, max_length=120)
@@ -164,7 +160,6 @@ class DepositQuoteRequest(BaseModel):
 
 class DepositRequestView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     reference: str
     status: DepositStatus
@@ -225,8 +220,6 @@ class WithdrawalEligibilityView(BaseModel):
     legal_disclosures: list[str] = Field(default_factory=list)
 
 
-
-
 class WithdrawalSourceScope(str, Enum):
     TRADE = "trade"
     COMPETITION = "competition"
@@ -268,7 +261,7 @@ class WithdrawalQuoteView(BaseModel):
 
 
 class WithdrawalReceiptView(BaseModel):
-    withdrawal: WithdrawalRequestView
+    withdrawal: "WithdrawalRequestView"
     gross_amount: Decimal
     fee_amount: Decimal
     net_amount: Decimal
@@ -279,11 +272,24 @@ class WithdrawalReceiptView(BaseModel):
     platform_positioning: str | None = None
     legal_disclosures: list[str] = Field(default_factory=list)
 
+
 class WithdrawalRequestCreate(BaseModel):
     amount_coin: Decimal
     bank_account_id: str | None = None
     source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
     notes: str | None = Field(default=None, max_length=255)
+    # A withdrawal is an economic submission, so replay protection is mandatory
+    # at the public API boundary. The router namespaces this key by user before
+    # it reaches the globally-unique payout idempotency column.
+    idempotency_key: str = Field(min_length=1, max_length=80)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def normalize_idempotency_key(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("idempotency_key must not be blank.")
+        return candidate
 
     @field_validator("amount_coin")
     @classmethod
@@ -295,7 +301,6 @@ class WithdrawalRequestCreate(BaseModel):
 
 class WithdrawalRequestView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     payout_request_id: str
     reference: str
@@ -332,7 +337,6 @@ class WithdrawalRequestView(BaseModel):
 
 class WithdrawalReviewView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     withdrawal_request_id: str
     payout_request_id: str | None
@@ -350,9 +354,7 @@ class WithdrawalReviewView(BaseModel):
 
 
 class WithdrawalBatchCreateRequest(BaseModel):
-    statuses: list[TreasuryWithdrawalStatus] = Field(
-        default_factory=lambda: [TreasuryWithdrawalStatus.APPROVED]
-    )
+    statuses: list[TreasuryWithdrawalStatus] = Field(default_factory=lambda: [TreasuryWithdrawalStatus.APPROVED])
     limit: int = Field(default=50, ge=1, le=200)
     notes: str | None = Field(default=None, max_length=255)
 
@@ -372,7 +374,6 @@ class WithdrawalBatchView(BaseModel):
 
 class KycProfileView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     status: KycStatus
     nin: str | None
@@ -433,7 +434,6 @@ class KycReviewRequest(BaseModel):
 
 class UserBankAccountView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     currency_code: str
     bank_name: str
@@ -456,7 +456,6 @@ class UserBankAccountCreate(BaseModel):
 
 class UserBankAccountUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     bank_name: str | None = Field(default=None, max_length=120)
     account_number: str | None = Field(default=None, max_length=32)
     account_name: str | None = Field(default=None, max_length=120)
@@ -467,7 +466,6 @@ class UserBankAccountUpdate(BaseModel):
 
 class AdminDepositView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     reference: str
     status: DepositStatus
@@ -491,7 +489,6 @@ class AdminDepositView(BaseModel):
 
 class AdminWithdrawalView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     reference: str
     status: TreasuryWithdrawalStatus
@@ -522,7 +519,6 @@ class AdminWithdrawalView(BaseModel):
 
 class AdminKycView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     user_id: str
     status: KycStatus
@@ -542,7 +538,6 @@ class AdminKycView(BaseModel):
 
 class AdminDisputeMessageView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     sender_user_id: str | None
     sender_role: str
@@ -553,7 +548,6 @@ class AdminDisputeMessageView(BaseModel):
 
 class AdminDisputeView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     status: str
     reference: str
