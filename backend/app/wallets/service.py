@@ -906,6 +906,7 @@ class WalletService:
         actor: User | None = None,
         notes: str | None = None,
         extra_meta: dict[str, object] | None = None,
+        idempotency_key: str | None = None,
     ) -> WithdrawalRequestResult:
         normalized_amount = self._normalize_amount(amount)
         if normalized_amount <= Decimal("0.0000"):
@@ -935,7 +936,34 @@ class WalletService:
                     "Competition reward balance is lower than the requested e-game withdrawal."
                 )
 
-        reference = f"payout-request:{generate_uuid()}"
+        normalized_idempotency_key = self._normalize_idempotency_key(idempotency_key)
+        if normalized_idempotency_key is not None:
+            # Scope the replay lookup to the submitting user. The unique index
+            # is global, so an unscoped match would hand one user's payout
+            # record back to another who happened to send the same key.
+            existing = session.scalar(
+                select(PayoutRequest).where(
+                    PayoutRequest.idempotency_key == normalized_idempotency_key,
+                    PayoutRequest.user_id == user.id,
+                )
+            )
+            if existing is not None:
+                existing_meta = self._parse_payout_meta(existing.notes)
+                return WithdrawalRequestResult(
+                    payout_request=existing,
+                    fee_amount=Decimal(str(existing_meta.get("fee_amount", "0.0000"))),
+                    total_debit=Decimal(str(existing_meta.get("total_debit", "0.0000"))),
+                    source_scope=str(existing_meta.get("source_scope", source_scope)),
+                )
+
+        # Derive the hold reference from the caller's intent key when there is
+        # one, so a replay collapses onto the same ledger transaction instead of
+        # minting a fresh uuid and a second hold.
+        reference = (
+            f"payout-request:{normalized_idempotency_key}"
+            if normalized_idempotency_key is not None
+            else f"payout-request:{generate_uuid()}"
+        )
         postings = [
             LedgerPosting(account=user_account, amount=-normalized_amount, source_tag=net_tag),
             LedgerPosting(account=escrow_account, amount=normalized_amount, source_tag=net_tag),
@@ -957,6 +985,11 @@ class WalletService:
             external_reference=reference,
             actor=actor or user,
             transaction_type=LedgerTransactionType.WITHDRAWAL,
+            idempotency_key=(
+                f"withdrawal-hold:{normalized_idempotency_key}"
+                if normalized_idempotency_key is not None
+                else None
+            ),
             metadata={
                 "withdrawal": {
                     "source_scope": source_scope,
@@ -985,6 +1018,7 @@ class WalletService:
             destination_reference=destination_reference.strip(),
             hold_transaction_id=entries[0].transaction_id if entries else None,
             notes=json.dumps(meta, sort_keys=True),
+            idempotency_key=normalized_idempotency_key,
         )
         session.add(payout_request)
         session.flush()

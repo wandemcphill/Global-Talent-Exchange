@@ -284,6 +284,11 @@ class WithdrawalRequestCreate(BaseModel):
     bank_account_id: str | None = None
     source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
     notes: str | None = Field(default=None, max_length=255)
+    # Caller-supplied submission intent. Two sends of the same key from the
+    # same user collapse onto one hold and one payout row instead of two.
+    # Bounded well under the column width so the per-user namespace the router
+    # prepends still fits in PayoutRequest.idempotency_key (String(128)).
+    idempotency_key: str | None = Field(default=None, max_length=80)
 
     @field_validator("amount_coin")
     @classmethod
