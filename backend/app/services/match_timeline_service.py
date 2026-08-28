@@ -1318,12 +1318,21 @@ class MatchTimelineService:
 
         for index, event in enumerate(events):
             event.team_side = self._team_side_from_team_id(home_runtime, away_runtime, event.view.team_id)
-            if event.team_side is not None:
+            non_possession_event = event.view.event_type in {
+                MatchViewerEventType.YELLOW_CARD,
+                MatchViewerEventType.RED_CARD,
+                MatchViewerEventType.SUBSTITUTION,
+                MatchViewerEventType.INJURY,
+                MatchViewerEventType.HALFTIME,
+                MatchViewerEventType.FULLTIME,
+                MatchViewerEventType.NEUTRAL,
+            }
+            if event.team_side is not None and not non_possession_event:
                 last_possession = event.team_side
             prior_home_score = frames[-1].home_score if frames else 0
             prior_away_score = frames[-1].away_score if frames else 0
             phase = self._phase_for_event(event.view.event_type)
-            possession_side = event.team_side or last_possession
+            possession_side = last_possession if non_possession_event else (event.team_side or last_possession)
             build_up = self._build_up_seconds(event.view)
             event_time = max(event.view.time_seconds, last_time + 0.1)
             pre_time = max(last_time + 0.4, event_time - build_up)
