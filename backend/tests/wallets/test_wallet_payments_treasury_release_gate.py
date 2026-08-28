@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 from scripts.audit_wallet_payments_treasury_release import audit  # noqa: E402
 from app.auth.service import AuthService  # noqa: E402
 from app.models import (  # noqa: E402
+    AdminRewardRule,
     AdminRuntimeState,
     Base,
     CountryFeaturePolicy,
@@ -73,6 +74,20 @@ def _create_user(session, *, email: str, username: str):
 
 
 def _seed_withdrawal_policy(session) -> None:
+    session.add(
+        AdminRewardRule(
+            rule_key="withdrawal-e2e",
+            title="Withdrawal E2E economic policy",
+            description="Explicit economic policy for treasury withdrawal regression tests.",
+            trading_fee_bps=2000,
+            gift_platform_rake_bps=3000,
+            withdrawal_fee_bps=1000,
+            minimum_withdrawal_fee_credits=Decimal("5.0000"),
+            competition_platform_fee_bps=3000,
+            stability_controls_json={},
+            active=True,
+        )
+    )
     session.add(
         CountryFeaturePolicy(
             country_code="GLOBAL",
