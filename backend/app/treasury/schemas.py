@@ -14,7 +14,6 @@ from app.models.wallet import LedgerUnit
 
 class TreasuryBankAccountView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     currency_code: str
     bank_name: str
@@ -28,7 +27,6 @@ class TreasuryBankAccountView(BaseModel):
 
 class TreasurySettingsView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     settings_key: str
     currency_code: str
@@ -58,7 +56,6 @@ class TreasurySettingsView(BaseModel):
 
 class TreasurySettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     currency_code: str | None = Field(default=None, max_length=8)
     deposit_rate_value: Decimal | None = None
     deposit_rate_direction: RateDirection | None = None
@@ -80,36 +77,17 @@ class TreasurySettingsUpdate(BaseModel):
     maintenance_message: str | None = Field(default=None, max_length=255)
     whatsapp_number: str | None = Field(default=None, max_length=32)
     active_bank_account_id: str | None = None
-
-    @field_validator(
-        "min_trader_buy_rate_fiat",
-        "max_trader_buy_rate_fiat",
-        "min_trader_sell_rate_fiat",
-        "max_trader_sell_rate_fiat",
-        "max_trader_spread_fiat",
-        "max_buy_above_withdrawal_fiat",
-        "max_sell_below_deposit_fiat",
-        mode="after",
-    )
+    @field_validator("min_trader_buy_rate_fiat", "max_trader_buy_rate_fiat", "min_trader_sell_rate_fiat", "max_trader_sell_rate_fiat", "max_trader_spread_fiat", "max_buy_above_withdrawal_fiat", "max_sell_below_deposit_fiat", mode="after")
     @classmethod
     def validate_non_negative_guardrail(cls, value: Decimal | None) -> Decimal | None:
         if value is not None and value < 0:
             raise ValueError("Trader pricing guardrails must be non-negative.")
         return value
-
     @model_validator(mode="after")
     def validate_trader_guardrail_pairs(self) -> "TreasurySettingsUpdate":
-        if (
-            self.min_trader_buy_rate_fiat is not None
-            and self.max_trader_buy_rate_fiat is not None
-            and self.min_trader_buy_rate_fiat > self.max_trader_buy_rate_fiat
-        ):
+        if self.min_trader_buy_rate_fiat is not None and self.max_trader_buy_rate_fiat is not None and self.min_trader_buy_rate_fiat > self.max_trader_buy_rate_fiat:
             raise ValueError("Minimum trader buy rate cannot exceed maximum trader buy rate.")
-        if (
-            self.min_trader_sell_rate_fiat is not None
-            and self.max_trader_sell_rate_fiat is not None
-            and self.min_trader_sell_rate_fiat > self.max_trader_sell_rate_fiat
-        ):
+        if self.min_trader_sell_rate_fiat is not None and self.max_trader_sell_rate_fiat is not None and self.min_trader_sell_rate_fiat > self.max_trader_sell_rate_fiat:
             raise ValueError("Minimum trader sell rate cannot exceed maximum trader sell rate.")
         return self
 
@@ -121,7 +99,6 @@ class TreasuryBankAccountCreate(BaseModel):
     bank_code: str | None = Field(default=None, max_length=32)
     currency_code: str = Field(default="NGN", max_length=8)
     is_active: bool = True
-
     @field_validator("bank_name", "account_number", "account_name", "bank_code")
     @classmethod
     def normalize_text(cls, value: str | None) -> str | None:
@@ -133,7 +110,6 @@ class TreasuryBankAccountCreate(BaseModel):
 
 class TreasuryBankAccountUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     bank_name: str | None = Field(default=None, max_length=120)
     account_number: str | None = Field(default=None, max_length=32)
     account_name: str | None = Field(default=None, max_length=120)
@@ -145,7 +121,6 @@ class TreasuryBankAccountUpdate(BaseModel):
 class DepositQuoteRequest(BaseModel):
     amount: Decimal
     input_unit: str = Field(default="fiat")
-
     @field_validator("input_unit")
     @classmethod
     def validate_input_unit(cls, value: str) -> str:
@@ -153,7 +128,6 @@ class DepositQuoteRequest(BaseModel):
         if candidate not in {"fiat", "coin"}:
             raise ValueError("input_unit must be fiat or coin")
         return candidate
-
     @field_validator("amount")
     @classmethod
     def validate_amount(cls, value: Decimal) -> Decimal:
@@ -164,7 +138,6 @@ class DepositQuoteRequest(BaseModel):
 
 class DepositRequestView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     reference: str
     status: DepositStatus
@@ -195,7 +168,6 @@ class DepositSubmitRequest(BaseModel):
     sender_bank: str | None = Field(default=None, max_length=120)
     transfer_reference: str | None = Field(default=None, max_length=128)
     proof_attachment_id: str | None = None
-
     @field_validator("payer_name", "sender_bank", "transfer_reference")
     @classmethod
     def normalize_optional(cls, value: str | None) -> str | None:
@@ -225,8 +197,6 @@ class WithdrawalEligibilityView(BaseModel):
     legal_disclosures: list[str] = Field(default_factory=list)
 
 
-
-
 class WithdrawalSourceScope(str, Enum):
     TRADE = "trade"
     COMPETITION = "competition"
@@ -238,7 +208,6 @@ class WithdrawalSourceScope(str, Enum):
 class WithdrawalQuoteRequest(BaseModel):
     amount_coin: Decimal
     source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
-
     @field_validator("amount_coin")
     @classmethod
     def validate_amount(cls, value: Decimal) -> Decimal:
@@ -268,7 +237,7 @@ class WithdrawalQuoteView(BaseModel):
 
 
 class WithdrawalReceiptView(BaseModel):
-    withdrawal: WithdrawalRequestView
+    withdrawal: "WithdrawalRequestView"
     gross_amount: Decimal
     fee_amount: Decimal
     net_amount: Decimal
@@ -279,17 +248,23 @@ class WithdrawalReceiptView(BaseModel):
     platform_positioning: str | None = None
     legal_disclosures: list[str] = Field(default_factory=list)
 
+
 class WithdrawalRequestCreate(BaseModel):
     amount_coin: Decimal
     bank_account_id: str | None = None
     source_scope: WithdrawalSourceScope = WithdrawalSourceScope.TRADE
     notes: str | None = Field(default=None, max_length=255)
-    # Caller-supplied submission intent. Two sends of the same key from the
-    # same user collapse onto one hold and one payout row instead of two.
-    # Bounded well under the column width so the per-user namespace the router
-    # prepends still fits in PayoutRequest.idempotency_key (String(128)).
-    idempotency_key: str | None = Field(default=None, max_length=80)
-
+    # A withdrawal is an economic submission, so replay protection is mandatory
+    # at the public API boundary. The router namespaces this key by user before
+    # it reaches the globally-unique payout idempotency column.
+    idempotency_key: str = Field(min_length=1, max_length=80)
+    @field_validator("idempotency_key")
+    @classmethod
+    def normalize_idempotency_key(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("idempotency_key must not be blank.")
+        return candidate
     @field_validator("amount_coin")
     @classmethod
     def validate_amount(cls, value: Decimal) -> Decimal:
@@ -300,7 +275,6 @@ class WithdrawalRequestCreate(BaseModel):
 
 class WithdrawalRequestView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     payout_request_id: str
     reference: str
@@ -337,7 +311,6 @@ class WithdrawalRequestView(BaseModel):
 
 class WithdrawalReviewView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     withdrawal_request_id: str
     payout_request_id: str | None
@@ -355,9 +328,7 @@ class WithdrawalReviewView(BaseModel):
 
 
 class WithdrawalBatchCreateRequest(BaseModel):
-    statuses: list[TreasuryWithdrawalStatus] = Field(
-        default_factory=lambda: [TreasuryWithdrawalStatus.APPROVED]
-    )
+    statuses: list[TreasuryWithdrawalStatus] = Field(default_factory=lambda: [TreasuryWithdrawalStatus.APPROVED])
     limit: int = Field(default=50, ge=1, le=200)
     notes: str | None = Field(default=None, max_length=255)
 
@@ -377,7 +348,6 @@ class WithdrawalBatchView(BaseModel):
 
 class KycProfileView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     status: KycStatus
     nin: str | None
@@ -412,7 +382,6 @@ class KycSubmitRequest(BaseModel):
     selfie_attachment_id: str | None = Field(default=None, max_length=255)
     proof_of_address_attachment_id: str | None = Field(default=None, max_length=255)
     country_confirmation: str | None = Field(default=None, max_length=120)
-
     @model_validator(mode="after")
     def require_nin_or_bvn(self) -> "KycSubmitRequest":
         if not (self.nin or self.bvn or self.government_id_attachment_id or self.id_document_attachment_id):
@@ -427,7 +396,6 @@ class KycSubmitRequest(BaseModel):
 class KycReviewRequest(BaseModel):
     status: KycStatus
     rejection_reason: str | None = Field(default=None, max_length=255)
-
     @field_validator("status")
     @classmethod
     def validate_status(cls, value: KycStatus) -> KycStatus:
@@ -438,7 +406,6 @@ class KycReviewRequest(BaseModel):
 
 class UserBankAccountView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     currency_code: str
     bank_name: str
@@ -461,7 +428,6 @@ class UserBankAccountCreate(BaseModel):
 
 class UserBankAccountUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     bank_name: str | None = Field(default=None, max_length=120)
     account_number: str | None = Field(default=None, max_length=32)
     account_name: str | None = Field(default=None, max_length=120)
@@ -472,7 +438,6 @@ class UserBankAccountUpdate(BaseModel):
 
 class AdminDepositView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     reference: str
     status: DepositStatus
@@ -496,7 +461,6 @@ class AdminDepositView(BaseModel):
 
 class AdminWithdrawalView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     reference: str
     status: TreasuryWithdrawalStatus
@@ -527,7 +491,6 @@ class AdminWithdrawalView(BaseModel):
 
 class AdminKycView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     user_id: str
     status: KycStatus
@@ -547,7 +510,6 @@ class AdminKycView(BaseModel):
 
 class AdminDisputeMessageView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     sender_user_id: str | None
     sender_role: str
@@ -558,7 +520,6 @@ class AdminDisputeMessageView(BaseModel):
 
 class AdminDisputeView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     status: str
     reference: str
