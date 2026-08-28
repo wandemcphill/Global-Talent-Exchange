@@ -19,7 +19,7 @@ def make_session() -> Session:
     return Session(engine)
 
 
-def test_withdrawal_fee_resolves_from_admin_runtime_state() -> None:
+def test_withdrawal_fee_resolves_from_active_admin_economic_policy() -> None:
     with make_session() as session:
         session.add(
             AdminRewardRule(
