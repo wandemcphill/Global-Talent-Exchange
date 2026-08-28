@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from hashlib import md5
-from math import cos, hypot, sin, sqrt, tau
+from math import cos, hypot, sin, tau
 from typing import Any
 
 from app.match_engine.simulation.models import PlayerRole
@@ -105,7 +105,11 @@ def _side_attacks_right(side: MatchViewerSide, home_attacks_right: bool) -> bool
 def _event_point(event: Any, key: str) -> dict[str, float] | None:
     contract = getattr(event, "render_contract", None) or {}
     value = contract.get(key) if isinstance(contract, dict) else None
-    if isinstance(value, dict) and isinstance(value.get("x"), (int, float)) and isinstance(value.get("y"), (int, float)):
+    if (
+        isinstance(value, dict)
+        and isinstance(value.get("x"), (int, float))
+        and isinstance(value.get("y"), (int, float))
+    ):
         return {"x": _clamp(float(value["x"])), "y": _clamp(float(value["y"]))}
     return None
 
@@ -171,13 +175,21 @@ def _player_position(
             position["x"] = position["x"] + (desired["x"] - position["x"]) * blend
             position["y"] = position["y"] + (desired["y"] - position["y"]) * blend
             if active_event.view.event_type.value in {"goal", "shot", "miss", "save", "penalty"} and abs(local) < 0.55:
-                state = MatchViewerPlayerState.ATTACKING if runtime.view.side is attacking_side else MatchViewerPlayerState.DEFENDING
+                state = (
+                    MatchViewerPlayerState.ATTACKING
+                    if runtime.view.side is attacking_side
+                    else MatchViewerPlayerState.DEFENDING
+                )
         elif player.player_id == active_event.view.secondary_player_id:
             desired = target
             blend = 0.58 * event_weight
             position["x"] = position["x"] + (desired["x"] - position["x"]) * blend
             position["y"] = position["y"] + (desired["y"] - position["y"]) * blend
-            state = MatchViewerPlayerState.MOVING if runtime.view.side is possession_side else MatchViewerPlayerState.DEFENDING
+            state = (
+                MatchViewerPlayerState.MOVING
+                if runtime.view.side is possession_side
+                else MatchViewerPlayerState.DEFENDING
+            )
         elif runtime.view.side is attacking_side and line in {"attack", "midfield"}:
             lane, depth = _hash_phase(player.player_id)
             lane_offset = sin((clock_minute * 0.55) + lane) * (7.0 if line == "attack" else 5.0)
@@ -209,7 +221,9 @@ def _velocity_for_player(runtime: Any, player: Any, **kwargs: Any) -> tuple[floa
     return ((current["x"] - previous["x"]) / 0.08, (current["y"] - previous["y"]) / 0.08)
 
 
-def _animation_for_player(player: Any, line: str, state: MatchViewerPlayerState, speed_ratio: float, event: Any, time_seconds: float) -> MatchViewerAnimationState:
+def _animation_for_player(
+    player: Any, line: str, state: MatchViewerPlayerState, speed_ratio: float, event: Any, time_seconds: float
+) -> MatchViewerAnimationState:
     if event is not None:
         local = time_seconds - float(event.view.time_seconds)
         if player.player_id == event.view.primary_player_id and abs(local) <= 0.45:
@@ -269,7 +283,9 @@ def build_player_payloads(
             )
             speed = hypot(vx, vy)
             speed_ratio = _clamp(speed / 8.5, 0.0, 1.0)
-            animation = _animation_for_player(player, _line(runtime, player_id), state, speed_ratio, active_event, time_seconds)
+            animation = _animation_for_player(
+                player, _line(runtime, player_id), state, speed_ratio, active_event, time_seconds
+            )
             payloads.append(
                 {
                     "player_id": player.player_id,
@@ -288,7 +304,11 @@ def build_player_payloads(
                     "speed_ratio": speed_ratio,
                     "blend_factor": _smoothstep(speed_ratio),
                     "stamina_pct": float(player.base_stamina_pct if player.base_stamina_pct is not None else 100.0),
-                    "has_possession": bool(active_event is not None and player.player_id == active_event.view.primary_player_id and runtime.view.side is possession_side),
+                    "has_possession": bool(
+                        active_event is not None
+                        and player.player_id == active_event.view.primary_player_id
+                        and runtime.view.side is possession_side
+                    ),
                     "facing": {"x": 1.0 if vx >= 0 else -1.0, "y": 0.0},
                     "velocity": {"x": round(vx, 3), "y": round(vy, 3)},
                 }
@@ -309,7 +329,11 @@ def build_ball_payload(
 ) -> dict[str, Any]:
     owner_id = None
     if active_event is not None:
-        owner_id = active_event.view.primary_player_id if possession_side is active_event.team_side else active_event.view.secondary_player_id
+        owner_id = (
+            active_event.view.primary_player_id
+            if possession_side is active_event.team_side
+            else active_event.view.secondary_player_id
+        )
     if not owner_id:
         for player in player_payloads:
             if player["side"] is possession_side and player["role"] is not PlayerRole.GOALKEEPER:
@@ -337,7 +361,11 @@ def build_ball_payload(
         phase = _smoothstep((local + 0.08) / duration)
         x = origin["x"] + ((target["x"] - origin["x"]) * phase)
         y = origin["y"] + ((target["y"] - origin["y"]) * phase)
-        height = 0.05 + (0.18 * sin(phase * 3.14159265)) if event_type in {"shot", "goal", "save", "miss", "penalty"} else 0.03 + (0.10 * sin(phase * 3.14159265))
+        height = (
+            0.05 + (0.18 * sin(phase * 3.14159265))
+            if event_type in {"shot", "goal", "save", "miss", "penalty"}
+            else 0.03 + (0.10 * sin(phase * 3.14159265))
+        )
         state = "in_flight"
     else:
         x, y = (owner_position or {"x": 50.0, "y": 50.0}).values()
@@ -346,7 +374,10 @@ def build_ball_payload(
 
     previous_t = max(0.0, time_seconds - 0.05)
     if event_type in flight_types:
-        previous_phase = _smoothstep((previous_t - event_time + 0.08) / max(0.42, min(2.4, 0.42 + (hypot(target["x"] - origin["x"], target["y"] - origin["y"]) / 32.0))))
+        previous_phase = _smoothstep(
+            (previous_t - event_time + 0.08)
+            / max(0.42, min(2.4, 0.42 + (hypot(target["x"] - origin["x"], target["y"] - origin["y"]) / 32.0)))
+        )
         previous_x = origin["x"] + ((target["x"] - origin["x"]) * previous_phase)
         previous_y = origin["y"] + ((target["y"] - origin["y"]) * previous_phase)
         velocity_x = (x - previous_x) / 0.05
