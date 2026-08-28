@@ -44,13 +44,6 @@ namespace FStudio.GTEX.Simulation
             new(14f, 0f, -8f)
         };
 
-        private enum DecisionAction
-        {
-            Hold,
-            Carry,
-            Pass
-        }
-
         private struct DecisionPlan
         {
             public int Sequence;
@@ -130,7 +123,7 @@ namespace FStudio.GTEX.Simulation
 
             HandleStateTransition(engine.State, currentMinute, engine.HomeScore, engine.AwayScore);
             ConsumeNewEvents(engine, currentMinute);
-            AdvanceDecisionCycle(currentMinute);
+            AdvanceDecisionCycle(currentMinute, engine.State);
             UpdatePlayers(currentMinute, deltaSeconds);
             UpdateBall(currentMinute, deltaSeconds, engine.State);
             UpdateCameraPreset(currentMinute);
@@ -243,6 +236,7 @@ namespace FStudio.GTEX.Simulation
                     currentDecision = default;
                     activeTransit = default;
                     dribbleUntilMinute = -1f;
+                    dribblePlayerId = string.Empty;
                     break;
             }
         }
@@ -270,6 +264,7 @@ namespace FStudio.GTEX.Simulation
                     currentCameraPresetUntilMinute = currentMinute + 0.28f;
                     currentDecision = default;
                     dribbleUntilMinute = -1f;
+                    dribblePlayerId = string.Empty;
                     continue;
                 }
 
@@ -285,6 +280,7 @@ namespace FStudio.GTEX.Simulation
                     currentCameraPresetUntilMinute = currentMinute + 0.22f;
                     currentDecision = default;
                     dribbleUntilMinute = -1f;
+                    dribblePlayerId = string.Empty;
                     continue;
                 }
 
@@ -299,6 +295,7 @@ namespace FStudio.GTEX.Simulation
                     currentDecision = default;
                     activeTransit = default;
                     dribbleUntilMinute = -1f;
+                    dribblePlayerId = string.Empty;
                     RegisterEvent("foul", currentMinute, fouledTeamSide, foulEvent.Summary, engine.HomeScore, engine.AwayScore, ballHolderPlayerId);
                     currentCameraPreset = "broadcast";
                     currentCameraPresetUntilMinute = currentMinute + 0.18f;
@@ -322,10 +319,9 @@ namespace FStudio.GTEX.Simulation
             }
         }
 
-        private void AdvanceDecisionCycle(float currentMinute)
+        private void AdvanceDecisionCycle(float currentMinute, GtexSimState currentState)
         {
-            if (string.Equals(ResolvePhaseToken(lastState), "halftime", StringComparison.Ordinal) ||
-                string.Equals(ResolvePhaseToken(lastState), "fulltime", StringComparison.Ordinal))
+            if (currentState == GtexSimState.HalfTime || currentState == GtexSimState.FullTime)
             {
                 return;
             }
@@ -335,28 +331,37 @@ namespace FStudio.GTEX.Simulation
                 return;
             }
 
-            if (dribbleUntilMinute >= currentMinute && string.Equals(dribblePlayerId, ballHolderPlayerId, StringComparison.Ordinal))
+            if (!string.IsNullOrWhiteSpace(dribblePlayerId) && dribbleUntilMinute >= currentMinute)
             {
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(ballHolderPlayerId) && currentMinute >= nextDecisionMinute)
+            if (currentDecision.Active)
             {
-                var source = FindPlayer(ballHolderPlayerId);
-                if (source != null)
+                if (currentMinute >= currentDecision.ExecuteAtMinute)
                 {
-                    currentDecision = BuildDecisionPlan(source, currentMinute);
                     ApplyDecisionPlan(currentDecision, currentMinute);
-                    return;
                 }
+                return;
             }
 
-            if (currentDecision.Active && currentMinute < currentDecision.ExpiresAtMinute)
+            if (currentMinute < nextDecisionMinute || string.IsNullOrWhiteSpace(ballHolderPlayerId))
             {
                 return;
             }
 
-            nextDecisionMinute = currentMinute + DecisionMinGapMinutes;
+            var source = FindPlayer(ballHolderPlayerId);
+            if (source == null)
+            {
+                nextDecisionMinute = currentMinute + DecisionMinGapMinutes;
+                return;
+            }
+
+            currentDecision = BuildDecisionPlan(source, currentMinute);
+            if (currentDecision.Active && currentMinute >= currentDecision.ExecuteAtMinute)
+            {
+                ApplyDecisionPlan(currentDecision, currentMinute);
+            }
         }
 
         private DecisionPlan BuildDecisionPlan(GtexSimSpatialPlayerState sourcePlayer, float currentMinute)
@@ -387,9 +392,7 @@ namespace FStudio.GTEX.Simulation
                 }
             }
 
-            var forwardValue = sourcePlayer.TeamSide == "home"
-                ? bestTarget.x - sourcePlayer.Position.x
-                : sourcePlayer.Position.x - bestTarget.x;
+            var forwardValue = ResolveAttackAxisDelta(bestTarget.x - sourcePlayer.Position.x, sourcePlayer.TeamSide);
             var distanceToGoal = DistanceToOpposingGoal(sourcePlayer.TeamSide, sourcePlayer.Position);
             var closeEnoughToCarry = pressure < 0.48f && forwardValue > 2.2f;
             var underImmediatePressure = pressure > 0.72f;
@@ -446,12 +449,8 @@ namespace FStudio.GTEX.Simulation
         {
             if (!plan.Active || string.IsNullOrWhiteSpace(plan.SourcePlayerId))
             {
-                return;
-            }
-
-            nextDecisionMinute = plan.ExpiresAtMinute;
-            if (currentMinute < plan.ExecuteAtMinute)
-            {
+                currentDecision = default;
+                nextDecisionMinute = currentMinute + DecisionMinGapMinutes;
                 return;
             }
 
@@ -474,7 +473,6 @@ namespace FStudio.GTEX.Simulation
                     if (!contestOutcome.Success)
                     {
                         target = ResolveInterceptPoint(source, receiver, contestOutcome.Defender);
-                        var interceptingPlayer = FindPlayer(contestOutcome.Defender);
                         RegisterEvent("interception", currentMinute, OppositeSide(source.TeamSide), "Pass intercepted.", 0, 0, contestOutcome.Defender, source.PlayerId);
                         StartTransit(source.PlayerId, target, currentMinute, ResolvePassDuration(source, target), ResolvePassArcHeight(source, receiver, target), "pass", contestOutcome.Defender, OppositeSide(source.TeamSide));
                         nextDecisionMinute = currentMinute + 0.18f;
@@ -486,6 +484,7 @@ namespace FStudio.GTEX.Simulation
                     StartTransit(source.PlayerId, target, currentMinute, ResolvePassDuration(source, target), ResolvePassArcHeight(source, receiver, target), "pass", receiver.PlayerId, source.TeamSide);
                     firstTouchSettleUntilMinute = currentMinute + FirstTouchSettleMinutes;
                     currentDecision = default;
+                    nextDecisionMinute = currentMinute + DecisionMinGapMinutes;
                     currentCameraPreset = "broadcast";
                     currentCameraPresetUntilMinute = currentMinute + 0.14f;
                     return;
@@ -502,7 +501,7 @@ namespace FStudio.GTEX.Simulation
                 return;
             }
 
-            nextDecisionMinute = currentMinute + Mathf.Lerp(0.14f, 0.3f, plan.Pressure);
+            nextDecisionMinute = Mathf.Max(currentMinute + DecisionMinGapMinutes, plan.ExpiresAtMinute);
             currentDecision = default;
         }
 
@@ -564,14 +563,13 @@ namespace FStudio.GTEX.Simulation
             var roleQuality = string.Equals(receiver.Line, "attack", StringComparison.Ordinal) ? 0.88f :
                 string.Equals(receiver.Line, "midfield", StringComparison.Ordinal) ? 0.76f : 0.58f;
             var pressurePenalty = Mathf.Clamp01(sourcePressure) * 0.24f;
-            return
-                distanceQuality * 0.23f +
-                forwardQuality * 0.22f +
-                space * 0.30f +
-                roleQuality * 0.13f +
-                laneBias * 0.04f -
-                risk * 0.26f -
-                pressurePenalty;
+            return distanceQuality * 0.23f +
+                   forwardQuality * 0.22f +
+                   space * 0.30f +
+                   roleQuality * 0.13f +
+                   laneBias * 0.04f -
+                   risk * 0.26f -
+                   pressurePenalty;
         }
 
         private float ResolvePressure(GtexSimSpatialPlayerState player, GtexSimSpatialPlayerState[] opponents)
@@ -641,6 +639,11 @@ namespace FStudio.GTEX.Simulation
 
         private float ResolvePassRisk(GtexSimSpatialPlayerState source, GtexSimSpatialPlayerState receiver, GtexSimSpatialPlayerState[] opponents, Vector3 target)
         {
+            if (source == null || receiver == null)
+            {
+                return 0.5f;
+            }
+
             var corridorRisk = 0f;
             var direction = target - source.Position;
             var distance = direction.magnitude;
@@ -672,8 +675,7 @@ namespace FStudio.GTEX.Simulation
                 }
             }
 
-            var receptionPressure = ResolveReceiverContestRisk(receiver, opponents);
-            return Mathf.Clamp01(corridorRisk * 0.58f + receptionPressure * 0.42f);
+            return Mathf.Clamp01(corridorRisk * 0.58f + ResolveReceiverContestRisk(receiver, opponents) * 0.42f);
         }
 
         private float ResolveReceiverContestRisk(GtexSimSpatialPlayerState receiver, GtexSimSpatialPlayerState[] opponents)
@@ -724,28 +726,22 @@ namespace FStudio.GTEX.Simulation
         private ContestOutcome EvaluatePossessionContest(int sequence, float risk)
         {
             var sampled = Mathf.Clamp01((float)decisionRandom.NextDouble() * 0.9f + ((sequence % 5) * 0.02f));
-            var defender = ResolveClosestOpponentToReceiver();
             return new ContestOutcome
             {
                 Success = sampled >= risk * 0.72f,
-                Defender = defender
+                Defender = ResolveClosestOpponentToDecisionReceiver()
             };
         }
 
-        private string ResolveClosestOpponentToReceiver()
+        private string ResolveClosestOpponentToDecisionReceiver()
         {
             var receiver = !string.IsNullOrWhiteSpace(currentDecision.ReceiverPlayerId)
                 ? FindPlayer(currentDecision.ReceiverPlayerId)
-                : null;
-            if (receiver == null)
-            {
-                receiver = FindPlayer(ballHolderPlayerId);
-            }
-
-            var opponents = ResolveTeamPlayers(OppositeSide(possessionSide));
+                : FindPlayer(ballHolderPlayerId);
+            var opponents = ResolveTeamPlayers(receiver != null ? OppositeSide(receiver.TeamSide) : OppositeSide(possessionSide));
             if (receiver == null || opponents == null)
             {
-                return ResolveNearestOutfieldPlayerId(OppositeSide(possessionSide), receiver != null ? receiver.Position : ResolveBallAnchor(lastClockMinute));
+                return ResolveNearestOutfieldPlayerId(OppositeSide(possessionSide), ResolveBallAnchor(lastClockMinute));
             }
 
             return ResolveNearestOutfieldPlayerId(OppositeSide(receiver.TeamSide), receiver.Position);
@@ -772,7 +768,6 @@ namespace FStudio.GTEX.Simulation
             var ballAnchor = ResolveBallAnchor(currentMinute);
             var receiverId = activeTransit.Active ? activeTransit.PostTransitHolderPlayerId : string.Empty;
             var sourceId = !string.IsNullOrWhiteSpace(ballHolderPlayerId) ? ballHolderPlayerId : receiverId;
-            var sourcePlayer = FindPlayer(sourceId);
             var supportPlayerId = teamHasPossession ? ResolveSupportPlayerId(teamSide, sourceId, receiverId) : string.Empty;
             var runnerPlayerId = teamHasPossession ? ResolveRunnerPlayerId(teamSide, sourceId, receiverId) : string.Empty;
             var presserPlayerId = !teamHasPossession ? ResolveNearestOutfieldPlayerId(teamSide, ballAnchor) : string.Empty;
@@ -995,6 +990,7 @@ namespace FStudio.GTEX.Simulation
             dribbleUntilMinute = -1f;
             dribblePlayerId = string.Empty;
             currentDecision = default;
+            nextDecisionMinute = currentMinute + 0.12f;
             RegisterEvent("turnover", currentMinute, possessionSide, "Possession won under pressure.", 0, 0, tacklerId, holder.PlayerId);
             currentCameraPreset = "broadcast";
             currentCameraPresetUntilMinute = currentMinute + 0.12f;
@@ -1170,6 +1166,7 @@ namespace FStudio.GTEX.Simulation
 
             var bestScore = float.NegativeInfinity;
             var bestPlayerId = string.Empty;
+            var opponents = ResolveTeamPlayers(OppositeSide(teamSide));
             for (var index = 0; index < teamPlayers.Length; index += 1)
             {
                 var candidate = teamPlayers[index];
@@ -1186,7 +1183,7 @@ namespace FStudio.GTEX.Simulation
                 score += string.Equals(candidate.Line, "midfield", StringComparison.Ordinal) ? 3.4f : 0f;
                 score += string.Equals(candidate.Line, "defense", StringComparison.Ordinal) ? 1.6f : 0f;
                 score += attackDelta > -8f && attackDelta < 8f ? 1.6f : 0f;
-                score += ResolveSpaceScore(candidate, ResolveTeamPlayers(OppositeSide(teamSide)), candidate.Position) * 1.6f;
+                score += ResolveSpaceScore(candidate, opponents, candidate.Position) * 1.6f;
                 score -= Mathf.Abs(distance - 10f) * 0.12f;
                 if (score > bestScore)
                 {
@@ -1209,6 +1206,7 @@ namespace FStudio.GTEX.Simulation
 
             var bestScore = float.NegativeInfinity;
             var bestPlayerId = string.Empty;
+            var opponents = ResolveTeamPlayers(OppositeSide(teamSide));
             for (var index = 0; index < teamPlayers.Length; index += 1)
             {
                 var candidate = teamPlayers[index];
@@ -1220,7 +1218,7 @@ namespace FStudio.GTEX.Simulation
                 }
 
                 var attackDelta = ResolveAttackAxisDelta(candidate.Position.x - sourcePlayer.Position.x, teamSide);
-                var space = ResolveSpaceScore(candidate, ResolveTeamPlayers(OppositeSide(teamSide)), candidate.Position);
+                var space = ResolveSpaceScore(candidate, opponents, candidate.Position);
                 var score = (string.Equals(candidate.Line, "attack", StringComparison.Ordinal) ? 3.8f : 0f) +
                             (IsWideRole(candidate) ? 1.1f : 0f) +
                             Mathf.Clamp(attackDelta, 0f, 18f) * 0.2f +
@@ -1599,33 +1597,16 @@ namespace FStudio.GTEX.Simulation
             return ClampToPitch(fallback);
         }
 
-        private Vector3 ResolveNearestPlayerPosition(string teamSide, Vector3 target)
+        private static Vector3 ResolveGoalMouthTarget(string teamSide, bool missedChance)
         {
-            var teamPlayers = ResolveTeamPlayers(teamSide);
-            if (teamPlayers == null)
+            var x = teamSide == "home" ? PitchLengthMeters * 0.5f : -PitchLengthMeters * 0.5f;
+            var z = missedChance ? 7.5f : 0f;
+            if (teamSide == "away")
             {
-                return target;
+                z *= -1f;
             }
 
-            var nearest = target;
-            var bestDistance = float.MaxValue;
-            for (var index = 0; index < teamPlayers.Length; index += 1)
-            {
-                var candidate = teamPlayers[index];
-                if (candidate == null || candidate.Role == "GK")
-                {
-                    continue;
-                }
-
-                var distance = Vector3.Distance(candidate.Position, target);
-                if (distance < bestDistance)
-                {
-                    bestDistance = distance;
-                    nearest = candidate.Position;
-                }
-            }
-
-            return nearest;
+            return new Vector3(x, GtexPlaybackSanitizer.DefaultBallHeight, z);
         }
 
         private static string ResolvePhaseToken(GtexSimState state)
