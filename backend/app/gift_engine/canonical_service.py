@@ -8,7 +8,12 @@ from sqlalchemy import select
 from app.core.events import DomainEvent
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
 from app.economy.economic_policy import compute_gift_split
-from app.gift_engine.service import GiftEngineError, GiftEngineService as LegacyGiftEngineService
+from app.gift_engine.service import (
+    MATCH_SCOPE_GIFT_MAX_COUNT,
+    MATCH_SCOPE_GIFT_WINDOW_SECONDS,
+    GiftEngineError,
+    GiftEngineService as LegacyGiftEngineService,
+)
 from app.models.base import generate_uuid
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.economy_config import GiftCatalogItem
@@ -81,6 +86,24 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             raise GiftEngineError("Gift recipient could not be resolved.")
         if recipient.id == sender.id:
             raise GiftEngineError("Users cannot send gifts to themselves.")
+
+        if requested_scope == "gtex_competition":
+            # This anti-abuse control lived only in the legacy send_gift() this
+            # class overrides. Overriding the method dropped the check entirely
+            # rather than inheriting it, silently disabling match-scope gift
+            # rate limiting once the canonical conversion path became the
+            # runtime entrypoint.
+            recent_pair_count = self._match_scope_gift_count(
+                sender_id=sender.id,
+                recipient_id=recipient.id,
+                source_scope=requested_scope,
+                window_seconds=MATCH_SCOPE_GIFT_WINDOW_SECONDS,
+            )
+            if recent_pair_count >= MATCH_SCOPE_GIFT_MAX_COUNT:
+                raise GiftEngineError(
+                    "Match gifting is rate limited to 5 gifts per minute for each sender-recipient pair.",
+                    reason="match_gift_rate_limited",
+                )
 
         gift_key = str(kwargs.get("gift_key") or "").strip()
         gift = self.session.scalar(

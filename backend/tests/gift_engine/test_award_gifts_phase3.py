@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -24,6 +24,7 @@ from app.models import (
     LiveThreadMessage,
 )
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 @pytest.fixture()
@@ -36,6 +37,8 @@ def session():
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db_session:
+        seed_economic_policy(db_session)
+        db_session.commit()
         yield db_session
 
 
@@ -68,30 +71,26 @@ def _fund_fan_coin(session, user, amount: Decimal) -> None:
 
 
 def _allow_mythic_awards(session) -> None:
-    session.add(
-        AdminRewardRule(
-            rule_key="phase3-award-gift-controls",
-            title="Phase 3 award gift controls",
-            description="Test-safe high limits for mythic award packs.",
-            trading_fee_bps=2000,
-            gift_platform_rake_bps=3000,
-            withdrawal_fee_bps=1000,
-            minimum_withdrawal_fee_credits=Decimal("5.0000"),
-            competition_platform_fee_bps=2000,
-            stability_controls_json=AdminRewardRuleStabilityControls(
-                user_hosted_gift={
-                    "max_amount": "20000.0000",
-                    "daily_sender_limit": "50000.0000",
-                    "daily_recipient_limit": "50000.0000",
-                    "daily_pair_limit": "50000.0000",
-                    "cooldown_seconds": 0,
-                    "burst_window_seconds": 300,
-                    "burst_max_count": 20,
-                    "review_threshold_bps": 9500,
-                }
-            ).model_dump(mode="json"),
-            active=True,
-        )
+    # Replaces the canonical policy instead of adding a second active rule:
+    # resolve_economic_policy() fails closed on more than one.
+    seed_economic_policy(
+        session,
+        rule_key="phase3-award-gift-controls",
+        title="Phase 3 award gift controls",
+        description="Test-safe high limits for mythic award packs.",
+        competition_platform_fee_bps=2000,
+        stability_controls_json=AdminRewardRuleStabilityControls(
+            user_hosted_gift={
+                "max_amount": "20000.0000",
+                "daily_sender_limit": "50000.0000",
+                "daily_recipient_limit": "50000.0000",
+                "daily_pair_limit": "50000.0000",
+                "cooldown_seconds": 0,
+                "burst_window_seconds": 300,
+                "burst_max_count": 20,
+                "review_threshold_bps": 9500,
+            }
+        ).model_dump(mode="json"),
     )
     session.commit()
 
@@ -137,7 +136,12 @@ def test_award_catalog_seeds_ballon_dor_and_sends_mythic_discussion_gift(session
     assert transaction.gross_amount == Decimal("10000.0000")
     assert transaction.platform_rake_amount == Decimal("3000.0000")
     assert transaction.recipient_net_amount == Decimal("7000.0000")
-    assert transaction.ledger_unit == LedgerUnit.CREDIT
+    # Phase A: a gift is spent in FanCoin and received as GTEX Coin. The
+    # deprecated single ledger_unit field now carries the destination unit, so
+    # assert the explicit source/destination pair instead.
+    assert transaction.source_ledger_unit == LedgerUnit.CREDIT
+    assert transaction.destination_ledger_unit == LedgerUnit.COIN
+    assert transaction.ledger_unit == LedgerUnit.COIN
     assert transaction.currency_label if hasattr(transaction, "currency_label") else True
     assert transaction.recipient_type == "discussion_thread"
     assert transaction.recipient_user_id == recipient.id
@@ -159,11 +163,19 @@ def test_award_catalog_seeds_ballon_dor_and_sends_mythic_discussion_gift(session
         session.scalar(select(GiftTransaction).where(GiftTransaction.idempotency_key == "award-night-ballon-dor")).id
         == transaction.id
     )
+    # Phase A: the ledger transaction is written by the conversion service and
+    # carries the conversion identity, not the caller's gift idempotency key.
+    # Gift-level replay protection is the GiftTransaction assertion above.
+    ledger_transaction = session.get(LedgerTransaction, transaction.ledger_transaction_id)
+    assert ledger_transaction is not None
+    assert ledger_transaction.idempotency_key == f"gift-conversion:{transaction.id}"
     assert (
         session.scalar(
-            select(LedgerTransaction).where(LedgerTransaction.idempotency_key == "award-night-ballon-dor")
-        ).id
-        == transaction.ledger_transaction_id
+            select(func.count(LedgerTransaction.id)).where(
+                LedgerTransaction.idempotency_key == f"gift-conversion:{transaction.id}"
+            )
+        )
+        == 1
     )
 
     user_stats = session.scalar(

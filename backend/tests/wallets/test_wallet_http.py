@@ -30,6 +30,7 @@ from app.wallets.router import router
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.models.user import KycStatus
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 @pytest.fixture()
@@ -42,6 +43,8 @@ def api_context():
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    seed_economic_policy(session)
+    session.commit()
     current_user = AuthService().register_user(
         session,
         email="wallet-http@example.com",

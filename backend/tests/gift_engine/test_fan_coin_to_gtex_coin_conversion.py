@@ -22,6 +22,7 @@ from app.models import (
     RevenueShareRule,
 )
 from app.wallets.service import LedgerPosting, WalletService
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 def _make_session():
@@ -47,20 +48,6 @@ def _create_user(session, *, email: str, username: str):
 
 def _seed_gift_economy(session, sender, *, gift_key: str = "conversion-star"):
     session.add(
-        AdminRewardRule(
-            rule_key="gift-conversion-test",
-            title="Gift conversion test policy",
-            description="Explicit economic policy for gift conversion regression tests.",
-            trading_fee_bps=2000,
-            gift_platform_rake_bps=3000,
-            withdrawal_fee_bps=1000,
-            minimum_withdrawal_fee_credits=Decimal("5.0000"),
-            competition_platform_fee_bps=3000,
-            stability_controls_json={},
-            active=True,
-        )
-    )
-    session.add(
         GiftCatalogItem(
             key=gift_key,
             display_name="Conversion Star",
@@ -68,13 +55,16 @@ def _seed_gift_economy(session, sender, *, gift_key: str = "conversion-star"):
             active=True,
         )
     )
+    # The gift rake is read from the Admin economic policy, not RevenueShareRule.
+    # The legacy rule stays seeded with a deliberately different share so these
+    # tests also prove the retired authority can no longer move the split.
     session.add(
         RevenueShareRule(
             rule_key="gift-30",
             scope="gift",
             title="Gift 30 percent rake",
             description=None,
-            platform_share_bps=3000,
+            platform_share_bps=9500,
             creator_share_bps=0,
             recipient_share_bps=None,
             burn_bps=0,
@@ -82,6 +72,7 @@ def _seed_gift_economy(session, sender, *, gift_key: str = "conversion-star"):
             active=True,
         )
     )
+    seed_economic_policy(session, gift_platform_rake_bps=3000)
     session.commit()
 
     wallet = WalletService()

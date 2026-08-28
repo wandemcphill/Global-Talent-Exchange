@@ -20,6 +20,7 @@ from app.models.user import User, UserRole
 from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntry, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.reward_engine.service import RewardEngineService
 from app.wallets.service import LedgerPosting, WalletService
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 @pytest.fixture(scope='session')
@@ -127,17 +128,16 @@ def _create_reward_rule(
     trading_fee_bps: int = 2000,
     competition_platform_fee_bps: int = 1000,
 ) -> AdminRewardRule:
-    rule = AdminRewardRule(
-        rule_key='platform-economy-defaults',
+    # migrated_economy_db runs the full migration chain, which now seeds
+    # 'platform-economy-defaults' itself (0113/0114). A raw insert here
+    # collided with that row on rule_key; upsert onto it instead.
+    return seed_economic_policy(
+        session,
         title='Platform defaults',
         description='Default configurable fee envelope.',
         trading_fee_bps=trading_fee_bps,
         competition_platform_fee_bps=competition_platform_fee_bps,
-        active=True,
     )
-    session.add(rule)
-    session.flush()
-    return rule
 
 
 def _create_service_pricing_rule(
