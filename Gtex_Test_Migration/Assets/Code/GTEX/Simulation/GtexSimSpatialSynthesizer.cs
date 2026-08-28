@@ -786,8 +786,8 @@ namespace FStudio.GTEX.Simulation
                 var anchor = teamSide == "home" ? HomeAnchors[index] : MirrorAnchor(HomeAnchors[index]);
                 var lineWeight = ResolveLineWeight(player.Line);
                 var possessionShift = attackDirection * (teamHasPossession ? 1f : -0.34f) * lineWeight * 4.25f;
-                var roamX = Mathf.Sin(currentMinute * 0.41f + index * 0.67f) * (player.Role == "GK" ? 0.12f : 0.38f);
-                var roamZ = Mathf.Cos(currentMinute * 0.53f + index * 0.49f) * (player.Role == "GK" ? 0.38f : 1.0f);
+                var roamX = 0f;
+                var roamZ = 0f;
                 var targetPosition = ClampToPitch(anchor + new Vector3(possessionShift + roamX, 0f, roamZ));
                 var playerId = player.PlayerId ?? string.Empty;
                 var isGoalkeeper = string.Equals(player.Role, "GK", StringComparison.Ordinal);
