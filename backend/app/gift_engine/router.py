@@ -17,7 +17,9 @@ from app.gift_engine.schemas import (
     GiftStatsView,
     GiftTransactionView,
 )
+from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
 from app.gift_engine.service import GiftEngineError, GiftEngineService
+from app.models.economic_conversion import EconomicConversion
 from app.models.economy_config import GiftCatalogItem
 from app.models.gift_transaction import GiftAbuseFlag, GiftStats, GiftTransactionStatus
 from app.models.gift_combo_event import GiftComboEvent
@@ -447,37 +449,70 @@ def admin_refund_gift_event(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Gift users are no longer available.")
 
     wallet_service = WalletService()
-    sender_account = wallet_service.get_user_account(session, sender, transaction.ledger_unit)
-    recipient_account = wallet_service.get_user_account(session, recipient, transaction.ledger_unit)
-    platform_account = wallet_service.ensure_platform_account(session, transaction.ledger_unit)
-    source_tag = (
-        LedgerSourceTag.USER_HOSTED_GIFT_INCOME_FANCOIN
-        if transaction.ledger_unit.value == "credit"
-        else LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
+    conversion = (
+        session.get(EconomicConversion, transaction.economic_conversion_id)
+        if transaction.economic_conversion_id
+        else None
     )
-    try:
-        wallet_service.append_transaction(
-            session,
-            postings=[
-                LedgerPosting(
-                    account=recipient_account, amount=-transaction.recipient_net_amount, source_tag=source_tag
-                ),
-                LedgerPosting(
-                    account=platform_account, amount=-transaction.platform_rake_amount, source_tag=source_tag
-                ),
-                LedgerPosting(account=sender_account, amount=transaction.gross_amount, source_tag=source_tag),
-            ],
-            reason=LedgerEntryReason.ADJUSTMENT,
-            source_tag=source_tag,
-            reference=f"gift-refund:{transaction.id}",
-            description=f"Admin refund for gift {transaction.gift_catalog_item.key}",
-            external_reference=f"gift-refund:{transaction.id}",
-            actor=actor,
-            idempotency_key=f"gift-refund:{transaction.id}",
-            metadata={"gift_transaction_id": transaction.id, "admin_user_id": actor.id},
+
+    if conversion is not None:
+        # Canonical FanCoin -> GTEX Coin gift. Reversing it in one unit would
+        # refund the sender in withdrawable Coin for a FanCoin debit that was
+        # never unwound, so the compensation runs through the conversion
+        # authority that posted the original two legs.
+        try:
+            FanCoinGiftConversionService(session, wallet_service=wallet_service).reverse(
+                conversion=conversion,
+                actor=actor,
+                note=f"Admin refund for gift {transaction.gift_catalog_item.key}",
+            )
+        except InsufficientBalanceError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        except EconomicConversionError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    elif transaction.source_ledger_unit is transaction.destination_ledger_unit:
+        # Legacy single-unit gift recorded before cross-currency conversion.
+        legacy_unit = transaction.source_ledger_unit
+        sender_account = wallet_service.get_user_account(session, sender, legacy_unit)
+        recipient_account = wallet_service.get_user_account(session, recipient, legacy_unit)
+        platform_account = wallet_service.ensure_platform_account(session, legacy_unit)
+        source_tag = (
+            LedgerSourceTag.USER_HOSTED_GIFT_INCOME_FANCOIN
+            if legacy_unit.value == "credit"
+            else LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
         )
-    except InsufficientBalanceError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        try:
+            wallet_service.append_transaction(
+                session,
+                postings=[
+                    LedgerPosting(
+                        account=recipient_account, amount=-transaction.recipient_net_amount, source_tag=source_tag
+                    ),
+                    LedgerPosting(
+                        account=platform_account, amount=-transaction.platform_rake_amount, source_tag=source_tag
+                    ),
+                    LedgerPosting(account=sender_account, amount=transaction.gross_amount, source_tag=source_tag),
+                ],
+                reason=LedgerEntryReason.ADJUSTMENT,
+                source_tag=source_tag,
+                reference=f"gift-refund:{transaction.id}",
+                description=f"Admin refund for gift {transaction.gift_catalog_item.key}",
+                external_reference=f"gift-refund:{transaction.id}",
+                actor=actor,
+                idempotency_key=f"gift-refund:{transaction.id}",
+                metadata={"gift_transaction_id": transaction.id, "admin_user_id": actor.id},
+            )
+        except InsufficientBalanceError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This gift crossed currencies but has no economic conversion record, "
+                "so it cannot be reversed automatically. Escalate for manual settlement."
+            ),
+        )
+
     transaction.status = GiftTransactionStatus.REFUNDED
     transaction.abuse_status = "review"
     transaction.metadata_json = {

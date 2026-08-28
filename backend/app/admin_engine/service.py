@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.admin_engine.schemas import (
@@ -400,13 +400,35 @@ class AdminEngineService:
         record.stability_controls_json = self.normalize_stability_controls_payload(payload.stability_controls)
         record.active = payload.active
         if payload.active:
+            # Exclude by rule_key, not id. A newly constructed record still has
+            # id=None at this point, so `id != record.id` compiles to
+            # `id IS NOT NULL` and matches every active row -- including the one
+            # autoflush is about to insert. That left zero active policies and
+            # hard-stopped every flow behind resolve_economic_policy().
             self.session.execute(
                 update(AdminRewardRule)
-                .where(AdminRewardRule.active.is_(True), AdminRewardRule.id != record.id)
+                .where(
+                    AdminRewardRule.active.is_(True),
+                    AdminRewardRule.rule_key != payload.rule_key,
+                )
                 .values(active=False)
             )
         record.updated_by_user_id = actor.id
         self.session.flush()
+        if payload.active:
+            # Post-condition, not decoration: resolve_economic_policy() fails
+            # closed on zero active rules as well as on several, so an activation
+            # that leaves any other count would take the whole economy offline.
+            # Raising here aborts the surrounding transaction and leaves the
+            # previous policy in place instead of committing an unusable state.
+            active_count = self.session.scalar(
+                select(func.count(AdminRewardRule.id)).where(AdminRewardRule.active.is_(True))
+            )
+            if active_count != 1:
+                raise ValueError(
+                    "Activating an Admin economic policy must leave exactly one active rule, "
+                    f"found {active_count}."
+                )
         return record
 
     def schedule_preview(self, requests: Iterable, /):
