@@ -484,7 +484,8 @@ def _unity_ball_payload(frame, active_event, players_by_id: dict[str, object]) -
     velocity = frame.ball.velocity
     spin = frame.ball.spin
     velocity_x = _float_or_default(velocity.x if velocity is not None else None)
-    velocity_z = _float_or_default(velocity.z if velocity is not None else None, default=1.0)
+    velocity_z = _float_or_default(velocity.z if velocity is not None else None, default=0.0)
+    speed = (velocity_x * velocity_x + velocity_z * velocity_z) ** 0.5
     return {
         "entityId": "ball",
         "playerId": owner_player_id,
@@ -498,7 +499,7 @@ def _unity_ball_payload(frame, active_event, players_by_id: dict[str, object]) -
         "highlighted": False,
         "hasPossession": bool(owner_player_id),
         "animationState": "ball",
-        "speedRatio": 1.0 if velocity is not None else 0.0,
+        "speedRatio": min(1.0, speed / 18.0),
         "state": str(frame.ball.state or "rolling"),
         "x": _world_x(frame.ball.position.x),
         "y": round(_float_or_default(frame.ball.height), 3),
@@ -506,8 +507,8 @@ def _unity_ball_payload(frame, active_event, players_by_id: dict[str, object]) -
         "velocityX": round(velocity_x, 3),
         "velocityY": round(_float_or_default(velocity.y if velocity is not None else None), 3),
         "velocityZ": round(velocity_z, 3),
-        "facingX": round(velocity_x, 3),
-        "facingZ": round(velocity_z, 3),
+        "facingX": round(velocity_x / speed, 3) if speed > 0.001 else 0.0,
+        "facingZ": round(velocity_z / speed, 3) if speed > 0.001 else 0.0,
         "spin": round(_float_or_default(getattr(spin, "z", None)), 3),
         "trajectoryType": _ball_trajectory_type(active_event),
         "isBall": True,
