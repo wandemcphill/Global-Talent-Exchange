@@ -1,4 +1,5 @@
 using System;
+using FStudio.GTEX.Core;
 using Shared.Responses;
 
 namespace FStudio.GTEX.Playback
@@ -50,17 +51,17 @@ namespace FStudio.GTEX.Playback
         }
 
         public GtexMatchConfig Config { get; private set; }
-
         public MatchResponse CurrentState { get; private set; }
-
         public MatchResponse PreviousState { get; private set; }
-
         public bool IsSceneReady => isSceneReady == null || isSceneReady();
 
         public void Initialize(GtexMatchConfig config)
         {
             Config = config;
         }
+
+        private bool IsAuthoritativeLivePlayback =>
+            Config != null && Config.ResolveRuntimeMode() == GtexRuntimeMode.LivePlayback;
 
         public bool ApplyFrame(MatchResponse state, bool forceSnap = false)
         {
@@ -81,8 +82,17 @@ namespace FStudio.GTEX.Playback
             }
 
             applyCameraPreset?.Invoke(state, forceSnap);
-            updateBallIntent?.Invoke(PreviousState, state);
-            tryStartSyntheticBallTransit?.Invoke(PreviousState, state, forceSnap);
+
+            // LivePlayback is a presentation of an already-decided GTEX match.
+            // Never invent a second local intent or synthetic transit layer here.
+            if (!IsAuthoritativeLivePlayback)
+            {
+                updateBallIntent?.Invoke(PreviousState, state);
+                tryStartSyntheticBallTransit?.Invoke(PreviousState, state, forceSnap);
+            }
+
+            // Keep action/event presentation so pass, shot, save, goal, replay
+            // and HUD reactions can still respond to authoritative events.
             tryTriggerBallAction?.Invoke(PreviousState, state);
             tryTriggerEventAction?.Invoke(PreviousState, state);
 
