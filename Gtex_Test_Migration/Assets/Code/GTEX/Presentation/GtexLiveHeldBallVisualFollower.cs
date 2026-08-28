@@ -1,4 +1,5 @@
 using FStudio.GTEX.Core;
+using FStudio.GTEX.Engine;
 using FStudio.MatchEngine;
 using FStudio.MatchEngine.Balls;
 using FStudio.MatchEngine.Enums;
@@ -71,8 +72,13 @@ namespace FStudio.GTEX.Presentation
                 target = pitchZones.ClampToPlayableGrass(target, 0.12f);
             }
 
-            ball.transform.position = target;
-            ball.transform.rotation = playerController.UnityObject.transform.rotation;
+            var rotation = playerController.UnityObject.transform.rotation;
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
+                ball.transform,
+                ball.GetComponent<Rigidbody>(),
+                target,
+                rotation,
+                false);
         }
 
         private static Vector3 ResolveHolderBallPoint(
