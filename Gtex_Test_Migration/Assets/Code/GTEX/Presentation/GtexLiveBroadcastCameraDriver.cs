@@ -1,4 +1,3 @@
-using System;
 using FStudio.GTEX.Core;
 using FStudio.GTEX.Playback;
 using FStudio.MatchEngine;
@@ -36,11 +35,9 @@ namespace FStudio.GTEX.Presentation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            if (GtexRuntimeState.ActiveMode != GtexRuntimeMode.LivePlayback)
-            {
-                return;
-            }
-
+            // Install regardless of the mode at scene-load time. The actual
+            // mode can be selected later by the GTEX bootstrap/environment.
+            // LateUpdate gates all behavior to authoritative LivePlayback.
             if (FindFirstObjectByType<GtexLiveBroadcastCameraDriver>() != null)
             {
                 return;
@@ -98,12 +95,7 @@ namespace FStudio.GTEX.Presentation
 
         private void DisableLegacyCameraController()
         {
-            if (legacyCameraSystem == null)
-            {
-                return;
-            }
-
-            if (legacyCameraSystem.enabled)
+            if (legacyCameraSystem != null && legacyCameraSystem.enabled)
             {
                 legacyCameraSystem.enabled = false;
             }
@@ -117,9 +109,7 @@ namespace FStudio.GTEX.Presentation
                 return manager.ExternalPlaybackPitchSpace;
             }
 
-            var center = manager != null && manager.transform != null
-                ? manager.transform.position
-                : Vector3.zero;
+            var center = manager != null ? manager.transform.position : Vector3.zero;
             return new GtexPitchSpace(DefaultLength, DefaultWidth, 0f, center);
         }
 
@@ -137,6 +127,8 @@ namespace FStudio.GTEX.Presentation
             var ballFocus = pitch.ClampWorld(ballPosition + lookAhead);
             ballFocus.y = pitch.GrassY;
 
+            // Keep most of the ball-following behavior while retaining enough
+            // pitch context to show the receiver, passer and defensive shape.
             var desiredFocus = Vector3.Lerp(pitch.Center, ballFocus, 0.82f);
             desiredFocus.y = pitch.GrassY;
 
@@ -150,12 +142,8 @@ namespace FStudio.GTEX.Presentation
             focus = Vector3.Lerp(focus, desiredFocus, positionT);
 
             var direction = velocity.sqrMagnitude > 0.04f ? velocity.normalized : Vector3.right;
-            var cameraSide = Vector3.back;
-            var desiredPosition = focus + cameraSide * TouchlineOffset - direction * AlongPlayOffset;
+            var desiredPosition = focus - direction * AlongPlayOffset + Vector3.back * TouchlineOffset;
             desiredPosition.y = pitch.GrassY + Height;
-
-            // Keep the lens along the same physical touchline instead of
-            // allowing the camera to cut across the pitch or switch sides.
             desiredPosition.z = pitch.MinZ - TouchlineOffset;
             desiredPosition.x = Mathf.Clamp(desiredPosition.x, pitch.MinX - 8f, pitch.MaxX + 8f);
 
