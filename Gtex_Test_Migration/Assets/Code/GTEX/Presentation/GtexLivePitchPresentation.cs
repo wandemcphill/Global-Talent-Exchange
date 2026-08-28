@@ -19,6 +19,7 @@ namespace FStudio.GTEX.Presentation
         private Vector3 lastCenter;
         private float lastLength = -1f;
         private float lastWidth = -1f;
+        private bool legacyPitchRenderersHidden;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -49,7 +50,11 @@ namespace FStudio.GTEX.Presentation
             }
 
             EnsurePresentation(pitch);
-            HideLegacyPitchRenderers();
+            if (!legacyPitchRenderersHidden)
+            {
+                HideLegacyPitchRenderers();
+                legacyPitchRenderersHidden = true;
+            }
         }
 
         private void EnsurePresentation(GtexPitchSpace pitch)
@@ -66,6 +71,7 @@ namespace FStudio.GTEX.Presentation
                 Vector3.Distance(pitch.Center, lastCenter) > 0.01f)
             {
                 BuildPitch(pitch);
+                legacyPitchRenderersHidden = false;
                 lastLength = pitch.Length;
                 lastWidth = pitch.Width;
                 lastCenter = pitch.Center;
