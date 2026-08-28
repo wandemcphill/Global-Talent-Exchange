@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 
-import pytest
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool

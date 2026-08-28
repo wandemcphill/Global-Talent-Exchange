@@ -36,7 +36,7 @@ from app.models.economic_conversion import (  # noqa: E402
     EconomicConversion,
     EconomicConversionStatus,
 )
-from app.models.wallet import LedgerAccount, LedgerEntry, LedgerUnit  # noqa: E402
+from app.models.wallet import LedgerAccount, LedgerEntry  # noqa: E402
 
 QUANTUM = Decimal("0.0001")
 CREDIT_BRIDGE_CODE = "platform:credit:gift_conversion_bridge"

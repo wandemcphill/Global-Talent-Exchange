@@ -10,7 +10,6 @@ from app.auth.service import AuthService
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
 from app.gift_engine.service import GiftEngineService
 from app.models import (
-    AdminRewardRule,
     Base,
     EconomicConversion,
     GiftCatalogItem,

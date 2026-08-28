@@ -11,7 +11,6 @@ from app.admin_engine.schemas import AdminRewardRuleStabilityControls
 from app.auth.service import AuthService
 from app.gift_engine.service import GiftEngineError, GiftEngineService
 from app.models import (
-    AdminRewardRule,
     Base,
     GiftCatalogItem,
     GiftComboEvent,
@@ -108,7 +107,7 @@ def test_gift_combo_applies_bonus(session) -> None:
     session.commit()
 
     service = GiftEngineService(session)
-    first_tx = service.send_gift(
+    service.send_gift(
         sender=sender,
         recipient_user_id=recipient.id,
         gift_key="cheer",

@@ -16,7 +16,6 @@ if str(ROOT) not in sys.path:
 from scripts.audit_wallet_payments_treasury_release import audit  # noqa: E402
 from app.auth.service import AuthService  # noqa: E402
 from app.models import (  # noqa: E402
-    AdminRewardRule,
     AdminRuntimeState,
     Base,
     CountryFeaturePolicy,
