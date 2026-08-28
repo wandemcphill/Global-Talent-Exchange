@@ -26,7 +26,7 @@ namespace FStudio.GTEX.Simulation
                 matchId = matchId ?? string.Empty,
                 source = "simulation",
                 status = string.Equals(Phase, "fulltime", StringComparison.OrdinalIgnoreCase) ? "completed" : "live",
-                frameId = "sim-" + Mathf.RoundToInt(ClockMinute * 10f),
+                frameId = BuildFrameId(),
                 clockMinute = ClockMinute,
                 phase = Phase ?? "kickoff",
                 homeScore = HomeScore,
@@ -43,6 +43,13 @@ namespace FStudio.GTEX.Simulation
 
             matchResponse.Normalize();
             return matchResponse;
+        }
+
+        private string BuildFrameId()
+        {
+            // Preserve sub-100ms simulation frames. The previous 0.1-minute
+            // rounding collapsed a continuous stream into identical frame IDs.
+            return "sim-" + Mathf.RoundToInt(ClockMinute * 60000f);
         }
 
         private PlayerPosition[] BuildPlayerPositions()
