@@ -20,6 +20,7 @@ from app.match_engine.schemas import (
 )
 from app.match_engine.simulation.models import MatchEventType, PlayerRole
 from app.replay_archive.schemas import ReplayArchiveRecord, ReplayMomentView
+from app.services.authoritative_spatial_simulation import build_ball_payload, build_player_payloads
 from app.schemas.match_viewer import (
     MatchViewerAnimationState,
     MatchViewerCameraPreset,
@@ -1778,6 +1779,7 @@ class MatchTimelineService:
             stage=stage,
             clock_minute=clock_minute,
             possession_side=possession_side,
+            time_seconds=time_seconds,
         )
         ball_payload = self._ball_payload(
             player_payloads=player_payloads,
@@ -1787,8 +1789,10 @@ class MatchTimelineService:
             active_event=active_event,
             stage=stage,
             possession_side=possession_side,
+            time_seconds=time_seconds,
         )
         return MatchTimelineFrameView(
+
             frame_id=f"{match_id}:{int(round(time_seconds * 100))}:{stage}",
             time_seconds=round(max(0.0, time_seconds), 2),
             clock_minute=round(max(0.0, min(120.0, clock_minute)), 2),
@@ -1824,95 +1828,18 @@ class MatchTimelineService:
         stage: str,
         clock_minute: float,
         possession_side: MatchViewerSide,
+        time_seconds: float | None = None,
     ) -> list[dict[str, Any]]:
-        payloads: list[dict[str, Any]] = []
-        for runtime in (home_runtime, away_runtime):
-            anchors = self._anchors_for_team(
-                runtime=runtime,
-                team_attacks_right=(
-                    home_attacks_right if runtime.view.side is MatchViewerSide.HOME else not home_attacks_right
-                ),
-            )
-            attack_direction = (
-                1.0
-                if (home_attacks_right if runtime.view.side is MatchViewerSide.HOME else not home_attacks_right)
-                else -1.0
-            )
-            for player_id in runtime.lineup:
-                player = runtime.players_by_id[player_id]
-                anchor = anchors[player_id]
-                line = self._line_for_player(runtime, player_id)
-                position = dict(anchor)
-                highlighted = active_event is not None and player_id in active_event.view.highlighted_player_ids
-                state = MatchViewerPlayerState.IDLE
-
-                push = self._push_amount(line=line, owns_ball=runtime.view.side is possession_side)
-                if stage == "reset":
-                    position = self._kickoff_position(position, attack_direction, player.role, highlighted)
-                    state = MatchViewerPlayerState.MOVING
-                else:
-                    position["x"] = self._clamp(position["x"] + (push * attack_direction))
-                    if runtime.view.side is not possession_side:
-                        position["x"] = self._clamp(position["x"] - (2.8 * attack_direction))
-                        state = MatchViewerPlayerState.DEFENDING
-                    else:
-                        state = MatchViewerPlayerState.ATTACKING if line == "attack" else MatchViewerPlayerState.MOVING
-
-                if active_event is not None:
-                    position, state = self._event_adjusted_position(
-                        runtime=runtime,
-                        opponent=away_runtime if runtime is home_runtime else home_runtime,
-                        player=player,
-                        line=line,
-                        position=position,
-                        anchor=anchor,
-                        active_event=active_event,
-                        home_attacks_right=home_attacks_right,
-                        stage=stage,
-                    )
-
-                if active_event is not None and not highlighted:
-                    position = self._apply_support_shape(
-                        runtime=runtime,
-                        player=player,
-                        line=line,
-                        position=position,
-                        active_event=active_event,
-                        possession_side=possession_side,
-                        attack_direction=attack_direction,
-                        home_attacks_right=home_attacks_right,
-                        stage=stage,
-                    )
-
-                variance_x, variance_y = self._player_variance_offset(
-                    player=player,
-                    line=line,
-                    stage=stage,
-                    clock_minute=clock_minute,
-                    highlighted=highlighted,
-                )
-                position["x"] = self._clamp(position["x"] + variance_x)
-                position["y"] = self._clamp(position["y"] + variance_y)
-
-                payloads.append(
-                    {
-                        "player_id": player.player_id,
-                        "team_id": player.team_id,
-                        "side": player.side,
-                        "shirt_number": player.shirt_number,
-                        "label": player.label,
-                        "role": player.role,
-                        "line": line,
-                        "state": state,
-                        "active": True,
-                        "highlighted": highlighted,
-                        "position": position,
-                        "anchor_position": anchor,
-                    }
-                )
-
-        self._resolve_collisions(payloads)
-        return payloads
+        return build_player_payloads(
+            home_runtime=home_runtime,
+            away_runtime=away_runtime,
+            home_attacks_right=home_attacks_right,
+            active_event=active_event,
+            stage=stage,
+            clock_minute=clock_minute,
+            possession_side=possession_side,
+            time_seconds=float(time_seconds if time_seconds is not None else clock_minute * 60.0),
+        )
 
     def _player_variance_offset(
         self,
@@ -2255,151 +2182,17 @@ class MatchTimelineService:
         active_event: _ViewerEventContext | None,
         stage: str,
         possession_side: MatchViewerSide,
+        time_seconds: float | None = None,
     ) -> dict[str, Any]:
-        positions = {item["player_id"]: item["position"] for item in player_payloads}
-        default_owner = self._default_owner(home_runtime if possession_side is MatchViewerSide.HOME else away_runtime)
-        trajectory_point = self._render_ball_trajectory_point(active_event, stage=stage)
-        ball_height = self._render_ball_height(active_event, stage=stage)
-        ball_spin = self._render_ball_vector(active_event, key="spin")
-        ball_velocity = self._render_ball_vector(active_event, key="velocity")
-
-        def ball_frame(*, position: dict[str, float], owner_player_id: str | None, state: str) -> dict[str, Any]:
-            resolved_position = trajectory_point or position
-            return {
-                "position": resolved_position,
-                "height": ball_height,
-                "owner_player_id": owner_player_id,
-                "state": state,
-                "spin": ball_spin,
-                "velocity": ball_velocity,
-            }
-
-        if stage == "reset":
-            return ball_frame(position={"x": 50.0, "y": 50.0}, owner_player_id=default_owner, state="placed")
-        if active_event is None:
-            owner = default_owner
-            return ball_frame(
-                position=self._ball_near_player(positions.get(owner) or {"x": 50.0, "y": 50.0}),
-                owner_player_id=owner,
-                state="rolling",
-            )
-
-        viewer_type = active_event.view.event_type
-        primary = active_event.view.primary_player_id
-        secondary = active_event.view.secondary_player_id
-        primary_side = self._player_side_lookup(home_runtime, away_runtime, primary)
-        secondary_side = self._player_side_lookup(home_runtime, away_runtime, secondary)
-        attacking_side = active_event.team_side or secondary_side or primary_side or possession_side
-        defending_side = self._opposite_side(attacking_side)
-        fallback_target = self._target_zone(
-            side=attacking_side,
+        return build_ball_payload(
+            player_payloads=player_payloads,
+            home_runtime=home_runtime,
+            away_runtime=away_runtime,
             home_attacks_right=home_attacks_right,
-            event_id=active_event.view.event_id,
-            viewer_type=viewer_type,
-        )
-        wide_target = self._wide_target_zone(
-            side=attacking_side,
-            home_attacks_right=home_attacks_right,
-            event_id=active_event.view.event_id,
-        )
-        goalkeeper_target = self._goalkeeper_zone(
-            side=defending_side,
-            home_attacks_right=home_attacks_right,
-            event_id=active_event.view.event_id,
-        )
-        primary_pos = positions.get(primary) if primary is not None else None
-        secondary_pos = positions.get(secondary) if secondary is not None else None
-        event_target = self._render_point(active_event, "target") or fallback_target
-        event_origin = self._render_point(active_event, "origin") or primary_pos or event_target
-
-        if viewer_type is MatchViewerEventType.GOAL:
-            if stage == "pre":
-                return ball_frame(
-                    position=self._ball_near_player(primary_pos or event_origin),
-                    owner_player_id=primary,
-                    state=self._ball_state_from_render(active_event, fallback="controlled"),
-                )
-            if stage == "event":
-                return ball_frame(
-                    position=event_target,
-                    owner_player_id=None,
-                    state=self._ball_state_from_render(active_event, fallback="shot"),
-                )
-            return ball_frame(
-                position={"x": event_target["x"], "y": event_target["y"]}, owner_player_id=None, state="in_goal"
-            )
-        if viewer_type is MatchViewerEventType.SAVE:
-            if stage == "pre":
-                return ball_frame(
-                    position=self._ball_near_player(secondary_pos or primary_pos or event_origin),
-                    owner_player_id=secondary or primary,
-                    state=self._ball_state_from_render(active_event, fallback="controlled"),
-                )
-            if stage == "event":
-                return ball_frame(
-                    position=event_target,
-                    owner_player_id=None,
-                    state=self._ball_state_from_render(active_event, fallback="saved"),
-                )
-            return ball_frame(
-                position=self._ball_near_player(goalkeeper_target),
-                owner_player_id=primary if primary_side is defending_side else secondary,
-                state="held",
-            )
-        if viewer_type is MatchViewerEventType.MISS:
-            if stage == "pre":
-                return ball_frame(
-                    position=self._ball_near_player(primary_pos or event_origin),
-                    owner_player_id=primary,
-                    state=self._ball_state_from_render(active_event, fallback="controlled"),
-                )
-            resolved_miss_target = event_target if stage == "event" else wide_target
-            return ball_frame(
-                position=resolved_miss_target if stage == "event" else self._ball_near_player(resolved_miss_target),
-                owner_player_id=None,
-                state=self._ball_state_from_render(active_event, fallback="missed"),
-            )
-        if viewer_type is MatchViewerEventType.FOUL:
-            return ball_frame(
-                position=self._ball_near_player(primary_pos or event_origin),
-                owner_player_id=primary or default_owner,
-                state="stopped",
-            )
-        if viewer_type is MatchViewerEventType.OFFSIDE:
-            return ball_frame(
-                position=event_target if stage != "pre" else self._ball_near_player(primary_pos or event_origin),
-                owner_player_id=primary,
-                state="stopped",
-            )
-        if viewer_type in {MatchViewerEventType.RED_CARD, MatchViewerEventType.HALFTIME, MatchViewerEventType.FULLTIME}:
-            return ball_frame(
-                position=self._ball_near_player(primary_pos or positions.get(default_owner) or {"x": 50.0, "y": 50.0}),
-                owner_player_id=primary or default_owner,
-                state="stopped",
-            )
-        if viewer_type in {
-            MatchViewerEventType.PENALTY,
-            MatchViewerEventType.SET_PIECE,
-            MatchViewerEventType.ATTACK,
-            MatchViewerEventType.PASS,
-        }:
-            if stage == "pre":
-                return ball_frame(
-                    position=self._ball_near_player(primary_pos or event_origin),
-                    owner_player_id=primary or default_owner,
-                    state=self._ball_state_from_render(active_event, fallback="controlled"),
-                )
-            if stage == "event":
-                return ball_frame(
-                    position=event_target,
-                    owner_player_id=None,
-                    state=self._ball_state_from_render(active_event, fallback="traveling"),
-                )
-        owner = primary or default_owner
-        return ball_frame(
-            position=self._ball_near_player(positions.get(owner) or event_target),
-            owner_player_id=owner,
-            state=self._ball_state_from_render(active_event, fallback="rolling"),
+            active_event=active_event,
+            stage=stage,
+            possession_side=possession_side,
+            time_seconds=float(time_seconds if time_seconds is not None else 0.0),
         )
 
     def _enrich_frames(
