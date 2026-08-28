@@ -1788,6 +1788,23 @@ def get_match_commentary_stream(
     raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Commentary service is unavailable.")
 
 
+@router.websocket("/api/v2/ws/match/{match_id}")
+async def stream_unity_spatial_match(match_id: str, websocket: WebSocket) -> None:
+    app = websocket.scope["app"]
+    _require_unity_live_access_for_websocket(websocket, match_id=match_id)
+    await websocket.accept()
+    frame_interval = 0.05
+    try:
+        while True:
+            payload = build_unity_live_payload_for_app(app, match_id, include_full_timeline=False, event_limit=24)
+            await websocket.send_json(payload)
+            if not bool(payload.get("isLive", False)):
+                return
+            await asyncio.sleep(frame_interval)
+    except WebSocketDisconnect:
+        return
+
+
 @legacy_router.websocket("/{match_id}/stream")
 @api_router.websocket("/{match_id}/stream")
 async def stream_match(match_id: str, websocket: WebSocket, session_id: str) -> None:
