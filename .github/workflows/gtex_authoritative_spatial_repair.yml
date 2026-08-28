@@ -23,12 +23,11 @@ jobs:
         run: python tools/apply_gtex_authoritative_spatial_repair.py
 
       - name: Compile spatial simulator
-        run: python -m py_compile backend/app/services/authoritative_spatial_simulation.py backend/app/services/match_timeline_service.py tools/apply_gtex_authoritative_spatial_repair.py
+        run: python -m py_compile backend/app/services/authoritative_spatial_simulation.py backend/app/services/match_timeline_service.py tools/apply_gtex_authoritative_spatial_repair.py backend/tests/test_authoritative_spatial_simulation.py
 
       - name: Run focused match timeline tests
         working-directory: backend
-        run: python -m pytest tests/match_engine tests/services/test_match_timeline_service.py -q
-        continue-on-error: true
+        run: python -m pytest tests/test_authoritative_spatial_simulation.py tests/test_match_timeline_service.py tests/live_matches/test_live_match_sampling.py tests/match_engine -q
 
       - name: Commit repaired source
         run: |
