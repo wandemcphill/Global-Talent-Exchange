@@ -1,0 +1,34 @@
+name: GTEX shot decision repair
+
+on:
+  push:
+    branches: [fix/gtex-shot-decision]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/gtex-shot-decision
+      - name: Patch shot decision
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs')
+          text = p.read_text(encoding='utf-8')
+          old = '''            else if (shotCorridor)\n            {\n                action = "carry";\n            }'''
+          new = '''            else if (shotCorridor)\n            {\n                action = "shoot";\n            }'''
+          if old not in text:\n              raise SystemExit('shot decision branch not found')
+          text = text.replace(old, new, 1)
+          old2 = '''            if (plan.Action == "carry")\n            {'''
+          new2 = '''            if (plan.Action == "shoot")\n            {\n                var shotTarget = ResolveGoalMouthTarget(source.TeamSide, false);\n                RegisterEvent("shot", currentMinute, source.TeamSide, "Shot on goal.", 0, 0, source.PlayerId);\n                StartTransit(\n                    source.PlayerId,\n                    shotTarget,\n                    currentMinute,\n                    ShotDurationMinutes,\n                    1.0f,\n                    "shot",\n                    OppositeSide(source.TeamSide) + "-1",\n                    OppositeSide(source.TeamSide));\n                currentDecision = default;\n                nextDecisionMinute = currentMinute + 0.26f;\n                currentCameraPreset = "broadcast";\n                currentCameraPresetUntilMinute = currentMinute + 0.24f;\n                return;\n            }\n\n            if (plan.Action == "carry")\n            {'''
+          if old2 not in text:\n              raise SystemExit('carry branch not found')
+          text = text.replace(old2, new2, 1)
+          p.write_text(text, encoding='utf-8')
+          PY
+          rm Gtex_Test_Migration/Assets/Code/GTEX/Simulation/README_shot_repair.md\n          rm .github/workflows/gtex_shot_decision_repair.yml\n          git config user.name "github-actions[bot]"\n          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"\n          git add Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs\n          git add -u .github/workflows/gtex_shot_decision_repair.yml Gtex_Test_Migration/Assets/Code/GTEX/Simulation/README_shot_repair.md\n          git commit -m "fix(gtex): execute shot decisions in shipped simulator"\n          git push origin HEAD:fix/gtex-shot-decision
