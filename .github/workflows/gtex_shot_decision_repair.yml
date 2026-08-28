@@ -19,22 +19,15 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
           p = Path("Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs")
           text = p.read_text(encoding="utf-8")
-          old = '''            else if (shotCorridor)
-            {
-                action = "carry";
-            }'''
-          new = '''            else if (shotCorridor)
-            {
-                action = "shoot";
-            }'''
-          if old not in text:
+          pattern = re.compile(r'(?ms)(^[ \t]*else if \(shotCorridor\)\s*\{\s*^[ \t]*action = )"carry"(\s*^[ \t]*\})')
+          text, count = pattern.subn(r'\1"shoot"\2', text, count=1)
+          if count != 1:
               raise SystemExit("shot decision branch not found")
-          text = text.replace(old, new, 1)
-          old2 = '''            if (plan.Action == "carry")
-            {'''
-          new2 = '''            if (plan.Action == "shoot")
+          marker = '            if (plan.Action == "carry")\n            {'
+          shot = '''            if (plan.Action == "shoot")
             {
                 var shotTarget = ResolveGoalMouthTarget(source.TeamSide, false);
                 RegisterEvent("shot", currentMinute, source.TeamSide, "Shot on goal.", 0, 0, source.PlayerId);
@@ -56,9 +49,9 @@ jobs:
 
             if (plan.Action == "carry")
             {'''
-          if old2 not in text:
+          if marker not in text:
               raise SystemExit("carry branch not found")
-          text = text.replace(old2, new2, 1)
+          text = text.replace(marker, shot, 1)
           p.write_text(text, encoding="utf-8")
           PY
           rm Gtex_Test_Migration/Assets/Code/GTEX/Simulation/README_shot_repair.md
