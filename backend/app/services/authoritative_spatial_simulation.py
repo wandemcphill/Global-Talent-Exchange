@@ -99,6 +99,69 @@ def _event_target(event: Any, possession_side: MatchViewerSide, home_attacks_rig
     return {"x": 84.0 if attacks_right else 16.0, "y": 50.0}
 
 
+def _trajectory_contract(event: Any) -> tuple[list[dict[str, float]], dict[str, float] | None]:
+    contract = getattr(event, "render_contract", None) or {}
+    ball = contract.get("ball") if isinstance(contract, dict) else None
+    if not isinstance(ball, dict):
+        return [], None
+    raw_trajectory = ball.get("trajectory")
+    if not isinstance(raw_trajectory, list):
+        return [], None
+    trajectory: list[dict[str, float]] = []
+    for item in raw_trajectory:
+        if not isinstance(item, dict):
+            continue
+        values = {key: item.get(key) for key in ("t", "x", "y", "z")}
+        if not all(isinstance(values[key], (int, float)) for key in values):
+            continue
+        trajectory.append({key: float(values[key]) for key in values})
+    trajectory.sort(key=lambda item: item["t"])
+    spin = ball.get("spin")
+    resolved_spin = None
+    if isinstance(spin, dict) and all(isinstance(spin.get(axis), (int, float)) for axis in ("x", "y", "z")):
+        resolved_spin = {axis: float(spin[axis]) for axis in ("x", "y", "z")}
+    return trajectory, resolved_spin
+
+
+def _sample_trajectory(trajectory: list[dict[str, float]], local: float) -> tuple[dict[str, float], dict[str, float], float]:
+    if not trajectory:
+        raise ValueError("trajectory must contain at least one sample")
+    if local <= trajectory[0]["t"]:
+        point = trajectory[0]
+        return {"x": point["x"], "y": point["y"], "z": max(0.0, point["z"])}, {"x": 0.0, "y": 0.0, "z": 0.0}, trajectory[-1]["t"]
+    if local >= trajectory[-1]["t"]:
+        point = trajectory[-1]
+        if len(trajectory) >= 2:
+            previous = trajectory[-2]
+            dt = max(0.001, point["t"] - previous["t"])
+            velocity = {
+                "x": (point["x"] - previous["x"]) / dt,
+                "y": (point["y"] - previous["y"]) / dt,
+                "z": (point["z"] - previous["z"]) / dt,
+            }
+        else:
+            velocity = {"x": 0.0, "y": 0.0, "z": 0.0}
+        return {"x": point["x"], "y": point["y"], "z": max(0.0, point["z"])}, velocity, trajectory[-1]["t"]
+
+    for left, right in zip(trajectory, trajectory[1:]):
+        if left["t"] <= local <= right["t"]:
+            dt = max(0.001, right["t"] - left["t"])
+            alpha = _clamp((local - left["t"]) / dt, 0.0, 1.0)
+            point = {
+                "x": left["x"] + ((right["x"] - left["x"]) * alpha),
+                "y": left["y"] + ((right["y"] - left["y"]) * alpha),
+                "z": max(0.0, left["z"] + ((right["z"] - left["z"]) * alpha)),
+            }
+            velocity = {
+                "x": (right["x"] - left["x"]) / dt,
+                "y": (right["y"] - left["y"]) / dt,
+                "z": (right["z"] - left["z"]) / dt,
+            }
+            return point, velocity, trajectory[-1]["t"]
+    point = trajectory[-1]
+    return {"x": point["x"], "y": point["y"], "z": max(0.0, point["z"])}, {"x": 0.0, "y": 0.0, "z": 0.0}, trajectory[-1]["t"]
+
+
 def _player_position(runtime: Any, player: Any, *, time_seconds: float, active_event: Any, stage: str, clock_minute: float, possession_side: MatchViewerSide, home_attacks_right: bool) -> tuple[dict[str, float], MatchViewerPlayerState, bool]:
     attacks_right = _side_attacks_right(runtime.view.side, home_attacks_right)
     anchor = _anchors(runtime, attacks_right)[player.player_id]
@@ -217,7 +280,35 @@ def build_ball_payload(*, player_payloads: list[dict[str, Any]], home_runtime: A
     if target is None:
         direction = 1.0 if _side_attacks_right(possession_side, home_attacks_right) else -1.0
         target = {"x": _clamp(origin["x"] + 10.0 * direction), "y": origin["y"]}
-    if event_type in flight_types and -0.15 <= local <= 2.8:
+
+    trajectory, trajectory_spin = _trajectory_contract(active_event)
+    post_flight_handoff_types = {"pass", "attack", "set_piece", "save"}
+    if trajectory and local >= 0.0:
+        point, sampled_velocity, trajectory_duration = _sample_trajectory(trajectory, local)
+        if local <= trajectory_duration:
+            state = "in_flight"
+            x, y = point["x"], point["y"]
+            height = point["z"]
+            velocity_x = sampled_velocity["x"]
+            velocity_y = sampled_velocity["y"]
+            velocity_z = sampled_velocity["z"]
+        else:
+            handoff_id = active_event.view.secondary_player_id if active_event is not None and event_type in post_flight_handoff_types else None
+            if handoff_id and handoff_id in player_by_id:
+                owner_id = handoff_id
+                owner_position = player_by_id[handoff_id]["position"]
+                x, y = owner_position["x"], owner_position["y"]
+                height = 0.05
+                state = "controlled"
+                velocity_x = velocity_y = velocity_z = 0.0
+            else:
+                x, y = point["x"], point["y"]
+                height = point["z"]
+                state = "rolling"
+                velocity_x = sampled_velocity["x"]
+                velocity_y = sampled_velocity["y"]
+                velocity_z = sampled_velocity["z"]
+    elif event_type in flight_types and -0.15 <= local <= 2.8:
         distance = hypot(target["x"] - origin["x"], target["y"] - origin["y"])
         duration = max(0.42, min(2.4, 0.42 + (distance / 32.0)))
         phase = _smoothstep((local + 0.08) / duration)
@@ -225,18 +316,22 @@ def build_ball_payload(*, player_payloads: list[dict[str, Any]], home_runtime: A
         y = origin["y"] + ((target["y"] - origin["y"]) * phase)
         height = 0.05 + (0.18 * sin(phase * 3.14159265)) if event_type in {"shot", "goal", "save", "miss", "penalty"} else 0.03 + (0.10 * sin(phase * 3.14159265))
         state = "in_flight"
+        previous_phase = _smoothstep((max(0.0, local - 0.05) + 0.08) / duration)
+        velocity_x = ((origin["x"] + ((target["x"] - origin["x"]) * phase)) - (origin["x"] + ((target["x"] - origin["x"]) * previous_phase))) / 0.05
+        velocity_y = ((origin["y"] + ((target["y"] - origin["y"]) * phase)) - (origin["y"] + ((target["y"] - origin["y"]) * previous_phase))) / 0.05
+        velocity_z = height / 0.05
     else:
         x, y = (owner_position or {"x": 50.0, "y": 50.0}).values()
         height = 0.05
         state = "controlled" if owner_position else "rolling"
-    previous_t = max(0.0, time_seconds - 0.05)
-    if event_type in flight_types:
-        duration = max(0.42, min(2.4, 0.42 + (hypot(target["x"] - origin["x"], target["y"] - origin["y"]) / 32.0)))
-        previous_phase = _smoothstep((previous_t - event_time + 0.08) / duration)
-        previous_x = origin["x"] + ((target["x"] - origin["x"]) * previous_phase)
-        previous_y = origin["y"] + ((target["y"] - origin["y"]) * previous_phase)
-        velocity_x = (x - previous_x) / 0.05
-        velocity_y = (y - previous_y) / 0.05
-    else:
-        velocity_x = velocity_y = 0.0
-    return {"position": {"x": round(_clamp(x), 3), "y": round(_clamp(y), 3)}, "height": round(max(0.0, height), 3), "owner_player_id": owner_id if state == "controlled" else None, "state": state, "spin": {"x": 0.0, "y": 0.35, "z": 0.8} if state == "in_flight" else None, "velocity": {"x": round(velocity_x, 3), "y": round(height / 0.05, 3), "z": round(velocity_y, 3)}}
+        velocity_x = velocity_y = velocity_z = 0.0
+
+    spin = trajectory_spin if state == "in_flight" and trajectory_spin is not None else ({"x": 0.0, "y": 0.35, "z": 0.8} if state == "in_flight" else None)
+    return {
+        "position": {"x": round(_clamp(x), 3), "y": round(_clamp(y), 3)},
+        "height": round(max(0.0, height), 3),
+        "owner_player_id": owner_id if state == "controlled" else None,
+        "state": state,
+        "spin": spin,
+        "velocity": {"x": round(velocity_x, 3), "y": round(velocity_z, 3), "z": round(velocity_y, 3)},
+    }
