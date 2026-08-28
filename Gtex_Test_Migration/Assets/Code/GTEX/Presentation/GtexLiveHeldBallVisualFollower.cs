@@ -18,6 +18,7 @@ namespace FStudio.GTEX.Presentation
     {
         private static GtexLiveHeldBallVisualFollower instance;
         private Ball ball;
+        private Rigidbody ballRigidbody;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -43,6 +44,7 @@ namespace FStudio.GTEX.Presentation
             if (ball == null)
             {
                 ball = Ball.Current ?? FindFirstObjectByType<Ball>();
+                ballRigidbody = ball != null ? ball.GetComponent<Rigidbody>() : null;
             }
 
             if (ball == null || !ball.ExternalPlaybackEnabled || ball.HolderPlayer == null)
@@ -75,7 +77,7 @@ namespace FStudio.GTEX.Presentation
             var rotation = playerController.UnityObject.transform.rotation;
             GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
                 ball.transform,
-                ball.GetComponent<Rigidbody>(),
+                ballRigidbody,
                 target,
                 rotation,
                 false);
