@@ -1,0 +1,39 @@
+name: GTEX first-touch branch repair
+on:
+  push:
+    branches: [fix/gtex-first-touch-window]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/gtex-first-touch-window
+      - name: Patch first-touch timing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs")
+          text = p.read_text(encoding="utf-8")
+          old = '''                    activeTransit = default;\n                    if (!string.IsNullOrWhiteSpace(ballHolderPlayerId))\n                    {\n                        var holder = FindPlayer(ballHolderPlayerId);'''
+          new = '''                    activeTransit = default;\n                    if (!string.IsNullOrWhiteSpace(ballHolderPlayerId))\n                    {\n                        firstTouchSettleUntilMinute = currentMinute + FirstTouchSettleMinutes;\n                        var holder = FindPlayer(ballHolderPlayerId);'''
+          if old not in text:
+              raise SystemExit("arrival block not found")
+          text = text.replace(old, new, 1)
+          old2 = '''                    firstTouchSettleUntilMinute = currentMinute + FirstTouchSettleMinutes;\n                    currentDecision = default;\n                    nextDecisionMinute = currentMinute + DecisionMinGapMinutes;'''
+          new2 = '''                    currentDecision = default;\n                    nextDecisionMinute = currentMinute + DecisionMinGapMinutes;'''
+          if old2 not in text:
+              raise SystemExit("pass launch settle block not found")
+          text = text.replace(old2, new2, 1)
+          p.write_text(text, encoding="utf-8")
+          PY
+          rm .github/workflows/gtex_first_touch_branch_repair.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs
+          git add -u .github/workflows/gtex_first_touch_branch_repair.yml
+          git commit -m "fix(gtex): start first-touch window on reception"
+          git push origin HEAD:fix/gtex-first-touch-window
