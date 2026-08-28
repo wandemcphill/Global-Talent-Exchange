@@ -120,7 +120,7 @@ namespace FStudio.GTEX.Simulation
 
         private void Emit(GtexSimEvent matchEvent)
         {
-            lastEventMinute = matchEvent != null ? matchEvent.Minute : lastEventMinute;
+            lastEventMinute = matchEvent != null ? matchEvent.Time : lastEventMinute;
             history.Add(matchEvent);
             config.Log("Generated event: " + matchEvent);
             EventGenerated?.Invoke(matchEvent);
