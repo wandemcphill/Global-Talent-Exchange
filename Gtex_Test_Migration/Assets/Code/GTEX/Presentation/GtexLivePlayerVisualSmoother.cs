@@ -103,7 +103,8 @@ namespace FStudio.GTEX.Presentation
                 return;
             }
 
-            var targetDelta = targetPosition - state.position;
+            var previousVisualPosition = state.position;
+            var targetDelta = targetPosition - previousVisualPosition;
             targetDelta.y = 0f;
             var targetDistance = targetDelta.magnitude;
 
@@ -126,7 +127,7 @@ namespace FStudio.GTEX.Presentation
             }
 
             state.position = Vector3.SmoothDamp(
-                state.position,
+                previousVisualPosition,
                 targetPosition,
                 ref state.velocity,
                 PositionSmoothTime,
@@ -134,7 +135,7 @@ namespace FStudio.GTEX.Presentation
                 dt);
             state.position.y = targetPosition.y;
 
-            var movement = state.position - transform.position;
+            var movement = state.position - previousVisualPosition;
             movement.y = 0f;
             var movementSpeed = movement.magnitude / dt;
 
