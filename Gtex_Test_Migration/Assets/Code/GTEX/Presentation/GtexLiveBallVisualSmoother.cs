@@ -37,7 +37,21 @@ namespace FStudio.GTEX.Presentation
             }
 
             var ball = Ball.Current;
-            if (ball == null || !ball.TryGetGtexLivePresentationTarget(out var target, out var velocity, out var targetRotation, out var hasTarget) || !hasTarget)
+            if (ball == null)
+            {
+                return;
+            }
+
+            // A held ball has a more precise render-time anchor driven from the
+            // carrier's animation/foot point. Do not let the generic network
+            // smoother overwrite that pose in the same frame.
+            if (ball.HolderPlayer != null)
+            {
+                initialized = false;
+                return;
+            }
+
+            if (!ball.TryGetGtexLivePresentationTarget(out var target, out var velocity, out var targetRotation, out var hasTarget) || !hasTarget)
             {
                 return;
             }
