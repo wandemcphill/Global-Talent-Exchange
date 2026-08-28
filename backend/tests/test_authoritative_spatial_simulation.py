@@ -63,6 +63,30 @@ def _event() -> SimpleNamespace:
     )
 
 
+def test_idle_player_has_no_artificial_clock_drift() -> None:
+    home = _runtime(MatchViewerSide.HOME, "home")
+    away = _runtime(MatchViewerSide.AWAY, "away")
+    positions = []
+    velocities = []
+    for time_seconds in (0.0, 5.0, 15.0, 30.0):
+        players = build_player_payloads(
+            home_runtime=home,
+            away_runtime=away,
+            home_attacks_right=True,
+            active_event=None,
+            stage="open_play",
+            clock_minute=time_seconds / 60.0,
+            possession_side=MatchViewerSide.HOME,
+            time_seconds=time_seconds,
+        )
+        player = next(item for item in players if item["player_id"] == "home-2")
+        positions.append((player["position"]["x"], player["position"]["y"]))
+        velocities.append((player["velocity"]["x"], player["velocity"]["y"]))
+
+    assert positions == [positions[0]] * len(positions)
+    assert velocities == [(0.0, 0.0)] * len(velocities)
+
+
 def test_player_motion_has_no_large_frame_to_frame_jump() -> None:
     home = _runtime(MatchViewerSide.HOME, "home")
     away = _runtime(MatchViewerSide.AWAY, "away")
