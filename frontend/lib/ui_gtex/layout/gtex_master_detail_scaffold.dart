@@ -225,6 +225,10 @@ void showGtexMasterDetailPanelSheet(
   );
 }
 
+/// Share of the header the action cluster may occupy before it wraps. The
+/// title keeps the remainder, so short action sets never squeeze it.
+const double _actionsWidthFraction = 0.62;
+
 class _MasterDetailHeader extends StatelessWidget {
   const _MasterDetailHeader({
     required this.title,
@@ -301,13 +305,23 @@ class _MasterDetailHeader extends StatelessWidget {
             ],
           );
         }
+        // The action `Wrap` must be laid out against a bounded width or it
+        // measures itself on a single infinite line and overflows the header.
+        // A `ConstrainedBox` (rather than `Flexible`) bounds it without
+        // claiming a fixed share of the row: the actions take only the width
+        // they actually need, wrap to further runs once they exceed the cap,
+        // and every remaining pixel goes to the title.
+        final double actionsMaxWidth =
+            (constraints.maxWidth - GtexSpacing.sm) * _actionsWidthFraction;
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
             Expanded(child: titleBlock),
             const SizedBox(width: GtexSpacing.sm),
-            // Flexible (not a bare Wrap) so wide action sets wrap to a new run
-            // instead of overflowing the header horizontally.
-            Flexible(child: actionRow),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: actionsMaxWidth),
+              child: actionRow,
+            ),
           ],
         );
       },
