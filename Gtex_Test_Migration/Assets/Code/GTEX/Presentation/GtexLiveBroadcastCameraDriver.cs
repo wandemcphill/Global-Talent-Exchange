@@ -7,11 +7,6 @@ using UnityEngine;
 
 namespace FStudio.GTEX.Presentation
 {
-    /// <summary>
-    /// Sole camera presenter for GTEX authoritative LivePlayback.
-    /// Disables the legacy asset camera controller and follows the real
-    /// pitch-space ball while maintaining a stable touchline broadcast view.
-    /// </summary>
     [DefaultExecutionOrder(10000)]
     public sealed class GtexLiveBroadcastCameraDriver : MonoBehaviour
     {
@@ -26,6 +21,7 @@ namespace FStudio.GTEX.Presentation
         private const float MaxFov = 54f;
         private const float LookAheadSeconds = 0.22f;
 
+        private static GtexLiveBroadcastCameraDriver instance;
         private CameraSystem legacyCameraSystem;
         private Camera targetCamera;
         private Ball ball;
@@ -35,22 +31,20 @@ namespace FStudio.GTEX.Presentation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            // Install regardless of the mode at scene-load time. The actual
-            // mode can be selected later by the GTEX bootstrap/environment.
-            // LateUpdate gates all behavior to authoritative LivePlayback.
-            if (FindFirstObjectByType<GtexLiveBroadcastCameraDriver>() != null)
+            if (instance != null)
             {
                 return;
             }
 
             var host = new GameObject("GTEX Live Broadcast Camera");
             DontDestroyOnLoad(host);
-            host.AddComponent<GtexLiveBroadcastCameraDriver>();
+            instance = host.AddComponent<GtexLiveBroadcastCameraDriver>();
         }
 
         private void LateUpdate()
         {
-            if (GtexRuntimeState.ActiveMode != GtexRuntimeMode.LivePlayback)
+            if (!GtexRuntimeState.IsStarted ||
+                GtexRuntimeState.ActiveMode != GtexRuntimeMode.LivePlayback)
             {
                 return;
             }
@@ -123,15 +117,11 @@ namespace FStudio.GTEX.Presentation
             var lookAhead = velocity.sqrMagnitude > 0.04f
                 ? Vector3.ClampMagnitude(velocity * LookAheadSeconds, 7f)
                 : Vector3.zero;
-
             var ballFocus = pitch.ClampWorld(ballPosition + lookAhead);
             ballFocus.y = pitch.GrassY;
 
-            // Keep most of the ball-following behavior while retaining enough
-            // pitch context to show the receiver, passer and defensive shape.
             var desiredFocus = Vector3.Lerp(pitch.Center, ballFocus, 0.82f);
             desiredFocus.y = pitch.GrassY;
-
             if (focus == Vector3.zero)
             {
                 focus = desiredFocus;
@@ -149,22 +139,12 @@ namespace FStudio.GTEX.Presentation
 
             var lookTarget = focus + Vector3.up * 0.8f;
             var desiredRotation = Quaternion.LookRotation(lookTarget - desiredPosition, Vector3.up);
-
-            targetCamera.transform.position = Vector3.Lerp(
-                targetCamera.transform.position,
-                desiredPosition,
-                positionT);
-            targetCamera.transform.rotation = Quaternion.Slerp(
-                targetCamera.transform.rotation,
-                desiredRotation,
-                rotationT);
+            targetCamera.transform.position = Vector3.Lerp(targetCamera.transform.position, desiredPosition, positionT);
+            targetCamera.transform.rotation = Quaternion.Slerp(targetCamera.transform.rotation, desiredRotation, rotationT);
 
             var speedRatio = Mathf.Clamp01(velocity.magnitude / 16f);
             var desiredFov = Mathf.Lerp(MaxFov, MinFov, speedRatio);
-            targetCamera.fieldOfView = Mathf.Lerp(
-                targetCamera.fieldOfView,
-                desiredFov,
-                Mathf.Clamp01(deltaTime * 4f));
+            targetCamera.fieldOfView = Mathf.Lerp(targetCamera.fieldOfView, desiredFov, Mathf.Clamp01(deltaTime * 4f));
         }
     }
 }
