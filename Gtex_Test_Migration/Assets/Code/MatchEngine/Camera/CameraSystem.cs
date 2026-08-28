@@ -1,14 +1,17 @@
-using UnityEngine;
+using System;
+using System.Threading.Tasks;
 using FStudio.Utilities;
+using FStudio.MatchEngine;
 using FStudio.MatchEngine.Balls;
 using FStudio.Events;
 using FStudio.UI.Events;
-using FStudio.MatchEngine.Events;
-using System.Threading.Tasks;
+using UnityEngine;
 
-namespace FStudio.MatchEngine.Cameras {
-    [RequireComponent (typeof (Camera))]
-    public class CameraSystem : SceneObjectSingleton<CameraSystem> {
+namespace FStudio.MatchEngine.Cameras
+{
+    [RequireComponent(typeof(Camera))]
+    public class CameraSystem : SceneObjectSingleton<CameraSystem>
+    {
 #pragma warning disable 0109
         public new Camera camera = default;
 #pragma warning restore 0109
@@ -23,59 +26,71 @@ namespace FStudio.MatchEngine.Cameras {
 
         public float ZoomMultiplier;
 
-        private bool isInTransition = false;
-        private float transitionValue = 1;
-
-        private bool instantTransitionInNextFrame = false;
+        private bool isInTransition;
+        private float transitionValue = 1f;
+        private bool instantTransitionInNextFrame;
 
         [SerializeField] private float transitionSpeed = 0.5f;
 
         [Header("Camera Speed")]
-        public float CameraPositionSpeed = 4;
-        public float CameraRotationSpeed = 20;
-        public float CameraZoomSpeed = 4;
+        public float CameraPositionSpeed = 4f;
+        public float CameraRotationSpeed = 20f;
+        public float CameraZoomSpeed = 4f;
 
         [Header("GTEX Broadcast Presentation")]
-        [SerializeField] private float broadcastMinFieldOfView = 42f;
-        [SerializeField] private float broadcastMaxFieldOfView = 55f;
-        [SerializeField] private float broadcastLookAheadDistance = 3.5f;
-        [SerializeField] private float broadcastPositionSpeed = 7f;
-        [SerializeField] private float broadcastRotationSpeed = 24f;
+        [SerializeField] private float broadcastMinFieldOfView = 46f;
+        [SerializeField] private float broadcastMaxFieldOfView = 54f;
+        [SerializeField] private float broadcastLookAheadDistance = 5f;
+        [SerializeField] private float broadcastPositionSpeed = 5.5f;
+        [SerializeField] private float broadcastRotationSpeed = 9f;
+        [SerializeField] private float broadcastHeight = 24f;
+        [SerializeField] private float broadcastSidelineOffset = 30f;
+        [SerializeField] private float broadcastAlongPlayOffset = 7f;
+        [SerializeField] private float broadcastFollowWeight = 0.72f;
+        [SerializeField] private float broadcastCenterBias = 0.18f;
 
         public MatchCamera CurrentCamera { get; private set; }
-
         public string CurrentCameraType { get; private set; }
-
         public Vector3? TargetPosition;
 
         private bool IsBroadcastCamera =>
-            string.Equals(CurrentCameraType, "TVBroadcast", System.StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(CurrentCameraType, "Broadcast", System.StringComparison.OrdinalIgnoreCase);
+            string.Equals(CurrentCameraType, "TVBroadcast", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(CurrentCameraType, "Broadcast", StringComparison.OrdinalIgnoreCase);
 
-        private void ActiveCameraChanged () {
-            if (target == null) {
+        private Vector3 broadcastFocus;
+        private bool hasBroadcastFocus;
+
+        private void ActiveCameraChanged()
+        {
+            if (target == null)
+            {
                 EventManager.Trigger<MatchCameraActiveEvent>(null);
-            } else {
+            }
+            else
+            {
                 EventManager.Trigger(new MatchCameraActiveEvent());
             }
         }
 
-        public void SetTarget(Transform target) {
-            Debug.Log($"[SetTarget] {target}");
+        public void SetTarget(Transform target)
+        {
             this.target = target;
             ActiveCameraChanged();
         }
 
-        public async Task SwitchCamera(string cameraType, bool instant = true) {
+        public async Task SwitchCamera(string cameraType, bool instant = true)
+        {
             var resolvedCameraType = ResolveCameraAlias(cameraType);
-            Debug.Log($"[CameraSystem] Switch Camera: {cameraType} -> {resolvedCameraType}");
             var resolvedCamera = await matchCameras.FindAsync(resolvedCameraType);
-            if (resolvedCamera == null && !string.Equals(resolvedCameraType, "Stadium", System.StringComparison.OrdinalIgnoreCase)) {
+
+            if (resolvedCamera == null && !string.Equals(resolvedCameraType, "Stadium", StringComparison.OrdinalIgnoreCase))
+            {
                 resolvedCameraType = "Stadium";
                 resolvedCamera = await matchCameras.FindAsync(resolvedCameraType);
             }
 
-            if (resolvedCamera == null) {
+            if (resolvedCamera == null)
+            {
                 Debug.LogWarning($"[CameraSystem] Camera asset not found for requested type '{cameraType}'.");
                 return;
             }
@@ -83,163 +98,210 @@ namespace FStudio.MatchEngine.Cameras {
             CurrentCamera = resolvedCamera;
             CurrentCameraType = resolvedCameraType;
             isInTransition = false;
+            transitionValue = 1f;
             instantTransitionInNextFrame = instant;
             TargetPosition = null;
-
+            hasBroadcastFocus = false;
             ActiveCameraChanged();
         }
 
-        private static string ResolveCameraAlias(string cameraType) {
+        private static string ResolveCameraAlias(string cameraType)
+        {
             var normalized = (cameraType ?? string.Empty).Trim();
-            if (string.Equals(normalized, "Broadcast", System.StringComparison.OrdinalIgnoreCase)) {
-                return "TVBroadcast";
-            }
-
-            return normalized;
+            return string.Equals(normalized, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                ? "TVBroadcast"
+                : normalized;
         }
 
-        private async void Start() {
-            // GTEX's live broadcast director uses the semantic camera name
-            // "Broadcast". The original asset collection ships the actual
-            // production camera as "TVBroadcast". Resolve that alias here so
-            // live play never silently falls back to the generic Stadium camera.
-            await SwitchCamera("TVBroadcast");
+        private async void Start()
+        {
+            await SwitchCamera("TVBroadcast", false);
         }
 
-        /// <summary>
-        /// Make the transition instant and bind the camera to the live ball.
-        /// </summary>
-        public void FocusToBall (bool instant = true) {
-            if (Ball.Current == null) {
+        public void FocusToBall(bool instant = true)
+        {
+            if (Ball.Current == null)
+            {
                 return;
             }
 
             SetTarget(Ball.Current.transform);
             TargetPosition = null;
-
             instantTransitionInNextFrame = instant;
             isInTransition = false;
+            transitionValue = 1f;
+            hasBroadcastFocus = false;
         }
 
-        public void FocusToPosition(Vector3 position, bool instant = true) {
-            if (target == null && Ball.Current != null) {
+        public void FocusToPosition(Vector3 position, bool instant = true)
+        {
+            if (target == null && Ball.Current != null)
+            {
                 SetTarget(Ball.Current.transform);
             }
 
             TargetPosition = position;
             instantTransitionInNextFrame = instant;
             isInTransition = false;
+            transitionValue = 1f;
         }
 
-        private void OnValidate() {
+        private void OnValidate()
+        {
             camera = GetComponent<Camera>();
-            broadcastMinFieldOfView = Mathf.Clamp(broadcastMinFieldOfView, 25f, 75f);
-            broadcastMaxFieldOfView = Mathf.Max(broadcastMinFieldOfView, broadcastMaxFieldOfView);
-            broadcastLookAheadDistance = Mathf.Clamp(broadcastLookAheadDistance, 0f, 10f);
-            broadcastPositionSpeed = Mathf.Max(1f, broadcastPositionSpeed);
-            broadcastRotationSpeed = Mathf.Max(1f, broadcastRotationSpeed);
+            broadcastMinFieldOfView = Mathf.Clamp(broadcastMinFieldOfView, 35f, 65f);
+            broadcastMaxFieldOfView = Mathf.Clamp(broadcastMaxFieldOfView, broadcastMinFieldOfView, 65f);
+            broadcastLookAheadDistance = Mathf.Clamp(broadcastLookAheadDistance, 0f, 12f);
+            broadcastPositionSpeed = Mathf.Clamp(broadcastPositionSpeed, 1f, 12f);
+            broadcastRotationSpeed = Mathf.Clamp(broadcastRotationSpeed, 2f, 18f);
+            broadcastHeight = Mathf.Clamp(broadcastHeight, 16f, 36f);
+            broadcastSidelineOffset = Mathf.Clamp(broadcastSidelineOffset, 20f, 40f);
+            broadcastAlongPlayOffset = Mathf.Clamp(broadcastAlongPlayOffset, 0f, 14f);
+            broadcastFollowWeight = Mathf.Clamp01(broadcastFollowWeight);
+            broadcastCenterBias = Mathf.Clamp01(broadcastCenterBias);
         }
 
-        private void Update() {
-            if (target == null && Ball.Current != null) {
+        private void Update()
+        {
+            if (target == null && Ball.Current != null)
+            {
                 target = Ball.Current.transform;
             }
 
-            if (target == null) {
+            if (target == null || CurrentCamera == null)
+            {
                 return;
             }
 
             var dT = Mathf.Max(0.001f, Time.unscaledDeltaTime);
 
-            if (isInTransition) {
+            if (isInTransition)
+            {
                 transitionValue += dT * transitionSpeed;
-
-                if (transitionValue >= 1 ) {
-                    isInTransition = false;
-                }
-            } else {
-                transitionValue = 1;
-            }
-
-            if (CurrentCamera != null) {
-                Vector3 targetPos;
-                if (IsBroadcastCamera && Ball.Current != null) {
-                    // The broadcast camera must follow the actual live ball every frame.
-                    // Do not allow a stale TargetPosition from an action/replay cue to
-                    // pin the camera to a static world coordinate.
-                    TargetPosition = null;
-                    targetPos = Ball.Current.transform.position;
-
-                    var ballVelocity = Ball.Current.GetComponent<Rigidbody>() != null
-                        ? Ball.Current.GetComponent<Rigidbody>().linearVelocity
-                        : Vector3.zero;
-                    ballVelocity.y = 0f;
-                    if (ballVelocity.sqrMagnitude > 0.0001f) {
-                        targetPos += Vector3.ClampMagnitude(ballVelocity.normalized * broadcastLookAheadDistance, broadcastLookAheadDistance);
-                    }
-                } else if (TargetPosition.HasValue) {
-                    targetPos = TargetPosition.Value;
-                } else {
-                    targetPos = target.position;
-                }
-
-                if (IsBroadcastCamera && Ball.Current != null)
+                if (transitionValue >= 1f)
                 {
-                    ApplyGtexBroadcastCamera(targetPos, dT);
-                    return;
-                }
-
-                var (position, rotation, zoom) = CurrentCamera.Behave(in dT, targetPos);
-
-                if (instantTransitionInNextFrame) {
-                    instantTransitionInNextFrame = false;
-
-                    transform.position = position;
-                    transform.rotation = rotation;
-                    var instantFov = zoom / (ZoomMultiplier + 1);
-                    camera.fieldOfView = IsBroadcastCamera
-                        ? Mathf.Clamp(instantFov, broadcastMinFieldOfView, broadcastMaxFieldOfView)
-                        : instantFov;
-                } else {
-                    var rawPositionDifference = Vector3.Distance(transform.position, position) + 1f;
-                    var rawRotationDifference = Quaternion.Angle(transform.rotation, rotation) + 1f;
-                    var positionDifference = Mathf.Clamp(rawPositionDifference, 1f, 8f) * transitionValue;
-                    var rotationDifference = Mathf.Clamp(rawRotationDifference, 1f, 24f) * transitionValue;
-                    var positionSpeed = IsBroadcastCamera ? broadcastPositionSpeed : CameraPositionSpeed;
-                    var rotationSpeed = IsBroadcastCamera ? broadcastRotationSpeed : CameraRotationSpeed;
-                    var positionLerp = Mathf.Clamp01(dT * positionSpeed * positionDifference * positionDifferencePower);
-                    var rotationLerp = Mathf.Clamp01(dT * rotationSpeed * rotationDifference * rotationDifferencePower);
-                    transform.position = Vector3.Lerp(transform.position, position, positionLerp);
-                    transform.rotation = Quaternion.Lerp(transform.rotation, rotation, rotationLerp);
-
-                    var desiredFov = zoom / (ZoomMultiplier + 1);
-                    if (IsBroadcastCamera) {
-                        desiredFov = Mathf.Clamp(desiredFov, broadcastMinFieldOfView, broadcastMaxFieldOfView);
-                    }
-
-                    camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, desiredFov, Mathf.Clamp01(dT * CameraZoomSpeed));
+                    isInTransition = false;
+                    transitionValue = 1f;
                 }
             }
+
+            var targetPos = IsBroadcastCamera && Ball.Current != null
+                ? BuildBroadcastFocusPoint(dT)
+                : TargetPosition.HasValue ? TargetPosition.Value : target.position;
+
+            if (IsBroadcastCamera && Ball.Current != null)
+            {
+                ApplyGtexBroadcastCamera(targetPos, dT);
+                return;
+            }
+
+            var (position, rotation, zoom) = CurrentCamera.Behave(in dT, targetPos);
+
+            if (instantTransitionInNextFrame)
+            {
+                instantTransitionInNextFrame = false;
+                transform.position = position;
+                transform.rotation = rotation;
+                camera.fieldOfView = zoom / (ZoomMultiplier + 1f);
+                return;
+            }
+
+            var rawPositionDifference = Vector3.Distance(transform.position, position) + 1f;
+            var rawRotationDifference = Quaternion.Angle(transform.rotation, rotation) + 1f;
+            var positionDifference = Mathf.Clamp(rawPositionDifference, 1f, 8f) * transitionValue;
+            var rotationDifference = Mathf.Clamp(rawRotationDifference, 1f, 24f) * transitionValue;
+            var positionLerp = Mathf.Clamp01(dT * CameraPositionSpeed * positionDifference * positionDifferencePower);
+            var rotationLerp = Mathf.Clamp01(dT * CameraRotationSpeed * rotationDifference * rotationDifferencePower);
+
+            transform.position = Vector3.Lerp(transform.position, position, positionLerp);
+            transform.rotation = Quaternion.Slerp(transform.rotation, rotation, rotationLerp);
+            camera.fieldOfView = Mathf.Lerp(
+                camera.fieldOfView,
+                zoom / (ZoomMultiplier + 1f),
+                Mathf.Clamp01(dT * CameraZoomSpeed));
         }
-    }
-        private void ApplyGtexBroadcastCamera(Vector3 targetPos, float dT)
+
+        private Vector3 BuildBroadcastFocusPoint(float dT)
         {
             var ball = Ball.Current;
-            if (ball == null) return;
+            var field = MatchManager.Current != null
+                ? MatchManager.Current.SizeOfField
+                : new Vector2(105f, 68f);
+
+            var fieldMinX = 0f;
+            var fieldMaxX = Mathf.Max(1f, field.x);
+            var fieldMinZ = 0f;
+            var fieldMaxZ = Mathf.Max(1f, field.y);
+            var fieldCenter = new Vector3(fieldMaxX * 0.5f, 0f, fieldMaxZ * 0.5f);
+
             var velocity = ball.Velocity;
             velocity.y = 0f;
-            var direction = velocity.sqrMagnitude > 0.04f ? velocity.normalized : Vector3.right;
-            var target = targetPos;
-            target.y = 0f;
-            var desiredPosition = new Vector3(target.x - Mathf.Clamp(direction.x * 3.5f, -3.5f, 3.5f), 18f, Mathf.Clamp(target.z - 27f, -46f, 46f));
-            var lookAt = target + Vector3.up * 0.8f;
-            var desiredRotation = Quaternion.LookRotation(lookAt - desiredPosition, Vector3.up);
-            var positionT = 1f - Mathf.Exp(-7.5f * Mathf.Max(dT, 0.001f));
-            var rotationT = 1f - Mathf.Exp(-12f * Mathf.Max(dT, 0.001f));
-            transform.position = Vector3.Lerp(transform.position, desiredPosition, positionT);
-            transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, rotationT);
-            var desiredFov = Mathf.Lerp(52f, 47f, Mathf.Clamp01(velocity.magnitude / 12f));
-            camera.fieldOfView = Mathf.Lerp(camera.fieldOfView, desiredFov, Mathf.Clamp01(dT * CameraZoomSpeed));
+            var lookAhead = velocity.sqrMagnitude > 0.04f
+                ? Vector3.ClampMagnitude(velocity.normalized * broadcastLookAheadDistance, broadcastLookAheadDistance)
+                : Vector3.zero;
+
+            var ballPoint = ball.transform.position + lookAhead;
+            ballPoint.y = 0f;
+            ballPoint.x = Mathf.Clamp(ballPoint.x, fieldMinX + 7f, fieldMaxX - 7f);
+            ballPoint.z = Mathf.Clamp(ballPoint.z, fieldMinZ + 7f, fieldMaxZ - 7f);
+
+            var desiredFocus = Vector3.Lerp(fieldCenter, ballPoint, broadcastFollowWeight);
+            desiredFocus = Vector3.Lerp(desiredFocus, fieldCenter, broadcastCenterBias * 0.35f);
+
+            if (!hasBroadcastFocus)
+            {
+                broadcastFocus = desiredFocus;
+                hasBroadcastFocus = true;
+            }
+
+            var followT = 1f - Mathf.Exp(-broadcastPositionSpeed * Mathf.Max(dT, 0.001f));
+            broadcastFocus = Vector3.Lerp(broadcastFocus, desiredFocus, followT);
+            return broadcastFocus;
         }
 
+        private void ApplyGtexBroadcastCamera(Vector3 focus, float dT)
+        {
+            var ball = Ball.Current;
+            if (ball == null)
+            {
+                return;
+            }
+
+            var field = MatchManager.Current != null
+                ? MatchManager.Current.SizeOfField
+                : new Vector2(105f, 68f);
+
+            var velocity = ball.Velocity;
+            velocity.y = 0f;
+            var playDirection = velocity.sqrMagnitude > 0.04f
+                ? velocity.normalized
+                : Vector3.right;
+
+            // A real broadcast camera stays on one touchline. It should not
+            // jump sides when the ball changes direction, which was one of
+            // the causes of the unstable framing in the previous pass.
+            var desiredPosition = new Vector3(
+                focus.x - playDirection.x * broadcastAlongPlayOffset,
+                broadcastHeight,
+                focus.z - broadcastSidelineOffset);
+
+            desiredPosition.x = Mathf.Clamp(desiredPosition.x, -8f, field.x + 8f);
+            desiredPosition.z = Mathf.Clamp(desiredPosition.z, -broadcastSidelineOffset, field.y + 8f);
+
+            var lookTarget = focus + Vector3.up * 0.75f;
+            var desiredRotation = Quaternion.LookRotation(lookTarget - desiredPosition, Vector3.up);
+            var positionT = 1f - Mathf.Exp(-broadcastPositionSpeed * Mathf.Max(dT, 0.001f));
+            var rotationT = 1f - Mathf.Exp(-broadcastRotationSpeed * Mathf.Max(dT, 0.001f));
+
+            transform.position = Vector3.Lerp(transform.position, desiredPosition, positionT);
+            transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, rotationT);
+
+            var ballSpeedRatio = Mathf.Clamp01(velocity.magnitude / 15f);
+            var desiredFov = Mathf.Lerp(broadcastMaxFieldOfView, broadcastMinFieldOfView, ballSpeedRatio);
+            camera.fieldOfView = Mathf.Lerp(
+                camera.fieldOfView,
+                desiredFov,
+                Mathf.Clamp01(dT * CameraZoomSpeed));
+        }
+    }
 }

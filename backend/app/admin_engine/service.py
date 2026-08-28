@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.admin_engine.schemas import (
@@ -271,7 +271,7 @@ DEFAULT_REWARD_RULES: tuple[dict[str, object], ...] = (
         "gift_platform_rake_bps": 3000,
         "withdrawal_fee_bps": 1000,
         "minimum_withdrawal_fee_credits": Decimal("5.0000"),
-        "competition_platform_fee_bps": 1000,
+        "competition_platform_fee_bps": 3000,
         "stability_controls_json": AdminRewardRuleStabilityControls().model_dump(mode="json"),
         "active": True,
     },
@@ -369,7 +369,16 @@ class AdminEngineService:
         return list(self.session.scalars(statement).all())
 
     def get_active_reward_rule(self) -> AdminRewardRule | None:
-        return next(iter(self.list_reward_rules(active_only=True)), None)
+        rows = list(
+            self.session.scalars(
+                select(AdminRewardRule)
+                .where(AdminRewardRule.active.is_(True))
+                .order_by(AdminRewardRule.updated_at.desc(), AdminRewardRule.id.asc())
+            ).all()
+        )
+        if len(rows) > 1:
+            raise ValueError("Exactly one active Admin reward/economic policy is required.")
+        return rows[0] if rows else None
 
     def get_active_stability_controls(self) -> AdminRewardRuleStabilityControls:
         rule = self.get_active_reward_rule()
@@ -390,6 +399,12 @@ class AdminEngineService:
         record.competition_platform_fee_bps = payload.competition_platform_fee_bps
         record.stability_controls_json = self.normalize_stability_controls_payload(payload.stability_controls)
         record.active = payload.active
+        if payload.active:
+            self.session.execute(
+                update(AdminRewardRule)
+                .where(AdminRewardRule.active.is_(True), AdminRewardRule.id != record.id)
+                .values(active=False)
+            )
         record.updated_by_user_id = actor.id
         self.session.flush()
         return record
