@@ -2,9 +2,15 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from app.match_engine.simulation.models import PlayerRole
 from app.schemas.match_viewer import MatchViewerEventType, MatchViewerSide
-from app.services.authoritative_spatial_simulation import build_ball_payload, build_player_payloads
+from app.services.authoritative_spatial_simulation import (
+    _line_sizes,
+    build_ball_payload,
+    build_player_payloads,
+)
 
 
 def _runtime(side: MatchViewerSide, team_id: str) -> SimpleNamespace:
@@ -229,3 +235,119 @@ def test_goal_produces_continuous_ball_flight_and_velocity() -> None:
     assert saw_flight
     assert saw_height
     assert maximum_step < 4.0
+
+
+def _reduced_runtime(
+    side: MatchViewerSide,
+    team_id: str,
+    *,
+    outfield: int,
+    roles: list[PlayerRole] | None = None,
+    formation: str = "4-4-1",
+) -> SimpleNamespace:
+    """A lineup reduced by dismissals, still carrying its nominal formation.
+
+    ``roles`` defaults to a shape that leaves one of the three lines empty,
+    which is what a real dismissal-reduced side looks like once its forwards
+    (or its whole midfield) have been sacrificed. That matters: the role
+    branch of _line_sizes only fires when defenders, midfielders and forwards
+    are all non-empty, so a balanced remainder never reaches the fallback that
+    actually broke.
+    """
+    runtime = _runtime(side, team_id)
+    assert outfield <= len(runtime.lineup) - 1, "base fixture cannot field that many outfield players"
+    runtime.lineup = runtime.lineup[: outfield + 1]
+    runtime.current_formation = formation
+    if roles is None:
+        roles = [PlayerRole.DEFENDER] * outfield
+    assert len(roles) == outfield
+    for player_id, role in zip(runtime.lineup[1:], roles):
+        runtime.players_by_id[player_id].role = role
+    return runtime
+
+
+# 10 outfield is a full XI; 0 is a side reduced to its goalkeeper. Both ends
+# and everything between are reachable through dismissals.
+@pytest.mark.parametrize("outfield", list(range(0, 11)))
+def test_line_sizes_always_cover_exactly_the_players_on_the_pitch(outfield: int) -> None:
+    # _anchors indexes the outfield list by these sizes, so covering exactly the
+    # players present is an invariant, not a preference.
+    runtime = _reduced_runtime(MatchViewerSide.HOME, "home", outfield=outfield)
+
+    sizes = _line_sizes(runtime)
+
+    assert sum(sizes) == outfield, f"{outfield} outfield players mapped to {sizes}"
+    assert all(size > 0 for size in sizes), f"empty line group in {sizes}"
+
+
+def _payloads_for(home: SimpleNamespace, away: SimpleNamespace) -> list[dict]:
+    return build_player_payloads(
+        home_runtime=home,
+        away_runtime=away,
+        home_attacks_right=True,
+        active_event=None,
+        stage="open_play",
+        clock_minute=1.0,
+        possession_side=MatchViewerSide.HOME,
+        time_seconds=60.0,
+    )
+
+
+def test_player_payloads_survive_a_lineup_reduced_by_red_cards() -> None:
+    # The exact production failure: a 9-man side (8 outfield) still advertising
+    # "4-4-1" (9 outfield), whose remaining players do not split into three
+    # non-empty lines. Anchoring used to fall back to a fixed [4, 4, 1] and
+    # index a ninth outfield player that no longer existed.
+    home = _reduced_runtime(
+        MatchViewerSide.HOME,
+        "home",
+        outfield=8,
+        roles=[PlayerRole.DEFENDER] * 4 + [PlayerRole.MIDFIELDER] * 4,
+    )
+    away = _runtime(MatchViewerSide.AWAY, "away")
+
+    payloads = _payloads_for(home, away)
+
+    assert len(payloads) == len(home.lineup) + len(away.lineup)
+    home_ids = {item["player_id"] for item in payloads if item["side"] is MatchViewerSide.HOME}
+    assert home_ids == set(home.lineup)
+    for item in payloads:
+        anchor = item["anchor_position"]
+        assert 0.0 <= float(anchor["x"]) <= 100.0
+        assert 0.0 <= float(anchor["y"]) <= 100.0
+
+
+def test_player_payloads_handle_a_goalkeeper_only_lineup() -> None:
+    home = _reduced_runtime(MatchViewerSide.HOME, "home", outfield=0)
+    away = _runtime(MatchViewerSide.AWAY, "away")
+
+    payloads = _payloads_for(home, away)
+
+    home_ids = [item["player_id"] for item in payloads if item["side"] is MatchViewerSide.HOME]
+    assert home_ids == home.lineup
+
+
+def test_line_sizes_ignore_a_formation_that_no_longer_matches_the_pitch() -> None:
+    # A dismissal does not rewrite current_formation, so the stale string must
+    # lose to the players actually available.
+    runtime = _reduced_runtime(MatchViewerSide.HOME, "home", outfield=7, formation="4-4-2")
+
+    sizes = _line_sizes(runtime)
+
+    assert sum(sizes) == 7
+
+
+def test_lineup_referencing_an_unknown_player_fails_loudly() -> None:
+    """Documents the module-wide contract: lineup is a subset of players_by_id.
+
+    Every access in this module indexes players_by_id directly, including the
+    payload loop, so a lineup entry with no player record is a data-integrity
+    fault upstream rather than a state playback should absorb. Pinning the
+    KeyError keeps a future "fix" from silently dropping the player and
+    rendering a match with ten men when eleven were selected.
+    """
+    runtime = _reduced_runtime(MatchViewerSide.HOME, "home", outfield=8)
+    runtime.players_by_id.pop(runtime.lineup[-1])
+
+    with pytest.raises(KeyError):
+        _line_sizes(runtime)
