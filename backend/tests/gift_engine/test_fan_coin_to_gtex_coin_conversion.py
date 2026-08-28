@@ -10,6 +10,7 @@ from app.auth.service import AuthService
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
 from app.gift_engine.service import GiftEngineService
 from app.models import (
+    AdminRewardRule,
     Base,
     EconomicConversion,
     GiftCatalogItem,
@@ -45,6 +46,20 @@ def _create_user(session, *, email: str, username: str):
 
 
 def _seed_gift_economy(session, sender, *, gift_key: str = "conversion-star"):
+    session.add(
+        AdminRewardRule(
+            rule_key="gift-conversion-test",
+            title="Gift conversion test policy",
+            description="Explicit economic policy for gift conversion regression tests.",
+            trading_fee_bps=2000,
+            gift_platform_rake_bps=3000,
+            withdrawal_fee_bps=1000,
+            minimum_withdrawal_fee_credits=Decimal("5.0000"),
+            competition_platform_fee_bps=3000,
+            stability_controls_json={},
+            active=True,
+        )
+    )
     session.add(
         GiftCatalogItem(
             key=gift_key,
