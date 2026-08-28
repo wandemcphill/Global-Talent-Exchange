@@ -525,7 +525,7 @@ namespace FStudio.GTEX.Simulation
                 }
 
                 var distance = Vector3.Distance(sourcePlayer.Position, candidate.Position);
-                if (distance <= 7f || distance >= 34f)
+                if (distance <= 3.5f || distance >= 34f)
                 {
                     continue;
                 }
