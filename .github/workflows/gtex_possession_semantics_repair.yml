@@ -1,0 +1,56 @@
+name: GTEX possession semantics repair
+
+on:
+  push:
+    branches:
+      - fix/gtex-possession-event-semantics
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/gtex-possession-event-semantics
+          fetch-depth: 0
+
+      - name: Patch possession semantics and regression
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          service = Path('backend/app/services/match_timeline_service.py')
+          text = service.read_text(encoding='utf-8')
+          old = '''            event.team_side = self._team_side_from_team_id(home_runtime, away_runtime, event.view.team_id)\n            if event.team_side is not None:\n                last_possession = event.team_side\n'''
+          new = '''            event.team_side = self._team_side_from_team_id(home_runtime, away_runtime, event.view.team_id)\n            if (\n                event.team_side is not None\n                and event.view.event_type\n                not in {\n                    MatchViewerEventType.YELLOW_CARD,\n                    MatchViewerEventType.RED_CARD,\n                    MatchViewerEventType.SUBSTITUTION,\n                    MatchViewerEventType.INJURY,\n                    MatchViewerEventType.HALFTIME,\n                    MatchViewerEventType.FULLTIME,\n                    MatchViewerEventType.NEUTRAL,\n                }\n            ):\n                last_possession = event.team_side\n'''
+          if old not in text:
+              raise SystemExit('expected possession assignment block not found')
+          service.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          test = Path('backend/tests/test_match_timeline_service.py')
+          text = test.read_text(encoding='utf-8')
+          marker = '''def test_match_timeline_service_builds_long_archive_replay() -> None:\n'''
+          test_case = '''def test_match_timeline_service_does_not_change_possession_for_disciplinary_or_admin_events() -> None:\n    simulation_service = MatchSimulationService()\n    replay_payload = simulation_service.build_replay_payload(build_request(seed=33))\n    service = MatchTimelineService()\n    view_state = service.build_from_replay_payload(replay_payload)\n\n    previous = None\n    for frame in view_state.frames:\n        if previous is not None and frame.active_event_id is not None:\n            event = next((item for item in view_state.events if item.event_id == frame.active_event_id), None)\n            if event is not None and event.event_type in {\n                MatchViewerEventType.YELLOW_CARD,\n                MatchViewerEventType.RED_CARD,\n                MatchViewerEventType.SUBSTITUTION,\n                MatchViewerEventType.INJURY,\n            }:\n                assert frame.possession_side == previous.possession_side\n        previous = frame\n\n\n'''
+          if marker not in text:
+              raise SystemExit('test insertion marker not found')
+          test.write_text(text.replace(marker, test_case + marker, 1), encoding='utf-8')
+          PY
+
+          python -m compileall -q backend/app/services/match_timeline_service.py
+          git diff --check
+          python -m pip install -r backend/requirements.txt pytest
+          python -m pytest backend/tests/test_match_timeline_service.py::test_match_timeline_service_does_not_change_possession_for_disciplinary_or_admin_events -q
+
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/gtex_possession_semantics_repair.yml
+          git add -A
+          git commit -m "fix(gtex): preserve possession across non-play events"
+          git push origin HEAD:fix/gtex-possession-event-semantics
