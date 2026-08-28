@@ -45,8 +45,8 @@ def _runtime(side: MatchViewerSide, team_id: str) -> SimpleNamespace:
 
 def _event() -> SimpleNamespace:
     view = SimpleNamespace(
-        event_id="spatial-shot",
-        event_type=MatchViewerEventType.SHOT,
+        event_id="spatial-goal",
+        event_type=MatchViewerEventType.GOAL,
         time_seconds=2.0,
         duration_ms=650,
         highlighted_player_ids=["home-10"],
@@ -93,7 +93,7 @@ def test_player_motion_has_no_large_frame_to_frame_jump() -> None:
     assert maximum_step < 2.0
 
 
-def test_shot_produces_continuous_ball_flight_and_velocity() -> None:
+def test_goal_produces_continuous_ball_flight_and_velocity() -> None:
     home = _runtime(MatchViewerSide.HOME, "home")
     away = _runtime(MatchViewerSide.AWAY, "away")
     event = _event()
