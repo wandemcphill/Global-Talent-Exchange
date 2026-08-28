@@ -7,6 +7,8 @@ namespace FStudio.GTEX.Engine
 {
     public sealed class GtexLegacyBallAdapter
     {
+        private GtexExternalPlaybackSmoother playbackSmoother;
+
         public bool IsAvailable => MatchManager.Current != null && Ball.Current != null;
 
         public Transform Transform => Ball.Current != null ? Ball.Current.transform : null;
@@ -31,6 +33,26 @@ namespace FStudio.GTEX.Engine
                 targetPosition,
                 targetVelocity,
                 holder != null && holder.IsValid ? holder.RawPlayer : null);
+
+            var transform = Ball.Current.transform;
+            if (transform == null)
+            {
+                return;
+            }
+
+            if (playbackSmoother == null)
+            {
+                playbackSmoother = transform.GetComponent<GtexExternalPlaybackSmoother>();
+                if (playbackSmoother == null)
+                {
+                    playbackSmoother = transform.gameObject.AddComponent<GtexExternalPlaybackSmoother>();
+                }
+            }
+
+            var targetRotation = targetVelocity.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(new Vector3(targetVelocity.x, 0f, targetVelocity.z), Vector3.up)
+                : transform.rotation;
+            playbackSmoother.SetTarget(targetPosition, targetRotation, false);
         }
 
         public Vector3 ResolveExternalReleaseAnchor(
