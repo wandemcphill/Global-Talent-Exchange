@@ -15,9 +15,12 @@ namespace FStudio.GTEX.Presentation
         private const float HardSnapDistance = 16f;
         private const float IdleSpeed = 0.05f;
         private const float WalkSpeed = 0.55f;
+        private const float PlayerRefreshInterval = 0.5f;
 
         private static GtexLivePlayerVisualSmoother instance;
         private readonly Dictionary<CodeBasedController, VisualState> states = new Dictionary<CodeBasedController, VisualState>();
+        private CodeBasedController[] players = System.Array.Empty<CodeBasedController>();
+        private float nextPlayerRefreshAt;
 
         private struct VisualState
         {
@@ -41,24 +44,40 @@ namespace FStudio.GTEX.Presentation
             if (!GtexRuntimeState.IsStarted || GtexRuntimeState.ActiveMode != GtexRuntimeMode.LivePlayback)
             {
                 states.Clear();
+                players = System.Array.Empty<CodeBasedController>();
+                nextPlayerRefreshAt = 0f;
                 return;
             }
 
-            var players = FindObjectsByType<CodeBasedController>(FindObjectsSortMode.None);
-            var seen = new HashSet<CodeBasedController>();
+            RefreshPlayersIfNeeded();
             var dt = Mathf.Max(Time.unscaledDeltaTime, 1f / 120f);
             for (var index = 0; index < players.Length; index++)
             {
                 var player = players[index];
                 if (player == null || !player.isActiveAndEnabled || player.UnityObject == null) continue;
-                seen.Add(player);
                 SmoothPlayer(player, dt);
             }
+        }
 
+        private void RefreshPlayersIfNeeded()
+        {
+            var now = Time.unscaledTime;
+            if (now < nextPlayerRefreshAt && players.Length > 0) return;
+
+            nextPlayerRefreshAt = now + PlayerRefreshInterval;
+            players = FindObjectsByType<CodeBasedController>(FindObjectsSortMode.None);
+
+            var active = new HashSet<CodeBasedController>();
+            for (var index = 0; index < players.Length; index++)
+            {
+                if (players[index] != null) active.Add(players[index]);
+            }
+
+            if (states.Count == 0) return;
             var stale = new List<CodeBasedController>();
             foreach (var pair in states)
             {
-                if (!seen.Contains(pair.Key) || pair.Key == null) stale.Add(pair.Key);
+                if (pair.Key == null || !active.Contains(pair.Key)) stale.Add(pair.Key);
             }
             for (var index = 0; index < stale.Count; index++) states.Remove(stale[index]);
         }
