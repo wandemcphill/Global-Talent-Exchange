@@ -27,20 +27,61 @@ def _hash_phase(player_id: str) -> tuple[float, float]:
 
 def _line_sizes(runtime: Any) -> list[int]:
     outfield = runtime.lineup[1:]
+    total = len(outfield)
+    if total <= 0:
+        return []
+
     try:
-        values = [int(part) for part in str(runtime.current_formation).split("-")]
+        values = [
+            max(0, int(part))
+            for part in str(runtime.current_formation).split("-")
+        ]
     except ValueError:
         values = []
-    if values and sum(values) == len(outfield):
+    if values and sum(values) == total and all(value > 0 for value in values):
         return values
-    defenders = sum(runtime.players_by_id[item].role is PlayerRole.DEFENDER for item in outfield)
-    midfielders = sum(runtime.players_by_id[item].role is PlayerRole.MIDFIELDER for item in outfield)
-    forwards = sum(runtime.players_by_id[item].role is PlayerRole.FORWARD for item in outfield)
-    if defenders and midfielders and forwards and defenders + midfielders + forwards == len(outfield):
-        return [defenders, midfielders, forwards]
-    return [4, 3, 3] if len(outfield) == 10 else [4, 4, 1]
 
+    defenders = sum(
+        runtime.players_by_id[item].role is PlayerRole.DEFENDER
+        for item in outfield
+    )
+    midfielders = sum(
+        runtime.players_by_id[item].role is PlayerRole.MIDFIELDER
+        for item in outfield
+    )
+    forwards = sum(
+        runtime.players_by_id[item].role is PlayerRole.FORWARD
+        for item in outfield
+    )
+    role_sizes = [size for size in (defenders, midfielders, forwards) if size > 0]
+    if role_sizes and sum(role_sizes) == total:
+        return role_sizes
 
+    defaults = {
+        1: [1],
+        2: [1, 1],
+        3: [1, 1, 1],
+        4: [2, 1, 1],
+        5: [2, 2, 1],
+        6: [3, 2, 1],
+        7: [3, 2, 2],
+        8: [3, 3, 2],
+        9: [4, 3, 2],
+        10: [4, 3, 3],
+        11: [4, 4, 3],
+    }
+    if total in defaults:
+        return defaults[total]
+
+    if total == 1:
+        return [1]
+    defenders = min(4, max(1, total - 2))
+    forwards = min(3, max(1, total - defenders - 1))
+    midfielders = total - defenders - forwards
+    if midfielders < 1:
+        midfielders = 1
+        defenders = max(1, total - forwards - midfielders)
+    return [defenders, midfielders, forwards]
 def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
     if not runtime.lineup:
         return {}
