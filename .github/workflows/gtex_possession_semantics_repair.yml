@@ -26,15 +26,21 @@ jobs:
           service = Path('backend/app/services/match_timeline_service.py')
           text = service.read_text(encoding='utf-8')
           old = '''            event.team_side = self._team_side_from_team_id(home_runtime, away_runtime, event.view.team_id)\n            if event.team_side is not None:\n                last_possession = event.team_side\n'''
-          new = '''            event.team_side = self._team_side_from_team_id(home_runtime, away_runtime, event.view.team_id)\n            if (\n                event.team_side is not None\n                and event.view.event_type\n                not in {\n                    MatchViewerEventType.YELLOW_CARD,\n                    MatchViewerEventType.RED_CARD,\n                    MatchViewerEventType.SUBSTITUTION,\n                    MatchViewerEventType.INJURY,\n                    MatchViewerEventType.HALFTIME,\n                    MatchViewerEventType.FULLTIME,\n                    MatchViewerEventType.NEUTRAL,\n                }\n            ):\n                last_possession = event.team_side\n'''
+          new = '''            event.team_side = self._team_side_from_team_id(home_runtime, away_runtime, event.view.team_id)\n            non_possession_event = event.view.event_type in {\n                MatchViewerEventType.YELLOW_CARD,\n                MatchViewerEventType.RED_CARD,\n                MatchViewerEventType.SUBSTITUTION,\n                MatchViewerEventType.INJURY,\n                MatchViewerEventType.HALFTIME,\n                MatchViewerEventType.FULLTIME,\n                MatchViewerEventType.NEUTRAL,\n            }\n            if event.team_side is not None and not non_possession_event:\n                last_possession = event.team_side\n'''
           if old not in text:
               raise SystemExit('expected possession assignment block not found')
-          service.write_text(text.replace(old, new, 1), encoding='utf-8')
+          text = text.replace(old, new, 1)
+          old2 = '''            possession_side = event.team_side or last_possession\n'''
+          new2 = '''            possession_side = last_possession if non_possession_event else (event.team_side or last_possession)\n'''
+          if old2 not in text:
+              raise SystemExit('expected possession resolution line not found')
+          text = text.replace(old2, new2, 1)
+          service.write_text(text, encoding='utf-8')
 
           test = Path('backend/tests/test_match_timeline_service.py')
           text = test.read_text(encoding='utf-8')
           marker = '''def test_match_timeline_service_builds_long_archive_replay() -> None:\n'''
-          test_case = '''def test_match_timeline_service_does_not_change_possession_for_disciplinary_or_admin_events() -> None:\n    simulation_service = MatchSimulationService()\n    replay_payload = simulation_service.build_replay_payload(build_request(seed=33))\n    service = MatchTimelineService()\n    view_state = service.build_from_replay_payload(replay_payload)\n\n    previous_event_id = None\n    previous_possession = None\n    for frame in view_state.frames:\n        if frame.active_event_id != previous_event_id:\n            previous_event_id = frame.active_event_id\n            previous_possession = frame.possession_side\n            continue\n        event = next((item for item in view_state.events if item.event_id == frame.active_event_id), None)\n        if event is not None and event.event_type in {\n            MatchViewerEventType.YELLOW_CARD,\n            MatchViewerEventType.RED_CARD,\n            MatchViewerEventType.SUBSTITUTION,\n            MatchViewerEventType.INJURY,\n        }:\n            assert frame.possession_side == previous_possession\n        previous_possession = frame.possession_side\n\n\n'''
+          test_case = '''def test_match_timeline_service_does_not_flip_possession_for_non_play_event_frames() -> None:\n    simulation_service = MatchSimulationService()\n    replay_payload = simulation_service.build_replay_payload(build_request(seed=33))\n    service = MatchTimelineService()\n    view_state = service.build_from_replay_payload(replay_payload)\n\n    current_event_id = None\n    event_possession = None\n    saw_non_play_event = False\n    for frame in view_state.frames:\n        if frame.active_event_id != current_event_id:\n            current_event_id = frame.active_event_id\n            event_possession = frame.possession_side\n            continue\n        event = next((item for item in view_state.events if item.event_id == frame.active_event_id), None)\n        if event is not None and event.event_type in {\n            MatchViewerEventType.YELLOW_CARD,\n            MatchViewerEventType.RED_CARD,\n            MatchViewerEventType.SUBSTITUTION,\n            MatchViewerEventType.INJURY,\n        }:\n            saw_non_play_event = True\n            assert frame.possession_side == event_possession\n        event_possession = frame.possession_side\n\n    assert saw_non_play_event\n\n\n'''
           if marker not in text:
               raise SystemExit('test insertion marker not found')
           test.write_text(text.replace(marker, test_case + marker, 1), encoding='utf-8')
@@ -43,7 +49,7 @@ jobs:
           python -m compileall -q backend/app/services/match_timeline_service.py
           git diff --check
           python -m pip install -r backend/requirements.txt pytest
-          python -m pytest backend/tests/test_match_timeline_service.py::test_match_timeline_service_does_not_change_possession_for_disciplinary_or_admin_events -q
+          python -m pytest backend/tests/test_match_timeline_service.py::test_match_timeline_service_does_not_flip_possession_for_non_play_event_frames -q
 
       - name: Commit and remove workflow
         shell: bash
