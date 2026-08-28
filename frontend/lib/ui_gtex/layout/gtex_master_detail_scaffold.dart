@@ -35,6 +35,11 @@ class GtexMasterDetailScaffold extends StatelessWidget {
     final bool compact = GtexBreakpoints.isCompact(context);
     final bool showRightPanel =
         rightPanel != null && width >= GtexBreakpoints.desktop;
+    // Between the compact breakpoint and desktop there is no room for the
+    // right panel inline, but it still holds the primary actions for the
+    // selected item. Surface it through the same sheet the mobile layout
+    // uses instead of dropping it silently.
+    final bool offerRightPanelSheet = rightPanel != null && !showRightPanel;
     if (compact) {
       return _MobileMasterDetail(
         title: title,
@@ -55,7 +60,21 @@ class GtexMasterDetailScaffold extends StatelessWidget {
           _MasterDetailHeader(
             title: title,
             subtitle: subtitle,
-            actions: actions,
+            actions: <Widget>[
+              if (offerRightPanelSheet)
+                IconButton.filledTonal(
+                  key: const Key('gtex-master-detail-summary-action'),
+                  tooltip: 'Open summary',
+                  onPressed:
+                      () => showGtexMasterDetailPanelSheet(
+                        context,
+                        'Summary',
+                        rightPanel!,
+                      ),
+                  icon: const Icon(Icons.receipt_long_outlined),
+                ),
+              ...actions,
+            ],
             accent: accent,
           ),
           const SizedBox(height: GtexSpacing.md),
@@ -119,7 +138,11 @@ class _MobileMasterDetail extends StatelessWidget {
               IconButton.filledTonal(
                 tooltip: mobileLeftTitle,
                 onPressed:
-                    () => _openPanel(context, mobileLeftTitle, leftPanel),
+                    () => showGtexMasterDetailPanelSheet(
+                      context,
+                      mobileLeftTitle,
+                      leftPanel,
+                    ),
                 icon: const Icon(Icons.view_sidebar_outlined),
               ),
               ...actions,
@@ -133,7 +156,12 @@ class _MobileMasterDetail extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () => _openPanel(context, 'Summary', rightPanel!),
+                onPressed:
+                    () => showGtexMasterDetailPanelSheet(
+                      context,
+                      'Summary',
+                      rightPanel!,
+                    ),
                 icon: const Icon(Icons.receipt_long_outlined),
                 label: const Text('Open summary'),
               ),
@@ -143,55 +171,58 @@ class _MobileMasterDetail extends StatelessWidget {
       ),
     );
   }
+}
 
-  void _openPanel(BuildContext context, String title, Widget child) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: GtexColors.panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(GtexSpacing.radiusLg),
-        ),
+/// Opens a panel that cannot be shown inline at the current width.
+void showGtexMasterDetailPanelSheet(
+  BuildContext context,
+  String title,
+  Widget child,
+) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: GtexColors.panel,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(GtexSpacing.radiusLg),
       ),
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.84,
-            child: Padding(
-              padding: const EdgeInsets.all(GtexSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(
-                            color: GtexColors.text,
-                            fontWeight: FontWeight.w900,
-                          ),
+    ),
+    builder: (BuildContext context) {
+      return SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.84,
+          child: Padding(
+            padding: const EdgeInsets.all(GtexSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: GtexColors.text,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: GtexSpacing.md),
-                  Expanded(child: child),
-                ],
-              ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: GtexSpacing.md),
+                Expanded(child: child),
+              ],
             ),
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
 }
 
 class _MasterDetailHeader extends StatelessWidget {
@@ -255,6 +286,7 @@ class _MasterDetailHeader extends StatelessWidget {
         );
         final Widget actionRow = Wrap(
           spacing: GtexSpacing.xs,
+          runSpacing: GtexSpacing.xs,
           children: actions,
         );
         if (compact) {
@@ -269,7 +301,15 @@ class _MasterDetailHeader extends StatelessWidget {
             ],
           );
         }
-        return Row(children: <Widget>[Expanded(child: titleBlock), actionRow]);
+        return Row(
+          children: <Widget>[
+            Expanded(child: titleBlock),
+            const SizedBox(width: GtexSpacing.sm),
+            // Flexible (not a bare Wrap) so wide action sets wrap to a new run
+            // instead of overflowing the header horizontally.
+            Flexible(child: actionRow),
+          ],
+        );
       },
     );
   }
@@ -292,10 +332,7 @@ class _PanelFrame extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
-        child: Material(
-          type: MaterialType.transparency,
-          child: child,
-        ),
+        child: Material(type: MaterialType.transparency, child: child),
       ),
     );
   }
