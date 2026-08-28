@@ -7,7 +7,13 @@ from typing import Any
 from app.match_engine.simulation.models import PlayerRole
 from app.schemas.match_viewer import MatchViewerAnimationState, MatchViewerPlayerState, MatchViewerSide
 
-_LINE_Y = {1: (50.0,), 2: (34.0, 66.0), 3: (22.0, 50.0, 78.0), 4: (18.0, 39.0, 61.0, 82.0), 5: (14.0, 32.0, 50.0, 68.0, 86.0)}
+_LINE_Y = {
+    1: (50.0,),
+    2: (34.0, 66.0),
+    3: (22.0, 50.0, 78.0),
+    4: (18.0, 39.0, 61.0, 82.0),
+    5: (14.0, 32.0, 50.0, 68.0, 86.0),
+}
 _LINE_X = {3: (24.0, 50.0, 76.0), 4: (20.0, 38.0, 62.0, 80.0)}
 
 
@@ -22,23 +28,49 @@ def _smoothstep(value: float) -> float:
 
 def _hash_phase(player_id: str) -> tuple[float, float]:
     digest = md5(player_id.encode("utf-8")).digest()
-    return ((int.from_bytes(digest[:4], "big") / 0xFFFFFFFF) * tau, (int.from_bytes(digest[4:8], "big") / 0xFFFFFFFF) * tau)
+    return (
+        (int.from_bytes(digest[:4], "big") / 0xFFFFFFFF) * tau,
+        (int.from_bytes(digest[4:8], "big") / 0xFFFFFFFF) * tau,
+    )
 
 
 def _line_sizes(runtime: Any) -> list[int]:
     outfield = runtime.lineup[1:]
+    n = len(outfield)
+    if n == 0:
+        return []
     try:
         values = [int(part) for part in str(runtime.current_formation).split("-")]
     except ValueError:
         values = []
-    if values and sum(values) == len(outfield):
+    if values and sum(values) == n:
         return values
-    defenders = sum(runtime.players_by_id[item].role is PlayerRole.DEFENDER for item in outfield)
-    midfielders = sum(runtime.players_by_id[item].role is PlayerRole.MIDFIELDER for item in outfield)
-    forwards = sum(runtime.players_by_id[item].role is PlayerRole.FORWARD for item in outfield)
-    if defenders and midfielders and forwards and defenders + midfielders + forwards == len(outfield):
-        return [defenders, midfielders, forwards]
-    return [4, 3, 3] if len(outfield) == 10 else [4, 4, 1]
+    defenders = sum(
+        1
+        for item in outfield
+        if item in runtime.players_by_id and runtime.players_by_id[item].role is PlayerRole.DEFENDER
+    )
+    midfielders = sum(
+        1
+        for item in outfield
+        if item in runtime.players_by_id and runtime.players_by_id[item].role is PlayerRole.MIDFIELDER
+    )
+    forwards = sum(
+        1
+        for item in outfield
+        if item in runtime.players_by_id and runtime.players_by_id[item].role is PlayerRole.FORWARD
+    )
+    if defenders + midfielders + forwards == n:
+        sizes = [c for c in (defenders, midfielders, forwards) if c > 0]
+        if sizes:
+            return sizes
+    if n <= 3:
+        return [1] * n
+    base, rem = divmod(n, 3)
+    d = base + (1 if rem > 0 else 0)
+    m = base + (1 if rem > 1 else 0)
+    a = base
+    return [d, m, a]
 
 
 def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
@@ -57,7 +89,9 @@ def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
     for group_index, size in enumerate(sizes):
         ys = _LINE_Y.get(size, tuple(10.0 + ((i + 1) * (80.0 / (size + 1))) for i in range(size)))
         for local_index in range(size):
-            result[outfield[cursor + local_index]] = {"x": float(base_x[group_index]), "y": float(ys[local_index])}
+            idx = cursor + local_index
+            if idx < len(outfield):
+                result[outfield[idx]] = {"x": float(base_x[group_index]), "y": float(ys[local_index])}
         cursor += size
     return result
 
@@ -86,7 +120,11 @@ def _side_attacks_right(side: MatchViewerSide, home_attacks_right: bool) -> bool
 def _event_point(event: Any, key: str) -> dict[str, float] | None:
     contract = getattr(event, "render_contract", None) or {}
     value = contract.get(key) if isinstance(contract, dict) else None
-    if isinstance(value, dict) and isinstance(value.get("x"), (int, float)) and isinstance(value.get("y"), (int, float)):
+    if (
+        isinstance(value, dict)
+        and isinstance(value.get("x"), (int, float))
+        and isinstance(value.get("y"), (int, float))
+    ):
         return {"x": _clamp(float(value["x"])), "y": _clamp(float(value["y"]))}
     return None
 
@@ -123,12 +161,18 @@ def _trajectory_contract(event: Any) -> tuple[list[dict[str, float]], dict[str, 
     return trajectory, resolved_spin
 
 
-def _sample_trajectory(trajectory: list[dict[str, float]], local: float) -> tuple[dict[str, float], dict[str, float], float]:
+def _sample_trajectory(
+    trajectory: list[dict[str, float]], local: float
+) -> tuple[dict[str, float], dict[str, float], float]:
     if not trajectory:
         raise ValueError("trajectory must contain at least one sample")
     if local <= trajectory[0]["t"]:
         point = trajectory[0]
-        return {"x": point["x"], "y": point["y"], "z": max(0.0, point["z"])}, {"x": 0.0, "y": 0.0, "z": 0.0}, trajectory[-1]["t"]
+        return (
+            {"x": point["x"], "y": point["y"], "z": max(0.0, point["z"])},
+            {"x": 0.0, "y": 0.0, "z": 0.0},
+            trajectory[-1]["t"],
+        )
     if local >= trajectory[-1]["t"]:
         point = trajectory[-1]
         if len(trajectory) >= 2:
@@ -159,10 +203,24 @@ def _sample_trajectory(trajectory: list[dict[str, float]], local: float) -> tupl
             }
             return point, velocity, trajectory[-1]["t"]
     point = trajectory[-1]
-    return {"x": point["x"], "y": point["y"], "z": max(0.0, point["z"])}, {"x": 0.0, "y": 0.0, "z": 0.0}, trajectory[-1]["t"]
+    return (
+        {"x": point["x"], "y": point["y"], "z": max(0.0, point["z"])},
+        {"x": 0.0, "y": 0.0, "z": 0.0},
+        trajectory[-1]["t"],
+    )
 
 
-def _player_position(runtime: Any, player: Any, *, time_seconds: float, active_event: Any, stage: str, clock_minute: float, possession_side: MatchViewerSide, home_attacks_right: bool) -> tuple[dict[str, float], MatchViewerPlayerState, bool]:
+def _player_position(
+    runtime: Any,
+    player: Any,
+    *,
+    time_seconds: float,
+    active_event: Any,
+    stage: str,
+    clock_minute: float,
+    possession_side: MatchViewerSide,
+    home_attacks_right: bool,
+) -> tuple[dict[str, float], MatchViewerPlayerState, bool]:
     attacks_right = _side_attacks_right(runtime.view.side, home_attacks_right)
     anchor = _anchors(runtime, attacks_right)[player.player_id]
     position = dict(anchor)
@@ -194,12 +252,20 @@ def _player_position(runtime: Any, player: Any, *, time_seconds: float, active_e
             position["x"] += (desired["x"] - position["x"]) * blend
             position["y"] += (desired["y"] - position["y"]) * blend
             if active_event.view.event_type.value in {"goal", "shot", "miss", "save", "penalty"} and abs(local) < 0.55:
-                state = MatchViewerPlayerState.ATTACKING if runtime.view.side is attacking_side else MatchViewerPlayerState.DEFENDING
+                state = (
+                    MatchViewerPlayerState.ATTACKING
+                    if runtime.view.side is attacking_side
+                    else MatchViewerPlayerState.DEFENDING
+                )
         elif player.player_id == active_event.view.secondary_player_id:
             blend = 0.58 * event_weight
             position["x"] += (target["x"] - position["x"]) * blend
             position["y"] += (target["y"] - position["y"]) * blend
-            state = MatchViewerPlayerState.MOVING if runtime.view.side is possession_side else MatchViewerPlayerState.DEFENDING
+            state = (
+                MatchViewerPlayerState.MOVING
+                if runtime.view.side is possession_side
+                else MatchViewerPlayerState.DEFENDING
+            )
         elif runtime.view.side is attacking_side and line in {"attack", "midfield"}:
             lane, depth = _hash_phase(player.player_id)
             lane_offset = sin((clock_minute * 0.55) + lane) * (7.0 if line == "attack" else 5.0)
@@ -223,7 +289,9 @@ def _velocity_for_player(runtime: Any, player: Any, **kwargs: Any) -> tuple[floa
     return ((current["x"] - previous["x"]) / 0.08, (current["y"] - previous["y"]) / 0.08)
 
 
-def _animation_for_player(player: Any, line: str, state: MatchViewerPlayerState, speed_ratio: float, event: Any, time_seconds: float) -> MatchViewerAnimationState:
+def _animation_for_player(
+    player: Any, line: str, state: MatchViewerPlayerState, speed_ratio: float, event: Any, time_seconds: float
+) -> MatchViewerAnimationState:
     if event is not None:
         local = time_seconds - float(event.view.time_seconds)
         if player.player_id == event.view.primary_player_id and abs(local) <= 0.45:
@@ -244,25 +312,102 @@ def _animation_for_player(player: Any, line: str, state: MatchViewerPlayerState,
     return MatchViewerAnimationState.IDLE
 
 
-def build_player_payloads(*, home_runtime: Any, away_runtime: Any, home_attacks_right: bool, active_event: Any, stage: str, clock_minute: float, possession_side: MatchViewerSide, time_seconds: float) -> list[dict[str, Any]]:
+def build_player_payloads(
+    *,
+    home_runtime: Any,
+    away_runtime: Any,
+    home_attacks_right: bool,
+    active_event: Any,
+    stage: str,
+    clock_minute: float,
+    possession_side: MatchViewerSide,
+    time_seconds: float,
+) -> list[dict[str, Any]]:
     payloads: list[dict[str, Any]] = []
     for runtime in (home_runtime, away_runtime):
         anchors = _anchors(runtime, _side_attacks_right(runtime.view.side, home_attacks_right))
         for player_id in runtime.lineup:
             player = runtime.players_by_id[player_id]
-            position, state, highlighted = _player_position(runtime, player, time_seconds=time_seconds, active_event=active_event, stage=stage, clock_minute=clock_minute, possession_side=possession_side, home_attacks_right=home_attacks_right)
-            vx, vy = _velocity_for_player(runtime, player, time_seconds=time_seconds, active_event=active_event, stage=stage, clock_minute=clock_minute, possession_side=possession_side, home_attacks_right=home_attacks_right)
+            position, state, highlighted = _player_position(
+                runtime,
+                player,
+                time_seconds=time_seconds,
+                active_event=active_event,
+                stage=stage,
+                clock_minute=clock_minute,
+                possession_side=possession_side,
+                home_attacks_right=home_attacks_right,
+            )
+            vx, vy = _velocity_for_player(
+                runtime,
+                player,
+                time_seconds=time_seconds,
+                active_event=active_event,
+                stage=stage,
+                clock_minute=clock_minute,
+                possession_side=possession_side,
+                home_attacks_right=home_attacks_right,
+            )
             speed_ratio = _clamp(hypot(vx, vy) / 8.5, 0.0, 1.0)
-            payloads.append({"player_id": player.player_id, "team_id": player.team_id, "side": player.side, "shirt_number": player.shirt_number, "label": player.label, "role": player.role, "line": _line(runtime, player_id), "state": state, "active": True, "highlighted": highlighted, "position": position, "anchor_position": anchors[player_id], "animation_state": _animation_for_player(player, _line(runtime, player_id), state, speed_ratio, active_event, time_seconds), "speed_ratio": speed_ratio, "blend_factor": _smoothstep(speed_ratio), "stamina_pct": float(player.base_stamina_pct if player.base_stamina_pct is not None else 100.0), "has_possession": bool(active_event is not None and player.player_id == active_event.view.primary_player_id and runtime.view.side is possession_side), "facing": {"x": 1.0 if vx >= 0 else -1.0, "y": 0.0}, "velocity": {"x": round(vx, 3), "y": round(vy, 3)}})
+            payloads.append(
+                {
+                    "player_id": player.player_id,
+                    "team_id": player.team_id,
+                    "side": player.side,
+                    "shirt_number": player.shirt_number,
+                    "label": player.label,
+                    "role": player.role,
+                    "line": _line(runtime, player_id),
+                    "state": state,
+                    "active": True,
+                    "highlighted": highlighted,
+                    "position": position,
+                    "anchor_position": anchors[player_id],
+                    "animation_state": _animation_for_player(
+                        player, _line(runtime, player_id), state, speed_ratio, active_event, time_seconds
+                    ),
+                    "speed_ratio": speed_ratio,
+                    "blend_factor": _smoothstep(speed_ratio),
+                    "stamina_pct": float(player.base_stamina_pct if player.base_stamina_pct is not None else 100.0),
+                    "has_possession": bool(
+                        active_event is not None
+                        and player.player_id == active_event.view.primary_player_id
+                        and runtime.view.side is possession_side
+                    ),
+                    "facing": {"x": 1.0 if vx >= 0 else -1.0, "y": 0.0},
+                    "velocity": {"x": round(vx, 3), "y": round(vy, 3)},
+                }
+            )
     return payloads
 
 
-def build_ball_payload(*, player_payloads: list[dict[str, Any]], home_runtime: Any, away_runtime: Any, home_attacks_right: bool, active_event: Any, stage: str, possession_side: MatchViewerSide, time_seconds: float) -> dict[str, Any]:
+def build_ball_payload(
+    *,
+    player_payloads: list[dict[str, Any]],
+    home_runtime: Any,
+    away_runtime: Any,
+    home_attacks_right: bool,
+    active_event: Any,
+    stage: str,
+    possession_side: MatchViewerSide,
+    time_seconds: float,
+) -> dict[str, Any]:
     if time_seconds <= 0.0:
-        return {"position": {"x": 50.0, "y": 50.0}, "height": 0.05, "owner_player_id": None, "state": "rolling", "spin": None, "velocity": {"x": 0.0, "y": 0.0, "z": 0.0}}
+        return {
+            "position": {"x": 50.0, "y": 50.0},
+            "height": 0.05,
+            "owner_player_id": None,
+            "state": "rolling",
+            "spin": None,
+            "velocity": {"x": 0.0, "y": 0.0, "z": 0.0},
+        }
     owner_id = None
     if active_event is not None:
-        owner_id = active_event.view.primary_player_id if possession_side is active_event.team_side else active_event.view.secondary_player_id
+        owner_id = (
+            active_event.view.primary_player_id
+            if possession_side is active_event.team_side
+            else active_event.view.secondary_player_id
+        )
     if not owner_id:
         for player in player_payloads:
             if player["side"] is possession_side and player["role"] is not PlayerRole.GOALKEEPER:
@@ -293,7 +438,11 @@ def build_ball_payload(*, player_payloads: list[dict[str, Any]], home_runtime: A
             velocity_y = sampled_velocity["y"]
             velocity_z = sampled_velocity["z"]
         else:
-            handoff_id = active_event.view.secondary_player_id if active_event is not None and event_type in post_flight_handoff_types else None
+            handoff_id = (
+                active_event.view.secondary_player_id
+                if active_event is not None and event_type in post_flight_handoff_types
+                else None
+            )
             if handoff_id and handoff_id in player_by_id:
                 owner_id = handoff_id
                 owner_position = player_by_id[handoff_id]["position"]
@@ -314,11 +463,21 @@ def build_ball_payload(*, player_payloads: list[dict[str, Any]], home_runtime: A
         phase = _smoothstep((local + 0.08) / duration)
         x = origin["x"] + ((target["x"] - origin["x"]) * phase)
         y = origin["y"] + ((target["y"] - origin["y"]) * phase)
-        height = 0.05 + (0.18 * sin(phase * 3.14159265)) if event_type in {"shot", "goal", "save", "miss", "penalty"} else 0.03 + (0.10 * sin(phase * 3.14159265))
+        height = (
+            0.05 + (0.18 * sin(phase * 3.14159265))
+            if event_type in {"shot", "goal", "save", "miss", "penalty"}
+            else 0.03 + (0.10 * sin(phase * 3.14159265))
+        )
         state = "in_flight"
         previous_phase = _smoothstep((max(0.0, local - 0.05) + 0.08) / duration)
-        velocity_x = ((origin["x"] + ((target["x"] - origin["x"]) * phase)) - (origin["x"] + ((target["x"] - origin["x"]) * previous_phase))) / 0.05
-        velocity_y = ((origin["y"] + ((target["y"] - origin["y"]) * phase)) - (origin["y"] + ((target["y"] - origin["y"]) * previous_phase))) / 0.05
+        velocity_x = (
+            (origin["x"] + ((target["x"] - origin["x"]) * phase))
+            - (origin["x"] + ((target["x"] - origin["x"]) * previous_phase))
+        ) / 0.05
+        velocity_y = (
+            (origin["y"] + ((target["y"] - origin["y"]) * phase))
+            - (origin["y"] + ((target["y"] - origin["y"]) * previous_phase))
+        ) / 0.05
         velocity_z = height / 0.05
     else:
         x, y = (owner_position or {"x": 50.0, "y": 50.0}).values()
@@ -326,7 +485,11 @@ def build_ball_payload(*, player_payloads: list[dict[str, Any]], home_runtime: A
         state = "controlled" if owner_position else "rolling"
         velocity_x = velocity_y = velocity_z = 0.0
 
-    spin = trajectory_spin if state == "in_flight" and trajectory_spin is not None else ({"x": 0.0, "y": 0.35, "z": 0.8} if state == "in_flight" else None)
+    spin = (
+        trajectory_spin
+        if state == "in_flight" and trajectory_spin is not None
+        else ({"x": 0.0, "y": 0.35, "z": 0.8} if state == "in_flight" else None)
+    )
     return {
         "position": {"x": round(_clamp(x), 3), "y": round(_clamp(y), 3)},
         "height": round(max(0.0, height), 3),
