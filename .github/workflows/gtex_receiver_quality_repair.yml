@@ -1,0 +1,48 @@
+name: GTEX receiver quality repair
+
+on:
+  push:
+    branches: [fix/gtex-receiver-space-quality]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/gtex-receiver-space-quality
+      - name: Patch native receiver scoring
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="Gtex_Test_Migration/Assets/Code/MatchEngine/Players/Behaviours/OriginalRuntimeFootballDecisionBehaviour.cs"
+          grep -n 'var boundaryPenalty' "$FILE"
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("Gtex_Test_Migration/Assets/Code/MatchEngine/Players/Behaviours/OriginalRuntimeFootballDecisionBehaviour.cs")
+          text = p.read_text(encoding="utf-8")
+          anchor = '''            var boundaryPenalty = IsNearBoundary(candidate.Position, BoundaryRiskDistance) ? 6f : 0f;\n            var centralityPenalty ='''
+          replacement = '''            var boundaryPenalty = IsNearBoundary(candidate.Position, BoundaryRiskDistance) ? 6f : 0f;\n            var nearestDefenderDistance = opponents\n                .Where(x => x != null && !x.IsGK && x.PlayerController != null && x.PlayerController.IsPhysicsEnabled)\n                .Select(x => Vector3.Distance(x.Position, point))\n                .DefaultIfEmpty(99f)\n                .Min();\n            var receiverPressurePenalty = Mathf.Clamp01((4.5f - nearestDefenderDistance) / 4.5f) * 5f;\n            var runDirection = candidate.Velocity.sqrMagnitude > 0.04f ? candidate.Velocity.normalized : Vector3.zero;\n            var forwardRunReward = runDirection.sqrMagnitude > 0.01f\n                ? Mathf.Clamp01(Vector3.Dot(Player.GoalDirection.normalized, runDirection)) * 1.6f\n                : 0f;\n            var centralityPenalty ='''
+          if anchor not in text:
+              raise SystemExit("receiver scoring anchor not found")
+          text = text.replace(anchor, replacement, 1)
+          old_return = '''            return linePenalty + boundaryPenalty + centralityPenalty + distancePenalty + backwardPenalty + progressReward - forwardDot * 2.5f;'''
+          new_return = '''            return linePenalty + boundaryPenalty + receiverPressurePenalty + centralityPenalty + distancePenalty + backwardPenalty + progressReward - forwardDot * 2.5f - forwardRunReward;'''
+          if old_return not in text:
+              raise SystemExit("receiver score return not found")
+          text = text.replace(old_return, new_return, 1)
+          p.write_text(text, encoding="utf-8")
+          PY
+          git diff --check
+          git diff -- "$FILE"
+          rm .github/workflows/gtex_receiver_quality_repair.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$FILE"
+          git add -u .github/workflows/gtex_receiver_quality_repair.yml
+          git commit -m "fix(gtex): score receiver pressure and forward runs"
+          git push origin HEAD:fix/gtex-receiver-space-quality
