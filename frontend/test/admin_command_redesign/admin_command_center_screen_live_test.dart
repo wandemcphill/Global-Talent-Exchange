@@ -6,6 +6,7 @@ import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
+import 'package:gte_frontend/shared/auth/gtex_admin_capabilities.dart';
 
 void main() {
   testWidgets(
@@ -48,6 +49,113 @@ void main() {
       );
     },
   );
+
+  // The backend enforces these capabilities per-route
+  // (backend/app/admin/capabilities.py). The command center must not advertise
+  // an action the session's effective permission list cannot perform.
+  testWidgets('scoped admin without finance capabilities cannot act', (
+    WidgetTester tester,
+  ) async {
+    await _pumpCommandCenter(
+      tester,
+      capabilities: _capabilitiesFor(<String>['manage_manager_supply']),
+    );
+
+    expect(_isEnabled(tester, 'Save payment rails'), isFalse);
+    expect(_isEnabled(tester, 'Save payout controls'), isFalse);
+    expect(_isEnabled(tester, 'Create GTEX competition'), isFalse);
+    expect(
+      find.textContaining('does not carry the manage_payment_rails'),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('capabilities enable exactly the actions they grant', (
+    WidgetTester tester,
+  ) async {
+    await _pumpCommandCenter(
+      tester,
+      capabilities: _capabilitiesFor(<String>[
+        'manage_payment_rails',
+        'manage_competitions',
+      ]),
+    );
+
+    expect(_isEnabled(tester, 'Save payment rails'), isTrue);
+    expect(_isEnabled(tester, 'Create GTEX competition'), isTrue);
+    // Granted neither -- must stay blocked.
+    expect(_isEnabled(tester, 'Save payout controls'), isFalse);
+  });
+
+  testWidgets('unchecked capabilities leave controls enabled', (
+    WidgetTester tester,
+  ) async {
+    await _pumpCommandCenter(
+      tester,
+      capabilities: const GtexAdminCapabilities.unchecked(),
+    );
+
+    expect(_isEnabled(tester, 'Save payment rails'), isTrue);
+    expect(_isEnabled(tester, 'Save payout controls'), isTrue);
+  });
+}
+
+GtexAdminCapabilities _capabilitiesFor(List<String> permissions) {
+  return GtexAdminCapabilities.fromSession(
+    GteAuthSession.fromJson(<String, Object?>{
+      'access_token': 'fixture-token',
+      'session_id': 'session-scoped',
+      'token_type': 'bearer',
+      'expires_in': 3600,
+      'permissions': permissions,
+      'user': <String, Object?>{
+        'id': 'scoped-admin-1',
+        'email': 'scoped@gtex.test',
+        'username': 'scoped',
+        'display_name': 'Scoped Admin',
+        'role': 'scoped_admin',
+      },
+    }),
+  );
+}
+
+Future<void> _pumpCommandCenter(
+  WidgetTester tester, {
+  required GtexAdminCapabilities capabilities,
+}) async {
+  // The panels live in a lazy sliver, so the surface must be tall enough for
+  // the finance controls to build before they can be asserted on.
+  tester.view.physicalSize = const Size(1600, 9000);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: AdminCommandCenterScreen(
+        baseUrl: 'http://127.0.0.1:8000',
+        accessToken: 'fixture-token',
+        backendMode: GteBackendMode.fixture,
+        api: _FakeAdminCommandCenterApi(),
+        capabilities: capabilities,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+bool _isEnabled(WidgetTester tester, String label) {
+  final Finder button =
+      find
+          .ancestor(
+            of: find.text(label),
+            matching: find.byType(FilledButton),
+          )
+          .first;
+  expect(button, findsOneWidget, reason: 'no FilledButton for "$label"');
+  return tester.widget<FilledButton>(button).onPressed != null;
 }
 
 class _FakeAdminCommandCenterApi extends AdminCommandCenterApi {
