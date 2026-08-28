@@ -16,40 +16,29 @@ jobs:
           fetch-depth: 0
           ref: fix/gtex-shot-decision
       - name: Patch shot decision
+        shell: bash
         run: |
+          set -euo pipefail
+          FILE="Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs"
+          grep -n -A6 -B2 'shotCorridor' "$FILE"
           python - <<'PY'
           from pathlib import Path
           p = Path("Gtex_Test_Migration/Assets/Code/GTEX/Simulation/GtexSimSpatialSynthesizer.cs")
-          lines = p.read_text(encoding="utf-8").splitlines(True)
-
-          in_plan = False
-          shot_fixed = False
-          for i, line in enumerate(lines):
-              if "private DecisionPlan BuildDecisionPlan" in line:
-                  in_plan = True
-              if in_plan and "shotCorridor" in line:
-                  for j in range(i, min(i + 8, len(lines))):
-                      if 'action = "carry";' in lines[j]:
-                          lines[j] = lines[j].replace('action = "carry";', 'action = "shoot";')
-                          shot_fixed = True
-                          break
-                  in_plan = False
-                  break
-
-          if not shot_fixed:
-              raise SystemExit("shot decision assignment not found")
-
-          text = "".join(lines)
-          if 'if (plan.Action == "shoot")' not in text:
-              marker = '        private void ApplyDecisionPlan(DecisionPlan plan, float currentMinute)\n'
-              start = text.find(marker)
-              if start < 0:
-                  raise SystemExit("ApplyDecisionPlan not found")
-              carry_marker = '            if (plan.Action == "carry")\n'
-              carry_index = text.find(carry_marker, start)
-              if carry_index < 0:
-                  raise SystemExit("carry action branch not found")
-              shot_branch = '''            if (plan.Action == "shoot")
+          text = p.read_text(encoding="utf-8")
+          marker = 'shotCorridor'
+          idx = text.find(marker)
+          if idx < 0:
+              raise SystemExit("shotCorridor not found")
+          carry = text.find('action = "carry";', idx)
+          if carry < 0 or carry - idx > 300:
+              raise SystemExit("shot action assignment not found near shotCorridor")
+          text = text[:carry] + text[carry:].replace('action = "carry";', 'action = "shoot";', 1)
+          method = text.find('private void ApplyDecisionPlan')
+          carry_branch = text.find('if (plan.Action == "carry")', method)
+          if method < 0 or carry_branch < 0:
+              raise SystemExit("ApplyDecisionPlan carry branch not found")
+          if 'if (plan.Action == "shoot")' not in text[method:carry_branch]:
+              shot_branch = '''if (plan.Action == "shoot")
             {
                 var shotTarget = ResolveGoalMouthTarget(source.TeamSide, false);
                 RegisterEvent("shot", currentMinute, source.TeamSide, "Shot on goal.", 0, 0, source.PlayerId);
@@ -69,11 +58,12 @@ jobs:
                 return;
             }
 
-'''
-              text = text[:carry_index] + shot_branch + text[carry_index:]
-
+            '''
+              text = text[:carry_branch] + shot_branch + text[carry_branch:]
           p.write_text(text, encoding="utf-8")
           PY
+          grep -n -A22 -B6 'plan.Action == "shoot"' "$FILE"
+          git diff --check
           rm Gtex_Test_Migration/Assets/Code/GTEX/Simulation/README_shot_repair.md
           rm .github/workflows/gtex_shot_decision_repair.yml
           git config user.name "github-actions[bot]"
