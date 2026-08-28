@@ -5,11 +5,6 @@ using UnityEngine;
 
 namespace FStudio.GTEX.Presentation
 {
-    /// <summary>
-    /// Deterministic production pitch presenter for GTEX LivePlayback.
-    /// Avoids textured pitch underlays whose UV/scale can duplicate or stretch
-    /// markings. The field and markings are generated directly in GTEX pitch space.
-    /// </summary>
     [DefaultExecutionOrder(9990)]
     public sealed class GtexLivePitchPresentation : MonoBehaviour
     {
@@ -21,8 +16,6 @@ namespace FStudio.GTEX.Presentation
         private GameObject generatedRoot;
         private MeshRenderer pitchRenderer;
         private MeshRenderer linesRenderer;
-        private Material pitchMaterial;
-        private Material linesMaterial;
         private Vector3 lastCenter;
         private float lastLength = -1f;
         private float lastWidth = -1f;
@@ -42,7 +35,8 @@ namespace FStudio.GTEX.Presentation
 
         private void LateUpdate()
         {
-            if (GtexRuntimeState.ActiveMode != GtexRuntimeMode.LivePlayback)
+            if (!GtexRuntimeState.IsStarted ||
+                GtexRuntimeState.ActiveMode != GtexRuntimeMode.LivePlayback)
             {
                 return;
             }
@@ -85,23 +79,20 @@ namespace FStudio.GTEX.Presentation
             pitchRenderer = pitchObject.AddComponent<MeshRenderer>();
             pitchRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             pitchRenderer.receiveShadows = false;
-            pitchRenderer.material = CreatePitchMaterial();
-            pitchMaterial = pitchRenderer.sharedMaterial;
+            pitchRenderer.sharedMaterial = CreatePitchMaterial();
 
             var linesObject = new GameObject("Pitch Markings");
             linesObject.transform.SetParent(generatedRoot.transform, false);
             linesRenderer = linesObject.AddComponent<MeshRenderer>();
             linesRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             linesRenderer.receiveShadows = false;
-            linesRenderer.material = CreateLinesMaterial();
-            linesMaterial = linesRenderer.sharedMaterial;
+            linesRenderer.sharedMaterial = CreateLinesMaterial();
         }
 
-        private Material CreatePitchMaterial()
+        private static Material CreatePitchMaterial()
         {
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            var material = new Material(shader);
-            material.name = "GTEX Live Pitch Material";
+            var material = new Material(shader) { name = "GTEX Live Pitch Material" };
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", new Color(0.10f, 0.34f, 0.12f, 1f));
             if (material.HasProperty("_Color")) material.SetColor("_Color", new Color(0.10f, 0.34f, 0.12f, 1f));
             if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0f);
@@ -109,11 +100,10 @@ namespace FStudio.GTEX.Presentation
             return material;
         }
 
-        private Material CreateLinesMaterial()
+        private static Material CreateLinesMaterial()
         {
             var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-            var material = new Material(shader);
-            material.name = "GTEX Live Pitch Lines Material";
+            var material = new Material(shader) { name = "GTEX Live Pitch Lines Material" };
             if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
             if (material.HasProperty("_Color")) material.SetColor("_Color", Color.white);
             material.renderQueue = 3000;
@@ -123,26 +113,18 @@ namespace FStudio.GTEX.Presentation
         private void BuildPitch(GtexPitchSpace pitch)
         {
             var y = pitch.GrassY + 0.0125f;
-            var minX = pitch.MinX;
-            var maxX = pitch.MaxX;
-            var minZ = pitch.MinZ;
-            var maxZ = pitch.MaxZ;
-
             var pitchMesh = new Mesh { name = "GTEX Live Pitch Surface Mesh" };
             pitchMesh.vertices = new[]
             {
-                new Vector3(minX, y, minZ),
-                new Vector3(maxX, y, minZ),
-                new Vector3(maxX, y, maxZ),
-                new Vector3(minX, y, maxZ)
+                new Vector3(pitch.MinX, y, pitch.MinZ),
+                new Vector3(pitch.MaxX, y, pitch.MinZ),
+                new Vector3(pitch.MaxX, y, pitch.MaxZ),
+                new Vector3(pitch.MinX, y, pitch.MaxZ)
             };
             pitchMesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
             pitchMesh.RecalculateBounds();
-            pitchMesh.UploadMeshData(false);
             pitchRenderer.sharedMesh = pitchMesh;
-
-            var lineMesh = BuildLineMesh(pitch, y + 0.008f);
-            linesRenderer.sharedMesh = lineMesh;
+            linesRenderer.sharedMesh = BuildLineMesh(pitch, y + 0.008f);
         }
 
         private static Mesh BuildLineMesh(GtexPitchSpace pitch, float y)
@@ -153,22 +135,18 @@ namespace FStudio.GTEX.Presentation
 
             void AddLine(Vector3 a, Vector3 b)
             {
-                var dir = (b - a);
-                dir.y = 0f;
-                if (dir.sqrMagnitude < 0.0001f) return;
-                dir.Normalize();
-                var normal = new Vector3(-dir.z, 0f, dir.x) * width;
+                var direction = b - a;
+                direction.y = 0f;
+                if (direction.sqrMagnitude < 0.0001f) return;
+                direction.Normalize();
+                var normal = new Vector3(-direction.z, 0f, direction.x) * width;
                 var start = vertices.Count;
                 vertices.Add(a - normal);
                 vertices.Add(a + normal);
                 vertices.Add(b + normal);
                 vertices.Add(b - normal);
-                triangles.Add(start);
-                triangles.Add(start + 1);
-                triangles.Add(start + 2);
-                triangles.Add(start);
-                triangles.Add(start + 2);
-                triangles.Add(start + 3);
+                triangles.Add(start); triangles.Add(start + 1); triangles.Add(start + 2);
+                triangles.Add(start); triangles.Add(start + 2); triangles.Add(start + 3);
             }
 
             void AddCircle(Vector3 center, float radius, int segments)
@@ -176,20 +154,16 @@ namespace FStudio.GTEX.Presentation
                 var previous = center + Vector3.forward * radius;
                 for (var i = 1; i <= segments; i++)
                 {
-                    var angle = (Mathf.PI * 2f * i) / segments;
+                    var angle = Mathf.PI * 2f * i / segments;
                     var next = center + new Vector3(Mathf.Sin(angle) * radius, 0f, Mathf.Cos(angle) * radius);
                     AddLine(previous, next);
                     previous = next;
                 }
             }
 
-            var minX = pitch.MinX;
-            var maxX = pitch.MaxX;
-            var minZ = pitch.MinZ;
-            var maxZ = pitch.MaxZ;
-            var midX = pitch.Center.x;
-            var midZ = pitch.Center.z;
-
+            var minX = pitch.MinX; var maxX = pitch.MaxX;
+            var minZ = pitch.MinZ; var maxZ = pitch.MaxZ;
+            var midX = pitch.Center.x; var midZ = pitch.Center.z;
             AddLine(new Vector3(minX, y, minZ), new Vector3(maxX, y, minZ));
             AddLine(new Vector3(maxX, y, minZ), new Vector3(maxX, y, maxZ));
             AddLine(new Vector3(maxX, y, maxZ), new Vector3(minX, y, maxZ));
@@ -202,18 +176,14 @@ namespace FStudio.GTEX.Presentation
             var penaltyHalf = Mathf.Min(20.16f, pitch.Width * 0.30f);
             var sixDepth = Mathf.Min(5.5f, pitch.Length * 0.055f);
             var sixHalf = Mathf.Min(9.16f, pitch.Width * 0.135f);
-            var boxY0 = midZ - penaltyHalf;
-            var boxY1 = midZ + penaltyHalf;
-            var sixY0 = midZ - sixHalf;
-            var sixY1 = midZ + sixHalf;
-
+            var boxY0 = midZ - penaltyHalf; var boxY1 = midZ + penaltyHalf;
+            var sixY0 = midZ - sixHalf; var sixY1 = midZ + sixHalf;
             AddLine(new Vector3(minX, y, boxY0), new Vector3(minX + penaltyDepth, y, boxY0));
             AddLine(new Vector3(minX + penaltyDepth, y, boxY0), new Vector3(minX + penaltyDepth, y, boxY1));
             AddLine(new Vector3(minX + penaltyDepth, y, boxY1), new Vector3(minX, y, boxY1));
             AddLine(new Vector3(maxX, y, boxY0), new Vector3(maxX - penaltyDepth, y, boxY0));
             AddLine(new Vector3(maxX - penaltyDepth, y, boxY0), new Vector3(maxX - penaltyDepth, y, boxY1));
             AddLine(new Vector3(maxX - penaltyDepth, y, boxY1), new Vector3(maxX, y, boxY1));
-
             AddLine(new Vector3(minX, y, sixY0), new Vector3(minX + sixDepth, y, sixY0));
             AddLine(new Vector3(minX + sixDepth, y, sixY0), new Vector3(minX + sixDepth, y, sixY1));
             AddLine(new Vector3(minX + sixDepth, y, sixY1), new Vector3(minX, y, sixY1));
@@ -240,18 +210,11 @@ namespace FStudio.GTEX.Presentation
             for (var i = 0; i < transforms.Length; i++)
             {
                 var transform = transforms[i];
-                if (transform == null || transform.name != objectName)
-                {
-                    continue;
-                }
-
+                if (transform == null || transform.name != objectName) continue;
                 var renderers = transform.GetComponentsInChildren<Renderer>(true);
                 for (var r = 0; r < renderers.Length; r++)
                 {
-                    if (renderers[r] != null)
-                    {
-                        renderers[r].enabled = false;
-                    }
+                    if (renderers[r] != null) renderers[r].enabled = false;
                 }
             }
         }
