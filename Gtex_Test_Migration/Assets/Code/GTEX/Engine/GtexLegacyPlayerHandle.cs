@@ -8,6 +8,7 @@ namespace FStudio.GTEX.Engine
     public sealed class GtexLegacyPlayerHandle
     {
         private readonly PlayerBase player;
+        private GtexExternalPlaybackSmoother playbackSmoother;
 
         public GtexLegacyPlayerHandle(PlayerBase player)
         {
@@ -93,6 +94,10 @@ namespace FStudio.GTEX.Engine
             }
 
             player.PlayerController.SetExternalPlayback(value);
+            if (!value && playbackSmoother != null)
+            {
+                playbackSmoother.Clear();
+            }
         }
 
         public void SetExternalPlaybackPose(Vector3 position, Quaternion rotation, bool snap = false)
@@ -103,6 +108,23 @@ namespace FStudio.GTEX.Engine
             }
 
             player.PlayerController.SetExternalPlaybackPose(position, rotation, snap);
+
+            var transform = UnityTransform;
+            if (transform == null)
+            {
+                return;
+            }
+
+            if (playbackSmoother == null)
+            {
+                playbackSmoother = transform.GetComponent<GtexExternalPlaybackSmoother>();
+                if (playbackSmoother == null)
+                {
+                    playbackSmoother = transform.gameObject.AddComponent<GtexExternalPlaybackSmoother>();
+                }
+            }
+
+            playbackSmoother.SetTarget(position, rotation, snap);
         }
 
         public Vector3 InverseTransformDirection(Vector3 worldDirection)
