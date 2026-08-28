@@ -5,10 +5,12 @@ namespace FStudio.GTEX.Simulation
 {
     public sealed class GtexSimEventSystem
     {
+        private const float MinimumEventSeparationMinutes = 1.1f;
         private readonly GtexSimConfig config;
         private readonly List<GtexSimEvent> history = new List<GtexSimEvent>();
         private readonly Random random;
         private int nextWindowIndex;
+        private float lastEventMinute = -999f;
 
         public GtexSimEventSystem(GtexSimConfig config, Random random = null)
         {
@@ -31,6 +33,7 @@ namespace FStudio.GTEX.Simulation
             HomeScore = 0;
             AwayScore = 0;
             nextWindowIndex = 0;
+            lastEventMinute = -999f;
             config.Log("Event system reset.");
         }
 
@@ -42,9 +45,6 @@ namespace FStudio.GTEX.Simulation
             }
 
             var windowSize = config.EventCheckWindowMinutes;
-
-            // Process fixed windows only after they fully close so event generation
-            // stays stable even if UpdateMatch is called with different delta sizes.
             while (((nextWindowIndex + 1) * windowSize) <= endMinute)
             {
                 var windowStart = nextWindowIndex * windowSize;
@@ -63,31 +63,36 @@ namespace FStudio.GTEX.Simulation
         private void TryGenerateWindowEvent(float windowStart, float windowEnd)
         {
             var intensity = 1d + (windowStart / config.FullMatchMinutes) * 0.25d;
-            var eventChance = Clamp(config.BaseEventChancePerWindow * intensity, 0d, 0.95d);
+            var eventChance = Clamp(config.BaseEventChancePerWindow * intensity, 0d, 0.82d);
             if (random.NextDouble() > eventChance)
             {
                 return;
             }
 
             var eventTime = Lerp(windowStart, windowEnd, random.NextDouble());
+            if (eventTime - lastEventMinute < MinimumEventSeparationMinutes)
+            {
+                return;
+            }
+
             var team = random.NextDouble() >= 0.5d
                 ? GtexSimTeamSide.Home
                 : GtexSimTeamSide.Away;
             var eventRoll = random.NextDouble();
 
-            if (eventRoll < 0.18d)
+            if (eventRoll < 0.20d)
             {
                 EmitGoal(eventTime, team);
                 return;
             }
 
-            if (eventRoll < 0.58d)
+            if (eventRoll < 0.65d)
             {
                 Emit(new GtexMissedChanceEvent(eventTime, team, (float)Lerp(0.45d, 0.98d, random.NextDouble())));
                 return;
             }
 
-            if (eventRoll < 0.88d)
+            if (eventRoll < 0.90d)
             {
                 Emit(new GtexFoulEvent(eventTime, team, (float)Lerp(0.25d, 1d, random.NextDouble())));
                 return;
@@ -96,7 +101,7 @@ namespace FStudio.GTEX.Simulation
             Emit(new GtexCardEvent(
                 eventTime,
                 team,
-                random.NextDouble() < 0.78d ? GtexSimCardType.Yellow : GtexSimCardType.Red));
+                random.NextDouble() < 0.84d ? GtexSimCardType.Yellow : GtexSimCardType.Red));
         }
 
         private void EmitGoal(float eventTime, GtexSimTeamSide team)
@@ -115,6 +120,7 @@ namespace FStudio.GTEX.Simulation
 
         private void Emit(GtexSimEvent matchEvent)
         {
+            lastEventMinute = matchEvent != null ? matchEvent.Minute : lastEventMinute;
             history.Add(matchEvent);
             config.Log("Generated event: " + matchEvent);
             EventGenerated?.Invoke(matchEvent);
