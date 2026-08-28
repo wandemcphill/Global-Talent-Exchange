@@ -148,11 +148,7 @@ def _player_position(runtime: Any, player: Any, *, time_seconds: float, active_e
             position["x"] += (target["x"] - position["x"]) * (0.08 * event_weight)
             position["y"] += (target["y"] - position["y"]) * (0.06 * event_weight)
             state = MatchViewerPlayerState.PRESSING if event_weight > 0.25 else MatchViewerPlayerState.DEFENDING
-    phase_x, phase_y = _hash_phase(player.player_id)
-    amplitude = 0.55 if player.role is PlayerRole.GOALKEEPER else 1.05 if line == "attack" else 0.8
-    position["x"] = _clamp(position["x"] + sin((time_seconds * 0.55) + phase_x) * amplitude)
-    position["y"] = _clamp(position["y"] + cos((time_seconds * 0.47) + phase_y) * amplitude * 1.25)
-    return position, state, highlighted
+    return {"x": _clamp(position["x"]), "y": _clamp(position["y"])}, state, highlighted
 
 
 def _velocity_for_player(runtime: Any, player: Any, **kwargs: Any) -> tuple[float, float]:
