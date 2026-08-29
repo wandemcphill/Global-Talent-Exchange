@@ -27,7 +27,16 @@ class GtexActionButton extends StatelessWidget {
         secondary
             ? OutlinedButton.styleFrom(
               foregroundColor: accent,
-              side: BorderSide(color: accent.withValues(alpha: 0.55)),
+              // An explicit background/foreground overrides Material's
+              // disabled colours, so state them or a disabled button reads
+              // as an enabled one.
+              disabledForegroundColor: GtexColors.textTertiary,
+              side: BorderSide(
+                color:
+                    onPressed == null
+                        ? GtexColors.surfaceBorder
+                        : accent.withValues(alpha: 0.55),
+              ),
               padding: EdgeInsets.symmetric(
                 horizontal: compact ? GtexSpacing.sm : GtexSpacing.lg,
                 vertical: compact ? GtexSpacing.xs : GtexSpacing.sm,
@@ -39,6 +48,8 @@ class GtexActionButton extends StatelessWidget {
             : FilledButton.styleFrom(
               backgroundColor: accent,
               foregroundColor: Colors.black,
+              disabledBackgroundColor: GtexColors.surfaceHover,
+              disabledForegroundColor: GtexColors.textTertiary,
               padding: EdgeInsets.symmetric(
                 horizontal: compact ? GtexSpacing.sm : GtexSpacing.lg,
                 vertical: compact ? GtexSpacing.xs : GtexSpacing.sm,

@@ -3,18 +3,24 @@ import 'package:flutter/material.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_exchange_api_client.dart';
 import '../../data/gte_exchange_models.dart';
+import '../../data/gte_models.dart';
+import '../../providers/gte_exchange_controller.dart';
+import '../../ui_gtex/ui_gtex.dart';
+import '../../widgets/gte_order_ticket_sheet.dart';
 
-const Color _bg = Color(0xFF0E1217);
-const Color _panel = Color(0xFF141A21);
-const Color _border = Color(0xFF283039);
-const Color _text = Color(0xFFF4F6F8);
-const Color _textSecondary = Color(0xFF9AA7B4);
-const Color _textMuted = Color(0xFF7F8C99);
-const Color _green = Color(0xFF5FD17A);
-const Color _amber = Color(0xFFE3B23C);
-const Color _orange = Color(0xFFE08A3C);
-const Color _red = Color(0xFFC7543A);
-const Color _blue = Color(0xFF85B7EB);
+// The profile draws from the shared GTEX tokens so it sits in the same
+// visual language as the market surfaces that link into it.
+const Color _bg = GtexColors.surfaceBase;
+const Color _panel = GtexColors.surfaceRaised;
+const Color _border = GtexColors.surfaceBorder;
+const Color _text = GtexColors.textPrimary;
+const Color _textSecondary = GtexColors.textSecondary;
+const Color _textMuted = GtexColors.textTertiary;
+const Color _green = GtexColors.accentPrimary;
+const Color _amber = GtexColors.accentAmber;
+const Color _orange = GtexColors.accentWarn;
+const Color _red = GtexColors.accentRed;
+const Color _blue = GtexColors.accentBlue;
 
 const String _condensed = 'BarlowCondensed';
 
@@ -26,11 +32,23 @@ class GtexFmPlayerProfileScreen extends StatefulWidget {
     required this.playerId,
     required this.baseUrl,
     this.backendMode = GteBackendMode.live,
+    this.controller,
+    this.onOpenLogin,
+    this.apiClient,
   });
 
   final String playerId;
   final String baseUrl;
   final GteBackendMode backendMode;
+
+  /// Supplied by the app shell so the profile can reach the live trading
+  /// flow. Without it the profile stays read-only and says so.
+  final GteExchangeController? controller;
+  final VoidCallback? onOpenLogin;
+
+  /// Overrides the client used to load the profile. Supplied by tests; the
+  /// app leaves it null and gets the standard live client.
+  final GteExchangeApiClient? apiClient;
 
   @override
   State<GtexFmPlayerProfileScreen> createState() =>
@@ -44,18 +62,79 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
   void initState() {
     super.initState();
     _future = _load();
+    _loadTradingSnapshot();
   }
 
   Future<GteMarketPlayerDetailView> _load() {
-    final GteExchangeApiClient client = GteExchangeApiClient.standard(
-      baseUrl: widget.baseUrl,
-      mode: widget.backendMode,
-    );
+    final GteExchangeApiClient client =
+        widget.apiClient ??
+        GteExchangeApiClient.standard(
+          baseUrl: widget.baseUrl,
+          mode: widget.backendMode,
+        );
     return client.fetchPlayerDetail(widget.playerId);
+  }
+
+  /// Loaded separately from the profile itself: the trading snapshot spans
+  /// six endpoints, and a failure there must not blank out the profile.
+  void _loadTradingSnapshot() {
+    final GteExchangeController? controller = widget.controller;
+    if (controller == null) {
+      return;
+    }
+    controller.openPlayer(widget.playerId);
+  }
+
+  GtePlayerMarketSnapshot? get _snapshot {
+    final GteExchangeController? controller = widget.controller;
+    if (controller?.selectedPlayer?.detail.playerId == widget.playerId) {
+      return controller!.selectedPlayer;
+    }
+    return null;
+  }
+
+  Future<void> _openOrderTicket() async {
+    final GteExchangeController? controller = widget.controller;
+    final GtePlayerMarketSnapshot? snapshot = _snapshot;
+    if (controller == null || snapshot == null) {
+      return;
+    }
+    final GteOrderRecord? order = await showModalBottomSheet<GteOrderRecord>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: GtexColors.panel,
+      builder:
+          (BuildContext context) =>
+              GteOrderTicketSheet(controller: controller, snapshot: snapshot),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (order == null) {
+      // Either dismissed or rejected; the sheet surfaces its own error.
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: GtexColors.surfaceOverlay,
+        content: Text(
+          'Order ${order.status.name} for '
+          '${snapshot.detail.identity.playerName} '
+          '(${order.side.name} ${order.quantity.toStringAsFixed(2)}).',
+          style: const TextStyle(color: _text),
+        ),
+        action: SnackBarAction(
+          label: 'Orders',
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+    );
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
+    final GteExchangeController? controller = widget.controller;
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -66,14 +145,44 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
       ),
       body: FutureBuilder<GteMarketPlayerDetailView>(
         future: _future,
-        builder: (BuildContext context, AsyncSnapshot<GteMarketPlayerDetailView> snap) {
+        builder: (
+          BuildContext context,
+          AsyncSnapshot<GteMarketPlayerDetailView> snap,
+        ) {
           if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const _ProfileSkeleton();
           }
           if (snap.hasError || snap.data == null) {
-            return _ErrorState(onRetry: () => setState(() => _future = _load()));
+            return _ErrorState(
+              onRetry: () {
+                setState(() => _future = _load());
+                _loadTradingSnapshot();
+              },
+            );
           }
-          return _ProfileBody(detail: snap.data!);
+          if (controller == null) {
+            return _ProfileBody(detail: snap.data!, actions: null);
+          }
+          return AnimatedBuilder(
+            animation: controller,
+            builder: (BuildContext context, Widget? _) {
+              return _ProfileBody(
+                detail: snap.data!,
+                careerEntries: _snapshot?.careerEntries,
+                orderBook: _snapshot?.orderBook,
+                actions: _TradeActionBar(
+                  detail: snap.data!,
+                  controller: controller,
+                  snapshotReady: _snapshot != null,
+                  isLoading: controller.isLoadingPlayer,
+                  loadError: controller.playerError,
+                  onTrade: _openOrderTicket,
+                  onRetry: _loadTradingSnapshot,
+                  onOpenLogin: widget.onOpenLogin,
+                ),
+              );
+            },
+          );
         },
       ),
     );
@@ -106,39 +215,399 @@ class _ErrorState extends StatelessWidget {
 }
 
 class _ProfileBody extends StatelessWidget {
-  const _ProfileBody({required this.detail});
+  const _ProfileBody({
+    required this.detail,
+    required this.actions,
+    this.careerEntries,
+    this.orderBook,
+  });
 
   final GteMarketPlayerDetailView detail;
+  final Widget? actions;
+  final List<GteCareerEntry>? careerEntries;
+  final GteOrderBook? orderBook;
 
   @override
   Widget build(BuildContext context) {
     final GteMarketPlayerIdentity id = detail.identity;
     final GteMarketPlayerAttributes attr = detail.attributes;
     final int gsi = detail.trend.globalScoutingIndex.round().clamp(0, 99);
+    final List<GteCareerEntry> career =
+        careerEntries ?? const <GteCareerEntry>[];
+    final GteOrderBook? book = orderBook;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _HeaderCard(identity: id, gsi: gsi, attr: attr),
+              if (actions != null) ...<Widget>[
+                const SizedBox(height: 14),
+                actions!,
+              ],
+              const SizedBox(height: 14),
+              _BioCard(identity: id),
+              const SizedBox(height: 14),
+              _SectionLabel('ATTRIBUTES'),
+              const SizedBox(height: 8),
+              _AttributesCard(attr: attr),
+              const SizedBox(height: 14),
+              _SectionLabel('MARKET'),
+              const SizedBox(height: 8),
+              _MarketCard(detail: detail),
+              // Depth is only drawn when the live book actually has levels,
+              // so an empty book reads as empty rather than as a flat market.
+              if (book != null &&
+                  (book.bids.isNotEmpty || book.asks.isNotEmpty)) ...<Widget>[
+                const SizedBox(height: 14),
+                _SectionLabel('ORDER BOOK'),
+                const SizedBox(height: 8),
+                _OrderBookCard(book: book),
+              ],
+              // Career is only drawn when the backend actually returned
+              // history. Nothing here is synthesised.
+              if (career.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 14),
+                _SectionLabel('CAREER'),
+                const SizedBox(height: 8),
+                _CareerCard(entries: career),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The primary actions for a player. Every state is explicit: the button is
+/// only enabled when there is a live order flow behind it, and each disabled
+/// state says why.
+class _TradeActionBar extends StatelessWidget {
+  const _TradeActionBar({
+    required this.detail,
+    required this.controller,
+    required this.snapshotReady,
+    required this.isLoading,
+    required this.loadError,
+    required this.onTrade,
+    required this.onRetry,
+    required this.onOpenLogin,
+  });
+
+  final GteMarketPlayerDetailView detail;
+  final GteExchangeController controller;
+  final bool snapshotReady;
+  final bool isLoading;
+  final String? loadError;
+  final Future<void> Function() onTrade;
+  final VoidCallback onRetry;
+  final VoidCallback? onOpenLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool tradable = detail.marketProfile.isTradable;
+
+    if (!controller.isAuthenticated) {
+      return _ActionShell(
+        message: 'Sign in to trade ${detail.identity.playerName}.',
+        button: GtexActionButton(
+          label: 'Sign in to trade',
+          icon: Icons.login_outlined,
+          onPressed: onOpenLogin,
+        ),
+      );
+    }
+    if (!tradable) {
+      return const _ActionShell(
+        message: 'This player is not currently tradable on the GTEX exchange.',
+        button: GtexActionButton(
+          label: 'Trading unavailable',
+          icon: Icons.lock_outline,
+          onPressed: null,
+        ),
+      );
+    }
+    if (isLoading && !snapshotReady) {
+      return const _ActionShell(
+        message: 'Loading live order book and quotes...',
+        button: GtexActionButton(
+          label: 'Preparing order ticket',
+          icon: Icons.hourglass_empty,
+          onPressed: null,
+        ),
+      );
+    }
+    if (!snapshotReady) {
+      return _ActionShell(
+        message:
+            loadError ?? 'Live market data for this player is unavailable.',
+        isError: true,
+        button: GtexActionButton(
+          label: 'Retry market data',
+          icon: Icons.refresh,
+          onPressed: onRetry,
+          secondary: true,
+        ),
+      );
+    }
+    return _ActionShell(
+      message: 'Buy or sell this player against the live order book.',
+      button: GtexActionButton(
+        label: controller.isSubmittingOrder ? 'Submitting...' : 'Trade player',
+        icon: Icons.swap_vert,
+        onPressed: controller.isSubmittingOrder ? null : () => onTrade(),
+      ),
+    );
+  }
+}
+
+class _ActionShell extends StatelessWidget {
+  const _ActionShell({
+    required this.message,
+    required this.button,
+    this.isError = false,
+  });
+
+  final String message;
+  final Widget button;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isError ? _red : _border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _HeaderCard(identity: id, gsi: gsi, attr: attr),
-          const SizedBox(height: 14),
-          _BioCard(identity: id),
-          const SizedBox(height: 14),
-          _SectionLabel('ATTRIBUTES'),
+          SizedBox(width: double.infinity, child: button),
           const SizedBox(height: 8),
-          _AttributesCard(attr: attr),
-          const SizedBox(height: 14),
-          _SectionLabel('MARKET'),
-          const SizedBox(height: 8),
-          _MarketCard(detail: detail),
+          Text(
+            message,
+            style: TextStyle(
+              color: isError ? _red : _textSecondary,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
+/// Live market depth for the player, harvested from the exchange detail
+/// screen so the order ticket on this page is not opened blind.
+class _OrderBookCard extends StatelessWidget {
+  const _OrderBookCard({required this.book});
+
+  final GteOrderBook book;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Expanded(
+            child: _OrderBookSide(
+              title: 'BIDS',
+              levels: book.bids,
+              color: _green,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _OrderBookSide(
+              title: 'ASKS',
+              levels: book.asks,
+              color: _red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderBookSide extends StatelessWidget {
+  const _OrderBookSide({
+    required this.title,
+    required this.levels,
+    required this.color,
+  });
+
+  final String title;
+  final List<GteOrderBookLevel> levels;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: TextStyle(
+            color: color,
+            fontFamily: _condensed,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        if (levels.isEmpty)
+          const Text(
+            'None',
+            style: TextStyle(color: _textMuted, fontSize: 12.5),
+          )
+        else
+          for (final GteOrderBookLevel level in levels.take(5))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      level.price.toStringAsFixed(2),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    level.quantity.toStringAsFixed(2),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textSecondary,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class _CareerCard extends StatelessWidget {
+  const _CareerCard({required this.entries});
+
+  final List<GteCareerEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: <Widget>[
+          for (final GteCareerEntry entry in entries.take(8))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  SizedBox(
+                    width: 74,
+                    child: Text(
+                      entry.seasonLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _textMuted,
+                        fontFamily: _condensed,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      entry.clubName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _text, fontSize: 13.5),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${entry.appearances} ap - ${entry.goals}g ${entry.assists}a',
+                    style: const TextStyle(
+                      color: _textSecondary,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileSkeleton extends StatelessWidget {
+  const _ProfileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Loading player profile',
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 780),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                GtexSkeleton.box(height: 96),
+                SizedBox(height: 14),
+                GtexSkeleton.box(height: 64),
+                SizedBox(height: 14),
+                GtexSkeleton.box(height: 132),
+                SizedBox(height: 14),
+                GtexSkeleton.box(height: 108),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.identity, required this.gsi, required this.attr});
+  const _HeaderCard({
+    required this.identity,
+    required this.gsi,
+    required this.attr,
+  });
 
   final GteMarketPlayerIdentity identity;
   final int gsi;
@@ -146,7 +615,8 @@ class _HeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String position = identity.normalizedPosition ?? identity.position ?? '—';
+    final String position =
+        identity.normalizedPosition ?? identity.position ?? '—';
     final String club = identity.currentClubName ?? '—';
     return Container(
       padding: const EdgeInsets.all(14),
@@ -197,7 +667,11 @@ class _HeaderCard extends StatelessWidget {
 }
 
 class _RatingBox extends StatelessWidget {
-  const _RatingBox({required this.label, required this.value, required this.color});
+  const _RatingBox({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   final String label;
   final int value;
@@ -226,7 +700,11 @@ class _RatingBox extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(color: _textMuted, fontSize: 10, letterSpacing: 0.5),
+            style: const TextStyle(
+              color: _textMuted,
+              fontSize: 10,
+              letterSpacing: 0.5,
+            ),
           ),
         ],
       ),
@@ -241,8 +719,10 @@ class _BioCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String primary = identity.normalizedPosition ?? identity.position ?? '—';
-    final String height = identity.heightCm == null ? '—' : '${identity.heightCm} cm';
+    final String primary =
+        identity.normalizedPosition ?? identity.position ?? '—';
+    final String height =
+        identity.heightCm == null ? '—' : '${identity.heightCm} cm';
     final String foot = _foot(identity.preferredFoot);
     return Container(
       padding: const EdgeInsets.all(14),
@@ -254,7 +734,14 @@ class _BioCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text('POSITIONS', style: TextStyle(color: _textMuted, fontSize: 10, letterSpacing: 0.6)),
+          const Text(
+            'POSITIONS',
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 10,
+              letterSpacing: 0.6,
+            ),
+          ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 6,
@@ -301,7 +788,9 @@ class _PosChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: natural ? color.withValues(alpha: 0.5) : _border),
+        border: Border.all(
+          color: natural ? color.withValues(alpha: 0.5) : _border,
+        ),
       ),
       child: Text(
         label.toUpperCase(),
@@ -329,9 +818,23 @@ class _BioStat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(label.toUpperCase(), style: const TextStyle(color: _textMuted, fontSize: 10, letterSpacing: 0.5)),
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: _textMuted,
+              fontSize: 10,
+              letterSpacing: 0.5,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(color: _text, fontSize: 14, fontWeight: FontWeight.w700)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: _text,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -354,7 +857,10 @@ class _AttributesCard extends StatelessWidget {
       ),
       child: Column(
         children: attr.sixStats
-            .map((MapEntry<String, int> stat) => _StatBar(label: stat.key, value: stat.value))
+            .map(
+              (MapEntry<String, int> stat) =>
+                  _StatBar(label: stat.key, value: stat.value),
+            )
             .toList(growable: false),
       ),
     );
@@ -382,13 +888,20 @@ class _StatBar extends StatelessWidget {
         children: <Widget>[
           SizedBox(
             width: 80,
-            child: Text(label, style: const TextStyle(color: _textSecondary, fontSize: 13)),
+            child: Text(
+              label,
+              style: const TextStyle(color: _textSecondary, fontSize: 13),
+            ),
           ),
           SizedBox(
             width: 24,
             child: Text(
               '$value',
-              style: TextStyle(color: _color, fontSize: 14, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                color: _color,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -429,14 +942,31 @@ class _MarketCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text('VALUE', style: TextStyle(color: _textMuted, fontSize: 10, letterSpacing: 0.6)),
+          const Text(
+            'VALUE',
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 10,
+              letterSpacing: 0.6,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(color: _text, fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: _text,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           if (movement != null) ...<Widget>[
             const SizedBox(height: 2),
             Text(
               '${movement >= 0 ? '+' : ''}${movement.toStringAsFixed(1)}% recent',
-              style: TextStyle(color: movement >= 0 ? _green : _red, fontSize: 12),
+              style: TextStyle(
+                color: movement >= 0 ? _green : _red,
+                fontSize: 12,
+              ),
             ),
           ],
           const SizedBox(height: 10),
@@ -463,7 +993,8 @@ class _MarketCard extends StatelessWidget {
     if (mp.marketValueEur != null && mp.marketValueEur! > 0) {
       return '€${_compact(mp.marketValueEur!)}';
     }
-    final double? credits = mp.quotedMarketPriceCredits ?? mp.snapshotMarketPriceCredits;
+    final double? credits =
+        mp.quotedMarketPriceCredits ?? mp.snapshotMarketPriceCredits;
     if (credits != null && credits > 0) {
       return '${_compact(credits)} GTC';
     }
@@ -478,7 +1009,11 @@ class _MarketCard extends StatelessWidget {
 }
 
 class _MarketStat extends StatelessWidget {
-  const _MarketStat({required this.label, required this.value, required this.color});
+  const _MarketStat({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   final String label;
   final String value;
@@ -490,9 +1025,23 @@ class _MarketStat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(label.toUpperCase(), style: const TextStyle(color: _textMuted, fontSize: 10, letterSpacing: 0.5)),
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: _textMuted,
+              fontSize: 10,
+              letterSpacing: 0.5,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700)),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

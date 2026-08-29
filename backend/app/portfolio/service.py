@@ -48,6 +48,8 @@ class SettledExecution:
 @dataclass(frozen=True, slots=True)
 class PortfolioHolding:
     player_id: str
+    player_name: str | None
+    club_name: str | None
     quantity: Decimal
     average_cost: Decimal
     current_price: Decimal
@@ -124,6 +126,7 @@ class PortfolioService:
 
             average_cost = self._normalize_amount(state["cost_basis"] / state["quantity"])
             current_price = self._resolve_current_price(session, player_id)
+            summary = session.get(PlayerSummaryReadModel, player_id)
             market_value = self._normalize_amount(state["quantity"] * current_price)
             unrealized_pl = self._normalize_amount(market_value - state["cost_basis"])
             unrealized_pl_percent = Decimal("0.0000")
@@ -135,6 +138,8 @@ class PortfolioService:
             holdings.append(
                 PortfolioHolding(
                     player_id=player_id,
+                    player_name=summary.player_name if summary is not None else None,
+                    club_name=summary.current_club_name if summary is not None else None,
                     quantity=state["quantity"],
                     average_cost=average_cost,
                     current_price=current_price,
