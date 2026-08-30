@@ -6,10 +6,9 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.admin_engine.service import AdminEngineService
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.economy.economic_policy import EconomicPolicyUnavailableError, compute_competition_reward_split
 from app.economy.governor_service import EconomyGovernorService
-from app.economy.service import EconomyConfigService
 from app.models.base import generate_uuid
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.reward_settlement import RewardSettlement
@@ -43,10 +42,6 @@ class RewardEngineService:
     def _normalize_amount(self, amount: Decimal | int | float | str) -> Decimal:
         return Decimal(str(amount)).quantize(AMOUNT_QUANTUM)
 
-    def _active_competition_fee_bps(self) -> int:
-        rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
-        return int(rule.competition_platform_fee_bps if rule is not None else 1000)
-
     @staticmethod
     def _reward_source_tag(reward_source: str) -> LedgerSourceTag:
         normalized = (reward_source or "").strip().lower()
@@ -79,12 +74,10 @@ class RewardEngineService:
         normalized_gross = self._normalize_amount(Decimal(gross_amount) * governor.reward_multiplier())
         if normalized_gross <= Decimal('0.0000'):
             raise RewardEngineError('Reward amount must be positive.', reason="reward_amount_invalid")
-        economy_service = EconomyConfigService(self.session)
-        split = economy_service.compute_revenue_split(
-            scope="competition_reward",
-            gross_amount=normalized_gross,
-            fallback_platform_bps=self._active_competition_fee_bps(),
-        )
+        try:
+            split = compute_competition_reward_split(self.session, normalized_gross)
+        except EconomicPolicyUnavailableError as exc:
+            raise RewardEngineError(str(exc), reason="economic_policy_unavailable") from exc
         fee_amount = self._normalize_amount(split.platform_amount)
         burn_amount = self._normalize_amount(split.burn_amount)
         net_amount = self._normalize_amount(normalized_gross - fee_amount - burn_amount)

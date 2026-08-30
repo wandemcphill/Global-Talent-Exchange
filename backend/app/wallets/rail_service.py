@@ -9,7 +9,7 @@ from uuid import uuid4
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.admin_godmode.service import DEFAULT_COMMISSION_SETTINGS
+from app.admin_godmode.service import CommissionSettingsUnavailableError, resolve_commission_settings
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.models.base import utcnow
 from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
@@ -707,7 +707,10 @@ class WalletRailService:
         return topup
 
     def _commission_settings(self) -> dict[str, Any]:
-        return dict(DEFAULT_COMMISSION_SETTINGS)
+        try:
+            return resolve_commission_settings(self.session)
+        except CommissionSettingsUnavailableError as exc:
+            raise WalletRailError(str(exc)) from exc
 
     def _normalize_amount(self, amount: Decimal | int | float | str) -> Decimal:
         return Decimal(str(amount)).quantize(AMOUNT_QUANTUM)

@@ -43,8 +43,12 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         )
 
     @staticmethod
-    def _idempotency_reference(*, actor_id: str, player_id: str, side: str, key: str) -> str:
-        digest = sha256(f"{actor_id}|{player_id}|{side}|{key}".encode("utf-8")).hexdigest()
+    def _idempotency_reference(*, actor_id: str, key: str) -> str:
+        # Scoped to (actor, key) only - NOT player/side/share_count - so that reusing
+        # the same key for a different trade lands on the same lookup bucket and is
+        # caught as a conflict by _replay_idempotent_trade's metadata check below,
+        # rather than silently executing as an unrelated trade.
+        digest = sha256(f"{actor_id}|{key}".encode("utf-8")).hexdigest()
         return f"trade-idempotency:{digest}"
 
     def _require_trade_market(self, player_id: str) -> PlayerShareMarket:
@@ -97,7 +101,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
     ) -> dict[str, Any] | None:
         transaction = self.session.scalar(
             select(LedgerTransaction)
-            .where(LedgerTransaction.reference == reference)
+            .where(LedgerTransaction.idempotency_key == reference)
             .order_by(LedgerTransaction.created_at.desc())
         )
         if transaction is None:
@@ -176,8 +180,6 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         if resolved_idempotency_key:
             reference = self._idempotency_reference(
                 actor_id=actor.id,
-                player_id=player_id,
-                side=side,
                 key=resolved_idempotency_key.strip(),
             )
         else:
