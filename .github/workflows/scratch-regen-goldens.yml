@@ -1,0 +1,30 @@
+name: Scratch - Regenerate UX Goldens
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regen-goldens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test test/ux_refinement/visual_qa_golden_test.dart --update-goldens
+      - run: flutter test test/ux_refinement/visual_qa_golden_test.dart -r compact
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ux-refinement-goldens
+          path: frontend/test/goldens/ux_refinement/*.png
+          if-no-files-found: error
