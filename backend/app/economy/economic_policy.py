@@ -94,6 +94,7 @@ def compute_gift_split(session: Session, gross_amount: Decimal) -> EconomicGiftS
     burn_amount = Decimal("0.0000")
     try:
         from app.economy.governor_service import EconomyGovernorService
+
         burn_bps = max(0, min(10_000, int(EconomyGovernorService(session).burn_bonus_bps())))
         burn_amount = (gross * Decimal(burn_bps) / Decimal(10_000)).quantize(quant)
     except Exception:
