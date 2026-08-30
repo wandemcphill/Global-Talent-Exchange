@@ -46,7 +46,7 @@ def _create_user(session, *, user_id: str, role: UserRole = UserRole.USER) -> Us
         id=user_id,
         email=f"{user_id}@example.com",
         username=user_id,
-        password_hash="hashed",
+        password_hash="hashed",  # pragma: allowlist secret
         role=role,
     )
     session.add(user)
