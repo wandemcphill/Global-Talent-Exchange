@@ -573,9 +573,9 @@ class RealPlayerIngestionService:
             source_name=payload.source_name,
             provider_external_id=payload.current_real_world_league_key,
             name=payload.current_real_world_league,
-            country=None,
-            country_code=None,
-            country_name=None,
+            country=country,
+            country_code=payload.nationality_code,
+            country_name=payload.nationality,
             as_of=as_of,
             sample_payload=sample_payload,
             auto_create_values={
