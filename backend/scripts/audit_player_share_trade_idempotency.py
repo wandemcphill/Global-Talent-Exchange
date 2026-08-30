@@ -14,6 +14,7 @@ TRADE_CONTEXT = Path(__file__).resolve().parents[1] / "app" / "players" / "trade
 TRADE_TEST = Path(__file__).resolve().parents[1] / "tests" / "players" / "test_trade_idempotency_conflicts.py"
 TRADE_METHODS = {"buy_shares", "sell_shares"}
 TRADE_ENDPOINTS = {"buy_player_shares", "sell_player_shares"}
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def inspect_trade_idempotency(source: str) -> dict[str, Any]:
@@ -113,11 +114,11 @@ def inspect_router(source: str) -> dict[str, Any]:
 
 
 def run_behavioral_gate(*, timeout_seconds: int = 300) -> dict[str, Any]:
-    command = [sys.executable, "-m", "pytest", str(TRADE_TEST), "-q"]
+    command = [sys.executable, "-m", "pytest", "tests/players/test_trade_idempotency_conflicts.py", "-q"]
     try:
         completed = subprocess.run(
             command,
-            cwd=TOKEN_SERVICE.parents[1],
+            cwd=REPO_ROOT,
             capture_output=True,
             text=True,
             timeout=timeout_seconds,
