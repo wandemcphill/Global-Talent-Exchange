@@ -224,9 +224,10 @@ def get_player_share_market(
     session: Session = Depends(get_session),
 ) -> PlayerShareMarketView:
     try:
-        market = PlayerTokenMarketService(session).get_market_view(player_id=player_id)
+        market = PlayerTokenMarketService(session).get_or_create_market_view(player_id=player_id)
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
+    session.commit()
     return PlayerShareMarketView.model_validate(market)
 
 

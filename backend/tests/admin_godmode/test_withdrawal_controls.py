@@ -266,10 +266,11 @@ def test_competition_withdrawal_can_be_enabled_for_bank_transfer_review(admin_wa
             "amount_coin": 20,
             "bank_account_id": bank_account.id,
             "source_scope": "competition",
+            "idempotency_key": "competition-bank-transfer-review",
         },
     )
 
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["status"] == "pending_review"
     assert payload["processor_mode"] == "manual_bank_transfer"

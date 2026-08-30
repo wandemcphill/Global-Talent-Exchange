@@ -554,6 +554,11 @@ class DemoBootstrapService:
                 batch_size=batch_size,
             )
             player_ids = self._list_demo_player_ids(session, provider_name=provider_name)
+            canonical_seed_plan = self._curate_canonical_demo_players(
+                session,
+                provider_name=provider_name,
+                random_seed=random_seed,
+            )
             market_signals_seeded = self._seed_market_signals(
                 session,
                 player_ids=player_ids,
@@ -622,7 +627,10 @@ class DemoBootstrapService:
             random_seed=random_seed,
             previous_snapshot_at=previous_snapshot_at,
             current_snapshot_at=current_snapshot_at,
-            universe_seed=universe_summary.to_dict(),
+            universe_seed={
+                **universe_summary.to_dict(),
+                "canonical_discoverability": canonical_seed_plan.to_dict(),
+            },
             players_seeded=len(player_ids),
             market_signals_seeded=market_signals_seeded,
             value_snapshots_seeded=len(previous_snapshots) + len(current_snapshots),

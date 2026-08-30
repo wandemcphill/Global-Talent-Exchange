@@ -19,7 +19,8 @@ from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.models.user import UserRole
 from app.players.read_models import PlayerSummaryReadModel
-from app.players.router import router as players_router
+from app.players.real_player_service import RealPlayerUniverseQueryService
+from app.players.router import get_real_player_universe_query_service, router as players_router
 
 
 def test_players_router_openapi_includes_real_player_universe_paths() -> None:
@@ -341,6 +342,14 @@ def test_players_match_route_returns_v2_ranked_matches_with_breakdowns() -> None
             yield session
 
         app.dependency_overrides[get_session] = _session_override
+        # Age scoring is computed against RealPlayerUniverseQueryService.today, which
+        # defaults to the real wall-clock date. Every seeded player's age here is
+        # meant to be read as of the players' `source_last_refreshed_at` date
+        # (2026-03-22); pinning it keeps the expected scores below from silently
+        # drifting a year every time a birthday passes between test runs.
+        app.dependency_overrides[get_real_player_universe_query_service] = lambda: RealPlayerUniverseQueryService(
+            session=session, today=date(2026, 3, 22)
+        )
 
         with TestClient(app) as client:
             response = client.post(

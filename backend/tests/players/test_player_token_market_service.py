@@ -147,6 +147,8 @@ def test_ineligible_new_player_does_not_auto_create_share_market(session) -> Non
     with pytest.raises(PlayerTokenMarketError, match="not eligible for the share market"):
         service.get_market_view(player_id=player.id)
 
+    assert session.query(PlayerShareMarket).filter_by(player_id=player.id).first() is None
+
 
 def test_player_share_market_sell_flow_updates_holding_and_price(session) -> None:
     wallet = WalletService()

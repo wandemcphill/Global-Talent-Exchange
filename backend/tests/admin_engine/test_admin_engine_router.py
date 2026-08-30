@@ -56,8 +56,8 @@ def user_account(client, app_session_factory) -> tuple[str, dict[str, str]]:
     return user_id, _login(client, email="launch-user@example.com", password=TEST_PASSWORD)
 
 
-def test_bootstrap_contains_seeded_defaults(client, admin_engine_defaults) -> None:
-    response = client.get("/admin-engine/bootstrap")
+def test_bootstrap_contains_seeded_defaults(client, admin_engine_defaults, admin_headers) -> None:
+    response = client.get("/admin-engine/bootstrap", headers=admin_headers)
     assert response.status_code == 200, response.text
     payload = response.json()
     assert any(item["feature_key"] == "story-feed" for item in payload["active_feature_flags"])
@@ -263,9 +263,7 @@ def test_client_feature_flags_filter_beta_access_and_kill_switch(
 
     with app_session_factory() as session:
         records = list(
-            session.scalars(
-                select(NotificationRecord).where(NotificationRecord.resource_id == "fan_coin")
-            ).all()
+            session.scalars(select(NotificationRecord).where(NotificationRecord.resource_id == "fan_coin")).all()
         )
     event_keys = {record.resource_type for record in records}
     assert {
@@ -274,10 +272,7 @@ def test_client_feature_flags_filter_beta_access_and_kill_switch(
         "kill_switch_enabled",
         "beta_access_revoked",
     }.issubset(event_keys)
-    assert any(
-        record.user_id == user_id and record.resource_type == "beta_access_granted"
-        for record in records
-    )
+    assert any(record.user_id == user_id and record.resource_type == "beta_access_granted" for record in records)
 
 
 def test_launch_control_module_health_tracks_paused_state(
