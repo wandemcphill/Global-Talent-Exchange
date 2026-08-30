@@ -2,6 +2,9 @@ name: Scratch - Regenerate UX Goldens
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/exciting-pascal-f0ba3b
 
 permissions:
   contents: read
