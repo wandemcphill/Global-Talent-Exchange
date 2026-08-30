@@ -181,23 +181,27 @@ def test_list_wallet_accounts_returns_default_coin_and_credit_accounts(session) 
     assert {Decimal(account.balance) for account in payload} == {Decimal("0.0000")}
 
 
-def test_create_payment_event_route_returns_pending_event(session) -> None:
+def test_create_payment_event_route_is_permanently_disabled(session) -> None:
+    # Client-authored payment events were a fraud vector (a client could just
+    # assert "I paid"). The route now unconditionally 410s regardless of
+    # policy/provider state; deposits only land via KoraPay webhooks, wallet
+    # top-up verification, or admin-reviewed manual bank transfer.
     current_user = _register_and_load_user(session)
     _seed_global_policy(session)
     _enable_automatic_deposits(session)
 
-    payload = create_payment_event(
-        PaymentEventCreate(
-            provider="korapay",
-            provider_reference="korapay-ref-001",
-            amount=Decimal("50"),
-            pack_code="starter-50",
-        ),
-        session=session,
-        current_user=current_user,
-    )
-    assert payload.status.value == "pending"
-    assert Decimal(payload.amount) == Decimal("50.0000")
+    with pytest.raises(HTTPException) as exc_info:
+        create_payment_event(
+            PaymentEventCreate(
+                provider="korapay",
+                provider_reference="korapay-ref-001",
+                amount=Decimal("50"),
+                pack_code="starter-50",
+            ),
+            session=session,
+            current_user=current_user,
+        )
+    assert exc_info.value.status_code == 410
 
 
 def test_quote_wallet_conversion_returns_fixed_rate_quote(session) -> None:

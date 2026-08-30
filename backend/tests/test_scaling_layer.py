@@ -108,7 +108,10 @@ def test_player_markets_cache_hit_and_invalidation(
         first = client.get("/players/markets")
         assert first.status_code == 200, first.text
         assert first.json()["pagination"]["page"] == 1
-        assert fake_cache.set_calls[-1]["ttl_seconds"] == 5
+        # N73 raised the default player-markets cache TTL from 5s to 300s to
+        # cut DB load after the market-list OOM incident; this asserts the
+        # cache is wired up at all, not a specific duration.
+        assert fake_cache.set_calls[-1]["ttl_seconds"] == 300
 
         second = client.get("/players/markets")
         assert second.status_code == 200, second.text

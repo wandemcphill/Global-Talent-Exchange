@@ -323,10 +323,11 @@ def test_create_trade_withdrawal_request_reserves_balance(api_context) -> None:
         json={
             "amount_coin": "20.0000",
             "source_scope": "trade",
+            "idempotency_key": "reserves-balance",
         },
     )
 
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["source_scope"] == "trade"
     assert payload["status"] == "pending_review"
@@ -345,10 +346,11 @@ def test_create_competition_withdrawal_request_is_blocked_by_default(api_context
         json={
             "amount_coin": "20.0000",
             "source_scope": "competition",
+            "idempotency_key": "competition-blocked-by-default",
         },
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 409, response.text
     assert "e-game reward withdrawals" in response.json()["detail"].lower()
 
 
@@ -363,10 +365,11 @@ def test_create_trade_withdrawal_request_requires_bank_account_details(api_conte
         json={
             "amount_coin": "20.0000",
             "source_scope": "trade",
+            "idempotency_key": "requires-bank-account-details",
         },
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 409, response.text
     assert "bank account details are required" in response.json()["detail"].lower()
 
 
@@ -388,10 +391,11 @@ def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabl
         json={
             "amount_coin": "20.0000",
             "source_scope": "trade",
+            "idempotency_key": "gateway-mode-enabled",
         },
     )
 
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["status"] == "pending_review"
     assert payload["processor_mode"] == "automatic_gateway"
@@ -620,7 +624,7 @@ def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None
 
     response = client.post(
         "/api/wallets/withdrawals",
-        json={"amount_coin": "20.0000", "source_scope": "trade"},
+        json={"amount_coin": "20.0000", "source_scope": "trade", "idempotency_key": "fee-breakdown"},
     )
     assert response.status_code == 201, response.text
     payload = response.json()

@@ -72,13 +72,19 @@ def upsert_competitor(
     competitor_id: str,
     payload: UltimateLeagueCompetitorInput,
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> UltimateLeagueCompetitorView:
     if payload.competitor_id != competitor_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Path competitor_id must match payload competitor_id."
         )
-    if payload.user_id != current_user.id:
+    if payload.user_id is not None and payload.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Competitor ownership must match the authenticated user.",
+        )
+    existing = runtime.competitors.get(competitor_id)
+    if existing is not None and existing.user_id is not None and existing.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Competitor ownership must match the authenticated user.",
@@ -169,7 +175,7 @@ def create_matchmaking_batch(
 def submit_match_result(
     payload: UltimateLeagueMatchResultRequest,
     runtime: UltimateLeagueRuntime = Depends(get_ultimate_league_runtime),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> UltimateLeagueMatchResultResponse:
     try:
         home_candidate = runtime.get_competitor(payload.home_competitor_id)

@@ -371,6 +371,8 @@ class GiftEngineService:
             recipient_net_amount=recipient_net,
             source_scope=normalized_scope,
             ledger_unit=ledger_unit,
+            source_ledger_unit=ledger_unit,
+            destination_ledger_unit=ledger_unit,
             ledger_transaction_id=entries[0].transaction_id if entries else None,
             wallet_debit_ledger_id=debit_entry_id,
             wallet_credit_ledger_id=credit_entry_id,

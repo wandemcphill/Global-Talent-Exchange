@@ -34,6 +34,17 @@ def _passing_market_integrity_report():
     return {"pass": True, "read_only": True}
 
 
+def _passing_event_reconciliation_report():
+    return {
+        "pass": True,
+        "read_only": True,
+        "gates": {
+            "market_circulation_reconciles_to_event_deltas": True,
+            "no_events_without_market": True,
+        },
+    }
+
+
 def _patch_common_gates(monkeypatch):
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_lifecycle",
@@ -46,6 +57,15 @@ def _patch_common_gates(monkeypatch):
     monkeypatch.setattr(
         "scripts.certify_player_share_economy.audit_market_integrity",
         lambda **_: _passing_market_integrity_report(),
+    )
+    # `certify()` also calls audit_event_reconciliation(database_url=...) unconditionally.
+    # Without stubbing it, `database_url=None` resolves to the process's configured
+    # default database, which in a bare dev/CI environment has never had the
+    # player_share_events table created — these tests exist to exercise certify()'s
+    # gate-combining logic, not to stand up a real database.
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_event_reconciliation",
+        lambda **_: _passing_event_reconciliation_report(),
     )
 
 

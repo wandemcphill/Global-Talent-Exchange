@@ -121,9 +121,14 @@ class PlayerTokenMarketService:
         )
 
     def get_market(self, *, player_id: str) -> PlayerShareMarket:
-        market = self.session.scalar(
-            select(PlayerShareMarket).where(PlayerShareMarket.player_id == player_id)
-        )
+        # _get_player surfaces a specific "not eligible"/"player not found"
+        # error before we ever check for a market row, so an ineligible
+        # player is distinguishable from an eligible one that simply has no
+        # market yet (the latter stays "market not found" - this method never
+        # creates one; see get_or_create_market_view for the read path that
+        # does).
+        self._get_player(player_id)
+        market = self.session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player_id))
         if market is None:
             raise PlayerTokenMarketError(
                 "Player share market was not found.",
@@ -134,6 +139,16 @@ class PlayerTokenMarketService:
     def get_market_view(self, *, player_id: str) -> dict[str, Any]:
         return self._serialize_market_view(self.get_market(player_id=player_id))
 
+    def get_or_create_market_view(self, *, player_id: str) -> dict[str, Any]:
+        # Used specifically by the single-player GET route: lazily
+        # materializes a market for an eligible player the same way
+        # buy_shares/sell_shares already do via ensure_market, so viewing a
+        # player's market page isn't gated behind someone having issued it
+        # first. get_market_view stays strict for callers (list_events,
+        # admin performance/dividend actions, tests) that must never create a
+        # market as a side effect of reading one.
+        return self._serialize_market_view(self.ensure_market(player_id=player_id))
+
     def list_markets(
         self,
         *,
@@ -142,10 +157,7 @@ class PlayerTokenMarketService:
         search: str | None = None,
     ) -> dict[str, Any]:
         normalized_search = (search or "").strip()
-        filters = [
-            Player.is_tradable.is_(True),
-            PlayerShareMarket.status == "active",
-        ]
+        filters = [Player.is_tradable.is_(True)]
         if normalized_search:
             search_pattern = f"%{normalized_search}%"
             filters.append(
@@ -154,29 +166,52 @@ class PlayerTokenMarketService:
                     Player.canonical_display_name.ilike(search_pattern),
                 )
             )
+        # A tradable player is listable if it has no market yet (lazily
+        # materialized below, same as get_market/ensure_market for single-
+        # player reads) or its existing market is active. This keeps unissued
+        # markets discoverable without ever surfacing a suspended one.
+        listable = or_(PlayerShareMarket.id.is_(None), PlayerShareMarket.status == "active")
 
         total = int(
             self.session.scalar(
-                select(func.count(PlayerShareMarket.id))
-                .join(Player, Player.id == PlayerShareMarket.player_id)
-                .where(*filters)
+                select(func.count(Player.id))
+                .outerjoin(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+                .where(*filters, listable)
             )
             or 0
         )
-        statement = (
-            select(PlayerShareMarket)
-            .join(Player, Player.id == PlayerShareMarket.player_id)
-            .options(
-                selectinload(PlayerShareMarket.player).selectinload(Player.current_club),
-                selectinload(PlayerShareMarket.player).selectinload(Player.country),
+        # Paginate over players, not markets, so a tradable player with no
+        # market row yet is still reachable by page/offset instead of being
+        # structurally excluded by an inner join. Work per request stays
+        # bounded to `limit` players regardless of the total player count.
+        player_ids = list(
+            self.session.scalars(
+                select(Player.id)
+                .outerjoin(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+                .where(*filters, listable)
+                .order_by(Player.full_name.asc(), Player.id.asc())
+                .offset(offset)
+                .limit(limit)
             )
-            .where(*filters)
-            .order_by(PlayerShareMarket.updated_at.desc(), Player.full_name.asc())
-            .offset(offset)
-            .limit(limit)
         )
-        markets = list(self.session.scalars(statement).all())
-        items = [self._serialize_market_list_item(self._synchronize_market_defaults(market)) for market in markets]
+        for player_id in player_ids:
+            self.ensure_market(player_id=player_id)
+        markets_by_player_id = {
+            market.player_id: market
+            for market in self.session.scalars(
+                select(PlayerShareMarket)
+                .where(PlayerShareMarket.player_id.in_(player_ids))
+                .options(
+                    selectinload(PlayerShareMarket.player).selectinload(Player.current_club),
+                    selectinload(PlayerShareMarket.player).selectinload(Player.country),
+                )
+            )
+        }
+        items = [
+            self._serialize_market_list_item(self._synchronize_market_defaults(markets_by_player_id[player_id]))
+            for player_id in player_ids
+            if player_id in markets_by_player_id
+        ]
         return {
             "items": items,
             "limit": limit,
@@ -216,9 +251,7 @@ class PlayerTokenMarketService:
     def buy_shares(self, *, actor: User, player_id: str, share_count: int) -> dict[str, Any]:
         market = self.ensure_market(player_id=player_id)
         market = self.session.scalar(
-            select(PlayerShareMarket)
-            .where(PlayerShareMarket.id == market.id)
-            .with_for_update()
+            select(PlayerShareMarket).where(PlayerShareMarket.id == market.id).with_for_update()
         )
         if market is None:
             raise PlayerTokenMarketError("Player share market was not found.", reason="market_not_found")
@@ -342,7 +375,12 @@ class PlayerTokenMarketService:
 
     def sell_shares(self, *, actor: User, player_id: str, share_count: int) -> dict[str, Any]:
         market = self.ensure_market(player_id=player_id)
-        market = self.session.scalar(select(PlayerShareMarket).options(selectinload(PlayerShareMarket.player)).where(PlayerShareMarket.id == market.id).with_for_update())
+        market = self.session.scalar(
+            select(PlayerShareMarket)
+            .options(selectinload(PlayerShareMarket.player))
+            .where(PlayerShareMarket.id == market.id)
+            .with_for_update()
+        )
         if market is None:
             raise PlayerTokenMarketError("Player share market was not found.", reason="market_not_found")
         self._assert_share_market_eligible(market.player)

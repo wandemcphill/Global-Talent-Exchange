@@ -816,12 +816,12 @@ def test_transfer_hub_offer_list_is_scoped_to_authenticated_club(
         f"/api/transfer-hub/listings/{listing_id}/offers",
         json={
             "bidder_club_id": context["buyer_club_id"],
-            "offer_type": "cash",
+            "offer_type": "transfer",
             "cash_amount": "900000.00",
         },
         headers=buyer_headers,
     )
-    assert offer_response.status_code == 201
+    assert offer_response.status_code == 201, offer_response.text
 
     buyer_list = transfer_market_api.get("/api/transfer-hub/offers", headers=buyer_headers)
     assert buyer_list.status_code == 200

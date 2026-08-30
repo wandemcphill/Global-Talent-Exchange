@@ -111,7 +111,10 @@ def _resolve_transfer_market_actor_club(
     ):
         candidate_club_ids.append(token_org_id)
     for membership in access_context.memberships:
-        if membership.organization_type == OrganizationType.CLUB and membership.organization_id not in candidate_club_ids:
+        if (
+            membership.organization_type == OrganizationType.CLUB
+            and membership.organization_id not in candidate_club_ids
+        ):
             candidate_club_ids.append(membership.organization_id)
     for club_id in session.scalars(select(ClubProfile.id).where(ClubProfile.owner_user_id == current_user.id)).all():
         if club_id not in candidate_club_ids:
@@ -186,7 +189,9 @@ def create_transfer_market_listing(
 
 @router.get("/api/transfer-hub/listings/{listing_id}", response_model=TransferListingView)
 @router.get("/api/transfer-market/listings/{listing_id}", response_model=TransferListingView)
-def get_transfer_market_listing(listing_id: str, service: TransferMarketService = Depends(_service)) -> TransferListingView:
+def get_transfer_market_listing(
+    listing_id: str, service: TransferMarketService = Depends(_service)
+) -> TransferListingView:
     try:
         return service.get_listing(listing_id)
     except (TransferMarketNotFoundError, TransferMarketValidationError) as exc:
@@ -221,15 +226,22 @@ def list_transfer_hub_offers(
     service: TransferMarketService = Depends(_service),
     current_user: User = Depends(get_current_user),
 ) -> list[TransferHubOfferView]:
-    return service.list_hub_offers(
-        actor=current_user,
-        listing_id=listing_id,
-        club_id=club_id,
-        status=status_filter,
-    )
+    try:
+        return service.list_hub_offers(
+            actor=current_user,
+            listing_id=listing_id,
+            club_id=club_id,
+            status=status_filter,
+        )
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
 
 
-@router.post("/api/transfer-hub/listings/{listing_id}/offers", response_model=TransferHubOfferView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/transfer-hub/listings/{listing_id}/offers",
+    response_model=TransferHubOfferView,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_transfer_hub_offer(
     listing_id: str,
     payload: TransferHubOfferCreateRequest,
@@ -296,7 +308,11 @@ def counter_transfer_hub_offer(
         _raise_transfer_market_error(exc)
 
 
-@router.post("/api/transfer-hub/players/{player_id}/transfer-request", response_model=TransferRequestView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/transfer-hub/players/{player_id}/transfer-request",
+    response_model=TransferRequestView,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_transfer_hub_transfer_request(
     player_id: str,
     payload: TransferRequestCreateRequest,
@@ -388,7 +404,11 @@ def upsert_transfer_market_coach_profile(
         _raise_transfer_market_error(exc)
 
 
-@router.post("/api/transfer-market/coaches/{club_id}/demands", response_model=CoachDemandView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/transfer-market/coaches/{club_id}/demands",
+    response_model=CoachDemandView,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_transfer_market_coach_demand(
     club_id: str,
     payload: CoachDemandCreateRequest,
@@ -414,8 +434,12 @@ def upsert_transfer_market_team_dynamics(
         _raise_transfer_market_error(exc)
 
 
-@router.post("/api/transfer-hub/watchlist", response_model=MarketWatchlistEntryView, status_code=status.HTTP_201_CREATED)
-@router.post("/api/transfer-market/watchlist", response_model=MarketWatchlistEntryView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/transfer-hub/watchlist", response_model=MarketWatchlistEntryView, status_code=status.HTTP_201_CREATED
+)
+@router.post(
+    "/api/transfer-market/watchlist", response_model=MarketWatchlistEntryView, status_code=status.HTTP_201_CREATED
+)
 def add_transfer_market_watchlist_entry(
     payload: WatchlistEntryCreateRequest,
     service: TransferMarketService = Depends(_service),

@@ -36,7 +36,7 @@ def _user(session, user_id: str, role: UserRole = UserRole.USER) -> User:
         id=user_id,
         email=f"{user_id}@example.com",
         username=user_id,
-        password_hash="hashed",
+        password_hash="hashed",  # pragma: allowlist secret
         role=role,
     )
     session.add(user)
@@ -90,5 +90,5 @@ def test_trade_boundary_accepts_only_existing_issued_market(session):
     assert market.player_id == player.id
     assert session.query(PlayerShareMarket).filter_by(player_id=player.id).count() == 1
 
-    with pytest.raises(PlayerTokenMarketError, match="Insufficient"):
+    with pytest.raises(PlayerTokenMarketError, match="does not have enough balance"):
         boundary.buy(actor=fan, player_id=player.id, share_count=1)
