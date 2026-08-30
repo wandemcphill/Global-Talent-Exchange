@@ -11,6 +11,7 @@ from uuid import uuid4
 from app.core.cache import CacheBackend, NullCacheBackend
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
+from app.ingestion.models import Player
 from app.market.player_eligibility_policy import is_transfer_market_eligible
 from app.market.models import (
     Listing,
@@ -1037,7 +1038,7 @@ class MarketPlayerQueryService:
             sort=sort,
         )
 
-        records = self.repository.list_player_records()
+        records = self.repository.list_player_candidates()
         open_listings_by_player_id = self._open_transfer_listings_by_player_id(records)
         filtered_records = [
             record
@@ -1089,6 +1090,7 @@ class MarketPlayerQueryService:
         paginated_records = sorted_records[start_index : start_index + limit + 1]
         page_records = paginated_records[:limit]
         has_more = len(paginated_records) > limit
+        page_records = self._hydrate_page_records(page_records)
         next_cursor = (
             self._encode_player_cursor(
                 page_records[-1],
@@ -1113,8 +1115,19 @@ class MarketPlayerQueryService:
             offset=start_index,
         )
 
+    def _hydrate_page_records(self, page_records: list[MarketPlayerRecord]) -> list[MarketPlayerRecord]:
+        """Swap the lightweight list_player_candidates() records for the
+        requested page with fully-hydrated ones (image_metadata etc.) that
+        _build_list_item needs, without re-scanning the whole tradable-player
+        set. Order and length are preserved exactly."""
+        if not page_records:
+            return page_records
+        player_ids = [record.player.id for record in page_records]
+        hydrated_by_id = {record.player.id: record for record in self.repository.get_player_records_by_ids(player_ids)}
+        return [hydrated_by_id.get(record.player.id, record) for record in page_records]
+
     def browse_catalog(self) -> MarketBrowseCatalog:
-        records = self.repository.list_player_records()
+        records = self.repository.list_player_candidates()
         countries: dict[str, dict[str, Any]] = {}
         leagues: dict[str, dict[str, Any]] = {}
         divisions: dict[str, dict[str, Any]] = {}

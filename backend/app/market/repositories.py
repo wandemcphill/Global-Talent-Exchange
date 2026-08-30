@@ -35,17 +35,30 @@ logger = logging.getLogger(__name__)
 
 # Process-level TTL cache for the full tradable-player record set.
 #
-# list_player_records() is the hot path behind /market/players and
-# /market/browse/catalog.  Filtering, sorting and pagination all happen in
-# Python on the returned records (the predicates depend on multi-source
-# fallbacks -- manual price overrides, summary read-models, snapshot JSON --
-# that cannot be expressed in SQL), so the query loads *all* ~30k tradable
-# players with their relationships on every request (~50s, OOMs small dynos).
+# list_player_records() is the FULL-fidelity load (every relationship,
+# including image_metadata/supply_tier/liquidity_band) used by callers that
+# need it: get_market_movers, list_leagues, list_league_clubs,
+# list_club_players, list_nationalities, list_nationality_players, and
+# offline batch/audit scripts.
 #
-# Caching the loaded records turns that into one load per TTL while preserving
-# the exact in-Python semantics.  Safe to reuse across sessions because the
-# session factory sets expire_on_commit=False and every relationship the
-# downstream code touches is eager-loaded, so detached records stay readable.
+# list_player_candidates() is a lighter load used by the two highest-traffic
+# public endpoints (/market/players and /market/browse/catalog): it carries
+# every relationship the filter/sort/search predicates in MarketService read
+# (country, club, competition, internal_league) but omits image_metadata,
+# supply_tier, and liquidity_band, which those two callers never touch -- the
+# list endpoint hydrates only the ~20-50 players on the actual result page
+# via get_player_records_by_ids() afterwards. Filtering, sorting and
+# pagination all happen in Python on the returned records (the predicates
+# depend on multi-source fallbacks -- manual price overrides, summary
+# read-models, snapshot JSON -- that cannot be expressed in SQL), so both
+# loads still scan *all* ~30k+ tradable players; candidates just does it with
+# a smaller object graph per row.
+#
+# Caching the loaded records turns each into one load per TTL while
+# preserving the exact in-Python semantics. Safe to reuse across sessions
+# because the session factory sets expire_on_commit=False and every
+# relationship the downstream code touches is eager-loaded, so detached
+# records stay readable.
 #
 # Keyed by the bound Engine via a WeakKeyDictionary: distinct test engines get
 # distinct entries (no cross-test pollution) and entries evict with the engine.
@@ -54,6 +67,8 @@ logger = logging.getLogger(__name__)
 # semantics unless a test explicitly enables it.
 _RECORDS_CACHE: "WeakKeyDictionary[Engine, tuple[float, list[MarketPlayerRecord]]]" = WeakKeyDictionary()
 _RECORDS_CACHE_LOCK = RLock()
+_CANDIDATES_CACHE: "WeakKeyDictionary[Engine, tuple[float, list[MarketPlayerRecord]]]" = WeakKeyDictionary()
+_CANDIDATES_CACHE_LOCK = RLock()
 
 
 def _records_cache_ttl_seconds() -> float:
@@ -68,6 +83,8 @@ def clear_market_records_cache() -> None:
     """Drop all cached player-record sets (used by tests and on demand)."""
     with _RECORDS_CACHE_LOCK:
         _RECORDS_CACHE.clear()
+    with _CANDIDATES_CACHE_LOCK:
+        _CANDIDATES_CACHE.clear()
 
 
 class MarketRepository(Protocol):
@@ -431,11 +448,11 @@ class SqlAlchemyMarketPlayerRepository:
             self.session.scalars(
                 select(Player)
                 .options(
-                      selectinload(Player.country),
-                      selectinload(Player.current_club).selectinload(Club.country),
-                      selectinload(Player.current_competition).selectinload(Competition.country),
-                      selectinload(Player.current_competition).selectinload(Competition.internal_league),
-                      selectinload(Player.internal_league),
+                    selectinload(Player.country),
+                    selectinload(Player.current_club).selectinload(Club.country),
+                    selectinload(Player.current_competition).selectinload(Competition.country),
+                    selectinload(Player.current_competition).selectinload(Competition.internal_league),
+                    selectinload(Player.internal_league),
                     selectinload(Player.supply_tier),
                     selectinload(Player.liquidity_band),
                     selectinload(Player.image_metadata),
@@ -446,14 +463,82 @@ class SqlAlchemyMarketPlayerRepository:
         )
         return self._build_records(players)
 
+    def list_player_candidates(self) -> list[MarketPlayerRecord]:
+        """Lighter-weight variant of list_player_records() for the two
+        highest-traffic public callers (MarketService.list_players and
+        browse_catalog). Carries every relationship their filter/sort/search
+        predicates read, but omits image_metadata/supply_tier/liquidity_band,
+        which neither caller touches. See the module-level comment above
+        _RECORDS_CACHE for the full rationale."""
+        ttl = _records_cache_ttl_seconds()
+        if ttl <= 0:
+            return self._load_player_candidates()
+
+        bind = self.session.get_bind()
+        if not isinstance(bind, Engine):
+            return self._load_player_candidates()
+
+        now = time.monotonic()
+        with _CANDIDATES_CACHE_LOCK:
+            cached = _CANDIDATES_CACHE.get(bind)
+            if cached is not None and (now - cached[0]) < ttl:
+                return cached[1]
+
+        records = self._load_player_candidates()
+        with _CANDIDATES_CACHE_LOCK:
+            _CANDIDATES_CACHE[bind] = (time.monotonic(), records)
+        return records
+
+    def _load_player_candidates(self) -> list[MarketPlayerRecord]:
+        players = list(
+            self.session.scalars(
+                select(Player)
+                .options(
+                    selectinload(Player.country),
+                    selectinload(Player.current_club).selectinload(Club.country),
+                    selectinload(Player.current_competition).selectinload(Competition.country),
+                    selectinload(Player.current_competition).selectinload(Competition.internal_league),
+                    selectinload(Player.internal_league),
+                )
+                .where(Player.is_tradable.is_(True))
+                .order_by(Player.full_name.asc(), Player.id.asc())
+            )
+        )
+        return self._build_records(players)
+
+    def get_player_records_by_ids(self, player_ids: list[str]) -> list[MarketPlayerRecord]:
+        """Full-fidelity hydration for a known, small set of player ids --
+        used to materialize just the page of results list_players() actually
+        returns, after list_player_candidates() has determined which ids
+        those are and in what order."""
+        if not player_ids:
+            return []
+        players = list(
+            self.session.scalars(
+                select(Player)
+                .options(
+                    selectinload(Player.country),
+                    selectinload(Player.current_club).selectinload(Club.country),
+                    selectinload(Player.current_competition).selectinload(Competition.country),
+                    selectinload(Player.current_competition).selectinload(Competition.internal_league),
+                    selectinload(Player.internal_league),
+                    selectinload(Player.supply_tier),
+                    selectinload(Player.liquidity_band),
+                    selectinload(Player.image_metadata),
+                )
+                .where(Player.id.in_(player_ids), Player.is_tradable.is_(True))
+            )
+        )
+        return self._build_records(players)
+
     def get_player_record(self, player_id: str) -> MarketPlayerRecord | None:
         player = self.session.scalar(
             select(Player)
             .options(
-                  selectinload(Player.country),
-                  selectinload(Player.current_club),
-                  selectinload(Player.current_competition).selectinload(Competition.country),
-                  selectinload(Player.current_competition).selectinload(Competition.internal_league),
+                selectinload(Player.country),
+                selectinload(Player.current_club),
+                selectinload(Player.current_competition).selectinload(Competition.country),
+                selectinload(Player.current_competition).selectinload(Competition.internal_league),
                 selectinload(Player.internal_league),
                 selectinload(Player.supply_tier),
                 selectinload(Player.liquidity_band),
