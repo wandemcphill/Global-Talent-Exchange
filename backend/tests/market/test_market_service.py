@@ -1213,3 +1213,100 @@ def test_list_players_uses_cached_records_across_sessions(monkeypatch) -> None:
     finally:
         clear_market_records_cache()
         engine.dispose()
+
+
+def test_player_candidates_cache_serves_within_ttl(session, monkeypatch) -> None:
+    monkeypatch.setenv("GTE_MARKET_RECORDS_CACHE_TTL_SECONDS", "300")
+    clear_market_records_cache()
+    try:
+        _seed_market_player_catalog(session)
+        session.commit()
+
+        repository = SqlAlchemyMarketPlayerRepository(session)
+        first = repository.list_player_candidates()
+        assert len(first) == 4
+
+        # A write within the TTL window must NOT be observed (cache hit).
+        session.add(_new_tradable_player("player-5", "Zed Newman"))
+        session.commit()
+        cached = repository.list_player_candidates()
+        assert len(cached) == 4
+
+        # Clearing the cache forces a reload that now sees the new player.
+        clear_market_records_cache()
+        reloaded = repository.list_player_candidates()
+        assert len(reloaded) == 5
+    finally:
+        clear_market_records_cache()
+
+
+def test_candidates_cache_is_independent_of_records_cache(session, monkeypatch) -> None:
+    monkeypatch.setenv("GTE_MARKET_RECORDS_CACHE_TTL_SECONDS", "300")
+    clear_market_records_cache()
+    try:
+        _seed_market_player_catalog(session)
+        session.commit()
+
+        repository = SqlAlchemyMarketPlayerRepository(session)
+        # Populate only the candidates cache.
+        repository.list_player_candidates()
+
+        # A write must still be observed by list_player_records(), since it has
+        # its own independent cache entry that hasn't been populated yet.
+        session.add(_new_tradable_player("player-5", "Zed Newman"))
+        session.commit()
+        assert len(repository.list_player_records()) == 5
+
+        # clear_market_records_cache() must drop BOTH caches, not just one.
+        clear_market_records_cache()
+        session.add(_new_tradable_player("player-6", "Yaw Sixth"))
+        session.commit()
+        assert len(repository.list_player_candidates()) == 6
+        assert len(repository.list_player_records()) == 6
+    finally:
+        clear_market_records_cache()
+
+
+def test_list_player_candidates_matches_full_records_player_ids(session) -> None:
+    _seed_market_player_catalog(session)
+    session.commit()
+
+    repository = SqlAlchemyMarketPlayerRepository(session)
+    candidate_ids = [record.player.id for record in repository.list_player_candidates()]
+    full_ids = [record.player.id for record in repository.list_player_records()]
+
+    # The lighter candidates load must select the exact same rows, in the
+    # same order, as the full-fidelity load -- it only trims which
+    # relationships get eager-loaded per row, never which rows are returned.
+    assert candidate_ids == full_ids == ["player-1", "player-2", "player-3", "player-4"]
+
+
+def test_get_player_records_by_ids_hydrates_and_preserves_membership(session) -> None:
+    _seed_market_player_catalog(session)
+    session.commit()
+
+    repository = SqlAlchemyMarketPlayerRepository(session)
+    assert repository.get_player_records_by_ids([]) == []
+
+    # Order of the input ids must not matter -- callers re-order by id.
+    records = repository.get_player_records_by_ids(["player-3", "player-1", "does-not-exist"])
+    by_id = {record.player.id: record for record in records}
+    assert set(by_id) == {"player-1", "player-3"}
+
+    # This is the exact relationship the list endpoint's hydration step
+    # depends on: get_player_records_by_ids must carry image_metadata, which
+    # list_player_candidates() deliberately omits.
+    assert by_id["player-1"].player.image_metadata
+    assert by_id["player-1"].player.image_metadata[0].source_url == "https://cdn.sportmonks.test/players/player-1.png"
+
+
+def test_get_player_records_by_ids_excludes_non_tradable_players(session) -> None:
+    _seed_market_player_catalog(session)
+    non_tradable = _new_tradable_player("player-untradable", "Non Tradable")
+    non_tradable.is_tradable = False
+    session.add(non_tradable)
+    session.commit()
+
+    repository = SqlAlchemyMarketPlayerRepository(session)
+    records = repository.get_player_records_by_ids(["player-1", "player-untradable"])
+    assert [record.player.id for record in records] == ["player-1"]
