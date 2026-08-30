@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from fastapi import FastAPI, Query
 from fastapi.testclient import TestClient
@@ -12,10 +13,11 @@ from app.core.api_contract import install_api_contracts
 from app.core.pagination import MAX_PER_PAGE
 from app.core.rate_limit import MemoryRateLimitStore, RateLimitMiddleware
 from app.core.response_cache import NamespacedResponseCache
-from app.core.task_queue import NullTaskQueueBackend, TaskExecution
 from app.ingestion.models import Player
 from app.models.player_token_market import PlayerShareMarket
+from app.models.treasury import PaymentMode
 from app.players.token_service import PlayerTokenMarketService
+from app.treasury.service import TreasuryService
 
 
 class FakeCacheBackend:
@@ -45,18 +47,53 @@ class FakeCacheBackend:
         return True
 
 
-class FakeTaskQueueBackend:
-    def __init__(self, execution: TaskExecution) -> None:
-        self.execution = execution
-        self.enqueued: list[dict[str, object]] = []
+class _FakeGatewayResponse:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
 
-    def enqueue(self, **kwargs) -> TaskExecution:
-        self.enqueued.append(kwargs)
-        return self.execution
-
-    def get(self, job_id: str) -> TaskExecution | None:
-        del job_id
+    def raise_for_status(self) -> None:
         return None
+
+    def json(self) -> dict[str, object]:
+        return self._payload
+
+
+def _stub_korapay_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", "sk_test_korapay")
+    monkeypatch.setenv("GTE_KORAPAY_ENCRYPTION_KEY", "test-korapay-encryption-key")
+    amounts_by_reference: dict[str, object] = {}
+
+    def fake_post(url, *, json, headers, timeout):  # noqa: ANN001
+        del url, headers, timeout
+        reference = str(json["reference"])
+        amounts_by_reference[reference] = json["amount"]
+        return _FakeGatewayResponse(
+            {
+                "data": {
+                    "checkout_url": f"https://checkout.korapay.test/pay/{reference}",
+                    "payment_reference": reference,
+                    "reference": reference,
+                }
+            }
+        )
+
+    def fake_get(url, *, headers, timeout):  # noqa: ANN001
+        del headers, timeout
+        reference = str(url).rstrip("/").rsplit("/", maxsplit=1)[-1]
+        return _FakeGatewayResponse(
+            {
+                "data": {
+                    "id": f"evt-{reference}",
+                    "status": "success",
+                    "amount": str(amounts_by_reference.get(reference, "250.0000")),
+                    "payment_reference": reference,
+                    "reference": reference,
+                }
+            }
+        )
+
+    monkeypatch.setattr("app.wallets.funding_service.httpx.post", fake_post)
+    monkeypatch.setattr("app.wallets.funding_service.httpx.get", fake_get)
 
 
 def test_player_markets_cache_hit_and_invalidation(
@@ -148,53 +185,74 @@ def test_competitions_pagination_defaults_and_clamps(client, demo_seed) -> None:
     assert "total" in clamped_payload["pagination"]
 
 
-def test_wallet_top_up_verify_queues_background_job(client, auth_user_factory) -> None:
-    user = auth_user_factory(suffix="wallet-queue-user")
-    execution = TaskExecution(
-        job_id="wallet-top-up-verify:ref-123",
-        name="wallet.verify_top_up",
-        status="queued",
-        queued_at=datetime.now(timezone.utc),
-        owner_user_id=user["user_id"],
+def test_wallet_top_up_verify_settles_synchronously_and_credits_wallet(
+    auth_user_factory, app_session_factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # /wallet/top-up/verify calls out to the payment gateway and credits the
+    # wallet within the same request/response cycle - it never touches a task
+    # queue. This is deliberate: the funding flow screen shows the new balance
+    # immediately from this response (no polling), and buying player shares
+    # right after verifying a deposit (the critical E2E path) depends on the
+    # balance already being posted by the time verify returns. See PR #82's
+    # merge commit for the prior audit that identified and deferred this.
+    #
+    # Called through the router functions directly (request=None), matching
+    # tests/wallets/test_wallet_router.py's established pattern for this
+    # flow: going through the real HTTP Request pulls in the module-scoped
+    # app's persisted AdminGodMode payment-rail state, which is a separate
+    # admin on/off toggle unrelated to what this test verifies.
+    from app.models.user import User
+    from app.wallets.router import initiate_wallet_top_up, verify_wallet_top_up
+    from app.wallets.schemas import WalletTopUpInitiateRequest, WalletTopUpVerifyRequest
+
+    _stub_korapay_gateway(monkeypatch)
+    with app_session_factory() as session:
+        settings = TreasuryService().ensure_settings(session)
+        original_deposit_mode = settings.deposit_mode
+        settings.deposit_mode = PaymentMode.AUTOMATIC
+        session.commit()
+    try:
+        user = auth_user_factory(suffix="wallet-sync-verify")
+
+        with app_session_factory() as session:
+            current_user = session.get(User, user["user_id"])
+            initiated = initiate_wallet_top_up(
+                WalletTopUpInitiateRequest(amount=Decimal("250")),
+                session=session,
+                current_user=current_user,
+            )
+            assert initiated.status == "pending"
+            reference = initiated.reference
+
+            verified = verify_wallet_top_up(
+                WalletTopUpVerifyRequest(reference=reference),
+                session=session,
+                current_user=current_user,
+            )
+            assert verified.transaction.status == "verified"
+            assert verified.transaction.reference == reference
+            assert verified.wallet.balance == Decimal("246.2500")
+    finally:
+        with app_session_factory() as session:
+            settings = TreasuryService().ensure_settings(session)
+            settings.deposit_mode = original_deposit_mode
+            session.commit()
+
+
+def test_wallet_top_up_verify_rejects_unknown_reference(client, auth_user_factory) -> None:
+    user = auth_user_factory(suffix="wallet-unknown-reference")
+
+    response = client.post(
+        "/wallet/top-up/verify",
+        headers=user["headers"],
+        json={"reference": "REF-DOES-NOT-EXIST"},
     )
-    fake_backend = FakeTaskQueueBackend(execution)
-    original_backend = getattr(client.app.state, "task_queue", None)
-    client.app.state.task_queue = fake_backend
-    try:
-        response = client.post(
-            "/wallet/top-up/verify",
-            headers=user["headers"],
-            json={"reference": "REF-123"},
-        )
-    finally:
-        client.app.state.task_queue = original_backend
 
-    assert response.status_code == 202, response.text
-    payload = response.json()
-    assert payload["job_id"] == execution.job_id
-    assert payload["status"] == "queued"
-    assert payload["reference"] == "REF-123"
-    assert fake_backend.enqueued
-
-
-def test_wallet_top_up_verify_returns_503_when_queue_is_unavailable(client, auth_user_factory) -> None:
-    user = auth_user_factory(suffix="wallet-queue-down")
-    original_backend = getattr(client.app.state, "task_queue", None)
-    client.app.state.task_queue = NullTaskQueueBackend()
-    try:
-        response = client.post(
-            "/wallet/top-up/verify",
-            headers=user["headers"],
-            json={"reference": "REF-999"},
-        )
-    finally:
-        client.app.state.task_queue = original_backend
-
-    assert response.status_code == 503, response.text
+    assert response.status_code == 400, response.text
     assert response.json() == {
         "error": True,
-        "message": "Wallet verification queue is unavailable.",
-        "code": "service_unavailable",
+        "message": "Wallet transaction was not found.",
+        "code": "bad_request",
     }
 
 
