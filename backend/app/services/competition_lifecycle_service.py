@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.common.enums.competition_format import CompetitionFormat
 from app.common.enums.competition_status import CompetitionStatus
 from app.common.enums.match_status import MatchStatus
+from app.common.schemas.competition import CompetitionSchedulePlan
 from app.ownership_groups.service import OwnershipGroupService
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.models.competition import Competition

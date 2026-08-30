@@ -221,12 +221,15 @@ def list_transfer_hub_offers(
     service: TransferMarketService = Depends(_service),
     current_user: User = Depends(get_current_user),
 ) -> list[TransferHubOfferView]:
-    return service.list_hub_offers(
-        actor=current_user,
-        listing_id=listing_id,
-        club_id=club_id,
-        status=status_filter,
-    )
+    try:
+        return service.list_hub_offers(
+            actor=current_user,
+            listing_id=listing_id,
+            club_id=club_id,
+            status=status_filter,
+        )
+    except (TransferMarketNotFoundError, TransferMarketPermissionError, TransferMarketValidationError) as exc:
+        _raise_transfer_market_error(exc)
 
 
 @router.post("/api/transfer-hub/listings/{listing_id}/offers", response_model=TransferHubOfferView, status_code=status.HTTP_201_CREATED)

@@ -132,14 +132,14 @@ class SpendBalanceController:
             GiftTransaction.gross_amount,
             GiftTransaction.sender_user_id == user_id,
             GiftTransaction.created_at >= window_start,
-            GiftTransaction.ledger_unit.in_(_COIN_COMPATIBLE_UNITS),
+            GiftTransaction.source_ledger_unit.in_(_COIN_COMPATIBLE_UNITS),
         )
         excluded_sources: list[str] = []
         incompatible_gifts = self.session.scalar(
             select(func.count(GiftTransaction.id)).where(
                 GiftTransaction.sender_user_id == user_id,
                 GiftTransaction.created_at >= window_start,
-                GiftTransaction.ledger_unit.not_in(_COIN_COMPATIBLE_UNITS),
+                GiftTransaction.source_ledger_unit.not_in(_COIN_COMPATIBLE_UNITS),
             )
         )
         if int(incompatible_gifts or 0) > 0:

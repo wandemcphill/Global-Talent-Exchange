@@ -7,13 +7,42 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from app.auth.dependencies import get_current_user
 from app.ultimate_league.router import router
+
+OWNER_USER_ID = "user-owner"
+OTHER_USER_ID = "user-other"
+
+
+class _StubUser:
+    def __init__(self, user_id: str) -> None:
+        self.id = user_id
+
+
+def _build_app(current_user: _StubUser | None) -> FastAPI:
+    application = FastAPI()
+    application.include_router(router)
+    if current_user is not None:
+        application.dependency_overrides[get_current_user] = lambda: current_user
+    return application
 
 
 @pytest.fixture()
 def client() -> TestClient:
-    application = FastAPI()
-    application.include_router(router)
+    application = _build_app(_StubUser(OWNER_USER_ID))
+    with TestClient(application) as test_client:
+        yield test_client
+
+
+def _as_user(client: TestClient, user_id: str) -> None:
+    # `app.dependency_overrides` is consulted per-request, so flipping it swaps the
+    # authenticated identity for subsequent calls on the same client/runtime.
+    client.app.dependency_overrides[get_current_user] = lambda: _StubUser(user_id)
+
+
+@pytest.fixture()
+def unauthenticated_client() -> TestClient:
+    application = _build_app(None)
     with TestClient(application) as test_client:
         yield test_client
 
@@ -27,6 +56,7 @@ def _competitor(
     draws: int = 0,
     losses: int = 0,
     region: str = "AF-WEST",
+    user_id: str | None = OWNER_USER_ID,
 ) -> dict[str, object]:
     return {
         "competitor_id": competitor_id,
@@ -36,6 +66,7 @@ def _competitor(
         "draws": draws,
         "losses": losses,
         "region": region,
+        "user_id": user_id,
         "queue_entered_at": datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc).isoformat(),
     }
 
@@ -43,7 +74,7 @@ def _competitor(
 def _register(client: TestClient, prefix: str, *competitors: dict[str, object]) -> None:
     for competitor in competitors:
         response = client.put(f"{prefix}/competitors/{competitor['competitor_id']}", json=competitor)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.text
 
 
 @pytest.mark.parametrize("prefix", ["/ultimate-league", "/api/ultimate-league"])
@@ -184,3 +215,92 @@ def test_tactical_presets_and_competitor_availability_round_trip(client: TestCli
     body = result_response.json()
     assert body["home"]["fatigue"] > 0.10
     assert body["away"]["fatigue"] > 0.20
+
+
+def test_upsert_competitor_requires_authentication(unauthenticated_client: TestClient) -> None:
+    response = unauthenticated_client.put(
+        "/ultimate-league/competitors/anon-1",
+        json=_competitor("anon-1", "Anon One", 1200, user_id=None),
+    )
+    assert response.status_code == 401
+
+
+def test_submit_match_result_requires_authentication(unauthenticated_client: TestClient) -> None:
+    response = unauthenticated_client.post(
+        "/ultimate-league/matches/result",
+        json={
+            "home_competitor_id": "anon-1",
+            "away_competitor_id": "anon-2",
+            "home_score": 1,
+            "away_score": 0,
+            "importance": 1.0,
+        },
+    )
+    assert response.status_code == 401
+
+
+def test_upsert_competitor_rejects_claiming_another_users_identity(client: TestClient) -> None:
+    response = client.put(
+        "/ultimate-league/competitors/impostor-1",
+        json=_competitor("impostor-1", "Impostor One", 1200, user_id=OTHER_USER_ID),
+    )
+    assert response.status_code == 403
+
+
+def test_upsert_competitor_rejects_overwriting_another_users_competitor(client: TestClient) -> None:
+    _register(client, "/ultimate-league", _competitor("owned-1", "Owned One", 1200))
+
+    _as_user(client, OTHER_USER_ID)
+    response = client.put(
+        "/ultimate-league/competitors/owned-1",
+        json=_competitor("owned-1", "Hijacked", 1400, user_id=None),
+    )
+    assert response.status_code == 403
+
+
+def test_upsert_competitor_allows_owner_to_update_own_competitor(client: TestClient) -> None:
+    _register(client, "/ultimate-league", _competitor("owned-2", "Owned Two", 1200))
+
+    response = client.put(
+        "/ultimate-league/competitors/owned-2",
+        json=_competitor("owned-2", "Owned Two Updated", 1250),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["elo_rating"] == 1250
+
+
+def test_submit_match_result_rejects_non_participant(client: TestClient) -> None:
+    _register(client, "/ultimate-league", _competitor("home-1", "Home One", 1200))
+    _as_user(client, OTHER_USER_ID)
+    _register(client, "/ultimate-league", _competitor("away-1", "Away One", 1200, user_id=OTHER_USER_ID))
+
+    _as_user(client, "user-bystander")
+    response = client.post(
+        "/ultimate-league/matches/result",
+        json={
+            "home_competitor_id": "home-1",
+            "away_competitor_id": "away-1",
+            "home_score": 2,
+            "away_score": 0,
+            "importance": 1.0,
+        },
+    )
+    assert response.status_code == 403
+
+
+def test_submit_match_result_allows_participant(client: TestClient) -> None:
+    _register(client, "/ultimate-league", _competitor("home-2", "Home Two", 1200))
+    _as_user(client, OTHER_USER_ID)
+    _register(client, "/ultimate-league", _competitor("away-2", "Away Two", 1200, user_id=OTHER_USER_ID))
+
+    response = client.post(
+        "/ultimate-league/matches/result",
+        json={
+            "home_competitor_id": "home-2",
+            "away_competitor_id": "away-2",
+            "home_score": 2,
+            "away_score": 0,
+            "importance": 1.0,
+        },
+    )
+    assert response.status_code == 200, response.text
