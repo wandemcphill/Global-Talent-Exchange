@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterable
 
@@ -19,7 +19,6 @@ from app.models.club_profile import ClubProfile
 from app.models.competition_entry import CompetitionEntry
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_participant import CompetitionParticipant
-from app.models.competition_playoff import CompetitionPlayoff
 from app.models.competition_prize_rule import CompetitionPrizeRule
 from app.models.competition_reward import CompetitionReward
 from app.models.competition_reward_pool import CompetitionRewardPool

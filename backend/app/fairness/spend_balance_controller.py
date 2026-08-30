@@ -16,7 +16,7 @@ from app.models.media_engine import PremiumVideoPurchase
 from app.models.wallet import LedgerUnit
 
 if TYPE_CHECKING:
-    from app.match_engine.schemas import MatchClubContextInput, MatchSimulationRequest, MatchTeamInput
+    from app.match_engine.schemas import MatchSimulationRequest, MatchTeamInput
 
 _ZERO = Decimal("0.0000")
 _CASUAL_THRESHOLD = Decimal("250.0000")
@@ -78,7 +78,9 @@ class SpendBalanceController:
         policy = self._resolve_policy(competition_metadata_json)
         self._enforce_s_plus_cap(request.home_team, policy=policy)
         self._enforce_s_plus_cap(request.away_team, policy=policy)
-        team_rating_spread = abs(self._average_team_rating(request.home_team) - self._average_team_rating(request.away_team))
+        team_rating_spread = abs(
+            self._average_team_rating(request.home_team) - self._average_team_rating(request.away_team)
+        )
         if team_rating_spread > policy.max_team_rating_spread:
             raise _fairness_violation(
                 f"Balanced squad spread exceeded the {policy.max_team_rating_spread}-point limit for this match.",
@@ -123,11 +125,25 @@ class SpendBalanceController:
 
     def _classify_user(self, user_id: str | None) -> SpendProfile:
         if self.session is None or user_id is None:
-            return SpendProfile(user_id=user_id, tier=SpendTier.CASUAL, compatible_total_coin=_ZERO, excluded_sources=())
+            return SpendProfile(
+                user_id=user_id, tier=SpendTier.CASUAL, compatible_total_coin=_ZERO, excluded_sources=()
+            )
         window_start = datetime.now(UTC) - timedelta(days=30)
-        compatible_total = self._coalesce_sum(PremiumVideoPurchase.price_coin, PremiumVideoPurchase.user_id == user_id, PremiumVideoPurchase.created_at >= window_start)
-        compatible_total += self._coalesce_sum(CreatorBroadcastPurchase.price_coin, CreatorBroadcastPurchase.user_id == user_id, CreatorBroadcastPurchase.created_at >= window_start)
-        compatible_total += self._coalesce_sum(CreatorSeasonPass.price_coin, CreatorSeasonPass.user_id == user_id, CreatorSeasonPass.created_at >= window_start)
+        compatible_total = self._coalesce_sum(
+            PremiumVideoPurchase.price_coin,
+            PremiumVideoPurchase.user_id == user_id,
+            PremiumVideoPurchase.created_at >= window_start,
+        )
+        compatible_total += self._coalesce_sum(
+            CreatorBroadcastPurchase.price_coin,
+            CreatorBroadcastPurchase.user_id == user_id,
+            CreatorBroadcastPurchase.created_at >= window_start,
+        )
+        compatible_total += self._coalesce_sum(
+            CreatorSeasonPass.price_coin,
+            CreatorSeasonPass.user_id == user_id,
+            CreatorSeasonPass.created_at >= window_start,
+        )
         compatible_total += self._coalesce_sum(
             GiftTransaction.gross_amount,
             GiftTransaction.sender_user_id == user_id,
