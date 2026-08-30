@@ -90,5 +90,6 @@ def test_trade_boundary_accepts_only_existing_issued_market(session):
     assert market.player_id == player.id
     assert session.query(PlayerShareMarket).filter_by(player_id=player.id).count() == 1
 
-    with pytest.raises(PlayerTokenMarketError, match="Insufficient"):
+    with pytest.raises(PlayerTokenMarketError) as exc_info:
         boundary.buy(actor=fan, player_id=player.id, share_count=1)
+    assert exc_info.value.reason == "insufficient_balance"

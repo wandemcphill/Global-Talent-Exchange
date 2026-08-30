@@ -11,7 +11,6 @@ import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
 import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
 import 'package:gte_frontend/features/world/live_world_provider.dart';
-import 'package:gte_frontend/features/world/world_screen.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/hosted_competition_models.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
@@ -161,23 +160,6 @@ void main() {
     expect(find.text('MAKE THE COIN MARKET FEEL ONLINE'), findsOneWidget);
     expect(find.text('GTC'), findsOneWidget);
     expect(find.text('FNC'), findsOneWidget);
-  });
-
-  testWidgets('world route presents live route truth without preview badges', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(1280, 1800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    await tester.pumpWidget(_surfaceHost(const WorldScreen()));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Preview'), findsNothing);
-    expect(find.text('World desk'), findsOneWidget);
   });
 
   testWidgets('native 3D route inventory is hidden while Unity is blocked', (

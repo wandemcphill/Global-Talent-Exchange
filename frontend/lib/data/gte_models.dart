@@ -3774,6 +3774,8 @@ class GtePortfolioHolding {
   const GtePortfolioHolding({
     required this.playerId,
     required this.quantity,
+    this.playerName,
+    this.clubName,
     required this.averageCost,
     required this.currentPrice,
     required this.marketValue,
@@ -3782,8 +3784,18 @@ class GtePortfolioHolding {
   });
 
   final String playerId;
+  final String? playerName;
+  final String? clubName;
   final double quantity;
   final double averageCost;
+
+  /// What to show a human. Falls back to the id only when the backend has
+  /// no identity for this player.
+  String get displayName {
+    final String? name = playerName?.trim();
+    return name == null || name.isEmpty ? playerId : name;
+  }
+
   final double currentPrice;
   final double marketValue;
   final double unrealizedPl;
@@ -3796,6 +3808,11 @@ class GtePortfolioHolding {
     );
     return GtePortfolioHolding(
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
+      playerName: GteJson.stringOrNull(json, <String>[
+        'player_name',
+        'playerName',
+      ]),
+      clubName: GteJson.stringOrNull(json, <String>['club_name', 'clubName']),
       quantity: GteJson.number(json, <String>['quantity']),
       averageCost: GteJson.number(json, <String>[
         'average_cost',

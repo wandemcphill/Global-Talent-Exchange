@@ -2,18 +2,28 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Generator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException, status
 from fastapi.testclient import TestClient
 import pytest
 
+from app.auth.dependencies import get_current_user
+from app.models.user import User
 from app.ultimate_league.router import router
 
 
+def mock_get_current_user(x_user_id: str | None = Header(default=None)) -> User:
+    if not x_user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing auth header")
+    return User(id=x_user_id, email=f"{x_user_id}@example.com", is_active=True)
+
+
 @pytest.fixture()
-def client() -> TestClient:
+def client() -> Generator[TestClient, None, None]:
     application = FastAPI()
     application.include_router(router)
+    application.dependency_overrides[get_current_user] = mock_get_current_user
     with TestClient(application) as test_client:
         yield test_client
 
@@ -23,6 +33,7 @@ def _competitor(
     display_name: str,
     elo_rating: int,
     *,
+    user_id: str | None = None,
     wins: int = 0,
     draws: int = 0,
     losses: int = 0,
@@ -32,6 +43,7 @@ def _competitor(
         "competitor_id": competitor_id,
         "display_name": display_name,
         "elo_rating": elo_rating,
+        "user_id": user_id or competitor_id,
         "wins": wins,
         "draws": draws,
         "losses": losses,
@@ -42,8 +54,80 @@ def _competitor(
 
 def _register(client: TestClient, prefix: str, *competitors: dict[str, object]) -> None:
     for competitor in competitors:
-        response = client.put(f"{prefix}/competitors/{competitor['competitor_id']}", json=competitor)
-        assert response.status_code == 200
+        user_id = str(competitor.get("user_id") or competitor["competitor_id"])
+        response = client.put(
+            f"{prefix}/competitors/{competitor['competitor_id']}",
+            json=competitor,
+            headers={"X-User-Id": user_id},
+        )
+        assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize("prefix", ["/ultimate-league", "/api/ultimate-league"])
+def test_auth_behavioral_requirements(client: TestClient, prefix: str) -> None:
+    payload_comp1 = _competitor("comp-1", "Competitor One", 1200, user_id="owner-1")
+    payload_comp2 = _competitor("comp-2", "Competitor Two", 1250, user_id="owner-2")
+
+    # 1. unauthenticated request -> 401
+    unauth_resp = client.put(f"{prefix}/competitors/comp-1", json=payload_comp1)
+    assert unauth_resp.status_code == 401
+
+    # 2. authenticated owner updates own competitor -> success (200)
+    auth_resp = client.put(
+        f"{prefix}/competitors/comp-1",
+        json=payload_comp1,
+        headers={"X-User-Id": "owner-1"},
+    )
+    assert auth_resp.status_code == 200
+    assert auth_resp.json()["user_id"] == "owner-1"
+
+    # Register comp-2 for match result tests
+    auth_comp2_resp = client.put(
+        f"{prefix}/competitors/comp-2",
+        json=payload_comp2,
+        headers={"X-User-Id": "owner-2"},
+    )
+    assert auth_comp2_resp.status_code == 200
+
+    # 3. authenticated user attempts to update another user's competitor -> 403
+    forbidden_update_resp = client.put(
+        f"{prefix}/competitors/comp-1",
+        json=payload_comp1,
+        headers={"X-User-Id": "other-user"},
+    )
+    assert forbidden_update_resp.status_code == 403
+
+    # 4. authenticated participant submits own match result -> success (200)
+    match_payload = {
+        "home_competitor_id": "comp-1",
+        "away_competitor_id": "comp-2",
+        "home_score": 2,
+        "away_score": 1,
+        "importance": 1.0,
+    }
+    match_participant_resp = client.post(
+        f"{prefix}/matches/result",
+        json=match_payload,
+        headers={"X-User-Id": "owner-1"},
+    )
+    assert match_participant_resp.status_code == 200
+
+    # 5. authenticated non-participant submits result -> 403
+    match_non_participant_resp = client.post(
+        f"{prefix}/matches/result",
+        json=match_payload,
+        headers={"X-User-Id": "outsider-user"},
+    )
+    assert match_non_participant_resp.status_code == 403
+
+    # 6. malformed/path mismatch -> existing 409 behavior preserved
+    mismatch_payload = _competitor("comp-1", "Competitor One", 1200, user_id="owner-1")
+    mismatch_resp = client.put(
+        f"{prefix}/competitors/path-mismatch-id",
+        json=mismatch_payload,
+        headers={"X-User-Id": "owner-1"},
+    )
+    assert mismatch_resp.status_code == 409
 
 
 @pytest.mark.parametrize("prefix", ["/ultimate-league", "/api/ultimate-league"])
@@ -86,6 +170,7 @@ def test_matchmaking_tournament_and_payout_preview(client: TestClient, prefix: s
     matchmaking_response = client.post(
         f"{prefix}/matchmaking/batch",
         json={"competitor_ids": ["gold-1", "gold-2", "gold-3", "gold-4"], "prefer_same_tier": True},
+        headers={"X-User-Id": "gold-1"},
     )
     assert matchmaking_response.status_code == 200
     assert len(matchmaking_response.json()["proposals"]) == 2
@@ -100,6 +185,7 @@ def test_matchmaking_tournament_and_payout_preview(client: TestClient, prefix: s
             "field_size": 4,
             "parallel_matches": 2,
         },
+        headers={"X-User-Id": "gold-1"},
     )
     assert tournament_response.status_code == 200
     body = tournament_response.json()
@@ -153,6 +239,7 @@ def test_tactical_presets_and_competitor_availability_round_trip(client: TestCli
             "fatigue_ceiling": 0.70,
             "injury_cover_enabled": True,
         },
+        headers={"X-User-Id": "seller-1"},
     )
     assert preset_response.status_code == 200, preset_response.text
     preset = preset_response.json()
@@ -166,6 +253,7 @@ def test_tactical_presets_and_competitor_availability_round_trip(client: TestCli
     purchase_response = client.post(
         f"{prefix}/tactical-presets/{preset['preset_id']}/purchase",
         json={"buyer_competitor_id": "buyer-1"},
+        headers={"X-User-Id": "buyer-1"},
     )
     assert purchase_response.status_code == 200, purchase_response.text
     assert purchase_response.json()["preset_id"] == preset["preset_id"]
@@ -179,6 +267,7 @@ def test_tactical_presets_and_competitor_availability_round_trip(client: TestCli
             "away_score": 1,
             "importance": 2.5,
         },
+        headers={"X-User-Id": "seller-1"},
     )
     assert result_response.status_code == 200, result_response.text
     body = result_response.json()

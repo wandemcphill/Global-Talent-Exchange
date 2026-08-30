@@ -61,6 +61,7 @@ jobs:
           backend/tests/players/test_player_share_release_audit.py
           backend/tests/players/test_player_share_strict_issuer.py
           backend/tests/players/test_player_share_trade_boundary_audit.py
+          backend/tests/players/test_player_share_economic_certification.py
           backend/tests/players/test_player_share_trade_reference_boundary.py
           backend/tests/players/test_player_share_trade_context.py
           backend/tests/players/test_trade_idempotency_conflicts.py

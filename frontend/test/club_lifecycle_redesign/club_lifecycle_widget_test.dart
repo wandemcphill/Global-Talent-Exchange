@@ -7,6 +7,16 @@ void main() {
   testWidgets('club dashboard renders lifecycle readiness from live model', (
     WidgetTester tester,
   ) async {
+    // The detail body is a lazy ListView, so the readiness panel is only built
+    // when the viewport has room for it. Pin a desktop-sized surface instead of
+    // relying on the implicit 800x600 default.
+    tester.view.physicalSize = const Size(1400, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     final GtexClubOperatingDashboard dashboard =
         await GtexClubLifecycleFixtures.seed().dashboard('fixture-club');
 

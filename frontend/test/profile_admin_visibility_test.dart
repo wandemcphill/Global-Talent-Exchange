@@ -1,140 +1,118 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:gte_frontend/features/profile/live_profile_provider.dart';
-import 'package:gte_frontend/features/profile/profile_admin_screen.dart';
-import 'package:gte_frontend/features/profile/profile_screen.dart';
-import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
-import 'package:gte_frontend/shared/models/auth_session.dart';
-import 'package:gte_frontend/shared/providers/auth_provider.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/data/gte_exchange_api_client.dart';
+import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
+import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
+/// Admin-entry visibility used to be asserted against the legacy
+/// `ProfileScreen`/`ProfileAdminScreen` pair, which were removed with the
+/// legacy router cluster. The live application gates the admin entry in the
+/// active navigation shell (`_isAdminSession`), so the coverage is retargeted
+/// there rather than at a surface no user can reach.
 void main() {
   testWidgets('authenticated admins see the active-shell admin entry', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
-          initialAuthSessionProvider.overrideWithValue(
-            const AuthSession(
-              userId: 'admin-1',
-              accessToken: 'token-1',
-              refreshToken: 'refresh-token-1',
-              sessionId: 'session-1',
-              role: 'admin',
-            ),
-          ),
-          profileDataProvider.overrideWith(
-            (Ref ref) async => const ProfileData(
-              authenticated: true,
-              user: <String, Object?>{
-                'id': 'admin-1',
-                'display_name': 'Admin User',
-                'role': 'admin',
-              },
-              affinityProfile: <String, Object?>{},
-              club: null,
-              followers: 10,
-              following: 5,
-            ),
-          ),
-        ],
-        child: const MaterialApp(home: Scaffold(body: ProfileScreen())),
-      ),
-    );
+    await _pumpShellWithRole(tester, role: 'admin');
 
-    await tester.pumpAndSettle();
-
-    expect(find.text('Open command center'), findsOneWidget);
+    expect(find.byTooltip('Admin dashboard'), findsOneWidget);
   });
 
   testWidgets('non-admin users do not see the active-shell admin entry', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
-          initialAuthSessionProvider.overrideWithValue(
-            const AuthSession(
-              userId: 'user-1',
-              accessToken: 'token-1',
-              refreshToken: 'refresh-token-1',
-              sessionId: 'session-1',
-              role: 'user',
-            ),
-          ),
-          profileDataProvider.overrideWith(
-            (Ref ref) async => const ProfileData(
-              authenticated: true,
-              user: <String, Object?>{
-                'id': 'user-1',
-                'display_name': 'Regular User',
-                'role': 'user',
-              },
-              affinityProfile: <String, Object?>{},
-              club: null,
-              followers: 3,
-              following: 7,
-            ),
-          ),
-        ],
-        child: const MaterialApp(home: Scaffold(body: ProfileScreen())),
-      ),
-    );
+    await _pumpShellWithRole(tester, role: 'user');
 
-    await tester.pumpAndSettle();
-
-    expect(find.text('Open command center'), findsNothing);
+    expect(find.byTooltip('Admin dashboard'), findsNothing);
   });
 
-  testWidgets(
-    'scoped admins only see admin actions backed by their permissions',
-    (WidgetTester tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            authSessionStoreProvider.overrideWithValue(
-              MemoryAuthSessionStore(),
-            ),
-            initialAuthSessionProvider.overrideWithValue(
-              const AuthSession(
-                userId: 'scoped-admin-1',
-                accessToken: 'token-1',
-                refreshToken: 'refresh-token-1',
-                sessionId: 'session-1',
-                role: 'scoped_admin',
-                permissions: <String>['manage_manager_supply'],
-              ),
-            ),
-          ],
-          child: const MaterialApp(home: Scaffold(body: ProfileAdminScreen())),
-        ),
-      );
+  testWidgets('scoped admins keep the active-shell admin entry', (
+    WidgetTester tester,
+  ) async {
+    await _pumpShellWithRole(tester, role: 'scoped_admin');
 
-      await tester.pumpAndSettle();
+    expect(find.byTooltip('Admin dashboard'), findsOneWidget);
+  });
 
-      await _scrollTo(tester, find.text('Regenerate Portrait'));
-      expect(find.text('Open command center'), findsOneWidget);
-      expect(find.text('Regenerate Portrait'), findsOneWidget);
-      expect(find.text('Upload/Override Portrait'), findsOneWidget);
-      expect(find.text('Ban Bad Portrait'), findsOneWidget);
-      expect(find.text('Trigger import'), findsNothing);
-      expect(find.text('Resume selected batch'), findsNothing);
-      await _scrollTo(tester, find.text('Player import is blocked'));
-      expect(find.text('Player import is blocked'), findsOneWidget);
-      expect(find.text('Squad supply is blocked'), findsNothing);
-    },
-  );
+  testWidgets('unauthenticated sessions do not see the admin entry', (
+    WidgetTester tester,
+  ) async {
+    await _pumpShellWithRole(tester, role: null);
+
+    expect(find.byTooltip('Admin dashboard'), findsNothing);
+  });
 }
 
-Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
-  await tester.scrollUntilVisible(
-    finder,
-    240,
-    scrollable: find.byType(Scrollable).first,
+/// Mounts the active shell on a non-home route so the assertion targets the
+/// shell header gate itself rather than the admin home surface it swaps in.
+Future<void> _pumpShellWithRole(
+  WidgetTester tester, {
+  required String? role,
+}) async {
+  _setLargeViewport(tester);
+
+  final GteExchangeController controller = GteExchangeController(
+    api: GteExchangeApiClient.fixture(),
   );
-  await tester.pumpAndSettle();
+  if (role != null) {
+    controller.session = _sessionWithRole(role);
+  }
+
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: GteShellTheme.build(),
+      home: GteExchangeShellScreen.fromPath(
+        controller: controller,
+        apiBaseUrl: 'http://127.0.0.1:8000',
+        backendMode: GteBackendMode.fixture,
+        initialPath: '/app/market',
+      ),
+    ),
+  );
+  await _pumpUntilText(tester, 'Transfer Hub');
+}
+
+GteAuthSession _sessionWithRole(String role) {
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'test-token',
+    'session_id': 'session-$role',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    'user': <String, Object?>{
+      'id': '$role-1',
+      'email': '$role@gtex.test',
+      'username': role,
+      'display_name': 'Session $role',
+      'role': role,
+    },
+  });
+}
+
+void _setLargeViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(2400, 2200);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+}
+
+Future<void> _pumpUntilText(
+  WidgetTester tester,
+  String text, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 120,
+}) async {
+  final Finder finder = find.text(text);
+  for (int pump = 0; pump < maxPumps; pump += 1) {
+    await tester.pump(step);
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  throw TestFailure('Timed out waiting for "$text".');
 }

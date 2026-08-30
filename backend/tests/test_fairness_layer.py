@@ -120,3 +120,62 @@ def test_match_integrity_service_builds_32_bit_visible_hashes() -> None:
     assert visible_hash == integrity._visible_hash_view_state(view_state)
     assert len(visible_hash) == 8
     assert all(char in "0123456789abcdef" for char in visible_hash)
+
+
+def test_spend_balance_controller_mixed_currency_classification() -> None:
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.fairness.spend_balance_controller import SpendTier
+    from app.models.base import Base
+    from app.models.gift_transaction import GiftTransaction
+    from app.models.user import User
+    from app.models.wallet import LedgerUnit
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+
+    user = User(id="usr_mixed_currency", username="usr_mixed_currency", email="test@example.com", password_hash="hash")
+    recipient = User(id="usr_recipient", username="usr_recipient", email="recipient@example.com", password_hash="hash")
+    session.add_all([user, recipient])
+    session.commit()
+
+    coin_gift = GiftTransaction(
+        id="gt_coin_1",
+        sender_user_id=user.id,
+        recipient_user_id=recipient.id,
+        gift_catalog_item_id="item_1",
+        unit_price=100,
+        gross_amount=300,
+        platform_rake_amount=30,
+        recipient_net_amount=270,
+        source_ledger_unit=LedgerUnit.COIN,
+        destination_ledger_unit=LedgerUnit.COIN,
+        ledger_unit=LedgerUnit.COIN,
+    )
+
+    fancoin_gift = GiftTransaction(
+        id="gt_credit_1",
+        sender_user_id=user.id,
+        recipient_user_id=recipient.id,
+        gift_catalog_item_id="item_2",
+        unit_price=1000,
+        gross_amount=1000,
+        platform_rake_amount=100,
+        recipient_net_amount=900,
+        source_ledger_unit=LedgerUnit.CREDIT,
+        destination_ledger_unit=LedgerUnit.COIN,
+        ledger_unit=LedgerUnit.COIN,
+    )
+
+    session.add_all([coin_gift, fancoin_gift])
+    session.commit()
+
+    controller = SpendBalanceController(session=session)
+    profile = controller._classify_user(user.id)
+
+    assert profile.tier == SpendTier.COMPETITIVE
+    assert profile.compatible_total_coin == 300
+    assert "gift_transactions_incompatible_unit" in profile.excluded_sources
