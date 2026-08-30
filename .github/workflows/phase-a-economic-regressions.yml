@@ -46,8 +46,10 @@ jobs:
           backend/tests/hosted_competition_engine/test_coin_aware_fee_freeze.py
           backend/tests/hosted_competition_engine/test_coin_aware_service.py
           backend/tests/treasury/test_commission_policy.py
+          backend/tests/reward_engine/test_competition_reward_platform_authority.py
           backend/tests/wallets/test_wallet_service.py
           backend/tests/wallets/test_wallet_rail_service.py
+          backend/tests/wallets/test_wallet_rail_commission_authority.py
           backend/tests/wallets/test_wallet_payments_treasury_release_gate.py
           backend/tests/admin_finance/test_admin_finance_router.py
           backend/tests/admin_finance/test_payment_webhook_fraud_regressions.py
@@ -61,6 +63,7 @@ jobs:
           backend/tests/players/test_player_share_trade_boundary_audit.py
           backend/tests/players/test_player_share_trade_reference_boundary.py
           backend/tests/players/test_player_share_trade_context.py
+          backend/tests/players/test_trade_idempotency_conflicts.py
           backend/tests/matches/test_competition_match_settlement_guard.py
           backend/tests/match_engine/test_match_engine_competition_economy_release_audit.py
           -q
