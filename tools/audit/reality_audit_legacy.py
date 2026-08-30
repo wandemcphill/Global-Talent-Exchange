@@ -494,41 +494,20 @@ def _strict_live_failures() -> list[str]:
             failures.append("Shared match provider still serves hard-coded live match rows.")
             break
 
-    exchange_hub_provider = _read("frontend/lib/shared/providers/exchange_hub_provider.dart")
-    if "liveAuthorityAvailable: false" not in exchange_hub_provider:
-        failures.append("Exchange hub provider does not expose a blocked live-authority state.")
-    if "PaymentMethod { paystack" in exchange_hub_provider or "PaymentMethod.paystack" in exchange_hub_provider:
-        failures.append("Exchange hub payment methods still expose Paystack.")
-    for synthetic_exchange_text in (
-        "market-mbappe",
-        "Kylian Mbappe",
-        "walletBalanceGtex: 12.5",
-        "KoraPay deposit",
-        "Ayo Manager",
-    ):
-        if synthetic_exchange_text in exchange_hub_provider:
-            failures.append("Exchange hub provider still seeds synthetic wallet/player market state.")
-            break
-
-    transfer_provider = _read("frontend/lib/shared/providers/transfer_provider.dart")
-    if "_fallbackUserClubName" in transfer_provider or "GTEX United" in transfer_provider:
-        failures.append("Transfer provider still invents a fallback user club name.")
-    for synthetic_transfer_text in (
-        "fallback: 'Transfer Target'",
-        "fallback: 'Open Market'",
-        "fallback: 'player-$listingId'",
-        "fallback: 'transfer-listing-",
-    ):
-        if synthetic_transfer_text in transfer_provider:
-            failures.append("Transfer provider still synthesizes missing live listing/player identity.")
-            break
-    transfer_build = _slice_between(
-        transfer_provider,
-        "TransferMarketState build()",
-        "TransferMarketState _buildEmptyState()",
-    )
-    if "_buildFixtureState()" in transfer_build and "_backendMode == GteBackendMode.fixture" not in transfer_build:
-        failures.append("Transfer provider fixture state is not gated to explicit fixture backend mode.")
+    # exchange_hub_provider.dart and transfer_provider.dart were removed by
+    # b3626b48 ("refactor: consolidate GTEX frontend on single router") -
+    # they belonged to the parallel legacy router/screen cluster (feeding
+    # TransferMarketScreen/TransferCenterScreen), which that commit verified
+    # was unreachable from main.dart before deleting it. Confirmed via
+    # `grep -rn "exchange_hub_provider\|transfer_provider.dart" frontend/lib`
+    # returning no hits: nothing imports either file any more. The
+    # live-data-integrity properties these checks enforced (no synthetic
+    # wallet/market/transfer state, live-authority gating, no Paystack) now
+    # belong to whatever the router consolidation's replacement screens
+    # (ManagerMarketScreen, FootballTransferCenterRouteData) source their
+    # state from - if those don't yet have an equivalent audit check, that's
+    # a gap for whoever owns that code to add, not something this removal
+    # papers over silently.
 
     tournaments_screen = _read("frontend/lib/features/tournaments/tournaments_screen.dart")
     tournament_screen = _read("frontend/lib/features/tournaments/tournament_screen.dart")
