@@ -35,16 +35,19 @@ def test_trade_service_and_boundary_accept_idempotency_keys():
     assert boundary_sell.parameters["idempotency_key"].default is None
 
 
-def test_idempotency_reference_is_scoped_to_actor_player_side_and_key():
+def test_idempotency_reference_is_scoped_to_actor_and_key_only():
+    # Deliberately NOT scoped to player/side/share_count: reusing the same raw key
+    # for a different trade must land on the SAME lookup bucket, so
+    # _replay_idempotent_trade's metadata comparison can detect and reject the
+    # conflict instead of two independent references silently allowing it through
+    # as two unrelated trades. See test_trade_idempotency_conflicts.py.
     build = PlayerTokenMarketService._idempotency_reference
 
-    first = build(actor_id="user-a", player_id="player-1", side="buy", key="same-key")
-    same = build(actor_id="user-a", player_id="player-1", side="buy", key="same-key")
-    other_user = build(actor_id="user-b", player_id="player-1", side="buy", key="same-key")
-    other_side = build(actor_id="user-a", player_id="player-1", side="sell", key="same-key")
+    first = build(actor_id="user-a", key="same-key")
+    same = build(actor_id="user-a", key="same-key")
+    other_user = build(actor_id="user-b", key="same-key")
 
     assert first == same
     assert first != other_user
-    assert first != other_side
     assert first.startswith("trade-idempotency:")
     assert len(first) == len("trade-idempotency:") + 64

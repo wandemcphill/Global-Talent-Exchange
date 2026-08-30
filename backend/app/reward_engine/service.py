@@ -6,10 +6,9 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.admin_engine.service import AdminEngineService
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
+from app.economy.economic_policy import EconomicPolicyUnavailableError, compute_competition_reward_split
 from app.economy.governor_service import EconomyGovernorService
-from app.economy.service import EconomyConfigService
 from app.models.base import generate_uuid
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.reward_settlement import RewardSettlement
@@ -18,7 +17,7 @@ from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransact
 from app.services.spending_control_service import SpendingControlService, SpendingControlViolation
 from app.wallets.service import LedgerPosting, WalletService
 
-AMOUNT_QUANTUM = Decimal('0.0001')
+AMOUNT_QUANTUM = Decimal("0.0001")
 
 
 class RewardEngineError(ValueError):
@@ -43,10 +42,6 @@ class RewardEngineService:
     def _normalize_amount(self, amount: Decimal | int | float | str) -> Decimal:
         return Decimal(str(amount)).quantize(AMOUNT_QUANTUM)
 
-    def _active_competition_fee_bps(self) -> int:
-        rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
-        return int(rule.competition_platform_fee_bps if rule is not None else 1000)
-
     @staticmethod
     def _reward_source_tag(reward_source: str) -> LedgerSourceTag:
         normalized = (reward_source or "").strip().lower()
@@ -68,23 +63,21 @@ class RewardEngineService:
         competition_key: str,
         title: str,
         gross_amount: Decimal,
-        reward_source: str = 'gtex_promotional_pool',
+        reward_source: str = "gtex_promotional_pool",
         note: str | None = None,
         ledger_unit: LedgerUnit = LedgerUnit.COIN,
     ) -> RewardSettlement:
         user = self.session.get(User, user_id)
         if user is None or not user.is_active:
-            raise RewardEngineError('Reward recipient user was not found.', reason="recipient_not_found")
+            raise RewardEngineError("Reward recipient user was not found.", reason="recipient_not_found")
         governor = EconomyGovernorService(self.session, wallet_service=self.wallet_service)
         normalized_gross = self._normalize_amount(Decimal(gross_amount) * governor.reward_multiplier())
-        if normalized_gross <= Decimal('0.0000'):
-            raise RewardEngineError('Reward amount must be positive.', reason="reward_amount_invalid")
-        economy_service = EconomyConfigService(self.session)
-        split = economy_service.compute_revenue_split(
-            scope="competition_reward",
-            gross_amount=normalized_gross,
-            fallback_platform_bps=self._active_competition_fee_bps(),
-        )
+        if normalized_gross <= Decimal("0.0000"):
+            raise RewardEngineError("Reward amount must be positive.", reason="reward_amount_invalid")
+        try:
+            split = compute_competition_reward_split(self.session, normalized_gross)
+        except EconomicPolicyUnavailableError as exc:
+            raise RewardEngineError(str(exc), reason="economic_policy_unavailable") from exc
         fee_amount = self._normalize_amount(split.platform_amount)
         burn_amount = self._normalize_amount(split.burn_amount)
         net_amount = self._normalize_amount(normalized_gross - fee_amount - burn_amount)
@@ -95,7 +88,9 @@ class RewardEngineService:
         promo_pool_account = self.wallet_service.ensure_promo_pool_account(self.session, ledger_unit)
         promo_pool_balance = self.wallet_service.get_balance(self.session, promo_pool_account)
         if promo_pool_balance < normalized_gross:
-            raise RewardEngineError("Promo pool balance is lower than the reward amount.", reason="promo_pool_insufficient")
+            raise RewardEngineError(
+                "Promo pool balance is lower than the reward amount.", reason="promo_pool_insufficient"
+            )
         control_reference = f"reward-control:{competition_key}:{user.id}:{generate_uuid()}"
         try:
             control_evaluation = SpendingControlService(self.session).evaluate_reward(
@@ -115,9 +110,18 @@ class RewardEngineService:
         except SpendingControlViolation as exc:
             raise RewardEngineError(exc.detail, reason="spending_controls_blocked") from exc
         postings = [
-            LedgerPosting(account=user_account, amount=net_amount, source_tag=source_tag, transaction_type=transaction_type),
-            LedgerPosting(account=platform_account, amount=fee_amount, source_tag=source_tag, transaction_type=transaction_type),
-            LedgerPosting(account=promo_pool_account, amount=-normalized_gross, source_tag=source_tag, transaction_type=transaction_type),
+            LedgerPosting(
+                account=user_account, amount=net_amount, source_tag=source_tag, transaction_type=transaction_type
+            ),
+            LedgerPosting(
+                account=platform_account, amount=fee_amount, source_tag=source_tag, transaction_type=transaction_type
+            ),
+            LedgerPosting(
+                account=promo_pool_account,
+                amount=-normalized_gross,
+                source_tag=source_tag,
+                transaction_type=transaction_type,
+            ),
         ]
         if burn_amount > Decimal("0.0000"):
             burn_account = self.wallet_service.ensure_platform_burn_account(self.session, ledger_unit)
@@ -134,9 +138,9 @@ class RewardEngineService:
             postings=postings,
             reason=LedgerEntryReason.COMPETITION_REWARD,
             source_tag=source_tag,
-            reference=f'reward:{competition_key}:{user.id}',
-            description=f'Competition reward for {title}',
-            external_reference=f'reward:{competition_key}:{user.id}',
+            reference=f"reward:{competition_key}:{user.id}",
+            description=f"Competition reward for {title}",
+            external_reference=f"reward:{competition_key}:{user.id}",
             actor=actor,
             transaction_type=transaction_type,
         )
@@ -243,14 +247,33 @@ class RewardEngineService:
         return transaction_id, resolved_reference
 
     def list_settlements_for_user(self, *, user: User, limit: int = 50) -> list[RewardSettlement]:
-        stmt = select(RewardSettlement).where(RewardSettlement.user_id == user.id).order_by(RewardSettlement.created_at.desc()).limit(limit)
+        stmt = (
+            select(RewardSettlement)
+            .where(RewardSettlement.user_id == user.id)
+            .order_by(RewardSettlement.created_at.desc())
+            .limit(limit)
+        )
         return list(self.session.scalars(stmt).all())
 
     def summary_for_user(self, *, user: User) -> dict[str, Decimal | list[RewardSettlement]]:
-        total_rewards = self._normalize_amount(self.session.scalar(select(func.coalesce(func.sum(RewardSettlement.net_amount), 0)).where(RewardSettlement.user_id == user.id)) or 0)
-        total_platform_fee = self._normalize_amount(self.session.scalar(select(func.coalesce(func.sum(RewardSettlement.platform_fee_amount), 0)).where(RewardSettlement.user_id == user.id)) or 0)
+        total_rewards = self._normalize_amount(
+            self.session.scalar(
+                select(func.coalesce(func.sum(RewardSettlement.net_amount), 0)).where(
+                    RewardSettlement.user_id == user.id
+                )
+            )
+            or 0
+        )
+        total_platform_fee = self._normalize_amount(
+            self.session.scalar(
+                select(func.coalesce(func.sum(RewardSettlement.platform_fee_amount), 0)).where(
+                    RewardSettlement.user_id == user.id
+                )
+            )
+            or 0
+        )
         return {
-            'total_rewards': total_rewards,
-            'total_platform_fee': total_platform_fee,
-            'settlements': self.list_settlements_for_user(user=user, limit=20),
+            "total_rewards": total_rewards,
+            "total_platform_fee": total_platform_fee,
+            "settlements": self.list_settlements_for_user(user=user, limit=20),
         }

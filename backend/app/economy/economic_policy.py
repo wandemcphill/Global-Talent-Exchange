@@ -94,6 +94,7 @@ def compute_gift_split(session: Session, gross_amount: Decimal) -> EconomicGiftS
     burn_amount = Decimal("0.0000")
     try:
         from app.economy.governor_service import EconomyGovernorService
+
         burn_bps = max(0, min(10_000, int(EconomyGovernorService(session).burn_bonus_bps())))
         burn_amount = (gross * Decimal(burn_bps) / Decimal(10_000)).quantize(quant)
     except Exception:
@@ -111,4 +112,53 @@ def compute_gift_split(session: Session, gross_amount: Decimal) -> EconomicGiftS
     )
 
 
-__all__ = ["EconomicGiftSplit", "EconomicPolicy", "EconomicPolicyUnavailableError", "compute_gift_split", "resolve_economic_policy"]
+@dataclass(frozen=True, slots=True)
+class EconomicCompetitionRewardSplit:
+    gross_amount: Decimal
+    platform_amount: Decimal
+    net_amount: Decimal
+    burn_amount: Decimal
+    rule_key: str
+    policy_version: str
+
+
+def compute_competition_reward_split(session: Session, gross_amount: Decimal) -> EconomicCompetitionRewardSplit:
+    """Sole policy authority for the ``competition_reward`` scope.
+
+    No legacy RevenueShareRule fallback: the canonical Admin economic policy
+    (resolve_economic_policy) is the only source of the platform fee here.
+    """
+    quant = Decimal("0.0001")
+    gross = Decimal(str(gross_amount)).quantize(quant)
+    if gross <= 0:
+        raise EconomicPolicyUnavailableError("Competition reward gross amount must be positive.")
+    policy = resolve_economic_policy(session)
+    bps = policy.competition_platform_fee_bps
+    if not 0 <= bps <= 10_000:
+        raise EconomicPolicyUnavailableError("Admin competition platform fee is outside the valid range.")
+    platform_amount = (gross * Decimal(bps) / Decimal(10_000)).quantize(quant)
+    from app.economy.governor_service import EconomyGovernorService
+
+    burn_bps = max(0, min(10_000, int(EconomyGovernorService(session).burn_bonus_bps())))
+    burn_amount = (gross * Decimal(burn_bps) / Decimal(10_000)).quantize(quant)
+    if platform_amount + burn_amount > gross:
+        burn_amount = max(Decimal("0.0000"), gross - platform_amount)
+    return EconomicCompetitionRewardSplit(
+        gross_amount=gross,
+        platform_amount=platform_amount,
+        net_amount=(gross - platform_amount - burn_amount).quantize(quant),
+        burn_amount=burn_amount,
+        rule_key=policy.rule.rule_key,
+        policy_version=policy.policy_version,
+    )
+
+
+__all__ = [
+    "EconomicCompetitionRewardSplit",
+    "EconomicGiftSplit",
+    "EconomicPolicy",
+    "EconomicPolicyUnavailableError",
+    "compute_competition_reward_split",
+    "compute_gift_split",
+    "resolve_economic_policy",
+]
