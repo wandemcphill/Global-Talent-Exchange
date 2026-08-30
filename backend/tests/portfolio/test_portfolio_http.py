@@ -146,6 +146,10 @@ def test_portfolio_api_endpoints(api_context) -> None:
     holding = portfolio_payload["holdings"][0]
     assert set(holding) == {
         "player_id",
+        # Identity is part of the contract so the portfolio can name what a
+        # user owns instead of showing a raw id.
+        "player_name",
+        "club_name",
         "quantity",
         "average_cost",
         "current_price",
@@ -154,6 +158,7 @@ def test_portfolio_api_endpoints(api_context) -> None:
         "unrealized_pl_percent",
     }
     assert holding["player_id"] == player.id
+    assert holding["player_name"] == player.full_name
     assert Decimal(str(holding["average_cost"])) == Decimal("10.0000")
     assert Decimal(str(holding["current_price"])) == Decimal("12.0000")
     assert Decimal(str(holding["market_value"])) == Decimal("24.0000")

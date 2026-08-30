@@ -33,6 +33,7 @@ import 'package:gte_frontend/features/social/social_screen.dart';
 import 'package:gte_frontend/features/world/widgets/football_world_pulse_widgets.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
+import 'package:gte_frontend/shared/auth/gtex_admin_capabilities.dart';
 import 'package:gte_frontend/screens/clubs/create_club_screen.dart';
 import 'package:gte_frontend/screens/clubs/gtex_club_owner_dashboard_screen_v2.dart';
 import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
@@ -485,6 +486,9 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           accessToken: accessToken,
           backendMode: widget.backendMode,
           authedApi: _createShellAuthedApi(),
+          capabilities: GtexAdminCapabilities.fromSession(
+            widget.controller.session,
+          ),
         );
       }
     }
@@ -1330,6 +1334,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
               baseUrl: widget.apiBaseUrl,
               accessToken: session.accessToken,
               backendMode: widget.backendMode,
+              capabilities: GtexAdminCapabilities.fromSession(session),
             ),
       ),
     );
@@ -1387,6 +1392,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
               playerId: playerId,
               baseUrl: widget.apiBaseUrl,
               backendMode: widget.backendMode,
+              controller: widget.controller,
+              onOpenLogin: () => _openLogin(targetRoute: _route),
             ),
       ),
     );

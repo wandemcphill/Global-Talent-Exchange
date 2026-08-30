@@ -189,6 +189,28 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
     }
   }
 
+  Future<void> _cancelOrder(GteOrderRecord order) async {
+    final GteOrderRecord? cancelled = await widget.controller.cancelOrder(
+      order.id,
+    );
+    if (!mounted) {
+      return;
+    }
+    final String label = widget.controller.playerLabel(order.playerId);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: GtexColors.surfaceOverlay,
+        content: Text(
+          cancelled == null
+              ? widget.controller.orderError ??
+                  'That order could not be cancelled.'
+              : 'Cancelled ${order.side.name} order for $label.',
+          style: const TextStyle(color: GtexColors.text),
+        ),
+      ),
+    );
+  }
+
   void _selectModule(GtexWalletDeskModule module) {
     if (_module != module) {
       setState(() => _module = module);
@@ -372,6 +394,8 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
             ...widget.controller.openOrders,
             ...widget.controller.recentOrders,
           ],
+          controller: widget.controller,
+          onCancel: _cancelOrder,
         );
       case GtexWalletDeskModule.holdings:
         return _HoldingsPanel(
@@ -600,9 +624,15 @@ class _WalletBalancePanel extends StatelessWidget {
 }
 
 class _OrdersPanel extends StatelessWidget {
-  const _OrdersPanel({required this.orders});
+  const _OrdersPanel({
+    required this.orders,
+    required this.controller,
+    required this.onCancel,
+  });
 
   final List<GteOrderRecord> orders;
+  final GteExchangeController controller;
+  final Future<void> Function(GteOrderRecord order) onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -610,7 +640,8 @@ class _OrdersPanel extends StatelessWidget {
       return const GtexEmptyState(
         title: 'No orders yet',
         message:
-            'Open and recent player orders will appear here from the live order API.',
+            'Buy and sell orders you place on a player appear here while they '
+            'are working, and stay for a while once they fill.',
         icon: Icons.receipt_long_outlined,
       );
     }
@@ -635,7 +666,10 @@ class _OrdersPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      '${order.side.name.toUpperCase()} ${order.playerId}',
+                      '${order.side.name.toUpperCase()} '
+                      '${controller.playerLabel(order.playerId)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: GtexColors.text,
                         fontWeight: FontWeight.w900,
@@ -643,6 +677,8 @@ class _OrdersPanel extends StatelessWidget {
                     ),
                     Text(
                       '${_statusLabel(order.status)} - ${order.quantity.toStringAsFixed(2)} units',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: GtexColors.textMuted),
                     ),
                   ],
@@ -655,6 +691,23 @@ class _OrdersPanel extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
+              // Cancelling is a real backend flow, so it is offered exactly
+              // when the order is actually cancellable.
+              if (order.canCancel) ...<Widget>[
+                const SizedBox(width: GtexSpacing.xs),
+                IconButton(
+                  key: ValueKey<String>('capital-order-cancel-${order.id}'),
+                  tooltip: 'Cancel order',
+                  onPressed:
+                      controller.isCancellingOrder
+                          ? null
+                          : () => onCancel(order),
+                  icon: const Icon(
+                    Icons.cancel_outlined,
+                    color: GtexColors.red,
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -673,9 +726,10 @@ class _HoldingsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     if (holdings.isEmpty) {
       return const GtexEmptyState(
-        title: 'No player holdings yet',
+        title: 'You do not own any players yet',
         message:
-            'Purchased players will appear here once the portfolio API returns positions.',
+            'Players you buy on the Transfer Hub show up here with what you '
+            'paid, what they are worth now, and your profit or loss.',
         icon: Icons.groups_2_outlined,
       );
     }
@@ -699,14 +753,23 @@ class _HoldingsPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      holding.playerId,
+                      holding.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: GtexColors.text,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     Text(
-                      'Qty ${holding.quantity.toStringAsFixed(2)} - Avg ${gteFormatGtc(holding.averageCost)}',
+                      <String>[
+                        if ((holding.clubName ?? '').trim().isNotEmpty)
+                          holding.clubName!.trim(),
+                        'Qty ${holding.quantity.toStringAsFixed(2)}',
+                        'Avg ${gteFormatGtc(holding.averageCost)}',
+                      ].join(' - '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: GtexColors.textMuted),
                     ),
                   ],
@@ -722,15 +785,33 @@ class _HoldingsPanel extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  Text(
-                    '${holding.unrealizedPlPercent.toStringAsFixed(2)}%',
-                    style: TextStyle(
-                      color:
-                          holding.unrealizedPl >= 0
-                              ? GtexColors.pitch
-                              : GtexColors.red,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  // Direction is carried by the arrow and the sign as well
+                  // as the colour, so it survives a colour-blind reading.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        holding.unrealizedPl >= 0
+                            ? Icons.arrow_drop_up
+                            : Icons.arrow_drop_down,
+                        size: 18,
+                        color:
+                            holding.unrealizedPl >= 0
+                                ? GtexColors.pitch
+                                : GtexColors.red,
+                      ),
+                      Text(
+                        '${holding.unrealizedPl >= 0 ? '+' : ''}'
+                        '${holding.unrealizedPlPercent.toStringAsFixed(2)}%',
+                        style: TextStyle(
+                          color:
+                              holding.unrealizedPl >= 0
+                                  ? GtexColors.pitch
+                                  : GtexColors.red,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

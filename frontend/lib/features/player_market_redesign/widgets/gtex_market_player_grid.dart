@@ -4,6 +4,9 @@ import 'package:flutter/rendering.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 import '../models/gtex_market_browse_models.dart';
 
+/// Height of a browse card: the identity row plus its action bar.
+const double _browseCardHeight = 132;
+
 class GtexMarketPlayerGrid extends StatelessWidget {
   const GtexMarketPlayerGrid({
     super.key,
@@ -123,7 +126,10 @@ class GtexMarketPlayerGrid extends StatelessWidget {
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: GtexSpacing.sm,
                     mainAxisSpacing: GtexSpacing.sm,
-                    childAspectRatio: crossAxisCount == 1 ? 1.55 : 1.34,
+                    // A ratio makes the cell height follow the column width,
+                    // which left most of each browse card empty on wide
+                    // screens. Pin the height to what the card actually needs.
+                    mainAxisExtent: _browseCardHeight,
                   ),
                   delegate: SliverChildBuilderDelegate((
                     BuildContext context,
