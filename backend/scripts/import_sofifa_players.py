@@ -329,11 +329,15 @@ def nationality_from_description(description: str | None) -> str | None:
 
 
 def _clean_name(value: str | None) -> str | None:
-    """Strip stray scraper artifacts: NBSP, replacement chars, trailing ' -' separators."""
+    """Strip stray scraper artifacts: NBSP, replacement chars, trailing ' -' separators.
+
+    Trailing periods are preserved -- they belong to legitimate names such as
+    ``John Anthony Brooks Jr.``, not to scraper noise.
+    """
     if not value:
         return None
     cleaned = value.replace("\xa0", " ").replace("�", "").strip()
-    while cleaned.endswith("-") or cleaned.endswith("."):
+    while cleaned.endswith("-"):
         cleaned = cleaned[:-1].strip()
     cleaned = " ".join(cleaned.split())
     return cleaned or None
