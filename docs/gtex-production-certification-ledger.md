@@ -11,7 +11,7 @@ commit — not inferred from tests passing.
 | --- | --- |
 | Ledger opened | 2026-08-30 |
 | Last updated | 2026-08-31 |
-| Baseline commit | `82894885` (main) |
+| Baseline commit | `36bd943e` (main) |
 | Backend tests collected | 2832 |
 
 ---
@@ -191,13 +191,25 @@ treatment F-01 got. Listed highest-risk first.
 
 | Route | Why it matters |
 | --- | --- |
-| `leagues/router.py:50` `register_league` | Persists a league season registration including `buy_in_tier` (economic). |
-| `live_match/router.py:73` `tick_session` | Advances live match session state; needs a check on whether this engine is authoritative. |
-| `match_engine/api/router.py:279,293,307,324` `create_match_timeline/summary/render_sync/post_match_analytics` | Write match records. (`create_match_replay` and `simulate_match` are **not** defects — they are public-by-design and pure, guarded by `fairness_guard.validate_public_request`.) |
+| `live_match/router.py:73` `tick_session` | **Highest priority.** Advances live match session state. `build_live_match_store()` returns a **Redis-backed shared store whenever `redis_enabled` + `redis_url` are set**, falling back to in-process otherwise — so in production this mutates state shared across workers, unauthenticated. Still to confirm: whether this singular `live_match` module is authoritative or secondary to `live_matches` (plural), which does carry auth on its mutations. |
+| `match_engine/api/router.py:279,293,307,324` `create_match_timeline/summary/render_sync/post_match_analytics` | Write match records. |
 | `national_team_engine/router.py:288` `auto_build_squad` | Builds squads. |
 | `club_social/router.py:130,265,368` `record_*` | Write social / rivalry state. |
 | `analytics/router.py:65` `create_frontend_event` | Unauthenticated analytics writes (pollution/spam; low). |
 | `live_matches/router.py:1597` `refresh_unity_live_access` | Access-token refresh path. |
+| `leagues/router.py:50` `register_league` | **Downgraded to P3.** Writes only to the module-level `InMemoryLeagueEventRepository`; `DatabaseLeagueEventRepository` exists and is exported but is **never instantiated or wired in** anywhere in `app/`. So an anonymous caller pollutes in-process memory (unbounded growth = mild DoS) rather than persistent state. |
+
+`create_match_replay` and `simulate_match` were checked and are **not** defects —
+public-by-design and pure, guarded by `fairness_guard.validate_public_request`.
+
+### Observation (not a defect, but a production risk worth a decision)
+
+League season state is served exclusively by `InMemoryLeagueEventRepository`.
+That means league state does not survive a restart and is **not shared between
+Render workers**, so two requests hitting different workers can see different
+league state. The database-backed repository is already written
+(`leagues/repository.py:38`) but unwired. Flagged because it is invisible from
+the test suite, which exercises a single in-process app.
 
 **Confirmed legitimately public** (no action): all `auth/router.py` entry points
 (register/signup/login/refresh/confirm/recovery); all four webhook endpoints
