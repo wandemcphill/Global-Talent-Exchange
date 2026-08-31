@@ -48,9 +48,7 @@ def session_to_dict(session: LiveMatchSession) -> dict[str, Any]:
         "away_score": session.away_score,
         "events": session.events,
         "halftime_ready": sorted(session.halftime_ready),
-        "halftime_deadline": (
-            session.halftime_deadline.isoformat() if session.halftime_deadline is not None else None
-        ),
+        "halftime_deadline": (session.halftime_deadline.isoformat() if session.halftime_deadline is not None else None),
         "home_user_id": session.home_user_id,
         "away_user_id": session.away_user_id,
     }

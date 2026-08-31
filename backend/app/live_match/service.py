@@ -130,6 +130,14 @@ class LiveMatchEngine:
         self.store.mark_active(match_id)
         return session
 
+    def assert_participant(self, *, match_id: str, user_id: str | None) -> None:
+        """Ensure the user is a participant in this match session if owners are set."""
+        session = self.get(match_id)
+        if session.home_user_id is None and session.away_user_id is None:
+            return
+        if session.side_for_user(user_id) is None:
+            raise LiveMatchError("You do not control a team in this match.")
+
     def resolve_owned_side(self, *, match_id: str, user_id: str | None, side: str | None = None) -> str:
         """Map a user to the side they control, enforcing ownership when owners are set.
 

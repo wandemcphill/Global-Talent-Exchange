@@ -74,10 +74,14 @@ def get_session(
 def tick_session(
     match_id: str,
     engine: LiveMatchEngine = Depends(_engine),
+    current_user: User = Depends(get_current_user),
 ) -> LiveMatchSessionView:
     try:
-        return _view(engine.tick(match_id))
+        engine.assert_participant(match_id=match_id, user_id=current_user.id)
+        return _view(engine.tick(match_id), user_id=current_user.id)
     except LiveMatchError as exc:
+        if str(exc) == "You do not control a team in this match.":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
 
