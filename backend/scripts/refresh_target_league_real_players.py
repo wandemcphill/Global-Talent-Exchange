@@ -251,6 +251,136 @@ _TARGET_LEAGUES: tuple[LeagueSpec, ...] = (
         ),
         manual_league_key="super-lig",
     ),
+    LeagueSpec(
+        name="NPFL",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="1475",
+        fallback_competition_id="1475",
+        fallback_season_id="28292",
+    ),
+    LeagueSpec(
+        name="South Africa Premier League",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="806",
+        fallback_competition_id="806",
+        fallback_season_id="28123",
+    ),
+    LeagueSpec(
+        name="Egypt Premier League",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="830",
+        fallback_competition_id="830",
+        fallback_season_id="28307",
+    ),
+    LeagueSpec(
+        name="Ivory Coast Ligue 1",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="827",
+        # Live current season (28362, 2026/27) has no squads yet; pin to the
+        # prior season (26390) which has clubs until 2026/27 populates.
+        season_id="26390",
+        fallback_competition_id="827",
+        fallback_season_id="26390",
+    ),
+    LeagueSpec(
+        name="Ghana Premier League",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="836",
+        fallback_competition_id="836",
+        fallback_season_id="27906",
+    ),
+    LeagueSpec(
+        name="Botola Pro",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="860",
+        # Live current season (28647, 2026/27) has no squads yet; pin to the
+        # prior season (26027) which has clubs until 2026/27 populates.
+        season_id="26027",
+        fallback_competition_id="860",
+        fallback_season_id="26027",
+    ),
+    LeagueSpec(
+        name="Senegal Ligue 1",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="875",
+        fallback_competition_id="875",
+        fallback_season_id="28640",
+    ),
+    LeagueSpec(
+        name="Liga BetPlay",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="672",
+        fallback_competition_id="672",
+        fallback_season_id="26881",
+    ),
+    LeagueSpec(
+        name="Liga Pro",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="696",
+        fallback_competition_id="696",
+        fallback_season_id="27249",
+    ),
+    LeagueSpec(
+        name="Primera Division Uruguay",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="770",
+        fallback_competition_id="770",
+        fallback_season_id="27710",
+    ),
+    LeagueSpec(
+        name="Major League Soccer",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="779",
+        fallback_competition_id="779",
+        fallback_season_id="26720",
+    ),
+    LeagueSpec(
+        name="Saudi Pro League",
+        competition_level="top_flight",
+        desired_names=(),
+        competition_id="944",
+        fallback_competition_id="944",
+        fallback_season_id="27951",
+    ),
+    LeagueSpec(
+        name="Brasileiro Serie B",
+        competition_level="second_tier",
+        # SportMonks calls this "Serie B" (id 651) — collides with Italy's
+        # Serie B (id 387); resolve by explicit id, never by name.
+        desired_names=(),
+        competition_id="651",
+        fallback_competition_id="651",
+        fallback_season_id="27198",
+    ),
+    LeagueSpec(
+        name="Serie B",
+        competition_level="second_tier",
+        # SportMonks calls this "Serie B" (id 387) — collides with Brazil's
+        # Serie B (id 651); resolve by explicit id, never by name.
+        desired_names=(),
+        competition_id="387",
+        fallback_competition_id="387",
+        fallback_season_id="28379",
+    ),
+    LeagueSpec(
+        name="Ligue 2",
+        competition_level="second_tier",
+        desired_names=(),
+        competition_id="304",
+        fallback_competition_id="304",
+        fallback_season_id="28105",
+    ),
 )
 
 

@@ -29,9 +29,9 @@ BACKOFF_MAX="${BACKOFF_MAX:-120}"
 STATE_PATH="tmp/render-realplayer-ingest/state.json"
 REPORT_PATH="tmp/render-realplayer-ingest-report.json"
 
-# Leagues that still need real players (the original 6 are already populated).
-# Override via INGEST_LEAGUES if needed.
-DEFAULT_LEAGUES=$'Championship\nSuper Lig\nLa Liga 2\nChance Liga\nBrasileiro Serie A\nLiga Profesional de Futbol\nAdmiral Bundesliga'
+# Leagues to keep in sync. Idempotent upserts make it safe to re-list
+# already-populated leagues alongside new ones. Override via INGEST_LEAGUES if needed.
+DEFAULT_LEAGUES=$'Championship\nSuper Lig\nLa Liga 2\nChance Liga\nBrasileiro Serie A\nLiga Profesional de Futbol\nAdmiral Bundesliga\nPro League\nPremiership\nLiga Portugal\nNPFL\nSouth Africa Premier League\nEgypt Premier League\nIvory Coast Ligue 1\nGhana Premier League\nBotola Pro\nSenegal Ligue 1\nLiga BetPlay\nLiga Pro\nPrimera Division Uruguay\nMajor League Soccer\nSaudi Pro League\nBrasileiro Serie B\nSerie B\nLigue 2'
 LEAGUE_SOURCE="${INGEST_LEAGUES:-$DEFAULT_LEAGUES}"
 
 LEAGUE_ARGS=()
