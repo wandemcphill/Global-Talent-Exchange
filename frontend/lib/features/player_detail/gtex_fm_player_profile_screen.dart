@@ -214,6 +214,11 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
+/// Width at which the profile stops being one column. Below it the football
+/// story and the asset case stack; above it they sit side by side, football
+/// on the left because that is what the reader is here to understand first.
+const double _twoColumnMinWidth = 1100;
+
 class _ProfileBody extends StatelessWidget {
   const _ProfileBody({
     required this.detail,
@@ -231,56 +236,131 @@ class _ProfileBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final GteMarketPlayerIdentity id = detail.identity;
     final GteMarketPlayerAttributes attr = detail.attributes;
-    final int gsi = detail.trend.globalScoutingIndex.round().clamp(0, 99);
     final List<GteCareerEntry> career =
         careerEntries ?? const <GteCareerEntry>[];
     final GteOrderBook? book = orderBook;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 780),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              _HeaderCard(identity: id, gsi: gsi, attr: attr),
-              if (actions != null) ...<Widget>[
-                const SizedBox(height: 14),
-                actions!,
-              ],
-              const SizedBox(height: 14),
-              _SectionLabel('ASSET & MARKET INTELLIGENCE'),
-              const SizedBox(height: 8),
-              _MarketCard(detail: detail),
-              const SizedBox(height: 14),
-              _SectionLabel('FOOTBALL PROFILE & BIO'),
-              const SizedBox(height: 8),
-              _BioCard(identity: id),
-              const SizedBox(height: 14),
-              _SectionLabel('ATTRIBUTES'),
-              const SizedBox(height: 8),
-              _AttributesCard(attr: attr),
-              // Depth is only drawn when the live book actually has levels,
-              // so an empty book reads as empty rather than as a flat market.
-              if (book != null &&
-                  (book.bids.isNotEmpty || book.asks.isNotEmpty)) ...<Widget>[
-                const SizedBox(height: 14),
-                _SectionLabel('ORDER BOOK'),
-                const SizedBox(height: 8),
-                _OrderBookCard(book: book),
-              ],
-              // Career is only drawn when the backend actually returned
-              // history. Nothing here is synthesised.
-              if (career.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 14),
-                _SectionLabel('CAREER'),
-                const SizedBox(height: 8),
-                _CareerCard(entries: career),
-              ],
-            ],
+    final bool hasDepth =
+        book != null && (book.bids.isNotEmpty || book.asks.isNotEmpty);
+
+    // The football half: who this player is, what they can do, where they
+    // are going.
+    final List<Widget> footballColumn = <Widget>[
+      _SectionLabel('FOOTBALL PROFILE'),
+      const SizedBox(height: 8),
+      _BioCard(identity: id),
+      const SizedBox(height: 14),
+      _SectionLabel('ATTRIBUTES'),
+      const SizedBox(height: 8),
+      _AttributesCard(attr: attr),
+      const SizedBox(height: 14),
+      _SectionLabel('TRAJECTORY'),
+      const SizedBox(height: 8),
+      _TrajectoryCard(trend: detail.trend, attr: attr),
+      // Career is only drawn when the backend actually returned history.
+      // Nothing here is synthesised.
+      if (career.isNotEmpty) ...<Widget>[
+        const SizedBox(height: 14),
+        _SectionLabel('CAREER'),
+        const SizedBox(height: 8),
+        _CareerCard(entries: career),
+      ],
+    ];
+
+    // The asset half: what the market makes of all that.
+    final List<Widget> assetColumn = <Widget>[
+      _SectionLabel('ASSET & MARKET INTELLIGENCE'),
+      const SizedBox(height: 8),
+      _MarketCard(detail: detail),
+      const SizedBox(height: 14),
+      _SectionLabel('TERMS'),
+      const SizedBox(height: 8),
+      _TermsCard(profile: detail.marketProfile),
+      // Depth is only drawn when the live book actually has levels, so an
+      // empty book reads as empty rather than as a flat market.
+      if (hasDepth) ...<Widget>[
+        const SizedBox(height: 14),
+        _SectionLabel('ORDER BOOK'),
+        const SizedBox(height: 8),
+        _OrderBookCard(book: book),
+      ],
+    ];
+
+    return Column(
+      children: <Widget>[
+        Expanded(
+          child: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final bool twoColumn = constraints.maxWidth >= _twoColumnMinWidth;
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: twoColumn ? 1320 : 780,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        _IdentityCard(
+                          identity: id,
+                          trend: detail.trend,
+                          attr: attr,
+                        ),
+                        const SizedBox(height: 14),
+                        if (twoColumn)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Expanded(
+                                flex: 3,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: footballColumn,
+                                ),
+                              ),
+                              const SizedBox(width: 18),
+                              Expanded(
+                                flex: 2,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: assetColumn,
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              ...footballColumn,
+                              const SizedBox(height: 14),
+                              ...assetColumn,
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
-      ),
+        // The trade action stays reachable without scrolling at every size,
+        // but it is no longer the first thing the page says about a
+        // footballer.
+        if (actions != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 780),
+                child: actions!,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -616,22 +696,24 @@ class _ProfileSkeleton extends StatelessWidget {
   }
 }
 
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({
+class _IdentityCard extends StatelessWidget {
+  const _IdentityCard({
     required this.identity,
-    required this.gsi,
+    required this.trend,
     required this.attr,
   });
 
   final GteMarketPlayerIdentity identity;
-  final int gsi;
+  final GteMarketPlayerTrend trend;
   final GteMarketPlayerAttributes attr;
 
   @override
   Widget build(BuildContext context) {
     final String position =
-        identity.normalizedPosition ?? identity.position ?? '—';
-    final String club = identity.currentClubName ?? '—';
+        identity.normalizedPosition ?? identity.position ?? '\u2014';
+    final String club = identity.currentClubName ?? '\u2014';
+    final String age = identity.age > 0 ? '${identity.age}y' : '\u2014';
+    final int gsi = trend.globalScoutingIndex.round().clamp(0, 99);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -640,7 +722,16 @@ class _HeaderCard extends StatelessWidget {
         border: Border.all(color: _border),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          GtexPlayerPortrait(
+            name: identity.playerName,
+            imageUrl: identity.imageUrl,
+            position: identity.normalizedPosition ?? identity.position,
+            nationalityCode: identity.nationalityCode,
+            size: 84,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -657,7 +748,7 @@ class _HeaderCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$club · ${identity.age}y · $position',
+                  '$club \u00b7 $age \u00b7 $position',
                   style: const TextStyle(color: _textSecondary, fontSize: 12.5),
                 ),
                 if ((identity.nationality ?? '').isNotEmpty) ...<Widget>[
@@ -667,13 +758,29 @@ class _HeaderCard extends StatelessWidget {
                     style: const TextStyle(color: _blue, fontSize: 12),
                   ),
                 ],
+                if ((identity.currentCompetitionName ?? '')
+                    .isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 2),
+                  Text(
+                    identity.currentCompetitionName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _textMuted, fontSize: 12),
+                  ),
+                ],
               ],
             ),
           ),
           const SizedBox(width: 10),
           _RatingBox(label: 'GSI', value: gsi, color: _green),
           const SizedBox(width: 8),
-          _RatingBox(label: 'POT', value: attr.potential, color: _blue),
+          // A potential of zero is the API's "not scouted", not a verdict on
+          // the player. It is rendered as unknown, never as a number.
+          _RatingBox(
+            label: 'POT',
+            value: attr.potential > 0 ? attr.potential : null,
+            color: _blue,
+          ),
         ],
       ),
     );
@@ -688,7 +795,10 @@ class _RatingBox extends StatelessWidget {
   });
 
   final String label;
-  final int value;
+
+  /// Null means the backend has no figure for this player. Unknown is
+  /// rendered as unknown - never converted into a zero.
+  final int? value;
   final Color color;
 
   @override
@@ -703,9 +813,9 @@ class _RatingBox extends StatelessWidget {
       child: Column(
         children: <Widget>[
           Text(
-            '$value',
+            value == null ? '\u2014' : '$value',
             style: TextStyle(
-              color: color,
+              color: value == null ? _textMuted : color,
               fontSize: 22,
               fontWeight: FontWeight.w800,
               height: 1,
@@ -887,7 +997,13 @@ class _StatBar extends StatelessWidget {
   final String label;
   final int value;
 
+  /// Football attributes run 1-99. A zero is the API's default for an
+  /// attribute it never received, so it is shown as unscouted rather than as
+  /// a player who cannot do the thing.
+  bool get _isKnown => value > 0;
+
   Color get _color {
+    if (!_isKnown) return _textMuted;
     if (value >= 80) return _green;
     if (value >= 65) return _amber;
     if (value >= 50) return _orange;
@@ -910,7 +1026,7 @@ class _StatBar extends StatelessWidget {
           SizedBox(
             width: 24,
             child: Text(
-              '$value',
+              _isKnown ? '$value' : '\u2014',
               style: TextStyle(
                 color: _color,
                 fontSize: 14,
@@ -923,7 +1039,7 @@ class _StatBar extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(3),
               child: LinearProgressIndicator(
-                value: (value / 99).clamp(0.0, 1.0),
+                value: _isKnown ? (value / 99).clamp(0.0, 1.0) : 0,
                 minHeight: 6,
                 backgroundColor: const Color(0xFF1E252E),
                 valueColor: AlwaysStoppedAnimation<Color>(_color),
@@ -936,6 +1052,230 @@ class _StatBar extends StatelessWidget {
   }
 }
 
+/// Where the player is heading, from the trend block the backend already
+/// computes. Every row is omitted when its figure is absent - the card
+/// never fills a gap with a zero.
+class _TrajectoryCard extends StatelessWidget {
+  const _TrajectoryCard({required this.trend, required this.attr});
+
+  final GteMarketPlayerTrend trend;
+  final GteMarketPlayerAttributes attr;
+
+  @override
+  Widget build(BuildContext context) {
+    final int overall = attr.overall;
+    final int potential = attr.potential;
+    final int? headroom =
+        overall > 0 && potential > 0 ? potential - overall : null;
+    final List<Widget> rows = <Widget>[
+      _TrajectoryRow(
+        label: 'GSI movement',
+        value: _signedPct(trend.globalScoutingIndexMovementPct),
+        color: _directionColor(trend.globalScoutingIndexMovementPct),
+      ),
+      _TrajectoryRow(
+        label: 'Value trend 7d',
+        value: _signedPct(trend.trend7dPct),
+        color: _directionColor(trend.trend7dPct),
+      ),
+      _TrajectoryRow(
+        label: 'Value trend 30d',
+        value: _signedPct(trend.trend30dPct),
+        color: _directionColor(trend.trend30dPct),
+      ),
+      _TrajectoryRow(
+        label: 'Development headroom',
+        value: headroom == null ? _unknown : '+$headroom to ceiling',
+        color: headroom == null ? _textMuted : _blue,
+      ),
+      _TrajectoryRow(
+        label: 'Scouting confidence',
+        value: _orUnknown(trend.confidenceTier),
+        color: _textSecondary,
+      ),
+    ];
+    final List<String> tags =
+        <String>[
+          ...trend.movementTags,
+          ...trend.drivers,
+        ].where((String tag) => tag.trim().isNotEmpty).take(4).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          ...rows,
+          if (tags.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: <Widget>[
+                for (final String tag in tags)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: _border),
+                    ),
+                    child: Text(
+                      tag,
+                      style: const TextStyle(
+                        color: _textSecondary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static const String _unknown = '\u2014';
+
+  String _signedPct(double? value) {
+    if (value == null) {
+      return _unknown;
+    }
+    final String prefix = value > 0 ? '+' : '';
+    return '$prefix${value.toStringAsFixed(1)}%';
+  }
+
+  String _orUnknown(String? value) {
+    final String? trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? _unknown : trimmed;
+  }
+
+  Color _directionColor(double? value) {
+    if (value == null) {
+      return _textMuted;
+    }
+    if (value > 0) {
+      return _green;
+    }
+    if (value < 0) {
+      return _red;
+    }
+    return _textSecondary;
+  }
+}
+
+class _TrajectoryRow extends StatelessWidget {
+  const _TrajectoryRow({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _textSecondary, fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Holding terms for the asset: supply, liquidity and concentration. All of
+/// it already came back with the player; none of it had a render site.
+class _TermsCard extends StatelessWidget {
+  const _TermsCard({required this.profile});
+
+  final GteMarketPlayerMarketProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _TrajectoryRow(
+            label: 'Supply tier',
+            value: _orUnknown(profile.supplyTier),
+            color: _textSecondary,
+          ),
+          _TrajectoryRow(
+            label: 'Liquidity band',
+            value: _orUnknown(profile.liquidityBand),
+            color: _textSecondary,
+          ),
+          _TrajectoryRow(
+            label: 'Top holder share',
+            value: _pct(profile.topHolderSharePct),
+            color: _blue,
+          ),
+          _TrajectoryRow(
+            label: 'Top 3 holder share',
+            value: _pct(profile.top3HolderSharePct),
+            color: _blue,
+          ),
+          _TrajectoryRow(
+            label: 'Trade trust score',
+            value:
+                profile.tradeTrustScore == null
+                    ? '\u2014'
+                    : profile.tradeTrustScore!.toStringAsFixed(1),
+            color: _green,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _orUnknown(String? value) {
+    final String? trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? '\u2014' : trimmed;
+  }
+
+  String _pct(double? value) =>
+      value == null ? '\u2014' : '${value.toStringAsFixed(1)}%';
+}
+
 class _MarketCard extends StatelessWidget {
   const _MarketCard({required this.detail});
 
@@ -944,8 +1284,11 @@ class _MarketCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final GteMarketPlayerMarketProfile mp = detail.marketProfile;
-    final double? movement = detail.value.movementPct;
     final String value = _value(mp);
+    // A percentage move only means something against a price. On an
+    // unpriced asset it asserted a price history that does not exist.
+    final bool isPriced = value != _unpricedLabel;
+    final double? movement = isPriced ? detail.value.movementPct : null;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1012,8 +1355,10 @@ class _MarketCard extends StatelessWidget {
     if (credits != null && credits > 0) {
       return '${_compact(credits)} GTC';
     }
-    return 'Unpriced';
+    return _unpricedLabel;
   }
+
+  static const String _unpricedLabel = 'Unpriced';
 
   String _compact(double v) {
     if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';

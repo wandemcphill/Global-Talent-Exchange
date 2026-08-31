@@ -25,6 +25,7 @@ export 'components/gtex_value_display.dart';
 export 'components/green_pulse_dot.dart';
 export 'commerce/gtex_shortlist_basket.dart';
 export 'football/gtex_player_card.dart';
+export 'football/gtex_player_portrait.dart';
 export 'football/gtex_regen_card.dart';
 export 'football/gtex_regen_portrait.dart';
 export 'routes/gtex_current_route_adapter.dart';
