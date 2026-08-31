@@ -1098,9 +1098,7 @@ def _resolve_league_targets(adapter: SportMonksAdapter, specs: tuple[LeagueSpec,
             (competition or {}).get("id") or spec.competition_id or spec.fallback_competition_id,
         )
         season_id = _required_text(
-            spec.season_id
-            or ((competition or {}).get("currentSeason") or {}).get("id")
-            or spec.fallback_season_id,
+            spec.season_id or ((competition or {}).get("currentSeason") or {}).get("id") or spec.fallback_season_id,
         )
         clubs = [
             {"id": _required_text(club.get("id")), "name": _required_text(club.get("name"))}
