@@ -1,9 +1,26 @@
+@Tags(<String>['golden'])
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 /// Visual QA captures for the refinement pass. Regenerate with
 /// `flutter test test/ux_refinement/visual_qa_golden_test.dart --update-goldens`.
+///
+/// Tagged `golden` and excluded from CI (`--exclude-tags golden`) because these
+/// captures are platform-dependent. Measured: all three pass on Windows, where
+/// they were generated, and fail on `ubuntu-latest` with small, *identical*
+/// pixel deltas on every run (browse_grid_mobile 1.70%, browse_grid_desktop
+/// 0.60%, master_detail_tablet 0.93%) across four unrelated backend-only
+/// commits. That signature is font rasterisation differing between platforms,
+/// not a UI regression - these player-card grids are text-heavy, so glyph
+/// antialiasing dominates the diff.
+///
+/// Left running in CI they were a permanently red gate that masked genuine
+/// frontend regressions. To put them back in CI, regenerate the PNGs on Linux
+/// (a one-off `flutter test --update-goldens` job on `ubuntu-latest`) and drop
+/// the tag - goldens are only valid on the platform that produced them.
 void main() {
   Widget card({
     required String name,
