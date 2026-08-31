@@ -291,7 +291,7 @@ services:
       - key: CSV_URL
         sync: false
       - key: IMAGES
-        value: "cloudinary"
+        sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
