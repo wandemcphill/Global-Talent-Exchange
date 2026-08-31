@@ -17,6 +17,18 @@ enum GtexPlayerCardVariant {
 
 enum GtexPlayerCardScale { full, compact, thumbnail }
 
+/// Below this width there is only room for a name, a rating and a price.
+const double _microMaxWidth = 128;
+
+/// The compact browse row's own height. Anything shorter cannot hold it.
+const double _compactMinHeight = 76;
+
+/// The full poster card stacks a portrait, an identity block, a stat grid,
+/// a value row and a signal rail. It needs real space in both axes; asked
+/// to render in a browse cell it would simply clip.
+const double _fullCardMinHeight = 360;
+const double _fullCardMinWidth = 280;
+
 class GtexPlayerCard extends StatelessWidget {
   const GtexPlayerCard({
     super.key,
@@ -51,6 +63,9 @@ class GtexPlayerCard extends StatelessWidget {
     this.footLabel,
     this.secondaryPositions = const <String>[],
     this.salaryLabel,
+    this.availabilityLabel,
+    this.interestLabel,
+    this.isOwned = false,
     this.isSelected = false,
     this.onTap,
     this.onAddToShortlist,
@@ -89,6 +104,18 @@ class GtexPlayerCard extends StatelessWidget {
   final String? ownerLabel;
   final String? contractLabel;
   final String? potentialLabel;
+
+  /// How the player can be acquired ("Transfer eligible", "Loan"...). Shown
+  /// in the browse row's meta line once there is width for it.
+  final String? availabilityLabel;
+
+  /// Market attention, e.g. "Watched 41". Only ever passed when the backend
+  /// actually reported an interest score.
+  final String? interestLabel;
+
+  /// True when the signed-in user already holds this player. The browse row
+  /// marks it so an owned asset is never mistaken for a target.
+  final bool isOwned;
   final bool isSelected;
   final VoidCallback? onTap;
   final VoidCallback? onAddToShortlist;
@@ -104,13 +131,27 @@ class GtexPlayerCard extends StatelessWidget {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
+        // Layout is chosen from what the card can actually draw in, and
+        // width is the axis that decides how much of a footballer fits.
+        // Height only rules out a layout it physically cannot contain: the
+        // micro row needs 76px, the full poster card needs a portrait, a
+        // stat grid and a footer.
         final bool microLayout =
-            (constraints.hasBoundedWidth && constraints.maxWidth < 128) ||
-            (constraints.hasBoundedHeight && constraints.maxHeight < 92);
-        final bool shortLayout =
-            constraints.hasBoundedHeight && constraints.maxHeight < 360;
+            (constraints.hasBoundedWidth &&
+                constraints.maxWidth < _microMaxWidth) ||
+            (constraints.hasBoundedHeight &&
+                constraints.maxHeight < _compactMinHeight);
+        final bool tooShortForFullCard =
+            constraints.hasBoundedHeight &&
+            constraints.maxHeight < _fullCardMinHeight;
+        final bool tooNarrowForFullCard =
+            constraints.hasBoundedWidth &&
+            constraints.maxWidth < _fullCardMinWidth;
         final bool compact =
-            microLayout || shortLayout || scale == GtexPlayerCardScale.compact;
+            microLayout ||
+            tooShortForFullCard ||
+            tooNarrowForFullCard ||
+            scale == GtexPlayerCardScale.compact;
         if (microLayout) {
           return _MicroPlayerCard(
             name: name,
@@ -145,6 +186,12 @@ class GtexPlayerCard extends StatelessWidget {
             valueDeltaLabel: valueDeltaLabel,
             valueState: valueState,
             ratingLabel: ratingLabel ?? gsiLabel,
+            gsiLabel: gsiLabel,
+            gsiTierLabel: gsiTierLabel,
+            ageLabel: ageLabel,
+            availabilityLabel: availabilityLabel,
+            interestLabel: interestLabel,
+            isOwned: isOwned,
             formResults: formResults,
             onAddToShortlist: onAddToShortlist,
             onBuyNow: onBuyNow,
@@ -688,6 +735,12 @@ class _CompactPlayerCard extends StatelessWidget {
     this.onTap,
     this.valueDeltaLabel,
     this.ratingLabel,
+    this.gsiLabel,
+    this.gsiTierLabel,
+    this.ageLabel,
+    this.availabilityLabel,
+    this.interestLabel,
+    this.isOwned = false,
     this.onAddToShortlist,
     this.onBuyNow,
     this.buyNowLabel = 'Buy now',
@@ -706,6 +759,12 @@ class _CompactPlayerCard extends StatelessWidget {
   final VoidCallback? onTap;
   final String? valueDeltaLabel;
   final String? ratingLabel;
+  final String? gsiLabel;
+  final String? gsiTierLabel;
+  final String? ageLabel;
+  final String? availabilityLabel;
+  final String? interestLabel;
+  final bool isOwned;
   final GtexValueState valueState;
   final List<String> formResults;
   final VoidCallback? onAddToShortlist;
@@ -716,6 +775,34 @@ class _CompactPlayerCard extends StatelessWidget {
   /// [_actionBarHeight] has room for the primary actions.
   static const double _rowHeight = 76;
   static const double _actionBarHeight = 48;
+
+  /// Width at which the row can carry a meta line under the club without
+  /// crowding the price column, and the widths at which each further piece
+  /// of market intelligence earns its place.
+  static const double _metaMinWidth = 340;
+  static const double _tierMinWidth = 440;
+  static const double _signalsMinWidth = 560;
+
+  /// The market facts this row can show, filtered to what the backend
+  /// actually returned. Nothing here is synthesised: an absent value is
+  /// simply not in the line.
+  List<String> _metaFacts({required bool withTier, required bool withSignals}) {
+    return <String>[
+      if (ageLabel != null && ageLabel!.trim().isNotEmpty) ageLabel!.trim(),
+      if (withTier && gsiLabel != null && gsiLabel!.trim().isNotEmpty)
+        gsiLabel!.trim(),
+      if (withSignals &&
+          gsiTierLabel != null &&
+          gsiTierLabel!.trim().isNotEmpty)
+        gsiTierLabel!.trim(),
+      if (availabilityLabel != null && availabilityLabel!.trim().isNotEmpty)
+        availabilityLabel!.trim(),
+      if (withSignals &&
+          interestLabel != null &&
+          interestLabel!.trim().isNotEmpty)
+        interestLabel!.trim(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -729,12 +816,26 @@ class _CompactPlayerCard extends StatelessWidget {
             hasActions &&
             constraints.hasBoundedHeight &&
             constraints.maxHeight >= _rowHeight + _actionBarHeight;
-        return _buildCard(context, showActionBar);
+        final double width =
+            constraints.hasBoundedWidth ? constraints.maxWidth : _metaMinWidth;
+        return _buildCard(
+          context,
+          showActionBar,
+          hasRoomForMeta: width >= _metaMinWidth,
+          hasRoomForTier: width >= _tierMinWidth,
+          hasRoomForSignals: width >= _signalsMinWidth,
+        );
       },
     );
   }
 
-  Widget _buildCard(BuildContext context, bool showActionBar) {
+  Widget _buildCard(
+    BuildContext context,
+    bool showActionBar, {
+    required bool hasRoomForMeta,
+    required bool hasRoomForTier,
+    required bool hasRoomForSignals,
+  }) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -764,7 +865,13 @@ class _CompactPlayerCard extends StatelessWidget {
                         constraints: const BoxConstraints(
                           minHeight: _rowHeight,
                         ),
-                        child: _row(context, flushBottom: true),
+                        child: _row(
+                          context,
+                          flushBottom: true,
+                          hasRoomForMeta: hasRoomForMeta,
+                          hasRoomForTier: hasRoomForTier,
+                          hasRoomForSignals: hasRoomForSignals,
+                        ),
                       ),
                       _CompactCardActionBar(
                         accent: positionAccent,
@@ -775,15 +882,34 @@ class _CompactPlayerCard extends StatelessWidget {
                       ),
                     ],
                   )
-                  : _row(context, flushBottom: showActionBar),
+                  : _row(
+                    context,
+                    flushBottom: showActionBar,
+                    hasRoomForMeta: hasRoomForMeta,
+                    hasRoomForTier: hasRoomForTier,
+                    hasRoomForSignals: hasRoomForSignals,
+                  ),
         ),
       ),
     );
   }
 
-  Widget _row(BuildContext context, {bool flushBottom = false}) {
+  Widget _row(
+    BuildContext context, {
+    bool flushBottom = false,
+    bool hasRoomForMeta = false,
+    bool hasRoomForTier = false,
+    bool hasRoomForSignals = false,
+  }) {
     final Color provenanceColor =
         isRegen ? GtexColors.accentViolet : GtexColors.accentBlue;
+    final List<String> metaFacts =
+        hasRoomForMeta
+            ? _metaFacts(
+              withTier: hasRoomForTier,
+              withSignals: hasRoomForSignals,
+            )
+            : const <String>[];
     return Row(
       children: <Widget>[
         Container(
@@ -815,16 +941,36 @@ class _CompactPlayerCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                isRegen ? 'REGEN DNA' : 'REAL PLAYER',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: provenanceColor,
-                  fontFamily: 'Barlow',
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5,
-                ),
+              Row(
+                children: <Widget>[
+                  Flexible(
+                    child: Text(
+                      isRegen ? 'REGEN DNA' : 'REAL PLAYER',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: provenanceColor,
+                        fontFamily: 'Barlow',
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  if (isOwned) ...<Widget>[
+                    const SizedBox(width: GtexSpacing.xs),
+                    Text(
+                      'OWNED',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: GtexColors.accentAmber,
+                        fontFamily: 'Barlow',
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 1),
               Text(
@@ -847,7 +993,20 @@ class _CompactPlayerCard extends StatelessWidget {
                   fontFamily: 'DM Sans',
                 ),
               ),
-              if (formResults.isNotEmpty) ...<Widget>[
+              if (metaFacts.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 2),
+                Text(
+                  metaFacts.join('  -  '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: GtexColors.textTertiary,
+                    fontFamily: 'DM Sans',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              if (formResults.isNotEmpty && hasRoomForMeta) ...<Widget>[
                 const SizedBox(height: 4),
                 _FormRail(results: formResults, compact: true),
               ],

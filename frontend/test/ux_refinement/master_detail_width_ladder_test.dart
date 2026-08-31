@@ -105,8 +105,6 @@ void main() {
     }
   }
 
-  final Map<double, double> measuredCardWidth = <double, double>{};
-
   for (final double width in ladder) {
     testWidgets('transfer hub keeps a usable player card at ${width}px', (
       WidgetTester tester,
@@ -126,7 +124,6 @@ void main() {
       );
 
       final double cardWidth = tester.getSize(cards.first).width;
-      measuredCardWidth[width] = cardWidth;
       expect(
         cardWidth,
         greaterThanOrEqualTo(minCardWidth),
@@ -153,17 +150,24 @@ void main() {
     });
   }
 
-  testWidgets('no viewport width starves the card the way a smaller one does', (
+  testWidgets('every width step is explained by the chrome it admits', (
     WidgetTester tester,
   ) async {
-    // Progressive disclosure means a card can legitimately narrow when a
-    // panel becomes affordable - going 1200 -> 1240 buys the summary panel
-    // and spends detail width on it. What must never happen again is the
-    // collapse the audit measured, where crossing 1280 upward cost 385px and
-    // dropped the card below legibility. Every step stays above the floor,
-    // and no single step may give up more than the widest panel it can be
-    // paying for.
-    const double maxStepRegression = 360;
+    // Strict monotonicity is not achievable alongside progressive
+    // disclosure: the moment a pane becomes affordable, the detail pane pays
+    // for it. What must never happen again is an *unexplained* collapse -
+    // the audit measured crossing 1280 upward costing 385px of card while
+    // nothing was gained. So each step is allowed exactly the width of the
+    // chrome that appeared at it, and nothing more.
+    const double gap = GtexSpacing.md;
+    const double marketLeftPanelWidth = 330;
+    const double marketRightPanelWidth = 370;
+    const double navRailWidth = 94;
+    const double worldPulseRailWidth = 318;
+
+    final Map<double, ({double card, bool left, bool right, bool rail})>
+    measured = <double, ({double card, bool left, bool right, bool rail})>{};
+
     for (final double width in ladder) {
       await pumpShell(
         tester,
@@ -173,23 +177,56 @@ void main() {
       );
       final Finder cards = find.byType(GtexPlayerCard);
       expect(cards, findsWidgets, reason: 'no cards at ${width}px');
-      measuredCardWidth[width] = tester.getSize(cards.first).width;
+      measured[width] = (
+        card: tester.getSize(cards.first).width,
+        left: find.byType(GtexMarketContextPanel).evaluate().isNotEmpty,
+        right: find.byType(GtexMarketSelectedPlayerPanel).evaluate().isNotEmpty,
+        rail:
+            find
+                .byKey(const Key('football-world-pulse-rail'))
+                .evaluate()
+                .isNotEmpty,
+      );
     }
 
     for (int index = 1; index < ladder.length; index += 1) {
-      final double previous = measuredCardWidth[ladder[index - 1]]!;
-      final double current = measuredCardWidth[ladder[index]]!;
+      final double previousWidth = ladder[index - 1];
+      final double currentWidth = ladder[index];
+      final ({double card, bool left, bool right, bool rail}) previous =
+          measured[previousWidth]!;
+      final ({double card, bool left, bool right, bool rail}) current =
+          measured[currentWidth]!;
+
       expect(
-        current,
+        current.card,
         greaterThanOrEqualTo(minCardWidth),
-        reason: 'card starved at ${ladder[index]}px',
+        reason: 'card starved at ${currentWidth}px',
       );
+
+      double allowance = 0;
+      if (current.left && !previous.left) {
+        allowance += marketLeftPanelWidth + gap;
+      }
+      if (current.right && !previous.right) {
+        allowance += marketRightPanelWidth + gap;
+      }
+      if (current.rail && !previous.rail) {
+        allowance += worldPulseRailWidth;
+      }
+      // The shell swaps its bottom nav for a 94px nav rail at the mobile
+      // breakpoint. That is the one horizontal cost not paid to a pane.
+      if (previousWidth < GtexBreakpoints.mobile &&
+          currentWidth >= GtexBreakpoints.mobile) {
+        allowance += navRailWidth;
+      }
+
       expect(
-        previous - current,
-        lessThanOrEqualTo(maxStepRegression),
+        previous.card - current.card,
+        lessThanOrEqualTo(allowance),
         reason:
-            'card lost ${(previous - current).toStringAsFixed(0)}px going '
-            'from ${ladder[index - 1]}px to ${ladder[index]}px',
+            'card lost ${(previous.card - current.card).toStringAsFixed(0)}px '
+            'going from ${previousWidth}px to ${currentWidth}px, but only '
+            '${allowance.toStringAsFixed(0)}px of chrome was added',
       );
     }
   });

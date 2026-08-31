@@ -330,10 +330,7 @@ class _ActiveFiltersBar extends StatelessWidget {
     }
     if (selectedLeague != null && selectedLeague!.isNotEmpty) {
       chips.add(
-        _FilterChip(
-          label: 'League: $selectedLeague',
-          onDeleted: onClearLeague,
-        ),
+        _FilterChip(label: 'League: $selectedLeague', onDeleted: onClearLeague),
       );
     }
     if (selectedDivision != null && selectedDivision!.isNotEmpty) {
@@ -346,10 +343,7 @@ class _ActiveFiltersBar extends StatelessWidget {
     }
     if (selectedClub != null && selectedClub!.isNotEmpty) {
       chips.add(
-        _FilterChip(
-          label: 'Club: $selectedClub',
-          onDeleted: onClearClub,
-        ),
+        _FilterChip(label: 'Club: $selectedClub', onDeleted: onClearClub),
       );
     }
     if (selectedAvailability != 'all') {
@@ -373,28 +367,18 @@ class _ActiveFiltersBar extends StatelessWidget {
           minAge.trim().isNotEmpty && maxAge.trim().isNotEmpty
               ? 'Age: $minAge-$maxAge'
               : minAge.trim().isNotEmpty
-                  ? 'Age: ≥$minAge'
-                  : 'Age: ≤$maxAge';
-      chips.add(
-        _FilterChip(
-          label: ageLabel,
-          onDeleted: onClearAge,
-        ),
-      );
+              ? 'Age: ≥$minAge'
+              : 'Age: ≤$maxAge';
+      chips.add(_FilterChip(label: ageLabel, onDeleted: onClearAge));
     }
     if (minValue.trim().isNotEmpty || maxValue.trim().isNotEmpty) {
       final String valLabel =
           minValue.trim().isNotEmpty && maxValue.trim().isNotEmpty
               ? 'Val: $minValue-$maxValue'
               : minValue.trim().isNotEmpty
-                  ? 'Val: ≥$minValue'
-                  : 'Val: ≤$maxValue';
-      chips.add(
-        _FilterChip(
-          label: valLabel,
-          onDeleted: onClearValue,
-        ),
-      );
+              ? 'Val: ≥$minValue'
+              : 'Val: ≤$maxValue';
+      chips.add(_FilterChip(label: valLabel, onDeleted: onClearValue));
     }
 
     return Column(
@@ -406,18 +390,18 @@ class _ActiveFiltersBar extends StatelessWidget {
             Text(
               'ACTIVE FILTERS',
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: GtexColors.gold,
-                    fontWeight: FontWeight.w900,
-                  ),
+                color: GtexColors.gold,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             GestureDetector(
               onTap: onClearAll,
               child: Text(
                 'Clear all',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: GtexColors.textMuted,
-                      decoration: TextDecoration.underline,
-                    ),
+                  color: GtexColors.textMuted,
+                  decoration: TextDecoration.underline,
+                ),
               ),
             ),
           ],

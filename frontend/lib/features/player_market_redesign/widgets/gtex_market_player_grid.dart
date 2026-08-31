@@ -4,10 +4,51 @@ import 'package:flutter/rendering.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 import '../models/gtex_market_browse_models.dart';
 
-/// Height of a browse card: the identity row plus its action bar.
-const double _browseCardHeight = 132;
+/// Height of a browse card: the identity row - which now carries a meta
+/// line of market intelligence under the club - plus its action bar.
+const double _browseCardHeight = 168;
 
-class GtexMarketPlayerGrid extends StatelessWidget {
+/// Narrowest a browse card may be before a second column stops being worth
+/// it. Below this the row cannot carry its meta line, so an extra column
+/// would buy density by throwing the market data away again.
+const double _minBrowseCardWidth = 420;
+
+/// Discovery lanes over the loaded listings. Each one is a filter on data
+/// the backend already returned - there is no client-side ranking engine
+/// here, and no lane exists for a signal the API does not provide.
+enum GtexMarketDiscoveryLane { all, rising, falling, watched }
+
+extension GtexMarketDiscoveryLaneLabel on GtexMarketDiscoveryLane {
+  String get label => switch (this) {
+    GtexMarketDiscoveryLane.all => 'All listings',
+    GtexMarketDiscoveryLane.rising => 'Rising',
+    GtexMarketDiscoveryLane.falling => 'Falling',
+    GtexMarketDiscoveryLane.watched => 'Most watched',
+  };
+
+  IconData get icon => switch (this) {
+    GtexMarketDiscoveryLane.all => Icons.grid_view_outlined,
+    GtexMarketDiscoveryLane.rising => Icons.trending_up,
+    GtexMarketDiscoveryLane.falling => Icons.trending_down,
+    GtexMarketDiscoveryLane.watched => Icons.visibility_outlined,
+  };
+
+  Color get accent => switch (this) {
+    GtexMarketDiscoveryLane.all => GtexColors.pitch,
+    GtexMarketDiscoveryLane.rising => GtexColors.accentPrimary,
+    GtexMarketDiscoveryLane.falling => GtexColors.accentRed,
+    GtexMarketDiscoveryLane.watched => GtexColors.gold,
+  };
+
+  bool matches(GtexMarketPlayerView player) => switch (this) {
+    GtexMarketDiscoveryLane.all => true,
+    GtexMarketDiscoveryLane.rising => player.isRising,
+    GtexMarketDiscoveryLane.falling => player.isFalling,
+    GtexMarketDiscoveryLane.watched => player.interestLabel != null,
+  };
+}
+
+class GtexMarketPlayerGrid extends StatefulWidget {
   const GtexMarketPlayerGrid({
     super.key,
     required this.players,
@@ -22,6 +63,7 @@ class GtexMarketPlayerGrid extends StatelessWidget {
     required this.onSelectPlayer,
     required this.onToggleBasket,
     required this.onBuyNow,
+    this.ownedPlayerIds = const <String>{},
   });
 
   final List<GtexMarketPlayerView> players;
@@ -37,8 +79,28 @@ class GtexMarketPlayerGrid extends StatelessWidget {
   final ValueChanged<GtexMarketPlayerView> onToggleBasket;
   final ValueChanged<GtexMarketPlayerView> onBuyNow;
 
+  /// Players the signed-in user already holds. Empty when signed out or
+  /// before the portfolio has loaded - never guessed.
+  final Set<String> ownedPlayerIds;
+
+  @override
+  State<GtexMarketPlayerGrid> createState() => _GtexMarketPlayerGridState();
+}
+
+class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
+  GtexMarketDiscoveryLane _lane = GtexMarketDiscoveryLane.all;
+
   @override
   Widget build(BuildContext context) {
+    final List<GtexMarketPlayerView> players = widget.players;
+    final int totalPlayers = widget.totalPlayers;
+    final String? selectedPlayerId = widget.selectedPlayerId;
+    final GtexMarketBasketState basketState = widget.basketState;
+    final bool isLoading = widget.isLoading;
+    final String? error = widget.error;
+    final VoidCallback onRefresh = widget.onRefresh;
+    final VoidCallback? onLoadMore = widget.onLoadMore;
+    final bool hasMore = widget.hasMore;
     if (isLoading && players.isEmpty) {
       return const _LoadingBoard();
     }
@@ -47,13 +109,20 @@ class GtexMarketPlayerGrid extends StatelessWidget {
         padding: const EdgeInsets.all(GtexSpacing.lg),
         child: GtexEmptyState(
           title: 'Player market unavailable',
-          message: error!,
+          message: error,
           icon: Icons.warning_amber_rounded,
           actionLabel: 'Retry market',
           onAction: onRefresh,
         ),
       );
     }
+    final List<GtexMarketPlayerView> laneMatches =
+        _lane == GtexMarketDiscoveryLane.all
+            ? players
+            : players
+                .where((GtexMarketPlayerView player) => _lane.matches(player))
+                .toList(growable: false);
+
     if (players.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(GtexSpacing.lg),
@@ -95,6 +164,22 @@ class GtexMarketPlayerGrid extends StatelessWidget {
                       icon: Icons.shopping_basket_outlined,
                       color: GtexColors.gold,
                     ),
+                  for (final GtexMarketDiscoveryLane lane
+                      in GtexMarketDiscoveryLane.values)
+                    _DiscoveryLaneChip(
+                      lane: lane,
+                      count:
+                          lane == GtexMarketDiscoveryLane.all
+                              ? players.length
+                              : players
+                                  .where(
+                                    (GtexMarketPlayerView player) =>
+                                        lane.matches(player),
+                                  )
+                                  .length,
+                      isSelected: _lane == lane,
+                      onSelected: () => setState(() => _lane = lane),
+                    ),
                   if (error != null)
                     GtexStatusChip(
                       label: 'Last good snapshot',
@@ -105,6 +190,23 @@ class GtexMarketPlayerGrid extends StatelessWidget {
               ),
             ),
           ),
+          if (laneMatches.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(GtexSpacing.lg),
+                child: GtexEmptyState(
+                  title:
+                      'No ${_lane.label.toLowerCase()} in the loaded listings',
+                  message:
+                      'This lane filters the listings already loaded. Load '
+                      'more players or switch back to all listings.',
+                  icon: _lane.icon,
+                  actionLabel: 'Show all listings',
+                  onAction:
+                      () => setState(() => _lane = GtexMarketDiscoveryLane.all),
+                ),
+              ),
+            ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
               GtexSpacing.md,
@@ -115,12 +217,12 @@ class GtexMarketPlayerGrid extends StatelessWidget {
             sliver: SliverLayoutBuilder(
               builder: (BuildContext context, SliverConstraints constraints) {
                 final double width = constraints.crossAxisExtent;
-                final int crossAxisCount =
-                    width >= 1100
-                        ? 3
-                        : width >= 680
-                        ? 2
-                        : 1;
+                // Columns follow the width a card needs to stay readable
+                // rather than fixed viewport breakpoints, so a second column
+                // only appears when both columns are still worth reading.
+                final int crossAxisCount = ((width + GtexSpacing.sm) ~/
+                        (_minBrowseCardWidth + GtexSpacing.sm))
+                    .clamp(1, 3);
                 return SliverGrid(
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
@@ -135,7 +237,7 @@ class GtexMarketPlayerGrid extends StatelessWidget {
                     BuildContext context,
                     int index,
                   ) {
-                    final GtexMarketPlayerView player = players[index];
+                    final GtexMarketPlayerView player = laneMatches[index];
                     return GtexPlayerCard(
                       name: player.name,
                       position: player.position,
@@ -147,10 +249,17 @@ class GtexMarketPlayerGrid extends StatelessWidget {
                       gsiTierLabel: player.gsiTierLabel,
                       gsiTrendLabel: player.gsiTrendLabel,
                       ratingLabel: player.ratingLabel,
-                      ageLabel: player.ageLabel,
+                      ageLabel: player.ageValueLabel,
                       heightLabel: player.heightLabel,
                       footLabel: player.footLabel,
                       secondaryPositions: player.secondaryPositions,
+                      // Value movement is computed by the backend and was
+                      // never rendered anywhere in the product. The card
+                      // has always been able to draw it.
+                      valueDeltaLabel: player.movementLabel,
+                      availabilityLabel: player.availabilityTypeLabel,
+                      interestLabel: player.interestLabel,
+                      isOwned: widget.ownedPlayerIds.contains(player.playerId),
                       badges: <Widget>[
                         GtexStatusChip(
                           label: player.availabilityTypeLabel,
@@ -180,13 +289,13 @@ class GtexMarketPlayerGrid extends StatelessWidget {
                           ),
                       ],
                       isSelected: selectedPlayerId == player.playerId,
-                      onTap: () => onSelectPlayer(player),
-                      onAddToShortlist: () => onToggleBasket(player),
+                      onTap: () => widget.onSelectPlayer(player),
+                      onAddToShortlist: () => widget.onToggleBasket(player),
                       buyNowLabel:
                           player.hasOpenTransferListing ? 'Negotiate' : 'Open',
-                      onBuyNow: () => onBuyNow(player),
+                      onBuyNow: () => widget.onBuyNow(player),
                     );
-                  }, childCount: players.length),
+                  }, childCount: laneMatches.length),
                 );
               },
             ),
@@ -281,6 +390,49 @@ class _LoadingBoard extends StatelessWidget {
           const SizedBox(height: GtexSpacing.sm),
           const LinearProgressIndicator(),
         ],
+      ),
+    );
+  }
+}
+
+/// A discovery lane selector. Counts are over the listings currently
+/// loaded, which is what the lane filters, so the number always matches
+/// what selecting it will show.
+class _DiscoveryLaneChip extends StatelessWidget {
+  const _DiscoveryLaneChip({
+    required this.lane,
+    required this.count,
+    required this.isSelected,
+    required this.onSelected,
+  });
+
+  final GtexMarketDiscoveryLane lane;
+  final int count;
+  final bool isSelected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: '${lane.label}, $count listings',
+      child: InkWell(
+        key: Key('gtex-market-lane-${lane.name}'),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusPill),
+        onTap:
+            count == 0 && lane != GtexMarketDiscoveryLane.all
+                ? null
+                : onSelected,
+        child: Opacity(
+          opacity: count == 0 && lane != GtexMarketDiscoveryLane.all ? 0.45 : 1,
+          child: GtexStatusChip(
+            label: '${lane.label} $count',
+            icon: lane.icon,
+            color: lane.accent,
+            compact: !isSelected,
+          ),
+        ),
       ),
     );
   }
