@@ -859,14 +859,18 @@ class _CompactPlayerCard extends StatelessWidget {
           _RatingPill(label: ratingLabel!, accent: positionAccent),
         ],
         const SizedBox(width: GtexSpacing.xs),
-        SizedBox(
-          width: 92,
-          child: GtexValueDisplay(
-            valueLabel: priceLabel,
-            deltaLabel: valueDeltaLabel,
-            state: valueState,
-            size: GtexValueDisplaySize.small,
-            showStateIndicator: false,
+        ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 84, maxWidth: 110),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: GtexValueDisplay(
+              valueLabel: priceLabel,
+              deltaLabel: valueDeltaLabel,
+              state: valueState,
+              size: GtexValueDisplaySize.small,
+              showStateIndicator: false,
+            ),
           ),
         ),
         const SizedBox(width: GtexSpacing.xs),
@@ -1275,8 +1279,8 @@ class _GsiPlate extends StatelessWidget {
     final String value =
         label.replaceFirst(RegExp(r'^GSI\s*', caseSensitive: false), '').trim();
     return Container(
-      width: 58,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      constraints: const BoxConstraints(minWidth: 58),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       decoration: BoxDecoration(
         color: GtexColors.surfaceOverlay,
         borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
@@ -1287,16 +1291,18 @@ class _GsiPlate extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(
-            value.isEmpty ? 'TBC' : value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: GtexColors.accentAmber,
-              fontFamily: 'JetBrains Mono',
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              height: 1,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value.isEmpty ? 'TBC' : value,
+              maxLines: 1,
+              style: const TextStyle(
+                color: GtexColors.accentAmber,
+                fontFamily: 'JetBrains Mono',
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
             ),
           ),
           const SizedBox(height: 3),

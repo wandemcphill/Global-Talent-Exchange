@@ -485,6 +485,7 @@ class _BrowseSection extends StatelessWidget {
     final List<GtexMarketBrowseOption> visibleOptions = options
         .take(14)
         .toList(growable: false);
+    final bool hasMore = options.length > 14;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -494,7 +495,7 @@ class _BrowseSection extends StatelessWidget {
             const SizedBox(width: GtexSpacing.xs),
             Expanded(
               child: Text(
-                title,
+                hasMore ? '$title (${options.length})' : title,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: GtexColors.text,
                   fontWeight: FontWeight.w900,
