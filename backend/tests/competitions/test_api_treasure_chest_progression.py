@@ -159,7 +159,7 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
     assert rewards_response.status_code == 200
     rewards = rewards_response.json()
     assert rewards["competition_id"] == competition_id
-    assert [item["amount"] for item in rewards["rewards"]] == ["36.00", "15.00", "9.00"]
+    assert [item["amount"] for item in rewards["rewards"]] == ["31.20", "13.00", "7.80"]
     assert [item["status"] for item in rewards["rewards"]] == ["settled", "settled", "settled"]
     assert rewards["rewards"][0]["subject_id"] == entrant_ids[0]
     assert rewards["rewards"][0]["resolved_user_id"] == entrant_ids[0]
@@ -172,7 +172,7 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
     assert standings_response.status_code == 200
     standings = standings_response.json()
     assert [item["club_id"] for item in standings] == entrant_ids
-    assert standings[0]["reward_amount"] == "36.0000"
+    assert standings[0]["reward_amount"] == "31.2000"
     assert standings[0]["reward_currency"] == "credit"
     assert standings[0]["reward_status"] == "settled"
     assert standings[0]["badge_code"] == "treasure_chest_gold"
@@ -180,7 +180,7 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
     assert standings[0]["career_title"] == "Champion"
     assert standings[0]["career_ranking_points"] == 100
     assert standings[0]["career_total_wins"] == 3
-    assert standings[0]["career_total_earnings"] == "36.0000"
+    assert standings[0]["career_total_earnings"] == "31.2000"
 
     progression_response = client.get(f"/api/competitions/players/{winner_id}/progression")
     assert progression_response.status_code == 200
@@ -194,14 +194,14 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
     assert progression["total_championships"] == 1
     assert progression["total_podiums"] == 1
     assert progression["total_competitions"] == 1
-    assert progression["total_earnings"] == "36.0000"
+    assert progression["total_earnings"] == "31.2000"
     assert progression["best_placement"] == 1
     assert "treasure_chest_gold" in progression["badges"]
     assert "treasure_chest_breakthrough" in progression["badges"]
     assert progression["titles"] == ["Champion"]
     assert len(progression["history"]) == 1
     assert progression["history"][0]["placement"] == 1
-    assert progression["history"][0]["earnings"] == "36.0000"
+    assert progression["history"][0]["earnings"] == "31.2000"
     assert progression["history"][0]["reward_status"] == "settled"
 
     with app_session_factory() as session:
@@ -218,13 +218,13 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
         assert host is not None
         assert wallet_service.get_balance(
             session, wallet_service.get_user_account(session, winner, LedgerUnit.CREDIT)
-        ) == Decimal("116.0000")
+        ) == Decimal("111.2000")
         assert wallet_service.get_balance(
             session, wallet_service.get_user_account(session, runner_up, LedgerUnit.CREDIT)
-        ) == Decimal("95.0000")
+        ) == Decimal("93.0000")
         assert wallet_service.get_balance(
             session, wallet_service.get_user_account(session, third_place, LedgerUnit.CREDIT)
-        ) == Decimal("89.0000")
+        ) == Decimal("87.8000")
         assert wallet_service.get_balance(
             session, wallet_service.get_user_account(session, fourth_place, LedgerUnit.CREDIT)
         ) == Decimal("80.0000")
@@ -233,4 +233,4 @@ def test_paid_league_finalize_exposes_rewards_progression_and_wallet_payouts(
         ) == Decimal("4.0000")
         assert wallet_service.get_balance(
             session, wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
-        ) == Decimal("16.0000")
+        ) == Decimal("24.0000")
