@@ -14,6 +14,18 @@ commit — not inferred from tests passing.
 | Baseline commit | `7a8504a1` (main) |
 | Backend tests collected | 2832 |
 
+### CI status at baseline `acffa431`
+
+| Workflow | Result |
+| --- | --- |
+| Quality Gates | ✅ success |
+| Phase A Economic Regressions | ✅ success |
+| Final Platform Certification | ✅ success (green for the first time since the goldens landed — F-02) |
+| CI and Staging Deploy | 13/14 jobs ✅ success; `unity-windows-build` **queued** on Windows-runner availability |
+
+`unity-windows-build` is the quarantined Unity/3D lane and was already
+failing/queued before this pass; it gates no backend or Flutter behaviour.
+
 ---
 
 ## Severity definitions
