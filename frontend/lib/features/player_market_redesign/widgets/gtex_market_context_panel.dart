@@ -95,6 +95,41 @@ class GtexMarketContextPanel extends StatelessWidget {
             ),
           ],
         ),
+        if (_hasActiveFilters) ...<Widget>[
+          const SizedBox(height: GtexSpacing.sm),
+          _ActiveFiltersBar(
+            selectedCountry: selectedCountry,
+            selectedLeague: selectedLeague,
+            selectedDivision: selectedDivision,
+            selectedClub: selectedClub,
+            selectedAvailability: selectedAvailability,
+            position: positionController.text,
+            minAge: minAgeController.text,
+            maxAge: maxAgeController.text,
+            minValue: minValueController.text,
+            maxValue: maxValueController.text,
+            onClearCountry: () => onCountrySelected(null),
+            onClearLeague: () => onLeagueSelected(null),
+            onClearDivision: () => onDivisionSelected(null),
+            onClearClub: () => onClubSelected(null),
+            onClearAvailability: () => onAvailabilitySelected('all'),
+            onClearPosition: () {
+              positionController.clear();
+              onAdvancedSubmitted();
+            },
+            onClearAge: () {
+              minAgeController.clear();
+              maxAgeController.clear();
+              onAdvancedSubmitted();
+            },
+            onClearValue: () {
+              minValueController.clear();
+              maxValueController.clear();
+              onAdvancedSubmitted();
+            },
+            onClearAll: onClearFilters,
+          ),
+        ],
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'My Shortlist',
@@ -175,6 +210,19 @@ class GtexMarketContextPanel extends StatelessWidget {
     );
   }
 
+  bool get _hasActiveFilters {
+    return (selectedCountry != null && selectedCountry!.isNotEmpty) ||
+        (selectedLeague != null && selectedLeague!.isNotEmpty) ||
+        (selectedDivision != null && selectedDivision!.isNotEmpty) ||
+        (selectedClub != null && selectedClub!.isNotEmpty) ||
+        selectedAvailability != 'all' ||
+        positionController.text.trim().isNotEmpty ||
+        minAgeController.text.trim().isNotEmpty ||
+        maxAgeController.text.trim().isNotEmpty ||
+        minValueController.text.trim().isNotEmpty ||
+        maxValueController.text.trim().isNotEmpty;
+  }
+
   List<GtexMarketBrowseOption> get _leagueOptions {
     final String? country = selectedCountry?.trim();
     if (country == null || country.isEmpty) {
@@ -222,6 +270,190 @@ class GtexMarketContextPanel extends StatelessWidget {
           return true;
         })
         .toList(growable: false);
+  }
+}
+
+class _ActiveFiltersBar extends StatelessWidget {
+  const _ActiveFiltersBar({
+    required this.selectedCountry,
+    required this.selectedLeague,
+    required this.selectedDivision,
+    required this.selectedClub,
+    required this.selectedAvailability,
+    required this.position,
+    required this.minAge,
+    required this.maxAge,
+    required this.minValue,
+    required this.maxValue,
+    required this.onClearCountry,
+    required this.onClearLeague,
+    required this.onClearDivision,
+    required this.onClearClub,
+    required this.onClearAvailability,
+    required this.onClearPosition,
+    required this.onClearAge,
+    required this.onClearValue,
+    required this.onClearAll,
+  });
+
+  final String? selectedCountry;
+  final String? selectedLeague;
+  final String? selectedDivision;
+  final String? selectedClub;
+  final String selectedAvailability;
+  final String position;
+  final String minAge;
+  final String maxAge;
+  final String minValue;
+  final String maxValue;
+  final VoidCallback onClearCountry;
+  final VoidCallback onClearLeague;
+  final VoidCallback onClearDivision;
+  final VoidCallback onClearClub;
+  final VoidCallback onClearAvailability;
+  final VoidCallback onClearPosition;
+  final VoidCallback onClearAge;
+  final VoidCallback onClearValue;
+  final VoidCallback onClearAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> chips = <Widget>[];
+
+    if (selectedCountry != null && selectedCountry!.isNotEmpty) {
+      chips.add(
+        _FilterChip(
+          label: 'Country: $selectedCountry',
+          onDeleted: onClearCountry,
+        ),
+      );
+    }
+    if (selectedLeague != null && selectedLeague!.isNotEmpty) {
+      chips.add(
+        _FilterChip(
+          label: 'League: $selectedLeague',
+          onDeleted: onClearLeague,
+        ),
+      );
+    }
+    if (selectedDivision != null && selectedDivision!.isNotEmpty) {
+      chips.add(
+        _FilterChip(
+          label: 'Division: $selectedDivision',
+          onDeleted: onClearDivision,
+        ),
+      );
+    }
+    if (selectedClub != null && selectedClub!.isNotEmpty) {
+      chips.add(
+        _FilterChip(
+          label: 'Club: $selectedClub',
+          onDeleted: onClearClub,
+        ),
+      );
+    }
+    if (selectedAvailability != 'all') {
+      chips.add(
+        _FilterChip(
+          label: 'Type: $selectedAvailability',
+          onDeleted: onClearAvailability,
+        ),
+      );
+    }
+    if (position.trim().isNotEmpty) {
+      chips.add(
+        _FilterChip(
+          label: 'Pos: ${position.trim()}',
+          onDeleted: onClearPosition,
+        ),
+      );
+    }
+    if (minAge.trim().isNotEmpty || maxAge.trim().isNotEmpty) {
+      final String ageLabel =
+          minAge.trim().isNotEmpty && maxAge.trim().isNotEmpty
+              ? 'Age: $minAge-$maxAge'
+              : minAge.trim().isNotEmpty
+                  ? 'Age: ≥$minAge'
+                  : 'Age: ≤$maxAge';
+      chips.add(
+        _FilterChip(
+          label: ageLabel,
+          onDeleted: onClearAge,
+        ),
+      );
+    }
+    if (minValue.trim().isNotEmpty || maxValue.trim().isNotEmpty) {
+      final String valLabel =
+          minValue.trim().isNotEmpty && maxValue.trim().isNotEmpty
+              ? 'Val: $minValue-$maxValue'
+              : minValue.trim().isNotEmpty
+                  ? 'Val: ≥$minValue'
+                  : 'Val: ≤$maxValue';
+      chips.add(
+        _FilterChip(
+          label: valLabel,
+          onDeleted: onClearValue,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            Text(
+              'ACTIVE FILTERS',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: GtexColors.gold,
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+            GestureDetector(
+              onTap: onClearAll,
+              child: Text(
+                'Clear all',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: GtexColors.textMuted,
+                      decoration: TextDecoration.underline,
+                    ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: GtexSpacing.xs),
+        Wrap(
+          spacing: GtexSpacing.xs,
+          runSpacing: GtexSpacing.xs,
+          children: chips,
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({required this.label, required this.onDeleted});
+
+  final String label;
+  final VoidCallback onDeleted;
+
+  @override
+  Widget build(BuildContext context) {
+    return InputChip(
+      label: Text(label),
+      onDeleted: onDeleted,
+      deleteIcon: const Icon(Icons.close, size: 14),
+      deleteIconColor: GtexColors.gold,
+      backgroundColor: GtexColors.gold.withValues(alpha: 0.15),
+      labelStyle: const TextStyle(
+        color: GtexColors.gold,
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+      ),
+      side: const BorderSide(color: GtexColors.gold, width: 0.8),
+    );
   }
 }
 

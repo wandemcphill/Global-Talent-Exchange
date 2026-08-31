@@ -603,6 +603,7 @@ class _SelectedProspectPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final int growthHeadroom = prospect.potentialRating - prospect.gsi;
     return GtexPanel(
       title: prospect.displayName,
       subtitle:
@@ -625,6 +626,13 @@ class _SelectedProspectPanel extends StatelessWidget {
                         ? GtexColors.cyan
                         : GtexColors.gold,
               ),
+              if (growthHeadroom > 0) ...<Widget>[
+                const SizedBox(width: 8),
+                GtexStatusChip(
+                  label: '+$growthHeadroom Growth',
+                  color: GtexColors.mint,
+                ),
+              ],
             ],
           ),
           const SizedBox(height: GtexSpacing.md),
@@ -632,7 +640,7 @@ class _SelectedProspectPanel extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: GtexMetricTile(
-                  label: 'GSI',
+                  label: 'GSI Rating',
                   value: '${prospect.gsi}',
                   accent: GtexColors.cyan,
                 ),
@@ -640,7 +648,7 @@ class _SelectedProspectPanel extends StatelessWidget {
               const SizedBox(width: GtexSpacing.sm),
               Expanded(
                 child: GtexMetricTile(
-                  label: 'POT',
+                  label: 'Potential Ceiling',
                   value: '${prospect.potentialRating}',
                   accent: GtexColors.purple,
                 ),

@@ -91,7 +91,7 @@ void main() {
     // The single canonical player detail carries both the profile and the
     // real trading entry point.
     expect(find.text('ATTRIBUTES'), findsOneWidget);
-    expect(find.text('MARKET'), findsOneWidget);
+    expect(find.text('ASSET & MARKET INTELLIGENCE'), findsOneWidget);
     expect(find.text('Trade player'), findsOneWidget);
   });
 
