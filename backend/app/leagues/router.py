@@ -23,9 +23,17 @@ api_router = APIRouter(prefix="/api/leagues")
 
 
 def get_league_service(request: Request) -> LeagueSeasonLifecycleService:
-    """Build the lifecycle service over durable storage when a database is wired."""
-    session_factory = getattr(request.app.state, "session_factory", None)
-    return LeagueSeasonLifecycleService(repository=build_league_event_repository(session_factory))
+    """Build the lifecycle service over durable storage when a database is wired.
+
+    The repository is resolved once per application instance: choosing it probes
+    the database for the event table, and repeating that on every league read
+    would add a catalog round trip to each request.
+    """
+    repository = getattr(request.app.state, "league_event_repository", None)
+    if repository is None:
+        repository = build_league_event_repository(getattr(request.app.state, "session_factory", None))
+        request.app.state.league_event_repository = repository
+    return LeagueSeasonLifecycleService(repository=repository)
 
 
 def _build_registration_view(state) -> LeagueRegistrationView:
