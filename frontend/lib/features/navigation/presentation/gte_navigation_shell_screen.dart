@@ -60,6 +60,13 @@ import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 
+/// Window width at which there is room for the 318px world-pulse rail on top
+/// of the nav rail *and* a workspace wide enough for a master/detail screen
+/// to still show its browse panel, its summary panel and a full-width
+/// content pane. Below it the rail is dropped rather than taken out of the
+/// content.
+const double _worldPulseRailMinWidth = 1700;
+
 class GteNavigationShellScreen extends StatefulWidget {
   const GteNavigationShellScreen({
     super.key,
@@ -251,6 +258,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   Widget build(BuildContext context) {
     final Size viewport = MediaQuery.sizeOf(context);
     final bool compactViewport = viewport.height < 720 || viewport.width < 480;
+    // The world-pulse rail is ambient context, so it yields on horizontal
+    // budget rather than viewport height: it is the first thing dropped when
+    // the workspace it sits beside would otherwise be squeezed. Below this
+    // width the rail's 318px came straight out of the primary content pane,
+    // which is what left the Transfer Hub with unreadable player cards at
+    // every common laptop width. The live pulse ticker stays at all widths,
+    // so world activity is never fully hidden.
+    final bool showWorldPulseRail =
+        !compactViewport && viewport.width >= _worldPulseRailMinWidth;
     final EdgeInsets topSectionPadding =
         compactViewport
             ? const EdgeInsets.fromLTRB(16, 6, 16, 0)
@@ -291,7 +307,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
                     : null,
             livePulseStrip: const FootballWorldPulseTicker(),
             worldPulseRail:
-                compactViewport ? null : const FootballWorldPulseRail(),
+                showWorldPulseRail ? const FootballWorldPulseRail() : null,
             child: workspace,
           );
         },
