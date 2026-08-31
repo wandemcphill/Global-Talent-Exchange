@@ -50,13 +50,14 @@ class GtexMasterDetailScaffold extends StatelessWidget {
         }
 
         final double windowWidth = MediaQuery.sizeOf(context).width;
-        // Calculate available space to protect the primary content pane
-        const double minDetailWidth = 320.0;
-        final bool canShowLeft = availableWidth >= 640;
-        final bool canShowRight = rightPanel != null && (availableWidth >= 1024 || windowWidth >= GtexBreakpoints.desktop);
+        final bool canShowLeft = availableWidth >= GtexBreakpoints.mobile;
+        final bool canShowRight =
+            rightPanel != null &&
+            (availableWidth >= GtexBreakpoints.desktop ||
+                windowWidth >= GtexBreakpoints.desktop);
 
-        final double actualLeftWidth = canShowLeft ? leftPanelWidth.clamp(200.0, 320.0) : 0.0;
-        final double actualRightWidth = canShowRight ? rightPanelWidth.clamp(240.0, 340.0) : 0.0;
+        final double actualLeftWidth = canShowLeft ? leftPanelWidth : 0.0;
+        final double actualRightWidth = canShowRight ? rightPanelWidth : 0.0;
 
         final bool offerRightPanelSheet = rightPanel != null && !canShowRight;
         final bool offerLeftPanelSheet = !canShowLeft;
@@ -109,10 +110,7 @@ class GtexMasterDetailScaffold extends StatelessWidget {
                       const SizedBox(width: GtexSpacing.md),
                     ],
                     Expanded(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minWidth: minDetailWidth),
-                        child: _PanelFrame(accent: accent, child: detail),
-                      ),
+                      child: _PanelFrame(accent: accent, child: detail),
                     ),
                     if (canShowRight) ...<Widget>[
                       const SizedBox(width: GtexSpacing.md),
