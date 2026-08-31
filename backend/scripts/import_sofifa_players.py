@@ -37,6 +37,7 @@ Usage::
 
 import argparse
 import csv
+import gzip
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 import hashlib
@@ -613,6 +614,19 @@ def main() -> int:
         raise SystemExit("Provide --csv <path> or --csv-url <url> (or $CSV_URL).")
     if not csv_path.exists():
         raise SystemExit(f"CSV not found: {csv_path}")
+    # A gzipped snapshot is accepted transparently: hosts commonly cap raw uploads
+    # (Cloudinary's is 10 MB) and the full export compresses ~6x under that.
+    with csv_path.open("rb") as fh:
+        is_gzip = fh.read(2) == bytes((0x1F, 0x8B))
+    if is_gzip:
+        decompressed = REPO_ROOT / "tmp" / "sofifa-decompressed.csv"
+        decompressed.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("input is gzipped; decompressing to %s", decompressed)
+        with gzip.open(csv_path, "rb") as src, decompressed.open("wb") as dst:
+            for chunk in iter(lambda: src.read(1 << 20), b""):
+                dst.write(chunk)
+        csv_path = decompressed
+        logger.info("decompressed CSV is %s bytes", csv_path.stat().st_size)
     if not args.dry_run and not args.database_url:
         raise SystemExit("--database-url or GTE_DATABASE_URL is required (or use --dry-run).")
 
