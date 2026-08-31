@@ -11,11 +11,14 @@ from backend.tests.app._module_registration_contract_data import (
 )
 from backend.tests.app._module_registration_contract_support import request_route
 
-
 # Authentication is resolved before body validation on this protected route.
 # Keep the shared historical contract data unchanged while asserting the live boundary.
 EXPECTED_STATUS_OVERRIDES = {
     ("POST", "/ultimate-league/tournaments"): 401,
+    # League seasons are shared state, so registration now requires an
+    # authenticated caller; the auth dependency resolves before the empty body
+    # is validated, turning the historical 422 into a 401.
+    ("POST", "/leagues/register"): 401,
 }
 
 
@@ -62,10 +65,7 @@ def test_reward_and_integrity_api_only_routes_resolve_on_the_real_app(
 @pytest.mark.parametrize(
     ("method", "path", "json_body", "expected_status"),
     DAILY_CHALLENGES_AND_STREAMER_ROUTE_CASES,
-    ids=[
-        f"{method} {path}"
-        for method, path, _, _ in DAILY_CHALLENGES_AND_STREAMER_ROUTE_CASES
-    ],
+    ids=[f"{method} {path}" for method, path, _, _ in DAILY_CHALLENGES_AND_STREAMER_ROUTE_CASES],
 )
 def test_daily_challenges_and_streamer_tournaments_api_only_routes_resolve_on_the_real_app(
     mounted_app_client,

@@ -34,6 +34,10 @@ class LiveMatchError(ValueError):
     """Raised on invalid live-match operations."""
 
 
+class LiveMatchPermissionError(LiveMatchError):
+    """Raised when an authenticated caller has no authority over a session."""
+
+
 def _utcnow() -> datetime:
     return datetime.now(tz=timezone.utc)
 
@@ -143,10 +147,25 @@ class LiveMatchEngine:
             return side
         owned = session.side_for_user(user_id)
         if owned is None:
-            raise LiveMatchError("You do not control a team in this match.")
+            raise LiveMatchPermissionError("You do not control a team in this match.")
         if side is not None and side != owned:
-            raise LiveMatchError("You can only change tactics for your own team.")
+            raise LiveMatchPermissionError("You can only change tactics for your own team.")
         return owned
+
+    def assert_participant(self, *, match_id: str, user_id: str | None) -> LiveMatchSession:
+        """Authorize a caller to drive a session's shared clock.
+
+        Sessions created with controlling users may only be advanced by one of
+        those users. Sessions created without owners (local/dev provisioning)
+        stay drivable by any authenticated caller, which is the pre-existing
+        single-player behaviour.
+        """
+        session = self.get(match_id)
+        if session.home_user_id is None and session.away_user_id is None:
+            return session
+        if session.side_for_user(user_id) is None:
+            raise LiveMatchPermissionError("You do not control a team in this match.")
+        return session
 
     def get(self, match_id: str) -> LiveMatchSession:
         session = self.store.get(match_id)

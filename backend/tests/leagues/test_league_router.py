@@ -1,26 +1,44 @@
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from app.auth.dependencies import get_current_user
 from app.leagues.models import LeaguePlayerContribution
 from app.leagues.repository import InMemoryLeagueEventRepository
 from app.leagues.router import get_league_service, router
 from app.leagues.service import LeagueSeasonLifecycleService
 
 
+def _build_league_app(service: LeagueSeasonLifecycleService) -> FastAPI:
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_league_service] = lambda: service
+    return app
+
+
 @pytest.fixture()
 def league_api() -> tuple[TestClient, LeagueSeasonLifecycleService]:
     repository = InMemoryLeagueEventRepository()
     service = LeagueSeasonLifecycleService(repository=repository)
-    app = FastAPI()
-    app.include_router(router)
-    app.dependency_overrides[get_league_service] = lambda: service
+    app = _build_league_app(service)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="league-organiser")
 
     with TestClient(app) as client:
+        yield client, service
+
+
+@pytest.fixture()
+def anonymous_league_api() -> tuple[TestClient, LeagueSeasonLifecycleService]:
+    """A client with no authenticated identity, to exercise the auth boundary."""
+    repository = InMemoryLeagueEventRepository()
+    service = LeagueSeasonLifecycleService(repository=repository)
+
+    with TestClient(_build_league_app(service)) as client:
         yield client, service
 
 
@@ -188,3 +206,31 @@ def test_missing_season_returns_not_found(league_api) -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "League season unknown-season was not found"
+
+
+def test_register_endpoint_rejects_unauthenticated_callers(anonymous_league_api) -> None:
+    """League seasons are shared state; an anonymous caller must not create one."""
+    client, service = anonymous_league_api
+
+    response = client.post("/api/leagues/register", json=_registration_payload(season_id="anon-season"))
+
+    assert response.status_code == 401
+    assert service.repository.list_events("anon-season") == ()
+
+
+def test_legacy_register_endpoint_rejects_unauthenticated_callers(anonymous_league_api) -> None:
+    client, service = anonymous_league_api
+
+    response = client.post("/leagues/register", json=_registration_payload(season_id="anon-legacy"))
+
+    assert response.status_code == 401
+    assert service.repository.list_events("anon-legacy") == ()
+
+
+def test_register_endpoint_accepts_authenticated_callers(league_api) -> None:
+    client, service = league_api
+
+    response = client.post("/api/leagues/register", json=_registration_payload(season_id="authed-season"))
+
+    assert response.status_code == 201
+    assert service.get_season_state("authed-season").season_id == "authed-season"
