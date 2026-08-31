@@ -133,11 +133,11 @@ _COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "description": ("description", "bio"),
     "nationality_code": ("nationality_code", "nation_code", "country_code"),
     "preferred_foot": ("preferred_foot", "foot"),
-    "jersey": ("club_jersey_number", "jersey_number", "shirt_number", "kit_number"),
+    "jersey": ("club_jersey_number", "jersey_number", "shirt_number", "kit_number", "club_kit_number"),
     "photo": ("player_face_url", "player_face", "face_url", "image", "image_url", "photo_url", "url"),
     "national_team": ("nation_team_name", "national_team", "nation_name"),
-    "national_team_position": ("nation_position", "national_team_position"),
-    "national_team_jersey": ("nation_jersey_number", "national_team_jersey"),
+    "national_team_position": ("nation_position", "national_team_position", "country_position"),
+    "national_team_jersey": ("nation_jersey_number", "national_team_jersey", "country_kit_number"),
 }
 
 
@@ -570,7 +570,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--images",
         choices=("none", "url", "cloudinary"),
-        default="cloudinary",
+        default="url",
         help="Image handling: 'cloudinary' mirrors faces to your account, 'url' keeps SoFIFA URLs, 'none' drops them.",
     )
     parser.add_argument("--league", dest="leagues", action="append", default=None, help="Filter to league name(s). Repeatable.")
