@@ -31,75 +31,103 @@ class GtexMasterDetailScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double width = MediaQuery.sizeOf(context).width;
-    final bool compact = GtexBreakpoints.isCompact(context);
-    final bool showRightPanel =
-        rightPanel != null && width >= GtexBreakpoints.desktop;
-    // Between the compact breakpoint and desktop there is no room for the
-    // right panel inline, but it still holds the primary actions for the
-    // selected item. Surface it through the same sheet the mobile layout
-    // uses instead of dropping it silently.
-    final bool offerRightPanelSheet = rightPanel != null && !showRightPanel;
-    if (compact) {
-      return _MobileMasterDetail(
-        title: title,
-        subtitle: subtitle,
-        leftPanel: leftPanel,
-        detail: detail,
-        rightPanel: rightPanel,
-        actions: actions,
-        accent: accent,
-        mobileLeftTitle: mobileLeftTitle,
-      );
-    }
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double availableWidth = constraints.maxWidth;
+        final bool isCompact = GtexBreakpoints.isCompact(context);
 
-    return Padding(
-      padding: GtexSpacing.screenPadding,
-      child: Column(
-        children: <Widget>[
-          _MasterDetailHeader(
+        if (isCompact) {
+          return _MobileMasterDetail(
             title: title,
             subtitle: subtitle,
-            actions: <Widget>[
-              if (offerRightPanelSheet)
-                IconButton.filledTonal(
-                  key: const Key('gtex-master-detail-summary-action'),
-                  tooltip: 'Open summary',
-                  onPressed:
-                      () => showGtexMasterDetailPanelSheet(
-                        context,
-                        'Summary',
-                        rightPanel!,
-                      ),
-                  icon: const Icon(Icons.receipt_long_outlined),
-                ),
-              ...actions,
-            ],
+            leftPanel: leftPanel,
+            detail: detail,
+            rightPanel: rightPanel,
+            actions: actions,
             accent: accent,
-          ),
-          const SizedBox(height: GtexSpacing.md),
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                SizedBox(
-                  width: leftPanelWidth,
-                  child: _PanelFrame(accent: accent, child: leftPanel),
-                ),
-                const SizedBox(width: GtexSpacing.md),
-                Expanded(child: _PanelFrame(accent: accent, child: detail)),
-                if (showRightPanel) ...<Widget>[
-                  const SizedBox(width: GtexSpacing.md),
-                  SizedBox(
-                    width: rightPanelWidth,
-                    child: _PanelFrame(accent: accent, child: rightPanel!),
-                  ),
+            mobileLeftTitle: mobileLeftTitle,
+          );
+        }
+
+        final double windowWidth = MediaQuery.sizeOf(context).width;
+        // Calculate available space to protect the primary content pane
+        const double minDetailWidth = 320.0;
+        final bool canShowLeft = availableWidth >= 640;
+        final bool canShowRight = rightPanel != null && (availableWidth >= 1024 || windowWidth >= GtexBreakpoints.desktop);
+
+        final double actualLeftWidth = canShowLeft ? leftPanelWidth.clamp(200.0, 320.0) : 0.0;
+        final double actualRightWidth = canShowRight ? rightPanelWidth.clamp(240.0, 340.0) : 0.0;
+
+        final bool offerRightPanelSheet = rightPanel != null && !canShowRight;
+        final bool offerLeftPanelSheet = !canShowLeft;
+
+        return Padding(
+          padding: GtexSpacing.screenPadding,
+          child: Column(
+            children: <Widget>[
+              _MasterDetailHeader(
+                title: title,
+                subtitle: subtitle,
+                actions: <Widget>[
+                  if (offerLeftPanelSheet)
+                    IconButton.filledTonal(
+                      tooltip: mobileLeftTitle,
+                      onPressed:
+                          () => showGtexMasterDetailPanelSheet(
+                            context,
+                            mobileLeftTitle,
+                            leftPanel,
+                          ),
+                      icon: const Icon(Icons.filter_list),
+                    ),
+                  if (offerRightPanelSheet)
+                    IconButton.filledTonal(
+                      key: const Key('gtex-master-detail-summary-action'),
+                      tooltip: 'Open summary',
+                      onPressed:
+                          () => showGtexMasterDetailPanelSheet(
+                            context,
+                            'Summary',
+                            rightPanel!,
+                          ),
+                      icon: const Icon(Icons.receipt_long_outlined),
+                    ),
+                  ...actions,
                 ],
-              ],
-            ),
+                accent: accent,
+              ),
+              const SizedBox(height: GtexSpacing.md),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    if (canShowLeft) ...<Widget>[
+                      SizedBox(
+                        width: actualLeftWidth,
+                        child: _PanelFrame(accent: accent, child: leftPanel),
+                      ),
+                      const SizedBox(width: GtexSpacing.md),
+                    ],
+                    Expanded(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: minDetailWidth),
+                        child: _PanelFrame(accent: accent, child: detail),
+                      ),
+                    ),
+                    if (canShowRight) ...<Widget>[
+                      const SizedBox(width: GtexSpacing.md),
+                      SizedBox(
+                        width: actualRightWidth,
+                        child: _PanelFrame(accent: accent, child: rightPanel!),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
