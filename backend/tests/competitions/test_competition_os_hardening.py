@@ -61,7 +61,7 @@ def test_paid_user_hosted_join_creates_fan_coin_escrow_and_visible_pot(
     )
     assert create_response.status_code == 201, create_response.text
     created = create_response.json()
-    assert created["platform_fee_pct"] == "0.20"
+    assert created["platform_fee_pct"] == "0.30"
     assert created["currency"] == "credit"
     assert created["is_ranked"] is True
 
@@ -82,14 +82,14 @@ def test_paid_user_hosted_join_creates_fan_coin_escrow_and_visible_pot(
     joined = join_response.json()
     assert joined["participant_count"] == 1
     assert joined["gross_pot"] == "10.0000"
-    assert joined["net_payout_pot"] == "8.0000"
+    assert joined["net_payout_pot"] == "7.0000"
 
     pot_response = client.get(f"/api/competitions/{competition_id}/pot")
     assert pot_response.status_code == 200, pot_response.text
     pot = pot_response.json()
     assert pot["gross_pot"] == "10.0000"
-    assert pot["platform_fee_amount"] == "2.0000"
-    assert pot["net_payout_pot"] == "8.0000"
+    assert pot["platform_fee_amount"] == "3.0000"
+    assert pot["net_payout_pot"] == "7.0000"
     assert pot["remaining_slots"] == 3
 
     participants_response = client.get(f"/api/competitions/{competition_id}/participants")
@@ -126,6 +126,7 @@ def test_host_funded_fixed_prize_requires_escrow_before_publish(
             "visibility": "public",
             "entry_fee": "0.00",
             "capacity": 4,
+            "currency": "coin",
             "prize_mode": "host_funded_fixed",
             "host_funded_prize_total": "100.00",
             "payout_structure": [{"place": 1, "percent": "1.00"}],
@@ -148,7 +149,7 @@ def test_host_funded_fixed_prize_escrows_and_refunds_on_cancel(
     client,
     auth_user_factory,
 ) -> None:
-    host = auth_user_factory(suffix="competition-os-funded-host", funded_credit=Decimal("200.0000"))
+    host = auth_user_factory(suffix="competition-os-funded-host", funded_coin=Decimal("200.0000"))
     create_response = client.post(
         "/api/competitions",
         headers=host["headers"],
@@ -158,6 +159,7 @@ def test_host_funded_fixed_prize_escrows_and_refunds_on_cancel(
             "visibility": "public",
             "entry_fee": "0.00",
             "capacity": 4,
+            "currency": "coin",
             "prize_mode": "host_funded_fixed",
             "fixed_prizes": {"1": "60.00", "2": "25.00", "3": "15.00"},
             "payout_structure": [

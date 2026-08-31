@@ -189,9 +189,7 @@ def test_discovery_filters_cover_public_format_fee_and_creator(client, auth_user
     )
 
     creator_params = {"creator_id": host["user_id"]}
-    assert _names(client.get("/api/competitions", params={**creator_params, "public_only": True})) == [
-        "Public League"
-    ]
+    assert _names(client.get("/api/competitions", params={**creator_params, "public_only": True})) == ["Public League"]
     assert set(_names(client.get("/api/competitions", params={**creator_params, "format": "league"}))) == {
         "Public League",
         "Private League",
@@ -252,6 +250,7 @@ def test_discovery_cards_surface_competition_economics_and_ranked_metadata(
         entry_fee="0.00",
         capacity=8,
         extra={
+            "currency": "coin",
             "prize_mode": "host_funded_fixed",
             "fixed_prizes": {"first": "60.00", "second": "25.00", "third": "15.00"},
             "host_funded_prize_total": "100.00",
@@ -438,8 +437,7 @@ def test_discovery_sorting_supports_new_prize_pool_fill_rate_and_trending(
     alpha_user = auth_user_factory(suffix="discovery-alpha", funded_credit="100.0000")
     beta_users = [auth_user_factory(suffix=f"discovery-beta-{index}") for index in range(1, 3)]
     gamma_users = [
-        auth_user_factory(suffix=f"discovery-gamma-{index}", funded_credit="100.0000")
-        for index in range(1, 4)
+        auth_user_factory(suffix=f"discovery-gamma-{index}", funded_credit="100.0000") for index in range(1, 4)
     ]
 
     _join(

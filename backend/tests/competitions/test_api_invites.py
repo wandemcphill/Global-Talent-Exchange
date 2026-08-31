@@ -48,7 +48,7 @@ def test_invite_generation_listing_and_join_flow(client, competition_admin_heade
     assert invite["max_uses"] == 2
     assert invite["uses"] == 0
 
-    invites_response = client.get(f"/api/competitions/{competition_id}/invites")
+    invites_response = client.get(f"/api/competitions/{competition_id}/invites", headers=host["headers"])
     assert invites_response.status_code == 200
     assert invites_response.json() == {
         "competition_id": competition_id,
@@ -82,7 +82,9 @@ def test_invite_generation_listing_and_join_flow(client, competition_admin_heade
     joined = join_response.json()
     assert joined["participant_count"] == 1
 
-    refreshed_invites = client.get(f"/api/competitions/{competition_id}/invites").json()["invites"]
+    refreshed_invites = client.get(f"/api/competitions/{competition_id}/invites", headers=host["headers"]).json()[
+        "invites"
+    ]
     assert refreshed_invites[0]["uses"] == 1
 
 

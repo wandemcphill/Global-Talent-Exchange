@@ -111,7 +111,7 @@ def test_create_patch_publish_join_leave_flow(
     assert created["creator_id"] == host["user_id"]
     assert created["participant_count"] == 0
     assert created["entry_fee"] == "12.50"
-    assert created["platform_fee_pct"] == "0.20"
+    assert created["platform_fee_pct"] == "0.30"
     assert created["host_fee_pct"] == "0.05"
     assert created["prize_pool"] == "0.0000"
     assert created["join_eligibility"] == {
@@ -159,7 +159,7 @@ def test_create_patch_publish_join_leave_flow(
         "requires_invite": False,
         "requires_passcode": False,
     }
-    assert joined["prize_pool"] == "9.3750"
+    assert joined["prize_pool"] == "8.1250"
 
     detail_response = client.get(f"/api/competitions/{competition_id}")
     assert detail_response.status_code == 200
@@ -228,6 +228,7 @@ def test_creator_can_publish_and_launch_full_competition(client, auth_user_facto
 
     create_response = client.post(
         "/api/competitions/create",
+        headers=host["headers"],
         json={
             "name": "Creator Clash League",
             "format": "league",
@@ -300,6 +301,7 @@ def test_non_owner_cannot_publish_someone_elses_competition(client, auth_user_fa
 
     create_response = client.post(
         "/api/competitions/create",
+        headers=host["headers"],
         json={
             "name": "Private Owner League",
             "format": "league",

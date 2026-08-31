@@ -26,6 +26,7 @@ from app.reward_engine.service import RewardEngineService, RewardEngineError
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
 from app.services.competition_wallet_service import CompetitionWalletService
 from app.wallets.service import WalletService
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 @pytest.fixture()
@@ -38,6 +39,12 @@ def session():
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db_session:
+        # create_all runs neither migration 20260827_0113 nor seed_defaults, so
+        # resolve_economic_policy() would fail closed and settlement would be
+        # skipped with "No active Admin economic policy exists" -- a database
+        # shape production never has.
+        seed_economic_policy(db_session)
+        db_session.commit()
         yield db_session
 
 
@@ -65,7 +72,9 @@ def _fund_user(session, user, amount: Decimal = Decimal("100.0000")) -> None:
     session.commit()
 
 
-def _create_platform_competition(session, *, host_id: str, winner_id: str, runner_up_id: str, pool_minor: int = 1_000_000) -> Competition:
+def _create_platform_competition(
+    session, *, host_id: str, winner_id: str, runner_up_id: str, pool_minor: int = 1_000_000
+) -> Competition:
     competition = Competition(
         host_user_id=host_id,
         name="GTEX Platform Cup",
@@ -174,7 +183,9 @@ def _create_user_hosted_competition(
     gross_pool_minor = entry_fee_minor * len(entrant_ids)
     platform_fee_bps = 1000
     host_fee_bps = 500
-    net_prize_pool_minor = gross_pool_minor - (gross_pool_minor * platform_fee_bps // 10_000) - (gross_pool_minor * host_fee_bps // 10_000)
+    net_prize_pool_minor = (
+        gross_pool_minor - (gross_pool_minor * platform_fee_bps // 10_000) - (gross_pool_minor * host_fee_bps // 10_000)
+    )
     competition = Competition(
         host_user_id=host_id,
         name="User Hosted Treasure Chest",
@@ -325,7 +336,9 @@ def test_finalize_competition_does_not_duplicate_reward_rows_or_settlements(sess
     session.commit()
 
     rewards = session.scalars(select(CompetitionReward).where(CompetitionReward.competition_id == competition.id)).all()
-    settlements = session.scalars(select(RewardSettlement).where(RewardSettlement.competition_key == competition.id)).all()
+    settlements = session.scalars(
+        select(RewardSettlement).where(RewardSettlement.competition_key == competition.id)
+    ).all()
     assert len(rewards) == 1
     assert len(settlements) == 1
 
@@ -359,10 +372,7 @@ def test_finalize_user_hosted_competition_credits_wallets_and_records_progressio
     assert [reward.amount_minor for reward in rewards] == [408_000, 170_000, 102_000]
     assert all(reward.status == "settled" for reward in rewards)
 
-    credit_accounts = {
-        user.id: wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
-        for user in entrants
-    }
+    credit_accounts = {user.id: wallet_service.get_user_account(session, user, LedgerUnit.CREDIT) for user in entrants}
     assert wallet_service.get_balance(session, credit_accounts[entrants[0].id]) == Decimal("120.8000")
     assert wallet_service.get_balance(session, credit_accounts[entrants[1].id]) == Decimal("97.0000")
     assert wallet_service.get_balance(session, credit_accounts[entrants[2].id]) == Decimal("90.2000")

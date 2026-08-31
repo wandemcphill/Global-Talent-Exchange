@@ -65,9 +65,7 @@ def test_league_round_and_fixture_generation(
     competition_club_factory,
 ) -> None:
     host = auth_user_factory(suffix="league-fixtures-host")
-    competition_id = _create_competition(
-        client, host=host, name="League Fixtures", format="league", capacity=4
-    )
+    competition_id = _create_competition(client, host=host, name="League Fixtures", format="league", capacity=4)
     entrants = []
     for index in range(1, 5):
         entrant = auth_user_factory(suffix=f"league-fixture-{index}")
@@ -102,9 +100,7 @@ def test_standings_update_after_match_completion(
     competition_club_factory,
 ) -> None:
     host = auth_user_factory(suffix="league-standings-host")
-    competition_id = _create_competition(
-        client, host=host, name="League Standings", format="league", capacity=2
-    )
+    competition_id = _create_competition(client, host=host, name="League Standings", format="league", capacity=2)
     entrants = []
     for index in range(1, 3):
         entrant = auth_user_factory(suffix=f"league-standings-{index}")
@@ -163,9 +159,7 @@ def test_re_settling_a_completed_match_with_a_different_score_returns_409(
     ``CompetitionActionError``) and surfaced as an unhandled 500.
     """
     host = auth_user_factory(suffix="league-resettle-host")
-    competition_id = _create_competition(
-        client, host=host, name="League Resettle", format="league", capacity=2
-    )
+    competition_id = _create_competition(client, host=host, name="League Resettle", format="league", capacity=2)
     entrants = []
     for index in range(1, 3):
         entrant = auth_user_factory(suffix=f"league-resettle-{index}")
@@ -201,7 +195,8 @@ def test_re_settling_a_completed_match_with_a_different_score_returns_409(
         json={"home_score": 0, "away_score": 4},
     )
     assert conflicting.status_code == 409, conflicting.text
-    assert "already settled" in conflicting.json()["detail"]
+    conflict_body = conflicting.json()
+    assert "already settled" in (conflict_body.get("message") or conflict_body.get("detail") or "")
 
     # The original settled result must be untouched by the rejected replay.
     standings = client.get(f"/api/competitions/{competition_id}/standings").json()

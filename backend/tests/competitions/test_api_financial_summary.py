@@ -216,7 +216,7 @@ def _create_paid_competition(
     )
     assert create_response.status_code == 201, create_response.text
     created = create_response.json()
-    assert created["platform_fee_pct"] == "0.20"
+    assert created["platform_fee_pct"] == "0.30"
 
     publish_response = client.post(
         f"/api/competitions/{created['id']}/publish",
@@ -412,17 +412,17 @@ def test_financial_summary_exposes_transparent_pool_breakdown(
         "participant_count": 2,
         "entry_fee": "20.00",
         "gross_pool": "40.0000",
-        "platform_fee_pct": "0.20",
-        "platform_fee_amount": "8.0000",
+        "platform_fee_pct": "0.30",
+        "platform_fee_amount": "12.0000",
         "host_fee_pct": "0.00",
         "host_fee_amount": "0.0000",
-        "prize_pool": "32.0000",
+        "prize_pool": "28.0000",
         "currency": "credit",
     }.items() <= financials.items()
     assert financials["payout_structure"] == [
-        {"place": 1, "percent": "0.50", "amount": "16.0000"},
-        {"place": 2, "percent": "0.30", "amount": "9.6000"},
-        {"place": 3, "percent": "0.20", "amount": "6.4000"},
+        {"place": 1, "percent": "0.50", "amount": "14.0000"},
+        {"place": 2, "percent": "0.30", "amount": "8.4000"},
+        {"place": 3, "percent": "0.20", "amount": "5.6000"},
     ]
 
     escrow_rows = _escrow_rows(app_session_factory, competition_id=competition_id)
@@ -496,10 +496,10 @@ def test_user_hosted_paid_twelve_team_cup_financials_and_duplicate_join(
     assert financials["participant_count"] == 12
     assert financials["entry_fee"] == "5.00"
     assert financials["gross_pool"] == "60.0000"
-    assert financials["platform_fee_pct"] == "0.20"
-    assert financials["platform_fee_amount"] == "12.0000"
-    assert financials["prize_pool"] == "48.0000"
-    assert financials["payout_structure"] == [{"place": 1, "percent": "1.00", "amount": "48.0000"}]
+    assert financials["platform_fee_pct"] == "0.30"
+    assert financials["platform_fee_amount"] == "18.0000"
+    assert financials["prize_pool"] == "42.0000"
+    assert financials["payout_structure"] == [{"place": 1, "percent": "1.00", "amount": "42.0000"}]
 
     assert len(_escrow_rows(app_session_factory, competition_id=competition_id)) == 12
     assert (
@@ -589,6 +589,7 @@ def test_host_funded_fixed_prizes_surface_gross_up_and_require_escrow(
             "visibility": "public",
             "entry_fee": "0.00",
             "capacity": 4,
+            "currency": "coin",
             "prize_mode": "host_funded_fixed",
             "fixed_prizes": {"1": "60.00", "2": "25.00", "3": "15.00"},
             "payout_structure": [
@@ -607,7 +608,7 @@ def test_host_funded_fixed_prizes_surface_gross_up_and_require_escrow(
     assert publish_response.status_code == 400
     assert _error_message(publish_response) == "host_prize_insufficient_balance"
 
-    funded_host = auth_user_factory(suffix="financial-funded-fixed-host", funded_credit=Decimal("200.0000"))
+    funded_host = auth_user_factory(suffix="financial-funded-fixed-host", funded_coin=Decimal("200.0000"))
     funded_create = client.post(
         "/api/competitions",
         headers=funded_host["headers"],
@@ -617,6 +618,7 @@ def test_host_funded_fixed_prizes_surface_gross_up_and_require_escrow(
             "visibility": "public",
             "entry_fee": "0.00",
             "capacity": 4,
+            "currency": "coin",
             "prize_mode": "host_funded_fixed",
             "fixed_prizes": {"1": "60.00", "2": "25.00", "3": "15.00"},
             "payout_structure": [
@@ -707,29 +709,33 @@ def test_free_no_prize_competition_has_zero_pot_and_no_escrow(
     )
 
 
-def test_cancellation_refunds_participant_and_host_escrows_once(
+# The economic constitution prohibits mixing participant entry fees with a
+# host-funded prize: validate_competition_funding_contract rejects both
+# "FanCoin entry-pool competitions cannot also carry a host-funded prize" and
+# "Participant-funded GTEX Coin prize pools are prohibited", and the model
+# boundary enforces the same invariant. The original single test built exactly
+# that now-impossible competition, so its subject -- refunding each escrow
+# exactly once across a repeated cancel -- is covered here once per legal mode.
+
+
+def test_cancellation_refunds_participant_escrow_once(
     client,
     app_session_factory,
     auth_user_factory,
 ) -> None:
-    host = auth_user_factory(suffix="financial-cancel-host", funded_credit=Decimal("200.0000"))
+    host = auth_user_factory(suffix="financial-cancel-host")
     entrant = auth_user_factory(suffix="financial-cancel-entrant", funded_credit=Decimal("50.0000"))
     create_response = client.post(
         "/api/competitions",
         headers=host["headers"],
         json={
-            "name": "Refundable Fixed Prize Cup",
+            "name": "Refundable Entry Pool Cup",
             "format": "league",
             "visibility": "public",
             "entry_fee": "5.00",
+            "currency": "credit",
             "capacity": 4,
-            "prize_mode": "host_funded_fixed",
-            "fixed_prizes": {"1": "60.00", "2": "25.00", "3": "15.00"},
-            "payout_structure": [
-                {"place": 1, "percent": "0.60"},
-                {"place": 2, "percent": "0.25"},
-                {"place": 3, "percent": "0.15"},
-            ],
+            "payout_structure": [{"place": 1, "percent": "1.00"}],
         },
     )
     assert create_response.status_code == 201, create_response.text
@@ -752,20 +758,11 @@ def test_cancellation_refunds_participant_and_host_escrows_once(
     first_cancel = client.post(f"/api/competitions/{competition_id}/cancel", headers=host["headers"])
     assert first_cancel.status_code == 200, first_cancel.text
     assert first_cancel.json()["status"] == "cancelled"
-    assert first_cancel.json()["host_funding_escrowed"] == "0.00"
     assert (
         _ledger_count(
             app_session_factory,
             competition_id=competition_id,
             entry_type="entry_fee_refund",
-        )
-        == 1
-    )
-    assert (
-        _ledger_count(
-            app_session_factory,
-            competition_id=competition_id,
-            entry_type="host_funded_prize_refund",
         )
         == 1
     )
@@ -784,6 +781,60 @@ def test_cancellation_refunds_participant_and_host_escrows_once(
         )
         == 1
     )
+    assert len(_escrow_rows(app_session_factory, competition_id=competition_id)) == 1
+
+
+def test_cancellation_refunds_host_escrow_once(
+    client,
+    app_session_factory,
+    auth_user_factory,
+) -> None:
+    host = auth_user_factory(suffix="financial-cancel-coin-host", funded_coin=Decimal("200.0000"))
+    create_response = client.post(
+        "/api/competitions",
+        headers=host["headers"],
+        json={
+            "name": "Refundable Fixed Prize Cup",
+            "format": "league",
+            "visibility": "public",
+            "entry_fee": "0.00",
+            "capacity": 4,
+            "currency": "coin",
+            "prize_mode": "host_funded_fixed",
+            "fixed_prizes": {"1": "60.00", "2": "25.00", "3": "15.00"},
+            "payout_structure": [
+                {"place": 1, "percent": "0.60"},
+                {"place": 2, "percent": "0.25"},
+                {"place": 3, "percent": "0.15"},
+            ],
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+    competition_id = create_response.json()["id"]
+    publish_response = client.post(
+        f"/api/competitions/{competition_id}/publish",
+        headers=host["headers"],
+        json={"open_for_join": True},
+    )
+    assert publish_response.status_code == 200, publish_response.text
+
+    first_cancel = client.post(f"/api/competitions/{competition_id}/cancel", headers=host["headers"])
+    assert first_cancel.status_code == 200, first_cancel.text
+    assert first_cancel.json()["status"] == "cancelled"
+    assert first_cancel.json()["host_funding_escrowed"] == "0.00"
+    assert (
+        _ledger_count(
+            app_session_factory,
+            competition_id=competition_id,
+            entry_type="host_funded_prize_refund",
+        )
+        == 1
+    )
+
+    second_cancel = client.post(f"/api/competitions/{competition_id}/cancel", headers=host["headers"])
+    assert second_cancel.status_code == 200, second_cancel.text
+    assert second_cancel.json()["status"] == "cancelled"
+    assert second_cancel.json()["host_funding_escrowed"] == "0.00"
     assert (
         _ledger_count(
             app_session_factory,

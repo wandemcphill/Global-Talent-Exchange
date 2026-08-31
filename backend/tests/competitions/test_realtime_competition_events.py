@@ -8,10 +8,12 @@ from app.common.enums.competition_start_mode import CompetitionStartMode
 from app.common.enums.competition_status import CompetitionStatus
 from app.common.enums.competition_visibility import CompetitionVisibility
 from app.core.events import InMemoryEventPublisher
+from app.models.admin_rules import AdminRewardRule
 from app.models.base import Base
 from app.models.competition import Competition
 from app.models.competition_participant import CompetitionParticipant
 from app.services.competition_orchestrator import CompetitionOrchestrator
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 def test_competition_orchestrator_publishes_realtime_event_payload() -> None:
@@ -22,6 +24,9 @@ def test_competition_orchestrator_publishes_realtime_event_payload() -> None:
     Base.metadata.create_all(
         engine,
         tables=[
+            # Inserting a priced competition runs the Admin fee listener, which
+            # resolves the active economic policy.
+            AdminRewardRule.__table__,
             Competition.__table__,
             CompetitionParticipant.__table__,
         ],
@@ -30,6 +35,8 @@ def test_competition_orchestrator_publishes_realtime_event_payload() -> None:
 
     try:
         with session_factory() as session:
+            seed_economic_policy(session)
+            session.commit()
             competition = Competition(
                 id="competition-1",
                 host_user_id="host-1",
@@ -77,9 +84,7 @@ def test_competition_orchestrator_publishes_realtime_event_payload() -> None:
                 extra={"source_type": "user_created"},
             )
 
-            assert [event.name for event in publisher.published_events] == [
-                "competition.updated"
-            ]
+            assert [event.name for event in publisher.published_events] == ["competition.updated"]
             event = publisher.published_events[0]
             assert event.aggregate_id == competition.id
             assert event.aggregate_type == "competition"

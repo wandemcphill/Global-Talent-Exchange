@@ -79,7 +79,13 @@ def test_viewer_timeline_consumes_render_contract_for_camera_and_ball_states() -
         frame.camera_preset in {MatchViewerCameraPreset.BOX_ZOOM, MatchViewerCameraPreset.GOAL_CELEBRATION}
         for frame in goal_frames
     )
-    assert any(frame.ball.state in {"shot", "cross", "lob"} for frame in goal_frames)
+    # The viewer's per-frame ball state is the authoritative *physical* state
+    # produced by authoritative_spatial_simulation ({in_flight, controlled,
+    # rolling}). How the ball was struck ("shot"/"cross"/"lob") is the engine's
+    # render contract, asserted in test_replay_payload_includes_renderer_ready_contracts.
+    # A goal must show the ball actually travelling.
+    assert any(frame.ball.state == "in_flight" for frame in goal_frames)
+    assert {frame.ball.state for frame in goal_frames} <= {"in_flight", "controlled", "rolling"}
     assert any(frame.playback_rate <= 0.5 for frame in goal_frames)
     assert any(frame.pressure_index > 0.0 for frame in goal_frames)
     assert any(

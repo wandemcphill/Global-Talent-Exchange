@@ -2,8 +2,23 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from backend.tests.support.secrets import TEST_PASSWORD
 from backend.tests.support.signup_payloads import user_signup_payload
+
+
+@pytest.fixture(autouse=True)
+def _bootstrap_admin_exists(app, client):
+    """Guarantee the bootstrap super-admin these guards log in as.
+
+    Production creates it in the deferred-startup thread, but the test suite
+    sets GTE_DEFERRED_STARTUP_ENABLED=0, which skips that thread entirely. Call
+    the same startup step directly so the login below has a real account.
+    """
+    from app.main import _ensure_initial_admin
+
+    _ensure_initial_admin(app.state.settings, app.state.session_factory)
 
 
 def _create_competition(client, *, host: dict[str, str], name: str) -> str:
