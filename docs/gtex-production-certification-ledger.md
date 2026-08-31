@@ -11,7 +11,7 @@ commit — not inferred from tests passing.
 | --- | --- |
 | Ledger opened | 2026-08-30 |
 | Last updated | 2026-08-31 |
-| Baseline commit | `36bd943e` (main) |
+| Baseline commit | `7a8504a1` (main) |
 | Backend tests collected | 2832 |
 
 ---
@@ -92,7 +92,7 @@ the request clears the auth boundary.
 
 ### F-02 — P2 — Permanently red `Final Platform Certification` (golden tests)
 
-**Commit:** `PLACEHOLDER_F02`
+**Commit:** `7a8504a1`
 
 3 golden tests in `frontend/test/ux_refinement/visual_qa_golden_test.dart` failed
 on every CI run (`browse_grid_mobile` 1.70%, `browse_grid_desktop` 0.60%,
