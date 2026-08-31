@@ -249,15 +249,17 @@ class _ProfileBody extends StatelessWidget {
                 actions!,
               ],
               const SizedBox(height: 14),
+              _SectionLabel('ASSET & MARKET INTELLIGENCE'),
+              const SizedBox(height: 8),
+              _MarketCard(detail: detail),
+              const SizedBox(height: 14),
+              _SectionLabel('FOOTBALL PROFILE & BIO'),
+              const SizedBox(height: 8),
               _BioCard(identity: id),
               const SizedBox(height: 14),
               _SectionLabel('ATTRIBUTES'),
               const SizedBox(height: 8),
               _AttributesCard(attr: attr),
-              const SizedBox(height: 14),
-              _SectionLabel('MARKET'),
-              const SizedBox(height: 8),
-              _MarketCard(detail: detail),
               // Depth is only drawn when the live book actually has levels,
               // so an empty book reads as empty rather than as a flat market.
               if (book != null &&
@@ -379,11 +381,21 @@ class _ActionShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _panel,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isError ? _red : _border),
+        border: Border.all(
+          color: isError ? _red : _green.withValues(alpha: 0.62),
+          width: 1.5,
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: (isError ? _red : _green).withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -392,9 +404,11 @@ class _ActionShell extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             message,
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: isError ? _red : _textSecondary,
               fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -1057,14 +1071,18 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: _condensed,
-            color: _textMuted,
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.5,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: _condensed,
+              color: _textMuted,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.5,
+            ),
           ),
         ),
         const SizedBox(width: 10),

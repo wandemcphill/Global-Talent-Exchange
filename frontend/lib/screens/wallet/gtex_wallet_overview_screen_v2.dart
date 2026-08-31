@@ -733,92 +733,142 @@ class _HoldingsPanel extends StatelessWidget {
         icon: Icons.groups_2_outlined,
       );
     }
-    return ListView.separated(
-      itemCount: holdings.length,
-      separatorBuilder: (_, __) => const SizedBox(height: GtexSpacing.sm),
-      itemBuilder: (BuildContext context, int index) {
-        final GtePortfolioHolding holding = holdings[index];
-        return GtexPanel(
-          accent: holding.unrealizedPl >= 0 ? GtexColors.pitch : GtexColors.red,
-          onTap:
-              onOpenPlayer == null
-                  ? null
-                  : () => onOpenPlayer!(holding.playerId),
-          child: Row(
+
+    final double totalHoldingsValue = holdings.fold<double>(
+      0,
+      (double sum, GtePortfolioHolding item) => sum + item.marketValue,
+    );
+    final double totalPl = holdings.fold<double>(
+      0,
+      (double sum, GtePortfolioHolding item) => sum + item.unrealizedPl,
+    );
+
+    return ListView(
+      children: <Widget>[
+        GtexPanel(
+          title: 'Player Asset Portfolio',
+          subtitle:
+              '${holdings.length} player asset${holdings.length == 1 ? '' : 's'} owned',
+          accent: GtexColors.pitch,
+          child: Wrap(
+            spacing: GtexSpacing.md,
+            runSpacing: GtexSpacing.md,
             children: <Widget>[
-              const Icon(Icons.person_outline, color: GtexColors.pitch),
-              const SizedBox(width: GtexSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      holding.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: GtexColors.text,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      <String>[
-                        if ((holding.clubName ?? '').trim().isNotEmpty)
-                          holding.clubName!.trim(),
-                        'Qty ${holding.quantity.toStringAsFixed(2)}',
-                        'Avg ${gteFormatGtc(holding.averageCost)}',
-                      ].join(' - '),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: GtexColors.textMuted),
-                    ),
-                  ],
+              SizedBox(
+                width: 200,
+                child: GtexMetricTile(
+                  label: 'Portfolio Value',
+                  value: gteFormatGtc(totalHoldingsValue),
+                  icon: Icons.groups_2_outlined,
+                  accent: GtexColors.pitch,
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              SizedBox(
+                width: 200,
+                child: GtexMetricTile(
+                  label: 'Unrealized P/L',
+                  value: gteFormatGtc(totalPl),
+                  icon: totalPl >= 0 ? Icons.trending_up : Icons.trending_down,
+                  accent: totalPl >= 0 ? GtexColors.pitch : GtexColors.red,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        Text(
+          'HOLDINGS BREAKDOWN',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: GtexColors.textMuted,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+        ),
+        const SizedBox(height: GtexSpacing.xs),
+        ...holdings.map(
+          (GtePortfolioHolding holding) => Padding(
+            padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+            child: GtexPanel(
+              accent: holding.unrealizedPl >= 0 ? GtexColors.pitch : GtexColors.red,
+              onTap:
+                  onOpenPlayer == null
+                      ? null
+                      : () => onOpenPlayer!(holding.playerId),
+              child: Row(
                 children: <Widget>[
-                  Text(
-                    gteFormatGtc(holding.marketValue),
-                    style: const TextStyle(
-                      color: GtexColors.text,
-                      fontWeight: FontWeight.w900,
+                  const Icon(Icons.person_outline, color: GtexColors.pitch),
+                  const SizedBox(width: GtexSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          holding.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: GtexColors.text,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          <String>[
+                            if ((holding.clubName ?? '').trim().isNotEmpty)
+                              holding.clubName!.trim(),
+                            'Qty ${holding.quantity.toStringAsFixed(2)}',
+                            'Avg ${gteFormatGtc(holding.averageCost)}',
+                          ].join(' - '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: GtexColors.textMuted),
+                        ),
+                      ],
                     ),
                   ),
-                  // Direction is carried by the arrow and the sign as well
-                  // as the colour, so it survives a colour-blind reading.
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: <Widget>[
-                      Icon(
-                        holding.unrealizedPl >= 0
-                            ? Icons.arrow_drop_up
-                            : Icons.arrow_drop_down,
-                        size: 18,
-                        color:
-                            holding.unrealizedPl >= 0
-                                ? GtexColors.pitch
-                                : GtexColors.red,
-                      ),
                       Text(
-                        '${holding.unrealizedPl >= 0 ? '+' : ''}'
-                        '${holding.unrealizedPlPercent.toStringAsFixed(2)}%',
-                        style: TextStyle(
-                          color:
-                              holding.unrealizedPl >= 0
-                                  ? GtexColors.pitch
-                                  : GtexColors.red,
-                          fontWeight: FontWeight.w800,
+                        gteFormatGtc(holding.marketValue),
+                        style: const TextStyle(
+                          color: GtexColors.text,
+                          fontWeight: FontWeight.w900,
                         ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(
+                            holding.unrealizedPl >= 0
+                                ? Icons.arrow_drop_up
+                                : Icons.arrow_drop_down,
+                            size: 18,
+                            color:
+                                holding.unrealizedPl >= 0
+                                    ? GtexColors.pitch
+                                    : GtexColors.red,
+                          ),
+                          Text(
+                            '${holding.unrealizedPl >= 0 ? '+' : ''}'
+                            '${holding.unrealizedPlPercent.toStringAsFixed(2)}%',
+                            style: TextStyle(
+                              color:
+                                  holding.unrealizedPl >= 0
+                                      ? GtexColors.pitch
+                                      : GtexColors.red,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
