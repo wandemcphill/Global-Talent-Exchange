@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import asdict
 from datetime import date, datetime
+import logging
 from threading import RLock
 from typing import Protocol
 
-from sqlalchemy import DateTime, JSON, String, select
+from sqlalchemy import DateTime, JSON, String, inspect, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from app.competitions.models.league_events import LeagueSeasonEvent
@@ -18,6 +20,8 @@ from app.competitions.models.league_events import (
     LeagueSeasonRegisteredEvent,
 )
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
+
+logger = logging.getLogger(__name__)
 
 
 class LeagueEventRepository(Protocol):
@@ -56,7 +60,9 @@ class DatabaseLeagueEventRepository:
             rows = session.scalars(
                 select(LeagueEventRecord)
                 .where(LeagueEventRecord.season_id == season_id)
-                .order_by(LeagueEventRecord.recorded_at.asc(), LeagueEventRecord.created_at.asc(), LeagueEventRecord.id.asc())
+                .order_by(
+                    LeagueEventRecord.recorded_at.asc(), LeagueEventRecord.created_at.asc(), LeagueEventRecord.id.asc()
+                )
             ).all()
         return tuple(_deserialize_event(row.event_type, row.payload_json) for row in rows)
 
@@ -83,7 +89,41 @@ _league_event_repository = InMemoryLeagueEventRepository()
 
 
 def get_league_event_repository() -> LeagueEventRepository:
+    """Process-local fallback store, used when no database is wired."""
     return _league_event_repository
+
+
+def build_league_event_repository(
+    session_factory: sessionmaker[Session] | None,
+) -> LeagueEventRepository:
+    """Pick the durable repository when a database is available.
+
+    League seasons are shared, multi-request state: keeping the event log in a
+    per-process dict loses every season on restart and lets two workers disagree.
+    The database repository is the production wiring; the in-process one remains
+    the fallback for standalone/unit use and for a database that has not yet had
+    ``league_event_records`` migrated in.
+    """
+    if session_factory is None:
+        return get_league_event_repository()
+    if not _league_event_table_available(session_factory):
+        logger.warning(
+            "leagues.repository.fallback reason=missing_table table=%s",
+            LeagueEventRecord.__tablename__,
+        )
+        return get_league_event_repository()
+    return DatabaseLeagueEventRepository(session_factory)
+
+
+def _league_event_table_available(session_factory: sessionmaker[Session]) -> bool:
+    try:
+        with session_factory() as session:
+            bind = session.get_bind()
+            if bind is None:
+                return False
+            return inspect(bind).has_table(LeagueEventRecord.__tablename__)
+    except SQLAlchemyError:
+        return False
 
 
 def _event_recorded_at(event: LeagueSeasonEvent) -> datetime:
@@ -159,5 +199,6 @@ __all__ = [
     "InMemoryLeagueEventRepository",
     "LeagueEventRecord",
     "LeagueEventRepository",
+    "build_league_event_repository",
     "get_league_event_repository",
 ]
