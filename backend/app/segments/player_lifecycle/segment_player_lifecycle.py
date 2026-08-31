@@ -5,7 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_user, get_session
+from app.models.user import User
 from app.schemas.player_lifecycle import (
     BigClubApproachRequest,
     CareerEntryView,
@@ -119,10 +120,7 @@ def get_player_lifecycle_events(
     service: PlayerLifecycleService = Depends(_service),
 ) -> list[PlayerLifecycleEventView]:
     try:
-        return [
-            service.to_event_view(event)
-            for event in service.list_events(player_id, limit=limit)
-        ]
+        return [service.to_event_view(event) for event in service.list_events(player_id, limit=limit)]
     except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
         _raise_for_lifecycle_error(exc)
 
@@ -156,6 +154,7 @@ def create_player_contract(
     player_id: str,
     payload: ContractCreateRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> ContractView:
     try:
         return service.to_contract_view(service.create_contract(player_id, payload), reference_on=date.today())
@@ -169,9 +168,12 @@ def renew_player_contract(
     contract_id: str,
     payload: ContractRenewRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> ContractView:
     try:
-        return service.to_contract_view(service.renew_contract(player_id, contract_id, payload), reference_on=date.today())
+        return service.to_contract_view(
+            service.renew_contract(player_id, contract_id, payload), reference_on=date.today()
+        )
     except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
         _raise_for_lifecycle_error(exc)
 
@@ -198,6 +200,7 @@ def create_player_injury(
     player_id: str,
     payload: InjuryCreateRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> InjuryCaseView:
     try:
         return service.to_injury_view(service.create_injury_case(player_id, payload))
@@ -211,6 +214,7 @@ def recover_player_injury(
     injury_id: str,
     payload: InjuryRecoveryRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> InjuryCaseView:
     try:
         return service.to_injury_view(service.recover_injury(player_id, injury_id, payload))
@@ -225,7 +229,10 @@ def list_transfer_windows(
     service: PlayerLifecycleService = Depends(_service),
 ) -> list[TransferWindowView]:
     reference_on = active_on or date.today()
-    return [service.to_transfer_window_view(item, reference_on=reference_on) for item in service.list_transfer_windows(territory_code=territory_code, active_on=active_on)]
+    return [
+        service.to_transfer_window_view(item, reference_on=reference_on)
+        for item in service.list_transfer_windows(territory_code=territory_code, active_on=active_on)
+    ]
 
 
 @router.get("/api/transfers/windows/{window_id}", response_model=TransferWindowView)
@@ -235,21 +242,28 @@ def get_transfer_window(
     service: PlayerLifecycleService = Depends(_service),
 ) -> TransferWindowView:
     try:
-        return service.to_transfer_window_view(service.get_transfer_window(window_id), reference_on=on_date or date.today())
+        return service.to_transfer_window_view(
+            service.get_transfer_window(window_id), reference_on=on_date or date.today()
+        )
     except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
         _raise_for_lifecycle_error(exc)
 
 
 @router.get("/api/transfers/windows/{window_id}/bids", response_model=list[TransferBidView])
-def list_transfer_window_bids(window_id: str, service: PlayerLifecycleService = Depends(_service)) -> list[TransferBidView]:
+def list_transfer_window_bids(
+    window_id: str, service: PlayerLifecycleService = Depends(_service)
+) -> list[TransferBidView]:
     return [service.to_transfer_bid_view(item) for item in service.list_window_bids(window_id)]
 
 
-@router.post("/api/transfers/windows/{window_id}/bids", response_model=TransferBidView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/transfers/windows/{window_id}/bids", response_model=TransferBidView, status_code=status.HTTP_201_CREATED
+)
 def create_transfer_bid(
     window_id: str,
     payload: TransferBidCreateRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> TransferBidView:
     try:
         return service.to_transfer_bid_view(service.create_bid(window_id, payload))
@@ -263,6 +277,7 @@ def accept_transfer_bid(
     bid_id: str,
     payload: TransferBidAcceptRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> TransferBidView:
     try:
         return service.to_transfer_bid_view(service.accept_bid(window_id, bid_id, payload))
@@ -276,6 +291,7 @@ def reject_transfer_bid(
     bid_id: str,
     payload: TransferBidRejectRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> TransferBidView:
     try:
         return service.to_transfer_bid_view(service.reject_bid(window_id, bid_id, payload))
@@ -312,6 +328,7 @@ def quote_regen_contract_offer(
     player_id: str,
     payload: RegenContractOfferQuoteRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> CurrencyConversionQuoteView:
     try:
         return service.quote_regen_contract_offer(player_id, payload)
@@ -324,6 +341,7 @@ def update_regen_transfer_listing(
     player_id: str,
     payload: RegenTransferListingRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> RegenLifecycleView:
     try:
         return service.update_regen_transfer_listing(player_id, payload)
@@ -336,6 +354,7 @@ def record_big_club_approach(
     player_id: str,
     payload: BigClubApproachRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> RegenLifecycleView:
     try:
         return service.record_big_club_approach(player_id, payload)
@@ -348,6 +367,7 @@ def apply_regen_pressure_resolution(
     player_id: str,
     payload: RegenPressureResolutionRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> RegenLifecycleView:
     try:
         return service.apply_regen_pressure_resolution(player_id, payload)
@@ -360,6 +380,7 @@ def apply_regen_special_training(
     player_id: str,
     payload: RegenSpecialTrainingRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> RegenLifecycleView:
     try:
         return service.apply_regen_special_training(player_id, payload)
@@ -367,7 +388,10 @@ def apply_regen_special_training(
         _raise_for_lifecycle_error(exc)
 
 
-@router.get("/api/transfers/windows/{window_id}/players/{player_id}/regen-bid-evaluations", response_model=tuple[RegenBidEvaluationView, ...])
+@router.get(
+    "/api/transfers/windows/{window_id}/players/{player_id}/regen-bid-evaluations",
+    response_model=tuple[RegenBidEvaluationView, ...],
+)
 def get_regen_bid_evaluations(
     window_id: str,
     player_id: str,
@@ -380,12 +404,15 @@ def get_regen_bid_evaluations(
         _raise_for_lifecycle_error(exc)
 
 
-@router.post("/api/transfers/windows/{window_id}/players/{player_id}/resolve-regen-bid", response_model=RegenBidResolutionView)
+@router.post(
+    "/api/transfers/windows/{window_id}/players/{player_id}/resolve-regen-bid", response_model=RegenBidResolutionView
+)
 def resolve_regen_bid(
     window_id: str,
     player_id: str,
     as_of: date | None = Query(default=None),
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> RegenBidResolutionView:
     try:
         return service.resolve_regen_bid(window_id, player_id, reference_on=as_of)
