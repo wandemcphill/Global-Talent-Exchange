@@ -39,40 +39,40 @@ void main() {
       expect(appSource, contains("this.initialPath = '/app/home',"));
     });
 
-    testWidgets(
-      'navigation shell orders primary lanes per workspace role',
-      (WidgetTester tester) async {
-        // Lane order is a per-role architectural contract, not a source
-        // layout one: the shell keeps a distinct destination list for each
-        // workspace, so assert the rendered rail rather than the byte
-        // offsets of the first matching enum literal in the file.
-        for (final _WorkspaceLaneCase laneCase in _workspaceLaneCases) {
-          final List<String> lanes = await _renderShellLanes(
-            tester,
-            session: laneCase.session,
-          );
-          expect(lanes, orderedEquals(laneCase.lanes), reason: laneCase.role);
-          expect(lanes.first, 'Home', reason: laneCase.role);
-          expect(lanes.toSet(), hasLength(lanes.length), reason: laneCase.role);
-        }
-      },
-    );
-
-    testWidgets('navigation shell keeps theme and capital utilities reachable', (
+    testWidgets('navigation shell orders primary lanes per workspace role', (
       WidgetTester tester,
     ) async {
-      await _renderShellLanes(tester, session: _roleSession(role: 'user'));
-
-      expect(find.byTooltip('Club funds'), findsOneWidget);
-      expect(
-        find.byWidgetPredicate(
-          (Widget widget) =>
-              widget is IconButton &&
-              (widget.tooltip?.startsWith('Theme: ') ?? false),
-        ),
-        findsOneWidget,
-      );
+      // Lane order is a per-role architectural contract, not a source
+      // layout one: the shell keeps a distinct destination list for each
+      // workspace, so assert the rendered rail rather than the byte
+      // offsets of the first matching enum literal in the file.
+      for (final _WorkspaceLaneCase laneCase in _workspaceLaneCases) {
+        final List<String> lanes = await _renderShellLanes(
+          tester,
+          session: laneCase.session,
+        );
+        expect(lanes, orderedEquals(laneCase.lanes), reason: laneCase.role);
+        expect(lanes.first, 'Home', reason: laneCase.role);
+        expect(lanes.toSet(), hasLength(lanes.length), reason: laneCase.role);
+      }
     });
+
+    testWidgets(
+      'navigation shell keeps theme and capital utilities reachable',
+      (WidgetTester tester) async {
+        await _renderShellLanes(tester, session: _roleSession(role: 'user'));
+
+        expect(find.byTooltip('Club funds'), findsOneWidget);
+        expect(
+          find.byWidgetPredicate(
+            (Widget widget) =>
+                widget is IconButton &&
+                (widget.tooltip?.startsWith('Theme: ') ?? false),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
 
     test('home dashboard preserves hero to secondary information order', () {
       final String homeSource = _readSource(
@@ -288,11 +288,21 @@ class _WorkspaceLaneCase {
   final List<String> lanes;
 }
 
+// Regen World is a lane of the shell now, not a hidden top-level URL. It
+// sits beside the Transfer Hub in every workspace that gets one, because
+// both are talent-discovery surfaces.
 final List<_WorkspaceLaneCase> _workspaceLaneCases = <_WorkspaceLaneCase>[
   const _WorkspaceLaneCase(
     role: 'guest',
     session: null,
-    lanes: <String>['Home', 'Club', 'Transfer Hub', 'Matchday', 'Community'],
+    lanes: <String>[
+      'Home',
+      'Club',
+      'Transfer Hub',
+      'Regen World',
+      'Matchday',
+      'Community',
+    ],
   ),
   _WorkspaceLaneCase(
     role: 'admin',
@@ -300,6 +310,7 @@ final List<_WorkspaceLaneCase> _workspaceLaneCases = <_WorkspaceLaneCase>[
     lanes: const <String>[
       'Home',
       'Transfer Hub',
+      'Regen World',
       'Matchday',
       'Club',
       'Wallet',
@@ -310,7 +321,13 @@ final List<_WorkspaceLaneCase> _workspaceLaneCases = <_WorkspaceLaneCase>[
   _WorkspaceLaneCase(
     role: 'coin trader',
     session: _roleSession(role: 'coin_trader'),
-    lanes: const <String>['Home', 'Wallet', 'Transfer Hub', 'Community'],
+    lanes: const <String>[
+      'Home',
+      'Wallet',
+      'Transfer Hub',
+      'Regen World',
+      'Community',
+    ],
   ),
   _WorkspaceLaneCase(
     role: 'creator',
@@ -320,6 +337,7 @@ final List<_WorkspaceLaneCase> _workspaceLaneCases = <_WorkspaceLaneCase>[
       'Studio',
       'Community',
       'Transfer Hub',
+      'Regen World',
       'Wallet',
     ],
   ),
@@ -330,6 +348,7 @@ final List<_WorkspaceLaneCase> _workspaceLaneCases = <_WorkspaceLaneCase>[
       'Home',
       'Club',
       'Transfer Hub',
+      'Regen World',
       'Matchday',
       'Wallet',
       'Studio',
@@ -342,6 +361,7 @@ final List<_WorkspaceLaneCase> _workspaceLaneCases = <_WorkspaceLaneCase>[
     lanes: const <String>[
       'Home',
       'Transfer Hub',
+      'Regen World',
       'Club',
       'Wallet',
       'Community',
@@ -353,6 +373,7 @@ final List<_WorkspaceLaneCase> _workspaceLaneCases = <_WorkspaceLaneCase>[
     lanes: const <String>[
       'Home',
       'Transfer Hub',
+      'Regen World',
       'Club',
       'Matchday',
       'Wallet',

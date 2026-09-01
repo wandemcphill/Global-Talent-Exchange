@@ -10,6 +10,13 @@ void main() {
   testWidgets('legacy market import delegates to the GTEX Transfer Hub V2', (
     WidgetTester tester,
   ) async {
+    // The browse panel is only inline when the box can afford it alongside
+    // a readable player list, so this delegation check runs at a desktop
+    // width rather than the 800x600 default test surface.
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final GteExchangeController controller = GteExchangeController(
       api: GteExchangeApiClient.fixture(),
     );

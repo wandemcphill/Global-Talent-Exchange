@@ -860,6 +860,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
     return const <GtePrimaryDestination>[
       GtePrimaryDestination.home,
       GtePrimaryDestination.market,
+      GtePrimaryDestination.regens,
       GtePrimaryDestination.club,
       GtePrimaryDestination.competitions,
       GtePrimaryDestination.wallet,

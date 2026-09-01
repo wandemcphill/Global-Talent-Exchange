@@ -79,9 +79,17 @@ void main() {
       ),
       '/app/market?player=player-jude',
     );
+    // A player result opens the canonical player detail. It used to
+    // canonicalise to the market carrying `?player=<id>`, a query no screen
+    // ever read, so searching for a footballer landed on an unfiltered
+    // market with nothing selected.
     expect(
       gtexCanonicalGlobalSearchRoute('/players/player-jude', isAdmin: false),
-      '/app/market?player=player-jude',
+      '/players/player-jude/profile',
+    );
+    expect(
+      gtexCanonicalGlobalSearchRoute('/player/player-jude', isAdmin: false),
+      '/players/player-jude/profile',
     );
     expect(
       gtexCanonicalGlobalSearchRoute('/clubs/club-arsenal', isAdmin: false),
