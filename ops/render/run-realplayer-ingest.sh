@@ -10,9 +10,17 @@
 #   SPORTMONKS_API_TOKEN  SportMonks v3 token
 #
 # Optional:
-#   INGEST_LEAGUES   newline/`;`-separated league names to override the default set
-#   PAUSE_MS         pause between club writes (default 1500)
-#   MAX_ATTEMPTS     retry budget (default 50)
+#   INGEST_LEAGUES             newline/`;`-separated league names to override the default set
+#   PAUSE_MS                   pause between club writes (default 1500)
+#   MAX_ATTEMPTS               retry budget (default 50)
+#   MARKET_ISSUANCE_ACTOR_ID   admin user id credited for the post-ingest share-market
+#                              backfill (default: known GTEX super-admin)
+#   SKIP_MARKET_BACKFILL       set to any non-empty value to skip the backfill step
+#
+# After a clean ingest this also issues player-share markets for any real,
+# league-assigned players that still lack one (ingestion prices players but never
+# issues markets). The backfill is idempotent; a failure there is logged and
+# surfaced via a distinct exit code but does NOT re-run the ingest.
 set -u
 
 cd "$(dirname "$0")/../../backend" || exit 1
@@ -28,6 +36,22 @@ BACKOFF_START="${BACKOFF_START:-30}"
 BACKOFF_MAX="${BACKOFF_MAX:-120}"
 STATE_PATH="tmp/render-realplayer-ingest/state.json"
 REPORT_PATH="tmp/render-realplayer-ingest-report.json"
+MARKET_ISSUANCE_ACTOR_ID="${MARKET_ISSUANCE_ACTOR_ID:-09ed5191-7b2d-4eff-a656-f26b58408758}"
+
+# Issue share markets for real, league-assigned players that still lack one.
+# Called after a clean ingest. Idempotent; never re-runs the ingest.
+run_market_backfill() {
+  if [ -n "${SKIP_MARKET_BACKFILL:-}" ]; then
+    echo "[$(date -u +%FT%TZ)] market backfill skipped (SKIP_MARKET_BACKFILL set)"
+    return 0
+  fi
+  echo "[$(date -u +%FT%TZ)] issuing share markets for newly-ingested real players"
+  python -u scripts/backfill_real_league_share_markets.py \
+    --database-url "$DATABASE_URL" \
+    --actor-user-id "$MARKET_ISSUANCE_ACTOR_ID" \
+    --activate \
+    --batch-size 200
+}
 
 # Leagues to keep in sync. Idempotent upserts make it safe to re-list
 # already-populated leagues alongside new ones. Override via INGEST_LEAGUES if needed.
@@ -61,8 +85,13 @@ while [ "$attempt" -lt "$MAX_ATTEMPTS" ]; do
   code=$?
 
   if [ "$code" -eq 0 ]; then
-    echo "[$(date -u +%FT%TZ)] completed cleanly (exit 0) after $attempt attempt(s)"
-    exit 0
+    echo "[$(date -u +%FT%TZ)] ingest completed cleanly (exit 0) after $attempt attempt(s)"
+    if run_market_backfill; then
+      echo "[$(date -u +%FT%TZ)] done (ingest + market backfill clean)"
+      exit 0
+    fi
+    echo "[$(date -u +%FT%TZ)] WARNING: market backfill failed; ingest is committed, re-run to retry issuance" >&2
+    exit 3
   fi
 
   echo "[$(date -u +%FT%TZ)] exited code=$code; retrying in ${backoff}s"
