@@ -7,13 +7,24 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from app.auth.dependencies import get_current_user
 from app.ultimate_league.router import router
+
+
+class _StubUser:
+    id = "test-actor"
 
 
 @pytest.fixture()
 def client() -> TestClient:
     application = FastAPI()
     application.include_router(router)
+    # Router-level authorization is exercised end-to-end by
+    # backend/tests/security/test_endpoint_authorization.py against the real
+    # app + DB. This fixture only wires up the ultimate-league runtime in
+    # isolation, so authentication is stubbed to a fixed actor rather than
+    # bypassed via a weaker dependency.
+    application.dependency_overrides[get_current_user] = lambda: _StubUser()
     with TestClient(application) as test_client:
         yield test_client
 

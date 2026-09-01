@@ -168,3 +168,222 @@ def test_spectator_presence_does_not_leak_viewer_identities(client):
 def test_malformed_bearer_tokens_return_401_not_500(client, token: str):
     response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401, response.text
+
+
+# --- club identity / jerseys (legacy compat router) were fully public --------
+
+
+def test_club_identity_patch_requires_authentication(client):
+    path = f"/api/clubs/{uuid4()}/identity"
+    _assert_gated(client.patch(path, json={}), path)
+
+
+def test_club_jerseys_patch_requires_authentication(client):
+    path = f"/api/clubs/{uuid4()}/jerseys"
+    _assert_gated(client.patch(path, json={}), path)
+
+
+# --- player lifecycle: contracts, injuries, transfer bids were fully public --
+
+
+def test_player_contract_create_requires_authentication(client):
+    path = f"/api/players/{uuid4()}/contracts"
+    payload = {"wage_amount": "100.00", "starts_on": "2026-01-01", "ends_on": "2027-01-01"}
+    _assert_gated(client.post(path, json=payload), path)
+
+
+def test_player_contract_renew_requires_authentication(client):
+    path = f"/api/players/{uuid4()}/contracts/{uuid4()}/renew"
+    _assert_gated(client.post(path, json={"new_ends_on": "2028-01-01"}), path)
+
+
+def test_player_injury_create_requires_authentication(client):
+    path = f"/api/players/{uuid4()}/injuries"
+    _assert_gated(client.post(path, json={}), path)
+
+
+def test_player_injury_recover_requires_authentication(client):
+    path = f"/api/players/{uuid4()}/injuries/{uuid4()}/recover"
+    _assert_gated(client.post(path, json={}), path)
+
+
+def test_transfer_bid_create_requires_authentication(client):
+    path = f"/api/transfers/windows/{uuid4()}/bids"
+    payload = {"player_id": str(uuid4()), "bid_amount": "100.00"}
+    _assert_gated(client.post(path, json=payload), path)
+
+
+def test_transfer_bid_accept_requires_authentication(client):
+    path = f"/api/transfers/windows/{uuid4()}/bids/{uuid4()}/accept"
+    _assert_gated(client.post(path, json={"contract_ends_on": "2028-01-01"}), path)
+
+
+def test_transfer_bid_reject_requires_authentication(client):
+    path = f"/api/transfers/windows/{uuid4()}/bids/{uuid4()}/reject"
+    _assert_gated(client.post(path, json={}), path)
+
+
+def test_regen_transfer_listing_requires_authentication(client):
+    path = f"/api/players/{uuid4()}/regen/transfer-listing"
+    _assert_gated(client.post(path, json={}), path)
+
+
+def test_regen_big_club_approach_requires_authentication(client):
+    path = f"/api/players/{uuid4()}/regen/big-club-approaches"
+    _assert_gated(client.post(path, json={"approaching_club_id": str(uuid4())}), path)
+
+
+def test_regen_pressure_resolution_requires_authentication(client):
+    path = f"/api/players/{uuid4()}/regen/pressure-resolution"
+    _assert_gated(client.post(path, json={"resolution_type": "stay"}), path)
+
+
+def test_regen_special_training_requires_authentication(client):
+    path = f"/api/players/{uuid4()}/regen/special-training"
+    _assert_gated(client.post(path, json={}), path)
+
+
+def test_resolve_regen_bid_requires_authentication(client):
+    path = f"/api/transfers/windows/{uuid4()}/players/{uuid4()}/resolve-regen-bid"
+    _assert_gated(client.post(path, json={}), path)
+
+
+# --- tournaments: creation, joining, result reporting were fully public -----
+
+
+def test_tournament_create_requires_authentication(client):
+    path = "/api/tournaments"
+    payload = {"name": "Security Probe Cup", "game_type": "gtex_pvp"}
+    _assert_gated(client.post(path, json=payload), path)
+
+
+def test_tournament_join_requires_authentication(client):
+    path = f"/api/tournaments/{uuid4()}/join"
+    _assert_gated(client.post(path, json={"user_id": str(uuid4())}), path)
+
+
+def test_tournament_join_rejects_joining_as_another_user(client, member_headers):
+    path = f"/api/tournaments/{uuid4()}/join"
+    response = client.post(path, json={"user_id": str(uuid4())}, headers=member_headers)
+    assert response.status_code == 403, response.text
+
+
+def test_tournament_match_result_requires_authentication(client):
+    path = f"/api/tournaments/{uuid4()}/matches/{uuid4()}/result"
+    _assert_gated(client.post(path, json={"winner_user_id": str(uuid4())}), path)
+
+
+def test_tournament_advance_requires_authentication(client):
+    path = f"/api/tournaments/{uuid4()}/advance"
+    _assert_gated(client.post(path, json={}), path)
+
+
+# --- ultimate league: competitor writes and match results were fully public -
+
+
+def test_ultimate_league_upsert_competitor_requires_authentication(client):
+    competitor_id = str(uuid4())
+    path = f"/api/ultimate-league/competitors/{competitor_id}"
+    payload = {"competitor_id": competitor_id, "display_name": "Probe", "elo_rating": 1200}
+    _assert_gated(client.put(path, json=payload), path)
+
+
+def test_ultimate_league_matchmaking_batch_requires_authentication(client):
+    path = "/api/ultimate-league/matchmaking/batch"
+    _assert_gated(client.post(path, json={"competitor_ids": []}), path)
+
+
+def test_ultimate_league_match_result_requires_authentication(client):
+    path = "/api/ultimate-league/matches/result"
+    payload = {
+        "home_competitor_id": str(uuid4()),
+        "away_competitor_id": str(uuid4()),
+        "home_score": 1,
+        "away_score": 0,
+    }
+    _assert_gated(client.post(path, json=payload), path)
+
+
+def test_ultimate_league_tournament_create_requires_authentication(client):
+    path = "/api/ultimate-league/tournaments"
+    _assert_gated(client.post(path, json={"tournament_id": str(uuid4()), "tier": "bronze"}), path)
+
+
+def test_ultimate_league_tactical_preset_upsert_requires_authentication(client):
+    path = "/api/ultimate-league/tactical-presets"
+    payload = {
+        "seller_competitor_id": str(uuid4()),
+        "title": "Probe",
+        "formation": "4-4-2",
+        "style": "balanced",
+        "price_gtex": "1.0000",
+    }
+    _assert_gated(client.post(path, json=payload), path)
+
+
+# --- regen ecosystem: academy/scout/agent writes and award votes were public
+
+
+def test_regen_academy_upsert_requires_authentication(client):
+    path = "/academy"
+    payload = {"club_user_id": str(uuid4()), "club_id": str(uuid4())}
+    _assert_gated(client.post(path, json=payload), path)
+
+
+def test_regen_academy_upsert_rejects_another_users_club_user_id(client, member_headers):
+    path = "/academy"
+    payload = {"club_user_id": str(uuid4()), "club_id": str(uuid4())}
+    response = client.post(path, json=payload, headers=member_headers)
+    assert response.status_code == 403, response.text
+
+
+def test_regen_academy_generate_requires_authentication(client):
+    path = "/academy/generate"
+    payload = {"club_user_id": str(uuid4()), "club_id": str(uuid4())}
+    _assert_gated(client.post(path, json=payload), path)
+
+
+def test_regen_academy_promote_requires_authentication(client):
+    path = f"/academy/promote/{uuid4()}"
+    _assert_gated(client.post(path, json={}), path)
+
+
+def test_regen_scout_create_requires_authentication(client):
+    path = "/scouts"
+    payload = {"club_user_id": str(uuid4()), "club_id": str(uuid4()), "region": "west-africa", "skill_rating": 50}
+    _assert_gated(client.post(path, json=payload), path)
+
+
+def test_regen_scout_create_rejects_another_users_club_user_id(client, member_headers):
+    path = "/scouts"
+    payload = {"club_user_id": str(uuid4()), "club_id": str(uuid4()), "region": "west-africa", "skill_rating": 50}
+    response = client.post(path, json=payload, headers=member_headers)
+    assert response.status_code == 403, response.text
+
+
+def test_regen_scout_discover_requires_authentication(client):
+    path = f"/scouts/{uuid4()}/discover"
+    _assert_gated(client.post(path, json={}), path)
+
+
+def test_regen_agent_create_requires_authentication(client):
+    path = "/agents"
+    _assert_gated(client.post(path, json={"name": "Probe Agency"}), path)
+
+
+def test_regen_career_event_trigger_requires_authentication(client):
+    path = f"/players/{uuid4()}/career-events"
+    _assert_gated(client.post(path, json={}), path)
+
+
+def test_regen_award_vote_requires_authentication(client):
+    path = f"/regens/awards/{uuid4()}/vote"
+    payload = {"user_id": str(uuid4()), "player_id": str(uuid4())}
+    _assert_gated(client.post(path, json=payload), path)
+
+
+def test_regen_award_vote_rejects_voting_as_another_user(client, member_headers):
+    path = f"/regens/awards/{uuid4()}/vote"
+    payload = {"user_id": str(uuid4()), "player_id": str(uuid4())}
+    response = client.post(path, json=payload, headers=member_headers)
+    assert response.status_code == 403, response.text

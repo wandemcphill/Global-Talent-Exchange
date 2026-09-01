@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.access_control.dependencies import require_bound_organization_access
+from app.models.access_control import OrganizationRole
 from app.club_identity.jerseys.sql_repository import SqlClubIdentityRepository
 from app.club_identity.jerseys.schemas import (
     BadgeProfileView,
@@ -15,8 +17,16 @@ from app.club_identity.jerseys.schemas import (
 )
 from app.club_identity.jerseys.service import ClubIdentityService
 from app.db import get_session
+from app.models.user import User
 
 router = APIRouter(prefix="/api", tags=["club-identity-jerseys"])
+
+# Named module-level dependency (rather than an inline `Depends(require_bound_organization_access(...))`
+# per route) so it is a single stable callable both routes share and tests can
+# target with `app.dependency_overrides[require_club_identity_write_access] = ...`.
+require_club_identity_write_access = require_bound_organization_access(
+    OrganizationRole.CLUB, forbidden_detail="club_access_required"
+)
 
 
 def get_identity_service(session=Depends(get_session)) -> ClubIdentityService:
@@ -40,6 +50,7 @@ def patch_club_identity(
     club_id: str,
     payload: ClubIdentityProfilePatch,
     service: ClubIdentityService = Depends(get_identity_service),
+    _: User = Depends(require_club_identity_write_access),
 ) -> ClubIdentityProfileView:
     try:
         profile = service.update_identity(club_id, payload.model_dump(exclude_unset=True, mode="python"))
@@ -59,6 +70,7 @@ def patch_club_jerseys(
     club_id: str,
     payload: JerseySetPatch,
     service: ClubIdentityService = Depends(get_identity_service),
+    _: User = Depends(require_club_identity_write_access),
 ) -> JerseySetView:
     try:
         jersey_set = service.update_jerseys(club_id, payload.model_dump(exclude_unset=True, mode="python"))

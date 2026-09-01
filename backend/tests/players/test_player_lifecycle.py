@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_user, get_session
 from app.common.enums.contract_status import ContractStatus
 from app.common.enums.injury_severity import InjurySeverity
 from app.common.enums.transfer_window_status import TransferWindowStatus
@@ -104,6 +104,21 @@ def lifecycle_api(lifecycle_session: Session):
         yield lifecycle_session
 
     app.dependency_overrides[get_session] = _session_override
+    # These endpoints only require an authenticated caller (no per-request
+    # ownership binding at the router layer), and this fixture tests the
+    # lifecycle service through the API in isolation from the auth/DB stack.
+    # The authorization gate itself is covered end-to-end by
+    # backend/tests/security/test_endpoint_authorization.py against the real
+    # app, so it is stubbed here rather than bypassed.
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id="user-owner",
+        email="owner@example.com",
+        username="owner",
+        display_name="Owner",
+        password_hash="x",
+        role=UserRole.USER,
+        kyc_status=KycStatus.FULLY_VERIFIED,
+    )
     with TestClient(app) as client:
         yield client
 

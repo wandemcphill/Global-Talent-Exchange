@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.models.user import User
 from app.schemas.regen_ecosystem import (
     AcademyGenerationRequest,
@@ -51,7 +51,12 @@ def _raise(exc: RegenEcosystemError) -> None:
 def upsert_academy(
     payload: YouthAcademyUpsertRequest,
     service: RegenEcosystemService = Depends(_service),
+    actor: User = Depends(get_current_user),
 ) -> YouthAcademyView:
+    if payload.club_user_id != actor.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="You may only manage your own club's academy."
+        )
     try:
         academy = service.upsert_academy(
             club_user_id=payload.club_user_id,
@@ -71,7 +76,12 @@ def upsert_academy(
 def generate_academy_players(
     payload: AcademyGenerationRequest,
     service: RegenEcosystemService = Depends(_service),
+    actor: User = Depends(get_current_user),
 ) -> AcademyGenerationResultView:
+    if payload.club_user_id != actor.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="You may only manage your own club's academy."
+        )
     try:
         result = service.generate_academy_players(
             club_user_id=payload.club_user_id,
@@ -88,6 +98,7 @@ def generate_academy_players(
 def promote_academy_player(
     player_id: str,
     service: RegenEcosystemService = Depends(_service),
+    _actor: User = Depends(get_current_user),
 ) -> AcademyPromotionView:
     try:
         result = service.promote_academy_player(player_id)
@@ -101,7 +112,10 @@ def promote_academy_player(
 def create_scout(
     payload: ScoutCreateRequest,
     service: RegenEcosystemService = Depends(_service),
+    actor: User = Depends(get_current_user),
 ) -> ScoutView:
+    if payload.club_user_id != actor.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You may only manage your own club's scouts.")
     try:
         scout = service.create_scout(
             club_user_id=payload.club_user_id,
@@ -121,6 +135,7 @@ def discover_regens(
     scout_id: str,
     limit: int = Query(default=5, ge=1, le=25),
     service: RegenEcosystemService = Depends(_service),
+    _actor: User = Depends(get_current_user),
 ) -> ScoutDiscoveryResultView:
     try:
         result = service.discover_regens(scout_id, limit=limit)
@@ -146,6 +161,7 @@ def get_scout_report(
 def create_agent(
     payload: AgentCreateRequest,
     service: RegenEcosystemService = Depends(_service),
+    _actor: User = Depends(get_current_user),
 ) -> AgentView:
     try:
         agent = service.create_agent(
@@ -164,6 +180,7 @@ def trigger_career_event(
     player_id: str,
     event_type: str | None = Query(default=None),
     service: RegenEcosystemService = Depends(_service),
+    _actor: User = Depends(get_current_user),
 ) -> CareerEventView:
     try:
         event = service.trigger_career_event(player_id, event_type=event_type)
@@ -210,7 +227,10 @@ def cast_award_vote(
     award_id: str,
     payload: AwardVoteRequest,
     service: RegenEcosystemService = Depends(_service),
+    actor: User = Depends(get_current_user),
 ) -> AwardVoteView:
+    if payload.user_id != actor.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You may only cast a vote as yourself.")
     try:
         vote = service.cast_award_vote(
             award_id,
