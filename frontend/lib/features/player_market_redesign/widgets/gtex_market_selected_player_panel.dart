@@ -75,94 +75,6 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
   }
 }
 
-String _salaryLabel(GtexMarketPlayerView player) {
-  final double? amount = player.salaryAmount;
-  if (amount == null || amount <= 0) {
-    return 'Not disclosed';
-  }
-  return '${GtexMarketFormatters.credits(amount)} / wk';
-}
-
-String _contractLabel(GtexMarketPlayerView player) {
-  final double? years = player.contractYearsRemaining;
-  if (years == null || years <= 0) {
-    return 'Not disclosed';
-  }
-  final String value =
-      years == years.roundToDouble()
-          ? years.toStringAsFixed(0)
-          : years.toStringAsFixed(1);
-  return '$value year${value == '1' ? '' : 's'} remaining';
-}
-
-String _buyClauseLabel(GtexMarketPlayerView player) {
-  final double? amount = player.buyClauseAmount;
-  if (amount == null || amount <= 0) {
-    return 'Not disclosed';
-  }
-  return GtexMarketFormatters.credits(amount);
-}
-
-String _swapLabel(GtexMarketPlayerView player) {
-  return _termsLabel(player.swapTerms, fallback: 'No published swap terms');
-}
-
-String _loanLabel(GtexMarketPlayerView player) {
-  return _termsLabel(player.loanTerms, fallback: 'No published loan terms');
-}
-
-String _termsLabel(Map<String, Object?> terms, {required String fallback}) {
-  if (terms.isEmpty) {
-    return fallback;
-  }
-  return terms.entries
-      .where((MapEntry<String, Object?> entry) => entry.value != null)
-      .take(2)
-      .map((MapEntry<String, Object?> entry) {
-        final String label = GtexMarketFormatters.labelFromToken(entry.key);
-        return '$label: ${entry.value}';
-      })
-      .join(', ');
-}
-
-class _TermRow extends StatelessWidget {
-  const _TermRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: GtexColors.textMuted,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          Flexible(
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: GtexColors.text,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _NoSelectedPlayerPanel extends StatelessWidget {
   const _NoSelectedPlayerPanel();
 
@@ -173,7 +85,9 @@ class _NoSelectedPlayerPanel extends StatelessWidget {
       child: GtexEmptyState(
         title: 'Select a player',
         message:
-            'Pick a player to inspect transfer, loan, swap, salary, contract, and buy-clause terms.',
+            'Pick a player for a quick read on value, movement and '
+            'availability, then open the full profile for the football and '
+            'the terms.',
         icon: Icons.person_search_outlined,
       ),
     );
@@ -263,22 +177,21 @@ class _SelectedPlayerDetail extends StatelessWidget {
           ],
         ),
         const SizedBox(height: GtexSpacing.md),
+        // A preview, not a second player screen. The full terms - salary,
+        // contract, clauses, swap and loan conditions - live on the
+        // canonical player detail, so there is one place that holds the
+        // whole story about a footballer.
         GtexPanel(
-          title: 'Transfer terms',
-          subtitle: 'Club, wage, contract, and clauses',
-          child: Column(
-            children: <Widget>[
-              _TermRow(label: 'GSI', value: player.gsiDetailLabel),
-              _TermRow(
-                label: 'GSI movement',
-                value: player.gsiTrendLabel ?? 'No movement signal',
-              ),
-              _TermRow(label: 'Market value', value: player.priceLabel),
-              _TermRow(label: 'Salary range', value: _salaryLabel(player)),
-              _TermRow(label: 'Contract', value: _contractLabel(player)),
-              _TermRow(label: 'Buy clause', value: _buyClauseLabel(player)),
-              _TermRow(label: 'Swap condition', value: _swapLabel(player)),
-              _TermRow(label: 'Loan-to-buy', value: _loanLabel(player)),
+          title: 'At a glance',
+          subtitle: 'Open the full profile for football, terms and depth',
+          child: GtexTermsList(
+            dense: true,
+            rows: <GtexTermRow>[
+              GtexTermRow('GSI', player.gsiDetailLabel),
+              GtexTermRow.orUnknown('GSI movement', player.gsiTrendLabel),
+              GtexTermRow('Market value', player.priceLabel),
+              GtexTermRow.orUnknown('Value movement', player.movementLabel),
+              GtexTermRow('Availability', player.availabilityTypeLabel),
             ],
           ),
         ),
@@ -309,13 +222,13 @@ class _SelectedPlayerDetail extends StatelessWidget {
           children: <Widget>[
             Expanded(
               child: GtexActionButton(
-                label: inBasket ? 'Remove shortlist' : 'Add shortlist',
-                icon:
-                    inBasket
-                        ? Icons.remove_shopping_cart_outlined
-                        : Icons.playlist_add,
-                onPressed: onToggleBasket,
-                accent: inBasket ? GtexColors.red : GtexColors.gold,
+                key: const Key('gtex-market-open-full-profile'),
+                label:
+                    isAuthenticated
+                        ? 'Open full profile'
+                        : 'Sign in to open profile',
+                icon: isAuthenticated ? Icons.open_in_new : Icons.login,
+                onPressed: isAuthenticated ? onOpenPlayer : onOpenLogin,
               ),
             ),
           ],
@@ -325,19 +238,13 @@ class _SelectedPlayerDetail extends StatelessWidget {
           children: <Widget>[
             Expanded(
               child: GtexActionButton(
-                label:
-                    isAuthenticated
-                        ? player.hasOpenTransferListing
-                            ? 'Negotiate'
-                            : 'Open player card'
-                        : 'Sign in to negotiate',
+                label: inBasket ? 'Remove shortlist' : 'Add shortlist',
                 icon:
-                    isAuthenticated
-                        ? player.hasOpenTransferListing
-                            ? Icons.handshake_outlined
-                            : Icons.open_in_new
-                        : Icons.login,
-                onPressed: isAuthenticated ? onOpenPlayer : onOpenLogin,
+                    inBasket
+                        ? Icons.remove_shopping_cart_outlined
+                        : Icons.playlist_add,
+                onPressed: onToggleBasket,
+                accent: inBasket ? GtexColors.red : GtexColors.gold,
                 secondary: true,
               ),
             ),

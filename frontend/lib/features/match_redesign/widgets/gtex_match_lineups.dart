@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../player_detail/gtex_player_navigator.dart';
 import '../data/gtex_match_models.dart';
 import 'gtex_match_visual_tokens.dart';
 
@@ -90,67 +91,106 @@ class _LineupTeam extends StatelessWidget {
             )
           else
             for (final GtexLineupPlayer player in team.players)
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: GtexMatchVisualTokens.surfaceRaised,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: GtexMatchVisualTokens.border),
-                ),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 34,
-                      child: Text(
-                        '#${player.shirtNumber}',
+              // A lineup name was dead text: the match knew exactly which
+              // footballer it was and there was no way to go and look at
+              // them. It now opens the same canonical player detail as the
+              // market and the portfolio.
+              _OpenLineupPlayer(
+                player: player,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: GtexMatchVisualTokens.surfaceRaised,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: GtexMatchVisualTokens.border),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 34,
+                        child: Text(
+                          '#${player.shirtNumber}',
+                          style: const TextStyle(
+                            color: GtexMatchVisualTokens.live,
+                            fontFamily: 'JetBrains Mono',
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          player.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: GtexMatchVisualTokens.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (player.isRegen) ...[
+                        const SizedBox(width: 8),
+                        const _MicroTag(
+                          label: 'REGEN',
+                          color: GtexMatchVisualTokens.regen,
+                        ),
+                      ],
+                      const SizedBox(width: 8),
+                      _MicroTag(
+                        label: player.position,
+                        color: GtexMatchVisualTokens.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        player.rating > 0
+                            ? player.rating.toStringAsFixed(1)
+                            : '--',
                         style: const TextStyle(
-                          color: GtexMatchVisualTokens.live,
+                          color: GtexMatchVisualTokens.textPrimary,
                           fontFamily: 'JetBrains Mono',
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        player.name,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: GtexMatchVisualTokens.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    if (player.isRegen) ...[
-                      const SizedBox(width: 8),
-                      const _MicroTag(
-                        label: 'REGEN',
-                        color: GtexMatchVisualTokens.regen,
-                      ),
                     ],
-                    const SizedBox(width: 8),
-                    _MicroTag(
-                      label: player.position,
-                      color: GtexMatchVisualTokens.textSecondary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      player.rating > 0
-                          ? player.rating.toStringAsFixed(1)
-                          : '--',
-                      style: const TextStyle(
-                        color: GtexMatchVisualTokens.textPrimary,
-                        fontFamily: 'JetBrains Mono',
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
         ],
+      ),
+    );
+  }
+}
+
+/// Wraps a lineup row so it opens the canonical player detail. The row is
+/// only made tappable when the fixture actually carried a player id - the
+/// repository falls back to the player's name when the feed omits one, and
+/// a name is not something the profile can be looked up by.
+class _OpenLineupPlayer extends StatelessWidget {
+  const _OpenLineupPlayer({required this.player, required this.child});
+
+  final GtexLineupPlayer player;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasRealId =
+        player.id.trim().isNotEmpty && player.id.trim() != player.name.trim();
+    final VoidCallback? onTap =
+        hasRealId ? GtexPlayerNavigator.tapToOpen(context, player.id) : null;
+    if (onTap == null) {
+      return child;
+    }
+    return Semantics(
+      button: true,
+      label: 'Open ${player.name}',
+      child: InkWell(
+        key: Key('gtex-lineup-open-${player.id}'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: child,
       ),
     );
   }

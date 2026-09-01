@@ -77,12 +77,43 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
 
   /// Loaded separately from the profile itself: the trading snapshot spans
   /// six endpoints, and a failure there must not blank out the profile.
+  ///
+  /// Deferred to after the frame because `openPlayer` notifies the shared
+  /// exchange controller synchronously. Called straight from `initState` -
+  /// which runs while the route that is pushing this screen is still being
+  /// built - that notification marked the shell's AnimatedBuilder dirty
+  /// mid-build and threw "setState() called during build" every time a
+  /// player was opened.
   void _loadTradingSnapshot() {
     final GteExchangeController? controller = widget.controller;
     if (controller == null) {
       return;
     }
-    controller.openPlayer(widget.playerId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      controller.openPlayer(widget.playerId);
+    });
+  }
+
+  /// The player's market listing, when the market list this session already
+  /// loaded happens to contain it. Salary, buy clause, swap and loan terms
+  /// live on the listing rather than on the player detail payload, and they
+  /// used to be visible only in the market's side panel. Nothing is fetched
+  /// for this: when the listing is not loaded the terms simply read as
+  /// unavailable.
+  GteMarketPlayerListItem? get _marketListing {
+    final GteExchangeController? controller = widget.controller;
+    if (controller == null) {
+      return null;
+    }
+    for (final GteMarketPlayerListItem item in controller.players) {
+      if (item.playerId == widget.playerId) {
+        return item;
+      }
+    }
+    return null;
   }
 
   GtePlayerMarketSnapshot? get _snapshot {
@@ -170,6 +201,8 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
                 detail: snap.data!,
                 careerEntries: _snapshot?.careerEntries,
                 orderBook: _snapshot?.orderBook,
+                overview: _snapshot?.overview,
+                listing: _marketListing,
                 actions: _TradeActionBar(
                   detail: snap.data!,
                   controller: controller,
@@ -225,12 +258,16 @@ class _ProfileBody extends StatelessWidget {
     required this.actions,
     this.careerEntries,
     this.orderBook,
+    this.overview,
+    this.listing,
   });
 
   final GteMarketPlayerDetailView detail;
   final Widget? actions;
   final List<GteCareerEntry>? careerEntries;
   final GteOrderBook? orderBook;
+  final GtePlayerOverview? overview;
+  final GteMarketPlayerListItem? listing;
 
   @override
   Widget build(BuildContext context) {
@@ -275,6 +312,10 @@ class _ProfileBody extends StatelessWidget {
       _SectionLabel('TERMS'),
       const SizedBox(height: 8),
       _TermsCard(profile: detail.marketProfile),
+      const SizedBox(height: 14),
+      _SectionLabel('TRANSFER'),
+      const SizedBox(height: 8),
+      _TransferCard(overview: overview, listing: listing),
       // Depth is only drawn when the live book actually has levels, so an
       // empty book reads as empty rather than as a flat market.
       if (hasDepth) ...<Widget>[
@@ -1067,32 +1108,31 @@ class _TrajectoryCard extends StatelessWidget {
     final int potential = attr.potential;
     final int? headroom =
         overall > 0 && potential > 0 ? potential - overall : null;
-    final List<Widget> rows = <Widget>[
-      _TrajectoryRow(
-        label: 'GSI movement',
-        value: _signedPct(trend.globalScoutingIndexMovementPct),
-        color: _directionColor(trend.globalScoutingIndexMovementPct),
+    final List<GtexTermRow> rows = <GtexTermRow>[
+      GtexTermRow(
+        'GSI movement',
+        _signedPct(trend.globalScoutingIndexMovementPct),
+        valueColor: _directionColor(trend.globalScoutingIndexMovementPct),
       ),
-      _TrajectoryRow(
-        label: 'Value trend 7d',
-        value: _signedPct(trend.trend7dPct),
-        color: _directionColor(trend.trend7dPct),
+      GtexTermRow(
+        'Value trend 7d',
+        _signedPct(trend.trend7dPct),
+        valueColor: _directionColor(trend.trend7dPct),
       ),
-      _TrajectoryRow(
-        label: 'Value trend 30d',
-        value: _signedPct(trend.trend30dPct),
-        color: _directionColor(trend.trend30dPct),
+      GtexTermRow(
+        'Value trend 30d',
+        _signedPct(trend.trend30dPct),
+        valueColor: _directionColor(trend.trend30dPct),
       ),
-      _TrajectoryRow(
-        label: 'Development headroom',
-        value: headroom == null ? _unknown : '+$headroom to ceiling',
-        color: headroom == null ? _textMuted : _blue,
-      ),
-      _TrajectoryRow(
-        label: 'Scouting confidence',
-        value: _orUnknown(trend.confidenceTier),
-        color: _textSecondary,
-      ),
+      if (headroom == null)
+        const GtexTermRow.unknown('Development headroom')
+      else
+        GtexTermRow(
+          'Development headroom',
+          '+$headroom to ceiling',
+          valueColor: _blue,
+        ),
+      GtexTermRow.orUnknown('Scouting confidence', trend.confidenceTier),
     ];
     final List<String> tags =
         <String>[
@@ -1110,7 +1150,7 @@ class _TrajectoryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          ...rows,
+          GtexTermsList(rows: rows),
           if (tags.isNotEmpty) ...<Widget>[
             const SizedBox(height: 10),
             Wrap(
@@ -1154,11 +1194,6 @@ class _TrajectoryCard extends StatelessWidget {
     return '$prefix${value.toStringAsFixed(1)}%';
   }
 
-  String _orUnknown(String? value) {
-    final String? trimmed = value?.trim();
-    return trimmed == null || trimmed.isEmpty ? _unknown : trimmed;
-  }
-
   Color _directionColor(double? value) {
     if (value == null) {
       return _textMuted;
@@ -1173,50 +1208,6 @@ class _TrajectoryCard extends StatelessWidget {
   }
 }
 
-class _TrajectoryRow extends StatelessWidget {
-  const _TrajectoryRow({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _textSecondary, fontSize: 13),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: color,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Holding terms for the asset: supply, liquidity and concentration. All of
-/// it already came back with the player; none of it had a render site.
 class _TermsCard extends StatelessWidget {
   const _TermsCard({required this.profile});
 
@@ -1231,49 +1222,126 @@ class _TermsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _TrajectoryRow(
-            label: 'Supply tier',
-            value: _orUnknown(profile.supplyTier),
-            color: _textSecondary,
+      child: GtexTermsList(
+        rows: <GtexTermRow>[
+          GtexTermRow.orUnknown('Supply tier', profile.supplyTier),
+          GtexTermRow.orUnknown('Liquidity band', profile.liquidityBand),
+          GtexTermRow.orUnknown(
+            'Top holder share',
+            _pct(profile.topHolderSharePct),
+            valueColor: _blue,
           ),
-          _TrajectoryRow(
-            label: 'Liquidity band',
-            value: _orUnknown(profile.liquidityBand),
-            color: _textSecondary,
+          GtexTermRow.orUnknown(
+            'Top 3 holder share',
+            _pct(profile.top3HolderSharePct),
+            valueColor: _blue,
           ),
-          _TrajectoryRow(
-            label: 'Top holder share',
-            value: _pct(profile.topHolderSharePct),
-            color: _blue,
-          ),
-          _TrajectoryRow(
-            label: 'Top 3 holder share',
-            value: _pct(profile.top3HolderSharePct),
-            color: _blue,
-          ),
-          _TrajectoryRow(
-            label: 'Trade trust score',
-            value:
-                profile.tradeTrustScore == null
-                    ? '\u2014'
-                    : profile.tradeTrustScore!.toStringAsFixed(1),
-            color: _green,
+          GtexTermRow.orUnknown(
+            'Trade trust score',
+            profile.tradeTrustScore?.toStringAsFixed(1),
+            valueColor: _green,
           ),
         ],
       ),
     );
   }
 
-  String _orUnknown(String? value) {
-    final String? trimmed = value?.trim();
-    return trimmed == null || trimmed.isEmpty ? '\u2014' : trimmed;
+  String? _pct(double? value) =>
+      value == null ? null : '${value.toStringAsFixed(1)}%';
+}
+
+/// The transfer story: contract, availability and the listing terms a club
+/// would actually negotiate on. Contract and availability come from the
+/// player's own overview; salary, buy clause, swap and loan terms come from
+/// the market listing when this session has it loaded. These used to exist
+/// only inside the market's side panel, so the canonical player screen was
+/// missing half of what a buyer needs.
+class _TransferCard extends StatelessWidget {
+  const _TransferCard({required this.overview, required this.listing});
+
+  final GtePlayerOverview? overview;
+  final GteMarketPlayerListItem? listing;
+
+  @override
+  Widget build(BuildContext context) {
+    final GteContractBadgeView? contract = overview?.contractBadge;
+    final GteTransferStatusView? transfer = overview?.transferStatus;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          GtexTermsList(
+            rows: <GtexTermRow>[
+              GtexTermRow.orUnknown(
+                'Availability',
+                overview?.availabilityBadge.label,
+              ),
+              GtexTermRow.orUnknown('Contract', contract?.label),
+              GtexTermRow.orUnknown('Contract club', contract?.clubName),
+              if (transfer == null)
+                const GtexTermRow.unknown('Transfer window')
+              else
+                GtexTermRow(
+                  'Transfer window',
+                  transfer.windowLabel ??
+                      (transfer.windowOpen ? 'Open' : 'Closed'),
+                  valueColor: transfer.windowOpen ? _green : _textSecondary,
+                ),
+              if (transfer != null && transfer.reason != null)
+                GtexTermRow('Transfer note', transfer.reason!),
+              GtexTermRow.orUnknown('Salary', _salary(listing)),
+              GtexTermRow.orUnknown('Buy clause', _buyClause(listing)),
+              GtexTermRow.orUnknown('Swap terms', _terms(listing?.swapTerms)),
+              GtexTermRow.orUnknown('Loan terms', _terms(listing?.loanTerms)),
+            ],
+          ),
+          if (listing == null) ...<Widget>[
+            const SizedBox(height: 8),
+            const Text(
+              'Listing terms load with the transfer market. Open this player '
+              'from the Transfer Hub to see the published terms.',
+              style: TextStyle(color: _textMuted, fontSize: 11.5, height: 1.3),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
-  String _pct(double? value) =>
-      value == null ? '\u2014' : '${value.toStringAsFixed(1)}%';
+  String? _salary(GteMarketPlayerListItem? item) {
+    final double? amount = item?.salaryAmount;
+    if (amount == null || amount <= 0) {
+      return null;
+    }
+    return '${amount.toStringAsFixed(0)} GTC / wk';
+  }
+
+  String? _buyClause(GteMarketPlayerListItem? item) {
+    final double? amount = item?.buyClauseAmount;
+    if (amount == null || amount <= 0) {
+      return null;
+    }
+    return '${amount.toStringAsFixed(0)} GTC';
+  }
+
+  String? _terms(Map<String, Object?>? terms) {
+    if (terms == null || terms.isEmpty) {
+      return null;
+    }
+    final Iterable<String> parts = terms.entries
+        .where((MapEntry<String, Object?> entry) => entry.value != null)
+        .take(2)
+        .map(
+          (MapEntry<String, Object?> entry) => '${entry.key}: ${entry.value}',
+        );
+    return parts.isEmpty ? null : parts.join(', ');
+  }
 }
 
 class _MarketCard extends StatelessWidget {

@@ -29,6 +29,7 @@ import 'package:gte_frontend/features/launch_control_redesign/launch_control_fea
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
+import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
 import 'package:gte_frontend/features/social/social_screen.dart';
 import 'package:gte_frontend/features/world/widgets/football_world_pulse_widgets.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
@@ -280,11 +281,19 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       child: AnimatedBuilder(
         animation: widget.controller,
         builder: (BuildContext context, Widget? child) {
-          final Widget workspace = PageStorage(
-            bucket: _pageStorageBucket,
-            child: KeyedSubtree(
-              key: ValueKey<String>('shell-${_route.primaryDestination.name}'),
-              child: _buildCurrentDestination(),
+          // Every surface below the shell opens a player the same way, so a
+          // squad row, a lineup name and a market card all resolve to the
+          // one canonical player detail.
+          final Widget workspace = GtexPlayerNavigator(
+            openPlayer: _openPlayer,
+            child: PageStorage(
+              bucket: _pageStorageBucket,
+              child: KeyedSubtree(
+                key: ValueKey<String>(
+                  'shell-${_route.primaryDestination.name}',
+                ),
+                child: _buildCurrentDestination(),
+              ),
             ),
           );
 
