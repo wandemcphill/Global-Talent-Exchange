@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, update
 from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService
@@ -349,10 +349,7 @@ class TransferMarketService:
             statement = statement.where(TransferListing.contract_years_remaining >= min_contract_years)
         if max_contract_years is not None:
             statement = statement.where(TransferListing.contract_years_remaining <= max_contract_years)
-        if any(
-            value is not None
-            for value in (position, country_id, league_id, club_profile_id, real_player_only)
-        ):
+        if any(value is not None for value in (position, country_id, league_id, club_profile_id, real_player_only)):
             statement = statement.join(Player, Player.id == TransferListing.player_id)
             if position is not None:
                 statement = statement.where(Player.normalized_position == position)
@@ -598,6 +595,31 @@ class TransferMarketService:
         if offer.status not in {"open", "countered"}:
             raise TransferMarketValidationError("Only open or countered offers can be accepted.")
         effective_at = self._coerce_utc(reference_at or utcnow())
+        # Claim the offer and the listing with guarded UPDATEs rather than
+        # read-then-write. Two accepts racing on sibling offers of the same
+        # listing would otherwise both observe an open listing and both close
+        # it, leaving one player sold twice.
+        claimed_offer = self.session.execute(
+            update(TransferHubOffer)
+            .where(
+                TransferHubOffer.id == offer.id,
+                TransferHubOffer.status.in_(("open", "countered")),
+            )
+            .values(status="accepted", resolved_at=effective_at)
+            .execution_options(synchronize_session=False)
+        )
+        if claimed_offer.rowcount == 0:
+            self.session.rollback()
+            raise TransferMarketValidationError("Only open or countered offers can be accepted.")
+        claimed_listing = self.session.execute(
+            update(TransferListing)
+            .where(TransferListing.id == listing.id, TransferListing.status != "accepted")
+            .values(status="accepted", closed_at=effective_at)
+            .execution_options(synchronize_session=False)
+        )
+        if claimed_listing.rowcount == 0:
+            self.session.rollback()
+            raise TransferMarketValidationError("This listing has already been resolved.")
         offer.status = "accepted"
         offer.resolved_at = effective_at
         listing.status = "accepted"
@@ -636,7 +658,9 @@ class TransferMarketService:
         )
         return self.to_hub_offer_view(offer)
 
-    def reject_hub_offer(self, offer_id: str, *, actor: User, reference_at: datetime | None = None) -> TransferHubOfferView:
+    def reject_hub_offer(
+        self, offer_id: str, *, actor: User, reference_at: datetime | None = None
+    ) -> TransferHubOfferView:
         offer = self._require_hub_offer(offer_id)
         self._resolve_actor_club_id(
             actor,
@@ -652,7 +676,9 @@ class TransferMarketService:
         self.session.refresh(offer)
         return self.to_hub_offer_view(offer)
 
-    def cancel_hub_offer(self, offer_id: str, *, actor: User, reference_at: datetime | None = None) -> TransferHubOfferView:
+    def cancel_hub_offer(
+        self, offer_id: str, *, actor: User, reference_at: datetime | None = None
+    ) -> TransferHubOfferView:
         offer = self._require_hub_offer(offer_id)
         self._resolve_actor_club_id(
             actor,
@@ -713,7 +739,9 @@ class TransferMarketService:
     ) -> TransferRequestView:
         player = self._require_player(player_id)
         effective_at = self._coerce_utc(reference_at or utcnow())
-        current_club_id = payload.current_club_id or self._current_player_club_id(player.id, on_date=effective_at.date())
+        current_club_id = payload.current_club_id or self._current_player_club_id(
+            player.id, on_date=effective_at.date()
+        )
         if current_club_id:
             self._resolve_actor_club_id(
                 actor,
