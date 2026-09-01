@@ -28,7 +28,6 @@ from app.services.spending_control_service import SpendingControlService
 from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
-COIN_TO_CREDIT_RATE = Decimal("100.0000")
 DEFAULT_LOTTERY_TRIGGER_STEP = Decimal("10000.0000")
 DEFAULT_LOTTERY_REWARDS: tuple[Decimal, ...] = (
     Decimal("10.0000"),
@@ -231,8 +230,8 @@ class MatchEconomyEngine:
                 ],
                 reason=LedgerEntryReason.ADJUSTMENT,
                 source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
-                reference=f"gtex-rewards-topup:{match.match_id}:{generate_uuid()}",
-                external_reference=f"gtex-rewards-topup:{match.match_id}",
+                reference=f"gtex-promo-topup:{match.match_id}:{generate_uuid()}",
+                external_reference=f"gtex-promo-topup:{match.match_id}",
                 description=f"Treasury top-up for {match.title} promo pool",
                 actor=actor,
                 transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
@@ -455,11 +454,13 @@ class MatchEconomyEngine:
         normalized_amount = self._normalize_amount(amount)
         if normalized_amount <= Decimal("0.0000"):
             raise MatchEconomyError("Recorded match volume must be positive.")
-        if unit == LedgerUnit.COIN:
+        # Match-volume accounting is already expressed in the economic unit supplied by
+        # the caller.  Fan Coin is intentionally not reverse-convertible into GTEX Coin.
+        # Normalize the recorded volume directly rather than invoking the wallet
+        # conversion API, which correctly rejects CREDIT -> COIN conversion.
+        if unit in {LedgerUnit.COIN, LedgerUnit.CREDIT}:
             return normalized_amount
-        if unit == LedgerUnit.CREDIT:
-            return self._normalize_amount(normalized_amount / COIN_TO_CREDIT_RATE)
-        return self.economy_service.quote_conversion(amount=normalized_amount, source_unit=unit).target_amount
+        raise MatchEconomyError(f"Unsupported match volume unit: {unit!s}")
 
     @staticmethod
     def _threshold_index(amount: Decimal, threshold: Decimal) -> int:

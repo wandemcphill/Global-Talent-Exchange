@@ -267,11 +267,17 @@ def test_record_match_volume_triggers_lottery_for_recently_active_users(session)
 
     engine = MatchEconomyEngine(session=session, wallet_service=wallet)
 
+    # CREDIT (Fan Coin) match volume is recorded in its own unit and is never
+    # converted into a COIN-equivalent (Fan Coin is intentionally not
+    # reverse-convertible into GTEX Coin, matching WalletService.quote_conversion).
+    # trigger_step is therefore expressed directly in CREDIT so this records
+    # exactly one lottery threshold crossing rather than assuming a conversion
+    # rate that no longer exists.
     result = engine.record_match_volume(
         amount=Decimal("500.0000"),
         unit=LedgerUnit.CREDIT,
         actor=admin,
-        trigger_step=Decimal("5.0000"),
+        trigger_step=Decimal("500.0000"),
         reward_options=(Decimal("3.0000"),),
         activity_window=timedelta(days=30),
     )
@@ -281,11 +287,13 @@ def test_record_match_volume_triggers_lottery_for_recently_active_users(session)
     )
     daily_stat = session.get(EconomyDailyStat, utcnow().date())
     assert result.previous_volume == Decimal("0.0000")
-    assert result.current_volume == Decimal("5.0000")
+    assert result.current_volume == Decimal("500.0000")
     assert len(result.triggered_rewards) == 1
     assert result.triggered_rewards[0].winner_user_id == eligible_user.id
-    assert wallet.get_balance(session, wallet.get_user_account(session, eligible_user, LedgerUnit.COIN)) == Decimal("3.0000")
+    assert wallet.get_balance(session, wallet.get_user_account(session, eligible_user, LedgerUnit.COIN)) == Decimal(
+        "3.0000"
+    )
     assert settlement is not None
     assert settlement.net_amount == Decimal("3.0000")
     assert daily_stat is not None
-    assert daily_stat.match_spend_amount == Decimal("5.0000")
+    assert daily_stat.match_spend_amount == Decimal("500.0000")
