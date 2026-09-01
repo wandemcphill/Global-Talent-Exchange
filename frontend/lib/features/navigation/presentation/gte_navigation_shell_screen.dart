@@ -30,6 +30,7 @@ import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.da
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_screen.dart';
 import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
+import 'package:gte_frontend/features/regens/regens_screen_v2.dart';
 import 'package:gte_frontend/features/social/social_screen.dart';
 import 'package:gte_frontend/features/world/widgets/football_world_pulse_widgets.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
@@ -122,6 +123,7 @@ Color _routeAccentFor(BuildContext context, GtePrimaryDestination destination) {
     case GtePrimaryDestination.market:
       return tokens.accent;
     case GtePrimaryDestination.competitions:
+    case GtePrimaryDestination.regens:
       return tokens.accentArena;
     case GtePrimaryDestination.hub:
     case GtePrimaryDestination.community:
@@ -797,6 +799,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         GtePrimaryDestination.home,
         GtePrimaryDestination.club,
         GtePrimaryDestination.market,
+        GtePrimaryDestination.regens,
         GtePrimaryDestination.competitions,
         GtePrimaryDestination.community,
       ];
@@ -805,6 +808,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       return const <GtePrimaryDestination>[
         GtePrimaryDestination.home,
         GtePrimaryDestination.market,
+        GtePrimaryDestination.regens,
         GtePrimaryDestination.competitions,
         GtePrimaryDestination.club,
         GtePrimaryDestination.wallet,
@@ -817,6 +821,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         GtePrimaryDestination.home,
         GtePrimaryDestination.wallet,
         GtePrimaryDestination.market,
+        GtePrimaryDestination.regens,
         GtePrimaryDestination.community,
       ];
     }
@@ -826,6 +831,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         GtePrimaryDestination.hub,
         GtePrimaryDestination.community,
         GtePrimaryDestination.market,
+        GtePrimaryDestination.regens,
         GtePrimaryDestination.wallet,
       ];
     }
@@ -834,6 +840,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         GtePrimaryDestination.home,
         GtePrimaryDestination.club,
         GtePrimaryDestination.market,
+        GtePrimaryDestination.regens,
         GtePrimaryDestination.competitions,
         GtePrimaryDestination.wallet,
         GtePrimaryDestination.hub,
@@ -844,6 +851,7 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       return const <GtePrimaryDestination>[
         GtePrimaryDestination.home,
         GtePrimaryDestination.market,
+        GtePrimaryDestination.regens,
         GtePrimaryDestination.club,
         GtePrimaryDestination.wallet,
         GtePrimaryDestination.community,
@@ -1031,6 +1039,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         return _buildCompetitionsDestination();
       case GtePrimaryDestination.market:
         return _buildMarketDestination();
+      case GtePrimaryDestination.regens:
+        return _buildRegensDestination();
       case GtePrimaryDestination.hub:
         return _buildHubDestination();
       case GtePrimaryDestination.community:
@@ -1070,6 +1080,21 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       onOpenLogin:
           () => _openLogin(targetRoute: const GteNavigationRoute.market()),
       navigationDependencies: _navigationDependencies(),
+    );
+  }
+
+  Widget _buildRegensDestination() {
+    // The canonical regen surface, mounted inside the shell so it finally
+    // inherits the GTEX dark canvas, the navigation rail and back behaviour.
+    // It used to be a top-level GoRoute rendering on a bare white page.
+    return RegensScreenV2(
+      key: const PageStorageKey<String>('regen-world-v2'),
+      baseUrl: widget.apiBaseUrl,
+      backendMode: widget.backendMode,
+      accessToken: widget.controller.accessToken,
+      isAuthenticated: widget.controller.isAuthenticated,
+      isAdmin: widget.controller.isAdmin,
+      onOpenAwards: () => _openFeatureRoute(const WorldAwardsRouteData()),
     );
   }
 
@@ -1249,6 +1274,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       case GtePrimaryDestination.market:
         {
           await widget.controller.loadMarket(reset: false);
+          return;
+        }
+      case GtePrimaryDestination.regens:
+        {
+          // Regen World owns its own future-backed load and refreshes from
+          // its own retry affordance; the shell has nothing to poll here.
           return;
         }
       case GtePrimaryDestination.competitions:
@@ -1507,6 +1538,17 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
           accent: accent,
           isRefreshing: widget.controller.isLoadingMarket,
           onRefresh: () => widget.controller.loadMarket(reset: true),
+        );
+      case GtePrimaryDestination.regens:
+        return GteSyncStatusCard(
+          title: 'Regen World',
+          status:
+              'Regen prospects, lineage, contracts, and Create-a-Son orders '
+              'load from the live regen universe.',
+          syncedAt: null,
+          accent: accent,
+          isRefreshing: false,
+          onRefresh: null,
         );
       case GtePrimaryDestination.hub:
         final bool creatorHealthy = _creatorController.errorMessage == null;

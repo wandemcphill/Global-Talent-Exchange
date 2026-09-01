@@ -5,6 +5,11 @@ enum GtePrimaryDestination {
   home,
   competitions,
   market,
+  // Regen World is GTEX's most differentiated surface and used to be
+  // reachable only by typing /world/regens: no navigation entry, no shell,
+  // and a Home tile that pointed at national team competitions instead. It
+  // is a lane of the product, so it is a destination of the shell.
+  regens,
   hub,
   community,
   club,
@@ -45,6 +50,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return 'Matchday';
       case GtePrimaryDestination.market:
         return 'Transfer Hub';
+      case GtePrimaryDestination.regens:
+        return 'Regen World';
       case GtePrimaryDestination.hub:
         return 'Studio';
       case GtePrimaryDestination.community:
@@ -64,6 +71,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return 'play';
       case GtePrimaryDestination.market:
         return 'market';
+      case GtePrimaryDestination.regens:
+        return 'regens';
       case GtePrimaryDestination.hub:
         return 'hub';
       case GtePrimaryDestination.community:
@@ -85,6 +94,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return Icons.play_circle_outline;
       case GtePrimaryDestination.market:
         return Icons.storefront_outlined;
+      case GtePrimaryDestination.regens:
+        return Icons.family_restroom_outlined;
       case GtePrimaryDestination.hub:
         return Icons.dashboard_outlined;
       case GtePrimaryDestination.community:
@@ -104,6 +115,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return const Color(0xFFB26DFF);
       case GtePrimaryDestination.market:
         return const Color(0xFFFFA860);
+      case GtePrimaryDestination.regens:
+        return const Color(0xFFC79BFF);
       case GtePrimaryDestination.hub:
       case GtePrimaryDestination.community:
         return const Color(0xFF5FE3A1);
@@ -122,6 +135,8 @@ extension GtePrimaryDestinationX on GtePrimaryDestination {
         return Icons.play_circle;
       case GtePrimaryDestination.market:
         return Icons.storefront;
+      case GtePrimaryDestination.regens:
+        return Icons.family_restroom;
       case GtePrimaryDestination.hub:
         return Icons.dashboard;
       case GtePrimaryDestination.community:
@@ -162,6 +177,9 @@ class GteNavigationRoute {
 
   const GteNavigationRoute.club()
     : this._(primaryDestination: GtePrimaryDestination.club);
+
+  const GteNavigationRoute.regens()
+    : this._(primaryDestination: GtePrimaryDestination.regens);
 
   const GteNavigationRoute.wallet({
     GteCapitalDestination capitalDestination = GteCapitalDestination.wallet,
@@ -209,6 +227,8 @@ class GteNavigationRoute {
         );
       case GtePrimaryDestination.market:
         return const GteNavigationRoute.market();
+      case GtePrimaryDestination.regens:
+        return const GteNavigationRoute.regens();
       case GtePrimaryDestination.hub:
         return const GteNavigationRoute.hub();
       case GtePrimaryDestination.community:
@@ -238,17 +258,16 @@ class GteNavigationRoute {
     if (uri == null) {
       return const GteNavigationRoute.home();
     }
-    final List<String> segments = uri.pathSegments
-        .where((String item) => item.isNotEmpty)
-        .toList();
+    final List<String> segments =
+        uri.pathSegments.where((String item) => item.isNotEmpty).toList();
     if (segments.isEmpty) {
       return const GteNavigationRoute.home();
     }
 
     final List<String> normalizedSegments =
         segments.isNotEmpty && segments.first.toLowerCase() == 'app'
-        ? segments.sublist(1)
-        : segments;
+            ? segments.sublist(1)
+            : segments;
     if (normalizedSegments.isEmpty) {
       return const GteNavigationRoute.home();
     }
@@ -264,6 +283,15 @@ class GteNavigationRoute {
       case 'market':
       case 'transfer-hub':
         return const GteNavigationRoute.market();
+      case 'regens':
+      case 'regen-universe':
+        return const GteNavigationRoute.regens();
+      case 'world':
+        if (normalizedSegments.length > 1 &&
+            normalizedSegments[1].toLowerCase() == 'regens') {
+          return const GteNavigationRoute.regens();
+        }
+        return const GteNavigationRoute.home();
       case 'coin-traders':
         return const GteNavigationRoute.wallet(
           capitalDestination: GteCapitalDestination.coinTraders,

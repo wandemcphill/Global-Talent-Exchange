@@ -434,6 +434,7 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
   static GtexCreateSonOrder _createSonOrderFromLive(RegenCreationOrder order) {
     return GtexCreateSonOrder(
       id: order.id,
+      parentPlayerId: order.parentPlayerId,
       parentPlayerName: order.parentPlayerId ?? 'Live parent',
       status: order.status,
       amountCoin: order.amountCoin,
@@ -497,6 +498,7 @@ class DemoGtexRegenRepository implements GtexRegenRepository {
     );
     return GtexCreateSonOrder(
       id: 'son-${DateTime.now().millisecondsSinceEpoch}',
+      parentPlayerId: parent.id,
       parentPlayerName: parent.name,
       status:
           draft.paymentMethod == 'wallet'

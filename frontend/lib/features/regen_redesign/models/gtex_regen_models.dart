@@ -297,11 +297,18 @@ class GtexCreateSonOrder {
     required this.amountCoin,
     required this.paymentMethod,
     required this.createdAtLabel,
+    this.parentPlayerId,
     this.generatedRegenName,
   });
 
   final String id;
   final String parentPlayerName;
+
+  /// The parent this regen inherits from, when the backend told us which
+  /// player it was. Lineage is the whole point of a regen, so where the id
+  /// exists the relationship is navigable rather than prose. Null means the
+  /// order did not name a player, and nothing is invented to fill it.
+  final String? parentPlayerId;
   final String status;
   final double amountCoin;
   final String paymentMethod;

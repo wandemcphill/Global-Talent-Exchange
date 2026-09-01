@@ -3,6 +3,7 @@ import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/gtex_regen_repository.dart';
 import '../models/gtex_regen_models.dart';
+import '../../player_detail/gtex_player_navigator.dart';
 
 class GtexCreateSonScreenV2 extends StatefulWidget {
   const GtexCreateSonScreenV2({
@@ -245,6 +246,31 @@ class _CreateSonLeftPanel extends StatelessWidget {
                             ],
                           ),
                         ),
+                        // The parent is a real footballer in GTEX. Opening
+                        // the canonical detail from here is what makes the
+                        // lineage a relationship rather than a label.
+                        Builder(
+                          builder: (BuildContext context) {
+                            final VoidCallback? open =
+                                GtexPlayerNavigator.tapToOpen(
+                                  context,
+                                  parent.id,
+                                );
+                            if (open == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return IconButton(
+                              key: Key('gtex-regen-parent-open-${parent.id}'),
+                              tooltip: 'Open ${parent.name}',
+                              onPressed: open,
+                              icon: const Icon(
+                                Icons.open_in_new,
+                                size: 18,
+                                color: GtexColors.textMuted,
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   );
@@ -472,9 +498,10 @@ class _CreateSonSummary extends StatelessWidget {
                   color: GtexColors.mint,
                 ),
                 const SizedBox(height: GtexSpacing.sm),
-                Text(
-                  'Parent: ${createdOrder!.parentPlayerName}',
-                  style: const TextStyle(color: GtexColors.textSecondary),
+                _ParentLineageLine(
+                  parentPlayerId: createdOrder!.parentPlayerId,
+                  parentPlayerName: createdOrder!.parentPlayerName,
+                  regenName: createdOrder!.generatedRegenName,
                 ),
                 Text(
                   'Amount: ${createdOrder!.amountCoin.toStringAsFixed(0)} coin',
@@ -577,6 +604,78 @@ class _CostLine extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Renders the lineage of a Create-a-Son order as `Parent -> Regen`. When
+/// the order named a player the parent opens the canonical player detail;
+/// when it only carried a label it stays text, because a name is not
+/// something the profile can be looked up by.
+class _ParentLineageLine extends StatelessWidget {
+  const _ParentLineageLine({
+    required this.parentPlayerId,
+    required this.parentPlayerName,
+    required this.regenName,
+  });
+
+  final String? parentPlayerId;
+  final String parentPlayerName;
+  final String? regenName;
+
+  @override
+  Widget build(BuildContext context) {
+    final VoidCallback? open = GtexPlayerNavigator.tapToOpen(
+      context,
+      parentPlayerId,
+    );
+    final Widget parentLabel = Text(
+      parentPlayerName,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: open == null ? GtexColors.textSecondary : GtexColors.gold,
+        fontWeight: FontWeight.w900,
+        decoration: open == null ? null : TextDecoration.underline,
+      ),
+    );
+    return Row(
+      children: <Widget>[
+        const Icon(
+          Icons.account_tree_rounded,
+          size: 16,
+          color: GtexColors.textMuted,
+        ),
+        const SizedBox(width: GtexSpacing.xs),
+        Flexible(
+          child:
+              open == null
+                  ? parentLabel
+                  : InkWell(
+                    key: Key('gtex-regen-lineage-open-$parentPlayerId'),
+                    onTap: open,
+                    child: parentLabel,
+                  ),
+        ),
+        const SizedBox(width: GtexSpacing.xs),
+        const Icon(
+          Icons.arrow_forward_rounded,
+          size: 14,
+          color: GtexColors.textMuted,
+        ),
+        const SizedBox(width: GtexSpacing.xs),
+        Flexible(
+          child: Text(
+            regenName ?? 'Regen generating',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: GtexColors.text,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -104,9 +104,17 @@ class GtexRegenCard extends StatelessWidget {
               ),
               LayoutBuilder(
                 builder: (BuildContext context, BoxConstraints constraints) {
-                  final bool tightHeight =
-                      constraints.maxHeight.isFinite &&
-                      constraints.maxHeight < 190;
+                  // Density ladder. The card carries a lot - identity,
+                  // chips, traits, lineage, awards and a storyline - and a
+                  // grid cell is a fixed box, so each tier drops the least
+                  // load-bearing block rather than overflowing it.
+                  final double availableHeight =
+                      constraints.maxHeight.isFinite
+                          ? constraints.maxHeight
+                          : double.infinity;
+                  final bool tightHeight = availableHeight < 190;
+                  final bool mediumHeight =
+                      !tightHeight && availableHeight < 300;
                   final bool compact = constraints.maxWidth < 320;
                   final Widget portrait = SizedBox(
                     width:
@@ -141,6 +149,7 @@ class GtexRegenCard extends StatelessWidget {
                     storyLine: storyLine,
                     theme: theme,
                     isDense: tightHeight,
+                    isMedium: mediumHeight,
                   );
                   if (compact) {
                     return Column(
@@ -215,6 +224,7 @@ class _RegenCardDetails extends StatelessWidget {
     this.awardLabels = const <String>[],
     this.storyLine,
     this.isDense = false,
+    this.isMedium = false,
   });
 
   final String name;
@@ -234,6 +244,10 @@ class _RegenCardDetails extends StatelessWidget {
   final List<String> awardLabels;
   final String? storyLine;
   final bool isDense;
+
+  /// Enough room for identity, chips, traits and lineage, but not for the
+  /// awards rail and the storyline as well.
+  final bool isMedium;
 
   @override
   Widget build(BuildContext context) {
@@ -356,14 +370,16 @@ class _RegenCardDetails extends StatelessWidget {
             color: GtexColors.accentViolet,
           ),
         ],
-        if (!isDense && awardLabels.isNotEmpty) ...<Widget>[
+        if (!isDense && !isMedium && awardLabels.isNotEmpty) ...<Widget>[
           const SizedBox(height: GtexSpacing.sm),
           Wrap(
             spacing: 6,
             runSpacing: 6,
             children: awardLabels
                 .where((String label) => label.trim().isNotEmpty)
-                .take(3)
+                // Bounded so a decorated regen cannot grow the card past
+                // the cell it was given.
+                .take(2)
                 .map(
                   (String label) => _RegenSignalLine(
                     icon: Icons.emoji_events_rounded,
@@ -374,7 +390,7 @@ class _RegenCardDetails extends StatelessWidget {
                 .toList(growable: false),
           ),
         ],
-        if (storyLine != null) ...<Widget>[
+        if (storyLine != null && !isMedium) ...<Widget>[
           SizedBox(height: isDense ? GtexSpacing.xs : GtexSpacing.sm),
           Text(
             storyLine!,

@@ -1052,16 +1052,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       _GlobalDiscoveryItem(
         title: 'Regen discoveries',
         summary:
-            'Youth prospects, national pools, pipelines, and future stars.',
+            'Youth prospects, lineage, development pipelines, and future '
+            'stars in Regen World.',
         icon: Icons.auto_awesome_outlined,
         accent: const Color(0xFFFFD66B),
-        actionLabel: 'National teams',
+        // This tile said "National teams" and opened the national team
+        // competitions screen, so the only signpost to Regen World anywhere
+        // on Home pointed somewhere else.
+        actionLabel: 'Open Regen World',
         onTap:
             widget.navigationDependencies == null
                 ? null
-                : () => _openFeatureRoute(
-                  const NationalTeamCompetitionsRouteData(),
-                ),
+                : () => _openFeatureRoute(const RegenUniverseRouteData()),
       ),
     ];
     return RefreshIndicator(

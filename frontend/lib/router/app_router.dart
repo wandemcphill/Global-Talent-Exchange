@@ -449,23 +449,15 @@ List<RouteBase> _buildLegacyAliasRoutes({
           (BuildContext context, GoRouterState state) =>
               const GteNavigationRoute.competitions().path,
     ),
+    // Regen World is a shell lane now. /world/regens stays the public URL
+    // and hands off to the shell lane route, so the screen inherits the
+    // GTEX dark canvas, the navigation rail and back behaviour instead of
+    // rendering as a bare top-level page on a white background.
     GoRoute(
       path: '/world/regens',
-      pageBuilder:
-          (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
-            key: state.pageKey,
-            child: RegensScreenV2(
-              baseUrl: config.apiBaseUrl,
-              backendMode: config.activeShellBackendMode,
-              accessToken: controller.accessToken,
-              isAuthenticated: controller.isAuthenticated,
-              isAdmin: controller.isAdmin,
-              onOpenAwards:
-                  () => context.go(
-                    const WorldAwardsRouteData().toUri().toString(),
-                  ),
-            ),
-          ),
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              const GteNavigationRoute.regens().path,
     ),
     GoRoute(
       path: '/regens',
