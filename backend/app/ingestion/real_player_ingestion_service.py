@@ -2332,9 +2332,12 @@ class RealPlayerIngestionService:
         normalized = str(value or "").strip()
         return normalized or None
 
-    @staticmethod
-    def _photo_rights_cleared(payload: RealPlayerSeedInput) -> bool:
-        return str(payload.source_name or "").strip().lower() == "sportmonks"
+    #: Sources whose player photography the operator holds distribution rights for.
+    _RIGHTS_CLEARED_SOURCES = frozenset({"sportmonks", "sofifa_fc25"})
+
+    @classmethod
+    def _photo_rights_cleared(cls, payload: RealPlayerSeedInput) -> bool:
+        return str(payload.source_name or "").strip().lower() in cls._RIGHTS_CLEARED_SOURCES
 
     def _trusted_photo_moderation_status(self, payload: RealPlayerSeedInput) -> str:
         if self._photo_rights_cleared(payload):
