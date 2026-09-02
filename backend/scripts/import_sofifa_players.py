@@ -16,12 +16,14 @@ Design decisions (see the GTEX plan discussion):
   pricing snapshot (otherwise the batch write is blocked) *and* gives the tiered
   pricing the design calls for (a whole "class" of players costs the same at launch;
   live trading diverges them later).
-* Player faces are EA/SoFIFA licensed assets. With ``--images cloudinary`` we mirror
-  them to your Cloudinary account (public ``type=upload``) so the app loads fast and
-  does not hotlink SoFIFA. Each image row is still stored with ``rights_cleared=False``
-  by the ingestion service, so the app can fall back to stylized avatars with a single
-  switch before any public launch. ``--images url`` keeps the raw SoFIFA URL;
-  ``--images none`` drops images entirely (avatars only).
+* Player faces are EA/SoFIFA assets the operator holds distribution rights for. With
+  ``--images cloudinary`` we mirror them to your Cloudinary account (public
+  ``type=upload``) so the app loads fast and does not hotlink SoFIFA. SoFIFA's CDN
+  403s any request whose Referer is not sofifa.com, so Cloudinary cannot fetch the
+  URL itself: the bytes are downloaded here with that Referer and uploaded as binary.
+  The ingestion service stores these rows with ``rights_cleared=True``.
+  ``--images url`` keeps the raw SoFIFA URL (which will 403 in the app);
+  ``--images none`` drops images entirely.
 
 Usage::
 
@@ -186,6 +188,13 @@ def _sign(params: dict[str, str], api_secret: str) -> str:
     return hashlib.sha1(f"{to_sign}{api_secret}".encode()).hexdigest()
 
 
+_IMAGE_FETCH_REFERER = "https://sofifa.com/"
+_IMAGE_FETCH_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+
+
 def upload_remote_image_to_cloudinary(source_url: str, *, public_id: str, client: httpx.Client) -> str | None:
     """Fetch a remote face image and re-upload it to Cloudinary. Returns the secure URL."""
     cloud_name = os.environ["CLOUDINARY_CLOUD_NAME"].strip()
@@ -198,16 +207,36 @@ def upload_remote_image_to_cloudinary(source_url: str, *, public_id: str, client
         "overwrite": "false",
         "timestamp": timestamp,
     }
-    # Cloudinary can fetch the remote URL itself (no need to download bytes locally).
+    # SoFIFA's CDN hotlink-protects faces and 403s any request whose Referer is not
+    # sofifa.com, so Cloudinary cannot fetch the URL itself. Download the bytes here
+    # (sending the Referer the CDN expects) and upload the binary instead.
+    try:
+        origin = client.get(
+            source_url,
+            headers={"User-Agent": _IMAGE_FETCH_USER_AGENT, "Referer": _IMAGE_FETCH_REFERER},
+            timeout=_UPLOAD_TIMEOUT_SECONDS,
+            follow_redirects=True,
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("source image fetch failed public_id=%s error=%s", public_id, exc)
+        return None
+    if origin.status_code >= 400 or not origin.content:
+        logger.warning(
+            "source image fetch rejected public_id=%s status=%s bytes=%s",
+            public_id,
+            origin.status_code,
+            len(origin.content),
+        )
+        return None
     data = {
         **signed_params,
-        "file": source_url,
         "api_key": api_key,
         "signature": _sign(signed_params, api_secret),
     }
+    files = {"file": (f"{public_id}.png", origin.content, origin.headers.get("content-type") or "image/png")}
     url = f"https://api.cloudinary.com/v1_1/{cloud_name}/image/upload"
     try:
-        response = client.post(url, data=data, timeout=_UPLOAD_TIMEOUT_SECONDS)
+        response = client.post(url, data=data, files=files, timeout=_UPLOAD_TIMEOUT_SECONDS)
     except httpx.HTTPError as exc:
         logger.warning("cloudinary upload failed public_id=%s error=%s", public_id, exc)
         return None
