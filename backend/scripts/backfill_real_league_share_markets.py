@@ -17,6 +17,7 @@ Usage:
     python backend/scripts/backfill_real_league_share_markets.py \
         --actor-user-id <admin-user-id> --activate
 """
+
 from __future__ import annotations
 
 import argparse
@@ -86,16 +87,20 @@ def _candidate_ids(engine, limit: int | None) -> list[str]:
 
 def _run_batch(engine, policy, policy_name: str, actor_id: str, batch_ids: list[str], activate: bool) -> dict:
     local = {
-        "created": 0, "skipped_existing": 0, "skipped_blocked": 0, "failed": 0,
-        "blocked_reasons": {}, "by_status": {}, "by_tier": {}, "failed_detail": [],
+        "created": 0,
+        "skipped_existing": 0,
+        "skipped_blocked": 0,
+        "failed": 0,
+        "blocked_reasons": {},
+        "by_status": {},
+        "by_tier": {},
+        "failed_detail": [],
     }
     with Session(engine) as session:
         actor = session.scalar(select(User).where(User.id == actor_id))
         if actor is None:
             raise SystemExit(f"actor {actor_id!r} not found")
-        players = list(
-            session.scalars(select(Player).options(*_LOAD_OPTS).where(Player.id.in_(batch_ids))).all()
-        )
+        players = list(session.scalars(select(Player).options(*_LOAD_OPTS).where(Player.id.in_(batch_ids))).all())
         service = PlayerTokenMarketService(session)
         for player in players:
             if player.share_market is not None:
@@ -154,14 +159,20 @@ def main() -> int:
     report = {
         "activate": bool(args.activate),
         "candidates": len(ids),
-        "created": 0, "skipped_existing": 0, "skipped_blocked": 0, "failed": 0,
-        "blocked_reasons": {}, "by_status": {}, "by_tier": {}, "failed_detail": [],
+        "created": 0,
+        "skipped_existing": 0,
+        "skipped_blocked": 0,
+        "failed": 0,
+        "blocked_reasons": {},
+        "by_status": {},
+        "by_tier": {},
+        "failed_detail": [],
     }
     print(f"[backfill] candidates missing a market: {len(ids)}  activate={args.activate}", flush=True)
 
     t0 = time.time()
     for start in range(0, len(ids), args.batch_size):
-        batch_ids = ids[start:start + args.batch_size]
+        batch_ids = ids[start : start + args.batch_size]
         for attempt in range(1, args.max_retry + 1):
             try:
                 local = _run_batch(engine, policy, policy_name, args.actor_user_id, batch_ids, args.activate)
@@ -187,7 +198,9 @@ def main() -> int:
                     flush=True,
                 )
                 if attempt == args.max_retry:
-                    report["failed_detail"].append({"batch_start": start, "reason": "batch_gave_up", "detail": str(exc)[:200]})
+                    report["failed_detail"].append(
+                        {"batch_start": start, "reason": "batch_gave_up", "detail": str(exc)[:200]}
+                    )
                 else:
                     time.sleep(min(3 * attempt, 20))
 
