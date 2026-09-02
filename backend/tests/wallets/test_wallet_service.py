@@ -100,9 +100,9 @@ def test_adaptive_overview_uses_registry_provider_status(session, monkeypatch) -
     assert "flutterwave" not in overview["payment_provider_status"]
 
 
-def test_paystack_is_not_listed_as_live_provider() -> None:
+def test_paystack_is_listed_as_live_provider() -> None:
     assert "korapay" in list_provider_keys(live_only=True)
-    assert "paystack" not in list_provider_keys(live_only=True)
+    assert "paystack" in list_provider_keys(live_only=True)
 
 
 def test_append_transaction_requires_balanced_postings(session) -> None:

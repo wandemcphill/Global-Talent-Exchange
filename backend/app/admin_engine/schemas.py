@@ -155,8 +155,7 @@ class AdminRewardRuleUpsertRequest(BaseModel):
     gift_platform_rake_bps: int = Field(default=3000, ge=0, le=5000)
     withdrawal_fee_bps: int = Field(default=1000, ge=0, le=5000)
     minimum_withdrawal_fee_credits: Decimal = Field(default=Decimal("5.0000"), ge=0)
-    # Product default is 30%; Admin may change it without code changes.
-    competition_platform_fee_bps: int = Field(default=3000, ge=0, le=5000)
+    competition_platform_fee_bps: int = Field(default=3000, ge=0, le=3000)
     stability_controls: AdminRewardRuleStabilityControls = Field(default_factory=AdminRewardRuleStabilityControls)
     active: bool = True
 

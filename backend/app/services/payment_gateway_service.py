@@ -118,7 +118,9 @@ class PaymentGatewayService:
                 "Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders."
             )
         if provider_key == "paystack" and not paystack_enabled():
-            raise PaymentGatewayError("Paystack is unavailable. Use KoraPay checkout or manual bank transfer.")
+            raise PaymentGatewayError("Paystack is not configured. Set the live Paystack secret before accepting payments.")
+        if provider_key == "paystack" and not provider_live_deposit_ready("paystack"):
+            raise PaymentGatewayError("Paystack webhook verification is not configured. Set the live Paystack webhook secret before accepting payments.")
         if provider_key == "korapay" and not provider_secret_configured("korapay"):
             raise PaymentGatewayError(
                 "KoraPay is not configured. Set the live KoraPay secret before accepting payments."
@@ -163,9 +165,16 @@ class PaymentGatewayService:
             raise PaymentGatewayError(
                 "Manual bank transfer uses the treasury deposit request flow, not automatic purchase orders."
             )
-        if provider_key in {"korapay", "paystack"}:
-            if provider_key == "paystack" and not paystack_enabled():
-                raise PaymentGatewayError("Paystack is unavailable. Use KoraPay checkout or manual bank transfer.")
+        if provider_key == "paystack":
+            if not paystack_enabled():
+                raise PaymentGatewayError("Paystack is not configured. Set the live Paystack secret before accepting payments.")
+            if not provider_live_deposit_ready("paystack"):
+                raise PaymentGatewayError("Paystack webhook verification is not configured. Set the live Paystack webhook secret before accepting payments.")
+            raise PaymentGatewayError(
+                "Automatic checkout orders must be initiated through the wallet top-up flow so a live checkout session "
+                "is created before settlement."
+            )
+        if provider_key == "korapay":
             raise PaymentGatewayError(
                 "Automatic checkout orders must be initiated through the wallet top-up flow so a live checkout session "
                 "is created before settlement."
@@ -223,13 +232,13 @@ class PaymentGatewayService:
                         merged.get("maintenance_message")
                         or "KoraPay requires live checkout and webhook credentials before it can accept deposits."
                     )
-                if provider == "paystack" and not paystack_enabled():
+                if provider == "paystack" and not provider_live_deposit_ready("paystack"):
                     merged["deposits_enabled"] = False
                     merged["withdrawals_enabled"] = False
                     merged["is_live"] = False
                     merged["maintenance_message"] = (
                         merged.get("maintenance_message")
-                        or "Paystack is unavailable for production. Use KoraPay or manual bank transfer."
+                        or "Paystack requires live secret and webhook credentials before it can accept deposits."
                     )
                 defaults_by_provider[provider] = merged
             return [defaults_by_provider[rail["provider"]] for rail in default_rails]
@@ -243,17 +252,17 @@ class PaymentGatewayService:
         rails = [dict(rail) for rail in DEFAULT_PAYMENT_RAILS]
         for rail in rails:
             provider = str(rail.get("provider") or "").strip().lower()
-            if provider == "korapay" and provider_live_deposit_ready("korapay"):
+            if provider in {"korapay", "paystack"} and provider_live_deposit_ready(provider):
                 rail["deposits_enabled"] = True
                 rail["is_live"] = True
                 rail["maintenance_message"] = None
-            elif provider == "paystack" and not paystack_enabled():
+            elif provider in {"korapay", "paystack"}:
                 rail["deposits_enabled"] = False
                 rail["withdrawals_enabled"] = False
                 rail["is_live"] = False
                 rail["maintenance_message"] = (
                     rail.get("maintenance_message")
-                    or "Paystack is unavailable for production. Use KoraPay or manual bank transfer."
+                    or f"{provider.title()} requires live secret and webhook credentials before it can accept deposits."
                 )
         return rails
 

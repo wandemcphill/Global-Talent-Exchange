@@ -12,6 +12,7 @@ from app.live_match.schemas import (
 from app.live_match.service import (
     LiveMatchEngine,
     LiveMatchError,
+    LiveMatchPermissionError,
     LiveMatchSession,
     get_live_match_engine,
     session_public_state,
@@ -26,6 +27,8 @@ def _engine() -> LiveMatchEngine:
 
 
 def _raise(exc: LiveMatchError) -> None:
+    if isinstance(exc, LiveMatchPermissionError):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
@@ -74,9 +77,16 @@ def get_session(
 def tick_session(
     match_id: str,
     engine: LiveMatchEngine = Depends(_engine),
+    current_user: User = Depends(get_current_user),
 ) -> LiveMatchSessionView:
     try:
-        return _view(engine.tick(match_id))
+        engine.assert_participant(match_id=match_id, user_id=current_user.id)
+    except LiveMatchPermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except LiveMatchError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    try:
+        return _view(engine.tick(match_id), user_id=current_user.id)
     except LiveMatchError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 

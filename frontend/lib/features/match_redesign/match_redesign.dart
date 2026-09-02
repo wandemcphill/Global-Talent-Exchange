@@ -1,8 +1,10 @@
 export 'data/gtex_match_models.dart';
 export 'data/gtex_match_api_repository.dart';
+export 'data/gtex_match_feed.dart';
 export 'presentation/gtex_match_center_controller.dart';
 export 'presentation/gtex_match_center_screen_v2.dart';
 export 'widgets/gtex_2d_pitch.dart';
+export 'widgets/gtex_match_connection_banner.dart';
 export 'widgets/gtex_match_lineups.dart';
 export 'widgets/gtex_match_scoreboard.dart';
 export 'widgets/gtex_match_stats_panel.dart';

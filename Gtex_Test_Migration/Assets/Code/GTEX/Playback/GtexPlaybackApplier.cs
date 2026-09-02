@@ -1,10 +1,13 @@
 using System;
+using FStudio.GTEX.Core;
 using Shared.Responses;
 
 namespace FStudio.GTEX.Playback
 {
     public sealed class GtexPlaybackApplier
     {
+        private const float ClockRegressionToleranceMinutes = 0.10f;
+
         private readonly Func<bool> isSceneReady;
         private readonly Func<bool> needsBindingRefresh;
         private readonly Action bindPlayers;
@@ -50,11 +53,8 @@ namespace FStudio.GTEX.Playback
         }
 
         public GtexMatchConfig Config { get; private set; }
-
         public MatchResponse CurrentState { get; private set; }
-
         public MatchResponse PreviousState { get; private set; }
-
         public bool IsSceneReady => isSceneReady == null || isSceneReady();
 
         public void Initialize(GtexMatchConfig config)
@@ -62,11 +62,29 @@ namespace FStudio.GTEX.Playback
             Config = config;
         }
 
+        private bool IsAuthoritativeLivePlayback =>
+            Config != null && Config.ResolveRuntimeMode() == GtexRuntimeMode.LivePlayback;
+
         public bool ApplyFrame(MatchResponse state, bool forceSnap = false)
         {
             if (state == null)
             {
                 return false;
+            }
+
+            if (!forceSnap && CurrentState != null)
+            {
+                if (!string.IsNullOrWhiteSpace(state.frameId) &&
+                    !string.IsNullOrWhiteSpace(CurrentState.frameId) &&
+                    string.Equals(state.frameId, CurrentState.frameId, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                if (state.clockMinute + ClockRegressionToleranceMinutes < CurrentState.clockMinute)
+                {
+                    return false;
+                }
             }
 
             PreviousState = CurrentState;
@@ -81,8 +99,17 @@ namespace FStudio.GTEX.Playback
             }
 
             applyCameraPreset?.Invoke(state, forceSnap);
-            updateBallIntent?.Invoke(PreviousState, state);
-            tryStartSyntheticBallTransit?.Invoke(PreviousState, state, forceSnap);
+
+            // LivePlayback is a presentation of an already-decided GTEX match.
+            // Never invent a second local intent or synthetic transit layer here.
+            if (!IsAuthoritativeLivePlayback)
+            {
+                updateBallIntent?.Invoke(PreviousState, state);
+                tryStartSyntheticBallTransit?.Invoke(PreviousState, state, forceSnap);
+            }
+
+            // Keep action/event presentation so pass, shot, save, goal, replay
+            // and HUD reactions can still respond to authoritative events.
             tryTriggerBallAction?.Invoke(PreviousState, state);
             tryTriggerEventAction?.Invoke(PreviousState, state);
 

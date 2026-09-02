@@ -154,7 +154,7 @@ def create_player_contract(
     player_id: str,
     payload: ContractCreateRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> ContractView:
     try:
         return service.to_contract_view(service.create_contract(player_id, payload), reference_on=date.today())
@@ -168,7 +168,7 @@ def renew_player_contract(
     contract_id: str,
     payload: ContractRenewRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> ContractView:
     try:
         return service.to_contract_view(
@@ -200,7 +200,7 @@ def create_player_injury(
     player_id: str,
     payload: InjuryCreateRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> InjuryCaseView:
     try:
         return service.to_injury_view(service.create_injury_case(player_id, payload))
@@ -214,7 +214,7 @@ def recover_player_injury(
     injury_id: str,
     payload: InjuryRecoveryRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> InjuryCaseView:
     try:
         return service.to_injury_view(service.recover_injury(player_id, injury_id, payload))
@@ -263,7 +263,7 @@ def create_transfer_bid(
     window_id: str,
     payload: TransferBidCreateRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> TransferBidView:
     try:
         return service.to_transfer_bid_view(service.create_bid(window_id, payload))
@@ -277,7 +277,7 @@ def accept_transfer_bid(
     bid_id: str,
     payload: TransferBidAcceptRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> TransferBidView:
     try:
         return service.to_transfer_bid_view(service.accept_bid(window_id, bid_id, payload))
@@ -291,7 +291,7 @@ def reject_transfer_bid(
     bid_id: str,
     payload: TransferBidRejectRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> TransferBidView:
     try:
         return service.to_transfer_bid_view(service.reject_bid(window_id, bid_id, payload))
@@ -328,6 +328,7 @@ def quote_regen_contract_offer(
     player_id: str,
     payload: RegenContractOfferQuoteRequest,
     service: PlayerLifecycleService = Depends(_service),
+    _: User = Depends(get_current_user),
 ) -> CurrencyConversionQuoteView:
     try:
         return service.quote_regen_contract_offer(player_id, payload)
@@ -340,7 +341,7 @@ def update_regen_transfer_listing(
     player_id: str,
     payload: RegenTransferListingRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> RegenLifecycleView:
     try:
         return service.update_regen_transfer_listing(player_id, payload)
@@ -353,7 +354,7 @@ def record_big_club_approach(
     player_id: str,
     payload: BigClubApproachRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> RegenLifecycleView:
     try:
         return service.record_big_club_approach(player_id, payload)
@@ -366,7 +367,7 @@ def apply_regen_pressure_resolution(
     player_id: str,
     payload: RegenPressureResolutionRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> RegenLifecycleView:
     try:
         return service.apply_regen_pressure_resolution(player_id, payload)
@@ -379,7 +380,7 @@ def apply_regen_special_training(
     player_id: str,
     payload: RegenSpecialTrainingRequest,
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> RegenLifecycleView:
     try:
         return service.apply_regen_special_training(player_id, payload)
@@ -411,7 +412,7 @@ def resolve_regen_bid(
     player_id: str,
     as_of: date | None = Query(default=None),
     service: PlayerLifecycleService = Depends(_service),
-    _actor: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ) -> RegenBidResolutionView:
     try:
         return service.resolve_regen_bid(window_id, player_id, reference_on=as_of)

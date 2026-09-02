@@ -189,6 +189,28 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
     }
   }
 
+  Future<void> _cancelOrder(GteOrderRecord order) async {
+    final GteOrderRecord? cancelled = await widget.controller.cancelOrder(
+      order.id,
+    );
+    if (!mounted) {
+      return;
+    }
+    final String label = widget.controller.playerLabel(order.playerId);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: GtexColors.surfaceOverlay,
+        content: Text(
+          cancelled == null
+              ? widget.controller.orderError ??
+                  'That order could not be cancelled.'
+              : 'Cancelled ${order.side.name} order for $label.',
+          style: const TextStyle(color: GtexColors.text),
+        ),
+      ),
+    );
+  }
+
   void _selectModule(GtexWalletDeskModule module) {
     if (_module != module) {
       setState(() => _module = module);
@@ -372,6 +394,8 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
             ...widget.controller.openOrders,
             ...widget.controller.recentOrders,
           ],
+          controller: widget.controller,
+          onCancel: _cancelOrder,
         );
       case GtexWalletDeskModule.holdings:
         return _HoldingsPanel(
@@ -600,9 +624,15 @@ class _WalletBalancePanel extends StatelessWidget {
 }
 
 class _OrdersPanel extends StatelessWidget {
-  const _OrdersPanel({required this.orders});
+  const _OrdersPanel({
+    required this.orders,
+    required this.controller,
+    required this.onCancel,
+  });
 
   final List<GteOrderRecord> orders;
+  final GteExchangeController controller;
+  final Future<void> Function(GteOrderRecord order) onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -610,7 +640,8 @@ class _OrdersPanel extends StatelessWidget {
       return const GtexEmptyState(
         title: 'No orders yet',
         message:
-            'Open and recent player orders will appear here from the live order API.',
+            'Buy and sell orders you place on a player appear here while they '
+            'are working, and stay for a while once they fill.',
         icon: Icons.receipt_long_outlined,
       );
     }
@@ -635,7 +666,10 @@ class _OrdersPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      '${order.side.name.toUpperCase()} ${order.playerId}',
+                      '${order.side.name.toUpperCase()} '
+                      '${controller.playerLabel(order.playerId)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: GtexColors.text,
                         fontWeight: FontWeight.w900,
@@ -643,6 +677,8 @@ class _OrdersPanel extends StatelessWidget {
                     ),
                     Text(
                       '${_statusLabel(order.status)} - ${order.quantity.toStringAsFixed(2)} units',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: GtexColors.textMuted),
                     ),
                   ],
@@ -655,6 +691,23 @@ class _OrdersPanel extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
+              // Cancelling is a real backend flow, so it is offered exactly
+              // when the order is actually cancellable.
+              if (order.canCancel) ...<Widget>[
+                const SizedBox(width: GtexSpacing.xs),
+                IconButton(
+                  key: ValueKey<String>('capital-order-cancel-${order.id}'),
+                  tooltip: 'Cancel order',
+                  onPressed:
+                      controller.isCancellingOrder
+                          ? null
+                          : () => onCancel(order),
+                  icon: const Icon(
+                    Icons.cancel_outlined,
+                    color: GtexColors.red,
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -673,71 +726,149 @@ class _HoldingsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     if (holdings.isEmpty) {
       return const GtexEmptyState(
-        title: 'No player holdings yet',
+        title: 'You do not own any players yet',
         message:
-            'Purchased players will appear here once the portfolio API returns positions.',
+            'Players you buy on the Transfer Hub show up here with what you '
+            'paid, what they are worth now, and your profit or loss.',
         icon: Icons.groups_2_outlined,
       );
     }
-    return ListView.separated(
-      itemCount: holdings.length,
-      separatorBuilder: (_, __) => const SizedBox(height: GtexSpacing.sm),
-      itemBuilder: (BuildContext context, int index) {
-        final GtePortfolioHolding holding = holdings[index];
-        return GtexPanel(
-          accent: holding.unrealizedPl >= 0 ? GtexColors.pitch : GtexColors.red,
-          onTap:
-              onOpenPlayer == null
-                  ? null
-                  : () => onOpenPlayer!(holding.playerId),
-          child: Row(
+
+    final double totalHoldingsValue = holdings.fold<double>(
+      0,
+      (double sum, GtePortfolioHolding item) => sum + item.marketValue,
+    );
+    final double totalPl = holdings.fold<double>(
+      0,
+      (double sum, GtePortfolioHolding item) => sum + item.unrealizedPl,
+    );
+
+    return ListView(
+      children: <Widget>[
+        GtexPanel(
+          title: 'Player Asset Portfolio',
+          subtitle:
+              '${holdings.length} player asset${holdings.length == 1 ? '' : 's'} owned',
+          accent: GtexColors.pitch,
+          child: Wrap(
+            spacing: GtexSpacing.md,
+            runSpacing: GtexSpacing.md,
             children: <Widget>[
-              const Icon(Icons.person_outline, color: GtexColors.pitch),
-              const SizedBox(width: GtexSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      holding.playerId,
-                      style: const TextStyle(
-                        color: GtexColors.text,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      'Qty ${holding.quantity.toStringAsFixed(2)} - Avg ${gteFormatGtc(holding.averageCost)}',
-                      style: const TextStyle(color: GtexColors.textMuted),
-                    ),
-                  ],
+              SizedBox(
+                width: 200,
+                child: GtexMetricTile(
+                  label: 'Portfolio Value',
+                  value: gteFormatGtc(totalHoldingsValue),
+                  icon: Icons.groups_2_outlined,
+                  accent: GtexColors.pitch,
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  Text(
-                    gteFormatGtc(holding.marketValue),
-                    style: const TextStyle(
-                      color: GtexColors.text,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    '${holding.unrealizedPlPercent.toStringAsFixed(2)}%',
-                    style: TextStyle(
-                      color:
-                          holding.unrealizedPl >= 0
-                              ? GtexColors.pitch
-                              : GtexColors.red,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
+              SizedBox(
+                width: 200,
+                child: GtexMetricTile(
+                  label: 'Unrealized P/L',
+                  value: gteFormatGtc(totalPl),
+                  icon: totalPl >= 0 ? Icons.trending_up : Icons.trending_down,
+                  accent: totalPl >= 0 ? GtexColors.pitch : GtexColors.red,
+                ),
               ),
             ],
           ),
-        );
-      },
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        Text(
+          'HOLDINGS BREAKDOWN',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: GtexColors.textMuted,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+        ),
+        const SizedBox(height: GtexSpacing.xs),
+        ...holdings.map(
+          (GtePortfolioHolding holding) => Padding(
+            padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+            child: GtexPanel(
+              accent: holding.unrealizedPl >= 0 ? GtexColors.pitch : GtexColors.red,
+              onTap:
+                  onOpenPlayer == null
+                      ? null
+                      : () => onOpenPlayer!(holding.playerId),
+              child: Row(
+                children: <Widget>[
+                  const Icon(Icons.person_outline, color: GtexColors.pitch),
+                  const SizedBox(width: GtexSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          holding.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: GtexColors.text,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          <String>[
+                            if ((holding.clubName ?? '').trim().isNotEmpty)
+                              holding.clubName!.trim(),
+                            'Qty ${holding.quantity.toStringAsFixed(2)}',
+                            'Avg ${gteFormatGtc(holding.averageCost)}',
+                          ].join(' - '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: GtexColors.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: <Widget>[
+                      Text(
+                        gteFormatGtc(holding.marketValue),
+                        style: const TextStyle(
+                          color: GtexColors.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Icon(
+                            holding.unrealizedPl >= 0
+                                ? Icons.arrow_drop_up
+                                : Icons.arrow_drop_down,
+                            size: 18,
+                            color:
+                                holding.unrealizedPl >= 0
+                                    ? GtexColors.pitch
+                                    : GtexColors.red,
+                          ),
+                          Text(
+                            '${holding.unrealizedPl >= 0 ? '+' : ''}'
+                            '${holding.unrealizedPlPercent.toStringAsFixed(2)}%',
+                            style: TextStyle(
+                              color:
+                                  holding.unrealizedPl >= 0
+                                      ? GtexColors.pitch
+                                      : GtexColors.red,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

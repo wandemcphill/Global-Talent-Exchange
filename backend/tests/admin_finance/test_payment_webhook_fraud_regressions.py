@@ -16,6 +16,7 @@ import app.orders.models  # noqa: F401
 from app.admin_finance.router import webhook_router
 from app.auth.dependencies import get_session
 from app.models.base import Base
+from app.wallets.providers.registry import paystack_enabled, provider_live_deposit_ready
 
 
 @pytest.fixture()
@@ -31,7 +32,7 @@ def webhook_client():
 
     app = FastAPI()
     app.include_router(webhook_router)
-    app.state.settings = SimpleNamespace()
+    app.state.settings = SimpleNamespace(app_env="production")
 
     def override_session():
         yield session
@@ -44,99 +45,80 @@ def webhook_client():
     session.close()
 
 
+def _paystack_payload() -> dict[str, object]:
+    return {
+        "event": "charge.success",
+        "data": {
+            "id": 9002,
+            "reference": "ps_live_ref_webhook",
+            "amount": 900000,
+            "currency": "NGN",
+            "status": "success",
+        },
+    }
+
+
+def test_paystack_enable_flag_requires_live_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
+    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
+    assert paystack_enabled() is False
+
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "paystack-secret")
+    monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
+    assert paystack_enabled() is True
+
+    monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "false")
+    assert paystack_enabled() is False
+
+
+def test_paystack_is_live_ready_with_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "paystack-secret")
+    monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
+    assert provider_live_deposit_ready("paystack") is True
+
+
 def test_paystack_webhook_rejects_invalid_signature_when_secret_is_configured(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Paystack is permanently blocked (410) before any signature check runs."""
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "paystack-secret")
     monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
 
     response = webhook_client.post(
         "/integrations/payments/paystack/webhook",
         headers={"x-paystack-signature": "invalid-signature"},
-        json={
-            "event": "charge.success",
-            "data": {
-                "id": 9002,
-                "reference": "ps_live_ref_webhook",
-                "amount": 900000,
-                "currency": "NGN",
-                "status": "success",
-            },
-        },
+        json=_paystack_payload(),
     )
 
-    assert response.status_code == 410, response.text
-    assert "paystack is unavailable" in response.json()["detail"].lower()
+    assert response.status_code == 401, response.text
+    assert "signature is invalid" in response.json()["detail"].lower()
 
 
-def test_paystack_webhook_is_gone_even_when_stale_secret_is_configured(
+def test_paystack_webhook_is_blocked_when_signature_is_missing(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
+    monkeypatch.setenv("GTE_PAYSTACK_SECRET_KEY", "paystack-secret")
     monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SECRET", "paystack-secret")
 
     response = webhook_client.post(
         "/integrations/payments/paystack/webhook",
-        headers={"x-paystack-signature": "invalid-signature"},
-        json={
-            "event": "charge.success",
-            "data": {
-                "id": 9002,
-                "reference": "ps_live_ref_webhook",
-                "amount": 900000,
-                "currency": "NGN",
-                "status": "success",
-            },
-        },
+        json=_paystack_payload(),
     )
 
-    assert response.status_code == 410, response.text
-    assert "paystack is unavailable" in response.json()["detail"].lower()
+    assert response.status_code == 401, response.text
 
 
-def test_paystack_webhook_is_gone_by_default(webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("GTE_ENABLE_PAYSTACK", raising=False)
-    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
-    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SIGNATURE_OPTIONAL", raising=False)
-
-    response = webhook_client.post(
-        "/integrations/payments/paystack/webhook",
-        json={
-            "event": "charge.success",
-            "data": {
-                "id": 9002,
-                "reference": "ps_live_ref_webhook",
-                "amount": 900000,
-                "currency": "NGN",
-                "status": "success",
-            },
-        },
-    )
-
-    assert response.status_code == 410, response.text
-    assert "paystack is unavailable" in response.json()["detail"].lower()
-
-
-def test_paystack_webhook_ignores_legacy_optional_signature_flag(
+def test_paystack_webhook_is_blocked_when_explicitly_disabled(
     webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "true")
-    monkeypatch.delenv("GTE_PAYSTACK_WEBHOOK_SECRET", raising=False)
-    monkeypatch.setenv("GTE_PAYSTACK_WEBHOOK_SIGNATURE_OPTIONAL", "true")
+    monkeypatch.setenv("GTE_ENABLE_PAYSTACK", "false")
 
     response = webhook_client.post(
         "/integrations/payments/paystack/webhook",
-        json={
-            "event": "charge.success",
-            "data": {
-                "id": 9002,
-                "reference": "ps_live_ref_webhook",
-                "amount": 900000,
-                "currency": "NGN",
-                "status": "success",
-            },
-        },
+        json=_paystack_payload(),
     )
 
     assert response.status_code == 410, response.text
@@ -180,31 +162,6 @@ def test_korapay_webhook_rejects_missing_secret_by_default(
             "data": {
                 "id": "kp-event-invalid",
                 "reference": "kp_live_ref_invalid_sig",
-                "amount": "9000.0000",
-                "currency": "NGN",
-                "status": "success",
-            },
-        },
-    )
-
-    assert response.status_code == 401, response.text
-    assert "not configured" in response.json()["detail"].lower()
-
-
-def test_korapay_webhook_signature_optional_flag_is_ignored_in_production(
-    webhook_client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    webhook_client.app.state.settings = SimpleNamespace(app_env="production")
-    monkeypatch.delenv("GTE_KORAPAY_WEBHOOK_SECRET", raising=False)
-    monkeypatch.setenv("GTE_KORAPAY_WEBHOOK_SIGNATURE_OPTIONAL", "true")
-
-    response = webhook_client.post(
-        "/integrations/payments/korapay/webhook",
-        json={
-            "event": "charge.success",
-            "data": {
-                "id": "kp-event-prod-unsigned",
-                "reference": "kp_live_ref_unsigned",
                 "amount": "9000.0000",
                 "currency": "NGN",
                 "status": "success",

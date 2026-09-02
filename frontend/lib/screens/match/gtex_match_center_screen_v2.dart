@@ -11,16 +11,27 @@ class GtexMatchCenterScreenV2 extends StatelessWidget {
     super.key,
     required this.matchId,
     this.repository,
+    this.onOpenReplay,
+    this.onExit,
   });
 
   final String matchId;
   final redesign.GtexMatchRepository? repository;
+
+  /// Forwarded to the match centre so full time can hand off to the replay
+  /// archive instead of terminating the journey.
+  final ValueChanged<String>? onOpenReplay;
+
+  /// Forwarded so error and empty states can offer a real way back.
+  final VoidCallback? onExit;
 
   @override
   Widget build(BuildContext context) {
     return redesign.GtexMatchCenterScreenV2(
       matchId: matchId,
       repository: repository,
+      onOpenReplay: onOpenReplay,
+      onExit: onExit,
     );
   }
 }

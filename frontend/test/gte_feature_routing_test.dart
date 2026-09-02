@@ -3,12 +3,14 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
 import 'package:gte_frontend/data/competition_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
 import 'package:gte_frontend/data/gte_models.dart';
+import 'package:gte_frontend/features/app_routes/gte_app_route_registry.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/club_hub/presentation/club_hub_screen.dart';
@@ -187,7 +189,7 @@ void main() {
     expect(find.text('Resolve match id'), findsOneWidget);
   });
 
-  testWidgets('owner offer inbox surfaces counter actions in fixture mode', (
+  testWidgets('owner offer inbox route fails visibly without live offers', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -204,9 +206,15 @@ void main() {
     await tester.tap(find.text('Open inbox'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Counter'), findsOneWidget);
-    expect(find.text('Accept'), findsOneWidget);
-    expect(find.text('Reject'), findsOneWidget);
+    // This route is built in gte_feature_route_builders.dart, which the
+    // "production route hosts do not mount demo-only V2 wrappers" contract
+    // above bars from naming FixtureRepository/.fixture(. It therefore has no
+    // offers to serve in the fixture runtime by design, and .standard() is not
+    // a substitute because createAuthedApi() carries session-store wiring that
+    // createFeatureApi() does not. The contract is that the gate resolves and
+    // fails visibly rather than silently.
+    expect(find.text('Owner offer inbox unavailable'), findsOneWidget);
+    expect(find.text('Retry'), findsWidgets);
   });
 
   testWidgets('creator-share admin control mounts live admin surface', (
@@ -306,7 +314,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Build your club command center'), findsOneWidget);
+      // c45d422d replaced the hand-rolled workspace entry with HomeScreen's
+      // persona desk. Hosted bare (no ProviderScope) the shell seeds its own
+      // container, so assert the shell-level onboarding contract here; the
+      // persona copy itself is covered by premium_media_test, which mounts
+      // Home the way production does.
+      expect(find.text('Home sync'), findsOneWidget);
       expect(find.text('Create club'), findsWidgets);
       expect(find.text('Transfer Hub'), findsWidgets);
       expect(find.text('No canonical club is selected'), findsNothing);
@@ -344,7 +357,11 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
+      _screenHost(
+        dependencies: _dependencies(
+          clubId: 'ibadan-lions',
+          clubName: 'Ibadan Lions FC',
+        ),
         home: HomeDashboardScreen(
           exchangeController: controller,
           apiBaseUrl: 'http://127.0.0.1:8000',
@@ -362,14 +379,16 @@ void main() {
 
     expect(find.text('Expansion lanes'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
-    final Finder fanPredictionsButton = find.widgetWithText(
-      FilledButton,
-      'Fan predictions (live match only)',
+    // 0a6eb1a4 retired the permanently-disabled "Fan predictions (live match
+    // only)" control in favour of copy that explains the gate. The lane must
+    // still offer no launch route from Home.
+    expect(
+      find.widgetWithText(FilledButton, 'Fan predictions (live match only)'),
+      findsNothing,
     );
-    expect(tester.widget<FilledButton>(fanPredictionsButton).onPressed, isNull);
     expect(
       find.text(
-        'Fan predictions unlock from live-match routes after a canonical match id is present.',
+        'Fan predictions open from live-match routes after a canonical match id is present.',
       ),
       findsOneWidget,
     );
@@ -531,7 +550,8 @@ void main() {
     await controller.bootstrap();
 
     await tester.pumpWidget(
-      MaterialApp(
+      _screenHost(
+        dependencies: _dependencies(),
         home: GteCompetitionsHubScreen(
           controller: controller,
           currentDestination: CompetitionHubDestination.overview,
@@ -548,14 +568,15 @@ void main() {
     );
 
     expect(find.text('Competition routes'), findsWidgets);
-    final Finder fanPredictionsButton = find.widgetWithText(
-      FilledButton,
-      'Fan predictions (live match only)',
+    // Same retirement as the Home expansion lane: no dead control, and the
+    // arena explains why predictions only open from live-match cards.
+    expect(
+      find.widgetWithText(FilledButton, 'Fan predictions (live match only)'),
+      findsNothing,
     );
-    expect(tester.widget<FilledButton>(fanPredictionsButton).onPressed, isNull);
     expect(
       find.text(
-        'Fan predictions stay disabled here until a live-match route supplies the canonical match id.',
+        'Fan predictions open from live-match cards once a canonical match id is present.',
       ),
       findsOneWidget,
     );
@@ -563,11 +584,16 @@ void main() {
     expect(find.text('Streamer tournament engine'), findsNothing);
   });
 
-  testWidgets('club hub quick links open world context routes', (
+  testWidgets('club hub quick links resolve the world context route', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
+      _screenHost(
+        dependencies: _dependencies(
+          isAuthenticated: true,
+          clubId: 'royal-lagos-fc',
+          clubName: 'Royal Lagos FC',
+        ),
         home: ClubHubScreen(
           clubId: 'royal-lagos-fc',
           clubName: 'Royal Lagos FC',
@@ -594,9 +620,13 @@ void main() {
     );
     await tester.ensureVisible(worldContextButton);
     await tester.tap(worldContextButton);
-    await _pumpUntilFound(tester, find.textContaining('public view'));
+    await _pumpUntilFound(tester, find.text('Live club profile unavailable'));
 
-    expect(find.textContaining('public view'), findsOneWidget);
+    // Same strict-live fixture policy as the club hub: the public club profile
+    // has no snapshot to render here, so assert the quick link resolves to
+    // that surface and it fails visibly rather than silently.
+    expect(find.text('Live club profile unavailable'), findsOneWidget);
+    expect(find.text('Retry club'), findsWidgets);
   });
 
   testWidgets('club hub demotes owner inbox when owner workspace is unknown', (
@@ -706,6 +736,44 @@ GteNavigationDependencies _dependencies({
   );
 }
 
+/// Hosts [home] inside the central GoRouter runtime that
+/// [GteNavigationHelpers.pushRoute] requires. The legacy material-route
+/// fallback is disabled in strict live mode, so a bare `MaterialApp` host makes
+/// every push fail with a StateError before the target screen can mount. Any
+/// GTEX route pushed from [home] resolves through the same registry the
+/// production router uses.
+Widget _screenHost({
+  required Widget home,
+  required GteNavigationDependencies dependencies,
+}) {
+  final GoRouter router = GoRouter(
+    initialLocation: '/',
+    routes: <RouteBase>[
+      GoRoute(
+        path: '/',
+        builder: (BuildContext context, GoRouterState state) => home,
+      ),
+      GoRoute(
+        path: '/:rest(.*)',
+        builder: (BuildContext context, GoRouterState state) {
+          final GteAppRouteData? route = GteNavigationHelpers.parseDeepLink(
+            state.uri.toString(),
+          );
+          if (route == null) {
+            return const Scaffold(
+              body: Center(child: Text('Route unavailable')),
+            );
+          }
+          return GteAppRouteRegistry(
+            dependencies: dependencies,
+          ).guardedScreenFor(route);
+        },
+      ),
+    ],
+  );
+  return MaterialApp.router(routerConfig: router);
+}
+
 class _RouteLauncherHost extends StatelessWidget {
   const _RouteLauncherHost({
     required this.dependencies,
@@ -719,25 +787,46 @@ class _RouteLauncherHost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Builder(
-            builder: (BuildContext context) {
-              return FilledButton(
-                onPressed:
-                    () => GteNavigationHelpers.pushRoute<void>(
-                      context,
-                      route: route,
-                      dependencies: dependencies,
-                    ),
-                child: Text(label),
-              );
-            },
-          ),
+    // GteNavigationHelpers.pushRoute requires the central GoRouter runtime;
+    // the legacy material-route fallback is disabled in strict live mode, so a
+    // plain MaterialApp host would make every push fail with a StateError.
+    // Mirror production by serving the route under test through GoRouter,
+    // delegating to the same registry the real router uses.
+    final GoRouter router = GoRouter(
+      initialLocation: '/',
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/',
+          builder:
+              (BuildContext context, GoRouterState state) => Scaffold(
+                body: Center(
+                  child: Builder(
+                    builder: (BuildContext context) {
+                      return FilledButton(
+                        onPressed:
+                            () => GteNavigationHelpers.pushRoute<void>(
+                              context,
+                              route: route,
+                              dependencies: dependencies,
+                            ),
+                        child: Text(label),
+                      );
+                    },
+                  ),
+                ),
+              ),
         ),
-      ),
+        GoRoute(
+          path: route.toUri().path,
+          builder:
+              (BuildContext context, GoRouterState state) =>
+                  GteAppRouteRegistry(
+                    dependencies: dependencies,
+                  ).guardedScreenFor(route),
+        ),
+      ],
     );
+    return MaterialApp.router(routerConfig: router);
   }
 }
 

@@ -146,7 +146,7 @@ class TournamentService:
         match_id: str,
         payload: TournamentMatchResultRequest,
         *,
-        actor_user_id: str | None = None,
+        actor_user_id: str,
     ) -> dict[str, object]:
         with self._state_lock(tournament_id) as acquired:
             if not acquired:
@@ -171,12 +171,13 @@ class TournamentService:
                 return self._build_view(tournament)
 
             participants = {match.player_one_user_id, match.player_two_user_id}
+            if actor_user_id not in participants:
+                raise TournamentValidationError(
+                    "Only a participant in the match may report its result.",
+                    reason="actor_not_participant",
+                )
             if payload.winner_user_id not in participants:
                 raise TournamentValidationError("Winner must be part of the match.", reason="invalid_winner")
-            if actor_user_id is not None and actor_user_id not in participants:
-                raise TournamentValidationError(
-                    "Only a participant in this match may report its result.", reason="not_a_participant"
-                )
 
             self._complete_match(
                 match,
@@ -189,11 +190,16 @@ class TournamentService:
             self._synchronize_prize_pool(tournament)
             return self._build_view(tournament)
 
-    def advance_tournament(self, tournament_id: str) -> dict[str, object]:
+    def advance_tournament(self, tournament_id: str, *, actor_user_id: str) -> dict[str, object]:
         with self._state_lock(tournament_id) as acquired:
             if not acquired:
                 raise TournamentValidationError("Tournament state is busy. Retry shortly.", reason="operation_busy")
             tournament = self._get_tournament(tournament_id, for_update=True)
+            if self._get_player(tournament.id, actor_user_id) is None:
+                raise TournamentValidationError(
+                    "Only a tournament participant may advance the tournament.",
+                    reason="actor_not_participant",
+                )
             before = (tournament.status, tournament.current_round, tournament.completed_at)
             self._sync_tournament(tournament, fail_if_not_ready=True)
             after = (tournament.status, tournament.current_round, tournament.completed_at)

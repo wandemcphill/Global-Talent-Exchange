@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user
 from app.db import get_session
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.tournaments.schemas import (
     TournamentCreateRequest,
     TournamentJoinRequest,
@@ -31,7 +31,7 @@ def _raise_http(exc: TournamentError) -> None:
     if isinstance(exc, TournamentNotFoundError):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.detail) from exc
     if isinstance(exc, TournamentValidationError):
-        if exc.reason == "not_a_participant":
+        if exc.reason in {"not_a_participant", "actor_not_participant"}:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.detail) from exc
         conflict_reasons = {
             "insufficient_balance",
@@ -63,10 +63,15 @@ def list_tournaments(
 @router.post("", response_model=TournamentView, status_code=status.HTTP_201_CREATED)
 def create_tournament(
     payload: TournamentCreateRequest,
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     service: TournamentService = Depends(_service),
-    _actor: User = Depends(get_current_user),
 ) -> TournamentView:
+    if current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators may create platform tournaments.",
+        )
     try:
         tournament = service.create_tournament(payload)
         session.commit()
@@ -95,17 +100,17 @@ def get_tournament(
 def join_tournament(
     tournament_id: str,
     payload: TournamentJoinRequest,
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     service: TournamentService = Depends(_service),
-    actor: User = Depends(get_current_user),
 ) -> TournamentView:
-    if payload.user_id != actor.id:
+    if payload.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You may only join a tournament as yourself.",
+            detail="Tournament joins must be performed for the authenticated user.",
         )
     try:
-        tournament = service.join_tournament(tournament_id, user_id=payload.user_id)
+        tournament = service.join_tournament(tournament_id, user_id=current_user.id)
         session.commit()
     except TournamentError as exc:
         session.rollback()
@@ -118,12 +123,17 @@ def report_match_result(
     tournament_id: str,
     match_id: str,
     payload: TournamentMatchResultRequest,
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     service: TournamentService = Depends(_service),
-    actor: User = Depends(get_current_user),
 ) -> TournamentView:
     try:
-        tournament = service.record_match_result(tournament_id, match_id, payload, actor_user_id=actor.id)
+        tournament = service.record_match_result(
+            tournament_id,
+            match_id,
+            payload,
+            actor_user_id=current_user.id,
+        )
         session.commit()
     except TournamentError as exc:
         session.rollback()
@@ -134,12 +144,12 @@ def report_match_result(
 @router.post("/{tournament_id}/advance", response_model=TournamentView)
 def advance_tournament(
     tournament_id: str,
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     service: TournamentService = Depends(_service),
-    _actor: User = Depends(get_current_user),
 ) -> TournamentView:
     try:
-        tournament = service.advance_tournament(tournament_id)
+        tournament = service.advance_tournament(tournament_id, actor_user_id=current_user.id)
         session.commit()
     except TournamentError as exc:
         session.rollback()

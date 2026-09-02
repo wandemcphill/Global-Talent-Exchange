@@ -48,6 +48,70 @@ extension GtexCompetitionStatusLabel on GtexCompetitionStatus {
   }
 }
 
+/// Coarse lifecycle position used to render the competition progress rail.
+///
+/// Derived from [GtexCompetitionStatus] plus settlement state rather than
+/// stored separately, so the rail can never disagree with the badge.
+enum GtexCompetitionLifecycleStage {
+  upcoming,
+  registration,
+  live,
+  completed,
+  settlement,
+}
+
+extension GtexCompetitionLifecycleStageLabel on GtexCompetitionLifecycleStage {
+  String get label {
+    switch (this) {
+      case GtexCompetitionLifecycleStage.upcoming:
+        return 'Upcoming';
+      case GtexCompetitionLifecycleStage.registration:
+        return 'Registration';
+      case GtexCompetitionLifecycleStage.live:
+        return 'Live';
+      case GtexCompetitionLifecycleStage.completed:
+        return 'Completed';
+      case GtexCompetitionLifecycleStage.settlement:
+        return 'Settled';
+    }
+  }
+
+  /// Ordering used by the rail to decide which steps are already behind us.
+  int get rank => index;
+}
+
+/// Where the signed-in club stands inside a competition.
+///
+/// [unknown] is the honest default: the list payload does not always carry
+/// participation, and guessing would be worse than staying quiet.
+enum GtexCompetitionViewerOutcome {
+  unknown,
+  notEntered,
+  registered,
+  active,
+  eliminated,
+  winner,
+}
+
+extension GtexCompetitionViewerOutcomeLabel on GtexCompetitionViewerOutcome {
+  String? get label {
+    switch (this) {
+      case GtexCompetitionViewerOutcome.unknown:
+        return null;
+      case GtexCompetitionViewerOutcome.notEntered:
+        return 'Not entered';
+      case GtexCompetitionViewerOutcome.registered:
+        return 'Registered';
+      case GtexCompetitionViewerOutcome.active:
+        return 'Still in';
+      case GtexCompetitionViewerOutcome.eliminated:
+        return 'Eliminated';
+      case GtexCompetitionViewerOutcome.winner:
+        return 'Winner';
+    }
+  }
+}
+
 class GtexCompetitionSummary {
   const GtexCompetitionSummary({
     required this.id,
@@ -66,6 +130,9 @@ class GtexCompetitionSummary {
     this.ownerClubName,
     this.creatorName,
     this.heroImageUrl,
+    this.viewerOutcome = GtexCompetitionViewerOutcome.unknown,
+    this.winnerClubName,
+    this.prizeSettled = false,
   });
 
   final String id;
@@ -85,11 +152,50 @@ class GtexCompetitionSummary {
   final String? creatorName;
   final String? heroImageUrl;
 
+  /// Where the signed-in club stands. Defaults to
+  /// [GtexCompetitionViewerOutcome.unknown] when the payload omits it.
+  final GtexCompetitionViewerOutcome viewerOutcome;
+
+  /// Winning club, only meaningful once the competition is completed.
+  final String? winnerClubName;
+
+  /// Whether prize coins have been released to the winners.
+  final bool prizeSettled;
+
   bool get isJoinable => status == GtexCompetitionStatus.registrationOpen && registeredClubs < maxClubs;
 
   String get entryFeeLabel => '${entryFeeCredits.toString()} coins';
   String get prizePoolLabel => '${prizePoolCredits.toString()} coins';
   String get capacityLabel => '$registeredClubs/$maxClubs clubs';
+
+  /// Lifecycle position used by the progress rail.
+  ///
+  /// Settlement is only reported once the competition is finished *and* the
+  /// prizes have actually been released, so a completed-but-unsettled
+  /// tournament still reads as pending payout rather than done.
+  GtexCompetitionLifecycleStage get lifecycleStage {
+    switch (status) {
+      case GtexCompetitionStatus.draft:
+        return GtexCompetitionLifecycleStage.upcoming;
+      case GtexCompetitionStatus.registrationOpen:
+        return GtexCompetitionLifecycleStage.registration;
+      case GtexCompetitionStatus.registrationClosed:
+        return GtexCompetitionLifecycleStage.registration;
+      case GtexCompetitionStatus.live:
+        return GtexCompetitionLifecycleStage.live;
+      case GtexCompetitionStatus.completed:
+        return prizeSettled
+            ? GtexCompetitionLifecycleStage.settlement
+            : GtexCompetitionLifecycleStage.completed;
+    }
+  }
+
+  /// Whether the competition is finished but prize coins are still pending.
+  bool get isAwaitingSettlement =>
+      status == GtexCompetitionStatus.completed && !prizeSettled;
+
+  /// Short outcome badge for the signed-in club, or null when unknown.
+  String? get viewerOutcomeLabel => viewerOutcome.label;
 }
 
 class GtexCompetitionFixture {

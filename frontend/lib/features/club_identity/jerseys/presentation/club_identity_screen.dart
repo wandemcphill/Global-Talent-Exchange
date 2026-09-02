@@ -45,13 +45,24 @@ class _ClubIdentityScreenState extends State<ClubIdentityScreen> {
           repository:
               widget.repository ??
               ClubIdentityApiRepository.standard(
-                baseUrl: widget.apiBaseUrl ?? 'http://127.0.0.1:8000',
+                baseUrl: _requireApiBaseUrl(),
                 mode: widget.backendMode ?? GteBackendMode.live,
               ),
         );
     if (!_controller.isLoading && !_controller.hasIdentity) {
       _controller.load();
     }
+  }
+
+  String _requireApiBaseUrl() {
+    final String? baseUrl = widget.apiBaseUrl?.trim();
+    if (baseUrl == null || baseUrl.isEmpty) {
+      throw StateError(
+        'ClubIdentityScreen requires an injected API base URL or repository. '
+        'Production screens must not provide an implicit localhost endpoint.',
+      );
+    }
+    return baseUrl;
   }
 
   @override

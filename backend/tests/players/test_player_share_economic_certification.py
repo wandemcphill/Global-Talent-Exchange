@@ -1,0 +1,121 @@
+from __future__ import annotations
+
+from scripts.certify_player_share_economy import certify
+
+
+def _passing_holdings_report():
+    return {
+        "gates": {
+            "no_negative_holdings": True,
+            "no_negative_average_costs": True,
+            "no_negative_dividend_balances": True,
+            "holdings_do_not_exceed_circulation": True,
+            "holdings_do_not_exceed_total_supply": True,
+        },
+        "read_only": True,
+    }
+
+
+def _passing_lifecycle_report():
+    return {
+        "gates": {
+            "no_blocked_active_markets": True,
+            "no_active_markets_missing_liquidity_account": True,
+            "all_active_markets_explicitly_issued": True,
+            "all_active_liquidity_balances_reconcile": True,
+            "no_negative_active_liquidity": True,
+            "all_active_liquidity_is_coin": True,
+        },
+        "read_only": True,
+    }
+
+
+def _passing_market_integrity_report():
+    return {"pass": True, "read_only": True}
+
+
+def _passing_event_reconciliation_report():
+    return {
+        "pass": True,
+        "read_only": True,
+        "gates": {
+            "market_circulation_reconciles_to_event_deltas": True,
+            "no_events_without_market": True,
+        },
+    }
+
+
+def _patch_common_gates(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_lifecycle",
+        lambda **_: _passing_lifecycle_report(),
+    )
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_holdings",
+        lambda **_: _passing_holdings_report(),
+    )
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_market_integrity",
+        lambda **_: _passing_market_integrity_report(),
+    )
+    # `certify()` also calls audit_event_reconciliation(database_url=...) unconditionally.
+    # Without stubbing it, `database_url=None` resolves to the process's configured
+    # default database, which in a bare dev/CI environment has never had the
+    # player_share_events table created — these tests exist to exercise certify()'s
+    # gate-combining logic, not to stand up a real database.
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_event_reconciliation",
+        lambda **_: _passing_event_reconciliation_report(),
+    )
+
+
+def test_certification_combines_all_economic_gates(monkeypatch):
+    _patch_common_gates(monkeypatch)
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_trade_boundary",
+        lambda: {"pass": True, "read_only": True},
+    )
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_issuer_boundary",
+        lambda: {"pass": True, "read_only": True},
+    )
+
+    report = certify(database_url=None, batch_size=100)
+
+    assert report["read_only"] is True
+    assert report["pass"] is True
+    assert all(report["gates"].values())
+
+
+def test_certification_fails_closed_when_trade_boundary_fails(monkeypatch):
+    _patch_common_gates(monkeypatch)
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_trade_boundary",
+        lambda: {"pass": False, "read_only": True},
+    )
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_issuer_boundary",
+        lambda: {"pass": True, "read_only": True},
+    )
+
+    report = certify(database_url=None, batch_size=100)
+
+    assert report["pass"] is False
+    assert report["gates"]["trade_boundary"] is False
+
+
+def test_certification_fails_closed_when_issuer_boundary_fails(monkeypatch):
+    _patch_common_gates(monkeypatch)
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_trade_boundary",
+        lambda: {"pass": True, "read_only": True},
+    )
+    monkeypatch.setattr(
+        "scripts.certify_player_share_economy.audit_issuer_boundary",
+        lambda: {"pass": False, "read_only": True},
+    )
+
+    report = certify(database_url=None, batch_size=100)
+
+    assert report["pass"] is False
+    assert report["gates"]["issuer_boundary"] is False

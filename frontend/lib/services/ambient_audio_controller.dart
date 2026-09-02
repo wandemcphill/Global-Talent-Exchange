@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/gte_runtime_environment.dart';
+
 abstract class AmbientAudioState extends ChangeNotifier {
   bool get isMuted;
   bool get isPlaying;
@@ -61,6 +63,15 @@ class AmbientAudioController extends ChangeNotifier
       return;
     }
     _bootstrapped = true;
+
+    // The Flutter test runner has no real audio platform and can report
+    // stream-channel shutdown errors when just_audio is bootstrapped while a
+    // widget tree is being torn down. Audio is intentionally disabled for the
+    // test runtime; production/mobile behavior is unchanged.
+    if (isFlutterTestEnvironment) {
+      return;
+    }
+
     try {
       _preferences ??= await SharedPreferences.getInstance();
       _isMuted = _preferences?.getBool(preferenceKey) ?? true;
@@ -80,7 +91,7 @@ class AmbientAudioController extends ChangeNotifier
 
   @override
   Future<void> preload() async {
-    if (_isReady || _isLoading) {
+    if (isFlutterTestEnvironment || _isReady || _isLoading) {
       return;
     }
     _isLoading = true;
@@ -102,6 +113,9 @@ class AmbientAudioController extends ChangeNotifier
 
   @override
   Future<void> play() async {
+    if (isFlutterTestEnvironment) {
+      return;
+    }
     if (!_isReady) {
       await preload();
     }
@@ -121,6 +135,9 @@ class AmbientAudioController extends ChangeNotifier
 
   @override
   Future<void> pause() async {
+    if (isFlutterTestEnvironment) {
+      return;
+    }
     try {
       await _player.pause();
     } catch (error) {
@@ -132,6 +149,10 @@ class AmbientAudioController extends ChangeNotifier
 
   @override
   Future<void> toggleMuted() async {
+    if (isFlutterTestEnvironment) {
+      _isMuted = !_isMuted;
+      return;
+    }
     final bool nextMuted = !_isMuted;
     _isMuted = nextMuted;
     try {
@@ -155,7 +176,12 @@ class AmbientAudioController extends ChangeNotifier
 
   @override
   void dispose() {
-    _player.dispose();
+    // Do not touch the native just_audio platform channel from the Flutter
+    // test runner during teardown. This is what prevents stream-channel close
+    // races after route_coverage_test.dart has completed.
+    if (!isFlutterTestEnvironment) {
+      _player.dispose();
+    }
     super.dispose();
   }
 }

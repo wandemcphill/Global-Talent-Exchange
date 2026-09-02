@@ -36,7 +36,6 @@ namespace Gtex.Match3D.Runtime
 
         private readonly Dictionary<string, string> _animationMap =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
         private readonly HashSet<int> _floatParameters = new HashSet<int>();
         private readonly HashSet<int> _boolParameters = new HashSet<int>();
 
@@ -55,10 +54,7 @@ namespace Gtex.Match3D.Runtime
         public string PlayerLabel { get; private set; }
         public int ShirtNumber { get; private set; }
 
-        public Vector3 TargetPosition
-        {
-            get { return _targetPosition; }
-        }
+        public Vector3 TargetPosition => _targetPosition;
 
         private void Awake()
         {
@@ -66,12 +62,10 @@ namespace Gtex.Match3D.Runtime
             {
                 animator = GetComponentInChildren<Animator>();
             }
-
             if (renderers == null || renderers.Length == 0)
             {
                 renderers = GetComponentsInChildren<Renderer>(true);
             }
-
             BuildAnimationMap();
             CacheAnimatorParameters();
             _targetPosition = transform.position;
@@ -89,12 +83,10 @@ namespace Gtex.Match3D.Runtime
             {
                 animator.SetFloat("speed", _speedRatio);
             }
-
             if (animator != null && HasBoolParameter("highlighted"))
             {
                 animator.SetBool("highlighted", _highlighted);
             }
-
             if (animator != null && HasBoolParameter("hasPossession"))
             {
                 animator.SetBool("hasPossession", _hasPossession);
@@ -107,7 +99,6 @@ namespace Gtex.Match3D.Runtime
             {
                 return;
             }
-
             MatchScenePayloadDto payload = node.payload ?? new MatchScenePayloadDto();
             EntityId = node.id;
             PlayerId = StripEntityPrefix(node.id);
@@ -115,22 +106,18 @@ namespace Gtex.Match3D.Runtime
             Side = payload.side;
             PlayerLabel = payload.label;
             ShirtNumber = payload.shirtNumber;
-
             _targetPosition = node.position != null ? node.position.ToVector3() : transform.position;
             _targetRotation = node.rotation != null ? node.rotation.ToQuaternion() : transform.rotation;
             _targetVelocity = node.velocity != null ? node.velocity.ToVector3() : Vector3.zero;
             _speedRatio = Mathf.Clamp01(payload.speedRatio);
             _highlighted = payload.highlighted;
             _hasPossession = payload.hasPossession;
-
             if (immediate || Vector3.Distance(transform.position, _targetPosition) > 8f)
             {
                 SnapTo(_targetPosition, _targetRotation);
             }
-
             gameObject.name = string.IsNullOrWhiteSpace(payload.label) ? node.id : payload.label;
             gameObject.SetActive(payload.active);
-
             ApplyVisualState(payload.side, payload.highlighted, payload.hasPossession);
             ApplyAnimationBlend(payload.animation);
         }
@@ -141,7 +128,6 @@ namespace Gtex.Match3D.Runtime
             {
                 return;
             }
-
             EntityId = frame.id;
             PlayerId = StripEntityPrefix(frame.id);
             _targetPosition = frame.position;
@@ -149,12 +135,10 @@ namespace Gtex.Match3D.Runtime
             _targetVelocity = frame.velocity;
             _highlighted = frame.highlighted;
             _hasPossession = frame.hasPossession;
-
             if (immediate)
             {
                 SnapTo(_targetPosition, _targetRotation);
             }
-
             ApplyVisualState(Side, frame.highlighted, frame.hasPossession);
             if (!string.IsNullOrWhiteSpace(frame.animationState))
             {
@@ -181,22 +165,18 @@ namespace Gtex.Match3D.Runtime
             Side = side;
             PlayerLabel = label;
             ShirtNumber = shirtNumber;
-
             _targetPosition = position;
             _targetRotation = rotation;
             _targetVelocity = (position - transform.position) * Mathf.Max(1f, speedRatio);
             _speedRatio = Mathf.Clamp01(speedRatio);
             _highlighted = highlighted;
             _hasPossession = hasPossession;
-
             if (immediate || Vector3.Distance(transform.position, _targetPosition) > 8f)
             {
                 SnapTo(_targetPosition, _targetRotation);
             }
-
             gameObject.name = string.IsNullOrWhiteSpace(label) ? entityId : label;
             gameObject.SetActive(true);
-
             ApplyVisualState(side, highlighted, hasPossession);
             PlayAnimation(ResolveLocomotionState(speedRatio), immediate ? 0.01f : 0.12f);
         }
@@ -207,13 +187,12 @@ namespace Gtex.Match3D.Runtime
             {
                 return;
             }
-
             string animatorState = ResolveAnimatorState(runtimeState);
-            if (string.Equals(_currentAnimatorState, animatorState, StringComparison.Ordinal))
+            bool transient = IsTransientAnimation(runtimeState);
+            if (!transient && string.Equals(_currentAnimatorState, animatorState, StringComparison.Ordinal))
             {
                 return;
             }
-
             _currentAnimatorState = animatorState;
             animator.CrossFade(animatorState, Mathf.Max(0.01f, blendDuration), 0);
         }
@@ -245,16 +224,13 @@ namespace Gtex.Match3D.Runtime
             {
                 return;
             }
-
             string desiredState = !string.IsNullOrWhiteSpace(animation.targetState)
                 ? animation.targetState
                 : animation.currentState;
-
             if (string.IsNullOrWhiteSpace(desiredState))
             {
                 return;
             }
-
             float blendDuration = animation.durationMs > 0 ? animation.durationMs / 1000f : 0.16f;
             PlayAnimation(desiredState, blendDuration);
         }
@@ -265,21 +241,15 @@ namespace Gtex.Match3D.Runtime
             {
                 return;
             }
-
-            Color baseColor = string.Equals(side, "away", StringComparison.OrdinalIgnoreCase)
-                ? awayColor
-                : homeColor;
-
+            Color baseColor = string.Equals(side, "away", StringComparison.OrdinalIgnoreCase) ? awayColor : homeColor;
             if (highlighted)
             {
                 baseColor += highlightBoost;
             }
-
             if (hasPossession)
             {
                 baseColor = Color.Lerp(baseColor, Color.white, 0.15f);
             }
-
             for (int index = 0; index < renderers.Length; index += 1)
             {
                 Renderer renderer = renderers[index];
@@ -287,13 +257,11 @@ namespace Gtex.Match3D.Runtime
                 {
                     continue;
                 }
-
                 Material material = renderer.material;
                 if (material.HasProperty("_BaseColor"))
                 {
                     material.SetColor("_BaseColor", baseColor);
                 }
-
                 if (material.HasProperty("_Color"))
                 {
                     material.color = baseColor;
@@ -307,12 +275,10 @@ namespace Gtex.Match3D.Runtime
             for (int index = 0; index < animationBindings.Length; index += 1)
             {
                 AnimationBinding binding = animationBindings[index];
-                if (string.IsNullOrWhiteSpace(binding.runtimeState) ||
-                    string.IsNullOrWhiteSpace(binding.animatorState))
+                if (string.IsNullOrWhiteSpace(binding.runtimeState) || string.IsNullOrWhiteSpace(binding.animatorState))
                 {
                     continue;
                 }
-
                 _animationMap[binding.runtimeState] = binding.animatorState;
             }
         }
@@ -321,12 +287,10 @@ namespace Gtex.Match3D.Runtime
         {
             _floatParameters.Clear();
             _boolParameters.Clear();
-
             if (animator == null)
             {
                 return;
             }
-
             AnimatorControllerParameter[] parameters = animator.parameters;
             for (int index = 0; index < parameters.Length; index += 1)
             {
@@ -355,12 +319,22 @@ namespace Gtex.Match3D.Runtime
         private string ResolveAnimatorState(string runtimeState)
         {
             string mappedState;
-            if (_animationMap.TryGetValue(runtimeState, out mappedState))
-            {
-                return mappedState;
-            }
+            return _animationMap.TryGetValue(runtimeState, out mappedState) ? mappedState : runtimeState;
+        }
 
-            return runtimeState;
+        private static bool IsTransientAnimation(string runtimeState)
+        {
+            switch (runtimeState.ToLowerInvariant())
+            {
+                case "pass":
+                case "shoot":
+                case "receive":
+                case "tackle":
+                case "intercept":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static string ResolveLocomotionState(float speedRatio)
@@ -369,12 +343,10 @@ namespace Gtex.Match3D.Runtime
             {
                 return "sprint";
             }
-
             if (speedRatio >= 0.2f)
             {
                 return "run";
             }
-
             return "idle";
         }
 
@@ -384,7 +356,6 @@ namespace Gtex.Match3D.Runtime
             {
                 return null;
             }
-
             int separatorIndex = entityId.IndexOf(':');
             return separatorIndex >= 0 ? entityId.Substring(separatorIndex + 1) : entityId;
         }
@@ -395,7 +366,6 @@ namespace Gtex.Match3D.Runtime
             {
                 return 1f;
             }
-
             return 1f - Mathf.Exp(-speed * deltaTime);
         }
     }

@@ -123,30 +123,14 @@ namespace FStudio.MatchEngine.Players.PlayerController
 
         private void FixedUpdate()
         {
-            if (!externalPlaybackEnabled || !hasExternalPlaybackPose || rigidbody == null)
+            // GTEX authoritative playback is driven once per rendered frame by
+            // SetExternalPlaybackPose(). The legacy controller must not chase a
+            // second target in FixedUpdate or it will fight the GTEX interpolator,
+            // producing overspeed movement, foot skating and apparent teleports.
+            if (externalPlaybackEnabled)
             {
                 return;
             }
-
-            var distanceToTarget = Vector3.Distance(rigidbody.position, externalPlaybackTargetPosition);
-            var catchUpBlend = Mathf.Clamp01(distanceToTarget / 2.25f);
-            var baseMoveSpeed = Mathf.Clamp(externalPlaybackMoveSpeed, 6.5f, 10.5f);
-            var moveSpeed = Mathf.Lerp(baseMoveSpeed, baseMoveSpeed * 1.55f, catchUpBlend);
-            var nextPosition = Vector3.MoveTowards(
-                rigidbody.position,
-                externalPlaybackTargetPosition,
-                moveSpeed * Time.fixedDeltaTime);
-
-            var baseTurnSpeed = Mathf.Clamp(externalPlaybackTurnSpeed, 7.5f, 12.5f);
-            var turnSpeed = Mathf.Lerp(baseTurnSpeed, baseTurnSpeed * 1.45f, catchUpBlend);
-            var turnT = 1f - Mathf.Exp(-turnSpeed * Time.fixedDeltaTime);
-            var nextRotation = Quaternion.Slerp(rigidbody.rotation, externalPlaybackTargetRotation, turnT);
-
-            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
-                transform,
-                rigidbody,
-                nextPosition,
-                nextRotation);
         }
 
         private void Start()
@@ -218,6 +202,7 @@ namespace FStudio.MatchEngine.Players.PlayerController
             {
                 GtexPlaybackPhysicsUtil.SafeSetRigidbodyVelocity(rigidbody, Vector3.zero, Vector3.zero);
                 rigidbody.isKinematic = value || !m_IsPhysicsEnabled;
+                rigidbody.interpolation = value ? RigidbodyInterpolation.None : RigidbodyInterpolation.Interpolate;
             }
 
             if (collider != null)
@@ -228,30 +213,20 @@ namespace FStudio.MatchEngine.Players.PlayerController
             hasExternalPlaybackPose = false;
         }
 
-        public void SetExternalPlaybackPose(Vector3 position, Quaternion rotation, bool snap = false)
+                public void SetExternalPlaybackPose(Vector3 position, Quaternion rotation, bool snap = false)
         {
             rotation = Quaternion.Euler(0f, rotation.eulerAngles.y, 0f);
-
             externalPlaybackTargetPosition = position;
             externalPlaybackTargetRotation = rotation;
             hasExternalPlaybackPose = true;
-
             if (!externalPlaybackEnabled || rigidbody == null)
             {
                 SetInstantPosition(position);
                 SetInstantRotation(rotation);
                 return;
             }
-
-            if (snap || Vector3.Distance(rigidbody.position, position) >= ResolveExternalPlaybackTeleportDistance())
-            {
-                GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(
-                    transform,
-                    rigidbody,
-                    position,
-                    rotation,
-                    true);
-            }
+            GtexPlaybackPhysicsUtil.ApplyExternalPlaybackPosition(transform, rigidbody, position, rotation, snap);
+            lastKnownPosition = transform.position;
         }
 
         public void SetPosition(Vector3 position)

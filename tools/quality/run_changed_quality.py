@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-import shutil
+import json
 import shlex
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NULL_SHA = "0" * 40
@@ -100,14 +101,27 @@ def changed_files(base: str, head: str | None) -> list[str]:
     files: set[str] = set()
     if head:
         if base == NULL_SHA:
-            files.update(git_stdout("diff-tree", "--root", "--no-commit-id", "--name-only", "-r", head))
+            files.update(
+                git_stdout(
+                    "diff-tree",
+                    "--root",
+                    "--no-commit-id",
+                    "--name-only",
+                    "-r",
+                    head,
+                )
+            )
         else:
-            files.update(git_stdout("diff", "--name-only", "--diff-filter=ACMRT", f"{base}..{head}"))
+            files.update(
+                git_stdout("diff", "--name-only", "--diff-filter=ACMRT", f"{base}..{head}")
+            )
         return sorted(files)
 
     files.update(git_stdout("diff", "--name-only", "--diff-filter=ACMRT", base, "--"))
     files.update(
-        path for path in git_stdout("ls-files", "--others", "--exclude-standard") if include_untracked_file(path)
+        path
+        for path in git_stdout("ls-files", "--others", "--exclude-standard")
+        if include_untracked_file(path)
     )
     return sorted(files)
 
@@ -142,6 +156,45 @@ def run_check(label: str, command: list[str], files: list[str]) -> None:
     print(f"[quality] Running {label}")
     print(f"[quality] $ {shlex.join(full_command)}")
     subprocess.run(full_command, cwd=REPO_ROOT, check=True)
+
+
+def _normalized_secret_baseline(path: Path) -> object:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        payload.pop("generated_at", None)
+    return payload
+
+
+def run_secret_check(command: list[str], files: list[str]) -> None:
+    if not files:
+        print("[quality] Skipping Secret scan: no matching files changed.")
+        return
+
+    full_command = [*command, *files]
+    print("[quality] Running Secret scan")
+    print(f"[quality] $ {shlex.join(full_command)}")
+
+    baseline_before = None
+    baseline_bytes = None
+    if SECRET_BASELINE_PATH.is_file():
+        baseline_bytes = SECRET_BASELINE_PATH.read_bytes()
+        baseline_before = _normalized_secret_baseline(SECRET_BASELINE_PATH)
+
+    result = subprocess.run(full_command, cwd=REPO_ROOT, check=False)
+    if result.returncode == 0:
+        return
+
+    if (
+        result.returncode == 3
+        and baseline_before is not None
+        and SECRET_BASELINE_PATH.is_file()
+        and _normalized_secret_baseline(SECRET_BASELINE_PATH) == baseline_before
+    ):
+        SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
+        print("[quality] Secret baseline changed only by generated_at; restored original baseline.")
+        return
+
+    raise subprocess.CalledProcessError(result.returncode, full_command)
 
 
 def ensure_javascript_dependencies() -> None:
@@ -190,14 +243,17 @@ def main() -> int:
         [NPM_EXECUTABLE or "npm", "exec", "--", "eslint", "--max-warnings=0"],
         javascript_files,
     )
-    secret_scan_command = [sys.executable, "-m", "detect_secrets.pre_commit_hook", "--no-verify"]
+    secret_scan_command = [
+        sys.executable,
+        "-m",
+        "detect_secrets.pre_commit_hook",
+        "--no-verify",
+    ]
     if SECRET_BASELINE_PATH.is_file():
-        secret_scan_command.extend(["--baseline", str(SECRET_BASELINE_PATH.relative_to(REPO_ROOT))])
-    run_check(
-        "Secret scan",
-        secret_scan_command,
-        secret_scan_files,
-    )
+        secret_scan_command.extend(
+            ["--baseline", str(SECRET_BASELINE_PATH.relative_to(REPO_ROOT))]
+        )
+    run_secret_check(secret_scan_command, secret_scan_files)
 
     print("[quality] All configured quality gates passed.")
     return 0

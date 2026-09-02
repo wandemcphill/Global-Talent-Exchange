@@ -5,6 +5,7 @@ from typing import Never
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.request_security import extract_client_ip
 from app.auth.dependencies import get_current_trading_user, get_current_user
 from app.auth.dependencies import get_session
 from app.core.app_state import get_optional_app_settings
@@ -72,13 +73,8 @@ def get_market_engine(request: Request) -> MarketEngine:
     return market_engine
 
 
-def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for") or request.headers.get("cf-connecting-ip")
-    if forwarded:
-        return forwarded.split(",", 1)[0].strip() or None
-    if request.client is not None and request.client.host:
-        return str(request.client.host)
-    return None
+def _client_ip(request: Request) -> str:
+    return extract_client_ip(request)
 
 
 def get_market_player_query_service(
@@ -562,9 +558,15 @@ def create_offer(
     market_engine: MarketEngine = Depends(get_market_engine),
 ) -> OfferView:
     try:
+        seller_user_id = payload.seller_user_id
+        if payload.listing_id:
+            listing = market_engine.get_listing(payload.listing_id)
+            seller_user_id = listing.seller_user_id
+            if payload.asset_id != listing.asset_id:
+                raise MarketValidationError("offer target does not match listing")
         offer = market_engine.create_offer(
             asset_id=payload.asset_id,
-            seller_user_id=payload.seller_user_id,
+            seller_user_id=seller_user_id,
             buyer_user_id=current_user.id,
             cash_amount=payload.cash_amount,
             offered_asset_ids=payload.offered_asset_ids,

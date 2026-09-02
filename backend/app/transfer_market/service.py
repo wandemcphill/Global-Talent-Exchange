@@ -459,6 +459,7 @@ class TransferMarketService:
     def list_hub_offers(
         self,
         *,
+        actor: User,
         listing_id: str | None = None,
         club_id: str | None = None,
         status: str | None = None,
@@ -467,8 +468,37 @@ class TransferMarketService:
         if listing_id is not None:
             statement = statement.where(TransferHubOffer.listing_id == listing_id)
         if club_id is not None:
+            self._require_actor_club_access(
+                actor,
+                club_id,
+                allowed_roles=TRANSFER_MARKET_EXECUTION_ROLES,
+                forbidden_detail="transfer_market_club_access_required",
+            )
             statement = statement.where(
                 (TransferHubOffer.seller_club_id == club_id) | (TransferHubOffer.bidder_club_id == club_id)
+            )
+        elif actor.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+            context = self._access_control().bind_user_access_context(actor)
+            eligible_club_ids = list(
+                dict.fromkeys(
+                    membership.organization_id
+                    for membership in context.memberships
+                    if membership.organization_type == OrganizationType.CLUB
+                    and membership.role in TRANSFER_MARKET_EXECUTION_ROLES
+                )
+            )
+            eligible_club_ids.extend(
+                club_id
+                for club_id in self.session.scalars(
+                    select(ClubProfile.id).where(ClubProfile.owner_user_id == actor.id)
+                ).all()
+                if club_id not in eligible_club_ids
+            )
+            if not eligible_club_ids:
+                raise TransferMarketPermissionError("transfer_market_club_access_required")
+            statement = statement.where(
+                (TransferHubOffer.seller_club_id.in_(eligible_club_ids))
+                | (TransferHubOffer.bidder_club_id.in_(eligible_club_ids))
             )
         if status is not None:
             statement = statement.where(TransferHubOffer.status == status)

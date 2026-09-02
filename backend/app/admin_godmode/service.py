@@ -143,7 +143,7 @@ KORAPAY_UNAVAILABLE_MESSAGE = (
 
 
 def _paystack_enabled() -> bool:
-    return False
+    return provider_live_deposit_ready("paystack")
 
 
 def _default_payment_rail(provider: str) -> dict[str, Any]:
@@ -226,6 +226,31 @@ class PermissionDeniedError(GodModeError):
 
 class IntegrityBoundError(GodModeError):
     pass
+
+
+class CommissionSettingsUnavailableError(RuntimeError):
+    """Raised when the persisted Admin GodMode commission settings cannot be trusted."""
+
+
+def resolve_commission_settings(session: Session) -> dict[str, Any]:
+    """Sole authority for buy/sell/instant-sell commission bps.
+
+    Reads the same ``AdminRuntimeState`` row that ``AdminGodModeService.update_commissions``
+    writes to, so callers (e.g. ``WalletRailService``) always see the Admin's live setting
+    instead of a hardcoded default. Only falls back to the bootstrap defaults when no admin
+    has ever configured commissions (the row does not exist yet); a corrupt/malformed row
+    fails closed rather than silently reverting to a stale hardcoded fee.
+    """
+    row = session.scalar(select(AdminRuntimeState).where(AdminRuntimeState.state_key == ADMIN_GODMODE_STATE_KEY))
+    if row is None:
+        return dict(DEFAULT_COMMISSION_SETTINGS)
+    payload = row.payload_json
+    if not isinstance(payload, dict):
+        raise CommissionSettingsUnavailableError("Admin GodMode runtime state payload is corrupt.")
+    commissions = payload.get("commissions")
+    if not isinstance(commissions, dict) or not commissions:
+        raise CommissionSettingsUnavailableError("Admin GodMode commission settings are missing or corrupt.")
+    return commissions
 
 
 @dataclass(slots=True)

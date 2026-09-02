@@ -11,6 +11,7 @@ import '../../data/gte_models.dart';
 import '../../features/app_routes/gte_navigation_helpers.dart';
 import '../../features/app_routes/gte_route_data.dart';
 import '../../features/navigation_guards/gte_navigation_guards.dart';
+import '../../shared/auth/gtex_admin_capabilities.dart';
 import '../../shared/widgets/gtex_premium_panels.dart';
 import '../../ui_gtex/layout/gtex_production_flow_scaffold.dart';
 import '../../widgets/gte_formatters.dart';
@@ -26,6 +27,7 @@ class AdminCommandCenterScreen extends StatefulWidget {
     required this.backendMode,
     this.api,
     this.authedApi,
+    this.capabilities = const GtexAdminCapabilities.unchecked(),
   });
 
   final String baseUrl;
@@ -33,6 +35,11 @@ class AdminCommandCenterScreen extends StatefulWidget {
   final GteBackendMode backendMode;
   final AdminCommandCenterApi? api;
   final GteAuthedApi? authedApi;
+
+  /// Effective admin capabilities for the signed-in session. Controls that map
+  /// to a backend-enforced capability are disabled when it is absent, so the
+  /// UI does not offer an action the API will reject with 403.
+  final GtexAdminCapabilities capabilities;
 
   @override
   State<AdminCommandCenterScreen> createState() =>
@@ -45,6 +52,29 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
 
   bool get _isTestBinding =>
       WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
+  bool _can(String capability) => widget.capabilities.allows(capability);
+
+  /// Explains a control the session cannot use, instead of leaving a dead
+  /// button with no stated reason.
+  Widget _capabilityBlockedNote(String capability) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(Icons.lock_outline, size: 16, color: Colors.white70),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              GtexAdminCapabilities.blockedMessage(capability),
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   final TextEditingController _depositRateController = TextEditingController();
   final TextEditingController _withdrawalRateController =
@@ -512,7 +542,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       actions: <Widget>[
         FilledButton.icon(
           onPressed:
-              _creatingGtexCompetition ? null : _createGtexHostedCompetition,
+              (_creatingGtexCompetition ||
+                      !_can(GtexAdminCapabilities.manageCompetitions))
+                  ? null
+                  : _createGtexHostedCompetition,
           icon: const Icon(Icons.emoji_events_outlined),
           label: const Text('Launch GTEX arena'),
         ),
@@ -2393,7 +2426,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             children: <Widget>[
               FilledButton.icon(
                 onPressed:
-                    _creatingGtexCompetition
+                    (_creatingGtexCompetition ||
+                            !_can(GtexAdminCapabilities.manageCompetitions))
                         ? null
                         : _createGtexHostedCompetition,
                 icon: const Icon(Icons.emoji_events_outlined),
@@ -2788,10 +2822,16 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _savingRails ? null : _savePaymentRails,
+            onPressed:
+                (_savingRails ||
+                        !_can(GtexAdminCapabilities.managePaymentRails))
+                    ? null
+                    : _savePaymentRails,
             icon: const Icon(Icons.tune_outlined),
             label: Text(_savingRails ? 'Saving...' : 'Save payment rails'),
           ),
+          if (!_can(GtexAdminCapabilities.managePaymentRails))
+            _capabilityBlockedNote(GtexAdminCapabilities.managePaymentRails),
           if (controls != null) ...<Widget>[
             const SizedBox(height: 22),
             const Divider(),
@@ -2883,7 +2923,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed:
-                  _savingWithdrawalControls ? null : _saveWithdrawalControls,
+                  (_savingWithdrawalControls ||
+                          !_can(GtexAdminCapabilities.manageWithdrawals))
+                      ? null
+                      : _saveWithdrawalControls,
               icon: const Icon(Icons.account_balance_outlined),
               label: Text(
                 _savingWithdrawalControls
@@ -2891,6 +2934,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     : 'Save payout controls',
               ),
             ),
+            if (!_can(GtexAdminCapabilities.manageWithdrawals))
+              _capabilityBlockedNote(GtexAdminCapabilities.manageWithdrawals),
           ],
         ],
       ),

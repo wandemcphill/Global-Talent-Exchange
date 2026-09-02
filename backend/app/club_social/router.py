@@ -111,7 +111,9 @@ def accept_challenge(
     return ChallengePageView.model_validate(body)
 
 
-@router.post("/api/challenges/{challenge_id}/links", response_model=ChallengeLinkView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/challenges/{challenge_id}/links", response_model=ChallengeLinkView, status_code=status.HTTP_201_CREATED
+)
 def create_challenge_link(
     challenge_id: str,
     payload: ChallengeLinkCreateRequest,
@@ -127,7 +129,11 @@ def create_challenge_link(
     return ChallengeLinkView.model_validate(body)
 
 
-@router.post("/api/challenges/{challenge_id}/share-events", response_model=ChallengeShareEventView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/challenges/{challenge_id}/share-events",
+    response_model=ChallengeShareEventView,
+    status_code=status.HTTP_201_CREATED,
+)
 def record_challenge_share_event(
     challenge_id: str,
     payload: ChallengeShareEventRequest,
@@ -172,9 +178,13 @@ def get_challenge(challenge_id: str, service: ClubSocialService = Depends(get_se
 
 
 @router.get("/api/clubs/{club_id}/identity/metrics", response_model=ClubIdentityMetricsView)
-def get_identity_metrics(club_id: str, service: ClubSocialService = Depends(get_service)) -> ClubIdentityMetricsView:
+def get_identity_metrics(
+    club_id: str,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> ClubIdentityMetricsView:
     try:
-        metrics = service.refresh_identity_metrics(club_id=club_id)
+        metrics = service.refresh_identity_metrics_for_actor(actor=current_user, club_id=club_id)
         service.session.commit()
     except ClubSocialError as exc:
         _raise(exc)
@@ -182,9 +192,13 @@ def get_identity_metrics(club_id: str, service: ClubSocialService = Depends(get_
 
 
 @router.post("/api/clubs/{club_id}/identity/metrics/refresh", response_model=ClubIdentityMetricsView)
-def refresh_identity_metrics(club_id: str, service: ClubSocialService = Depends(get_service)) -> ClubIdentityMetricsView:
+def refresh_identity_metrics(
+    club_id: str,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> ClubIdentityMetricsView:
     try:
-        metrics = service.refresh_identity_metrics(club_id=club_id)
+        metrics = service.refresh_identity_metrics_for_actor(actor=current_user, club_id=club_id)
         service.session.commit()
     except ClubSocialError as exc:
         _raise(exc)
@@ -213,7 +227,9 @@ def unfollow_target(
     service: ClubSocialService = Depends(get_service),
 ) -> dict[str, str]:
     try:
-        service.unfollow_target(actor=current_user, target_type=payload.target_type, club_id=payload.club_id, player_id=payload.player_id)
+        service.unfollow_target(
+            actor=current_user, target_type=payload.target_type, club_id=payload.club_id, player_id=payload.player_id
+        )
         service.session.commit()
     except ClubSocialError as exc:
         _raise(exc)
@@ -234,11 +250,15 @@ def list_my_follows(
 
 
 @router.get("/api/matches/{match_id}/reactions", response_model=MatchReactionFeedView)
-def list_match_reactions(match_id: str, limit: int = Query(default=30, ge=1, le=100), service: ClubSocialService = Depends(get_service)) -> MatchReactionFeedView:
+def list_match_reactions(
+    match_id: str, limit: int = Query(default=30, ge=1, le=100), service: ClubSocialService = Depends(get_service)
+) -> MatchReactionFeedView:
     return MatchReactionFeedView(match_id=match_id, reactions=service.list_match_reactions(match_id, limit=limit))
 
 
-@router.post("/api/matches/{match_id}/share-links", response_model=MatchShareLinkView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/matches/{match_id}/share-links", response_model=MatchShareLinkView, status_code=status.HTTP_201_CREATED
+)
 def create_match_share_link(
     match_id: str,
     payload: MatchShareLinkCreateRequest,
@@ -281,7 +301,11 @@ def get_match_share_page(share_code: str, service: ClubSocialService = Depends(g
     return MatchSharePageView.model_validate(body)
 
 
-@router.post("/api/matches/{match_id}/live-reactions", response_model=MatchLiveReactionFeedView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api/matches/{match_id}/live-reactions",
+    response_model=MatchLiveReactionFeedView,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_live_reaction(
     match_id: str,
     payload: MatchLiveReactionCreateRequest,
@@ -349,7 +373,9 @@ def list_rivalries(club_id: str, service: ClubSocialService = Depends(get_servic
 
 
 @router.get("/api/clubs/{club_id}/rivalries/{opponent_club_id}", response_model=RivalryDetailView)
-def get_rivalry_detail(club_id: str, opponent_club_id: str, service: ClubSocialService = Depends(get_service)) -> RivalryDetailView:
+def get_rivalry_detail(
+    club_id: str, opponent_club_id: str, service: ClubSocialService = Depends(get_service)
+) -> RivalryDetailView:
     try:
         body = service.rivalry_detail(club_id=club_id, opponent_club_id=opponent_club_id)
     except ClubSocialError as exc:
@@ -358,8 +384,13 @@ def get_rivalry_detail(club_id: str, opponent_club_id: str, service: ClubSocialS
 
 
 @router.post("/api/rivalries/matches", response_model=RivalryDetailView, status_code=status.HTTP_201_CREATED)
-def record_rivalry_match(payload: RivalryMatchRecordRequest, service: ClubSocialService = Depends(get_service)) -> RivalryDetailView:
+def record_rivalry_match(
+    payload: RivalryMatchRecordRequest,
+    current_user: User = Depends(get_current_user),
+    service: ClubSocialService = Depends(get_service),
+) -> RivalryDetailView:
     try:
+        service.require_participant_club(current_user.id, (payload.home_club_id, payload.away_club_id))
         service.record_match_outcome(**payload.model_dump())
         body = service.rivalry_detail(club_id=payload.home_club_id, opponent_club_id=payload.away_club_id)
         service.session.commit()

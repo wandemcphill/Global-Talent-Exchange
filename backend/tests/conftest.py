@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 
+from backend.tests.support.economic_policy import seed_economic_policy
 from backend.tests.support.secrets import (
     BOOTSTRAP_TEST_ADMIN_PASSWORD,
     MEDIA_SIGNING_TEST_SECRET,
@@ -88,6 +89,14 @@ def app(test_settings):
 @pytest.fixture(scope="module")
 def client(app):
     with TestClient(app) as test_client:
+        # GTE_RUN_STARTUP_SEEDING is 0 under test, so the canonical Admin
+        # economic policy that production gets from migration 0113 (or from
+        # seed_defaults on a fresh install) is absent. Seed it once the app has
+        # started and the schema exists, so resolve_economic_policy() runs
+        # against a database shape that can actually occur in production.
+        with app.state.session_factory() as session:
+            seed_economic_policy(session)
+            session.commit()
         yield test_client
 
 

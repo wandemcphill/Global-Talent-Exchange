@@ -12,6 +12,8 @@ class PortfolioHoldingView(BaseModel):
         json_schema_extra={
             "example": {
                 "player_id": "player-123",
+                "player_name": "Daniel Okoro",
+                "club_name": "Enyimba FC",
                 "quantity": "2.0000",
                 "average_cost": "10.0000",
                 "current_price": "12.0000",
@@ -23,6 +25,8 @@ class PortfolioHoldingView(BaseModel):
     )
 
     player_id: str
+    player_name: str | None = None
+    club_name: str | None = None
     quantity: Decimal
     average_cost: Decimal
     current_price: Decimal

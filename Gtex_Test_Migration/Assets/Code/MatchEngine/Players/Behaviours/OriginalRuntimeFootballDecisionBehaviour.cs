@@ -214,12 +214,22 @@ namespace FStudio.MatchEngine.Players.Behaviours {
             var forwardDot = distance > 0.01f ? Vector3.Dot(Player.GoalDirection.normalized, offset / distance) : 0f;
             var linePenalty = IsOpponentBlockingLine(Player.Position, point, 1.35f) ? 9f : 0f;
             var boundaryPenalty = IsNearBoundary(candidate.Position, BoundaryRiskDistance) ? 6f : 0f;
+            var nearestDefenderDistance = opponents
+                .Where(x => x != null && !x.IsGK && x.PlayerController != null && x.PlayerController.IsPhysicsEnabled)
+                .Select(x => Vector3.Distance(x.Position, point))
+                .DefaultIfEmpty(99f)
+                .Min();
+            var receiverPressurePenalty = Mathf.Clamp01((4.5f - nearestDefenderDistance) / 4.5f) * 5f;
+            var runDirection = candidate.Velocity.sqrMagnitude > 0.04f ? candidate.Velocity.normalized : Vector3.zero;
+            var forwardRunReward = runDirection.sqrMagnitude > 0.01f
+                ? Mathf.Clamp01(Vector3.Dot(Player.GoalDirection.normalized, runDirection)) * 1.6f
+                : 0f;
             var centralityPenalty = Mathf.Abs(candidate.Position.z - fieldEndY * 0.5f) * 0.08f;
             var distancePenalty = Mathf.Abs(distance - IdealPassDistance) * 0.28f;
             var backwardPenalty = forwardDot < -0.2f && !IsUnderPressure() ? 5.5f : 0f;
             var progressReward = -candidate.PlayerFieldProgress * 4f;
 
-            return linePenalty + boundaryPenalty + centralityPenalty + distancePenalty + backwardPenalty + progressReward - forwardDot * 2.5f;
+            return linePenalty + boundaryPenalty + receiverPressurePenalty + centralityPenalty + distancePenalty + backwardPenalty + progressReward - forwardDot * 2.5f - forwardRunReward;
         }
 
         private bool IsEligibleReceiver(PlayerBase candidate) {

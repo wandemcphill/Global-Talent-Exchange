@@ -95,6 +95,10 @@ from app.treasury.schemas import (
     WithdrawalRequestCreate as TreasuryWithdrawalRequestCreate,
     WithdrawalRequestView as TreasuryWithdrawalRequestView,
 )
+from app.treasury.commission_policy import (
+    CommissionPolicyUnavailableError,
+    resolve_commission_policy,
+)
 from app.treasury.service import TreasuryConflictError, TreasuryError, TreasuryService
 
 router = APIRouter()
@@ -260,9 +264,20 @@ def _build_withdrawal_quote(
     treasury = _build_treasury_service(request)
     settings = treasury.ensure_settings(session)
     eligibility = treasury.get_withdrawal_eligibility(session, current_user)
-    commissions = _commission_settings(request)
-    fee_bps = int(commissions.get("withdrawal_fee_bps", 1000) or 1000)
-    minimum_fee = Decimal(str(commissions.get("minimum_withdrawal_fee_credits", "5.0000") or "5.0000"))
+    # Price the quote from the same authority that will debit the user
+    # (TreasuryService -> resolve_commission_policy -> AdminRewardRule). This
+    # previously read the admin god-mode commissions block -- an unrelated store
+    # with its own 1000bps fallback -- so the fee shown before confirmation
+    # could differ from the fee actually charged.
+    try:
+        commission_policy = resolve_commission_policy(session)
+    except CommissionPolicyUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Withdrawal fees cannot be quoted until an active Admin economic policy is configured.",
+        ) from exc
+    fee_bps = int(commission_policy.withdrawal_fee_bps)
+    minimum_fee = Decimal(str(commission_policy.minimum_withdrawal_fee_credits))
     fee_amount = max((Decimal(amount_coin) * Decimal(fee_bps) / Decimal(10000)), minimum_fee).quantize(
         Decimal("0.0001")
     )
@@ -1457,6 +1472,15 @@ def create_withdrawal_request(
                 bank_account_id=payload.bank_account_id,
                 source_scope=payload.source_scope.value,
                 notes=payload.notes,
+                # Namespace the caller's key by user. The unique index on
+                # payout_requests.idempotency_key is global, so two users
+                # picking the same key ("1", a shared uuid) would otherwise
+                # collide on submission.
+                idempotency_key=(
+                    f"u:{current_user.id}:{payload.idempotency_key.strip()}"
+                    if payload.idempotency_key and payload.idempotency_key.strip()
+                    else None
+                ),
             )
             session.commit()
             session.refresh(withdrawal)
@@ -1698,6 +1722,11 @@ def create_payment_event(
     current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> PaymentEventView:
+    # Client-authored payment events were a fraud vector (a client could simply
+    # assert "I paid"). Deposits now only ever land through KoraPay signed
+    # webhooks, wallet top-up verification, or admin-reviewed manual bank
+    # transfer. Kept as a 410 rather than removed so old clients get a clear,
+    # permanent signal instead of a 404.
     raise HTTPException(
         status_code=status.HTTP_410_GONE,
         detail=(
@@ -1705,30 +1734,6 @@ def create_payment_event(
             "Use KoraPay signed webhooks, wallet top-up verification, or admin-reviewed manual bank transfer deposits."
         ),
     )
-    service = _build_wallet_service(request)
-    _require_gateway_deposit(
-        request=request,
-        session=session,
-        user=current_user,
-        provider_key=payload.provider,
-    )
-    try:
-        with _wallet_transaction_lock(request, user=current_user, operation="payment_event_create"):
-            payment_event = service.create_payment_event(
-                session,
-                user=current_user,
-                provider=payload.provider,
-                provider_reference=payload.provider_reference,
-                amount=payload.amount,
-                pack_code=payload.pack_code,
-            )
-            session.commit()
-            session.refresh(payment_event)
-    except LedgerError as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-
-    return PaymentEventView.model_validate(payment_event)
 
 
 router.include_router(public_wallet_router)

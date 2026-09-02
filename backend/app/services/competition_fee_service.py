@@ -10,7 +10,7 @@ _FOUR_PLACES = Decimal("0.0001")
 
 @dataclass(slots=True)
 class CompetitionFeeService:
-    default_platform_fee_pct: Decimal = Decimal("0.20")
+    default_platform_fee_pct: Decimal = Decimal("0.30")
     default_host_fee_pct: Decimal = Decimal("0.00")
 
     def resolve_fees(

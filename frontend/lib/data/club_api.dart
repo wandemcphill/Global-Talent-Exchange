@@ -80,32 +80,48 @@ class ClubApi {
         config: config,
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        fixtures:
-            resolvedMode == GteBackendMode.fixture
-                ? StubTrophyCabinetRepository()
-                : null,
+        fixtures: null,
       ),
       identityRepository: _ClubIdentityApiRepository(
         config: config,
         transport: GteHttpTransport(),
         accessToken: accessToken,
-        fixtures:
-            resolvedMode == GteBackendMode.fixture
-                ? MockClubIdentityRepository()
-                : null,
+        fixtures: null,
       ),
-      fixtures:
-          resolvedMode == GteBackendMode.fixture
-              ? _ClubFixtureStore.seeded()
-              : null,
+      fixtures: null,
     );
   }
 
   factory ClubApi.fixture() {
     assertFixtureFactoryAllowed('ClubApi.fixture');
-    return ClubApi.standard(
+    const GteRepositoryConfig config = GteRepositoryConfig(
       baseUrl: 'http://127.0.0.1:8000',
       mode: GteBackendMode.fixture,
+    );
+    return ClubApi(
+      config: config,
+      transport: GteHttpTransport(),
+      reputationRepository: ReputationApiRepository.standard(
+        baseUrl: config.baseUrl,
+        mode: GteBackendMode.fixture,
+      ),
+      dynastyRepository: DynastyApiRepository.standard(
+        baseUrl: config.baseUrl,
+        mode: GteBackendMode.fixture,
+      ),
+      trophyRepository: _ClubTrophyApiRepository(
+        config: config,
+        transport: GteHttpTransport(),
+        accessToken: null,
+        fixtures: StubTrophyCabinetRepository(),
+      ),
+      identityRepository: _ClubIdentityApiRepository(
+        config: config,
+        transport: GteHttpTransport(),
+        accessToken: null,
+        fixtures: MockClubIdentityRepository(),
+      ),
+      fixtures: _ClubFixtureStore.seeded(),
     );
   }
 
@@ -221,6 +237,12 @@ class ClubApi {
     required String clubId,
     String? clubName,
   }) async {
+    if (config.mode == GteBackendMode.fixture) {
+      // Every other data method on this class reads through the fixture
+      // store that ClubApi.standard() seeds in fixture mode; this one used
+      // to be the exception and always went to the network.
+      return _requireFixtures().workspaceSnapshotFor(clubId, clubName);
+    }
     final Map<String, String> headers = <String, String>{
       'Accept': 'application/json',
     };
@@ -1132,11 +1154,23 @@ class _ClubFixtureStore {
         ),
       ];
 
+  final Map<String, GtexClubWorkspaceSnapshot> _workspaceByClub =
+      <String, GtexClubWorkspaceSnapshot>{};
   final Map<String, ClubBrandingProfile> _brandingByClub;
   final Map<String, Set<String>> _ownedByClub;
   final Map<String, Map<String, String>> _equippedByClub;
   final Map<String, List<ClubPurchaseRecord>> _purchaseHistoryByClub;
   final List<BrandingReviewCase> _brandingQueue;
+
+  GtexClubWorkspaceSnapshot workspaceSnapshotFor(String clubId, String? clubName) {
+    return _workspaceByClub.putIfAbsent(
+      clubId,
+      () => GtexClubWorkspaceSnapshot.fixtureSeed(
+        clubId: clubId,
+        clubName: clubName ?? prettifyClubId(clubId),
+      ),
+    );
+  }
 
   ClubBrandingProfile brandingFor(String clubId, String? clubName) {
     return _brandingByClub.putIfAbsent(

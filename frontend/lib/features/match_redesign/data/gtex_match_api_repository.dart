@@ -10,11 +10,20 @@ class ApiBackedMatchRepository implements GtexMatchRepository {
   const ApiBackedMatchRepository({
     required GteAuthedApi client,
     Stream<Map<String, Object?>> Function(String matchId)? realtimeEvents,
+    Duration minimumRefreshInterval = const Duration(milliseconds: 400),
   }) : _client = client,
-       _realtimeEvents = realtimeEvents;
+       _realtimeEvents = realtimeEvents,
+       _minimumRefreshInterval = minimumRefreshInterval;
 
   final GteAuthedApi _client;
   final Stream<Map<String, Object?>> Function(String matchId)? _realtimeEvents;
+
+  /// Floor between two state re-fetches.
+  ///
+  /// The realtime channel emits one frame per match event, and a busy minute
+  /// can burst a dozen of them. Without coalescing, each burst turned into a
+  /// dozen `/state` round trips for a single visible update.
+  final Duration _minimumRefreshInterval;
 
   @override
   Future<GtexLiveMatchState> fetchLiveMatch(String matchId) async {
@@ -32,15 +41,60 @@ class ApiBackedMatchRepository implements GtexMatchRepository {
 
   @override
   Stream<GtexLiveMatchState> watchLiveMatch(String matchId) async* {
-    yield await fetchLiveMatch(matchId);
     final Stream<Map<String, Object?>> Function(String matchId)?
     realtimeEvents = _realtimeEvents;
     if (realtimeEvents == null) {
+      // No realtime channel wired: emit the current snapshot once and close.
+      // The controller treats the close as a drop and polls with backoff.
+      yield await fetchLiveMatch(matchId);
       return;
     }
-    await for (final Map<String, Object?> _ in realtimeEvents(matchId)) {
-      yield await fetchLiveMatch(matchId);
+
+    DateTime? lastFetchedAt;
+    int consecutiveFailures = 0;
+
+    await for (final Map<String, Object?> event in realtimeEvents(matchId)) {
+      // Coalesce event bursts into at most one refetch per interval.
+      final DateTime now = DateTime.now();
+      final DateTime? previous = lastFetchedAt;
+      if (previous != null &&
+          now.difference(previous) < _minimumRefreshInterval &&
+          !_isTerminalEvent(event)) {
+        continue;
+      }
+      lastFetchedAt = now;
+
+      try {
+        final GtexLiveMatchState snapshot = await fetchLiveMatch(matchId);
+        consecutiveFailures = 0;
+        yield snapshot;
+        if (snapshot.phase == GtexMatchPhase.fullTime) {
+          return;
+        }
+      } catch (error) {
+        // A single malformed or failed refresh must not kill the feed. Give up
+        // only after the backend has failed repeatedly, at which point the
+        // controller takes over with its own backoff.
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= 3) {
+          rethrow;
+        }
+      }
     }
+  }
+
+  /// Full-time and similar terminal frames bypass burst coalescing so the
+  /// final result is never withheld behind the refresh floor.
+  static bool _isTerminalEvent(Map<String, Object?> event) {
+    final Object? raw = event['phase'] ?? event['status'] ?? event['type'];
+    if (raw == null) {
+      return false;
+    }
+    final String normalized = raw.toString().trim().toUpperCase();
+    return normalized == 'FT' ||
+        normalized == 'FULL_TIME' ||
+        normalized == 'FULLTIME' ||
+        normalized == 'MATCH_ENDED';
   }
 
   @override

@@ -37,6 +37,7 @@ Usage::
 
 import argparse
 import csv
+import gzip
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 import hashlib
@@ -133,11 +134,11 @@ _COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "description": ("description", "bio"),
     "nationality_code": ("nationality_code", "nation_code", "country_code"),
     "preferred_foot": ("preferred_foot", "foot"),
-    "jersey": ("club_jersey_number", "jersey_number", "shirt_number", "kit_number"),
+    "jersey": ("club_jersey_number", "jersey_number", "shirt_number", "kit_number", "club_kit_number"),
     "photo": ("player_face_url", "player_face", "face_url", "image", "image_url", "photo_url", "url"),
     "national_team": ("nation_team_name", "national_team", "nation_name"),
-    "national_team_position": ("nation_position", "national_team_position"),
-    "national_team_jersey": ("nation_jersey_number", "national_team_jersey"),
+    "national_team_position": ("nation_position", "national_team_position", "country_position"),
+    "national_team_jersey": ("nation_jersey_number", "national_team_jersey", "country_kit_number"),
 }
 
 
@@ -329,11 +330,15 @@ def nationality_from_description(description: str | None) -> str | None:
 
 
 def _clean_name(value: str | None) -> str | None:
-    """Strip stray scraper artifacts: NBSP, replacement chars, trailing ' -' separators."""
+    """Strip stray scraper artifacts: NBSP, replacement chars, trailing ' -' separators.
+
+    Trailing periods are preserved -- they belong to legitimate names such as
+    ``John Anthony Brooks Jr.``, not to scraper noise.
+    """
     if not value:
         return None
     cleaned = value.replace("\xa0", " ").replace("�", "").strip()
-    while cleaned.endswith("-") or cleaned.endswith("."):
+    while cleaned.endswith("-"):
         cleaned = cleaned[:-1].strip()
     cleaned = " ".join(cleaned.split())
     return cleaned or None
@@ -566,7 +571,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--images",
         choices=("none", "url", "cloudinary"),
-        default="cloudinary",
+        default="url",
         help="Image handling: 'cloudinary' mirrors faces to your account, 'url' keeps SoFIFA URLs, 'none' drops them.",
     )
     parser.add_argument("--league", dest="leagues", action="append", default=None, help="Filter to league name(s). Repeatable.")
@@ -609,6 +614,19 @@ def main() -> int:
         raise SystemExit("Provide --csv <path> or --csv-url <url> (or $CSV_URL).")
     if not csv_path.exists():
         raise SystemExit(f"CSV not found: {csv_path}")
+    # A gzipped snapshot is accepted transparently: hosts commonly cap raw uploads
+    # (Cloudinary's is 10 MB) and the full export compresses ~6x under that.
+    with csv_path.open("rb") as fh:
+        is_gzip = fh.read(2) == bytes((0x1F, 0x8B))
+    if is_gzip:
+        decompressed = REPO_ROOT / "tmp" / "sofifa-decompressed.csv"
+        decompressed.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("input is gzipped; decompressing to %s", decompressed)
+        with gzip.open(csv_path, "rb") as src, decompressed.open("wb") as dst:
+            for chunk in iter(lambda: src.read(1 << 20), b""):
+                dst.write(chunk)
+        csv_path = decompressed
+        logger.info("decompressed CSV is %s bytes", csv_path.stat().st_size)
     if not args.dry_run and not args.database_url:
         raise SystemExit("--database-url or GTE_DATABASE_URL is required (or use --dry-run).")
 

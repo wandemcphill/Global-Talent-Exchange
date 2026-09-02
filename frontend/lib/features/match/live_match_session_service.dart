@@ -21,14 +21,23 @@ class LiveMatchSessionService {
   final GteExchangeApiClient _api;
 
   Future<LiveMatchSpectateSession?> resolveSession(String matchId) async {
-    if (_config.activeShellBackendMode == GteBackendMode.fixture) {
+    final String requestedMatchId = matchId.trim();
+    if (requestedMatchId.isEmpty ||
+        _config.activeShellBackendMode == GteBackendMode.fixture) {
       return null;
     }
     try {
-      final Map<String, Object?> payload = await _api.joinMatchSpectateSession(
-        matchId,
-      );
-      return LiveMatchSpectateSession.fromJson(payload);
+      final Map<String, Object?> payload = await _api
+          .joinMatchSpectateSession(requestedMatchId)
+          .timeout(const Duration(seconds: 8));
+      final LiveMatchSpectateSession session =
+          LiveMatchSpectateSession.fromJson(payload);
+      if (session.matchId.trim() != requestedMatchId ||
+          session.id.trim().isEmpty ||
+          session.websocketPath.trim().isEmpty) {
+        return null;
+      }
+      return session;
     } catch (_) {
       return null;
     }
@@ -39,23 +48,63 @@ class LiveMatchSessionService {
     if (trimmedPath == null || trimmedPath.isEmpty) {
       return null;
     }
+
+    if (trimmedPath.contains('%') && !trimmedPath.contains('%20')) {
+      try {
+        final String decoded = Uri.decodeFull(trimmedPath);
+        if (decoded != trimmedPath && decoded.contains('%')) {
+          return null;
+        }
+      } catch (_) {
+        return null;
+      }
+    }
+
     final Uri? base = Uri.tryParse(_config.apiBaseUrl);
     if (base == null || !base.hasScheme || base.host.trim().isEmpty) {
       return null;
     }
+
     final String scheme = switch (base.scheme) {
       'https' => 'wss',
       'http' => 'ws',
       'ws' || 'wss' => base.scheme,
       _ => 'wss',
     };
-    final Uri resolved = Uri.parse(trimmedPath);
-    if (resolved.hasScheme) {
-      return resolved;
+
+    final Uri? resolved = Uri.tryParse(trimmedPath);
+    if (resolved == null) {
+      return null;
     }
-    return base.replace(
+
+    if (resolved.hasScheme) {
+      if (resolved.scheme != 'ws' && resolved.scheme != 'wss') {
+        return null;
+      }
+      if (resolved.host.trim().isEmpty) {
+        return null;
+      }
+      return Uri(
+        scheme: resolved.scheme,
+        userInfo: resolved.userInfo,
+        host: resolved.host,
+        port: resolved.hasPort ? resolved.port : null,
+        path: resolved.path,
+        query: resolved.hasQuery ? resolved.query : null,
+      );
+    }
+
+    final String path = resolved.path.trim();
+    if (path.isEmpty) {
+      return null;
+    }
+
+    return Uri(
       scheme: scheme,
-      path: resolved.path,
+      userInfo: base.userInfo,
+      host: base.host,
+      port: base.hasPort ? base.port : null,
+      path: path.startsWith('/') ? path : '/$path',
       query: resolved.hasQuery ? resolved.query : null,
     );
   }

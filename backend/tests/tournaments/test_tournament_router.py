@@ -17,7 +17,7 @@ from app.models.base import utcnow
 from app.models.event_backbone import EventOutbox
 from app.models.risk_ops import AuditLog
 from app.models.tournament import Tournament, TournamentMatch, TournamentPlayer, TournamentRound
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.wallet import (
     LedgerAccount,
     LedgerBalanceProjection,
@@ -45,6 +45,11 @@ class _StubActor:
 
     def __init__(self, user_id: str) -> None:
         self.id = user_id
+        # create_tournament is admin-only; every actor used in this fixture
+        # is treated as an admin so the existing flow/lifecycle tests (which
+        # aren't exercising that specific gate) keep working. The gate itself
+        # is covered end-to-end by backend/tests/security/test_endpoint_authorization.py.
+        self.role = UserRole.SUPER_ADMIN
 
 
 def _override_get_current_user(request: Request) -> _StubActor:

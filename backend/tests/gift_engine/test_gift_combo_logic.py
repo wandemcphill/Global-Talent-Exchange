@@ -11,7 +11,6 @@ from app.admin_engine.schemas import AdminRewardRuleStabilityControls
 from app.auth.service import AuthService
 from app.gift_engine.service import GiftEngineError, GiftEngineService
 from app.models import (
-    AdminRewardRule,
     Base,
     GiftCatalogItem,
     GiftComboEvent,
@@ -24,6 +23,7 @@ from app.models import (
     SpendingControlDecision,
 )
 from app.wallets.service import LedgerPosting, WalletService
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 @pytest.fixture()
@@ -36,6 +36,8 @@ def session():
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     with SessionLocal() as db_session:
+        seed_economic_policy(db_session)
+        db_session.commit()
         yield db_session
 
 
@@ -105,7 +107,7 @@ def test_gift_combo_applies_bonus(session) -> None:
     session.commit()
 
     service = GiftEngineService(session)
-    first_tx = service.send_gift(
+    service.send_gift(
         sender=sender,
         recipient_user_id=recipient.id,
         gift_key="cheer",
@@ -145,30 +147,26 @@ def test_gift_controls_flag_near_limit_and_block_daily_sender_cap(session) -> No
             active=True,
         )
     )
-    session.add(
-        AdminRewardRule(
-            rule_key="tight-gift-controls",
-            title="Tight Gift Controls",
-            description="Limit rapid high-value user hosted gifts.",
-            trading_fee_bps=2000,
-            gift_platform_rake_bps=3000,
-            withdrawal_fee_bps=1000,
-            minimum_withdrawal_fee_credits=Decimal("5.0000"),
-            competition_platform_fee_bps=1000,
-            stability_controls_json=AdminRewardRuleStabilityControls(
-                user_hosted_gift={
-                    "max_amount": "200.0000",
-                    "daily_sender_limit": "150.0000",
-                    "daily_recipient_limit": "500.0000",
-                    "daily_pair_limit": "150.0000",
-                    "cooldown_seconds": 0,
-                    "burst_window_seconds": 300,
-                    "burst_max_count": 5,
-                    "review_threshold_bps": 8000,
-                }
-            ).model_dump(mode="json"),
-            active=True,
-        )
+    # Replaces the canonical policy instead of adding a second active rule:
+    # resolve_economic_policy() fails closed on more than one.
+    seed_economic_policy(
+        session,
+        rule_key="tight-gift-controls",
+        title="Tight Gift Controls",
+        description="Limit rapid high-value user hosted gifts.",
+        competition_platform_fee_bps=1000,
+        stability_controls_json=AdminRewardRuleStabilityControls(
+            user_hosted_gift={
+                "max_amount": "200.0000",
+                "daily_sender_limit": "150.0000",
+                "daily_recipient_limit": "500.0000",
+                "daily_pair_limit": "150.0000",
+                "cooldown_seconds": 0,
+                "burst_window_seconds": 300,
+                "burst_max_count": 5,
+                "review_threshold_bps": 8000,
+            }
+        ).model_dump(mode="json"),
     )
     session.commit()
 
@@ -252,8 +250,10 @@ def test_match_scope_gift_rate_limit_blocks_the_sixth_sender_recipient_pair_gift
     session.commit()
 
     wallet_service = WalletService()
-    sender_account = wallet_service.get_user_account(session, sender, LedgerUnit.COIN)
-    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+    # Gifts are always funded in FanCoin now, whatever the source scope. This
+    # used to seed COIN, which a match-scope gift can no longer spend.
+    sender_account = wallet_service.get_user_account(session, sender, LedgerUnit.CREDIT)
+    platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
     wallet_service.append_transaction(
         session,
         postings=[

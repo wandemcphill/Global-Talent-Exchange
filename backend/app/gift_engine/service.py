@@ -371,6 +371,8 @@ class GiftEngineService:
             recipient_net_amount=recipient_net,
             source_scope=normalized_scope,
             ledger_unit=ledger_unit,
+            source_ledger_unit=ledger_unit,
+            destination_ledger_unit=ledger_unit,
             ledger_transaction_id=entries[0].transaction_id if entries else None,
             wallet_debit_ledger_id=debit_entry_id,
             wallet_credit_ledger_id=credit_entry_id,
@@ -567,7 +569,11 @@ class GiftEngineService:
                 self.session.add(stats)
                 self.session.flush()
             stats.total_gifts_received += 1
-            if transaction.ledger_unit == LedgerUnit.CREDIT:
+            # ledger_unit now carries the destination unit (GTEX Coin) for a
+            # canonical gift; the FanCoin the gift was funded in is
+            # source_ledger_unit. Branching on ledger_unit left every gift's
+            # total_fan_coin_received permanently at zero once Phase A shipped.
+            if transaction.source_ledger_unit == LedgerUnit.CREDIT:
                 stats.total_fan_coin_received = self._normalize_amount(
                     Decimal(stats.total_fan_coin_received) + Decimal(transaction.recipient_net_amount)
                 )

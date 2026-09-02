@@ -10,6 +10,12 @@ from sqlalchemy.orm import Session
 
 from app.common.enums.match_status import MatchStatus
 from app.match_engine.schemas import MatchEventView, MatchReplayPayloadView, ReplayEventLogEntryView
+from app.match_engine.simulation.models import MatchEventType as EngineMatchEventType
+from app.matches.lifecycle import (
+    MatchStateTransitionError,
+    assert_transition,
+    is_terminal,
+)
 from app.models.competition_match import CompetitionMatch
 from app.models.match_event import MatchEvent, MatchEventTeam, MatchEventType
 from app.orchestrator.orchestrator_service import OrchestratorService
@@ -29,6 +35,21 @@ from .schemas import (
 )
 
 
+#: Replay log entries carry the *match engine* event vocabulary
+#: (``app.match_engine.simulation.models.MatchEventType``), not the persisted
+#: ``app.models.match_event.MatchEventType`` used by the event log tables. Comparing an
+#: entry against the persisted enum raised ``AttributeError`` for penalty/red-card
+#: members that only exist on the engine enum.
+_HIGHLIGHT_ELIGIBLE_ENGINE_EVENTS: frozenset[EngineMatchEventType] = frozenset(
+    {
+        EngineMatchEventType.GOAL,
+        EngineMatchEventType.PENALTY_GOAL,
+        EngineMatchEventType.PENALTY_SCORED,
+        EngineMatchEventType.RED_CARD,
+    }
+)
+
+
 class MatchReplayNotFoundError(LookupError):
     pass
 
@@ -39,6 +60,15 @@ class MatchCommandError(ValueError):
 
 class MatchCommandNotFoundError(MatchCommandError):
     pass
+
+
+class MatchCommandStateError(MatchCommandError):
+    """Raised when a lifecycle command is illegal for the match's current state."""
+
+    def __init__(self, message: str, *, match_id: str, current_status: str | None) -> None:
+        super().__init__(message)
+        self.match_id = match_id
+        self.current_status = current_status
 
 
 @dataclass(slots=True)
@@ -842,12 +872,7 @@ class MatchEventLoggerService:
                 if isinstance(metadata.get("render"), dict)
                 else False
             )
-            or item.event_type in {
-                MatchEventType.GOAL,
-                MatchEventType.PENALTY_GOAL,
-                MatchEventType.PENALTY_SCORED,
-                MatchEventType.RED_CARD,
-            },
+            or item.event_type in _HIGHLIGHT_ELIGIBLE_ENGINE_EVENTS,
         }
         if isinstance(render, dict):
             viewer_payload["render"] = render
@@ -896,12 +921,17 @@ class MatchCommandService:
         self.session.commit()
         return MatchCommandAcceptedView(
             match_id=match.id,
-            status=MatchStatus(match.status),
+            status=self._resolved_status(match),
             command_name="StartMatchCommand",
             outbox_event_id=outbox_event.event_id,
             outbox_event_type=outbox_event.event_type,
             queued_at=outbox_event.occurred_at,
         )
+
+    @staticmethod
+    def _resolved_status(match: CompetitionMatch) -> MatchStatus:
+        """Read a match status without raising on rows written by other code paths."""
+        return MatchStatus.coerce(match.status) or MatchStatus.SCHEDULED
 
     def complete_match(self, payload: MatchCompleteRequest) -> MatchCommandAcceptedView:
         match = self.session.get(CompetitionMatch, payload.match_id)
@@ -909,6 +939,35 @@ class MatchCommandService:
             raise MatchCommandNotFoundError(f"Match {payload.match_id} was not found.")
 
         now = payload.completed_at or _utcnow()
+        current_status = self._resolved_status(match)
+        if current_status is MatchStatus.COMPLETED:
+            # Settlement already happened. Replaying the same command is a no-op; a
+            # command carrying a different result must never silently overwrite a
+            # settled scoreline, because standings/payouts have already consumed it.
+            if (match.home_score, match.away_score) != (payload.home_score, payload.away_score):
+                raise MatchCommandStateError(
+                    f"Match {match.id} is already completed "
+                    f"{match.home_score}-{match.away_score} and cannot be re-settled "
+                    f"as {payload.home_score}-{payload.away_score}.",
+                    match_id=match.id,
+                    current_status=current_status.value,
+                )
+            return MatchCommandAcceptedView(
+                match_id=match.id,
+                status=current_status,
+                command_name="CompleteMatchCommand",
+                outbox_event_id=self._last_outbox_event_id(match),
+                outbox_event_type="CompleteMatchCommand",
+                queued_at=match.completed_at or now,
+            )
+        try:
+            assert_transition(current_status, MatchStatus.COMPLETED, match_id=match.id)
+        except MatchStateTransitionError as exc:
+            raise MatchCommandStateError(
+                str(exc),
+                match_id=match.id,
+                current_status=current_status.value,
+            ) from exc
         match.status = MatchStatus.COMPLETED.value
         match.home_score = payload.home_score
         match.away_score = payload.away_score
@@ -931,10 +990,16 @@ class MatchCommandService:
 
         self.session.flush()
         outbox_event = self.orchestrator.complete_match(payload.model_dump(mode="json"))
+        match.metadata_json = _merge_orchestrator_metadata(
+            match.metadata_json,
+            key="complete_outbox_event_id",
+            payload={"outbox_event_id": outbox_event.event_id},
+            recorded_at=now,
+        )
         self.session.commit()
         return MatchCommandAcceptedView(
             match_id=match.id,
-            status=MatchStatus(match.status),
+            status=self._resolved_status(match),
             command_name="CompleteMatchCommand",
             outbox_event_id=outbox_event.event_id,
             outbox_event_type=outbox_event.event_type,
@@ -980,7 +1045,34 @@ class MatchCommandService:
             ),
         )
 
+    @staticmethod
+    def _last_outbox_event_id(match: CompetitionMatch) -> str:
+        orchestrator_metadata = dict((match.metadata_json or {}).get("orchestrator") or {})
+        recorded = orchestrator_metadata.get("complete_outbox_event_id") or {}
+        if isinstance(recorded, dict):
+            event_id = str(recorded.get("outbox_event_id") or "").strip()
+            if event_id:
+                return event_id
+        return f"replayed:{match.id}"
+
     def _prepare_existing_match_for_start(self, match: CompetitionMatch, payload: MatchStartRequest) -> None:
+        current_status = self._resolved_status(match)
+        if is_terminal(current_status):
+            # Guard the destructive reset below: a duplicate or late StartMatchCommand
+            # must never clear a settled result while standings keep its points.
+            raise MatchCommandStateError(
+                f"Match {match.id} is {current_status.value} and cannot be restarted.",
+                match_id=match.id,
+                current_status=current_status.value,
+            )
+        try:
+            assert_transition(current_status, MatchStatus.QUEUED, match_id=match.id)
+        except MatchStateTransitionError as exc:
+            raise MatchCommandStateError(
+                str(exc),
+                match_id=match.id,
+                current_status=current_status.value,
+            ) from exc
         match.status = MatchStatus.QUEUED.value
         match.home_score = 0
         match.away_score = 0

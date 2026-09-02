@@ -77,7 +77,31 @@ def compute_plans(conn) -> list[RegenPlan]:
             FROM ingestion_players p
             LEFT JOIN player_share_markets psm ON psm.player_id = p.id
             WHERE p.source_provider = %s
+              AND p.is_real_player IS FALSE
+              AND p.is_tradable IS TRUE
+              AND p.country_id IS NOT NULL
+              AND (
+                    p.current_club_id IS NOT NULL
+                    OR p.current_competition_id IS NOT NULL
+                    OR p.internal_league_id IS NOT NULL
+                    OR NULLIF(BTRIM(p.real_world_club_name), '') IS NOT NULL
+                    OR NULLIF(BTRIM(p.real_world_league_name), '') IS NOT NULL
+                  )
+              AND COALESCE(p.dna_profile ->> 'integrity_hold', 'false') <> 'true'
+              AND COALESCE(p.dna_profile ->> 'sanctions', 'false') <> 'true'
+              AND COALESCE(p.dna_profile ->> 'manual_block', 'false') <> 'true'
+              AND COALESCE(p.dna_profile ->> 'manual_review_required', 'false') <> 'true'
+              AND COALESCE(p.dna_profile ->> 'player_share_block', 'false') <> 'true'
+              AND COALESCE(p.dna_profile ->> 'share_market_blocked', 'false') <> 'true'
               AND psm.player_id IS NULL
+              -- A pre-existing liquidity wallet indicates a partial prior run.
+              -- Do not replay the fixed top-up transaction and debit clearing twice.
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM wallets existing_liquidity
+                    WHERE existing_liquidity.code =
+                        'platform:player_share:' || p.id || ':liquidity'
+                  )
             ORDER BY p.id
             """,
             (REGEN_PROVIDER,),

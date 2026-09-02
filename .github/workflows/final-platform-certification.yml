@@ -1,0 +1,69 @@
+name: Final Platform Certification
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  final-platform-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.txt pytest
+
+      - name: Final read-only platform truth audit
+        run: python backend/scripts/audit_final_platform_release.py
+
+      - name: Backend security and contract smoke suite
+        run: >
+          python -m pytest
+          backend/tests/security
+          backend/tests/app/test_module_registration_routes.py
+          backend/tests/wallets/test_wallet_service.py
+          backend/tests/wallets/test_wallet_rail_service.py
+          backend/tests/admin_finance/test_admin_finance_router.py
+          backend/tests/admin_godmode/test_admin_control_plane_release_gate.py
+          backend/tests/matches/test_competition_match_settlement_guard.py
+          -q
+
+      - name: Frontend dependencies
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Frontend dependency graph
+        working-directory: frontend
+        run: python tool/audit_dependency_graph.py
+
+      - name: Frontend analyzer hard-error gate
+        working-directory: frontend
+        run: python tool/check_analyzer_hard_errors.py
+
+      - name: Flutter unit/widget tests
+        working-directory: frontend
+        # Golden captures are platform-dependent and were generated on Windows;
+        # they pass there and fail here. See
+        # test/ux_refinement/visual_qa_golden_test.dart.
+        run: flutter test --exclude-tags golden

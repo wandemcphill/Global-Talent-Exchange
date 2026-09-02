@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../data/gtex_match_feed.dart';
 import '../data/gtex_match_models.dart';
 import '../data/gtex_match_repository.dart';
 import '../widgets/gtex_2d_pitch.dart';
 import '../widgets/gtex_highlights_panel.dart';
+import '../widgets/gtex_match_connection_banner.dart';
 import '../widgets/gtex_match_lineups.dart';
 import '../widgets/gtex_match_scoreboard.dart';
 import '../widgets/gtex_match_stats_panel.dart';
@@ -30,10 +32,20 @@ class GtexMatchCenterScreenV2 extends StatefulWidget {
     super.key,
     required this.matchId,
     this.repository,
+    this.onOpenReplay,
+    this.onExit,
   });
 
   final String matchId;
   final GtexMatchRepository? repository;
+
+  /// Opens the replay archive for this fixture. When null the replay CTA is
+  /// hidden rather than rendered as a dead end.
+  final ValueChanged<String>? onOpenReplay;
+
+  /// Navigates away from the match centre. When null the back affordance is
+  /// hidden so the screen never shows a button that does nothing.
+  final VoidCallback? onExit;
 
   @override
   State<GtexMatchCenterScreenV2> createState() =>
@@ -75,12 +87,27 @@ class _GtexMatchCenterScreenV2State extends State<GtexMatchCenterScreenV2> {
             body: Center(
               child: _MatchErrorState(
                 message: controller.error.toString(),
-                onRetry: controller.load,
+                onRetry: controller.retry,
+                onExit: widget.onExit,
               ),
             ),
           );
         }
-        final match = controller.state!;
+        final GtexLiveMatchState? match = controller.state;
+        if (match == null) {
+          // Feed resolved without a payload. Explicit empty beats a blank
+          // scaffold with nothing in it.
+          return Scaffold(
+            backgroundColor: _GtexMatchColors.shell,
+            body: Center(
+              child: _MatchEmptyState(
+                matchId: widget.matchId,
+                onRetry: controller.retry,
+                onExit: widget.onExit,
+              ),
+            ),
+          );
+        }
         return Scaffold(
           backgroundColor: _GtexMatchColors.shell,
           body: SafeArea(
@@ -89,30 +116,50 @@ class _GtexMatchCenterScreenV2State extends State<GtexMatchCenterScreenV2> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final wide = constraints.maxWidth >= 1080;
-                  if (!wide) {
-                    return _MobileMatchView(
-                      match: match,
-                      controller: controller,
-                    );
-                  }
-                  return Row(
+                  final Widget banner = GtexMatchConnectionBanner(
+                    status: controller.connection,
+                    onRetry: controller.retry,
+                    compact: !wide,
+                  );
+                  final Widget body =
+                      !wide
+                          ? _MobileMatchView(
+                            match: match,
+                            controller: controller,
+                            onOpenReplay: widget.onOpenReplay,
+                          )
+                          : Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                flex: 7,
+                                child: _MainPitchWorkspace(
+                                  match: match,
+                                  controller: controller,
+                                  onOpenReplay: widget.onOpenReplay,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              SizedBox(
+                                width: 392,
+                                child: _RightLivePanel(
+                                  match: match,
+                                  controller: controller,
+                                ),
+                              ),
+                            ],
+                          );
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        flex: 7,
-                        child: _MainPitchWorkspace(
-                          match: match,
-                          controller: controller,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      SizedBox(
-                        width: 392,
-                        child: _RightLivePanel(
-                          match: match,
-                          controller: controller,
-                        ),
-                      ),
+                    children: <Widget>[
+                      if (controller.connection !=
+                              GtexMatchConnectionStatus.live &&
+                          controller.connection !=
+                              GtexMatchConnectionStatus.idle) ...<Widget>[
+                        banner,
+                        const SizedBox(height: 12),
+                      ],
+                      Expanded(child: body),
                     ],
                   );
                 },
@@ -126,10 +173,15 @@ class _GtexMatchCenterScreenV2State extends State<GtexMatchCenterScreenV2> {
 }
 
 class _MainPitchWorkspace extends StatelessWidget {
-  const _MainPitchWorkspace({required this.match, required this.controller});
+  const _MainPitchWorkspace({
+    required this.match,
+    required this.controller,
+    this.onOpenReplay,
+  });
 
   final GtexLiveMatchState match;
   final GtexMatchCenterController controller;
+  final ValueChanged<String>? onOpenReplay;
 
   @override
   Widget build(BuildContext context) {
@@ -153,79 +205,43 @@ class _MainPitchWorkspace extends StatelessWidget {
         _HorizontalTimelineScrub(match: match),
         const SizedBox(height: 12),
         _LineupStrip(home: match.home, away: match.away),
-        if (match.phase == GtexMatchPhase.fullTime)
+        if (match.phase == GtexMatchPhase.fullTime) ...<Widget>[
           GtexPostMatchPanel(match: match),
+          _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
+        ],
       ],
     );
   }
 }
 
-class _MatchSidePanel extends StatelessWidget {
-  const _MatchSidePanel({required this.match, required this.controller});
+/// Post-match handoff into the replay archive.
+///
+/// Hidden entirely when the host did not supply a destination, so full time
+/// never leaves the viewer staring at an inert button.
+class _ReplayEntryBar extends StatelessWidget {
+  const _ReplayEntryBar({required this.matchId, this.onOpenReplay});
 
-  final GtexLiveMatchState match;
-  final GtexMatchCenterController controller;
+  final String matchId;
+  final ValueChanged<String>? onOpenReplay;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: _panelDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              'Match Center',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
+    final ValueChanged<String>? open = onOpenReplay;
+    if (open == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: () => open(matchId),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
           ),
-          _TabButton(
-            label: 'Timeline',
-            icon: Icons.timeline,
-            selected: controller.selectedTab == 0,
-            onTap: () => controller.selectTab(0),
-          ),
-          _TabButton(
-            label: 'Lineups',
-            icon: Icons.groups,
-            selected: controller.selectedTab == 1,
-            onTap: () => controller.selectTab(1),
-          ),
-          _TabButton(
-            label: 'Stats',
-            icon: Icons.bar_chart,
-            selected: controller.selectedTab == 2,
-            onTap: () => controller.selectTab(2),
-          ),
-          _TabButton(
-            label: 'Tactics',
-            icon: Icons.tune,
-            selected: controller.selectedTab == 3,
-            onTap: () => controller.selectTab(3),
-          ),
-          _TabButton(
-            label: 'Highlights',
-            icon: Icons.movie,
-            selected: controller.selectedTab == 4,
-            onTap: () => controller.selectTab(4),
-          ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              '2D is the primary gameplay view until the 3D engine is production-ready.',
-              style: TextStyle(
-                color: Colors.white.withOpacity(.52),
-                height: 1.3,
-              ),
-            ),
-          ),
-        ],
+          icon: const Icon(Icons.replay_circle_filled_outlined),
+          label: const Text('Watch replay'),
+        ),
       ),
     );
   }
@@ -320,10 +336,15 @@ class _RightLivePanel extends StatelessWidget {
 }
 
 class _MobileMatchView extends StatelessWidget {
-  const _MobileMatchView({required this.match, required this.controller});
+  const _MobileMatchView({
+    required this.match,
+    required this.controller,
+    this.onOpenReplay,
+  });
 
   final GtexLiveMatchState match;
   final GtexMatchCenterController controller;
+  final ValueChanged<String>? onOpenReplay;
 
   @override
   Widget build(BuildContext context) {
@@ -377,6 +398,8 @@ class _MobileMatchView extends StatelessWidget {
             compact: true,
           ),
         ),
+        if (match.phase == GtexMatchPhase.fullTime)
+          _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
       ],
     );
   }
@@ -398,7 +421,7 @@ class _AnalysisTabs extends StatelessWidget {
       (4, 'Clips', Icons.movie),
     ];
     return SizedBox(
-      height: 44,
+      height: 48,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: tabs.length,
@@ -463,11 +486,96 @@ class _MatchLoadingState extends StatelessWidget {
   }
 }
 
+/// Shown when the feed resolved but carried no match payload.
+class _MatchEmptyState extends StatelessWidget {
+  const _MatchEmptyState({
+    required this.matchId,
+    required this.onRetry,
+    this.onExit,
+  });
+
+  final String matchId;
+  final VoidCallback onRetry;
+  final VoidCallback? onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 460),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: _panelDecoration(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Row(
+              children: <Widget>[
+                Icon(
+                  Icons.sports_soccer_outlined,
+                  color: _GtexMatchColors.muted,
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No match state yet',
+                    style: TextStyle(
+                      color: _GtexMatchColors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'The match authority has not published a state for "$matchId" yet. '
+              'This usually means kickoff has not happened.',
+              style: const TextStyle(
+                color: _GtexMatchColors.muted,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(88, 48),
+                  ),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Check again'),
+                ),
+                if (onExit != null) ...<Widget>[
+                  const SizedBox(width: 10),
+                  TextButton(
+                    onPressed: onExit,
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(88, 48),
+                    ),
+                    child: const Text('Back'),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MatchErrorState extends StatelessWidget {
-  const _MatchErrorState({required this.message, required this.onRetry});
+  const _MatchErrorState({
+    required this.message,
+    required this.onRetry,
+    this.onExit,
+  });
 
   final String message;
   final VoidCallback onRetry;
+  final VoidCallback? onExit;
 
   @override
   Widget build(BuildContext context) {
@@ -504,10 +612,27 @@ class _MatchErrorState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry live feed'),
+            Row(
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(88, 48),
+                  ),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry live feed'),
+                ),
+                if (onExit != null) ...<Widget>[
+                  const SizedBox(width: 10),
+                  TextButton(
+                    onPressed: onExit,
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(88, 48),
+                    ),
+                    child: const Text('Back'),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
@@ -1005,12 +1130,17 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.zero,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: onTap,
         child: Container(
+          // 48dp minimum keeps the tab strip within the accessibility floor.
+          constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+          alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color:

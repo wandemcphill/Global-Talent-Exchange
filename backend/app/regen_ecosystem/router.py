@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.regen_ecosystem import (
     AcademyGenerationRequest,
     AcademyGenerationResultView,
@@ -50,13 +50,11 @@ def _raise(exc: RegenEcosystemError) -> None:
 @router.post("/academy", response_model=YouthAcademyView, status_code=status.HTTP_201_CREATED)
 def upsert_academy(
     payload: YouthAcademyUpsertRequest,
+    current_user: User = Depends(get_current_user),
     service: RegenEcosystemService = Depends(_service),
-    actor: User = Depends(get_current_user),
 ) -> YouthAcademyView:
-    if payload.club_user_id != actor.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="You may only manage your own club's academy."
-        )
+    if payload.club_user_id != current_user.id and current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Academy ownership is required.")
     try:
         academy = service.upsert_academy(
             club_user_id=payload.club_user_id,
@@ -75,13 +73,11 @@ def upsert_academy(
 @router.post("/academy/generate", response_model=AcademyGenerationResultView)
 def generate_academy_players(
     payload: AcademyGenerationRequest,
+    current_user: User = Depends(get_current_user),
     service: RegenEcosystemService = Depends(_service),
-    actor: User = Depends(get_current_user),
 ) -> AcademyGenerationResultView:
-    if payload.club_user_id != actor.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="You may only manage your own club's academy."
-        )
+    if payload.club_user_id != current_user.id and current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Academy ownership is required.")
     try:
         result = service.generate_academy_players(
             club_user_id=payload.club_user_id,
@@ -97,8 +93,8 @@ def generate_academy_players(
 @router.post("/academy/promote/{player_id}", response_model=AcademyPromotionView)
 def promote_academy_player(
     player_id: str,
+    current_admin: User = Depends(get_current_admin),
     service: RegenEcosystemService = Depends(_service),
-    _actor: User = Depends(get_current_user),
 ) -> AcademyPromotionView:
     try:
         result = service.promote_academy_player(player_id)
@@ -111,11 +107,11 @@ def promote_academy_player(
 @router.post("/scouts", response_model=ScoutView, status_code=status.HTTP_201_CREATED)
 def create_scout(
     payload: ScoutCreateRequest,
+    current_user: User = Depends(get_current_user),
     service: RegenEcosystemService = Depends(_service),
-    actor: User = Depends(get_current_user),
 ) -> ScoutView:
-    if payload.club_user_id != actor.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You may only manage your own club's scouts.")
+    if payload.club_user_id != current_user.id and current_user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Scout ownership is required.")
     try:
         scout = service.create_scout(
             club_user_id=payload.club_user_id,
@@ -134,8 +130,8 @@ def create_scout(
 def discover_regens(
     scout_id: str,
     limit: int = Query(default=5, ge=1, le=25),
+    current_admin: User = Depends(get_current_admin),
     service: RegenEcosystemService = Depends(_service),
-    _actor: User = Depends(get_current_user),
 ) -> ScoutDiscoveryResultView:
     try:
         result = service.discover_regens(scout_id, limit=limit)
@@ -160,8 +156,8 @@ def get_scout_report(
 @router.post("/agents", response_model=AgentView, status_code=status.HTTP_201_CREATED)
 def create_agent(
     payload: AgentCreateRequest,
+    current_admin: User = Depends(get_current_admin),
     service: RegenEcosystemService = Depends(_service),
-    _actor: User = Depends(get_current_user),
 ) -> AgentView:
     try:
         agent = service.create_agent(
@@ -179,8 +175,8 @@ def create_agent(
 def trigger_career_event(
     player_id: str,
     event_type: str | None = Query(default=None),
+    current_admin: User = Depends(get_current_admin),
     service: RegenEcosystemService = Depends(_service),
-    _actor: User = Depends(get_current_user),
 ) -> CareerEventView:
     try:
         event = service.trigger_career_event(player_id, event_type=event_type)
@@ -226,11 +222,13 @@ def list_regen_awards(
 def cast_award_vote(
     award_id: str,
     payload: AwardVoteRequest,
+    current_user: User = Depends(get_current_user),
     service: RegenEcosystemService = Depends(_service),
-    actor: User = Depends(get_current_user),
 ) -> AwardVoteView:
-    if payload.user_id != actor.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You may only cast a vote as yourself.")
+    if payload.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Votes must be cast by the authenticated user."
+        )
     try:
         vote = service.cast_award_vote(
             award_id,

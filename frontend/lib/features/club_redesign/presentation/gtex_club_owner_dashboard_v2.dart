@@ -182,8 +182,7 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
             _CommandAction(
               label: 'Market',
               icon: Icons.shopping_basket_outlined,
-              message:
-                  'Open the player market from the app shell; this embedded club widget has no route dispatcher.',
+              message: 'Browse and sign players in the Transfer Hub.',
               accent: GtexColors.pitch,
               onPressed: widget.onOpenMarket,
             ),
@@ -191,7 +190,7 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
               label: 'Create competition',
               icon: Icons.add_circle_outline,
               message:
-                  'Open Competition OS from the app shell to create and manage hosted competitions.',
+                  'Create and manage a hosted competition. Requires host access.',
               accent: GtexColors.gold,
               onPressed: widget.onCreateCompetition,
             ),
@@ -219,19 +218,21 @@ class _CommandAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // An action with no flow behind it is shown as unavailable rather than
+    // firing a snackbar that reads like something happened.
+    final bool available = onPressed != null;
     return Tooltip(
       message: message,
-      child: GtexActionButton(
-        label: label,
-        icon: icon,
-        onPressed:
-            onPressed ??
-            () {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(message)));
-            },
-        accent: accent,
+      child: Semantics(
+        enabled: available,
+        button: true,
+        label: available ? label : '$label. Unavailable. $message',
+        child: GtexActionButton(
+          label: available ? label : '$label (unavailable)',
+          icon: available ? icon : Icons.lock_outline,
+          onPressed: onPressed,
+          accent: accent,
+        ),
       ),
     );
   }

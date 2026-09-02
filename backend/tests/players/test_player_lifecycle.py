@@ -103,22 +103,23 @@ def lifecycle_api(lifecycle_session: Session):
     def _session_override():
         yield lifecycle_session
 
+    def _current_user_override() -> User:
+        # Lifecycle mutations require authentication. These tests exercise the
+        # domain behaviour, not the auth boundary, so stand in a signed-in user
+        # here; the boundary itself is pinned by
+        # tests/players/test_player_lifecycle_auth_boundary.py.
+        return User(
+            id="user-lifecycle-api",
+            email="lifecycle-api@example.com",
+            username="lifecycle_api",
+            display_name="Lifecycle API",
+            password_hash="x",  # pragma: allowlist secret
+            role=UserRole.USER,
+            kyc_status=KycStatus.FULLY_VERIFIED,
+        )
+
     app.dependency_overrides[get_session] = _session_override
-    # These endpoints only require an authenticated caller (no per-request
-    # ownership binding at the router layer), and this fixture tests the
-    # lifecycle service through the API in isolation from the auth/DB stack.
-    # The authorization gate itself is covered end-to-end by
-    # backend/tests/security/test_endpoint_authorization.py against the real
-    # app, so it is stubbed here rather than bypassed.
-    app.dependency_overrides[get_current_user] = lambda: User(
-        id="user-owner",
-        email="owner@example.com",
-        username="owner",
-        display_name="Owner",
-        password_hash="x",
-        role=UserRole.USER,
-        kyc_status=KycStatus.FULLY_VERIFIED,
-    )
+    app.dependency_overrides[get_current_user] = _current_user_override
     with TestClient(app) as client:
         yield client
 

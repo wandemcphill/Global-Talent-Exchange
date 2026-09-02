@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.admin_engine.schemas import (
@@ -271,7 +271,7 @@ DEFAULT_REWARD_RULES: tuple[dict[str, object], ...] = (
         "gift_platform_rake_bps": 3000,
         "withdrawal_fee_bps": 1000,
         "minimum_withdrawal_fee_credits": Decimal("5.0000"),
-        "competition_platform_fee_bps": 1000,
+        "competition_platform_fee_bps": 3000,
         "stability_controls_json": AdminRewardRuleStabilityControls().model_dump(mode="json"),
         "active": True,
     },
@@ -329,7 +329,9 @@ class AdminEngineService:
         return list(self.session.scalars(statement).all())
 
     def upsert_feature_flag(self, *, actor: User, payload: AdminFeatureFlagUpsertRequest) -> AdminFeatureFlag:
-        record = self.session.scalar(select(AdminFeatureFlag).where(AdminFeatureFlag.feature_key == payload.feature_key))
+        record = self.session.scalar(
+            select(AdminFeatureFlag).where(AdminFeatureFlag.feature_key == payload.feature_key)
+        )
         if record is None:
             record = AdminFeatureFlag(feature_key=payload.feature_key)
             self.session.add(record)
@@ -342,7 +344,9 @@ class AdminEngineService:
         return record
 
     def list_calendar_rules(self, *, active_only: bool = False) -> list[AdminCalendarRule]:
-        statement = select(AdminCalendarRule).order_by(AdminCalendarRule.priority.asc(), AdminCalendarRule.rule_key.asc())
+        statement = select(AdminCalendarRule).order_by(
+            AdminCalendarRule.priority.asc(), AdminCalendarRule.rule_key.asc()
+        )
         if active_only:
             statement = statement.where(AdminCalendarRule.active.is_(True))
         return list(self.session.scalars(statement).all())
@@ -369,7 +373,16 @@ class AdminEngineService:
         return list(self.session.scalars(statement).all())
 
     def get_active_reward_rule(self) -> AdminRewardRule | None:
-        return next(iter(self.list_reward_rules(active_only=True)), None)
+        rows = list(
+            self.session.scalars(
+                select(AdminRewardRule)
+                .where(AdminRewardRule.active.is_(True))
+                .order_by(AdminRewardRule.updated_at.desc(), AdminRewardRule.id.asc())
+            ).all()
+        )
+        if len(rows) > 1:
+            raise ValueError("Exactly one active Admin reward/economic policy is required.")
+        return rows[0] if rows else None
 
     def get_active_stability_controls(self) -> AdminRewardRuleStabilityControls:
         rule = self.get_active_reward_rule()
@@ -390,8 +403,35 @@ class AdminEngineService:
         record.competition_platform_fee_bps = payload.competition_platform_fee_bps
         record.stability_controls_json = self.normalize_stability_controls_payload(payload.stability_controls)
         record.active = payload.active
+        if payload.active:
+            # Exclude by rule_key, not id. A newly constructed record still has
+            # id=None at this point, so `id != record.id` compiles to
+            # `id IS NOT NULL` and matches every active row -- including the one
+            # autoflush is about to insert. That left zero active policies and
+            # hard-stopped every flow behind resolve_economic_policy().
+            self.session.execute(
+                update(AdminRewardRule)
+                .where(
+                    AdminRewardRule.active.is_(True),
+                    AdminRewardRule.rule_key != payload.rule_key,
+                )
+                .values(active=False)
+            )
         record.updated_by_user_id = actor.id
         self.session.flush()
+        if payload.active:
+            # Post-condition, not decoration: resolve_economic_policy() fails
+            # closed on zero active rules as well as on several, so an activation
+            # that leaves any other count would take the whole economy offline.
+            # Raising here aborts the surrounding transaction and leaves the
+            # previous policy in place instead of committing an unusable state.
+            active_count = self.session.scalar(
+                select(func.count(AdminRewardRule.id)).where(AdminRewardRule.active.is_(True))
+            )
+            if active_count != 1:
+                raise ValueError(
+                    "Activating an Admin economic policy must leave exactly one active rule, " f"found {active_count}."
+                )
         return record
 
     def schedule_preview(self, requests: Iterable, /):

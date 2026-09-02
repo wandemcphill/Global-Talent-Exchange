@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 import json
 import os
 from typing import Any, Sequence
@@ -44,14 +44,9 @@ from .demo_discoverability import (
     CANONICAL_INITIAL_VISIBLE_PLAYERS,
     CANONICAL_ILLIQUID_PLAYER_COUNT,
     CANONICAL_LIQUID_PLAYER_COUNT,
-    CanonicalDemoPlayerProfile,
-    CanonicalDemoSeedPlan,
-    DEMO_SUPPLY_BANDS,
     EUR_QUANTUM as DEMO_EUR_QUANTUM,
     MOVEMENT_PATTERN as DEMO_MOVEMENT_PATTERN,
     PRICE_QUANTUM as DEMO_VALUE_QUANTUM,
-    build_canonical_demo_seed_plan,
-    liquidity_band_code_for_market_value_eur,
 )
 from .player_universe_seeder import VerifiedPlayerUniverseSeeder
 
@@ -236,7 +231,7 @@ def build_canonical_demo_seed_plan(
     cursor = 0
     for band in DEMO_SUPPLY_BANDS:
         count = band_counts.get(band.code, 0)
-        band_player_ids = ordered_player_ids[cursor:cursor + count]
+        band_player_ids = ordered_player_ids[cursor : cursor + count]
         cursor += count
         for index, player_id in enumerate(band_player_ids):
             sequence_position = index + 1
@@ -264,9 +259,9 @@ def build_canonical_demo_seed_plan(
             ).quantize(DEMO_VALUE_QUANTUM, rounding=ROUND_HALF_UP)
             movement_pct = Decimal("0.0000")
             if previous_credits > 0:
-                movement_pct = (
-                    (current_credits - previous_credits) / previous_credits
-                ).quantize(DEMO_VALUE_QUANTUM, rounding=ROUND_HALF_UP)
+                movement_pct = ((current_credits - previous_credits) / previous_credits).quantize(
+                    DEMO_VALUE_QUANTUM, rounding=ROUND_HALF_UP
+                )
             profiles.append(
                 CanonicalDemoPlayerProfile(
                     player_id=player_id,
@@ -289,13 +284,9 @@ def canonical_band_counts_for_player_count(player_count: int) -> dict[str, int]:
     if player_count <= 0:
         return {band.code: 0 for band in DEMO_SUPPLY_BANDS}
 
-    exact_counts = {
-        band.code: band.target_share * Decimal(player_count)
-        for band in DEMO_SUPPLY_BANDS
-    }
+    exact_counts = {band.code: band.target_share * Decimal(player_count) for band in DEMO_SUPPLY_BANDS}
     counts = {
-        band.code: int(exact_counts[band.code].to_integral_value(rounding="ROUND_FLOOR"))
-        for band in DEMO_SUPPLY_BANDS
+        band.code: int(exact_counts[band.code].to_integral_value(rounding="ROUND_FLOOR")) for band in DEMO_SUPPLY_BANDS
     }
     assigned = sum(counts.values())
     remaining = player_count - assigned
@@ -550,7 +541,9 @@ class DemoBootstrapService:
         auth_service = AuthService(wallet_service=wallet_service)
 
         with self.session_factory() as session:
-            self._ensure_demo_users(session, auth_service=auth_service, wallet_service=wallet_service, demo_password=demo_password)
+            self._ensure_demo_users(
+                session, auth_service=auth_service, wallet_service=wallet_service, demo_password=demo_password
+            )
             self._reset_demo_holdings(session, wallet_service=wallet_service)
             self._purge_demo_read_models(session, provider_name=provider_name)
             universe_summary = VerifiedPlayerUniverseSeeder(session, settings=resolved_settings).seed(
@@ -561,6 +554,11 @@ class DemoBootstrapService:
                 batch_size=batch_size,
             )
             player_ids = self._list_demo_player_ids(session, provider_name=provider_name)
+            canonical_seed_plan = self._curate_canonical_demo_players(
+                session,
+                provider_name=provider_name,
+                random_seed=random_seed,
+            )
             market_signals_seeded = self._seed_market_signals(
                 session,
                 player_ids=player_ids,
@@ -596,7 +594,9 @@ class DemoBootstrapService:
                 wallet_service=wallet_service,
                 featured_players=featured_players,
             )
-            self._ensure_demo_users(session, auth_service=auth_service, wallet_service=wallet_service, demo_password=demo_password)
+            self._ensure_demo_users(
+                session, auth_service=auth_service, wallet_service=wallet_service, demo_password=demo_password
+            )
             demo_users = self._load_demo_user_summaries(
                 session,
                 wallet_service=wallet_service,
@@ -627,7 +627,10 @@ class DemoBootstrapService:
             random_seed=random_seed,
             previous_snapshot_at=previous_snapshot_at,
             current_snapshot_at=current_snapshot_at,
-            universe_seed=universe_summary.to_dict(),
+            universe_seed={
+                **universe_summary.to_dict(),
+                "canonical_discoverability": canonical_seed_plan.to_dict(),
+            },
             players_seeded=len(player_ids),
             market_signals_seeded=market_signals_seeded,
             value_snapshots_seeded=len(previous_snapshots) + len(current_snapshots),
@@ -745,9 +748,7 @@ class DemoBootstrapService:
         session.execute(
             delete(PlayerValueSnapshotRecord).where(PlayerValueSnapshotRecord.player_id.in_(tuple(player_ids)))
         )
-        session.execute(
-            delete(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(tuple(player_ids)))
-        )
+        session.execute(delete(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(tuple(player_ids))))
 
     def _list_demo_player_ids(self, session: Session, *, provider_name: str) -> list[str]:
         statement = (
@@ -782,10 +783,12 @@ class DemoBootstrapService:
             for band in session.scalars(
                 select(LiquidityBand).where(
                     LiquidityBand.code.in_(
-                        tuple({
-                            liquidity_band_code_for_canonical_demo_band(profile.band.code)
-                            for profile in seed_plan.player_profiles
-                        })
+                        tuple(
+                            {
+                                liquidity_band_code_for_canonical_demo_band(profile.band.code)
+                                for profile in seed_plan.player_profiles
+                            }
+                        )
                     )
                 )
             )
@@ -798,9 +801,7 @@ class DemoBootstrapService:
             player.market_value_eur = float(profile.market_value_eur)
             player.is_tradable = True
             player.supply_tier_id = supply_tiers[profile.band.code].id
-            liquidity_band = liquidity_bands.get(
-                liquidity_band_code_for_canonical_demo_band(profile.band.code)
-            )
+            liquidity_band = liquidity_bands.get(liquidity_band_code_for_canonical_demo_band(profile.band.code))
             if liquidity_band is not None:
                 player.liquidity_band_id = liquidity_band.id
         session.flush()
@@ -1255,17 +1256,66 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=_HelpFormatter,
     )
-    parser.add_argument("--database-url", default=os.getenv("GTE_DATABASE_URL", DEFAULT_DATABASE_URL), help="Target database URL.")
-    parser.add_argument("--player-count", type=int, default=DEFAULT_DEMO_PLAYER_COUNT, help="Number of demo players to seed into the local universe.")
-    parser.add_argument("--provider", default=DEFAULT_DEMO_PROVIDER_NAME, help="Synthetic provider slug written onto demo player records.")
-    parser.add_argument("--signal-provider", default=DEFAULT_DEMO_SIGNAL_PROVIDER, help="Synthetic provider slug written onto demo market signals.")
-    parser.add_argument("--password", default=DEFAULT_DEMO_PASSWORD, help="Password assigned to the local synthetic seed users when auth fixtures are bootstrapped.")
-    parser.add_argument("--seed", type=int, default=DEFAULT_DEMO_RANDOM_SEED, help="Deterministic seed for repeatable player, holding, and optional liquidity fixtures.")
-    parser.add_argument("--batch-size", type=int, default=DEFAULT_DEMO_BATCH_SIZE, help="Batch size used while seeding the demo player universe.")
-    parser.add_argument("--featured-limit", type=int, default=DEFAULT_FEATURED_PLAYER_LIMIT, help="Number of featured players to include in the summary output.")
-    parser.add_argument("--with-liquidity", action=argparse.BooleanOptionalAction, default=False, help="Also seed deterministic exchange-side liquidity and trade history.")
-    parser.add_argument("--liquid-player-count", type=int, default=DEFAULT_LIQUID_PLAYER_COUNT, help="Number of high-activity players to receive liquid demo markets.")
-    parser.add_argument("--illiquid-player-count", type=int, default=DEFAULT_ILLIQUID_PLAYER_COUNT, help="Number of low-activity players to receive illiquid demo markets.")
+    parser.add_argument(
+        "--database-url", default=os.getenv("GTE_DATABASE_URL", DEFAULT_DATABASE_URL), help="Target database URL."
+    )
+    parser.add_argument(
+        "--player-count",
+        type=int,
+        default=DEFAULT_DEMO_PLAYER_COUNT,
+        help="Number of demo players to seed into the local universe.",
+    )
+    parser.add_argument(
+        "--provider",
+        default=DEFAULT_DEMO_PROVIDER_NAME,
+        help="Synthetic provider slug written onto demo player records.",
+    )
+    parser.add_argument(
+        "--signal-provider",
+        default=DEFAULT_DEMO_SIGNAL_PROVIDER,
+        help="Synthetic provider slug written onto demo market signals.",
+    )
+    parser.add_argument(
+        "--password",
+        default=DEFAULT_DEMO_PASSWORD,
+        help="Password assigned to the local synthetic seed users when auth fixtures are bootstrapped.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_DEMO_RANDOM_SEED,
+        help="Deterministic seed for repeatable player, holding, and optional liquidity fixtures.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_DEMO_BATCH_SIZE,
+        help="Batch size used while seeding the demo player universe.",
+    )
+    parser.add_argument(
+        "--featured-limit",
+        type=int,
+        default=DEFAULT_FEATURED_PLAYER_LIMIT,
+        help="Number of featured players to include in the summary output.",
+    )
+    parser.add_argument(
+        "--with-liquidity",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Also seed deterministic exchange-side liquidity and trade history.",
+    )
+    parser.add_argument(
+        "--liquid-player-count",
+        type=int,
+        default=DEFAULT_LIQUID_PLAYER_COUNT,
+        help="Number of high-activity players to receive liquid demo markets.",
+    )
+    parser.add_argument(
+        "--illiquid-player-count",
+        type=int,
+        default=DEFAULT_ILLIQUID_PLAYER_COUNT,
+        help="Number of low-activity players to receive illiquid demo markets.",
+    )
     return parser
 
 

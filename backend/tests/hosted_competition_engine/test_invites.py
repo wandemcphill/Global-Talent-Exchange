@@ -26,6 +26,7 @@ import app.models.hosted_competition  # noqa: F401
 import app.models.user  # noqa: F401
 import app.models.user_wallet  # noqa: F401
 import app.models.wallet  # noqa: F401
+from backend.tests.support.economic_policy import seed_economic_policy
 
 
 def _create_user(session, *, user_id: str, role: UserRole = UserRole.USER) -> User:
@@ -49,6 +50,8 @@ def test_private_hosted_competition_requires_invite_and_accepts_invited_user() -
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    seed_economic_policy(session)
+    session.commit()
     try:
         host = _create_user(session, user_id="host-user")
         guest = _create_user(session, user_id="guest-user")
@@ -152,6 +155,8 @@ def test_passcode_competition_requires_valid_passcode_to_join() -> None:
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    seed_economic_policy(session)
+    session.commit()
     try:
         host = _create_user(session, user_id="host-passcode")
         guest = _create_user(session, user_id="guest-passcode")
@@ -237,6 +242,8 @@ def test_admin_can_create_free_gtex_hosted_competition() -> None:
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    seed_economic_policy(session)
+    session.commit()
     try:
         admin = _create_user(session, user_id="admin-host", role=UserRole.ADMIN)
         template = CompetitionTemplate(
@@ -305,6 +312,8 @@ def test_hosted_competition_finance_requires_host_or_admin() -> None:
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    seed_economic_policy(session)
+    session.commit()
     try:
         host = _create_user(session, user_id="finance-host")
         outsider = _create_user(session, user_id="finance-outsider")
@@ -391,6 +400,8 @@ def test_gtex_hosted_reward_pool_is_funded_and_finalize_requires_exact_unique_pl
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = SessionLocal()
+    seed_economic_policy(session)
+    session.commit()
     try:
         admin = _create_user(session, user_id="gtex-reward-admin", role=UserRole.ADMIN)
         winner = _create_user(session, user_id="gtex-reward-winner")

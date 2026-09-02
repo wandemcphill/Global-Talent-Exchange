@@ -1,40 +1,50 @@
-# Phase D6 — Render Redis Certification
+# Render Key Value Production Certification
 
-Date: 2026-06-14
-Provider: Render Redis (`type: keyvalue`, service `gtex-cache`)
+Date: 2026-08-25
+Provider: Render Key Value (`type: keyvalue`, service `gtex-cache`)
 
-## Mode A — REDIS_ENABLED=false
-```
-redis_enabled = False   redis_url = None
-cache backend = NullCacheBackend
-```
-- `build_cache_backend()` short-circuits to `NullCacheBackend` before any connection.
-- `load_settings()` forces `redis_url=None` when disabled, so the health check reports `skipped`.
-- App boots fully (175 modules, 398 routes) without Redis.
+## Production mode
 
-## Mode B — REDIS_ENABLED=true
-```
-redis_enabled = True    redis_url = redis://red-cache:6379  (GTE_REDIS_URL)
-cache backend = RedisCacheBackend when reachable (graceful NullCache fallback if down)
-```
+`REDIS_ENABLED=true` and `GTE_REDIS_URL` is wired from the Blueprint-managed
+`gtex-cache` Key Value instance into the five Redis consumers.
 
-## Backend toggle (ported surgically onto main)
-- `config.py`: `redis_enabled: bool` field (`REDIS_ENABLED`/`GTE_REDIS_ENABLED`), and
-  `redis_url=source.redis_url if source.redis_enabled else None` in `load_settings()`.
-- `cache.py`: `if not resolved_settings.redis_enabled: return NullCacheBackend()`.
-- `health.py`: unchanged (existing `if not settings.redis_url` path already yields `skipped`).
+## Why Redis is required
 
-## Node ingestion (BullMQ)
-- `config.js`: `redisUrl` now optional (`env("REDIS_URL") || env("GTE_REDIS_URL") || null`) + `redisEnabled`.
-- `queues.js`: throws a clear error if `redisUrl` missing — Redis is mandatory for the ingestion queue.
+Redis / Valkey is part of the production runtime for:
 
-## Matrix
-| Check | Mode A | Mode B |
-|---|---|---|
-| Backend boot | ✅ | ✅ |
-| Cache selection | NullCacheBackend | RedisCacheBackend (graceful) |
-| Health endpoint | `skipped` | `ok` when reachable |
-| Queue init | in-process fallback | Redis-backed |
-| BullMQ ingestion | refuses (by design) | connects |
+- shared application caching
+- RQ/task queues
+- simulation coordination
+- outbox relay processing
+- Node/BullMQ player ingestion
 
-## Verdict: Backend works with Redis OFF and ON. CERTIFIED.
+The application can still boot in a Redis-off development/test mode, but that is
+not the production configuration.
+
+## Production datastore configuration
+
+- Service: `gtex-cache`
+- Region: Frankfurt
+- Plan: starter
+- Maxmemory policy: `noeviction`
+- Persistence: `journal-snapshot`
+- External access: disabled (`ipAllowList: []`)
+
+`noeviction` protects queued jobs from being silently evicted when memory is
+exhausted. Journal + Snapshot provides durability appropriate for the queue and
+coordination workloads.
+
+## Consumer wiring
+
+| Consumer | Redis enabled | Connection source |
+|---|---:|---|
+| gtex-api | yes | `fromService: gtex-cache` |
+| gtex-rq-worker | yes | `fromService: gtex-cache` |
+| gtex-simulation-worker | yes | `fromService: gtex-cache` |
+| gtex-outbox-relay | yes | `fromService: gtex-cache` |
+| gtex-player-ingestion-worker | yes | `fromService: gtex-cache` |
+
+## Verdict
+
+**PRODUCTION REDIS CERTIFIED — Blueprint-managed Render Key Value, internal-only,
+persistent, and wired to all production Redis consumers.**

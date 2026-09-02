@@ -225,6 +225,34 @@ def test_match_timeline_service_handles_stress_profiles_back_to_back() -> None:
         assert max(len(frame.players) for frame in view_state.frames) <= 22
 
 
+def test_match_timeline_service_does_not_flip_possession_for_non_play_event_frames() -> None:
+    simulation_service = MatchSimulationService()
+    replay_payload = simulation_service.build_replay_payload(build_request(seed=33))
+    service = MatchTimelineService()
+    view_state = service.build_from_replay_payload(replay_payload)
+
+    current_event_id = None
+    event_possession = None
+    saw_non_play_event = False
+    for frame in view_state.frames:
+        if frame.active_event_id != current_event_id:
+            current_event_id = frame.active_event_id
+            event_possession = frame.possession_side
+            continue
+        event = next((item for item in view_state.events if item.event_id == frame.active_event_id), None)
+        if event is not None and event.event_type in {
+            MatchViewerEventType.YELLOW_CARD,
+            MatchViewerEventType.RED_CARD,
+            MatchViewerEventType.SUBSTITUTION,
+            MatchViewerEventType.INJURY,
+        }:
+            saw_non_play_event = True
+            assert frame.possession_side == event_possession
+        event_possession = frame.possession_side
+
+    assert saw_non_play_event
+
+
 def test_match_timeline_service_builds_long_archive_replay() -> None:
     replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=91))
     record = _build_archive_record(

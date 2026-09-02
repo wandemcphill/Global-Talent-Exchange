@@ -172,8 +172,23 @@ class HostedCompetitionSettlement(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
 
+def _normalize_funding_mode(value: object) -> HostedCompetitionFundingMode:
+    """Coerce any equivalent funding-mode value to this module's enum.
+
+    app.economy.competition_funding_policy.CompetitionFundingMode carries the
+    same values but is a different class, so callers assigning it produced a
+    member that compares equal yet fails the `is` checks below -- silently
+    routing a FanCoin entry pool into the Coin-prize branch.
+    """
+    if isinstance(value, HostedCompetitionFundingMode):
+        return value
+    if value is None:
+        return HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL
+    return HostedCompetitionFundingMode(str(getattr(value, "value", value)))
+
+
 def _validate_hosted_competition_economic_contract(_: object, __: object, competition: UserHostedCompetition) -> None:
-    mode = competition.funding_mode or HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL
+    mode = _normalize_funding_mode(competition.funding_mode)
     entry = Decimal(competition.entry_fee_fancoin or 0)
     fancoin_prize = Decimal(competition.reward_pool_fancoin or 0)
     coin_prize = Decimal(competition.reward_pool_coin or 0)

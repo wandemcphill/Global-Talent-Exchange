@@ -25,9 +25,15 @@ void main() {
     expect(find.text('Live configuration missing'), findsOneWidget);
     expect(find.textContaining('GTE_API_BASE_URL'), findsWidgets);
     expect(find.textContaining('flutter run -d <device>'), findsOneWidget);
-    expect(
-      find.textContaining('adb reverse tcp:8000 tcp:8000'),
-      findsOneWidget,
-    );
+
+    // e9abceac ("remove production localhost bootstrap endpoint") replaced the
+    // hardcoded http://127.0.0.1:8000 suggestion and its
+    // `adb reverse tcp:8000 tcp:8000` pairing advice with a reachable-backend
+    // placeholder. Assert the guidance that shipped, and hold the line on the
+    // localhost endpoint not creeping back into production copy.
+    expect(find.textContaining('<reachable-backend-url>'), findsOneWidget);
+    expect(find.textContaining('reachable backend URL'), findsOneWidget);
+    expect(find.textContaining('127.0.0.1'), findsNothing);
+    expect(find.textContaining('adb reverse'), findsNothing);
   });
 }

@@ -484,7 +484,8 @@ def _unity_ball_payload(frame, active_event, players_by_id: dict[str, object]) -
     velocity = frame.ball.velocity
     spin = frame.ball.spin
     velocity_x = _float_or_default(velocity.x if velocity is not None else None)
-    velocity_z = _float_or_default(velocity.z if velocity is not None else None, default=1.0)
+    velocity_z = _float_or_default(velocity.z if velocity is not None else None, default=0.0)
+    speed = (velocity_x * velocity_x + velocity_z * velocity_z) ** 0.5
     return {
         "entityId": "ball",
         "playerId": owner_player_id,
@@ -498,7 +499,7 @@ def _unity_ball_payload(frame, active_event, players_by_id: dict[str, object]) -
         "highlighted": False,
         "hasPossession": bool(owner_player_id),
         "animationState": "ball",
-        "speedRatio": 1.0 if velocity is not None else 0.0,
+        "speedRatio": min(1.0, speed / 18.0),
         "state": str(frame.ball.state or "rolling"),
         "x": _world_x(frame.ball.position.x),
         "y": round(_float_or_default(frame.ball.height), 3),
@@ -506,8 +507,8 @@ def _unity_ball_payload(frame, active_event, players_by_id: dict[str, object]) -
         "velocityX": round(velocity_x, 3),
         "velocityY": round(_float_or_default(velocity.y if velocity is not None else None), 3),
         "velocityZ": round(velocity_z, 3),
-        "facingX": round(velocity_x, 3),
-        "facingZ": round(velocity_z, 3),
+        "facingX": round(velocity_x / speed, 3) if speed > 0.001 else 0.0,
+        "facingZ": round(velocity_z / speed, 3) if speed > 0.001 else 0.0,
         "spin": round(_float_or_default(getattr(spin, "z", None)), 3),
         "trajectoryType": _ball_trajectory_type(active_event),
         "isBall": True,
@@ -1786,6 +1787,23 @@ def get_match_commentary_stream(
     if response is not None:
         return response
     raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Commentary service is unavailable.")
+
+
+@router.websocket("/api/v2/ws/match/{match_id}")
+async def stream_unity_spatial_match(match_id: str, websocket: WebSocket) -> None:
+    app = websocket.scope["app"]
+    _require_unity_live_access_for_websocket(websocket, match_id=match_id)
+    await websocket.accept()
+    frame_interval = 0.05
+    try:
+        while True:
+            payload = build_unity_live_payload_for_app(app, match_id, include_full_timeline=False, event_limit=24)
+            await websocket.send_json(payload)
+            if not bool(payload.get("isLive", False)):
+                return
+            await asyncio.sleep(frame_interval)
+    except WebSocketDisconnect:
+        return
 
 
 @legacy_router.websocket("/{match_id}/stream")

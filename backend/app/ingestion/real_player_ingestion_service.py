@@ -248,6 +248,7 @@ class RealPlayerIngestionService:
             audit = self._audit_batch(player_ids=player_ids, as_of=as_of)
         except Exception as _audit_exc:  # noqa: BLE001
             import logging as _logging
+
             _logging.getLogger(__name__).warning("_audit_batch skipped due to error: %s", _audit_exc)
             audit = RealPlayerPostWriteAuditResult(
                 duplicate_canonical_identity_count=0,
@@ -573,9 +574,9 @@ class RealPlayerIngestionService:
             source_name=payload.source_name,
             provider_external_id=payload.current_real_world_league_key,
             name=payload.current_real_world_league,
-            country=None,
-            country_code=None,
-            country_name=None,
+            country=country,
+            country_code=payload.nationality_code,
+            country_name=payload.nationality,
             as_of=as_of,
             sample_payload=sample_payload,
             auto_create_values={

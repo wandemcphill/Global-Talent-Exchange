@@ -89,7 +89,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Trader command center'), findsOneWidget);
+    // 591461ca ("UX: de-jargon residual dashboard copy") renamed this header
+    // from "Trader command center" to "Your trading desk"; hold that.
+    expect(find.text('Your trading desk'), findsOneWidget);
+    expect(find.text('Trader command center'), findsNothing);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Security'));
     await tester.pumpAndSettle();

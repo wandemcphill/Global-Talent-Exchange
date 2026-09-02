@@ -1,5 +1,12 @@
 services:
-  # 🌐 API
+  - name: gtex-cache
+    type: keyvalue
+    region: frankfurt
+    plan: starter
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+    ipAllowList: []
+
   - name: gtex-api
     type: web
     runtime: python
@@ -7,22 +14,19 @@ services:
     plan: starter
     buildCommand: "pip install -r backend/requirements.txt"
     preDeployCommand: "bash ops/render/production-preflight.sh && cd backend && alembic -c migrations/alembic.ini upgrade head"
-    startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-2} --timeout 180 --graceful-timeout 120"
+    startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-1} --timeout 180 --graceful-timeout 120"
     envVars:
       - key: WEB_CONCURRENCY
-        value: "4"
-      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
-      # Set manually in the Render dashboard. GTEX no longer provisions a
-      # Render-managed Postgres instance; the database lives on Supabase.
+        value: "1"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_ENABLED
         value: "true"
-      # Manual Render Redis instance connection string (rediss://...).
-      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
-      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        sync: false
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
       - key: GTE_APP_ENV
         value: production
       - key: GTE_RUN_MIGRATION_CHECK
@@ -33,7 +37,6 @@ services:
         value: https://gtex-web-tw6c.onrender.com
       - key: GTE_CORS_ALLOW_ORIGIN_REGEX
         value: ""
-      # Render terminates TLS and appends exactly one X-Forwarded-For hop.
       - key: GTE_TRUSTED_PROXY_HOPS
         value: "1"
       - key: GTE_AUTH_SECRET
@@ -51,7 +54,13 @@ services:
       - key: GTE_KORAPAY_NOTIFICATION_URL
         value: https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook
       - key: GTE_ENABLE_PAYSTACK
-        value: "false"
+        value: "true"
+      - key: GTE_PAYSTACK_SECRET_KEY
+        sync: false
+      - key: GTE_PAYSTACK_WEBHOOK_SECRET
+        sync: false
+      - key: GTE_PAYSTACK_CALLBACK_URL
+        sync: false
       - key: TREASURY_BANK_NAME
         sync: false
       - key: TREASURY_ACCOUNT_NAME
@@ -62,18 +71,11 @@ services:
         value: "false"
       - key: GTE_TASK_QUEUE_ENABLED
         value: "true"
-      # Cache the full tradable-player record set in-process for this many
-      # seconds. The market listing query loads all ~30k players + relationships
-      # per request (filtering/sorting happen in Python); caching turns that into
-      # one load per TTL. 0 disables (default outside production).
       - key: GTE_MARKET_RECORDS_CACHE_TTL_SECONDS
         value: "300"
-      # Kafka is not provisioned in production. Empty → viral clip ingestion
-      # silently skips startup instead of logging NoBrokersAvailable tracebacks.
       - key: GTE_KAFKA_BROKERS
         value: ""
 
-  # 🎨 Web
   - name: gtex-web
     type: web
     runtime: static
@@ -85,7 +87,6 @@ services:
       - key: GTE_BACKEND_MODE
         value: live
 
-  # ⚙️ RQ Worker
   - name: gtex-rq-worker
     type: worker
     runtime: python
@@ -94,23 +95,17 @@ services:
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.workers.rq_worker_main"
     envVars:
-      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
-      # Set manually in the Render dashboard. GTEX no longer provisions a
-      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
         sync: false
       - key: REDIS_ENABLED
         value: "true"
-      # Manual Render Redis instance connection string (rediss://...).
-      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
-      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        sync: false
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
       - key: GTE_APP_ENV
         value: production
-      # Must be set to the SAME value as gtex-api's GTE_AUTH_SECRET /
-      # GTE_MEDIA_SIGNING_SECRET (sync: false on every service so Blueprint never
-      # overwrites them). Mismatched values will break cross-service auth.
       - key: GTE_AUTH_SECRET
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
@@ -124,7 +119,6 @@ services:
       - key: GTE_TASK_QUEUE_ENABLED
         value: "true"
 
-  # 🎮 Simulation Worker
   - name: gtex-simulation-worker
     type: worker
     runtime: python
@@ -133,23 +127,17 @@ services:
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.backbone.simulation_worker_main"
     envVars:
-      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
-      # Set manually in the Render dashboard. GTEX no longer provisions a
-      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
         sync: false
       - key: REDIS_ENABLED
         value: "true"
-      # Manual Render Redis instance connection string (rediss://...).
-      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
-      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        sync: false
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
       - key: GTE_APP_ENV
         value: production
-      # Must be set to the SAME value as gtex-api's GTE_AUTH_SECRET /
-      # GTE_MEDIA_SIGNING_SECRET (sync: false on every service so Blueprint never
-      # overwrites them). Mismatched values will break cross-service auth.
       - key: GTE_AUTH_SECRET
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
@@ -161,7 +149,6 @@ services:
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "false"
 
-  # 📡 Outbox Relay
   - name: gtex-outbox-relay
     type: worker
     runtime: python
@@ -170,23 +157,17 @@ services:
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "cd backend && python -m app.backbone.outbox_relay_main"
     envVars:
-      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
-      # Set manually in the Render dashboard. GTEX no longer provisions a
-      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
         sync: false
       - key: REDIS_ENABLED
         value: "true"
-      # Manual Render Redis instance connection string (rediss://...).
-      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
-      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        sync: false
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
       - key: GTE_APP_ENV
         value: production
-      # Must be set to the SAME value as gtex-api's GTE_AUTH_SECRET /
-      # GTE_MEDIA_SIGNING_SECRET (sync: false on every service so Blueprint never
-      # overwrites them). Mismatched values will break cross-service auth.
       - key: GTE_AUTH_SECRET
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
@@ -198,7 +179,6 @@ services:
       - key: GTE_OUTBOX_RELAY_ENABLED
         value: "true"
 
-  # Player Ingestion Worker
   - name: gtex-player-ingestion-worker
     type: worker
     runtime: node
@@ -207,18 +187,15 @@ services:
     buildCommand: "cd services/player-ingestion && npm ci"
     startCommand: "cd services/player-ingestion && npm run migrate && npm start"
     envVars:
-      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
-      # Set manually in the Render dashboard. GTEX no longer provisions a
-      # Render-managed Postgres instance; the database lives on Supabase.
       - key: DATABASE_URL
         sync: false
       - key: REDIS_ENABLED
         value: "true"
-      # Manual Render Redis instance connection string (rediss://...).
-      # Set in the dashboard. Blueprint does NOT provision Redis (no keyvalue block),
-      # so it can never recreate it or change its plan.
       - key: GTE_REDIS_URL
-        sync: false
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
       - key: DATABASE_SSL
         value: "true"
       - key: SPORTMONKS_BASE_URL
@@ -276,13 +253,6 @@ services:
       - key: SEASON_TRANSFER_WINDOWS
         value: "2026-01-01:2026-01-31,2026-08-01:2026-08-31"
 
-  # 🧑‍🤝‍🧑 Real-player ingest (cron job)
-  # Ingests real players for leagues that still need them (the original 6 top
-  # leagues are already populated). Runs on Render's stable network so the
-  # supervised refresh can complete — a laptop session cannot (slow EU-pooler
-  # throughput + dropped connections). Writes are DB-idempotent, so the
-  # schedule can re-run safely; trigger manually from the dashboard for a
-  # one-off backfill.
   - name: gtex-realplayer-ingest
     type: cron
     runtime: python
@@ -292,10 +262,8 @@ services:
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "bash ops/render/run-realplayer-ingest.sh"
     envVars:
-      # Supabase PostgreSQL connection string (postgresql://...?sslmode=require).
       - key: DATABASE_URL
         sync: false
-      # SportMonks v3 token (same value as gtex-player-ingestion-worker).
       - key: SPORTMONKS_API_TOKEN
         sync: false
       - key: SPORTMONKS_BASE_URL
@@ -304,18 +272,11 @@ services:
         value: production
       - key: GTE_INGESTION_PROVIDER
         value: sportmonks
-      # Same values as gtex-api (cross-service auth). Optional — the script
-      # falls back to local-dev secrets for this CLI path if unset.
       - key: GTE_AUTH_SECRET
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
-  # One-time SoFIFA / EA FC frozen player import (~18k players). Runs in-region
-  # so the full import completes in minutes instead of the many hours a laptop
-  # session needs over the EU pooler. Resume-safe (skips already-imported
-  # players). Manual: set env in dashboard, then Trigger Run. Schedule is a
-  # placeholder — this is a one-off, not a recurring job.
   - name: gtex-sofifa-import
     type: cron
     runtime: python
@@ -325,17 +286,12 @@ services:
     buildCommand: "pip install -r backend/requirements.txt"
     startCommand: "bash ops/render/run-sofifa-import.sh"
     envVars:
-      # Supabase Postgres URL (postgresql://...?sslmode=require) — the NEW project.
       - key: DATABASE_URL
         sync: false
-      # Public/temporary URL to the SoFIFA players CSV (e.g. a Supabase Storage
-      # public object URL). The job downloads it at runtime.
       - key: CSV_URL
         sync: false
-      # none | url | cloudinary. 'url' stores sofifa CDN urls (fast). 'cloudinary'
-      # mirrors faces to your account (set the CLOUDINARY_* vars below too).
       - key: IMAGES
-        value: "cloudinary"
+        sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
@@ -349,9 +305,6 @@ services:
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
-  # Appreciation scheduler: recompute frozen prices from potential-driven effective
-  # GSI as players age (young players appreciate). Weekly, in-region. Feed-free +
-  # idempotent. Runs on the same DB as the API.
   - name: gtex-appreciation-reprice
     type: cron
     runtime: python
@@ -370,8 +323,6 @@ services:
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
-  # Rebuild the regen cohort + (re)generate portraits. Manual: Trigger Run.
-  # Schedule is a placeholder (monthly) — this is meant to be run on demand.
   - name: gtex-regen-rebuild
     type: cron
     runtime: python
@@ -383,7 +334,6 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
-      # Number of regens to (re)build. Default 12000.
       - key: REGEN_TARGET
         value: "12000"
       - key: GTE_APP_ENV
@@ -393,8 +343,6 @@ services:
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
-  # One-off: backfill first_team squad-tier memberships for contracted players.
-  # Run AFTER gtex-api has deployed migration 0104. Manual: Trigger Run.
   - name: gtex-squad-tier-backfill
     type: cron
     runtime: python
@@ -408,11 +356,7 @@ services:
         sync: false
       - key: GTE_APP_ENV
         value: production
-
-# NOTE: NO Blueprint-managed paid resources.
-# - PostgreSQL is hosted on Supabase (no `databases:` block).
-# - Redis is a MANUALLY-created Render Redis/Key-Value instance (no `keyvalue`
-#   service block). Blueprint therefore never provisions, recreates, or re-plans
-#   Redis. Services consume it via GTE_REDIS_URL (sync: false), set in the dashboard.
-# All connection strings and secrets use `sync: false` so Blueprint cannot
-# overwrite dashboard-managed values on deploy.
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false

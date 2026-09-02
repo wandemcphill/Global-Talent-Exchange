@@ -20,6 +20,7 @@ import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
 import 'package:gte_frontend/features/regens/regens_screen_v2.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
+import 'package:gte_frontend/shared/auth/gtex_admin_capabilities.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_notification_matrix_screen.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_trust_ops_screen_v2.dart';
 import 'package:gte_frontend/screens/gte_login_screen.dart';
@@ -99,10 +100,11 @@ GoRouter buildGtexAppRouter({
       GoRoute(
         path: gtexLoginRoute,
         pageBuilder:
-            (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
-              key: state.pageKey,
-              child: GteLoginScreen(controller: controller),
-            ),
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: GteLoginScreen(controller: controller),
+                ),
       ),
       GoRoute(
         path: gtexLegacyAccountSelectRoute,
@@ -539,6 +541,7 @@ List<RouteBase> _buildLegacyAliasRoutes({
               playerId: state.pathParameters['playerId']?.trim() ?? '',
               baseUrl: config.apiBaseUrl,
               backendMode: config.activeShellBackendMode,
+              controller: controller,
             ),
           ),
     ),
@@ -551,22 +554,23 @@ List<RouteBase> _buildLegacyAliasRoutes({
         final String clubId = dependencies.currentClubId ?? '';
         return NoTransitionPage<void>(
           key: state.pageKey,
-          child: clubId.isEmpty
-              ? GteRouteIntegrityScreen.blocked(
-                  title: 'No club yet',
-                  message:
-                      'Open a club to set your formation and starting lineup.',
-                  icon: Icons.groups_outlined,
-                  actionLabel: 'Back to GTEX',
-                  onAction: () =>
-                      context.go(const GteNavigationRoute.home().path),
-                )
-              : GtexLineupEditorScreen(
-                  clubId: clubId,
-                  baseUrl: config.apiBaseUrl,
-                  accessToken: controller.accessToken ?? '',
-                  backendMode: config.activeShellBackendMode,
-                ),
+          child:
+              clubId.isEmpty
+                  ? GteRouteIntegrityScreen.blocked(
+                    title: 'No club yet',
+                    message:
+                        'Open a club to set your formation and starting lineup.',
+                    icon: Icons.groups_outlined,
+                    actionLabel: 'Back to GTEX',
+                    onAction:
+                        () => context.go(const GteNavigationRoute.home().path),
+                  )
+                  : GtexLineupEditorScreen(
+                    clubId: clubId,
+                    baseUrl: config.apiBaseUrl,
+                    accessToken: controller.accessToken ?? '',
+                    backendMode: config.activeShellBackendMode,
+                  ),
         );
       },
     ),
@@ -846,6 +850,13 @@ List<RouteBase> _buildLegacyAliasRoutes({
           child: GtexMatchCenterScreenV2(
             matchId: matchId,
             repository: runtime.repositories.matches,
+            // Full time hands off to the already-registered match viewer
+            // route rather than dead-ending on the final scoreline.
+            onOpenReplay: (String id) => context.go('/matches/viewer/$id'),
+            onExit:
+                () => context.go(
+                  const BroadcastDeskRouteData().toUri().toString(),
+                ),
           ),
         );
       },
@@ -999,6 +1010,9 @@ List<RouteBase> _buildLegacyAliasRoutes({
                       accessToken: controller.session!.accessToken,
                       backendMode: config.activeShellBackendMode,
                       authedApi: dependenciesBuilder(context).createAuthedApi(),
+                      capabilities: GtexAdminCapabilities.fromSession(
+                        controller.session,
+                      ),
                     )
                     : GteRouteIntegrityScreen.blocked(
                       title: 'Admin access required',
@@ -1094,5 +1108,3 @@ Page<void> _landingPage({
     ),
   );
 }
-
-
