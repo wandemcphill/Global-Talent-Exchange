@@ -15,6 +15,7 @@
 # When IMAGES=cloudinary, also set CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY /
 # CLOUDINARY_API_SECRET.
 set -u
+set -o pipefail
 
 cd "$(dirname "$0")/../../backend" || exit 1
 
@@ -57,7 +58,10 @@ while [ "$attempt" -lt "$MAX_ATTEMPTS" ]; do
 
   echo "[$(date -u +%FT%TZ)] exited code=$code; retrying in ${backoff}s"
   sleep "$backoff"
-  backoff=$(( backoff * 2 )); [ "$backoff" -gt "$BACKOFF_MAX" ] && backoff="$BACKOFF_MAX"
+  backoff=$(( backoff * 2 ))
+  if [ "$backoff" -gt "$BACKOFF_MAX" ]; then
+    backoff="$BACKOFF_MAX"
+  fi
 done
 
 echo "[$(date -u +%FT%TZ)] gave up after $MAX_ATTEMPTS attempts"

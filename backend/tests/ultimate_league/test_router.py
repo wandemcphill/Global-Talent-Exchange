@@ -29,6 +29,11 @@ def _build_app(current_user: _StubUser | None) -> FastAPI:
 
 @pytest.fixture()
 def client() -> TestClient:
+    # Router-level authorization is exercised end-to-end by
+    # backend/tests/security/test_endpoint_authorization.py against the real
+    # app + DB. This fixture only wires up the ultimate-league runtime in
+    # isolation, so authentication is stubbed to a fixed actor rather than
+    # bypassed via a weaker dependency.
     application = _build_app(_StubUser(OWNER_USER_ID))
     with TestClient(application) as test_client:
         yield test_client

@@ -293,6 +293,12 @@ def test_record_match_volume_triggers_lottery_for_recently_active_users(session)
 
     engine = MatchEconomyEngine(session=session, wallet_service=wallet)
 
+    # CREDIT (Fan Coin) match volume is recorded in its own unit and is never
+    # converted into a COIN-equivalent (Fan Coin is intentionally not
+    # reverse-convertible into GTEX Coin, matching WalletService.quote_conversion).
+    # trigger_step is therefore expressed directly in CREDIT so this records
+    # exactly one lottery threshold crossing rather than assuming a conversion
+    # rate that no longer exists.
     result = engine.record_match_volume(
         amount=Decimal("5.0000"),
         unit=LedgerUnit.CREDIT,

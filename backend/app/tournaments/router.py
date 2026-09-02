@@ -31,6 +31,8 @@ def _raise_http(exc: TournamentError) -> None:
     if isinstance(exc, TournamentNotFoundError):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.detail) from exc
     if isinstance(exc, TournamentValidationError):
+        if exc.reason in {"not_a_participant", "actor_not_participant"}:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.detail) from exc
         conflict_reasons = {
             "insufficient_balance",
             "operation_busy",

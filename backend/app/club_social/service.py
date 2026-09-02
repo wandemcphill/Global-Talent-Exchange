@@ -383,7 +383,9 @@ class ClubSocialService:
         )
         rivalry_profiles = list(
             self.session.scalars(
-                select(RivalryProfile).where(or_(RivalryProfile.club_a_id == club_id, RivalryProfile.club_b_id == club_id))
+                select(RivalryProfile).where(
+                    or_(RivalryProfile.club_a_id == club_id, RivalryProfile.club_b_id == club_id)
+                )
             ).all()
         )
         reputation_profile = self.session.scalar(
@@ -392,7 +394,9 @@ class ClubSocialService:
         reputation_score = reputation_profile.current_score if reputation_profile is not None else 0
         rivalry_intensity = max((profile.intensity_score for profile in rivalry_profiles), default=0)
         share_event_count = len(share_events)
-        recent_share_count = sum(1 for event in share_events if self._coerce_datetime(event.created_at) >= thirty_days_ago)
+        recent_share_count = sum(
+            1 for event in share_events if self._coerce_datetime(event.created_at) >= thirty_days_ago
+        )
         club_followers = int(
             self.session.scalar(
                 select(func.count(SocialFollow.id)).where(
@@ -440,10 +444,14 @@ class ClubSocialService:
         metrics.reputation_score = reputation_score
         metrics.media_popularity_score = media_popularity
         metrics.media_value_minor = (media_popularity * 2500) + (fan_count * 120)
-        metrics.club_valuation_minor = (reputation_score * 1000) + (fan_count * 350) + (rivalry_intensity * 500) + (challenge_wins * 5000)
+        metrics.club_valuation_minor = (
+            (reputation_score * 1000) + (fan_count * 350) + (rivalry_intensity * 500) + (challenge_wins * 5000)
+        )
         metrics.rivalry_intensity_score = rivalry_intensity
         metrics.support_momentum_score = support_momentum
-        metrics.sponsorship_potential_score = (reputation_score // 8) + media_popularity + (fan_count // 100) + (challenge_wins * 10)
+        metrics.sponsorship_potential_score = (
+            (reputation_score // 8) + media_popularity + (fan_count // 100) + (challenge_wins * 10)
+        )
         metrics.discoverability_score = media_popularity + (rivalry_intensity // 2) + (share_event_count * 4)
         metrics.challenge_history_json = {
             "issued": len(issued_challenges),
@@ -790,7 +798,9 @@ class ClubSocialService:
         derby = self._is_derby(home_club, away_club)
         resolved_high_view = high_view_flag if high_view_flag is not None else view_count >= DEFAULT_HIGH_VIEW_THRESHOLD
         resolved_high_gift = high_gift_flag if high_gift_flag is not None else gift_count >= DEFAULT_HIGH_GIFT_THRESHOLD
-        resolved_upset = upset_flag if upset_flag is not None else self._is_upset(home_club.id, away_club.id, resolved_winner)
+        resolved_upset = (
+            upset_flag if upset_flag is not None else self._is_upset(home_club.id, away_club.id, resolved_winner)
+        )
         resolved_challenge_match = challenge_match_flag or challenge_id is not None
         profile.matches_played += 1
         profile.regional_derby = profile.regional_derby or derby
@@ -843,7 +853,9 @@ class ClubSocialService:
             high_gift=resolved_high_gift,
         )
         profile.narrative_tags_json = self._merge_strings(profile.narrative_tags_json, narrative_tags)
-        profile.label = self._derive_rivalry_label(profile, derby=derby, upset=resolved_upset, challenge_match=resolved_challenge_match)
+        profile.label = self._derive_rivalry_label(
+            profile, derby=derby, upset=resolved_upset, challenge_match=resolved_challenge_match
+        )
         profile.metadata_json = {
             **(profile.metadata_json or {}),
             "last_match_id": match_id,
@@ -1011,6 +1023,19 @@ class ClubSocialService:
         if club.owner_user_id != actor_user_id:
             raise ClubSocialError("club_owner_required")
         return club
+
+    def require_participant_club(self, actor_user_id: str, club_ids: tuple[str, ...]) -> ClubProfile:
+        """Require the actor to own at least one of the clubs involved.
+
+        Rivalry history is shared, cross-club state: it must only be written by
+        somebody with standing in the fixture, never by an arbitrary caller who
+        can name two club ids.
+        """
+        clubs = tuple(self._require_club(club_id) for club_id in club_ids)
+        for club in clubs:
+            if club.owner_user_id == actor_user_id:
+                return club
+        raise ClubSocialError("club_owner_required")
 
     def _follow_target_key(self, target_type: str, club_id: str | None, player_id: str | None) -> str:
         normalized_type = self._normalize(target_type, default="club") or "club"
@@ -1419,11 +1444,21 @@ class ClubSocialService:
         return tuple(sorted((club_one_id, club_two_id)))  # type: ignore[return-value]
 
     def _is_derby(self, home_club: ClubProfile, away_club: ClubProfile) -> bool:
-        if home_club.city_name and away_club.city_name and home_club.city_name.strip().lower() == away_club.city_name.strip().lower():
+        if (
+            home_club.city_name
+            and away_club.city_name
+            and home_club.city_name.strip().lower() == away_club.city_name.strip().lower()
+        ):
             return True
-        if home_club.region_name and away_club.region_name and home_club.region_name.strip().lower() == away_club.region_name.strip().lower():
+        if (
+            home_club.region_name
+            and away_club.region_name
+            and home_club.region_name.strip().lower() == away_club.region_name.strip().lower()
+        ):
             return True
-        return bool(home_club.country_code and away_club.country_code and home_club.country_code == away_club.country_code)
+        return bool(
+            home_club.country_code and away_club.country_code and home_club.country_code == away_club.country_code
+        )
 
     def _is_upset(self, home_club_id: str, away_club_id: str, winner_club_id: str | None) -> bool:
         if winner_club_id is None:

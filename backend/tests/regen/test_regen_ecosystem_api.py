@@ -9,10 +9,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
-from app.models.regen import RegenLegacyRecord
+from app.models.regen import AcademyCandidate, RegenLegacyRecord
 from app.models.regen_ecosystem import RegenBloodlineLink
 from app.models.user import KycStatus, User, UserRole
 from app.regen_ecosystem.router import router as regen_ecosystem_router
@@ -37,6 +37,32 @@ def regen_api():
             yield session
 
     app.dependency_overrides[get_session] = override_session
+    # Ownership checks on these routes compare the payload's club_user_id /
+    # user_id to the authenticated actor's id. This fixture's fixed seeded
+    # owner id ("user-regen-owner") is reused across every test in this
+    # module, so the stub actor below matches it. The authorization gate
+    # itself (including the "acting as someone else" rejection path) is
+    # covered end-to-end by backend/tests/security/test_endpoint_authorization.py
+    # against the real app + DB.
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id="user-regen-owner",
+        email="regen-owner@example.com",
+        username="regen-owner",
+        password_hash="hash",
+        role=UserRole.USER,
+        kyc_status=KycStatus.FULLY_VERIFIED,
+    )
+    # /regens/jobs/{job_name} is admin-only (bulk-generates data platform-wide);
+    # this predates the current change and is exercised here with a distinct
+    # admin override rather than promoting the regular actor above.
+    app.dependency_overrides[get_current_admin] = lambda: User(
+        id="user-regen-admin",
+        email="regen-admin@example.com",
+        username="regen-admin",
+        password_hash="hash",
+        role=UserRole.SUPER_ADMIN,
+        kyc_status=KycStatus.FULLY_VERIFIED,
+    )
 
     with TestClient(app) as client:
         yield client, session_factory
@@ -115,7 +141,12 @@ def test_regen_ecosystem_end_to_end(regen_api) -> None:
         json={
             "club_user_id": seeded["user_id"],
             "club_id": seeded["club_id"],
-            "season_label": "2026/2027",
+            # Distinct from the weekly job's auto-computed current-season label so
+            # the later /regens/jobs/academy-weekly call (exercised below, now that
+            # it is reachable behind the admin gate) does not collide with this
+            # manual generation on the (club_id, season_label, trigger_reason)
+            # uniqueness constraint.
+            "season_label": "2025/2026-manual-probe",
         },
     )
     assert generate_response.status_code == 200
@@ -148,7 +179,22 @@ def test_regen_ecosystem_end_to_end(regen_api) -> None:
     report_payload = report_response.json()
     assert report_payload["accuracy"] == 86
     assert set(report_payload["visible_stats"].keys()) == {"technical", "physical", "mental", "tactical"}
-    assert set(report_payload["hidden_stats"].keys()) == {"consistency", "injury_proneness", "clutch_factor", "growth_variance"}
+    assert set(report_payload["hidden_stats"].keys()) == {
+        "consistency",
+        "injury_proneness",
+        "clutch_factor",
+        "growth_variance",
+    }
+
+    # The deterministic academy-generation seed (club_id + season_label + slot
+    # count) can legitimately produce candidates younger than the
+    # promotion-eligibility floor (16); promotion isn't what this end-to-end
+    # test is exercising here, so bump the candidate's age directly rather
+    # than depending on the RNG outcome for a specific season_label.
+    with app_session_factory() as session:
+        candidate = session.get(AcademyCandidate, candidate_id)
+        candidate.age = 18
+        session.commit()
 
     promote_response = client.post(f"/academy/promote/{candidate_id}")
     assert promote_response.status_code == 200

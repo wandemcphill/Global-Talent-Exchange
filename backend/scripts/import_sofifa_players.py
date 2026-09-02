@@ -16,12 +16,14 @@ Design decisions (see the GTEX plan discussion):
   pricing snapshot (otherwise the batch write is blocked) *and* gives the tiered
   pricing the design calls for (a whole "class" of players costs the same at launch;
   live trading diverges them later).
-* Player faces are EA/SoFIFA licensed assets. With ``--images cloudinary`` we mirror
-  them to your Cloudinary account (public ``type=upload``) so the app loads fast and
-  does not hotlink SoFIFA. Each image row is still stored with ``rights_cleared=False``
-  by the ingestion service, so the app can fall back to stylized avatars with a single
-  switch before any public launch. ``--images url`` keeps the raw SoFIFA URL;
-  ``--images none`` drops images entirely (avatars only).
+* Player faces are EA/SoFIFA assets the operator holds distribution rights for. With
+  ``--images cloudinary`` we mirror them to your Cloudinary account (public
+  ``type=upload``) so the app loads fast and does not hotlink SoFIFA. SoFIFA's CDN
+  403s any request whose Referer is not sofifa.com, so Cloudinary cannot fetch the
+  URL itself: the bytes are downloaded here with that Referer and uploaded as binary.
+  The ingestion service stores these rows with ``rights_cleared=True``.
+  ``--images url`` keeps the raw SoFIFA URL (which will 403 in the app);
+  ``--images none`` drops images entirely.
 
 Usage::
 
@@ -37,7 +39,8 @@ Usage::
 
 import argparse
 import csv
-from dataclasses import dataclass, field
+import gzip
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 import hashlib
 import json
@@ -66,13 +69,13 @@ from app.ingestion.real_player_ingestion_service import (
     RealPlayerIngestionService,
 )
 from app.schemas.real_player_ingestion import RealPlayerIngestionRequest, RealPlayerSeedInput
-from scripts.sofifa_pricing import SOFIFA_SNAPSHOT_DATE, credits_to_naira, projected_price_credits
+from scripts.sofifa_pricing import SOFIFA_SNAPSHOT_DATE, projected_price_credits
 
 logger = logging.getLogger("import_sofifa_players")
 
 SOURCE_NAME = "sofifa_fc25"
-_FALLBACK_AUTH_SECRET = "local-dev-import-secret"
-_FALLBACK_MEDIA_SECRET = "local-dev-import-media-secret"
+_FALLBACK_AUTH_SECRET = "local-dev-import-secret"  # pragma: allowlist secret
+_FALLBACK_MEDIA_SECRET = "local-dev-import-media-secret"  # pragma: allowlist secret
 _CLOUDINARY_FOLDER = "players/sofifa"
 _UPLOAD_TIMEOUT_SECONDS = 30.0
 
@@ -91,8 +94,8 @@ class GsiTier:
 
 
 GSI_TIERS: tuple[GsiTier, ...] = (
-    GsiTier("world_class", 88, 120_000_000.0),   # Mbappe / Bellingham / Yamal class
-    GsiTier("top_class", 84, 60_000_000.0),      # Osimhen class
+    GsiTier("world_class", 88, 120_000_000.0),  # Mbappe / Bellingham / Yamal class
+    GsiTier("top_class", 84, 60_000_000.0),  # Osimhen class
     GsiTier("quality", 80, 28_000_000.0),
     GsiTier("solid", 75, 12_000_000.0),
     GsiTier("squad", 70, 4_000_000.0),
@@ -133,11 +136,11 @@ _COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "description": ("description", "bio"),
     "nationality_code": ("nationality_code", "nation_code", "country_code"),
     "preferred_foot": ("preferred_foot", "foot"),
-    "jersey": ("club_jersey_number", "jersey_number", "shirt_number", "kit_number"),
+    "jersey": ("club_jersey_number", "jersey_number", "shirt_number", "kit_number", "club_kit_number"),
     "photo": ("player_face_url", "player_face", "face_url", "image", "image_url", "photo_url", "url"),
     "national_team": ("nation_team_name", "national_team", "nation_name"),
-    "national_team_position": ("nation_position", "national_team_position"),
-    "national_team_jersey": ("nation_jersey_number", "national_team_jersey"),
+    "national_team_position": ("nation_position", "national_team_position", "country_position"),
+    "national_team_jersey": ("nation_jersey_number", "national_team_jersey", "country_kit_number"),
 }
 
 
@@ -146,9 +149,7 @@ class ColumnMap:
         self._lookup = {col.strip().lower(): col for col in header}
         self._resolved: dict[str, str | None] = {}
         for logical, aliases in _COLUMN_ALIASES.items():
-            self._resolved[logical] = next(
-                (self._lookup[alias] for alias in aliases if alias in self._lookup), None
-            )
+            self._resolved[logical] = next((self._lookup[alias] for alias in aliases if alias in self._lookup), None)
 
     def get(self, row: dict[str, Any], logical: str) -> str | None:
         column = self._resolved.get(logical)
@@ -185,6 +186,12 @@ def _sign(params: dict[str, str], api_secret: str) -> str:
     return hashlib.sha1(f"{to_sign}{api_secret}".encode()).hexdigest()
 
 
+_IMAGE_FETCH_REFERER = "https://sofifa.com/"
+_IMAGE_FETCH_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+
+
 def upload_remote_image_to_cloudinary(source_url: str, *, public_id: str, client: httpx.Client) -> str | None:
     """Fetch a remote face image and re-upload it to Cloudinary. Returns the secure URL."""
     cloud_name = os.environ["CLOUDINARY_CLOUD_NAME"].strip()
@@ -197,16 +204,36 @@ def upload_remote_image_to_cloudinary(source_url: str, *, public_id: str, client
         "overwrite": "false",
         "timestamp": timestamp,
     }
-    # Cloudinary can fetch the remote URL itself (no need to download bytes locally).
+    # SoFIFA's CDN hotlink-protects faces and 403s any request whose Referer is not
+    # sofifa.com, so Cloudinary cannot fetch the URL itself. Download the bytes here
+    # (sending the Referer the CDN expects) and upload the binary instead.
+    try:
+        origin = client.get(
+            source_url,
+            headers={"User-Agent": _IMAGE_FETCH_USER_AGENT, "Referer": _IMAGE_FETCH_REFERER},
+            timeout=_UPLOAD_TIMEOUT_SECONDS,
+            follow_redirects=True,
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("source image fetch failed public_id=%s error=%s", public_id, exc)
+        return None
+    if origin.status_code >= 400 or not origin.content:
+        logger.warning(
+            "source image fetch rejected public_id=%s status=%s bytes=%s",
+            public_id,
+            origin.status_code,
+            len(origin.content),
+        )
+        return None
     data = {
         **signed_params,
-        "file": source_url,
         "api_key": api_key,
         "signature": _sign(signed_params, api_secret),
     }
+    files = {"file": (f"{public_id}.png", origin.content, origin.headers.get("content-type") or "image/png")}
     url = f"https://api.cloudinary.com/v1_1/{cloud_name}/image/upload"
     try:
-        response = client.post(url, data=data, timeout=_UPLOAD_TIMEOUT_SECONDS)
+        response = client.post(url, data=data, files=files, timeout=_UPLOAD_TIMEOUT_SECONDS)
     except httpx.HTTPError as exc:
         logger.warning("cloudinary upload failed public_id=%s error=%s", public_id, exc)
         return None
@@ -254,7 +281,9 @@ def _parse_dob(value: str | None, age: int | None, as_of: datetime) -> tuple[dat
 # (3) demonym + map. Order = highest confidence first.                           #
 # --------------------------------------------------------------------------- #
 _NATIONAL_TEAM_RE = re.compile(r"the ([A-Z][A-Za-z .'-]+?) national team")
-_FROM_COUNTRY_RE = re.compile(r"(?:footballer|soccer player|player) from ([A-Z][A-Za-z .'-]+?)(?: \(country\))?[‎\s]* who")
+_FROM_COUNTRY_RE = re.compile(
+    r"(?:footballer|soccer player|player) from ([A-Z][A-Za-z .'-]+?)(?: \(country\))?[‎\s]* who"
+)
 _DEMONYM_RE = re.compile(r"\bis an? ([A-Z][A-Za-zÀ-ÿ]+(?:[- ][A-Z]?[A-Za-zÀ-ÿ]+)?) (?:footballer|soccer player)")
 
 # Demonym -> country name. Covers the footballing world; extend as needed.
@@ -262,52 +291,185 @@ _DEMONYM_TO_COUNTRY: dict[str, str] = {
     # SoFIFA describes English players as "British" (Scots/Welsh/NI get their own demonym),
     # so British -> England is the correct majority mapping for this dataset.
     "British": "England",
-    "English": "England", "Scottish": "Scotland", "Welsh": "Wales", "Northern Irish": "Northern Ireland",
-    "Irish": "Ireland", "French": "France", "Spanish": "Spain", "Italian": "Italy", "German": "Germany",
-    "Portuguese": "Portugal", "Dutch": "Netherlands", "Belgian": "Belgium", "Brazilian": "Brazil",
-    "Argentine": "Argentina", "Argentinian": "Argentina", "Uruguayan": "Uruguay", "Chilean": "Chile",
-    "Colombian": "Colombia", "Peruvian": "Peru", "Ecuadorian": "Ecuador", "Paraguayan": "Paraguay",
-    "Bolivian": "Bolivia", "Venezuelan": "Venezuela", "Mexican": "Mexico", "American": "United States",
-    "Canadian": "Canada", "Costa Rican": "Costa Rica", "Honduran": "Honduras", "Panamanian": "Panama",
-    "Jamaican": "Jamaica", "Croatian": "Croatia", "Serbian": "Serbia", "Slovenian": "Slovenia",
-    "Slovak": "Slovakia", "Czech": "Czech Republic", "Polish": "Poland", "Hungarian": "Hungary",
-    "Austrian": "Austria", "Swiss": "Switzerland", "Danish": "Denmark", "Swedish": "Sweden",
-    "Norwegian": "Norway", "Finnish": "Finland", "Icelandic": "Iceland", "Russian": "Russia",
-    "Ukrainian": "Ukraine", "Romanian": "Romania", "Bulgarian": "Bulgaria", "Greek": "Greece",
-    "Turkish": "Turkey", "Bosnian": "Bosnia and Herzegovina", "Montenegrin": "Montenegro",
-    "Macedonian": "North Macedonia", "Albanian": "Albania", "Kosovar": "Kosovo", "Georgian": "Georgia",
-    "Armenian": "Armenia", "Azerbaijani": "Azerbaijan", "Israeli": "Israel", "Nigerian": "Nigeria",
-    "Ghanaian": "Ghana", "Ivorian": "Ivory Coast", "Senegalese": "Senegal", "Cameroonian": "Cameroon",
-    "Malian": "Mali", "Egyptian": "Egypt", "Moroccan": "Morocco", "Algerian": "Algeria", "Tunisian": "Tunisia",
-    "South African": "South Africa", "Kenyan": "Kenya", "Zimbabwean": "Zimbabwe", "Zambian": "Zambia",
-    "Congolese": "DR Congo", "Guinean": "Guinea", "Gabonese": "Gabon", "Burkinabè": "Burkina Faso",
-    "Burkinabé": "Burkina Faso", "Burkinabe": "Burkina Faso", "Togolese": "Togo", "Angolan": "Angola", "Ugandan": "Uganda",
-    "Liberian": "Liberia", "Sierra Leonean": "Sierra Leone", "Gambian": "Gambia", "Mozambican": "Mozambique",
-    "Cape Verdean": "Cape Verde", "Japanese": "Japan", "South Korean": "South Korea", "Korean": "South Korea",
-    "Chinese": "China", "Australian": "Australia", "Iranian": "Iran", "Iraqi": "Iraq", "Saudi": "Saudi Arabia",
-    "Qatari": "Qatar", "Emirati": "United Arab Emirates", "Uzbek": "Uzbekistan", "Thai": "Thailand",
-    "Indonesian": "Indonesia", "Indian": "India", "New Zealand": "New Zealand", "Jordanian": "Jordan",
-    "Lebanese": "Lebanon", "Syrian": "Syria", "Palestinian": "Palestine", "Cypriot": "Cyprus",
-    "Luxembourgish": "Luxembourg", "Maltese": "Malta", "Estonian": "Estonia", "Latvian": "Latvia",
-    "Lithuanian": "Lithuania", "Belarusian": "Belarus", "Moldovan": "Moldova", "Curaçaoan": "Curaçao",
-    "Surinamese": "Suriname", "Haitian": "Haiti", "Trinidadian": "Trinidad and Tobago", "Grenadian": "Grenada",
-    "Comorian": "Comoros", "Beninese": "Benin", "Nigerien": "Niger", "Chadian": "Chad", "Namibian": "Namibia",
-    "Botswanan": "Botswana", "Malagasy": "Madagascar", "Mauritanian": "Mauritania", "Rwandan": "Rwanda",
-    "Burundian": "Burundi", "Tanzanian": "Tanzania", "Sudanese": "Sudan",
+    "English": "England",
+    "Scottish": "Scotland",
+    "Welsh": "Wales",
+    "Northern Irish": "Northern Ireland",
+    "Irish": "Ireland",
+    "French": "France",
+    "Spanish": "Spain",
+    "Italian": "Italy",
+    "German": "Germany",
+    "Portuguese": "Portugal",
+    "Dutch": "Netherlands",
+    "Belgian": "Belgium",
+    "Brazilian": "Brazil",
+    "Argentine": "Argentina",
+    "Argentinian": "Argentina",
+    "Uruguayan": "Uruguay",
+    "Chilean": "Chile",
+    "Colombian": "Colombia",
+    "Peruvian": "Peru",
+    "Ecuadorian": "Ecuador",
+    "Paraguayan": "Paraguay",
+    "Bolivian": "Bolivia",
+    "Venezuelan": "Venezuela",
+    "Mexican": "Mexico",
+    "American": "United States",
+    "Canadian": "Canada",
+    "Costa Rican": "Costa Rica",
+    "Honduran": "Honduras",
+    "Panamanian": "Panama",
+    "Jamaican": "Jamaica",
+    "Croatian": "Croatia",
+    "Serbian": "Serbia",
+    "Slovenian": "Slovenia",
+    "Slovak": "Slovakia",
+    "Czech": "Czech Republic",
+    "Polish": "Poland",
+    "Hungarian": "Hungary",
+    "Austrian": "Austria",
+    "Swiss": "Switzerland",
+    "Danish": "Denmark",
+    "Swedish": "Sweden",
+    "Norwegian": "Norway",
+    "Finnish": "Finland",
+    "Icelandic": "Iceland",
+    "Russian": "Russia",
+    "Ukrainian": "Ukraine",
+    "Romanian": "Romania",
+    "Bulgarian": "Bulgaria",
+    "Greek": "Greece",
+    "Turkish": "Turkey",
+    "Bosnian": "Bosnia and Herzegovina",
+    "Montenegrin": "Montenegro",
+    "Macedonian": "North Macedonia",
+    "Albanian": "Albania",
+    "Kosovar": "Kosovo",
+    "Georgian": "Georgia",
+    "Armenian": "Armenia",
+    "Azerbaijani": "Azerbaijan",
+    "Israeli": "Israel",
+    "Nigerian": "Nigeria",
+    "Ghanaian": "Ghana",
+    "Ivorian": "Ivory Coast",
+    "Senegalese": "Senegal",
+    "Cameroonian": "Cameroon",
+    "Malian": "Mali",
+    "Egyptian": "Egypt",
+    "Moroccan": "Morocco",
+    "Algerian": "Algeria",
+    "Tunisian": "Tunisia",
+    "South African": "South Africa",
+    "Kenyan": "Kenya",
+    "Zimbabwean": "Zimbabwe",
+    "Zambian": "Zambia",
+    "Congolese": "DR Congo",
+    "Guinean": "Guinea",
+    "Gabonese": "Gabon",
+    "Burkinabè": "Burkina Faso",
+    "Burkinabé": "Burkina Faso",
+    "Burkinabe": "Burkina Faso",
+    "Togolese": "Togo",
+    "Angolan": "Angola",
+    "Ugandan": "Uganda",
+    "Liberian": "Liberia",
+    "Sierra Leonean": "Sierra Leone",
+    "Gambian": "Gambia",
+    "Mozambican": "Mozambique",
+    "Cape Verdean": "Cape Verde",
+    "Japanese": "Japan",
+    "South Korean": "South Korea",
+    "Korean": "South Korea",
+    "Chinese": "China",
+    "Australian": "Australia",
+    "Iranian": "Iran",
+    "Iraqi": "Iraq",
+    "Saudi": "Saudi Arabia",
+    "Qatari": "Qatar",
+    "Emirati": "United Arab Emirates",
+    "Uzbek": "Uzbekistan",
+    "Thai": "Thailand",
+    "Indonesian": "Indonesia",
+    "Indian": "India",
+    "New Zealand": "New Zealand",
+    "Jordanian": "Jordan",
+    "Lebanese": "Lebanon",
+    "Syrian": "Syria",
+    "Palestinian": "Palestine",
+    "Cypriot": "Cyprus",
+    "Luxembourgish": "Luxembourg",
+    "Maltese": "Malta",
+    "Estonian": "Estonia",
+    "Latvian": "Latvia",
+    "Lithuanian": "Lithuania",
+    "Belarusian": "Belarus",
+    "Moldovan": "Moldova",
+    "Curaçaoan": "Curaçao",
+    "Surinamese": "Suriname",
+    "Haitian": "Haiti",
+    "Trinidadian": "Trinidad and Tobago",
+    "Grenadian": "Grenada",
+    "Comorian": "Comoros",
+    "Beninese": "Benin",
+    "Nigerien": "Niger",
+    "Chadian": "Chad",
+    "Namibian": "Namibia",
+    "Botswanan": "Botswana",
+    "Malagasy": "Madagascar",
+    "Mauritanian": "Mauritania",
+    "Rwandan": "Rwanda",
+    "Burundian": "Burundi",
+    "Tanzanian": "Tanzania",
+    "Sudanese": "Sudan",
     # Variant spellings / less-common nations seen in this dataset's descriptions.
-    "Saudi Arabian": "Saudi Arabia", "Ukranian": "Ukraine", "Kosovan": "Kosovo",
-    "Bissau-Guinean": "Guinea-Bissau", "Luxembourgian": "Luxembourg", "Curaçao": "Curaçao",
-    "Equatoguinean": "Equatorial Guinea", "Guyanese": "Guyana", "Uzbekistani": "Uzbekistan",
-    "Filipino": "Philippines", "Saint Lucian": "Saint Lucia", "New Zealander": "New Zealand",
-    "Faroese": "Faroe Islands", "Montserratian": "Montserrat", "Bermudian": "Bermuda",
-    "Antiguan": "Antigua and Barbuda", "Barbadian": "Barbados", "Vincentian": "Saint Vincent and the Grenadines",
-    "Malawian": "Malawi", "Lesotho": "Lesotho", "Swazi": "Eswatini", "Djiboutian": "Djibouti",
-    "Somali": "Somalia", "Eritrean": "Eritrea", "Ethiopian": "Ethiopia", "Kazakh": "Kazakhstan",
-    "Kyrgyz": "Kyrgyzstan", "Tajik": "Tajikistan", "Turkmen": "Turkmenistan", "Vietnamese": "Vietnam",
-    "Malaysian": "Malaysia", "Singaporean": "Singapore", "Bahraini": "Bahrain", "Kuwaiti": "Kuwait",
-    "Omani": "Oman", "Yemeni": "Yemen", "Afghan": "Afghanistan", "Nepalese": "Nepal", "Pakistani": "Pakistan",
-    "Bangladeshi": "Bangladesh", "Sri Lankan": "Sri Lanka", "Cuban": "Cuba", "Dominican": "Dominican Republic",
-    "Guatemalan": "Guatemala", "Salvadoran": "El Salvador", "Nicaraguan": "Nicaragua", "Belizean": "Belize",
+    "Saudi Arabian": "Saudi Arabia",
+    "Ukranian": "Ukraine",
+    "Kosovan": "Kosovo",
+    "Bissau-Guinean": "Guinea-Bissau",
+    "Luxembourgian": "Luxembourg",
+    "Curaçao": "Curaçao",
+    "Equatoguinean": "Equatorial Guinea",
+    "Guyanese": "Guyana",
+    "Uzbekistani": "Uzbekistan",
+    "Filipino": "Philippines",
+    "Saint Lucian": "Saint Lucia",
+    "New Zealander": "New Zealand",
+    "Faroese": "Faroe Islands",
+    "Montserratian": "Montserrat",
+    "Bermudian": "Bermuda",
+    "Antiguan": "Antigua and Barbuda",
+    "Barbadian": "Barbados",
+    "Vincentian": "Saint Vincent and the Grenadines",
+    "Malawian": "Malawi",
+    "Lesotho": "Lesotho",
+    "Swazi": "Eswatini",
+    "Djiboutian": "Djibouti",
+    "Somali": "Somalia",
+    "Eritrean": "Eritrea",
+    "Ethiopian": "Ethiopia",
+    "Kazakh": "Kazakhstan",
+    "Kyrgyz": "Kyrgyzstan",
+    "Tajik": "Tajikistan",
+    "Turkmen": "Turkmenistan",
+    "Vietnamese": "Vietnam",
+    "Malaysian": "Malaysia",
+    "Singaporean": "Singapore",
+    "Bahraini": "Bahrain",
+    "Kuwaiti": "Kuwait",
+    "Omani": "Oman",
+    "Yemeni": "Yemen",
+    "Afghan": "Afghanistan",
+    "Nepalese": "Nepal",
+    "Pakistani": "Pakistan",
+    "Bangladeshi": "Bangladesh",
+    "Sri Lankan": "Sri Lanka",
+    "Cuban": "Cuba",
+    "Dominican": "Dominican Republic",
+    "Guatemalan": "Guatemala",
+    "Salvadoran": "El Salvador",
+    "Nicaraguan": "Nicaragua",
+    "Belizean": "Belize",
 }
 
 
@@ -329,11 +491,15 @@ def nationality_from_description(description: str | None) -> str | None:
 
 
 def _clean_name(value: str | None) -> str | None:
-    """Strip stray scraper artifacts: NBSP, replacement chars, trailing ' -' separators."""
+    """Strip stray scraper artifacts: NBSP, replacement chars, trailing ' -' separators.
+
+    Trailing periods are preserved -- they belong to legitimate names such as
+    ``John Anthony Brooks Jr.``, not to scraper noise.
+    """
     if not value:
         return None
     cleaned = value.replace("\xa0", " ").replace("�", "").strip()
-    while cleaned.endswith("-") or cleaned.endswith("."):
+    while cleaned.endswith("-"):
         cleaned = cleaned[:-1].strip()
     cleaned = " ".join(cleaned.split())
     return cleaned or None
@@ -377,7 +543,6 @@ def build_payload(
     display = short_name or full_name
     if not player_id or not canonical:
         return None
-    name = canonical
 
     overall = _parse_int(columns.get(row, "overall"))
     tier = resolve_tier(overall)
@@ -492,7 +657,13 @@ def preseed_competitions(session_factory, payloads: list[dict[str, Any]]) -> dic
     for league, c in counts.items():
         modal[league] = c.most_common(1)[0][0]
 
-    leagues = sorted({(p.get("current_real_world_league") or "").strip() for p in payloads if (p.get("current_real_world_league") or "").strip()})
+    leagues = sorted(
+        {
+            (p.get("current_real_world_league") or "").strip()
+            for p in payloads
+            if (p.get("current_real_world_league") or "").strip()
+        }
+    )
     result = {"competitions": 0, "countries_created": 0}
     with session_factory() as session:
         country_cache: dict[str, str] = {}
@@ -566,10 +737,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--images",
         choices=("none", "url", "cloudinary"),
-        default="cloudinary",
+        default="url",
         help="Image handling: 'cloudinary' mirrors faces to your account, 'url' keeps SoFIFA URLs, 'none' drops them.",
     )
-    parser.add_argument("--league", dest="leagues", action="append", default=None, help="Filter to league name(s). Repeatable.")
+    parser.add_argument(
+        "--league", dest="leagues", action="append", default=None, help="Filter to league name(s). Repeatable."
+    )
     parser.add_argument("--limit", type=int, default=None, help="Only import the first N rows (after league filter).")
     parser.add_argument(
         "--encoding",
@@ -609,6 +782,19 @@ def main() -> int:
         raise SystemExit("Provide --csv <path> or --csv-url <url> (or $CSV_URL).")
     if not csv_path.exists():
         raise SystemExit(f"CSV not found: {csv_path}")
+    # A gzipped snapshot is accepted transparently: hosts commonly cap raw uploads
+    # (Cloudinary's is 10 MB) and the full export compresses ~6x under that.
+    with csv_path.open("rb") as fh:
+        is_gzip = fh.read(2) == bytes((0x1F, 0x8B))
+    if is_gzip:
+        decompressed = REPO_ROOT / "tmp" / "sofifa-decompressed.csv"
+        decompressed.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("input is gzipped; decompressing to %s", decompressed)
+        with gzip.open(csv_path, "rb") as src, decompressed.open("wb") as dst:
+            for chunk in iter(lambda: src.read(1 << 20), b""):
+                dst.write(chunk)
+        csv_path = decompressed
+        logger.info("decompressed CSV is %s bytes", csv_path.stat().st_size)
     if not args.dry_run and not args.database_url:
         raise SystemExit("--database-url or GTE_DATABASE_URL is required (or use --dry-run).")
 
@@ -672,7 +858,9 @@ def main() -> int:
                 )
                 frozen_prices[payload["source_player_key"]] = _price
             if rows_seen % 500 == 0:
-                logger.info("processed rows=%s payloads=%s images_uploaded=%s", rows_seen, len(payloads), images_uploaded)
+                logger.info(
+                    "processed rows=%s payloads=%s images_uploaded=%s", rows_seen, len(payloads), images_uploaded
+                )
     finally:
         if http_client is not None:
             http_client.close()
@@ -720,7 +908,8 @@ def main() -> int:
 
     with session_factory() as _s:
         already = {
-            k for (k,) in _s.execute(
+            k
+            for (k,) in _s.execute(
                 _select(_Player.provider_external_id).where(_Player.source_provider == SOURCE_NAME)
             ).all()
         }
@@ -737,7 +926,14 @@ def main() -> int:
     logger.info("preseeded competitions=%s countries_created=%s", preseed["competitions"], preseed["countries_created"])
 
     run_stamp = as_of.strftime("%Y%m%dT%H%M%SZ")
-    totals = {"processed": 0, "created": 0, "updated": 0, "batches_written": 0, "batches_blocked": 0, "player_failures": 0}
+    totals = {
+        "processed": 0,
+        "created": 0,
+        "updated": 0,
+        "batches_written": 0,
+        "batches_blocked": 0,
+        "player_failures": 0,
+    }
     try:
         for club, club_payloads in club_groups.items():
             _write_club_batch(

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from app.auth.dependencies import get_current_user
 from app.leagues.models import LeagueClub
+from app.leagues.repository import build_league_event_repository
 from app.leagues.schemas import (
     LeagueFixturesView,
     LeagueQualificationView,
@@ -13,14 +15,25 @@ from app.leagues.schemas import (
     LeagueStandingsView,
 )
 from app.leagues.service import LeagueSeasonLifecycleService, LeagueSeasonNotFoundError, LeagueValidationError
+from app.models.user import User
 
 router = APIRouter(tags=["leagues"])
 legacy_router = APIRouter(prefix="/leagues")
 api_router = APIRouter(prefix="/api/leagues")
 
 
-def get_league_service() -> LeagueSeasonLifecycleService:
-    return LeagueSeasonLifecycleService()
+def get_league_service(request: Request) -> LeagueSeasonLifecycleService:
+    """Build the lifecycle service over durable storage when a database is wired.
+
+    The repository is resolved once per application instance: choosing it probes
+    the database for the event table, and repeating that on every league read
+    would add a catalog round trip to each request.
+    """
+    repository = getattr(request.app.state, "league_event_repository", None)
+    if repository is None:
+        repository = build_league_event_repository(getattr(request.app.state, "session_factory", None))
+        request.app.state.league_event_repository = repository
+    return LeagueSeasonLifecycleService(repository=repository)
 
 
 def _build_registration_view(state) -> LeagueRegistrationView:
@@ -52,6 +65,7 @@ def _build_standings_view(state) -> LeagueStandingsView:
 def register_league(
     payload: LeagueRegisterRequest,
     service: LeagueSeasonLifecycleService = Depends(get_league_service),
+    current_user: User = Depends(get_current_user),
 ) -> LeagueRegistrationView:
     try:
         state = service.register_season(

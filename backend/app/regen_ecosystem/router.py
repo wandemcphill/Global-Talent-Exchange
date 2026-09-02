@@ -226,7 +226,9 @@ def cast_award_vote(
     service: RegenEcosystemService = Depends(_service),
 ) -> AwardVoteView:
     if payload.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Votes must be cast by the authenticated user.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Votes must be cast by the authenticated user."
+        )
     try:
         vote = service.cast_award_vote(
             award_id,

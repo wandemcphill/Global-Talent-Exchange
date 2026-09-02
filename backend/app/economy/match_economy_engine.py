@@ -232,14 +232,14 @@ class MatchEconomyEngine:
                 source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
                 reference=f"gtex-promo-topup:{match.match_id}:{generate_uuid()}",
                 external_reference=f"gtex-promo-topup:{match.match_id}",
-                description=f"Treasury top-up for {match.title} rewards pool",
+                description=f"Treasury top-up for {match.title} promo pool",
                 actor=actor,
                 transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
                 metadata={
                     "match_economy": {
                         "match_id": match.match_id,
                         "match_type": str(match.match_type),
-                        "flow": "treasury_to_rewards_pool",
+                        "flow": "treasury_to_promo_pool",
                     }
                 },
             )
@@ -348,7 +348,7 @@ class MatchEconomyEngine:
 
         promo_pool_account = self.wallet_service.ensure_promo_pool_account(self.session, LedgerUnit.COIN)
         if self.wallet_service.get_balance(self.session, promo_pool_account) < reward_amount:
-            raise MatchEconomyError("Rewards pool balance is lower than the lottery reward.")
+            raise MatchEconomyError("Promo pool balance is lower than the lottery reward.")
 
         reference = f"lottery:{threshold_index}:{winner.id}"
         control_reference = f"lottery-control:{threshold_index}:{winner.id}"
