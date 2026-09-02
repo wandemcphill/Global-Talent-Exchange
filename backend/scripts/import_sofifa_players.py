@@ -74,8 +74,8 @@ from scripts.sofifa_pricing import SOFIFA_SNAPSHOT_DATE, projected_price_credits
 logger = logging.getLogger("import_sofifa_players")
 
 SOURCE_NAME = "sofifa_fc25"
-_FALLBACK_AUTH_SECRET = "local-dev-import-secret"
-_FALLBACK_MEDIA_SECRET = "local-dev-import-media-secret"
+_FALLBACK_AUTH_SECRET = "local-dev-import-secret"  # pragma: allowlist secret
+_FALLBACK_MEDIA_SECRET = "local-dev-import-media-secret"  # pragma: allowlist secret
 _CLOUDINARY_FOLDER = "players/sofifa"
 _UPLOAD_TIMEOUT_SECONDS = 30.0
 
