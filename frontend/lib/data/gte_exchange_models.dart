@@ -377,11 +377,12 @@ class GteMarketPlayerListItem {
         'preferred_foot',
         'preferredFoot',
       ]),
-      secondaryPositions: GteJson.typedList(
-        json,
-        <String>['secondary_positions', 'secondaryPositions'],
-        (Object? entry) => entry?.toString() ?? '',
-      ).where((String entry) => entry.trim().isNotEmpty).toList(growable: false),
+      secondaryPositions: GteJson.typedList(json, <String>[
+            'secondary_positions',
+            'secondaryPositions',
+          ], (Object? entry) => entry?.toString() ?? '')
+          .where((String entry) => entry.trim().isNotEmpty)
+          .toList(growable: false),
       marketValueEur: _nullableNumber(json, <String>[
         'market_value_eur',
         'marketValueEur',
@@ -829,11 +830,12 @@ class GteMarketPlayerIdentity {
         'normalized_position',
         'normalizedPosition',
       ]),
-      secondaryPositions: GteJson.typedList(
-        json,
-        <String>['secondary_positions', 'secondaryPositions'],
-        (Object? entry) => entry?.toString() ?? '',
-      ).where((String entry) => entry.trim().isNotEmpty).toList(growable: false),
+      secondaryPositions: GteJson.typedList(json, <String>[
+            'secondary_positions',
+            'secondaryPositions',
+          ], (Object? entry) => entry?.toString() ?? '')
+          .where((String entry) => entry.trim().isNotEmpty)
+          .toList(growable: false),
       nationality: GteJson.stringOrNull(json, <String>['nationality']),
       nationalityCode: GteJson.stringOrNull(json, <String>[
         'nationality_code',
@@ -981,7 +983,12 @@ class GteMarketPlayerValue {
   final DateTime? lastSnapshotAt;
   final double currentValueCredits;
   final double? previousValueCredits;
-  final double movementPct;
+
+  /// Signed value movement, or null when the payload carried none. It was
+  /// parsed with a zero fallback, so a player the backend had no movement
+  /// for was indistinguishable from one that had genuinely not moved - and
+  /// the profile printed a flat `0.0%` it had no basis for.
+  final double? movementPct;
   final double? footballTruthValueCredits;
   final double? marketSignalValueCredits;
   final double? publishedCardValueCredits;
@@ -1017,7 +1024,7 @@ class GteMarketPlayerValue {
         'previous_value_credits',
         'previousValueCredits',
       ]),
-      movementPct: GteJson.number(json, <String>[
+      movementPct: _nullableNumber(json, <String>[
         'movement_pct',
         'movementPct',
       ]),

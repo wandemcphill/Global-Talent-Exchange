@@ -124,6 +124,8 @@ class GtexMarketPlayerView {
   bool get hasOpenTransferListing =>
       transferListingId != null && transferListingId!.trim().isNotEmpty;
   bool get isRising => (movementPct ?? 0) > 0;
+  bool get isFalling => (movementPct ?? 0) < 0;
+  bool get hasMovement => movementPct != null;
 
   String get priceLabel =>
       marketValueEur == null
@@ -140,6 +142,7 @@ class GtexMarketPlayerView {
     }
     return foot[0].toUpperCase() + foot.substring(1).toLowerCase();
   }
+
   List<String> get secondaryPositions => raw.secondaryPositions;
   int? get gsiScore => globalScoutingIndex?.round();
   String? get gsiLabel =>
@@ -176,13 +179,31 @@ class GtexMarketPlayerView {
       availabilityLabel.trim().isNotEmpty
           ? availabilityLabel.trim()
           : GtexMarketFormatters.labelFromToken(askingType);
-  String get movementLabel {
+
+  /// Signed value movement, or null when the backend has no movement for
+  /// this player. A missing movement is not a flat one: rendering "0.0%"
+  /// would assert a price history that does not exist.
+  String? get movementLabel {
     final double? value = movementPct;
     if (value == null) {
-      return '0.0%';
+      return null;
     }
     final String prefix = value > 0 ? '+' : '';
     return '$prefix${value.toStringAsFixed(1)}%';
+  }
+
+  /// Age as a fact rather than a placeholder - null when it is unknown, so
+  /// callers can omit it instead of printing "Age TBC" into a dense row.
+  String? get ageValueLabel => age == null || age! <= 0 ? null : '$age yrs';
+
+  /// Market attention, straight from the backend's interest score. Only
+  /// surfaced once there is genuine interest to report.
+  String? get interestLabel {
+    final int? score = interestScore;
+    if (score == null || score <= 0) {
+      return null;
+    }
+    return 'Watched $score';
   }
 
   String get leagueLabel =>

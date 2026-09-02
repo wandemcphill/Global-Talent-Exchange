@@ -14,6 +14,7 @@ class GtexMasterDetailScaffold extends StatelessWidget {
     this.rightPanel,
     this.leftPanelWidth = 310,
     this.rightPanelWidth = 340,
+    this.detailMinWidth = 420,
     this.accent = GtexColors.pitch,
     this.mobileLeftTitle = 'Browse',
   });
@@ -26,80 +27,138 @@ class GtexMasterDetailScaffold extends StatelessWidget {
   final List<Widget> actions;
   final double leftPanelWidth;
   final double rightPanelWidth;
+
+  /// The narrowest the primary detail pane is ever allowed to become. The
+  /// secondary panels drop to sheets rather than squeezing past it: the
+  /// detail pane holds the actual content of the screen, so it is the last
+  /// thing to give up width, not the first.
+  final double detailMinWidth;
   final Color accent;
   final String mobileLeftTitle;
 
   @override
   Widget build(BuildContext context) {
-    final double width = MediaQuery.sizeOf(context).width;
-    final bool compact = GtexBreakpoints.isCompact(context);
-    final bool showRightPanel =
-        rightPanel != null && width >= GtexBreakpoints.desktop;
-    // Between the compact breakpoint and desktop there is no room for the
-    // right panel inline, but it still holds the primary actions for the
-    // selected item. Surface it through the same sheet the mobile layout
-    // uses instead of dropping it silently.
-    final bool offerRightPanelSheet = rightPanel != null && !showRightPanel;
-    if (compact) {
-      return _MobileMasterDetail(
-        title: title,
-        subtitle: subtitle,
-        leftPanel: leftPanel,
-        detail: detail,
-        rightPanel: rightPanel,
-        actions: actions,
-        accent: accent,
-        mobileLeftTitle: mobileLeftTitle,
-      );
-    }
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        // Layout is decided from the box this scaffold was actually handed,
+        // not from the window. Inside the app shell the two differ by the
+        // nav rail plus the world-pulse rail, and reading the window made
+        // the scaffold reserve inline panels it had no room for - which is
+        // what starved the detail pane down to a few dozen pixels at common
+        // laptop widths. MediaQuery is only a fallback for an unbounded
+        // parent, where there is no box to measure.
+        final double outerWidth =
+            constraints.hasBoundedWidth
+                ? constraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
 
-    return Padding(
-      padding: GtexSpacing.screenPadding,
-      child: Column(
-        children: <Widget>[
-          _MasterDetailHeader(
+        if (outerWidth < GtexBreakpoints.mobile) {
+          return _MobileMasterDetail(
             title: title,
             subtitle: subtitle,
-            actions: <Widget>[
-              if (offerRightPanelSheet)
-                IconButton.filledTonal(
-                  key: const Key('gtex-master-detail-summary-action'),
-                  tooltip: 'Open summary',
-                  onPressed:
-                      () => showGtexMasterDetailPanelSheet(
-                        context,
-                        'Summary',
-                        rightPanel!,
-                      ),
-                  icon: const Icon(Icons.receipt_long_outlined),
-                ),
-              ...actions,
-            ],
+            leftPanel: leftPanel,
+            detail: detail,
+            rightPanel: rightPanel,
+            actions: actions,
             accent: accent,
-          ),
-          const SizedBox(height: GtexSpacing.md),
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                SizedBox(
-                  width: leftPanelWidth,
-                  child: _PanelFrame(accent: accent, child: leftPanel),
-                ),
-                const SizedBox(width: GtexSpacing.md),
-                Expanded(child: _PanelFrame(accent: accent, child: detail)),
-                if (showRightPanel) ...<Widget>[
-                  const SizedBox(width: GtexSpacing.md),
-                  SizedBox(
-                    width: rightPanelWidth,
-                    child: _PanelFrame(accent: accent, child: rightPanel!),
-                  ),
+            mobileLeftTitle: mobileLeftTitle,
+          );
+        }
+
+        final double contentWidth =
+            outerWidth - GtexSpacing.screenPadding.horizontal;
+
+        double detailWidthFor({required bool left, required bool right}) {
+          double remaining = contentWidth;
+          if (left) {
+            remaining -= leftPanelWidth + GtexSpacing.md;
+          }
+          if (right) {
+            remaining -= rightPanelWidth + GtexSpacing.md;
+          }
+          return remaining;
+        }
+
+        // Progressive collapse in priority order: the summary panel yields
+        // first, then the browse panel. Each keeps its affordance as a
+        // sheet, so nothing becomes unreachable - it only stops competing
+        // for horizontal space the screen cannot afford.
+        bool showRight = rightPanel != null;
+        if (showRight &&
+            detailWidthFor(left: true, right: true) < detailMinWidth) {
+          showRight = false;
+        }
+        bool showLeft = true;
+        if (detailWidthFor(left: true, right: showRight) < detailMinWidth) {
+          showLeft = false;
+        }
+
+        final bool offerLeftPanelSheet = !showLeft;
+        final bool offerRightPanelSheet = rightPanel != null && !showRight;
+
+        return Padding(
+          padding: GtexSpacing.screenPadding,
+          child: Column(
+            children: <Widget>[
+              _MasterDetailHeader(
+                title: title,
+                subtitle: subtitle,
+                actions: <Widget>[
+                  if (offerLeftPanelSheet)
+                    IconButton.filledTonal(
+                      key: const Key('gtex-master-detail-browse-action'),
+                      tooltip: mobileLeftTitle,
+                      onPressed:
+                          () => showGtexMasterDetailPanelSheet(
+                            context,
+                            mobileLeftTitle,
+                            leftPanel,
+                          ),
+                      icon: const Icon(Icons.view_sidebar_outlined),
+                    ),
+                  if (offerRightPanelSheet)
+                    IconButton.filledTonal(
+                      key: const Key('gtex-master-detail-summary-action'),
+                      tooltip: 'Open summary',
+                      onPressed:
+                          () => showGtexMasterDetailPanelSheet(
+                            context,
+                            'Summary',
+                            rightPanel!,
+                          ),
+                      icon: const Icon(Icons.receipt_long_outlined),
+                    ),
+                  ...actions,
                 ],
-              ],
-            ),
+                accent: accent,
+              ),
+              const SizedBox(height: GtexSpacing.md),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    if (showLeft) ...<Widget>[
+                      SizedBox(
+                        width: leftPanelWidth,
+                        child: _PanelFrame(accent: accent, child: leftPanel),
+                      ),
+                      const SizedBox(width: GtexSpacing.md),
+                    ],
+                    Expanded(child: _PanelFrame(accent: accent, child: detail)),
+                    if (showRight) ...<Widget>[
+                      const SizedBox(width: GtexSpacing.md),
+                      SizedBox(
+                        width: rightPanelWidth,
+                        child: _PanelFrame(accent: accent, child: rightPanel!),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -136,6 +195,7 @@ class _MobileMasterDetail extends StatelessWidget {
             subtitle: subtitle,
             actions: <Widget>[
               IconButton.filledTonal(
+                key: const Key('gtex-master-detail-browse-action'),
                 tooltip: mobileLeftTitle,
                 onPressed:
                     () => showGtexMasterDetailPanelSheet(
@@ -156,6 +216,7 @@ class _MobileMasterDetail extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
+                key: const Key('gtex-master-detail-summary-action'),
                 onPressed:
                     () => showGtexMasterDetailPanelSheet(
                       context,

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 void main() {
-  testWidgets('player card renders football silhouette and live indicators', (
+  testWidgets('player card renders an identity plate and live indicators', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -40,7 +40,21 @@ void main() {
     expect(find.text('REGEN DNA'), findsWidgets);
     expect(find.text('National Seed'), findsOneWidget);
     expect(find.text('POOL EXCLUSIVE'), findsOneWidget);
-    expect(find.text('NG'), findsOneWidget);
+    // No photograph, so the shared portrait plate stands in - never a drawn
+    // face. It carries the position and the country the silhouette used to
+    // be overlaid with.
+    expect(find.byKey(const Key('gtex-player-portrait-plate')), findsOneWidget);
+    expect(find.text('ST / NG'), findsOneWidget);
+    expect(
+      find.byType(CustomPaint).evaluate().where((Element element) {
+        final CustomPaint paint = element.widget as CustomPaint;
+        return paint.painter.runtimeType.toString().toLowerCase().contains(
+          'silhouette',
+        );
+      }),
+      isEmpty,
+      reason: 'GTEX shows a real face or no face - never a drawn one',
+    );
   });
 
   testWidgets('standard player card has real-player market identity', (

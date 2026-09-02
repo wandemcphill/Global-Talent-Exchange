@@ -3,6 +3,7 @@ import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../models/gtex_club_redesign_models.dart';
 import '../presentation/gtex_club_workspace_controller.dart';
+import '../../player_detail/gtex_player_navigator.dart';
 
 class GtexClubHero extends StatelessWidget {
   const GtexClubHero({
@@ -254,78 +255,123 @@ class GtexClubSquadList extends StatelessWidget {
           .map(
             (GtexClubMember member) => Padding(
               padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
-              child: GtexPanel(
-                padding: const EdgeInsets.all(GtexSpacing.sm),
-                accent: member.isRegen ? GtexColors.gold : GtexColors.pitch,
-                child: Row(
-                  children: <Widget>[
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor: (member.isRegen
-                              ? GtexColors.gold
-                              : GtexColors.pitch)
-                          .withValues(alpha: 0.16),
-                      backgroundImage:
-                          member.imageUrl == null
-                              ? null
-                              : NetworkImage(member.imageUrl!),
-                      child:
-                          member.imageUrl == null
-                              ? Text(
-                                member.name.substring(0, 1).toUpperCase(),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              )
-                              : null,
-                    ),
-                    const SizedBox(width: GtexSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              // An owned player is the one place in the product where a
+              // footballer already has football identity. Opening the
+              // canonical detail from here is what makes it the same object
+              // the market and the portfolio are talking about.
+              child: _OpenPlayerOnTap(
+                playerId: member.id,
+                playerName: member.name,
+                child: GtexPanel(
+                  padding: const EdgeInsets.all(GtexSpacing.sm),
+                  accent: member.isRegen ? GtexColors.gold : GtexColors.pitch,
+                  child: Row(
+                    children: <Widget>[
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundColor: (member.isRegen
+                                ? GtexColors.gold
+                                : GtexColors.pitch)
+                            .withValues(alpha: 0.16),
+                        backgroundImage:
+                            member.imageUrl == null
+                                ? null
+                                : NetworkImage(member.imageUrl!),
+                        child:
+                            member.imageUrl == null
+                                ? Text(
+                                  member.name.substring(0, 1).toUpperCase(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                )
+                                : null,
+                      ),
+                      const SizedBox(width: GtexSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              member.name,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleSmall?.copyWith(
+                                color: GtexColors.text,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            Text(
+                              '${member.position} - ${member.nationality}',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: GtexColors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: <Widget>[
                           Text(
-                            member.name,
+                            member.rating.toStringAsFixed(1),
                             style: Theme.of(
                               context,
-                            ).textTheme.titleSmall?.copyWith(
+                            ).textTheme.titleMedium?.copyWith(
                               color: GtexColors.text,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
                           Text(
-                            '${member.position} - ${member.nationality}',
+                            gtexFormatCredits(member.valueCredits),
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: GtexColors.textMuted),
                           ),
                         ],
                       ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: <Widget>[
-                        Text(
-                          member.rating.toStringAsFixed(1),
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleMedium?.copyWith(
-                            color: GtexColors.text,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        Text(
-                          gtexFormatCredits(member.valueCredits),
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: GtexColors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           )
           .toList(growable: false),
+    );
+  }
+}
+
+/// Makes a row open the canonical player detail, but only when there is a
+/// player id to open and a shell above it to do the opening. Outside the
+/// shell the row stays exactly as it was rather than offering a control
+/// that does nothing.
+class _OpenPlayerOnTap extends StatelessWidget {
+  const _OpenPlayerOnTap({
+    required this.playerId,
+    required this.playerName,
+    required this.child,
+  });
+
+  final String playerId;
+  final String playerName;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final VoidCallback? onTap = GtexPlayerNavigator.tapToOpen(
+      context,
+      playerId,
+    );
+    if (onTap == null) {
+      return child;
+    }
+    return Semantics(
+      button: true,
+      label: 'Open $playerName',
+      child: InkWell(
+        key: Key('gtex-club-squad-open-$playerId'),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
+        onTap: onTap,
+        child: child,
+      ),
     );
   }
 }

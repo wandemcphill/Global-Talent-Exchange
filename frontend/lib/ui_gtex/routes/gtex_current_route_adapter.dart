@@ -42,6 +42,8 @@ class GtexCurrentRouteAdapter {
         return 'GTEX Command';
       case GtePrimaryDestination.market:
         return 'Transfer Hub';
+      case GtePrimaryDestination.regens:
+        return 'Regen World';
       case GtePrimaryDestination.competitions:
         return 'Matchday & Tournaments';
       case GtePrimaryDestination.club:
@@ -61,6 +63,8 @@ class GtexCurrentRouteAdapter {
         return 'Your football operating system';
       case GtePrimaryDestination.market:
         return 'Transfer, loan, swap, and loan-to-buy football operations';
+      case GtePrimaryDestination.regens:
+        return 'Regen prospects, lineage, development, and Create-a-Son';
       case GtePrimaryDestination.competitions:
         return 'Run, join, and monitor GTEX football competitions';
       case GtePrimaryDestination.club:

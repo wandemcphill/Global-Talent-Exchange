@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/gte_exchange_models.dart';
+import '../../../data/gte_models.dart';
 import '../../../providers/gte_exchange_controller.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 import '../models/gtex_market_browse_models.dart';
@@ -168,6 +169,14 @@ class _GtexPlayerMarketRedesignScreenState
           ),
           detail: GtexMarketPlayerGrid(
             players: players,
+            // Ownership comes from the loaded portfolio; before it loads, or
+            // when signed out, the market simply does not claim ownership.
+            ownedPlayerIds: <String>{
+              for (final GtePortfolioHolding holding
+                  in widget.controller.portfolio?.holdings ??
+                      const <GtePortfolioHolding>[])
+                holding.playerId,
+            },
             totalPlayers: widget.controller.marketTotalPlayerCount,
             selectedPlayerId: _selectedPlayerId,
             basketState: _basketState,

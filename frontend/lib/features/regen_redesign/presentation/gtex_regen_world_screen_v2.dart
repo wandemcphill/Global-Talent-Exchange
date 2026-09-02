@@ -480,7 +480,13 @@ class _ProspectsBoard extends StatelessWidget {
                 padding: const EdgeInsets.all(GtexSpacing.md),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
-                  childAspectRatio: columns == 1 ? 2.1 : 1.38,
+                  // A ratio made the cell height follow the column width,
+                  // which left the card's content taller than its box on
+                  // wide panes and overflowed the prospect grid. Pin the
+                  // height to what the card actually needs instead: the
+                  // stacked layout below 320px puts the portrait above the
+                  // details and needs more of it.
+                  mainAxisExtent: constraints.maxWidth < 360 ? 480 : 400,
                   crossAxisSpacing: GtexSpacing.md,
                   mainAxisSpacing: GtexSpacing.md,
                 ),
@@ -612,13 +618,16 @@ class _SelectedProspectPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
+          // A Row here overflowed the 370px summary panel by 131px once the
+          // growth chip joined it. Chips wrap instead of being clipped.
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: <Widget>[
               GtexStatusChip(
                 label: prospect.originLabel,
                 color: GtexColors.purple,
               ),
-              const SizedBox(width: 8),
               GtexStatusChip(
                 label: prospect.contractStatusLabel,
                 color:
@@ -626,13 +635,11 @@ class _SelectedProspectPanel extends StatelessWidget {
                         ? GtexColors.cyan
                         : GtexColors.gold,
               ),
-              if (growthHeadroom > 0) ...<Widget>[
-                const SizedBox(width: 8),
+              if (growthHeadroom > 0)
                 GtexStatusChip(
                   label: '+$growthHeadroom Growth',
                   color: GtexColors.mint,
                 ),
-              ],
             ],
           ),
           const SizedBox(height: GtexSpacing.md),

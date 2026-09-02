@@ -188,6 +188,11 @@ class _TopBar extends StatelessWidget {
   final String subtitle;
   final List<Widget> actions;
 
+  /// Share of the bar the action cluster may claim before it starts to
+  /// scroll. The title keeps the rest, so a short action set never squeezes
+  /// it.
+  static const double _actionsWidthFraction = 0.62;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -199,58 +204,87 @@ class _TopBar extends StatelessWidget {
           bottom: BorderSide(color: GtexColors.line.withValues(alpha: 0.48)),
         ),
       ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: GtexColors.pitch,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: <BoxShadow>[
-                GtexColors.glow(GtexColors.pitch, opacity: 0.28),
-              ],
-            ),
-            child: const Center(
-              child: Text(
-                'G',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 22,
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          return Row(
+            children: <Widget>[
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: GtexColors.pitch,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: <BoxShadow>[
+                    GtexColors.glow(GtexColors.pitch, opacity: 0.28),
+                  ],
+                ),
+                child: const Center(
+                  child: Text(
+                    'G',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: GtexSpacing.sm),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: GtexColors.text,
-                    fontWeight: FontWeight.w900,
+              const SizedBox(width: GtexSpacing.sm),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: GtexColors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: GtexColors.textMuted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // The action cluster used to be laid out unbounded inside this
+              // row, so a full desktop action set overflowed the bar by 217px
+              // between the mobile and desktop breakpoints. Bounding it to a
+              // share of the bar and scrolling the remainder keeps every action
+              // reachable without ever clipping the title.
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth:
+                      (constraints.maxWidth - 42 - GtexSpacing.sm) *
+                      _actionsWidthFraction,
+                ),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      for (final Widget action in actions)
+                        Padding(
+                          padding: const EdgeInsets.only(left: GtexSpacing.xs),
+                          child: action,
+                        ),
+                    ],
                   ),
                 ),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: GtexColors.textMuted,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Wrap(spacing: GtexSpacing.xs, children: actions),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }

@@ -18,7 +18,6 @@ import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.da
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
-import 'package:gte_frontend/features/regens/regens_screen_v2.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/shared/auth/gtex_admin_capabilities.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_notification_matrix_screen.dart';
@@ -449,23 +448,15 @@ List<RouteBase> _buildLegacyAliasRoutes({
           (BuildContext context, GoRouterState state) =>
               const GteNavigationRoute.competitions().path,
     ),
+    // Regen World is a shell lane now. /world/regens stays the public URL
+    // and hands off to the shell lane route, so the screen inherits the
+    // GTEX dark canvas, the navigation rail and back behaviour instead of
+    // rendering as a bare top-level page on a white background.
     GoRoute(
       path: '/world/regens',
-      pageBuilder:
-          (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
-            key: state.pageKey,
-            child: RegensScreenV2(
-              baseUrl: config.apiBaseUrl,
-              backendMode: config.activeShellBackendMode,
-              accessToken: controller.accessToken,
-              isAuthenticated: controller.isAuthenticated,
-              isAdmin: controller.isAdmin,
-              onOpenAwards:
-                  () => context.go(
-                    const WorldAwardsRouteData().toUri().toString(),
-                  ),
-            ),
-          ),
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              const GteNavigationRoute.regens().path,
     ),
     GoRoute(
       path: '/regens',

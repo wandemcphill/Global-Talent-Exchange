@@ -6,6 +6,12 @@ void main() {
   testWidgets('GtexMasterDetailScaffold renders desktop panels', (
     WidgetTester tester,
   ) async {
+    // The scaffold sizes itself from the box it is handed, not from a
+    // MediaQuery that may describe a much larger window, so the harness has
+    // to hand it a real desktop-width box.
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       const MaterialApp(
         home: MediaQuery(

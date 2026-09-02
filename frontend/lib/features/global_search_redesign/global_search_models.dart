@@ -120,9 +120,10 @@ String gtexCanonicalGlobalSearchRoute(String route, {required bool isAdmin}) {
 
   if (segments.length == 2 &&
       (segments.first == 'player' || segments.first == 'players')) {
-    canonicalPath = '/app/market';
-    canonicalQuery =
-        Uri(queryParameters: <String, String>{'player': segments[1]}).query;
+    // A player result opens the canonical player detail. It used to land on
+    // the market carrying `?player=<id>`, which no screen ever read - so
+    // searching for a footballer dropped you in an unfiltered market.
+    return '/players/${segments[1]}/profile';
   } else if (segments.length == 2 &&
       segments.first == 'clubs' &&
       segments[1] != 'sale-market') {
