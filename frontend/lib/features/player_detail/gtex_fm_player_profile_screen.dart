@@ -4,9 +4,12 @@ import '../../data/gte_api_repository.dart';
 import '../../data/gte_exchange_api_client.dart';
 import '../../data/gte_exchange_models.dart';
 import '../../data/gte_models.dart';
+import '../../domain/value/gtex_value_models.dart';
 import '../../providers/gte_exchange_controller.dart';
 import '../../ui_gtex/ui_gtex.dart';
 import '../../widgets/gte_order_ticket_sheet.dart';
+import 'widgets/matchday_form_card.dart';
+import 'widgets/ownership_consequence_card.dart';
 
 // The profile draws from the shared GTEX tokens so it sits in the same
 // visual language as the market surfaces that link into it.
@@ -58,21 +61,78 @@ class GtexFmPlayerProfileScreen extends StatefulWidget {
 class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
   late Future<GteMarketPlayerDetailView> _future;
 
+  /// Null until the first form fetch settles, so the card can hold its place
+  /// without claiming the player has no football.
+  GtexPlayerForm? _form;
+
+  /// The viewer's position in this player. Stays null when signed out, when the
+  /// portfolio cannot be read, or when they simply hold none - the card renders
+  /// all three as "no position" rather than inventing a holding.
+  GtePortfolioHolding? _holding;
+  bool _holdingLoaded = false;
+
   @override
   void initState() {
     super.initState();
     _future = _load();
     _loadTradingSnapshot();
+    _loadForm();
+    _loadHolding();
   }
 
+  GteExchangeApiClient get _client =>
+      widget.apiClient ??
+      GteExchangeApiClient.standard(
+        baseUrl: widget.baseUrl,
+        mode: widget.backendMode,
+      );
+
   Future<GteMarketPlayerDetailView> _load() {
-    final GteExchangeApiClient client =
-        widget.apiClient ??
-        GteExchangeApiClient.standard(
-          baseUrl: widget.baseUrl,
-          mode: widget.backendMode,
-        );
-    return client.fetchPlayerDetail(widget.playerId);
+    return _client.fetchPlayerDetail(widget.playerId);
+  }
+
+  /// Loaded separately from the profile, for the same reason the trading
+  /// snapshot is: matchday form is a secondary read, and a failure fetching it
+  /// must not blank out a player's profile. A failed load reports "no sample"
+  /// rather than inventing form.
+  Future<void> _loadForm() async {
+    try {
+      final GtexPlayerForm form = await _client.fetchPlayerForm(widget.playerId);
+      if (mounted) {
+        setState(() => _form = form);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _form = GtexPlayerForm.unknown(widget.playerId));
+      }
+    }
+  }
+
+  /// The viewer's own position, loaded independently of everything else.
+  ///
+  /// Requires authentication, so a failure here is an ordinary outcome for a
+  /// signed-out reader and must be silent rather than an error state.
+  Future<void> _loadHolding() async {
+    try {
+      final GtePortfolioView portfolio = await _client.fetchPortfolio();
+      GtePortfolioHolding? match;
+      for (final GtePortfolioHolding item in portfolio.holdings) {
+        if (item.playerId == widget.playerId) {
+          match = item;
+          break;
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _holding = match;
+          _holdingLoaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _holdingLoaded = true);
+      }
+    }
   }
 
   /// Loaded separately from the profile itself: the trading snapshot spans
@@ -192,13 +252,22 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
             );
           }
           if (controller == null) {
-            return _ProfileBody(detail: snap.data!, actions: null);
+            return _ProfileBody(
+              detail: snap.data!,
+              actions: null,
+              form: _form,
+              holding: _holding,
+              holdingLoaded: _holdingLoaded,
+            );
           }
           return AnimatedBuilder(
             animation: controller,
             builder: (BuildContext context, Widget? _) {
               return _ProfileBody(
                 detail: snap.data!,
+                form: _form,
+                holding: _holding,
+                holdingLoaded: _holdingLoaded,
                 careerEntries: _snapshot?.careerEntries,
                 orderBook: _snapshot?.orderBook,
                 overview: _snapshot?.overview,
@@ -256,6 +325,9 @@ class _ProfileBody extends StatelessWidget {
   const _ProfileBody({
     required this.detail,
     required this.actions,
+    this.form,
+    this.holding,
+    this.holdingLoaded = false,
     this.careerEntries,
     this.orderBook,
     this.overview,
@@ -264,6 +336,9 @@ class _ProfileBody extends StatelessWidget {
 
   final GteMarketPlayerDetailView detail;
   final Widget? actions;
+  final GtexPlayerForm? form;
+  final GtePortfolioHolding? holding;
+  final bool holdingLoaded;
   final List<GteCareerEntry>? careerEntries;
   final GteOrderBook? orderBook;
   final GtePlayerOverview? overview;
@@ -293,6 +368,16 @@ class _ProfileBody extends StatelessWidget {
       _SectionLabel('TRAJECTORY'),
       const SizedBox(height: 8),
       _TrajectoryCard(trend: detail.trend, attr: attr),
+      // Matchday form is the bridge between the football half of this page and
+      // the asset half: it is the only block that states what the player's
+      // actual performances are doing to his value. Drawn only once the form
+      // fetch has settled, so an in-flight read never reads as "no football".
+      if (form != null) ...<Widget>[
+        const SizedBox(height: 14),
+        _SectionLabel('MATCHDAY FORM'),
+        const SizedBox(height: 8),
+        MatchdayFormCard(form: form!),
+      ],
       // Career is only drawn when the backend actually returned history.
       // Nothing here is synthesised.
       if (career.isNotEmpty) ...<Widget>[
@@ -308,6 +393,14 @@ class _ProfileBody extends StatelessWidget {
       _SectionLabel('ASSET & MARKET INTELLIGENCE'),
       const SizedBox(height: 8),
       _MarketCard(detail: detail),
+      // The reader's own stake, drawn only once the portfolio read has settled
+      // so an in-flight fetch never reads as "you hold nothing".
+      if (holdingLoaded) ...<Widget>[
+        const SizedBox(height: 14),
+        _SectionLabel('YOUR POSITION'),
+        const SizedBox(height: 8),
+        OwnershipConsequenceCard(holding: holding, form: form),
+      ],
       const SizedBox(height: 14),
       _SectionLabel('TERMS'),
       const SizedBox(height: 8),
