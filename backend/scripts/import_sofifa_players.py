@@ -40,7 +40,7 @@ Usage::
 import argparse
 import csv
 import gzip
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 import hashlib
 import json
@@ -69,7 +69,7 @@ from app.ingestion.real_player_ingestion_service import (
     RealPlayerIngestionService,
 )
 from app.schemas.real_player_ingestion import RealPlayerIngestionRequest, RealPlayerSeedInput
-from scripts.sofifa_pricing import SOFIFA_SNAPSHOT_DATE, credits_to_naira, projected_price_credits
+from scripts.sofifa_pricing import SOFIFA_SNAPSHOT_DATE, projected_price_credits
 
 logger = logging.getLogger("import_sofifa_players")
 
@@ -543,7 +543,6 @@ def build_payload(
     display = short_name or full_name
     if not player_id or not canonical:
         return None
-    name = canonical
 
     overall = _parse_int(columns.get(row, "overall"))
     tier = resolve_tier(overall)
