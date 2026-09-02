@@ -69,6 +69,20 @@ class GtexPlayerPortrait extends StatelessWidget {
                   url,
                   key: const Key('gtex-player-portrait-image'),
                   fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  filterQuality: FilterQuality.medium,
+                  // While the photograph is in flight the plate would flash
+                  // and then be replaced, so a neutral hold sits in for it.
+                  loadingBuilder: (
+                    BuildContext context,
+                    Widget child,
+                    ImageChunkEvent? progress,
+                  ) {
+                    if (progress == null) {
+                      return child;
+                    }
+                    return const _PortraitLoadingPlate();
+                  },
                   errorBuilder: (_, __, ___) => plate,
                 ),
       ),
@@ -148,6 +162,27 @@ class _IdentityPlate extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PortraitLoadingPlate extends StatelessWidget {
+  const _PortraitLoadingPlate();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(color: GtexColors.surfaceHover),
+      child: Center(
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: GtexColors.textTertiary,
+          ),
         ),
       ),
     );

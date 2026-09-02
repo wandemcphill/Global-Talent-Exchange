@@ -6,6 +6,7 @@ import '../components/gtex_status_chip.dart';
 import '../components/gtex_value_display.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_spacing.dart';
+import 'gtex_player_portrait.dart';
 
 enum GtexPlayerCardVariant {
   standard,
@@ -386,7 +387,6 @@ class _FullPlayerCard extends StatelessWidget {
                           position: position,
                           countryCode: countryCode ?? nationality,
                           accent: provenanceColor,
-                          isRegen: isRegen,
                           portraitMissingReason: portraitMissingReason,
                         ),
                         const SizedBox(width: GtexSpacing.sm),
@@ -929,7 +929,6 @@ class _CompactPlayerCard extends StatelessWidget {
           position: position,
           countryCode: nationality,
           accent: provenanceColor,
-          isRegen: isRegen,
           compact: true,
         ),
         const SizedBox(width: GtexSpacing.sm),
@@ -1211,7 +1210,6 @@ class _MicroPlayerCard extends StatelessWidget {
                           position: position,
                           countryCode: nationality,
                           accent: provenanceColor,
-                          isRegen: isRegen,
                           compact: true,
                         ),
                         const SizedBox(width: GtexSpacing.sm),
@@ -1271,6 +1269,14 @@ class _MicroPlayerCard extends StatelessWidget {
   }
 }
 
+/// A footballer's portrait on the card.
+///
+/// The fallback used to be `_FmSilhouettePainter`: a drawn head-and-
+/// shoulders. GTEX shows a real face or no face - a generic silhouette
+/// reads as a stand-in for a person who does not exist, which is exactly
+/// the impression an ownership product cannot afford - so the shared
+/// `GtexPlayerPortrait` plate stands in instead. It carries the same facts
+/// the silhouette was overlaid with: the position and the country code.
 class _PlayerImage extends StatelessWidget {
   const _PlayerImage({
     required this.imageUrl,
@@ -1278,7 +1284,6 @@ class _PlayerImage extends StatelessWidget {
     required this.position,
     required this.countryCode,
     required this.accent,
-    required this.isRegen,
     this.portraitMissingReason,
     this.compact = false,
   });
@@ -1288,15 +1293,26 @@ class _PlayerImage extends StatelessWidget {
   final String position;
   final String countryCode;
   final Color accent;
-  final bool isRegen;
   final String? portraitMissingReason;
   final bool compact;
+
+  /// The country as a badge token. Callers pass either an ISO code or a
+  /// full country name, so anything longer than a code is clipped the way
+  /// the old overlay clipped it.
+  String? get _shortCountryCode {
+    final String code = countryCode.trim().toUpperCase();
+    if (code.isEmpty) {
+      return null;
+    }
+    return code.length > 3 ? code.substring(0, 3) : code;
+  }
 
   @override
   Widget build(BuildContext context) {
     final String? trimmed = imageUrl?.trim();
+    final bool hasPhotograph = trimmed != null && trimmed.isNotEmpty;
     final double size = compact ? 48 : 96;
-    return Container(
+    final Widget portrait = Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
@@ -1305,122 +1321,29 @@ class _PlayerImage extends StatelessWidget {
         border: Border.all(color: accent.withValues(alpha: 0.5)),
       ),
       clipBehavior: Clip.antiAlias,
-      child:
-          trimmed == null || trimmed.isEmpty
-              ? _PlayerAvatarFallback(
-                name: name,
-                position: position,
-                countryCode: countryCode,
-                accent: accent,
-                isRegen: isRegen,
-                reason: portraitMissingReason,
-              )
-              : Image.network(
-                trimmed,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                filterQuality: FilterQuality.medium,
-                loadingBuilder: (
-                  BuildContext context,
-                  Widget child,
-                  ImageChunkEvent? loadingProgress,
-                ) {
-                  if (loadingProgress == null) {
-                    return child;
-                  }
-                  return const _PortraitLoadingPlate();
-                },
-                errorBuilder:
-                    (_, __, ___) => _PlayerAvatarFallback(
-                      name: name,
-                      position: position,
-                      countryCode: countryCode,
-                      accent: accent,
-                      isRegen: isRegen,
-                      reason: portraitMissingReason,
-                    ),
-              ),
+      child: GtexPlayerPortrait(
+        name: name,
+        imageUrl: trimmed,
+        // A 48px circle has room for initials and nothing else, and the row
+        // beside it already names the position and the club. Callers also
+        // pass a full nationality here as often as a code, so it is clipped
+        // to a badge-sized token rather than ellipsised mid-country.
+        position: compact ? null : position,
+        nationalityCode: compact ? null : _shortCountryCode,
+        accent: accent,
+        size: size,
+        borderRadius: size / 2,
+      ),
     );
-  }
-}
-
-class _PlayerAvatarFallback extends StatelessWidget {
-  const _PlayerAvatarFallback({
-    required this.name,
-    required this.position,
-    required this.countryCode,
-    required this.accent,
-    required this.isRegen,
-    this.reason,
-  });
-
-  final String name;
-  final String position;
-  final String countryCode;
-  final Color accent;
-  final bool isRegen;
-  final String? reason;
-
-  @override
-  Widget build(BuildContext context) {
-    final String code =
-        countryCode.trim().isEmpty ? 'GTEX' : countryCode.toUpperCase();
+    if (hasPhotograph) {
+      return portrait;
+    }
     return Tooltip(
       message:
-          reason == null
+          portraitMissingReason == null
               ? 'Portrait unavailable'
-              : 'Portrait unavailable: $reason',
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          CustomPaint(
-            painter: _FmSilhouettePainter(accent: accent, regenTint: isRegen),
-          ),
-          Positioned(
-            left: 8,
-            top: 8,
-            child: Text(
-              position.toUpperCase(),
-              style: TextStyle(
-                color: accent,
-                fontFamily: 'Barlow',
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          Positioned(
-            right: 8,
-            top: 8,
-            child: Text(
-              code.length > 4 ? code.substring(0, 4) : code,
-              style: const TextStyle(
-                color: GtexColors.textSecondary,
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PortraitLoadingPlate extends StatelessWidget {
-  const _PortraitLoadingPlate();
-
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(color: GtexColors.surfaceHover),
-      child: Center(
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
+              : 'Portrait unavailable: $portraitMissingReason',
+      child: portrait,
     );
   }
 }
@@ -1746,42 +1669,4 @@ class _RatingPill extends StatelessWidget {
       ),
     );
   }
-}
-
-class _FmSilhouettePainter extends CustomPainter {
-  const _FmSilhouettePainter({required this.accent, required this.regenTint});
-
-  final Color accent;
-  final bool regenTint;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double w = size.width;
-    final double h = size.height;
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = GtexColors.surfaceOverlay,
-    );
-
-    const Color base = Color(0xFF8A95A1);
-    final Color silhouette =
-        regenTint ? (Color.lerp(base, accent, 0.35) ?? base) : base;
-    final Paint fill =
-        Paint()
-          ..color = silhouette
-          ..isAntiAlias = true;
-
-    final Path body =
-        Path()
-          ..moveTo(w * 0.10, h)
-          ..cubicTo(w * 0.12, h * 0.70, w * 0.30, h * 0.62, w * 0.50, h * 0.62)
-          ..cubicTo(w * 0.70, h * 0.62, w * 0.88, h * 0.70, w * 0.90, h)
-          ..close();
-    canvas.drawPath(body, fill);
-    canvas.drawCircle(Offset(w * 0.5, h * 0.36), w * 0.19, fill);
-  }
-
-  @override
-  bool shouldRepaint(covariant _FmSilhouettePainter oldDelegate) =>
-      oldDelegate.accent != accent || oldDelegate.regenTint != regenTint;
 }
