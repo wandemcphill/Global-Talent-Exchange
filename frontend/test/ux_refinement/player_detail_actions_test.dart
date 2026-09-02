@@ -276,6 +276,43 @@ void main() {
     expect(find.text('\u2014'), findsAtLeastNWidgets(7));
   });
 
+  testWidgets('a priced player with no movement data shows no percentage', (
+    WidgetTester tester,
+  ) async {
+    // `movement_pct` was parsed with a zero fallback, so a payload that
+    // carried no movement was indistinguishable from one that had genuinely
+    // not moved - and a priced player the backend had no history for was
+    // given a flat "+0.0% recent" the profile had no basis for.
+    tester.view.physicalSize = const Size(420, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GtexFmPlayerProfileScreen(
+          playerId: 'priced-no-movement',
+          baseUrl: 'http://fixture.local',
+          backendMode: GteBackendMode.fixture,
+          apiClient: _PricedNoMovementApi(),
+        ),
+      ),
+    );
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 120));
+    }
+
+    expect(
+      find.textContaining('GTC'),
+      findsWidgets,
+      reason: 'this player is priced - the guard must not be the price guard',
+    );
+    expect(
+      find.textContaining('% recent'),
+      findsNothing,
+      reason: 'absent movement must not be rendered as a flat one',
+    );
+  });
+
   testWidgets('an unpriced asset shows no percentage movement', (
     WidgetTester tester,
   ) async {
@@ -359,6 +396,46 @@ class _UnscoutedPlayerApi extends GteExchangeApiClient {
         'trend_score': 0,
         'market_interest_score': 0,
         'global_scouting_index': 61,
+      },
+      'attributes': <String, Object?>{},
+    });
+  }
+}
+
+/// A player the backend has priced but reported no value movement for. The
+/// payload simply omits `movement_pct`, which is not the same fact as a
+/// movement of zero.
+class _PricedNoMovementApi extends GteExchangeApiClient {
+  _PricedNoMovementApi._(GteExchangeApiClient base)
+    : super(
+        config: base.config,
+        transport: base.transport,
+        repository: base.repository,
+      );
+
+  factory _PricedNoMovementApi() =>
+      _PricedNoMovementApi._(GteExchangeApiClient.fixture());
+
+  @override
+  Future<GteMarketPlayerDetailView> fetchPlayerDetail(String playerId) async {
+    return GteMarketPlayerDetailView.fromJson(<String, Object?>{
+      'player_id': playerId,
+      'identity': <String, Object?>{
+        'player_id': playerId,
+        'player_name': 'Freshly Listed Prospect',
+        'position': 'CM',
+        'age': 21,
+        'nationality': 'Nigeria',
+      },
+      'market_profile': <String, Object?>{
+        'is_tradable': true,
+        'quoted_market_price_credits': 42000,
+      },
+      'value': <String, Object?>{'current_value_credits': 42000},
+      'trend': <String, Object?>{
+        'trend_score': 0,
+        'market_interest_score': 0,
+        'global_scouting_index': 74,
       },
       'attributes': <String, Object?>{},
     });

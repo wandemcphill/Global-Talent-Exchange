@@ -111,12 +111,91 @@ class _SelectedPlayerDetail extends StatelessWidget {
   final VoidCallback onOpenPlayer;
   final VoidCallback onToggleBasket;
 
+  /// The pane is short: the preview sits above the shortlist basket, so it
+  /// gets roughly a third of the workspace height. Below the height the
+  /// poster card needs, the card renders in its own compact layout instead
+  /// of filling the whole pane with a clipped portrait.
+  static const double _posterCardMinHeight = 380;
+
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool posterFits =
+            !constraints.hasBoundedHeight ||
+            constraints.maxHeight >= _posterCardMinHeight;
+        return Column(
+          children: <Widget>[
+            Expanded(child: _scrollingRead(context, posterFits: posterFits)),
+            // "Open full profile" is the preview's whole purpose - it is the
+            // way into the canonical player detail - so it is pinned rather
+            // than left at the bottom of a list taller than its pane. At
+            // 1440x900 it used to sit so far below the fold that the list
+            // never even built it.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                GtexSpacing.md,
+                0,
+                GtexSpacing.md,
+                GtexSpacing.md,
+              ),
+              child: _actions(context),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _actions(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: GtexActionButton(
+                key: const Key('gtex-market-open-full-profile'),
+                label:
+                    isAuthenticated
+                        ? 'Open full profile'
+                        : 'Sign in to open profile',
+                icon: isAuthenticated ? Icons.open_in_new : Icons.login,
+                onPressed: isAuthenticated ? onOpenPlayer : onOpenLogin,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: GtexSpacing.sm),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: GtexActionButton(
+                label: inBasket ? 'Remove shortlist' : 'Add shortlist',
+                icon:
+                    inBasket
+                        ? Icons.remove_shopping_cart_outlined
+                        : Icons.playlist_add,
+                onPressed: onToggleBasket,
+                accent: inBasket ? GtexColors.red : GtexColors.gold,
+                secondary: true,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _scrollingRead(BuildContext context, {required bool posterFits}) {
     return ListView(
       padding: const EdgeInsets.all(GtexSpacing.md),
       children: <Widget>[
         GtexPlayerCard(
+          scale:
+              posterFits
+                  ? GtexPlayerCardScale.full
+                  : GtexPlayerCardScale.compact,
           name: player.name,
           position: player.position,
           clubName: player.clubName,
@@ -216,39 +295,6 @@ class _SelectedPlayerDetail extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-        ),
-        const SizedBox(height: GtexSpacing.md),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: GtexActionButton(
-                key: const Key('gtex-market-open-full-profile'),
-                label:
-                    isAuthenticated
-                        ? 'Open full profile'
-                        : 'Sign in to open profile',
-                icon: isAuthenticated ? Icons.open_in_new : Icons.login,
-                onPressed: isAuthenticated ? onOpenPlayer : onOpenLogin,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: GtexSpacing.sm),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: GtexActionButton(
-                label: inBasket ? 'Remove shortlist' : 'Add shortlist',
-                icon:
-                    inBasket
-                        ? Icons.remove_shopping_cart_outlined
-                        : Icons.playlist_add,
-                onPressed: onToggleBasket,
-                accent: inBasket ? GtexColors.red : GtexColors.gold,
-                secondary: true,
-              ),
-            ),
-          ],
         ),
       ],
     );

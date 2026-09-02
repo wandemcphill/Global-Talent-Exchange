@@ -46,6 +46,32 @@ extension GtexMarketDiscoveryLaneLabel on GtexMarketDiscoveryLane {
     GtexMarketDiscoveryLane.falling => player.isFalling,
     GtexMarketDiscoveryLane.watched => player.interestLabel != null,
   };
+
+  /// The lane's listings, in the order the lane's name promises.
+  ///
+  /// `Most watched` claims a ranking, so it has to actually be one: the
+  /// matches are ordered by the backend's own interest score, highest
+  /// first. Filtering alone would have made the label an assertion the
+  /// screen was not keeping. The other lanes make no ordering claim and
+  /// keep the market's own order.
+  List<GtexMarketPlayerView> applyTo(List<GtexMarketPlayerView> players) {
+    if (this == GtexMarketDiscoveryLane.all) {
+      return players;
+    }
+    final List<GtexMarketPlayerView> matched = players
+        .where(matches)
+        .toList(growable: false);
+    if (this != GtexMarketDiscoveryLane.watched) {
+      return matched;
+    }
+    final List<GtexMarketPlayerView> ranked = List<GtexMarketPlayerView>.of(
+      matched,
+    )..sort(
+      (GtexMarketPlayerView a, GtexMarketPlayerView b) =>
+          (b.interestScore ?? 0).compareTo(a.interestScore ?? 0),
+    );
+    return List<GtexMarketPlayerView>.unmodifiable(ranked);
+  }
 }
 
 class GtexMarketPlayerGrid extends StatefulWidget {
@@ -116,12 +142,7 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
         ),
       );
     }
-    final List<GtexMarketPlayerView> laneMatches =
-        _lane == GtexMarketDiscoveryLane.all
-            ? players
-            : players
-                .where((GtexMarketPlayerView player) => _lane.matches(player))
-                .toList(growable: false);
+    final List<GtexMarketPlayerView> laneMatches = _lane.applyTo(players);
 
     if (players.isEmpty) {
       return Padding(

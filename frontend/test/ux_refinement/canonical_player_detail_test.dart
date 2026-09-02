@@ -154,6 +154,42 @@ void main() {
     expect(find.text('Swap condition'), findsNothing);
   });
 
+  testWidgets('the preview CTA is reachable in the real shell at 1440x900', (
+    WidgetTester tester,
+  ) async {
+    // The preview only counts as the way into the canonical detail if a
+    // user can actually see the way in. In the real shell the summary pane
+    // is roughly a third of the workspace height, and the poster card used
+    // to fill all of it: "Open full profile" sat so far down the list that
+    // it was never built, let alone shown. A 420x1600 harness hides this
+    // exactly the way the scaffold's own harness hid the width bug.
+    final GteExchangeController controller = await signedInController(tester);
+    await pumpShell(
+      tester,
+      controller,
+      '/app/market',
+      find.byType(GtexMarketSelectedPlayerPanel),
+    );
+
+    final Finder cta = find.byKey(const Key('gtex-market-open-full-profile'));
+    expect(
+      cta,
+      findsOneWidget,
+      reason: 'the preview must offer the canonical detail without scrolling',
+    );
+
+    final Rect panel = tester.getRect(
+      find.byType(GtexMarketSelectedPlayerPanel),
+    );
+    final Rect button = tester.getRect(cta);
+    expect(
+      button.bottom,
+      lessThanOrEqualTo(panel.bottom),
+      reason: 'the CTA is below the summary pane at 1440x900',
+    );
+    expect(button.top, greaterThanOrEqualTo(panel.top));
+  });
+
   testWidgets('a search hit for a player canonicalises to the player detail', (
     WidgetTester tester,
   ) async {

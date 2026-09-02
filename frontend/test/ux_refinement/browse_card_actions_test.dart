@@ -262,6 +262,95 @@ void main() {
     expect(find.text('Falling Winger'), findsNothing);
   });
 
+  testWidgets('the rating pill carries a figure, not a truncated caption', (
+    WidgetTester tester,
+  ) async {
+    // The pill stripped only a leading `GSI ` and drew the remainder in a
+    // fixed 44px box, so the market's `Form 8.4` rendered as `Form...` and
+    // the card's primary rating showed no number at any width.
+    for (final double width in <double>[340, 560, 900]) {
+      await pumpCapturingErrors(
+        tester,
+        grid(width, <GtexMarketPlayerView>[playerView(movementPct: 1.2)]),
+        width,
+      );
+
+      expect(
+        find.text('8.4'),
+        findsWidgets,
+        reason: 'the rating figure must be legible at ${width}px',
+      );
+      expect(
+        find.text('FORM'),
+        findsWidgets,
+        reason: 'the pill must still say which rating the figure is',
+      );
+      expect(
+        find.textContaining('Form 8.4'),
+        findsNothing,
+        reason: 'the caption and the figure are separate lines now',
+      );
+    }
+  });
+
+  testWidgets('the rating pill keeps the score out of the tier label', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 560,
+            height: 120,
+            child: GtexPlayerCard(
+              name: 'Scored Player',
+              position: 'CB',
+              clubName: 'Club',
+              nationality: 'NG',
+              priceLabel: '10 GTC',
+              gsiLabel: 'GSI 96 - Elite GSI',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('96'), findsOneWidget);
+    expect(find.text('GSI'), findsOneWidget);
+  });
+
+  testWidgets('most watched is ranked by interest, not merely filtered', (
+    WidgetTester tester,
+  ) async {
+    // A lane named "Most watched" asserts an ordering. It has to keep it
+    // from the backend's own interest score rather than leave the market's
+    // arbitrary order under a ranking label.
+    // A single column, so "leads the lane" is a vertical fact.
+    await pumpCapturingErrors(
+      tester,
+      grid(420, <GtexMarketPlayerView>[
+        playerView(playerId: 'low', name: 'Lightly Watched', interest: 4),
+        playerView(playerId: 'none', name: 'Unwatched Player'),
+        playerView(playerId: 'high', name: 'Heavily Watched', interest: 91),
+      ]),
+      420,
+    );
+
+    await tester.tap(
+      find.byKey(const Key('gtex-market-lane-watched')),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+
+    expect(find.text('Unwatched Player'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('Heavily Watched')).dy,
+      lessThan(tester.getTopLeft(find.text('Lightly Watched')).dy),
+      reason: 'the most watched listing must lead the most-watched lane',
+    );
+  });
+
   testWidgets('the market still uses exactly one player card type', (
     WidgetTester tester,
   ) async {

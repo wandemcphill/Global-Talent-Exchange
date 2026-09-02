@@ -780,16 +780,16 @@ class _CompactPlayerCard extends StatelessWidget {
   /// crowding the price column, and the widths at which each further piece
   /// of market intelligence earns its place.
   static const double _metaMinWidth = 340;
-  static const double _tierMinWidth = 440;
+  static const double _gsiMinWidth = 440;
   static const double _signalsMinWidth = 560;
 
   /// The market facts this row can show, filtered to what the backend
   /// actually returned. Nothing here is synthesised: an absent value is
   /// simply not in the line.
-  List<String> _metaFacts({required bool withTier, required bool withSignals}) {
+  List<String> _metaFacts({required bool withGsi, required bool withSignals}) {
     return <String>[
       if (ageLabel != null && ageLabel!.trim().isNotEmpty) ageLabel!.trim(),
-      if (withTier && gsiLabel != null && gsiLabel!.trim().isNotEmpty)
+      if (withGsi && gsiLabel != null && gsiLabel!.trim().isNotEmpty)
         gsiLabel!.trim(),
       if (withSignals &&
           gsiTierLabel != null &&
@@ -822,7 +822,7 @@ class _CompactPlayerCard extends StatelessWidget {
           context,
           showActionBar,
           hasRoomForMeta: width >= _metaMinWidth,
-          hasRoomForTier: width >= _tierMinWidth,
+          hasRoomForGsi: width >= _gsiMinWidth,
           hasRoomForSignals: width >= _signalsMinWidth,
         );
       },
@@ -833,7 +833,7 @@ class _CompactPlayerCard extends StatelessWidget {
     BuildContext context,
     bool showActionBar, {
     required bool hasRoomForMeta,
-    required bool hasRoomForTier,
+    required bool hasRoomForGsi,
     required bool hasRoomForSignals,
   }) {
     return Material(
@@ -869,7 +869,7 @@ class _CompactPlayerCard extends StatelessWidget {
                           context,
                           flushBottom: true,
                           hasRoomForMeta: hasRoomForMeta,
-                          hasRoomForTier: hasRoomForTier,
+                          hasRoomForGsi: hasRoomForGsi,
                           hasRoomForSignals: hasRoomForSignals,
                         ),
                       ),
@@ -886,7 +886,7 @@ class _CompactPlayerCard extends StatelessWidget {
                     context,
                     flushBottom: showActionBar,
                     hasRoomForMeta: hasRoomForMeta,
-                    hasRoomForTier: hasRoomForTier,
+                    hasRoomForGsi: hasRoomForGsi,
                     hasRoomForSignals: hasRoomForSignals,
                   ),
         ),
@@ -898,17 +898,14 @@ class _CompactPlayerCard extends StatelessWidget {
     BuildContext context, {
     bool flushBottom = false,
     bool hasRoomForMeta = false,
-    bool hasRoomForTier = false,
+    bool hasRoomForGsi = false,
     bool hasRoomForSignals = false,
   }) {
     final Color provenanceColor =
         isRegen ? GtexColors.accentViolet : GtexColors.accentBlue;
     final List<String> metaFacts =
         hasRoomForMeta
-            ? _metaFacts(
-              withTier: hasRoomForTier,
-              withSignals: hasRoomForSignals,
-            )
+            ? _metaFacts(withGsi: hasRoomForGsi, withSignals: hasRoomForSignals)
             : const <String>[];
     return Row(
       children: <Widget>[
@@ -1674,33 +1671,78 @@ class _SignalRail extends StatelessWidget {
   }
 }
 
+/// The card's rating box: which rating it is, and the figure.
+///
+/// It used to strip a leading `GSI ` and draw whatever remained in a fixed
+/// 44px box with an ellipsis. Every other caller labels its rating
+/// differently - the market sends `Form 7.4`, the regen world `OVR 82` - so
+/// the box rendered `Form…` and the card's primary rating carried no number
+/// at any width. The caption and the figure are now separate lines, and
+/// neither is allowed to truncate.
 class _RatingPill extends StatelessWidget {
   const _RatingPill({required this.label, required this.accent});
 
   final String label;
   final Color accent;
 
+  /// A leading word naming the rating, e.g. `GSI 96`, `Form 7.4`, `OVR 82`.
+  static final RegExp _captioned = RegExp(
+    r'^([A-Za-z]{2,6})\s+(.+)$',
+    caseSensitive: false,
+  );
+
   @override
   Widget build(BuildContext context) {
+    final String trimmed = label.trim();
+    final RegExpMatch? match = _captioned.firstMatch(trimmed);
+    final String? caption = match?.group(1)?.toUpperCase();
+    // Only the leading figure belongs in a pill: `GSI 96 - Elite GSI` is a
+    // tier label with a score in front of it, and the tier already has its
+    // own place in the row's meta line.
+    final String value = (match?.group(2) ?? trimmed).split(' - ').first.trim();
     return Container(
-      width: 44,
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      constraints: const BoxConstraints(minWidth: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
         border: Border.all(color: accent.withValues(alpha: 0.38)),
       ),
-      alignment: Alignment.center,
-      child: Text(
-        label.replaceFirst(RegExp(r'^GSI\s*', caseSensitive: false), ''),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: accent,
-          fontFamily: 'JetBrains Mono',
-          fontWeight: FontWeight.w900,
-          fontSize: 13,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          if (caption != null)
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                caption,
+                maxLines: 1,
+                style: TextStyle(
+                  color: accent.withValues(alpha: 0.78),
+                  fontFamily: 'Barlow',
+                  fontWeight: FontWeight.w900,
+                  fontSize: 8,
+                  letterSpacing: 0.4,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value.isEmpty ? '—' : value,
+              maxLines: 1,
+              style: TextStyle(
+                color: accent,
+                fontFamily: 'JetBrains Mono',
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                height: 1.15,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
