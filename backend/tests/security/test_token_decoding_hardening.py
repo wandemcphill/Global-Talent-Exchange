@@ -11,7 +11,7 @@ import pytest
 
 from app.auth.security import TokenError, create_access_token, decode_access_token
 
-_SECRET = "phase-b-hardening-test-secret-value-0123456789"
+_SECRET = "phase-b-hardening-test-secret-value-0123456789"  # pragma: allowlist secret
 
 
 @pytest.mark.parametrize(

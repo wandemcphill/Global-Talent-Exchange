@@ -4,21 +4,56 @@ from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+from app.auth.dependencies import get_current_user
 from app.db import get_session
 from app.models import Base
 from app.models.base import utcnow
 from app.models.event_backbone import EventOutbox
+from app.models.risk_ops import AuditLog
 from app.models.tournament import Tournament, TournamentMatch, TournamentPlayer, TournamentRound
-from app.models.user import User
-from app.models.wallet import LedgerAccount, LedgerBalanceProjection, LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerTransaction, LedgerUnit
+from app.models.user import User, UserRole
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerBalanceProjection,
+    LedgerEntry,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransaction,
+    LedgerUnit,
+)
 from app.tournaments.router import router
 from app.wallets.service import LedgerPosting, WalletService
+
+
+class _StubActor:
+    """Minimal stand-in for the router's `current_user`/`actor` dependency.
+
+    Router-level authorization is exercised end-to-end by
+    backend/tests/security/test_endpoint_authorization.py against the real
+    app + DB. This fixture only wires up the tournament runtime in isolation,
+    so authentication is stubbed rather than bypassed: each request carries
+    an `X-Test-Actor-Id` header naming which seeded user is acting, and the
+    override resolves that header into the actor the route handlers check
+    against (e.g. "you may only join as yourself").
+    """
+
+    def __init__(self, user_id: str) -> None:
+        self.id = user_id
+        # create_tournament is admin-only; every actor used in this fixture
+        # is treated as an admin so the existing flow/lifecycle tests (which
+        # aren't exercising that specific gate) keep working. The gate itself
+        # is covered end-to-end by backend/tests/security/test_endpoint_authorization.py.
+        self.role = UserRole.SUPER_ADMIN
+
+
+def _override_get_current_user(request: Request) -> _StubActor:
+    return _StubActor(request.headers.get("X-Test-Actor-Id", ""))
 
 
 def _build_app(database_url: str) -> tuple[TestClient, sessionmaker]:
@@ -33,6 +68,7 @@ def _build_app(database_url: str) -> tuple[TestClient, sessionmaker]:
             LedgerEntry.__table__,
             LedgerBalanceProjection.__table__,
             EventOutbox.__table__,
+            AuditLog.__table__,
             Tournament.__table__,
             TournamentRound.__table__,
             TournamentMatch.__table__,
@@ -50,6 +86,7 @@ def _build_app(database_url: str) -> tuple[TestClient, sessionmaker]:
             session.close()
 
     app.dependency_overrides[get_session] = override_get_session
+    app.dependency_overrides[get_current_user] = _override_get_current_user
     return TestClient(app), SessionLocal
 
 
@@ -105,7 +142,18 @@ def _seed_users(session_factory: sessionmaker, *, count: int, balance: int = 1_0
         return users
 
 
-def _create_tournament(client: TestClient, *, name: str = "Weekend Clash", max_players: int = 4, entry_fee: int = 500) -> dict:
+def _actor_headers(user_id: str) -> dict[str, str]:
+    return {"X-Test-Actor-Id": user_id}
+
+
+def _create_tournament(
+    client: TestClient,
+    *,
+    name: str = "Weekend Clash",
+    max_players: int = 4,
+    entry_fee: int = 500,
+    actor_id: str = "tournament-organizer",
+) -> dict:
     response = client.post(
         "/api/tournaments",
         json={
@@ -115,6 +163,7 @@ def _create_tournament(client: TestClient, *, name: str = "Weekend Clash", max_p
             "max_players": max_players,
             "round_timeout_minutes": 60,
         },
+        headers=_actor_headers(actor_id),
     )
     assert response.status_code == 201, response.text
     return response.json()
@@ -123,7 +172,11 @@ def _create_tournament(client: TestClient, *, name: str = "Weekend Clash", max_p
 def _join_all(client: TestClient, tournament_id: str, users: list[User]) -> dict:
     latest_payload: dict | None = None
     for user in users:
-        response = client.post(f"/api/tournaments/{tournament_id}/join", json={"user_id": user.id})
+        response = client.post(
+            f"/api/tournaments/{tournament_id}/join",
+            json={"user_id": user.id},
+            headers=_actor_headers(user.id),
+        )
         assert response.status_code == 200, response.text
         latest_payload = response.json()
     assert latest_payload is not None
@@ -145,8 +198,14 @@ def test_join_flow_deducts_entry_fee_and_starts_when_full(tournament_client) -> 
 
     round_one_matches = [match for match in payload["matches"] if match["round_number"] == 1]
     assert len(round_one_matches) == 2
-    assert (round_one_matches[0]["player_one_user_id"], round_one_matches[0]["player_two_user_id"]) == (users[0].id, users[3].id)
-    assert (round_one_matches[1]["player_one_user_id"], round_one_matches[1]["player_two_user_id"]) == (users[1].id, users[2].id)
+    assert (round_one_matches[0]["player_one_user_id"], round_one_matches[0]["player_two_user_id"]) == (
+        users[0].id,
+        users[3].id,
+    )
+    assert (round_one_matches[1]["player_one_user_id"], round_one_matches[1]["player_two_user_id"]) == (
+        users[1].id,
+        users[2].id,
+    )
 
     with session_factory() as session:
         balances = [_get_credit_balance(session, session.get(User, user.id)) for user in users]
@@ -164,6 +223,7 @@ def test_completed_matches_advance_and_finish_tournament(tournament_client) -> N
     first_result = client.post(
         f"/api/tournaments/{tournament_id}/matches/{round_one_matches[0]['match_id']}/result",
         json={"winner_user_id": users[0].id, "player_one_score": 3, "player_two_score": 1},
+        headers=_actor_headers(users[0].id),
     )
     assert first_result.status_code == 200, first_result.text
     assert first_result.json()["current_round"] == 1
@@ -171,6 +231,7 @@ def test_completed_matches_advance_and_finish_tournament(tournament_client) -> N
     second_result = client.post(
         f"/api/tournaments/{tournament_id}/matches/{round_one_matches[1]['match_id']}/result",
         json={"winner_user_id": users[1].id, "player_one_score": 2, "player_two_score": 0},
+        headers=_actor_headers(users[1].id),
     )
     assert second_result.status_code == 200, second_result.text
     advanced = second_result.json()
@@ -181,6 +242,7 @@ def test_completed_matches_advance_and_finish_tournament(tournament_client) -> N
     final_result = client.post(
         f"/api/tournaments/{tournament_id}/matches/{final_match['match_id']}/result",
         json={"winner_user_id": users[0].id, "player_one_score": 1, "player_two_score": 0},
+        headers=_actor_headers(users[0].id),
     )
     assert final_result.status_code == 200, final_result.text
     completed = final_result.json()
@@ -203,6 +265,7 @@ def test_timeout_advances_unfinished_round_using_bracket_priority(tournament_cli
     first_result = client.post(
         f"/api/tournaments/{tournament_id}/matches/{round_one_matches[0]['match_id']}/result",
         json={"winner_user_id": users[0].id},
+        headers=_actor_headers(users[0].id),
     )
     assert first_result.status_code == 200, first_result.text
 
@@ -217,7 +280,7 @@ def test_timeout_advances_unfinished_round_using_bracket_priority(tournament_cli
         active_round.timeout_at = utcnow() - timedelta(minutes=1)
         session.commit()
 
-    advance_response = client.post(f"/api/tournaments/{tournament_id}/advance")
+    advance_response = client.post(f"/api/tournaments/{tournament_id}/advance", headers=_actor_headers(users[0].id))
     assert advance_response.status_code == 200, advance_response.text
     advanced = advance_response.json()
 

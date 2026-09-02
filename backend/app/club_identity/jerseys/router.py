@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 
+from app.access_control.dependencies import require_bound_organization_access
+from app.models.access_control import OrganizationRole
 from app.club_identity.jerseys.sql_repository import SqlClubIdentityRepository
 from app.club_identity.jerseys.schemas import (
     BadgeProfileView,
@@ -22,6 +24,13 @@ from app.models.club_profile import ClubProfile
 from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/api", tags=["club-identity-jerseys"])
+
+# Named module-level dependency (rather than an inline `Depends(require_bound_organization_access(...))`
+# per route) so it is a single stable callable both routes share and tests can
+# target with `app.dependency_overrides[require_club_identity_write_access] = ...`.
+require_club_identity_write_access = require_bound_organization_access(
+    OrganizationRole.CLUB, forbidden_detail="club_access_required"
+)
 
 
 def get_identity_service(session=Depends(get_session)) -> ClubIdentityService:
@@ -55,6 +64,7 @@ def patch_club_identity(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     service: ClubIdentityService = Depends(get_identity_service),
+    _: User = Depends(require_club_identity_write_access),
 ) -> ClubIdentityProfileView:
     _require_club_editor(club_id, session=session, current_user=current_user)
     try:
@@ -77,6 +87,7 @@ def patch_club_jerseys(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     service: ClubIdentityService = Depends(get_identity_service),
+    _: User = Depends(require_club_identity_write_access),
 ) -> JerseySetView:
     _require_club_editor(club_id, session=session, current_user=current_user)
     try:
