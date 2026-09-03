@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/gte_exchange_models.dart';
-import '../../../data/gte_models.dart';
+import '../../../domain/ownership/gtex_ownership_models.dart';
 import '../../../providers/gte_exchange_controller.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 import '../models/gtex_market_browse_models.dart';
@@ -152,12 +152,12 @@ class _GtexPlayerMarketRedesignScreenState
         // room for it above the board.
         final bool showMoversRail =
             MediaQuery.sizeOf(context).width >= 1024;
-        final Set<String> ownedPlayerIds = <String>{
-          for (final GtePortfolioHolding holding
-              in widget.controller.portfolio?.holdings ??
-                  const <GtePortfolioHolding>[])
-            holding.playerId,
-        };
+        // Ownership comes from PHASE4-B's published contract (§4.3); before it
+        // loads, or when signed out, the market simply does not claim
+        // ownership.
+        final Set<String> ownedPlayerIds = GtexOwnershipBook.fromPortfolio(
+          widget.controller.portfolio,
+        ).stakes.map((GtexOwnershipStake s) => s.playerId).toSet();
 
         return GtexMasterDetailScaffold(
           title: 'Transfer Hub',
@@ -223,8 +223,6 @@ class _GtexPlayerMarketRedesignScreenState
                 )
                 : null,
             players: players,
-            // Ownership comes from the loaded portfolio; before it loads, or
-            // when signed out, the market simply does not claim ownership.
             ownedPlayerIds: ownedPlayerIds,
             totalPlayers: widget.controller.marketTotalPlayerCount,
             selectedPlayerId: _selectedPlayerId,
