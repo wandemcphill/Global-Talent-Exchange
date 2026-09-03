@@ -3,8 +3,19 @@
 **Date:** 2026-09-03
 **Measured against:** `origin/main` @ `2abe01fd` (Merge PR #91)
 **Rebased onto:** `origin/main` @ `7f7dfdc1` (Merge PR #94)
-**Branch:** `phase4/contract-drift-hardening`
+**Branch:** `phase4/contract-drift-hardening` — merged as PR #96 (`1b138034`)
 **Scope:** API contract integrity only. No application architecture, Player Card, router, Home, Market UX, Regen UX, or Club UX changes.
+
+---
+
+## -1. Follow-up — §6 (Class A) fixed on `phase4/get-write-side-effects`
+
+PR #96 (§0–§8 below) shipped with §5.1 fixed and §5.2/§5.3/§6 documented but open. Two follow-ups exist:
+
+- `phase4/ws-match-collision-fix` (PR #97, open) fixes §5.2.
+- `phase4/get-write-side-effects` (this branch) fixes the one genuine bug in §6 — see the rewritten §6 for the full account. Investigating it also **reversed §6's own "sweep Class B" recommendation**: what looked like 43 pointless no-op commits turned out to depend on a real, shared write (an auth-session `last_used_at` touch) that a naive per-handler scan couldn't see. Sweeping them, as originally suggested, would have been a regression, not a cleanup.
+
+§5.3 remains open, unowned.
 
 ---
 
@@ -20,7 +31,7 @@ What this PR still delivers, all live against `7f7dfdc1`:
 |---|---|
 | **§5.1 — the `/api/v2/admin` middleware gap** | **Fixed.** Still present on `main`. This is now the PR's primary change. |
 | **§7 — the regression guard** | **New.** Nothing on `main` prevents the drift recurring; PR #94 absorbed the backlog by luck of timing, not by a gate. |
-| **§5.2, §5.3, §6** | Documented, not fixed. Still present on `main`. |
+| **§5.2, §5.3, §6** | Documented, not fixed at merge time. §6 (Class A) fixed since, §5.2 fixed on a separate open PR -- see §-1. |
 | Residual artifact regeneration | ~40 lines. `main`'s frontend-derived docs are *already* stale again — `gtex_regen_world_api.dart` call sites landed after the last stage-1 run. A live instance of the same pattern, caught by the pipeline here. |
 
 The absorption is itself evidence for §2: PR #94 fixed the drift as a side effect of touching the same generated files, with no gate involved and nothing recording that it happened. The next agent who does not happen to regenerate re-opens it.
@@ -183,7 +194,7 @@ Recommended but **deliberately not done here** (each is owned elsewhere; see §8
 
 4. Add `generate_contract_audit.py` to `quality-gates.yml`, or better, leave CI as-is and rely on the new test. Adding stage 1 to CI would make the pipeline *silently self-heal* — it would regenerate `ROUTE_MAP.json` in the runner, never commit it, and never fail. A test that **fails loudly** is the correct gate; a regeneration step would mask the drift it is meant to catch.
 5. Resolve the `/api/v2/ws/match/{match_id}` handler collision (§5.2).
-6. Sweep the Class B defensive commits in §6.
+6. ~~Sweep the Class B defensive commits in §6.~~ **Reversed, not done -- see §-1 and the rewritten §6.** Tracing the shared auth dependency chain found Class B's commits are not no-ops; sweeping them would have broken auth-session touch persistence on read-only traffic.
 
 ---
 
@@ -281,35 +292,55 @@ An earlier pass of this scan reported 120 routes because its pattern missed `get
 
 `update_match_v2_tactics` and the six `match_engine` `create_*` handlers are the two groups worth a security-owned look. Neither is fixed here.
 
-## 6. GET endpoints with write side effects
+## 6. GET endpoints with write side effects -- one fixed, one earlier recommendation reversed
 
 AST-scanned every handler whose only HTTP method is `GET` for transaction writes. **51 GET handlers commit.** Splitting by whether an identifiable state-changing call precedes the commit:
 
-### Class A — GET performs a real write (8)
+### Class A -- GET performs a real write (8)
 
 | Canonical path | Mutation |
 |---|---|
-| `GET /api/v2/players/{player_id}/shares/market` | `get_or_create_market_view` — **creates a share market row** |
+| `GET /api/v2/players/{player_id}/shares/market` | `get_or_create_market_view` -- creates a share market row |
 | `GET /api/v2/notifications/preferences` | `get_or_create_preferences` |
 | `GET /api/v2/real-world/settings/me` | `get_or_create_settings` |
 | `GET /api/v2/clubs/{club_id}/identity/metrics` | `refresh_identity_metrics_for_actor` |
-| `GET /api/v2/fast-cups/{cup_id}/result-summary` | `settle_result_summary` — **settles a result** |
-| `GET /api/v2/feed/for-you` | `record_delivery` |
-| `GET /api/v2/feed/following` | `record_delivery` |
-| `GET /api/v2/feed/for-you/refresh` | `record_refresh_delivery`, `refresh_for_you` |
+| `GET /api/v2/fast-cups/{cup_id}/result-summary` | `settle_result_summary` -- settles a result |
+| `GET /api/v2/feed/for-you` | `record_delivery` -- **FIXED, see below** |
+| `GET /api/v2/feed/following` | `record_delivery` -- **FIXED, see below** |
+| `GET /api/v2/feed/for-you/refresh` | `record_refresh_delivery`, `refresh_for_you` -- **FIXED, see below** |
 
-These are lazy-materialisation and delivery-accounting patterns. They are not accidents, but they do mean these GETs are **not idempotent and not safely cacheable or retryable**. Two deserve attention:
+Six of the eight are lazy-materialisation patterns (`get_or_create_*`, `refresh_identity_metrics_for_actor`) or a settlement handler with its own idempotency key (`settle_result_summary` -- traced: `_settle_reward` looks up an existing `FastCupPayout` by `idempotency_key` before writing, and it's the only call site anywhere in the codebase, i.e. the deliberate settlement trigger, not an accidental one). All six are safe against retries and confirmed intentional-by-design. Not fixed, not needing a fix.
 
-- `settle_result_summary` on a GET performs settlement — a financially meaningful operation behind a method that any crawler, prefetcher, or retry layer may issue repeatedly.
-- `get_or_create_market_view` lets a GET create market rows for arbitrary `player_id` values, which is a write amplification path worth bounding.
+#### Fixed: creator-earnings double-crediting on every repeat feed delivery
 
-### Class B — GET commits with no identifiable mutation (43)
+The other two write paths -- `record_delivery` (used by both `/feed/for-you` and `/feed/following`) and `record_refresh_delivery` -- funnel into `PersonalizedFeedRankingService._record_clip_delivery`, which calls `creator_earnings_service.track_impression(reference_key=f"personalized-feed:{feed_source}:{user_id}:{slot_index}:{clip.clip_id}:{delivered_at.isoformat()}")`.
 
-Includes `/api/v2/admin/finance/control-tower`, `/api/v2/session/bootstrap`, the five `/api/v2/leaderboard/*` routes, seven `/api/v2/news|rankings/*` routes, and four `/api/v2/clubs/{id}/scouting-intelligence/*` routes.
+`_record_event` (the method behind `track_impression`) already implements its own idempotency guard -- it looks up an existing `ClipEarningsLog` by `reference_key` and returns early if found -- but `delivered_at.isoformat()` is a fresh wall-clock timestamp on *every call*, so the guard could never fire: every repeat delivery of the same clip to the same user generated a distinct key and credited the creator again.
 
-For most of these the `session.commit()` is a no-op on a read-only transaction — harmless but misleading, since it makes every one of them look like a writer to any audit. A few may commit writes made inside a service call that this scan could not attribute.
+This wasn't a hypothetical: `record_delivery` runs unconditionally on every GET to `/feed/for-you` and `/feed/following`, **including a plain, non-`refresh` request that serves the exact same cached items again** (`get_following`'s `_build_response` sets `cache_hit=True` and returns the cached top-N without recomputing anything). A page reload, a retried request, or a proxy prefetch of either endpoint re-credited the creator on every hit.
 
-**Recommendation:** treat Class A as intentional-but-documented, and sweep Class B to drop the defensive commits so the two classes stop being indistinguishable. Neither is fixed here — both are application behaviour, outside this PR's scope.
+Fix: bucket `delivered_at` to the minute before building the reference key (`backend/app/viral/personalized_feed_service.py::_record_clip_delivery`). Same-instant repeats -- retries, double-clicks, prefetch, a cache-hit response -- collapse into one credited impression; a genuinely later re-view (a different minute) still counts. This makes the dedup guard the code already tries to run actually work, rather than inventing new crediting policy -- no product decision about *how often* a re-view should count was made here, only that duplicate-instant deliveries of the same clip shouldn't double-pay.
+
+Regression test: `backend/tests/viral/test_personalized_feed_service.py::test_personalized_feed_repeat_delivery_within_a_minute_does_not_double_credit` -- two `record_delivery` calls 47 seconds apart, same clip, same user; asserts `wallet.total_impressions == 1` and one `ClipEarningsLog` row, not two.
+
+### Class B -- GET commits with no identifiable mutation in the handler body (43)
+
+The original framing of this class -- "no identifiable mutation... the commit is a no-op on a read-only transaction... sweep Class B to drop the defensive commits" -- was wrong, and fixing this item is what surfaced why.
+
+Tracing beyond the handler body (into every called service method, every `Depends(...)` dependency, and the shared auth chain those dependencies run through) found that **every one of these 43 is reachable from a real, if intermittent, ORM write**, not from the handler's own logic but from the auth machinery every authenticated route depends on:
+
+```
+# backend/app/auth/dependencies.py::_resolve_authenticated_user -- runs on every
+# Depends(get_current_user) call, i.e. on nearly every authenticated route in the app
+if _should_touch_auth_session(auth_session):
+    auth_session.last_used_at = _utcnow()   # staged ORM write, needs a commit to persist
+```
+
+`_should_touch_auth_session` throttles this to once per 60 seconds per session -- so it is not on *every* request, but it is a genuine, expected write on most of them, and it depends entirely on **some** commit happening in the request to persist. For a GET handler with no business-logic write of its own, that `session.commit()` at the end of the handler is not defensive dead code -- it is the *only* thing that persists the session's `last_used_at` touch. Sweeping it, as originally recommended, would have silently broken "last active" tracking for any user who only ever reads (browses leaderboards, rankings, news, their own notification preferences) without hitting a mutating endpoint -- a real, if minor, regression, introduced in the name of removing a no-op that turned out not to be one.
+
+Four of the 43 (`segment_clubs.py`'s `list_scouting_intelligence_*` / `get_scouting_intelligence_*`) have a second, separate real write, also invisible at the handler level: `_require_owned_club`/`_require_scouting_club_access` call `AccessControlService.require_club_access`, which -- for a legacy club owner with no `OrganizationMembership` row yet -- calls `ensure_club_organization`, which does `session.add(Organization(...)); session.flush()`. Rare (first access by a legacy-owned club), but real, and also depends on the handler's commit to persist.
+
+**Nothing in Class B is touched here.** The audit's own hedge -- "a few may commit writes made inside a service call that this scan could not attribute" -- undersold it: not a few, all of them, via a dependency the original AST scan (and my first attempt at fixing this) never traced into. The corrected recommendation: **leave Class B exactly as it is.** If a future pass wants to make GETs in this app provably side-effect-free, the auth-session touch needs its own commit boundary independent of the handler's -- a real, if small, architectural change, and out of scope here.
 
 ---
 
@@ -376,5 +407,5 @@ Note what this means now that PR #94 has absorbed the backlog: **test 1 would ha
 ### Residual risk after this PR
 
 - CI still does not run stage 1; the new test is the only thing consulting backend source. If the test is skipped, marked xfail, or its 31-second scan is trimmed for speed, the drift returns silently. **Do not weaken it without replacing the coverage.**
-- §5.2 and §6 are documented, not fixed. Each needs an owner outside this PR's scope. §5.1 is fixed.
+- §5.3 is documented, not fixed. It needs an owner outside this PR's scope. §5.1 and §6 (Class A) are fixed here; §5.2 is fixed on a separate open PR (#97) -- see §-1.
 - Admin surfaces mounted outside an admin prefix (e.g. `/api/competitions/admin`) are still invisible to prefix matching and depend solely on their handler guard.

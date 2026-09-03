@@ -166,11 +166,33 @@ def test_personalized_feed_blends_following_feed_and_emits_new_clip_notification
     with session_factory() as session:
         session.add_all(
             [
-                User(id="viewer-1", email="viewer@example.com", username="viewer", password_hash="hashed", role=UserRole.USER),
-                User(id="creator-followed", email="followed@example.com", username="followed", password_hash="hashed", role=UserRole.USER),
-                User(id="creator-other", email="other@example.com", username="other", password_hash="hashed", role=UserRole.USER),
-                User(id="fan-a", email="fan-a@example.com", username="fana", password_hash="hashed", role=UserRole.USER),
-                User(id="fan-b", email="fan-b@example.com", username="fanb", password_hash="hashed", role=UserRole.USER),
+                User(
+                    id="viewer-1",
+                    email="viewer@example.com",
+                    username="viewer",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+                User(
+                    id="creator-followed",
+                    email="followed@example.com",
+                    username="followed",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+                User(
+                    id="creator-other",
+                    email="other@example.com",
+                    username="other",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+                User(
+                    id="fan-a", email="fan-a@example.com", username="fana", password_hash="hashed", role=UserRole.USER
+                ),
+                User(
+                    id="fan-b", email="fan-b@example.com", username="fanb", password_hash="hashed", role=UserRole.USER
+                ),
             ]
         )
         session.add_all(
@@ -275,8 +297,20 @@ def test_personalized_feed_delivery_credits_creator_wallet_on_impression() -> No
     with session_factory() as session:
         session.add_all(
             [
-                User(id="viewer-wallet-1", email="viewer-wallet@example.com", username="viewer-wallet", password_hash="hashed", role=UserRole.USER),
-                User(id="creator-wallet-1", email="creator-wallet@example.com", username="creator-wallet", password_hash="hashed", role=UserRole.USER),
+                User(
+                    id="viewer-wallet-1",
+                    email="viewer-wallet@example.com",
+                    username="viewer-wallet",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+                User(
+                    id="creator-wallet-1",
+                    email="creator-wallet@example.com",
+                    username="creator-wallet",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
             ]
         )
         session.commit()
@@ -317,9 +351,7 @@ def test_personalized_feed_delivery_credits_creator_wallet_on_impression() -> No
 
         service.record_delivery(response)
 
-        wallet = session.scalar(
-            select(CreatorWallet).where(CreatorWallet.creator_user_id == "creator-wallet-1")
-        )
+        wallet = session.scalar(select(CreatorWallet).where(CreatorWallet.creator_user_id == "creator-wallet-1"))
         logs = list(session.scalars(select(ClipEarningsLog)).all())
 
         assert wallet is not None
@@ -334,6 +366,111 @@ def test_personalized_feed_delivery_credits_creator_wallet_on_impression() -> No
 
     assert len(cache.events) == 1
     assert cache.events[0]["creator_user_id"] == "creator-wallet-1"
+
+
+def test_personalized_feed_repeat_delivery_within_a_minute_does_not_double_credit() -> None:
+    """A retried, prefetched, or cache-hit repeat of the same impression must not re-pay the creator.
+
+    record_delivery runs unconditionally on every GET to /feed/for-you and
+    /feed/following, including a plain (non-refresh) request that serves the
+    same cached items again. Regression for the reference_key bug where a
+    fresh isoformat() timestamp on every call defeated track_impression's own
+    dedup lookup, so every repeat delivery of the same clip credited the
+    creator again.
+    """
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            User.__table__,
+            CreatorWallet.__table__,
+            ClipEarningsLog.__table__,
+        ],
+    )
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    cache = _FakeCreatorEarningsCache()
+
+    with session_factory() as session:
+        session.add_all(
+            [
+                User(
+                    id="viewer-repeat-1",
+                    email="viewer-repeat@example.com",
+                    username="viewer-repeat",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+                User(
+                    id="creator-repeat-1",
+                    email="creator-repeat@example.com",
+                    username="creator-repeat",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+            ]
+        )
+        session.commit()
+
+    with session_factory() as session:
+        service = PersonalizedFeedRankingService(
+            session=session,
+            feed_store=InMemoryPersonalizedFeedStore(),
+            creator_earnings_service=CreatorAttentionEarningsService(session=session, cache=cache),
+        )
+        clip = PersonalizedFeedClipView.model_validate(
+            {
+                **_build_clip(
+                    clip_id="clip-repeat-1",
+                    creator_id="creator-repeat-1",
+                    viral_score=84,
+                    ranking_score=63.0,
+                    metadata={"creator_user_id": "creator-repeat-1"},
+                ).model_dump(mode="python"),
+                "rank": 1,
+                "score": 1.42,
+                "feed_source": PERSONALIZED_FEED_SOURCE_FOR_YOU,
+                "score_breakdown": PersonalizedFeedScoreBreakdownView(
+                    affinity=PersonalizedFeedAffinityView(),
+                    final_score=1.42,
+                ).model_dump(mode="python"),
+            }
+        )
+        first_call = datetime(2026, 3, 29, 10, 30, 0, tzinfo=UTC)
+        second_call = datetime(2026, 3, 29, 10, 30, 47, tzinfo=UTC)  # same minute, distinct instant
+
+        service.record_delivery(
+            PersonalizedFeedResponse(
+                user_id="viewer-repeat-1",
+                items=[clip],
+                generated_at=first_call,
+                feed_key="user:viewer-repeat-1:feed",
+                feed_source=PERSONALIZED_FEED_SOURCE_FOR_YOU,
+                mix={PERSONALIZED_FEED_SOURCE_FOR_YOU: 1.0},
+                cache_hit=False,
+            )
+        )
+        service.record_delivery(
+            PersonalizedFeedResponse(
+                user_id="viewer-repeat-1",
+                items=[clip],
+                generated_at=second_call,
+                feed_key="user:viewer-repeat-1:feed",
+                feed_source=PERSONALIZED_FEED_SOURCE_FOR_YOU,
+                mix={PERSONALIZED_FEED_SOURCE_FOR_YOU: 1.0},
+                cache_hit=False,
+            )
+        )
+
+        wallet = session.scalar(select(CreatorWallet).where(CreatorWallet.creator_user_id == "creator-repeat-1"))
+        logs = list(session.scalars(select(ClipEarningsLog)).all())
+
+        assert wallet is not None
+        assert wallet.total_impressions == 1
+        assert len(logs) == 1
 
 
 def test_persistent_personalized_feed_store_falls_back_to_primary_when_replica_fails() -> None:
@@ -389,11 +526,41 @@ def test_personalized_feed_boosts_creators_trending_inside_follow_network() -> N
     with session_factory() as session:
         session.add_all(
             [
-                User(id="viewer-network", email="viewer-network@example.com", username="viewer-network", password_hash="hashed", role=UserRole.USER),
-                User(id="friend-a", email="friend-a@example.com", username="friend-a", password_hash="hashed", role=UserRole.USER),
-                User(id="friend-b", email="friend-b@example.com", username="friend-b", password_hash="hashed", role=UserRole.USER),
-                User(id="creator-network", email="creator-network@example.com", username="creator-network", password_hash="hashed", role=UserRole.USER),
-                User(id="creator-other", email="creator-other@example.com", username="creator-other", password_hash="hashed", role=UserRole.USER),
+                User(
+                    id="viewer-network",
+                    email="viewer-network@example.com",
+                    username="viewer-network",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+                User(
+                    id="friend-a",
+                    email="friend-a@example.com",
+                    username="friend-a",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+                User(
+                    id="friend-b",
+                    email="friend-b@example.com",
+                    username="friend-b",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+                User(
+                    id="creator-network",
+                    email="creator-network@example.com",
+                    username="creator-network",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
+                User(
+                    id="creator-other",
+                    email="creator-other@example.com",
+                    username="creator-other",
+                    password_hash="hashed",
+                    role=UserRole.USER,
+                ),
             ]
         )
         session.add_all(
@@ -467,7 +634,11 @@ def test_personalized_feed_reranks_after_two_session_interactions() -> None:
                     ranking_score=92.0,
                     event_type="goal",
                     tags=["goal"],
-                    metadata={"creator_id": "creator-global", "content_type": "highlight", "format_key": "instant_clip"},
+                    metadata={
+                        "creator_id": "creator-global",
+                        "content_type": "highlight",
+                        "format_key": "instant_clip",
+                    },
                 ),
                 _build_clip(
                     clip_id="clip-session",
@@ -549,10 +720,7 @@ def test_personalized_feed_reranks_after_two_session_interactions() -> None:
     refreshed = service.get_for_you(user_id="viewer-live", limit=2, refresh=True, session_id="session-live")
 
     assert refreshed.items[0].clip_id == "clip-session"
-    assert (
-        refreshed.items[0].score_breakdown.session_boost
-        > refreshed.items[1].score_breakdown.session_boost
-    )
+    assert refreshed.items[0].score_breakdown.session_boost > refreshed.items[1].score_breakdown.session_boost
 
 
 def test_personalized_feed_filters_seen_clips_from_future_results() -> None:
@@ -592,9 +760,7 @@ def test_personalized_feed_filters_seen_clips_from_future_results() -> None:
 
     refreshed = service.get_for_you(user_id="viewer-seen", limit=3, refresh=True)
 
-    assert {clip.clip_id for clip in refreshed.items}.isdisjoint(
-        {clip.clip_id for clip in first_response.items}
-    )
+    assert {clip.clip_id for clip in refreshed.items}.isdisjoint({clip.clip_id for clip in first_response.items})
     assert refreshed.items[0].clip_id == "clip-3"
 
 
@@ -805,16 +971,8 @@ def test_personalized_feed_applies_agent_fairness_cap_when_humans_exist() -> Non
 
     response = service.get_for_you(user_id="viewer-fair", limit=4, refresh=True)
 
-    agent_count = sum(
-        1
-        for clip in response.items
-        if clip.metadata.get("origin") == "creator_agent"
-    )
-    human_count = sum(
-        1
-        for clip in response.items
-        if clip.metadata.get("origin") == "human_creator"
-    )
+    agent_count = sum(1 for clip in response.items if clip.metadata.get("origin") == "creator_agent")
+    human_count = sum(1 for clip in response.items if clip.metadata.get("origin") == "human_creator")
 
     assert len(response.items) == 4
     assert agent_count <= 1
@@ -898,7 +1056,9 @@ def test_personalized_feed_resolves_pool_identifiers_from_match_feed_and_skips_u
         def build_match_feed(self, match_key: str, *, allocate_impressions: bool = False):  # noqa: ARG002
             self.match_feed_requests.append(match_key)
             if match_key != "match-fallback":
-                return ViralFeedResponse(clips=[], generated_at=datetime.now(UTC), personalization={"match_id": match_key})
+                return ViralFeedResponse(
+                    clips=[], generated_at=datetime.now(UTC), personalization={"match_id": match_key}
+                )
             clip = _build_clip(
                 clip_id="match-fallback::clip-fallback",
                 creator_id="creator-fallback",
@@ -906,7 +1066,9 @@ def test_personalized_feed_resolves_pool_identifiers_from_match_feed_and_skips_u
                 ranking_score=93.0,
                 metadata={"match_id": "match-fallback"},
             ).model_copy(update={"match_id": "match-fallback"})
-            return ViralFeedResponse(clips=[clip], generated_at=datetime.now(UTC), personalization={"match_id": match_key})
+            return ViralFeedResponse(
+                clips=[clip], generated_at=datetime.now(UTC), personalization={"match_id": match_key}
+            )
 
     class _FeedbackEngine:
         def creator_recommendation_boost(self, _creator_id: str) -> float:
