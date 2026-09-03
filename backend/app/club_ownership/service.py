@@ -19,6 +19,8 @@ from app.club_ownership.schemas import (
     ClubGovernanceVoteView,
     ClubHoldingView,
     ClubOwnershipView,
+    ClubPortfolioHoldingView,
+    ClubPortfolioView,
     ClubTokenTradeResultView,
     ClubTokenView,
     ClubTreasuryEntryView,
@@ -88,6 +90,80 @@ class ClubOwnershipService:
         self._require_club(club_id)
         _, treasury, _ = self._ensure_state(club_id)
         return self._treasury_view(treasury)
+
+    def list_user_club_portfolio(self, *, user: User) -> ClubPortfolioView:
+        """Every club in which ``user`` holds ownership tokens, valued live.
+
+        Read-only. This is the D -> B join: the portfolio surface folds these
+        club-share positions in alongside player holdings.
+        """
+        holdings = list(
+            self.session.scalars(
+                select(ClubHolding)
+                .where(ClubHolding.user_id == user.id)
+                .order_by(ClubHolding.updated_at.desc())
+            ).all()
+        )
+        views: list[ClubPortfolioHoldingView] = []
+        total_market = Decimal("0.0000")
+        total_cost = Decimal("0.0000")
+        for holding in holdings:
+            tokens = int(holding.tokens_owned)
+            if tokens <= 0:
+                continue
+            club = self.session.get(ClubProfile, holding.club_id)
+            if club is None:
+                continue
+            token, treasury, _ = self._ensure_state(holding.club_id)
+            share_price = Decimal(token.price).quantize(DECIMAL_QUANTUM)
+            avg_price = Decimal(holding.avg_price).quantize(DECIMAL_QUANTUM)
+            market_value = (share_price * Decimal(tokens)).quantize(DECIMAL_QUANTUM)
+            cost_basis = (avg_price * Decimal(tokens)).quantize(DECIMAL_QUANTUM)
+            unrealized = (market_value - cost_basis).quantize(DECIMAL_QUANTUM)
+            unrealized_pct = (
+                float((unrealized / cost_basis) * Decimal("100"))
+                if cost_basis > Decimal("0.0000")
+                else None
+            )
+            circulating = int(token.circulating_supply)
+            ownership_pct = (
+                float((Decimal(tokens) / Decimal(circulating)) * Decimal("100"))
+                if circulating > 0
+                else None
+            )
+            total_market += market_value
+            total_cost += cost_basis
+            views.append(
+                ClubPortfolioHoldingView(
+                    club_id=club.id,
+                    club_name=club.club_name,
+                    tokens_owned=tokens,
+                    avg_price_coin=avg_price,
+                    share_price_coin=share_price,
+                    market_value_coin=market_value,
+                    cost_basis_coin=cost_basis,
+                    unrealized_pl_coin=unrealized,
+                    unrealized_pl_pct=unrealized_pct,
+                    reward_tokens_earned=int(holding.reward_tokens_earned),
+                    holder_count=int(token.holder_count),
+                    circulating_supply=circulating,
+                    total_supply=int(token.total_supply),
+                    ownership_pct=ownership_pct,
+                    performance_score=Decimal(token.performance_score).quantize(DECIMAL_QUANTUM),
+                    win_rate=Decimal(token.win_rate).quantize(DECIMAL_QUANTUM),
+                    fan_demand_score=Decimal(token.fan_demand_score).quantize(DECIMAL_QUANTUM),
+                    treasury_balance_coin=Decimal(treasury.balance_coin).quantize(DECIMAL_QUANTUM),
+                    governance_enabled=bool(token.governance_enabled),
+                    metadata_json=dict(holding.metadata_json or {}),
+                )
+            )
+        return ClubPortfolioView(
+            club_count=len(views),
+            total_market_value_coin=total_market.quantize(DECIMAL_QUANTUM),
+            total_cost_basis_coin=total_cost.quantize(DECIMAL_QUANTUM),
+            total_unrealized_pl_coin=(total_market - total_cost).quantize(DECIMAL_QUANTUM),
+            holdings=views,
+        )
 
     def buy_tokens(self, *, club_id: str, buyer: User, quantity: int) -> ClubTokenTradeResultView:
         if quantity <= 0:

@@ -3,7 +3,9 @@ import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.
 import 'package:gte_frontend/features/club_lifecycle_redesign/club_lifecycle_redesign.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
+import '../models/gtex_club_ownership_models.dart';
 import '../models/gtex_club_redesign_models.dart';
+import '../widgets/gtex_club_ownership_panel.dart';
 import '../widgets/gtex_club_workspace_widgets.dart';
 import 'gtex_club_workspace_controller.dart';
 
@@ -35,6 +37,11 @@ class GtexClubOwnerDashboardV2 extends StatefulWidget {
     this.onPromoteAcademyProspect,
     this.onOpenMarket,
     this.onCreateCompetition,
+    this.clubOwnership,
+    this.clubOwnershipLoading = false,
+    this.clubOwnershipError,
+    this.onRefreshClubOwnership,
+    this.onOpenClubShareMarket,
   });
 
   final String clubId;
@@ -62,6 +69,13 @@ class GtexClubOwnerDashboardV2 extends StatefulWidget {
   final ValueChanged<String>? onPromoteAcademyProspect;
   final VoidCallback? onOpenMarket;
   final VoidCallback? onCreateCompetition;
+
+  /// The signed-in user's live-valued club-share book (`GET /api/portfolio/clubs`).
+  final GtexClubOwnershipPortfolio? clubOwnership;
+  final bool clubOwnershipLoading;
+  final String? clubOwnershipError;
+  final VoidCallback? onRefreshClubOwnership;
+  final VoidCallback? onOpenClubShareMarket;
 
   @override
   State<GtexClubOwnerDashboardV2> createState() =>
@@ -176,6 +190,11 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
             onGenerateAcademyProspects: widget.onGenerateAcademyProspects,
             onOfferAcademyContract: widget.onOfferAcademyContract,
             onPromoteAcademyProspect: widget.onPromoteAcademyProspect,
+            clubOwnership: widget.clubOwnership,
+            clubOwnershipLoading: widget.clubOwnershipLoading,
+            clubOwnershipError: widget.clubOwnershipError,
+            onRefreshClubOwnership: widget.onRefreshClubOwnership,
+            onOpenClubShareMarket: widget.onOpenClubShareMarket,
           ),
           rightPanel: GtexClubRightRail(snapshot: snapshot, ownerFacing: true),
           actions: <Widget>[
@@ -258,6 +277,11 @@ class _OwnerDetail extends StatelessWidget {
     required this.onGenerateAcademyProspects,
     required this.onOfferAcademyContract,
     required this.onPromoteAcademyProspect,
+    required this.clubOwnership,
+    required this.clubOwnershipLoading,
+    required this.clubOwnershipError,
+    required this.onRefreshClubOwnership,
+    required this.onOpenClubShareMarket,
   });
 
   final GtexClubWorkspaceSnapshot snapshot;
@@ -278,6 +302,11 @@ class _OwnerDetail extends StatelessWidget {
   final VoidCallback? onGenerateAcademyProspects;
   final ValueChanged<String>? onOfferAcademyContract;
   final ValueChanged<String>? onPromoteAcademyProspect;
+  final GtexClubOwnershipPortfolio? clubOwnership;
+  final bool clubOwnershipLoading;
+  final String? clubOwnershipError;
+  final VoidCallback? onRefreshClubOwnership;
+  final VoidCallback? onOpenClubShareMarket;
 
   @override
   Widget build(BuildContext context) {
@@ -412,6 +441,14 @@ class _OwnerDetail extends StatelessWidget {
           ),
           const SizedBox(height: GtexSpacing.md),
           _OwnerMetrics(snapshot: snapshot),
+          const SizedBox(height: GtexSpacing.md),
+          GtexClubOwnershipPanel(
+            portfolio: clubOwnership ?? GtexClubOwnershipPortfolio.empty(),
+            isLoading: clubOwnershipLoading,
+            errorMessage: clubOwnershipError,
+            onRetry: onRefreshClubOwnership,
+            onBrowseClubMarket: onOpenClubShareMarket,
+          ),
         ] else if (section == GtexClubOwnerSection.competitions) ...<Widget>[
           _CompetitionOpsPanel(snapshot: snapshot),
         ] else if (section == GtexClubOwnerSection.identity) ...<Widget>[
