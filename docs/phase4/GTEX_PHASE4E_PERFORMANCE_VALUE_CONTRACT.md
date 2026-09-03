@@ -1,6 +1,6 @@
 # GTEX PHASE 4E — MATCHDAY → FORM → VALUE CONTRACT
 
-**Status:** IMPLEMENTED, PENDING ARCHITECTURAL REVIEW
+**Status:** IMPLEMENTED — review blockers 1, 2 and 3 closed
 **Scope:** the chain `match → performance → form → valuation → market → ownership`
 
 This document is the contract for the only mechanism in GTEX by which football
@@ -171,8 +171,8 @@ implies a causal link the backend has not made is worse than no card:
 | `tests/performance_economy/test_scheduled_owner_path.py` | 7 | the cron path and the real owner path |
 | `tests/performance_economy/test_audit_invariants.py` | 26 | the review's 12 audit points |
 | `test/player_detail/matchday_form_card_test.dart` | 15 | the honesty rules above |
-| `test/player_detail/gtex_value_models_contract_test.dart` | 10 | API/Flutter nullability agreement |
-| **Total** | **131** | |
+| `test/player_detail/gtex_value_models_contract_test.dart` | 9 | API/Flutter nullability agreement |
+| **Total** | **130** | |
 
 ---
 
