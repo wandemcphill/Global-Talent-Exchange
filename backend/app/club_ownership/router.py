@@ -38,7 +38,9 @@ def get_my_club_portfolio(
 
 @legacy_router.get("/{club_id}/ownership", response_model=ClubOwnershipView)
 @api_router.get("/{club_id}/ownership", response_model=ClubOwnershipView)
-def get_club_ownership(club_id: str, user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> ClubOwnershipView:
+def get_club_ownership(
+    club_id: str, user: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> ClubOwnershipView:
     service = ClubOwnershipService(session)
     try:
         return service.get_ownership_view(club_id=club_id, user=user)
@@ -134,7 +136,9 @@ def vote_on_club_proposal(
 
 @legacy_router.get("/{club_id}/treasury", response_model=ClubTreasuryView)
 @api_router.get("/{club_id}/treasury", response_model=ClubTreasuryView)
-def get_club_treasury(club_id: str, _: User = Depends(get_current_user), session: Session = Depends(get_session)) -> ClubTreasuryView:
+def get_club_treasury(
+    club_id: str, _: User = Depends(get_current_user), session: Session = Depends(get_session)
+) -> ClubTreasuryView:
     service = ClubOwnershipService(session)
     try:
         return service.get_treasury_view(club_id=club_id)

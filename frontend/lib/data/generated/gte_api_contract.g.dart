@@ -10049,6 +10049,7 @@ const Map<String, String> gteApiDeprecatedAliases = <String, String>{
   '/api/v2/managers/trade-listings': '/api/v2/managers/trade-listings',
   '/api/v2/market/browse/catalog': '/api/v2/market/browse/catalog',
   '/api/v2/market/leagues': '/api/v2/market/leagues',
+  '/api/v2/market/movers': '/api/v2/market/movers',
   '/api/v2/market/national-teams': '/api/v2/market/national-teams',
   '/api/v2/market/nationalities': '/api/v2/market/nationalities',
   '/api/v2/market/players': '/api/v2/market/players',

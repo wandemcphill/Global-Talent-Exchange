@@ -97,9 +97,7 @@ def test_club_portfolio_values_holdings_at_the_live_share_price() -> None:
         dynamos = by_name["Port Harcourt Dynamos"]
         assert dynamos.tokens_owned == 30
         assert dynamos.share_price_coin > Decimal("0.0000")
-        assert dynamos.market_value_coin == (
-            dynamos.share_price_coin * Decimal("30")
-        ).quantize(Decimal("0.0001"))
+        assert dynamos.market_value_coin == (dynamos.share_price_coin * Decimal("30")).quantize(Decimal("0.0001"))
         assert dynamos.ownership_pct is not None
         assert view.total_market_value_coin == sum(
             (item.market_value_coin for item in view.holdings), Decimal("0.0000")

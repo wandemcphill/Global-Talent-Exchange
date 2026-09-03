@@ -1,6 +1,6 @@
 # Mismatch Report
 
-- Total mismatches detected: **1056**
+- Total mismatches detected: **1060**
 
 ## HIGH
 
@@ -408,7 +408,7 @@
 - `frontend/lib/data/discovery_api.dart` POST `/api/admin/discovery/featured-rails` -> `/api/v2/admin/discovery/featured-rails`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
 - `frontend/lib/data/governance_api.dart` INFERRED `/api/governance/proposals` -> `/api/v2/governance/proposals`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
 - `frontend/lib/data/governance_api.dart` INFERRED `/api/governance/proposals` -> `/api/v2/governance/proposals`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
-- ... and 581 more
+- ... and 585 more
 
 ## LOW
 
