@@ -5,7 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_user, get_session
+from app.models.user import User
 from app.schemas.player_agency import (
     ContractDecisionRequest,
     ContractDecisionView,
@@ -38,8 +39,17 @@ def get_player_agency_snapshot(
 def evaluate_contract_decision(
     player_id: str,
     payload: ContractDecisionRequest,
+    current_user: User = Depends(get_current_user),
     service: PlayerAgencyService = Depends(_service),
 ) -> ContractDecisionView:
+    # Not just a read-only preview: evaluate_contract_decision mutates the player's
+    # persistent agent state (contract_stance, cooldowns, cached decision) via
+    # PlayerAgencyService, the same engine the authenticated transfer/contract flows
+    # in player_lifecycle_service.py and transfer_market/service.py use for real
+    # offers. Requiring an authenticated caller here closes an anonymous write path
+    # onto shared player state; a fabricated offer submitted by anyone could still
+    # perturb a real player's negotiation history and cooldown timers.
+    del current_user
     try:
         return service.evaluate_contract_decision(player_id, payload)
     except KeyError as exc:
@@ -50,8 +60,13 @@ def evaluate_contract_decision(
 def evaluate_transfer_decision(
     player_id: str,
     payload: TransferDecisionRequest,
+    current_user: User = Depends(get_current_user),
     service: PlayerAgencyService = Depends(_service),
 ) -> TransferDecisionView:
+    # See evaluate_contract_decision above: same engine, same write to persistent
+    # player agent state (cooldowns, transfer_appetite, cached decision), same reason
+    # to require an authenticated caller rather than accept anonymous input.
+    del current_user
     try:
         return service.evaluate_transfer_decision(player_id, payload)
     except KeyError as exc:

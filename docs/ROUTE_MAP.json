@@ -30748,6 +30748,7 @@
         "parameters": [
           "player_id",
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -30775,6 +30776,7 @@
         "parameters": [
           "player_id",
           "payload",
+          "current_user",
           "service"
         ]
       },

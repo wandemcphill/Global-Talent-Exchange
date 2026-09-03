@@ -3,14 +3,18 @@
 **Date:** 2026-09-03
 **Measured against:** `origin/main` @ `2abe01fd` (Merge PR #91)
 **Rebased onto:** `origin/main` @ `7f7dfdc1` (Merge PR #94)
-**Branch:** `phase4/contract-drift-hardening` — **merged as PR #96** (`1b138034`)
+**Branch:** `phase4/contract-drift-hardening` — merged as PR #96 (`1b138034`)
 **Scope:** API contract integrity only. No application architecture, Player Card, router, Home, Market UX, Regen UX, or Club UX changes.
 
 ---
 
-## -1. Follow-up — §5.2 fixed on `phase4/ws-match-collision-fix`
+## -1. Follow-up — all three items originally left open are now addressed
 
-PR #96 (§0–§8 below) shipped and merged with §5.1 fixed and §5.2/§5.3/§6 documented but open. **§5.2 — the `/api/v2/ws/match/{match_id}` handler collision — is now fixed**, on a new branch off post-merge `main` (`1b138034`). Investigating it turned up that it was not the static ambiguity originally described, but a deterministic runtime bug already failing 5 tests in `backend/tests/api_v1/test_router.py`. Full account in the rewritten §5.2. §5.3 and §6 remain open.
+PR #96 shipped with §5.1 fixed and §5.2/§5.3/§6 documented but open. Three follow-ups closed the rest, all now merged to `main`:
+
+- `phase4/ws-match-collision-fix` (PR #97) fixed §5.2 — not the static ambiguity originally described, but a deterministic runtime bug already failing 5 tests in `backend/tests/api_v1/test_router.py`. Full account in the rewritten §5.2.
+- `phase4/get-write-side-effects` (PR #98) fixed the one genuine bug in §6 (creator-earnings double-crediting on repeat feed delivery) and **reversed** §6's own "sweep Class B" recommendation after tracing showed it would have been a regression, not a cleanup. Full account in the rewritten §6.
+- `phase4/mutating-routes-auth` (this branch) traced every one of §5.3's 28 flagged handlers into its actual body and call chain. 26 turn out to be false positives — 25 have no database session anywhere in their path (pure computation/preview endpoints, correctly public) and 2 are deliberately anonymous, rate-limited telemetry writes. **One real gap:** `evaluate_contract_decision`/`evaluate_transfer_decision` in `routes/player_agency.py` write to a player's shared persistent agent state with no caller identity at all — fixed by requiring authentication. See the rewritten §5.3 for the full per-handler account.
 
 ---
 
@@ -26,7 +30,7 @@ What this PR still delivers, all live against `7f7dfdc1`:
 |---|---|
 | **§5.1 — the `/api/v2/admin` middleware gap** | **Fixed.** Still present on `main`. This is now the PR's primary change. |
 | **§7 — the regression guard** | **New.** Nothing on `main` prevents the drift recurring; PR #94 absorbed the backlog by luck of timing, not by a gate. |
-| **§5.2, §5.3, §6** | Documented, not fixed at merge time. §5.2 fixed since — see §-1. |
+| **§5.2, §5.3, §6** | Documented, not fixed at merge time. All three fixed since, on separate PRs (#97, #98, and this branch) — see §-1. |
 | Residual artifact regeneration | ~40 lines. `main`'s frontend-derived docs are *already* stale again — `gtex_regen_world_api.dart` call sites landed after the last stage-1 run. A live instance of the same pattern, caught by the pipeline here. |
 
 The absorption is itself evidence for §2: PR #94 fixed the drift as a side effect of touching the same generated files, with no gate involved and nothing recording that it happened. The next agent who does not happen to regenerate re-opens it.
@@ -297,55 +301,89 @@ Regression guard: `backend/tests/app/test_websocket_route_collisions.py` hydrate
 
 `shared/api_contract.json` records this path's owner as `stream_live_match_events` (`realtime/router.py`) both before and after this fix — unchanged, because `generate_contract_audit.py`'s dedup heuristic (`route_key` + last-write-wins) has no model of `register_domain_modules`'s eager/lazy collision resolution or the `_reserved_versioned_fingerprints` mechanism that stops `realtime`'s alias from ever being created at this path in the first place. At runtime, `realtime.stream_live_match_events` is **not** reachable at `/api/v2/ws/match/{match_id}` — only at the bare `/ws/match/{match_id}` and `/ws/matches/{match_id}`. The static contract's canonical-handler attribution for this path was wrong before this PR and remains wrong after it; only the *runtime* collision (two different implementations competing for the same request) is fixed here. Bringing the generator's model in line with `register_domain_modules` is a distinct piece of work, out of scope for a route-level fix.
 
-### 5.3 Mutating routes without a handler-level auth dependency
+### 5.3 Mutating routes without a handler-level auth dependency -- **investigated, one fixed, 26 were false positives**
 
-Of 801 `POST/PUT/PATCH/DELETE` routes, **63** have no auth-looking dependency in their signature. Excluding legitimate unauthenticated intake (login, signup, password reset, recovery, email confirmation, provider webhooks) leaves **28 distinct handlers**:
+Of 801 `POST/PUT/PATCH/DELETE` routes, **63** have no auth-looking dependency in their signature. Excluding legitimate unauthenticated intake (login, signup, password reset, recovery, email confirmation, provider webhooks) left **28 distinct handlers**, listed at merge time as a lead list, not confirmed vulnerabilities, with two groups singled out for a closer look: `update_match_v2_tactics` and the six `match_engine` `create_*` handlers.
 
-| Group | Count | Assessment |
-|---|---|---|
-| `academy/api/router.py` — `preview_*`, `season_summary` | 6 | Stateless calculators. `POST` used for a request body, not to write. Low risk. |
-| `champions_league/api/router.py` — `build_*`, `*_preview` | 5 | Same pattern: bracket/table computation from a posted payload. |
-| `match_engine/api/router.py` — `create_match_replay`, `simulate_match`, `create_match_timeline`, `create_match_summary`, `create_match_render_sync`, `create_post_match_analytics` | 6 | Named `create_*`; worth confirming these are pure renderers and not persisting match records. |
-| `live_matches/router.py:1247` — `update_match_v2_tactics` | 1 | **Highest concern here.** Mutates in-flight match tactics; not behind a protected middleware prefix. |
-| `national_team_engine` — `auto_build_squad` | 1 | Builds a squad for a competition entry. |
-| `club_social` — `record_challenge_share_event`, `record_match_share_event` | 2 | Share-link telemetry; unauthenticated by design, but unbounded write paths. |
-| Others (`federations`, `integrations/payments/quote`, `real_world_hub/normalize`, `player_agency` ×2, `sponsorship_engine`, `ultimate_league` payout preview) | 7 | Mostly preview/validation endpoints. |
+That closer look is what this fix delivers -- every one of the 28 was traced into its actual body and, where the handler itself showed nothing, into the service methods and `Depends(...)` dependencies it calls, checking for `session.add`/`delete`/`merge`/direct ORM attribute assignment.
 
-**Caveats — this list is a lead list, not a finding of confirmed vulnerabilities.** The scan reads handler signatures, decorators, and router-level `dependencies=`. It cannot see auth applied through `LazyModuleMiddleware`, module-mount configuration in `modules.py`, or service-layer checks.
+#### 25 of 28: no database session anywhere in the call path
 
-An earlier pass of this scan reported 120 routes because its pattern missed `get_current_trading_user`; the entire `market/router.py` trade surface (`/buy`, `/sell`, `/offers`, `/trade-intents`) is in fact properly guarded by `Depends(get_current_trading_user)`. The `wallets` surface is guarded both by signature and by the middleware's `/api/wallet*` and `/api/v2/wallet*` prefixes. Recorded here because it is the reason the number should be verified per-route rather than trusted in aggregate.
+`academy/api/router.py`'s 6 `preview_*`/`season_summary` handlers, `champions_league/api/router.py`'s 5 `build_*`/`*_preview` handlers, all 6 `match_engine/api/router.py` handlers (`create_match_replay`, `simulate_match`, `create_match_timeline`, `create_match_summary`, `create_match_render_sync`, `create_post_match_analytics`), `national_team_engine`'s `auto_build_squad`, `real_world_hub`'s `normalize_player`, `integrations/payments`'s `quote_payment`, `ultimate_league`'s `preview_payouts`, and `federations`'s `validate_action` -- **25 handlers in total** -- take a posted payload, compute a result (a bracket, a simulated match, a squad suggestion, a price quote, a compliance check), and return it. None of them accept a `Session`, and tracing one level into their called services confirmed none of the services do either (`match_engine`'s `MatchSimulationService()` takes no session at construction at all). They cannot write to the database. They are `POST` because the input is a body, not because they mutate.
 
-`update_match_v2_tactics` and the six `match_engine` `create_*` handlers are the two groups worth a security-owned look. Neither is fixed here.
+`update_match_v2_tactics` -- the one the original list called "highest concern" -- turned out to be a stub: `raise HTTPException(501, "Live tactical instruction persistence is not mounted.")`, unconditionally, after loading (never writing) match state. It cannot currently mutate anything either.
 
-## 6. GET endpoints with write side effects
+None of these 25 need or get an auth dependency. Adding one would not close a vulnerability -- there is nothing to protect -- and would just as likely break legitimate anonymous callers of what are, by design, public calculators.
+
+#### 2 of 28: real writes, correctly public, protected by the existing rate limiter
+
+`club_social`'s `record_challenge_share_event` and `record_match_share_event` do write -- `service.session.add(ChallengeShareEvent(...)); service.session.commit()` -- and take no auth dependency, `actor_user_id` hardcoded to `None`. This is deliberate: a share link is meant to be clickable by someone who isn't logged in, and the event needs recording regardless. Requiring auth would break the actual product feature. The residual risk is abuse volume (unbounded anonymous writes), not authorization, and it is already covered by the app-wide `RateLimitMiddleware` (`app/core/rate_limit.py`) that every request passes through. Not fixed here, correctly.
+
+#### 1 of 28: **fixed** -- two handlers that write to shared player state with no caller identity at all
+
+`routes/player_agency.py`'s `evaluate_contract_decision` and `evaluate_transfer_decision` stage a real ORM write with no auth dependency: `PlayerAgencyService.evaluate_contract_decision`/`evaluate_transfer_decision` set `state.contract_stance`, `state.recent_offer_cooldown_until`, `state.next_review_at`, `state.transfer_appetite`, and a cached-decision blob directly on the loaded `state` object, then `self.session.flush()`. That `state` is the player's persistent agent-decision state -- the same one `player_lifecycle_service.py` and `transfer_market/service.py` write to when a real, authenticated club submits an actual offer, since both reuse this exact evaluation engine. `offering_club_id`/`destination_club_id` in the request body are caller-supplied, not derived from an authenticated identity.
+
+One mitigating fact and why it doesn't change the fix: neither handler, nor `PlayerAgencyService`, nor anything else in the call chain calls `.commit()` -- only `.flush()`. `get_session`'s teardown is a bare `session.close()` with no commit, so today these writes roll back at the end of the request and never persist. That is a real, separate bug (the decision cache and cooldown timers this code clearly means to persist across requests currently never do), but it is not a reason to leave the auth gap open: fixing the missing commit as an unrelated piece of future work would silently turn this into a live anonymous-write vulnerability, by someone who has no reason to know this thread exists.
+
+Fixed by requiring `Depends(get_current_user)` on both handlers -- no club-ownership check added (that would mean deciding, without product input, whether "any authenticated user" or "the authenticated user's own club" is the right bar, and the existing codebase is not consistent enough on that point to infer it safely). This closes the anonymous-write path; it does not change who can evaluate what once authenticated, which is exactly the boundary every comparable mutation in this codebase draws (see `test_player_lifecycle_auth_boundary.py`, the direct precedent this fix's test file is modelled on).
+
+The read-only `GET /api/players/{player_id}/agency` snapshot is untouched -- it doesn't write, and doesn't need to.
+
+Regression test: `backend/tests/players/test_player_agency_auth_boundary.py` -- both mutations return 401 with `code: "unauthorized"` for anonymous callers and clear the auth boundary (any non-401) once authenticated; the GET snapshot stays reachable anonymously.
+
+#### On the earlier `120` figure
+
+An earlier pass of this scan reported 120 unauthenticated mutating routes because its pattern missed `get_current_trading_user`; the entire `market/router.py` trade surface (`/buy`, `/sell`, `/offers`, `/trade-intents`) is in fact properly guarded by it, and the `wallets` surface is guarded both by signature and by the middleware's `/api/wallet*` and `/api/v2/wallet*` prefixes. Kept here as the reason this whole finding needed per-route verification rather than aggregate trust -- which is what this fix did.
+
+## 6. GET endpoints with write side effects -- one fixed, one earlier recommendation reversed
 
 AST-scanned every handler whose only HTTP method is `GET` for transaction writes. **51 GET handlers commit.** Splitting by whether an identifiable state-changing call precedes the commit:
 
-### Class A — GET performs a real write (8)
+### Class A -- GET performs a real write (8)
 
 | Canonical path | Mutation |
 |---|---|
-| `GET /api/v2/players/{player_id}/shares/market` | `get_or_create_market_view` — **creates a share market row** |
+| `GET /api/v2/players/{player_id}/shares/market` | `get_or_create_market_view` -- creates a share market row |
 | `GET /api/v2/notifications/preferences` | `get_or_create_preferences` |
 | `GET /api/v2/real-world/settings/me` | `get_or_create_settings` |
 | `GET /api/v2/clubs/{club_id}/identity/metrics` | `refresh_identity_metrics_for_actor` |
-| `GET /api/v2/fast-cups/{cup_id}/result-summary` | `settle_result_summary` — **settles a result** |
-| `GET /api/v2/feed/for-you` | `record_delivery` |
-| `GET /api/v2/feed/following` | `record_delivery` |
-| `GET /api/v2/feed/for-you/refresh` | `record_refresh_delivery`, `refresh_for_you` |
+| `GET /api/v2/fast-cups/{cup_id}/result-summary` | `settle_result_summary` -- settles a result |
+| `GET /api/v2/feed/for-you` | `record_delivery` -- **FIXED, see below** |
+| `GET /api/v2/feed/following` | `record_delivery` -- **FIXED, see below** |
+| `GET /api/v2/feed/for-you/refresh` | `record_refresh_delivery`, `refresh_for_you` -- **FIXED, see below** |
 
-These are lazy-materialisation and delivery-accounting patterns. They are not accidents, but they do mean these GETs are **not idempotent and not safely cacheable or retryable**. Two deserve attention:
+Six of the eight are lazy-materialisation patterns (`get_or_create_*`, `refresh_identity_metrics_for_actor`) or a settlement handler with its own idempotency key (`settle_result_summary` -- traced: `_settle_reward` looks up an existing `FastCupPayout` by `idempotency_key` before writing, and it's the only call site anywhere in the codebase, i.e. the deliberate settlement trigger, not an accidental one). All six are safe against retries and confirmed intentional-by-design. Not fixed, not needing a fix.
 
-- `settle_result_summary` on a GET performs settlement — a financially meaningful operation behind a method that any crawler, prefetcher, or retry layer may issue repeatedly.
-- `get_or_create_market_view` lets a GET create market rows for arbitrary `player_id` values, which is a write amplification path worth bounding.
+#### Fixed: creator-earnings double-crediting on every repeat feed delivery
 
-### Class B — GET commits with no identifiable mutation (43)
+The other two write paths -- `record_delivery` (used by both `/feed/for-you` and `/feed/following`) and `record_refresh_delivery` -- funnel into `PersonalizedFeedRankingService._record_clip_delivery`, which calls `creator_earnings_service.track_impression(reference_key=f"personalized-feed:{feed_source}:{user_id}:{slot_index}:{clip.clip_id}:{delivered_at.isoformat()}")`.
 
-Includes `/api/v2/admin/finance/control-tower`, `/api/v2/session/bootstrap`, the five `/api/v2/leaderboard/*` routes, seven `/api/v2/news|rankings/*` routes, and four `/api/v2/clubs/{id}/scouting-intelligence/*` routes.
+`_record_event` (the method behind `track_impression`) already implements its own idempotency guard -- it looks up an existing `ClipEarningsLog` by `reference_key` and returns early if found -- but `delivered_at.isoformat()` is a fresh wall-clock timestamp on *every call*, so the guard could never fire: every repeat delivery of the same clip to the same user generated a distinct key and credited the creator again.
 
-For most of these the `session.commit()` is a no-op on a read-only transaction — harmless but misleading, since it makes every one of them look like a writer to any audit. A few may commit writes made inside a service call that this scan could not attribute.
+This wasn't a hypothetical: `record_delivery` runs unconditionally on every GET to `/feed/for-you` and `/feed/following`, **including a plain, non-`refresh` request that serves the exact same cached items again** (`get_following`'s `_build_response` sets `cache_hit=True` and returns the cached top-N without recomputing anything). A page reload, a retried request, or a proxy prefetch of either endpoint re-credited the creator on every hit.
 
-**Recommendation:** treat Class A as intentional-but-documented, and sweep Class B to drop the defensive commits so the two classes stop being indistinguishable. Neither is fixed here — both are application behaviour, outside this PR's scope.
+Fix: bucket `delivered_at` to the minute before building the reference key (`backend/app/viral/personalized_feed_service.py::_record_clip_delivery`). Same-instant repeats -- retries, double-clicks, prefetch, a cache-hit response -- collapse into one credited impression; a genuinely later re-view (a different minute) still counts. This makes the dedup guard the code already tries to run actually work, rather than inventing new crediting policy -- no product decision about *how often* a re-view should count was made here, only that duplicate-instant deliveries of the same clip shouldn't double-pay.
+
+Regression test: `backend/tests/viral/test_personalized_feed_service.py::test_personalized_feed_repeat_delivery_within_a_minute_does_not_double_credit` -- two `record_delivery` calls 47 seconds apart, same clip, same user; asserts `wallet.total_impressions == 1` and one `ClipEarningsLog` row, not two.
+
+### Class B -- GET commits with no identifiable mutation in the handler body (43)
+
+The original framing of this class -- "no identifiable mutation... the commit is a no-op on a read-only transaction... sweep Class B to drop the defensive commits" -- was wrong, and fixing this item is what surfaced why.
+
+Tracing beyond the handler body (into every called service method, every `Depends(...)` dependency, and the shared auth chain those dependencies run through) found that **every one of these 43 is reachable from a real, if intermittent, ORM write**, not from the handler's own logic but from the auth machinery every authenticated route depends on:
+
+```
+# backend/app/auth/dependencies.py::_resolve_authenticated_user -- runs on every
+# Depends(get_current_user) call, i.e. on nearly every authenticated route in the app
+if _should_touch_auth_session(auth_session):
+    auth_session.last_used_at = _utcnow()   # staged ORM write, needs a commit to persist
+```
+
+`_should_touch_auth_session` throttles this to once per 60 seconds per session -- so it is not on *every* request, but it is a genuine, expected write on most of them, and it depends entirely on **some** commit happening in the request to persist. For a GET handler with no business-logic write of its own, that `session.commit()` at the end of the handler is not defensive dead code -- it is the *only* thing that persists the session's `last_used_at` touch. Sweeping it, as originally recommended, would have silently broken "last active" tracking for any user who only ever reads (browses leaderboards, rankings, news, their own notification preferences) without hitting a mutating endpoint -- a real, if minor, regression, introduced in the name of removing a no-op that turned out not to be one.
+
+Four of the 43 (`segment_clubs.py`'s `list_scouting_intelligence_*` / `get_scouting_intelligence_*`) have a second, separate real write, also invisible at the handler level: `_require_owned_club`/`_require_scouting_club_access` call `AccessControlService.require_club_access`, which -- for a legacy club owner with no `OrganizationMembership` row yet -- calls `ensure_club_organization`, which does `session.add(Organization(...)); session.flush()`. Rare (first access by a legacy-owned club), but real, and also depends on the handler's commit to persist.
+
+**Nothing in Class B is touched here.** The audit's own hedge -- "a few may commit writes made inside a service call that this scan could not attribute" -- undersold it: not a few, all of them, via a dependency the original AST scan (and my first attempt at fixing this) never traced into. The corrected recommendation: **leave Class B exactly as it is.** If a future pass wants to make GETs in this app provably side-effect-free, the auth-session touch needs its own commit boundary independent of the handler's -- a real, if small, architectural change, and out of scope here.
 
 ---
 
@@ -412,5 +450,5 @@ Note what this means now that PR #94 has absorbed the backlog: **test 1 would ha
 ### Residual risk after this PR
 
 - CI still does not run stage 1; the new test is the only thing consulting backend source. If the test is skipped, marked xfail, or its 31-second scan is trimmed for speed, the drift returns silently. **Do not weaken it without replacing the coverage.**
-- §6 is documented, not fixed. It needs an owner outside this PR's scope. §5.1 and §5.2 are fixed.
+- §5.1, §5.2, §5.3, and §6 are all fixed — §5.1 in this PR, the rest on separate follow-up PRs (#97, #98, and this branch). See §-1.
 - Admin surfaces mounted outside an admin prefix (e.g. `/api/competitions/admin`) are still invisible to prefix matching and depend solely on their handler guard.
