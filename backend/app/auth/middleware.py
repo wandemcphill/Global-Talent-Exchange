@@ -5,16 +5,28 @@ from fastapi.security import HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.auth.dependencies import _resolve_authenticated_user
+from app.core.api_contract import build_versioned_path
 from app.core.errors import error_response
 
-PROTECTED_PATH_PREFIXES = (
+# Declare protection against the path a router actually mounts. The versioned
+# `/api/v2/...` alias of each entry is derived below, never hand-listed.
+#
+# `register_versioned_route_aliases` clones every route onto its `/api/v2/...`
+# alias at startup, so each protected surface is reachable under at least two
+# paths. Enumerating those by hand is what produced the bug this derivation
+# fixes: v2 entries were added for `profile`, `session`, and `wallet` but not
+# for `admin`, leaving all 321 canonical `/api/v2/admin/...` paths outside the
+# middleware. Most survived on their handler's `Depends(get_current_admin)`;
+# `GET /api/v2/admin/access/permissions` has no handler guard and served the
+# admin permission catalogue to unauthenticated callers, while the legacy
+# `/api/admin/access/permissions` correctly returned 401.
+#
+# Deriving with `build_versioned_path` — the same function the alias registrar
+# uses — means the two cannot disagree again.
+_PROTECTED_PATH_PREFIX_SOURCES = (
     "/api/admin",
     "/api/profile",
     "/api/session",
-    "/api/v2/profile",
-    "/api/v2/session",
-    "/api/v2/wallet",
-    "/api/v2/wallets",
     "/api/wallet",
     "/api/wallets",
     "/wallets",
@@ -23,16 +35,26 @@ PROTECTED_PATH_PREFIXES = (
     "/users/me",
     "/internal",
 )
-PROTECTED_EXACT_PATHS = frozenset(
-    {
-        "/api/auth/me",
-        "/api/auth/logout",
-        "/api/auth/change-password",
-        "/api/v2/auth/me",
-        "/api/v2/auth/logout",
-        "/api/v2/auth/change-password",
-    }
+_PROTECTED_EXACT_PATH_SOURCES = (
+    "/api/auth/me",
+    "/api/auth/logout",
+    "/api/auth/change-password",
 )
+
+
+def _with_versioned_aliases(paths: tuple[str, ...]) -> frozenset[str]:
+    """Expand each path to itself plus its `/api/v2/...` alias."""
+    expanded: set[str] = set()
+    for path in paths:
+        expanded.add(path)
+        versioned = build_versioned_path(path)
+        if versioned is not None:
+            expanded.add(versioned)
+    return frozenset(expanded)
+
+
+PROTECTED_PATH_PREFIXES = tuple(sorted(_with_versioned_aliases(_PROTECTED_PATH_PREFIX_SOURCES)))
+PROTECTED_EXACT_PATHS = _with_versioned_aliases(_PROTECTED_EXACT_PATH_SOURCES)
 
 
 class AuthEnforcementMiddleware(BaseHTTPMiddleware):

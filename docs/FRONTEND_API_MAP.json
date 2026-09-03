@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 639,
+  "call_count": 642,
   "calls": [
     {
       "file": "frontend/lib/core/runtime/gtex_realtime_client.dart",
@@ -6367,6 +6367,42 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/auth/me",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/$id/regen",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/${playerId.trim()}/regen/contract-offers/quote",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/${playerId.trim()}/regen/transfer-listing",
       "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [
