@@ -144,6 +144,14 @@ class _GtexPlayerMarketRedesignScreenState
                 )
                 : GtexMarketBrowseSummary.fromCatalog(catalog);
         final GtexMarketPlayerView? selectedPlayer = _selectedPlayer(players);
+        // The movers rail is secondary chrome. Below the width at which the
+        // master-detail scaffold stops stacking, the detail pane is the whole
+        // narrow viewport and every vertical pixel belongs to the listing -
+        // the market's movement is still legible there through the per-row
+        // deltas and the discovery lanes. Show the rail only when there is
+        // room for it above the board.
+        final bool showMoversRail =
+            MediaQuery.sizeOf(context).width >= 1024;
         final Set<String> ownedPlayerIds = <String>{
           for (final GtePortfolioHolding holding
               in widget.controller.portfolio?.holdings ??
@@ -206,12 +214,14 @@ class _GtexPlayerMarketRedesignScreenState
             onAvailabilitySelected: _setAvailability,
           ),
           detail: GtexMarketPlayerGrid(
-            header: GtexMarketMoversRail(
-              movers: _movers,
-              isLoading: _isLoadingMovers,
-              error: _moversError,
-              onOpenPlayer: widget.onOpenPlayer,
-            ),
+            header: showMoversRail
+                ? GtexMarketMoversRail(
+                  movers: _movers,
+                  isLoading: _isLoadingMovers,
+                  error: _moversError,
+                  onOpenPlayer: widget.onOpenPlayer,
+                )
+                : null,
             players: players,
             // Ownership comes from the loaded portfolio; before it loads, or
             // when signed out, the market simply does not claim ownership.
