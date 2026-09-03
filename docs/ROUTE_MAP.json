@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1697,
+  "route_count": 1696,
   "routes": [
     {
       "method": "POST",
@@ -22484,32 +22484,6 @@
           "match_id",
           "websocket",
           "session_id"
-        ]
-      },
-      "response_shape": {
-        "response_model": null,
-        "returns": "None"
-      },
-      "version": "canonical",
-      "domain": "live"
-    },
-    {
-      "method": "WEBSOCKET",
-      "path": "/api/v2/ws/match/{match_id}",
-      "effective_paths": [
-        "/api/v2/ws/match/{match_id}"
-      ],
-      "file": "backend/app/live_matches/router.py",
-      "handler": "stream_unity_spatial_match",
-      "router_variable": "router",
-      "module_path": "app.live_matches.router",
-      "module_mounts": [
-        "live_matches"
-      ],
-      "request_shape": {
-        "parameters": [
-          "match_id",
-          "websocket"
         ]
       },
       "response_shape": {

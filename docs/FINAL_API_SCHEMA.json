@@ -1119,6 +1119,12 @@
       },
       {
         "method": "WEBSOCKET",
+        "path": "/api/v2/ws/match/{match_id}",
+        "handler": "stream_match_commentary",
+        "response_model": null
+      },
+      {
+        "method": "WEBSOCKET",
         "path": "/api/v2/ws/notifications",
         "handler": "stream_notifications",
         "response_model": null
@@ -5672,12 +5678,6 @@
         "path": "/api/season-pass/claim",
         "handler": "claim_season_pass_reward",
         "response_model": "SeasonPassClaimView"
-      },
-      {
-        "method": "WEBSOCKET",
-        "path": "/api/v2/ws/match/{match_id}",
-        "handler": "stream_unity_spatial_match",
-        "response_model": null
       },
       {
         "method": "GET",

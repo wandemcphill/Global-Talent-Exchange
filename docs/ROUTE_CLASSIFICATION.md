@@ -213,7 +213,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 
 ## MIGRATE_TO
 
-- `WEBSOCKET /api/v2/ws/match/{}`: `/api/v2/ws/match/{match_id}` in `backend/app/api_v1/router.py` (stream_match_commentary) -> `/api/v2/ws/match/{match_id}` - Legacy api_v1 surface shadowed by `/api/v2/ws/match/{match_id}`.
+- None
 
 ## DELETE
 
