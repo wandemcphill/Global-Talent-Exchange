@@ -200,7 +200,7 @@ class NationalRegenSeed(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     seed_key: Mapped[str] = mapped_column(String(96), nullable=False)
     display_name: Mapped[str] = mapped_column(String(160), nullable=False)
-    age: Mapped[int] = mapped_column(Integer, nullable=False)
+    age: Mapped[int] = mapped_column(Integer, nullable=False, default=18, server_default="18")
     age_band: Mapped[str] = mapped_column(String(16), nullable=False, default="senior", server_default="senior")
     country_code: Mapped[str] = mapped_column(String(8), nullable=False)
     country_name: Mapped[str] = mapped_column(String(120), nullable=False)
