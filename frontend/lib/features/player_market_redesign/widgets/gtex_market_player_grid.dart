@@ -16,11 +16,12 @@ const double _minBrowseCardWidth = 420;
 /// Discovery lanes over the loaded listings. Each one is a filter on data
 /// the backend already returned - there is no client-side ranking engine
 /// here, and no lane exists for a signal the API does not provide.
-enum GtexMarketDiscoveryLane { all, rising, falling, watched }
+enum GtexMarketDiscoveryLane { all, opportunities, rising, falling, watched }
 
 extension GtexMarketDiscoveryLaneLabel on GtexMarketDiscoveryLane {
   String get label => switch (this) {
     GtexMarketDiscoveryLane.all => 'All listings',
+    GtexMarketDiscoveryLane.opportunities => 'Opportunities',
     GtexMarketDiscoveryLane.rising => 'Rising',
     GtexMarketDiscoveryLane.falling => 'Falling',
     GtexMarketDiscoveryLane.watched => 'Most watched',
@@ -28,6 +29,7 @@ extension GtexMarketDiscoveryLaneLabel on GtexMarketDiscoveryLane {
 
   IconData get icon => switch (this) {
     GtexMarketDiscoveryLane.all => Icons.grid_view_outlined,
+    GtexMarketDiscoveryLane.opportunities => Icons.auto_awesome_outlined,
     GtexMarketDiscoveryLane.rising => Icons.trending_up,
     GtexMarketDiscoveryLane.falling => Icons.trending_down,
     GtexMarketDiscoveryLane.watched => Icons.visibility_outlined,
@@ -35,6 +37,7 @@ extension GtexMarketDiscoveryLaneLabel on GtexMarketDiscoveryLane {
 
   Color get accent => switch (this) {
     GtexMarketDiscoveryLane.all => GtexColors.pitch,
+    GtexMarketDiscoveryLane.opportunities => GtexColors.cyan,
     GtexMarketDiscoveryLane.rising => GtexColors.accentPrimary,
     GtexMarketDiscoveryLane.falling => GtexColors.accentRed,
     GtexMarketDiscoveryLane.watched => GtexColors.gold,
@@ -42,6 +45,7 @@ extension GtexMarketDiscoveryLaneLabel on GtexMarketDiscoveryLane {
 
   bool matches(GtexMarketPlayerView player) => switch (this) {
     GtexMarketDiscoveryLane.all => true,
+    GtexMarketDiscoveryLane.opportunities => player.isOpportunity,
     GtexMarketDiscoveryLane.rising => player.isRising,
     GtexMarketDiscoveryLane.falling => player.isFalling,
     GtexMarketDiscoveryLane.watched => player.interestLabel != null,
@@ -61,16 +65,32 @@ extension GtexMarketDiscoveryLaneLabel on GtexMarketDiscoveryLane {
     final List<GtexMarketPlayerView> matched = players
         .where(matches)
         .toList(growable: false);
-    if (this != GtexMarketDiscoveryLane.watched) {
-      return matched;
+    if (this == GtexMarketDiscoveryLane.watched) {
+      final List<GtexMarketPlayerView> ranked = List<GtexMarketPlayerView>.of(
+        matched,
+      )..sort(
+        (GtexMarketPlayerView a, GtexMarketPlayerView b) =>
+            (b.interestScore ?? 0).compareTo(a.interestScore ?? 0),
+      );
+      return List<GtexMarketPlayerView>.unmodifiable(ranked);
     }
-    final List<GtexMarketPlayerView> ranked = List<GtexMarketPlayerView>.of(
-      matched,
-    )..sort(
-      (GtexMarketPlayerView a, GtexMarketPlayerView b) =>
-          (b.interestScore ?? 0).compareTo(a.interestScore ?? 0),
-    );
-    return List<GtexMarketPlayerView>.unmodifiable(ranked);
+    if (this == GtexMarketDiscoveryLane.opportunities) {
+      // Opportunities lead with the strongest combined move; both keys are
+      // non-null here by construction of [isOpportunity].
+      final List<GtexMarketPlayerView> ranked = List<GtexMarketPlayerView>.of(
+        matched,
+      )..sort(
+        (GtexMarketPlayerView a, GtexMarketPlayerView b) {
+          final int byValue = (b.movementPct ?? 0).compareTo(a.movementPct ?? 0);
+          if (byValue != 0) return byValue;
+          return (b.globalScoutingIndexMovementPct ?? 0).compareTo(
+            a.globalScoutingIndexMovementPct ?? 0,
+          );
+        },
+      );
+      return List<GtexMarketPlayerView>.unmodifiable(ranked);
+    }
+    return matched;
   }
 }
 
@@ -90,7 +110,12 @@ class GtexMarketPlayerGrid extends StatefulWidget {
     required this.onToggleBasket,
     required this.onBuyNow,
     this.ownedPlayerIds = const <String>{},
+    this.header,
   });
+
+  /// Optional content rendered above the listing board - the market movers
+  /// rail lives here.
+  final Widget? header;
 
   final List<GtexMarketPlayerView> players;
   final int totalPlayers;
@@ -115,6 +140,7 @@ class GtexMarketPlayerGrid extends StatefulWidget {
 
 class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
   GtexMarketDiscoveryLane _lane = GtexMarketDiscoveryLane.all;
+  GtexMarketSort _sort = GtexMarketSort.relevance;
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +168,9 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
         ),
       );
     }
-    final List<GtexMarketPlayerView> laneMatches = _lane.applyTo(players);
+    final List<GtexMarketPlayerView> laneMatches = _sort.applyTo(
+      _lane.applyTo(players),
+    );
 
     if (players.isEmpty) {
       return Padding(
@@ -162,6 +190,16 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
       onRefresh: () async => onRefresh(),
       child: CustomScrollView(
         slivers: <Widget>[
+          if (widget.header != null)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(
+                GtexSpacing.md,
+                GtexSpacing.md,
+                GtexSpacing.md,
+                0,
+              ),
+              sliver: SliverToBoxAdapter(child: widget.header),
+            ),
           SliverPadding(
             padding: const EdgeInsets.all(GtexSpacing.md),
             sliver: SliverToBoxAdapter(
@@ -201,6 +239,11 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                       isSelected: _lane == lane,
                       onSelected: () => setState(() => _lane = lane),
                     ),
+                  _SortMenu(
+                    sort: _sort,
+                    onSelected: (GtexMarketSort value) =>
+                        setState(() => _sort = value),
+                  ),
                   if (error != null)
                     GtexStatusChip(
                       label: 'Last good snapshot',
@@ -282,6 +325,13 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                       interestLabel: player.interestLabel,
                       isOwned: widget.ownedPlayerIds.contains(player.playerId),
                       badges: <Widget>[
+                        if (player.isOpportunity)
+                          const GtexStatusChip(
+                            label: 'Opportunity',
+                            icon: Icons.auto_awesome_outlined,
+                            color: GtexColors.cyan,
+                            compact: true,
+                          ),
                         GtexStatusChip(
                           label: player.availabilityTypeLabel,
                           icon: _availabilityIcon(player.askingType),
@@ -454,6 +504,39 @@ class _DiscoveryLaneChip extends StatelessWidget {
             compact: !isSelected,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Sort selector for the loaded listings. Ordering is applied client-side over
+/// the players already loaded, matching how the discovery lanes filter.
+class _SortMenu extends StatelessWidget {
+  const _SortMenu({required this.sort, required this.onSelected});
+
+  final GtexMarketSort sort;
+  final ValueChanged<GtexMarketSort> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<GtexMarketSort>(
+      key: const Key('gtex-market-sort'),
+      tooltip: 'Sort listings',
+      initialValue: sort,
+      onSelected: onSelected,
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<GtexMarketSort>>[
+        for (final GtexMarketSort option in GtexMarketSort.values)
+          CheckedPopupMenuItem<GtexMarketSort>(
+            key: Key('gtex-market-sort-${option.name}'),
+            value: option,
+            checked: option == sort,
+            child: Text(option.label),
+          ),
+      ],
+      child: GtexStatusChip(
+        label: 'Sort: ${sort.label}',
+        icon: Icons.swap_vert,
+        color: GtexColors.cyan,
       ),
     );
   }

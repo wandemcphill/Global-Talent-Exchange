@@ -1537,6 +1537,24 @@ class GteExchangeApiClient {
         position == 'LM' ||
         position == 'RM';
   }
+
+  // --- Phase 4-A: Market Intelligence (append-only, market methods only) ---
+
+  /// `GET /api/market/movers` - real gainers, losers, most-traded and trending
+  /// from the pricing engine. In fixture mode (tests only) it returns an empty
+  /// payload so the "no movers yet" state is what gets exercised, never a
+  /// fabricated set of numbers.
+  Future<GteMarketMovers> fetchMarketMovers({int limit = 5}) async {
+    return _loadPublicWithFallback<GteMarketMovers>(
+      liveCall: () async => GteMarketMovers.fromJson(
+        await _sendPublicGet(
+          '/api/market/movers',
+          query: <String, Object?>{'limit': limit},
+        ),
+      ),
+      fallbackCall: () async => GteMarketMovers.empty,
+    );
+  }
 }
 
 class _BrowseSeed {

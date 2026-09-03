@@ -1994,6 +1994,106 @@ class GtePlayerMarketSnapshot {
   }
 }
 
+/// A single row in `GET /api/market/movers` - a player whose price moved, is
+/// heavily traded, or is trending. Every figure is straight from the pricing
+/// engine's `MarketMoverItemView`; nothing is derived on the client.
+class GteMarketMoverItem {
+  const GteMarketMoverItem({
+    required this.playerId,
+    required this.playerName,
+    this.symbol,
+    this.lastPrice,
+    required this.dayChange,
+    required this.dayChangePercent,
+    required this.volume24h,
+    this.trendScore,
+  });
+
+  final String playerId;
+  final String playerName;
+  final String? symbol;
+  final double? lastPrice;
+  final double dayChange;
+  final double dayChangePercent;
+  final double volume24h;
+  final double? trendScore;
+
+  bool get isUp => dayChangePercent > 0;
+  bool get isDown => dayChangePercent < 0;
+
+  factory GteMarketMoverItem.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'market mover');
+    return GteMarketMoverItem(
+      playerId: GteJson.string(json, const <String>['player_id', 'playerId']),
+      playerName: GteJson.string(
+        json,
+        const <String>['player_name', 'playerName'],
+        fallback: 'Unknown player',
+      ),
+      symbol: GteJson.stringOrNull(json, const <String>['symbol']),
+      lastPrice: _nullableNumber(
+        json,
+        const <String>['last_price', 'lastPrice'],
+      ),
+      dayChange: GteJson.number(
+        json,
+        const <String>['day_change', 'dayChange'],
+      ),
+      dayChangePercent: GteJson.number(
+        json,
+        const <String>['day_change_percent', 'dayChangePercent'],
+      ),
+      volume24h: GteJson.number(
+        json,
+        const <String>['volume_24h', 'volume24h'],
+      ),
+      trendScore: _nullableNumber(
+        json,
+        const <String>['trend_score', 'trendScore'],
+      ),
+    );
+  }
+}
+
+/// The `GET /api/market/movers` payload: real gainers, losers, most-traded and
+/// trending lists from the pricing engine.
+class GteMarketMovers {
+  const GteMarketMovers({
+    this.topGainers = const <GteMarketMoverItem>[],
+    this.topLosers = const <GteMarketMoverItem>[],
+    this.mostTraded = const <GteMarketMoverItem>[],
+    this.trending = const <GteMarketMoverItem>[],
+  });
+
+  final List<GteMarketMoverItem> topGainers;
+  final List<GteMarketMoverItem> topLosers;
+  final List<GteMarketMoverItem> mostTraded;
+  final List<GteMarketMoverItem> trending;
+
+  static const GteMarketMovers empty = GteMarketMovers();
+
+  bool get isEmpty =>
+      topGainers.isEmpty &&
+      topLosers.isEmpty &&
+      mostTraded.isEmpty &&
+      trending.isEmpty;
+
+  factory GteMarketMovers.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'market movers',
+    );
+    List<GteMarketMoverItem> parse(List<String> keys) =>
+        GteJson.typedList(json, keys, GteMarketMoverItem.fromJson);
+    return GteMarketMovers(
+      topGainers: parse(const <String>['top_gainers', 'topGainers']),
+      topLosers: parse(const <String>['top_losers', 'topLosers']),
+      mostTraded: parse(const <String>['most_traded', 'mostTraded']),
+      trending: parse(const <String>['trending']),
+    );
+  }
+}
+
 double? _nullableNumber(Map<String, Object?> json, List<String> keys) {
   if (GteJson.value(json, keys) == null) {
     return null;
