@@ -7,6 +7,7 @@ import '../../core/app_feedback.dart';
 import '../../data/gte_api_repository.dart';
 import '../../features/competitions/live_competitions_provider.dart';
 import '../../features/navigation/routing/gte_navigation_route.dart';
+import '../../features/player_detail/gtex_player_navigator.dart';
 import '../../features/profile/live_profile_provider.dart';
 import '../../features/shared/data/gte_feature_support.dart';
 import '../../features/tasks/live_tasks_provider.dart';
@@ -17,7 +18,11 @@ import '../../shared/models/data_source_status.dart';
 import '../../shared/providers/auth_provider.dart';
 import '../../shared/widgets/app_page_layout.dart';
 import '../../shared/widgets/data_source_badge.dart';
+import '../../ui_gtex/ui_gtex.dart';
+import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_state_panel.dart';
+import 'data/gtex_home_digest_provider.dart';
+import 'models/gtex_home_digest_models.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -36,6 +41,9 @@ class HomeScreen extends ConsumerWidget {
       worldAggregateProvider,
     );
     final AsyncValue<LiveTasksData> tasksValue = ref.watch(liveTasksProvider);
+    final AsyncValue<GtexHomeDigest> digestValue = ref.watch(
+      homeDigestProvider,
+    );
     final bool authenticated = ref.watch(isAuthenticatedProvider);
     final bool blocked = <AsyncValue<Object?>>[
       profileValue,
@@ -83,6 +91,10 @@ class HomeScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         _RoleBriefPanel(personaCopy: personaCopy),
+        if (authenticated) ...<Widget>[
+          const SizedBox(height: 16),
+          _HomeWorldTodayBanner(digestValue: digestValue),
+        ],
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
             final bool desktop = constraints.maxWidth >= 1040;
@@ -100,6 +112,22 @@ class HomeScreen extends ConsumerWidget {
             );
             final Widget centerStack = Column(
               children: <Widget>[
+                if (authenticated) ...<Widget>[
+                  _HomeYourPlayersPanel(digestValue: digestValue),
+                  const SizedBox(height: 16),
+                  _HomeWhatMovedPanel(digestValue: digestValue),
+                  const SizedBox(height: 16),
+                  _HomeYourClubsPanel(digestValue: digestValue),
+                  const SizedBox(height: 16),
+                  _HomeYourProspectsPanel(digestValue: digestValue),
+                  const SizedBox(height: 16),
+                  _HomeAttentionPanel(
+                    digestValue: digestValue,
+                    onOpen: (String location) => context.push(location),
+                    onGo: (String location) => context.go(location),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 _ClubReadinessPanel(
                   profile: profile,
                   authenticated: authenticated,
@@ -157,6 +185,10 @@ class HomeScreen extends ConsumerWidget {
                   authenticated: authenticated,
                   onSignIn: () => context.push(AppRoutes.profileLogin),
                 ),
+                if (authenticated) ...<Widget>[
+                  const SizedBox(height: 16),
+                  _HomeRecentActivityPanel(digestValue: digestValue),
+                ],
               ],
             );
 
@@ -1968,4 +2000,326 @@ String _formatFanCoin(double value) {
     return 'FNC ${(value / 1000).toStringAsFixed(1)}K';
   }
   return 'FNC ${value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1)}';
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 4F — Personalized Home digest sections.
+//
+// Every section below reads the single `homeDigestProvider` AsyncValue and
+// composes it strictly from PHASE4-B/A/D/C/E's published models (see
+// `data/gtex_home_digest_provider.dart`). A section hides entirely once the
+// digest has loaded and its own list is genuinely empty, rather than
+// rendering an empty-state wall for an asset class the user does not
+// participate in (P6 / Step 11).
+// ---------------------------------------------------------------------------
+
+class _HomeWorldTodayBanner extends StatelessWidget {
+  const _HomeWorldTodayBanner({required this.digestValue});
+
+  final AsyncValue<GtexHomeDigest> digestValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return _LiveModule<GtexHomeDigest>(
+      value: digestValue,
+      title: 'YOUR WORLD TODAY',
+      subtitle: 'What happened to your GTEX football world.',
+      accent: _GtexCommandColors.accentPrimary,
+      authenticated: true,
+      builder: (BuildContext context, GtexHomeDigest digest) {
+        return Text(
+          digest.headline,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontFamily: 'BarlowCondensed',
+            fontWeight: FontWeight.w800,
+            color: _GtexCommandColors.textPrimary,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HomeYourPlayersPanel extends StatelessWidget {
+  const _HomeYourPlayersPanel({required this.digestValue});
+
+  final AsyncValue<GtexHomeDigest> digestValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexHomeDigest? data = digestValue.asData?.value;
+    if (data != null && data.ownedPlayers.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return _LiveModule<GtexHomeDigest>(
+      value: digestValue,
+      title: 'YOUR PLAYERS',
+      subtitle: 'Owned players and what is moving their value.',
+      accent: _GtexCommandColors.accentPrimary,
+      authenticated: true,
+      builder:
+          (BuildContext context, GtexHomeDigest digest) => Column(
+            children: digest.ownedPlayers
+                .map(
+                  (GtexHomePlayerHighlight highlight) =>
+                      _HomePlayerHighlightTile(highlight: highlight),
+                )
+                .toList(growable: false),
+          ),
+    );
+  }
+}
+
+class _HomePlayerHighlightTile extends StatelessWidget {
+  const _HomePlayerHighlightTile({required this.highlight});
+
+  final GtexHomePlayerHighlight highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final String ownershipLabel =
+        highlight.quantityLabel == '1'
+            ? 'You own 1 share'
+            : 'You own ${highlight.quantityLabel} shares';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          GtexPlayerCard(
+            name: highlight.playerName,
+            position: '—',
+            clubName: highlight.clubName ?? 'Club unknown',
+            nationality: '',
+            priceLabel: highlight.priceLabel,
+            scale: GtexPlayerCardScale.compact,
+            isOwned: true,
+            ownershipLabel: ownershipLabel,
+            onTap: GtexPlayerNavigator.tapToOpen(context, highlight.playerId),
+          ),
+          if (highlight.unrealizedPlPercent != null ||
+              highlight.formTrendLabel != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, left: 4),
+              child: Text(
+                <String>[
+                  if (highlight.unrealizedPlPercent != null)
+                    'Your position: ${highlight.movementLabel}',
+                  if (highlight.formTrendLabel != null)
+                    highlight.formTrendLabel!,
+                ].join(' · '),
+                style: _bodyStyle(context),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeWhatMovedPanel extends StatelessWidget {
+  const _HomeWhatMovedPanel({required this.digestValue});
+
+  final AsyncValue<GtexHomeDigest> digestValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexHomeDigest? data = digestValue.asData?.value;
+    if (data != null &&
+        data.yourMoversToday.isEmpty &&
+        data.opportunityMovers.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return _LiveModule<GtexHomeDigest>(
+      value: digestValue,
+      title: 'WHAT MOVED',
+      subtitle: 'Real price movement from the live market.',
+      accent: _GtexCommandColors.accentBlue,
+      authenticated: true,
+      builder: (BuildContext context, GtexHomeDigest digest) {
+        final List<Widget> rows = <Widget>[
+          ...digest.yourMoversToday.map(
+            (GtexHomeMoverHighlight mover) => _PulseRow(
+              line: _PulseLine(
+                label: mover.playerName,
+                detail: 'You own this player',
+                metric: mover.movementLabel,
+                color:
+                    mover.isRising
+                        ? _GtexCommandColors.accentPrimary
+                        : _GtexCommandColors.accentRed,
+              ),
+            ),
+          ),
+          ...digest.opportunityMovers.map(
+            (GtexHomeMoverHighlight mover) => _PulseRow(
+              line: _PulseLine(
+                label: mover.playerName,
+                detail: 'Opportunity · not in your squad',
+                metric: mover.movementLabel,
+                color: _GtexCommandColors.accentAmber,
+              ),
+            ),
+          ),
+        ];
+        return Column(children: rows);
+      },
+    );
+  }
+}
+
+class _HomeYourClubsPanel extends StatelessWidget {
+  const _HomeYourClubsPanel({required this.digestValue});
+
+  final AsyncValue<GtexHomeDigest> digestValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexHomeDigest? data = digestValue.asData?.value;
+    if (data != null && data.clubs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return _LiveModule<GtexHomeDigest>(
+      value: digestValue,
+      title: 'YOUR CLUBS',
+      subtitle: 'Club shares you hold and their live price.',
+      accent: _GtexCommandColors.accentPrimary,
+      authenticated: true,
+      builder:
+          (BuildContext context, GtexHomeDigest digest) => Column(
+            children: digest.clubs
+                .map(
+                  (GtexHomeClubHighlight club) => _PulseRow(
+                    line: _PulseLine(
+                      label: club.clubName,
+                      detail:
+                          '${club.sharesLabel} · ${club.sharePriceLabel} · '
+                          '${club.hasPerformanceHistory ? 'Club form is being tracked' : 'No settled GTEX matches yet — the share price sits at its base'}',
+                      metric: club.plLabel,
+                      color:
+                          club.isInProfit
+                              ? _GtexCommandColors.accentPrimary
+                              : _GtexCommandColors.accentRed,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+    );
+  }
+}
+
+class _HomeYourProspectsPanel extends StatelessWidget {
+  const _HomeYourProspectsPanel({required this.digestValue});
+
+  final AsyncValue<GtexHomeDigest> digestValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexHomeDigest? data = digestValue.asData?.value;
+    if (data != null && data.regens.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return _LiveModule<GtexHomeDigest>(
+      value: digestValue,
+      title: 'YOUR PROSPECTS',
+      subtitle: 'Regens you own on the live leaderboard.',
+      accent: _GtexCommandColors.accentViolet,
+      authenticated: true,
+      builder:
+          (BuildContext context, GtexHomeDigest digest) => Column(
+            children: digest.regens
+                .map(
+                  (GtexHomeRegenHighlight regen) => _PulseRow(
+                    line: _PulseLine(
+                      label: regen.playerName,
+                      detail: '${regen.category} ranking',
+                      metric: regen.rankLabel,
+                      color: _GtexCommandColors.accentViolet,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+    );
+  }
+}
+
+class _HomeAttentionPanel extends StatelessWidget {
+  const _HomeAttentionPanel({
+    required this.digestValue,
+    required this.onOpen,
+    required this.onGo,
+  });
+
+  final AsyncValue<GtexHomeDigest> digestValue;
+  final ValueChanged<String> onOpen;
+  final ValueChanged<String> onGo;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexHomeDigest? data = digestValue.asData?.value;
+    if (data != null && data.attentionItems.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return _LiveModule<GtexHomeDigest>(
+      value: digestValue,
+      title: 'WHAT NEEDS YOUR ATTENTION',
+      subtitle: 'A short list of real, actionable next moves.',
+      accent: _GtexCommandColors.accentAmber,
+      authenticated: true,
+      builder:
+          (BuildContext context, GtexHomeDigest digest) => Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: digest.attentionItems
+                .map(
+                  (GtexHomeAttentionItem item) => OutlinedButton(
+                    onPressed:
+                        item.useGo
+                            ? () => onGo(item.routeLocation)
+                            : () => onOpen(item.routeLocation),
+                    child: Text(item.label),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+    );
+  }
+}
+
+class _HomeRecentActivityPanel extends StatelessWidget {
+  const _HomeRecentActivityPanel({required this.digestValue});
+
+  final AsyncValue<GtexHomeDigest> digestValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexHomeDigest? data = digestValue.asData?.value;
+    if (data != null && data.recentActivity.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return _LiveModule<GtexHomeDigest>(
+      value: digestValue,
+      title: 'RECENT OWNERSHIP CHANGES',
+      subtitle: 'Settled trades from your account.',
+      accent: _GtexCommandColors.accentBlue,
+      authenticated: true,
+      builder:
+          (BuildContext context, GtexHomeDigest digest) => Column(
+            children: digest.recentActivity
+                .map(
+                  (GtexHomeActivityItem item) => _PulseRow(
+                    line: _PulseLine(
+                      label: item.label,
+                      detail: item.timestampLabel,
+                      metric: '',
+                      color: _GtexCommandColors.textSecondary,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+    );
+  }
 }
