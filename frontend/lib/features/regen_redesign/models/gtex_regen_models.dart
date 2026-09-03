@@ -81,6 +81,8 @@ class GtexRegenProspect {
     this.rarityTier = 'Elite',
     this.isTradable = true,
     this.isNationalRentalOnly = false,
+    this.lineageLabel,
+    this.parentPlayerId,
   });
 
   final String id;
@@ -103,6 +105,15 @@ class GtexRegenProspect {
   final String rarityTier;
   final bool isTradable;
   final bool isNationalRentalOnly;
+
+  /// "Son of A. Okoye", when the listing itself told us the parent. Null where
+  /// the browse response carries no lineage: the full relationship comes from
+  /// the regen's dossier, and a card never guesses one.
+  final String? lineageLabel;
+
+  /// The parent's canonical player id when the listing named one, so the card
+  /// can offer a route into Player Detail.
+  final String? parentPlayerId;
 
   String get ageLabel => '$age yrs';
 

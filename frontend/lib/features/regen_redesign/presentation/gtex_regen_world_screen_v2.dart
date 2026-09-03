@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/app/test_runtime_detector.dart';
+import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/gtex_regen_repository.dart';
+import '../models/gtex_regen_dossier.dart';
 import '../models/gtex_regen_models.dart';
+import '../models/gtex_regen_wire_models.dart';
+import '../widgets/gtex_regen_discovery_boards.dart';
+import '../widgets/gtex_regen_dossier_panel.dart';
+import '../widgets/gtex_regen_ownership_actions.dart';
 import 'gtex_admin_create_son_screen_v2.dart';
 import 'gtex_create_son_screen_v2.dart';
 
@@ -48,11 +54,60 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
   String _origin = 'All';
   GtexRegenProspect? _selected;
 
+  /// The dossier for whichever regen is selected. Held beside the selection
+  /// rather than fetched inside the panel, so changing selection supersedes
+  /// the previous read and a rebuild does not refetch.
+  String? _dossierPlayerId;
+  Future<GtexRegenDossierResult>? _dossierFuture;
+
+  // The three world-level surfaces are fetched only when their lane is first
+  // opened - browsing prospects should not pay for the hall of fame.
+  Future<List<RegenBloodlineChain>>? _bloodlinesFuture;
+  Future<List<RegenRankingEntry>>? _rankingsFuture;
+  Future<List<RegenHallOfFameEntry>>? _hallOfFameFuture;
+
   @override
   void initState() {
     super.initState();
     _future = widget.repository.loadWorld();
   }
+
+  void _select(GtexRegenProspect prospect) {
+    setState(() {
+      _selected = prospect;
+      _loadDossierFor(prospect);
+    });
+  }
+
+  /// Starts a dossier read for [prospect] unless one is already in flight for
+  /// that same regen. Must be called from inside a setState.
+  void _loadDossierFor(GtexRegenProspect prospect) {
+    if (_dossierPlayerId == prospect.id && _dossierFuture != null) {
+      return;
+    }
+    _dossierPlayerId = prospect.id;
+    _dossierFuture = widget.repository.loadDossier(prospect.id);
+  }
+
+  void _retryDossier() {
+    final GtexRegenProspect? prospect = _selected;
+    if (prospect == null) {
+      return;
+    }
+    setState(() {
+      _dossierPlayerId = null;
+      _loadDossierFor(prospect);
+    });
+  }
+
+  Future<List<RegenBloodlineChain>> _bloodlines() =>
+      _bloodlinesFuture ??= widget.repository.loadBloodlines();
+
+  Future<List<RegenRankingEntry>> _rankings() =>
+      _rankingsFuture ??= widget.repository.loadRankings();
+
+  Future<List<RegenHallOfFameEntry>> _hallOfFame() =>
+      _hallOfFameFuture ??= widget.repository.loadHallOfFame();
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +152,10 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
             }
           });
         }
-        _selected ??= filtered.isNotEmpty ? filtered.first : null;
+        if (_selected == null && filtered.isNotEmpty) {
+          _selected = filtered.first;
+          _loadDossierFor(filtered.first);
+        }
 
         return GtexMasterDetailScaffold(
           title: 'Regen World',
@@ -143,6 +201,9 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
           detail: _buildDetail(data, filtered),
           rightPanel: _RegenRightPanel(
             selected: _selected,
+            repository: widget.repository,
+            dossierFuture: _dossierFuture,
+            onRetryDossier: _retryDossier,
             contracts: data.contracts,
             achievements: data.achievementFeed,
             onCreateSon: () => _openCreateSon(context, data),
@@ -190,6 +251,44 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
         );
       case 'achievements':
         return _AchievementBoard(items: data.achievementFeed);
+      case 'bloodlines':
+        return GtexRegenAsyncBoard<RegenBloodlineChain>(
+          future: _bloodlines(),
+          accent: GtexColors.gold,
+          emptyTitle: 'No bloodlines recorded',
+          emptyMessage:
+              'GTEX has not linked any regen to a parent line yet. Bloodlines '
+              'appear as Create-a-Son and legend regens are generated.',
+          onRetry: () => setState(() => _bloodlinesFuture = null),
+          builder:
+              (BuildContext context, List<RegenBloodlineChain> chains) =>
+                  GtexRegenBloodlinesBoard(chains: chains),
+        );
+      case 'rankings':
+        return GtexRegenAsyncBoard<RegenRankingEntry>(
+          future: _rankings(),
+          accent: GtexColors.purple,
+          emptyTitle: 'No rankings published',
+          emptyMessage:
+              'Regen rankings are published when a season closes. None has '
+              'closed yet.',
+          onRetry: () => setState(() => _rankingsFuture = null),
+          builder:
+              (BuildContext context, List<RegenRankingEntry> entries) =>
+                  GtexRegenRankingsBoard(entries: entries),
+        );
+      case 'hall-of-fame':
+        return GtexRegenAsyncBoard<RegenHallOfFameEntry>(
+          future: _hallOfFame(),
+          accent: GtexColors.gold,
+          emptyTitle: 'Hall of Fame is empty',
+          emptyMessage:
+              'No regen has completed a career long enough to be inducted.',
+          onRetry: () => setState(() => _hallOfFameFuture = null),
+          builder:
+              (BuildContext context, List<RegenHallOfFameEntry> entries) =>
+                  GtexRegenHallOfFameBoard(entries: entries),
+        );
       case 'admin-create-son':
         if (!widget.isAdmin) {
           return const GtexEmptyState(
@@ -211,9 +310,7 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
         return _ProspectsBoard(
           prospects: prospects,
           selectedId: _selected?.id,
-          onSelected:
-              (GtexRegenProspect prospect) =>
-                  setState(() => _selected = prospect),
+          onSelected: _select,
         );
     }
   }
@@ -328,6 +425,24 @@ class _RegenLeftPanel extends StatelessWidget {
             icon: Icons.assignment_outlined,
             selected: section == 'contracts',
             onTap: () => onSectionChanged('contracts'),
+          ),
+          _SectionTile(
+            label: 'Bloodlines',
+            icon: Icons.account_tree_outlined,
+            selected: section == 'bloodlines',
+            onTap: () => onSectionChanged('bloodlines'),
+          ),
+          _SectionTile(
+            label: 'Rankings',
+            icon: Icons.leaderboard_outlined,
+            selected: section == 'rankings',
+            onTap: () => onSectionChanged('rankings'),
+          ),
+          _SectionTile(
+            label: 'Hall of Fame',
+            icon: Icons.workspace_premium_outlined,
+            selected: section == 'hall-of-fame',
+            onTap: () => onSectionChanged('hall-of-fame'),
           ),
           _SectionTile(
             label: 'Achievements',
@@ -457,6 +572,19 @@ class _ProspectsBoard extends StatelessWidget {
                 : constraints.maxWidth > 620
                 ? 2
                 : 1;
+        // The cell height has to follow the width of a *card*, not of the
+        // board: two columns in a narrow detail pane produce a narrower card
+        // than one column in a wide one. Below 320 the card stacks its
+        // portrait above its details and needs the taller box.
+        final double cardWidth =
+            (constraints.maxWidth -
+                GtexSpacing.md * 2 -
+                GtexSpacing.md * (columns - 1)) /
+            columns;
+        // Raised from 480/400 when the card gained its lineage line and trait
+        // chips: the cell is a fixed box, so new content has to be paid for
+        // here rather than clipped there.
+        final double cellHeight = cardWidth < 320 ? 504 : 432;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -483,10 +611,8 @@ class _ProspectsBoard extends StatelessWidget {
                   // A ratio made the cell height follow the column width,
                   // which left the card's content taller than its box on
                   // wide panes and overflowed the prospect grid. Pin the
-                  // height to what the card actually needs instead: the
-                  // stacked layout below 320px puts the portrait above the
-                  // details and needs more of it.
-                  mainAxisExtent: constraints.maxWidth < 360 ? 480 : 400,
+                  // height to what the card actually needs instead.
+                  mainAxisExtent: cellHeight,
                   crossAxisSpacing: GtexSpacing.md,
                   mainAxisSpacing: GtexSpacing.md,
                 ),
@@ -507,6 +633,8 @@ class _ProspectsBoard extends StatelessWidget {
                     potentialLabel: prospect.potentialLabel,
                     ageLabel: prospect.ageLabel,
                     valueLabel: _valueLabelFor(prospect),
+                    lineageLabel: prospect.lineageLabel,
+                    traitLabels: prospect.traits,
                     storyLine: prospect.storyline,
                     isSelected: prospect.id == selectedId,
                     onTap: () => onSelected(prospect),
@@ -531,12 +659,18 @@ class _ProspectsBoard extends StatelessWidget {
 class _RegenRightPanel extends StatelessWidget {
   const _RegenRightPanel({
     required this.selected,
+    required this.repository,
+    required this.dossierFuture,
+    required this.onRetryDossier,
     required this.contracts,
     required this.achievements,
     required this.onCreateSon,
   });
 
   final GtexRegenProspect? selected;
+  final GtexRegenRepository repository;
+  final Future<GtexRegenDossierResult>? dossierFuture;
+  final VoidCallback onRetryDossier;
   final List<GtexRegenContractOffer> contracts;
   final List<GtexRegenAchievement> achievements;
   final VoidCallback onCreateSon;
@@ -554,8 +688,15 @@ class _RegenRightPanel extends StatelessWidget {
             icon: Icons.auto_awesome,
             accent: GtexColors.purple,
           )
-        else
+        else ...<Widget>[
           _SelectedProspectPanel(prospect: prospect),
+          const SizedBox(height: GtexSpacing.md),
+          _DossierSection(
+            future: dossierFuture,
+            onRetry: onRetryDossier,
+            repository: repository,
+          ),
+        ],
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'Create-a-Son',
@@ -688,16 +829,40 @@ class _SelectedProspectPanel extends StatelessWidget {
                 .toList(growable: false),
           ),
           const SizedBox(height: GtexSpacing.md),
-          GtexStatusChip(
-            label:
-                prospect.isNationalRentalOnly
-                    ? 'National rental only - not tradable'
-                    : 'Live contract endpoint unavailable',
-            color:
-                prospect.isNationalRentalOnly
-                    ? GtexColors.cyan
-                    : GtexColors.danger,
-          ),
+          // The contract situation is no longer "unavailable": it is read
+          // from the regen lifecycle endpoint and rendered by the dossier's
+          // Ownership section below, so this chip only carries the one fact
+          // the browse row itself knows.
+          if (prospect.isNationalRentalOnly)
+            const GtexStatusChip(
+              label: 'National rental only - not tradable',
+              color: GtexColors.cyan,
+            ),
+          // A tradable regen is a player like any other, so it opens the one
+          // canonical Player Detail through the sanctioned navigator. A
+          // national-pool depth regen has no market identity, so no control is
+          // offered rather than one that dead-ends.
+          if (!prospect.isNationalRentalOnly)
+            Builder(
+              builder: (BuildContext context) {
+                final VoidCallback? openPlayer = GtexPlayerNavigator.tapToOpen(
+                  context,
+                  prospect.id,
+                );
+                if (openPlayer == null) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: GtexSpacing.md),
+                  child: GtexActionButton(
+                    label: 'Open player detail',
+                    icon: Icons.badge_outlined,
+                    accent: GtexColors.purple,
+                    onPressed: openPlayer,
+                  ),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -891,6 +1056,75 @@ class _MiniContractTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Hosts the dossier read beside the selected regen.
+///
+/// The dossier is a second request, so it gets its own loading and failure
+/// treatment: the identity panel above stays readable while it resolves,
+/// rather than the whole right rail flashing.
+class _DossierSection extends StatelessWidget {
+  const _DossierSection({
+    required this.future,
+    required this.onRetry,
+    required this.repository,
+  });
+
+  final Future<GtexRegenDossierResult>? future;
+  final VoidCallback onRetry;
+  final GtexRegenRepository repository;
+
+  @override
+  Widget build(BuildContext context) {
+    final Future<GtexRegenDossierResult>? pending = future;
+    if (pending == null) {
+      return const SizedBox.shrink();
+    }
+    return FutureBuilder<GtexRegenDossierResult>(
+      future: pending,
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<GtexRegenDossierResult> snapshot,
+      ) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              GtexSkeleton.box(height: 120),
+              SizedBox(height: GtexSpacing.sm),
+              GtexSkeleton.box(height: 120),
+            ],
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return GtexBlockedState(
+            title: 'Dossier unavailable',
+            reason:
+                'The regen dossier could not be loaded: '
+                '${snapshot.error ?? 'no response'}',
+            severity: GtexBlockedSeverity.warning,
+            icon: Icons.cloud_off_rounded,
+            ctaLabel: 'Retry',
+            ctaAction: onRetry,
+          );
+        }
+        return GtexRegenDossierPanel(
+          result: snapshot.data!,
+          onRetry: onRetry,
+          ownershipActionsBuilder:
+              (BuildContext context, GtexRegenDossier dossier) =>
+                  GtexRegenOwnershipActions(
+                    repository: repository,
+                    dossier: dossier,
+                    // A listing change invalidates the dossier we are showing,
+                    // so re-read it rather than patching state locally and
+                    // risking a view that disagrees with the backend.
+                    onLifecycleChanged: (RegenLifecycleState? _) => onRetry(),
+                  ),
+        );
+      },
     );
   }
 }

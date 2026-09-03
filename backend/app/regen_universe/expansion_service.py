@@ -46,6 +46,7 @@ from app.regen_universe.dna import (
 )
 from app.regen_universe.models import RegenAwardWinner, RegenPerformanceRecord, RegenSeason
 from app.services.regen_portrait_service import RegenPortraitService
+from app.regen_universe.seed_profile_service import RegenSeedProfileService
 from app.services.regen_service import (
     RegenClubContext,
     RegenGenerationEngine,
@@ -2208,6 +2209,11 @@ class RegenUniverseExpansionService:
                         )
                         self.session.add(seed)
                         self.session.flush()
+                        # The engine just built a complete RegenProfileView and
+                        # only its scalars were kept above. Persist the whole
+                        # thing so the regen dossier works for this seed
+                        # instead of 404ing - see seed_profile_service.py.
+                        RegenSeedProfileService.attach_snapshot(seed, regen_view)
                         RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
                         batch_counts[position] += 1
                         used_names.add(regen_view.display_name.casefold())

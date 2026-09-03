@@ -3,12 +3,50 @@ import 'package:gte_frontend/data/regen_universe_api.dart';
 import 'package:gte_frontend/models/regen_creation_models.dart';
 import 'package:gte_frontend/models/regen_universe_models.dart';
 
+import '../models/gtex_regen_dossier.dart';
 import '../models/gtex_regen_models.dart';
+import '../models/gtex_regen_wire_models.dart';
+import 'gtex_regen_demo_dossier.dart';
+import 'gtex_regen_world_api.dart';
 
 abstract class GtexRegenRepository {
   Future<GtexRegenWorldData> loadWorld();
   Future<GtexCreateSonOrder> createSon(GtexCreateSonDraft draft);
   Future<GtexRegenContractOffer> submitContract(String offerId);
+
+  /// The full record for one regen: lineage, potential band, personality,
+  /// development timeline, legacy and value. Never throws for a regen that
+  /// simply has no dossier - that case comes back as an absence with a
+  /// reason, so the caller states it instead of rendering blanks.
+  Future<GtexRegenDossierResult> loadDossier(String playerId);
+
+  /// `GET /regen-universe/bloodlines` - parent lines and their descendants.
+  Future<List<RegenBloodlineChain>> loadBloodlines();
+
+  /// `GET /regen-universe/rankings` - the live regen leaderboard.
+  Future<List<RegenRankingEntry>> loadRankings();
+
+  /// `GET /regen-universe/hall-of-fame` - regens whose careers are finished.
+  Future<List<RegenHallOfFameEntry>> loadHallOfFame();
+
+  /// List or unlist a regen for transfer. Authenticated, and it changes what
+  /// other clubs can see, so it is only offered where the caller is signed in.
+  Future<RegenLifecycleState?> setTransferListing(
+    String playerId, {
+    required bool listed,
+    String? reason,
+  });
+
+  /// Price a contract offer without committing to it, so the shortfall is
+  /// known before anything is spent.
+  Future<RegenOfferQuote> quoteContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  );
+
+  /// Whether ownership actions should be offered at all. False for an
+  /// anonymous session, where every write would fail on auth.
+  bool get canActOnOwnership;
 }
 
 class LiveGtexRegenRepository implements GtexRegenRepository {
@@ -186,6 +224,102 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
     );
   }
 
+  GtexRegenWorldApi get _worldApi =>
+      GtexRegenWorldApi(client: universeApi.client);
+
+  @override
+  Future<GtexRegenDossierResult> loadDossier(String playerId) async {
+    final RegenPlayerShowcase showcase;
+    try {
+      showcase = await _worldApi.fetchDossier(playerId);
+    } on GtexRegenDossierUnavailable {
+      return const GtexRegenDossierResult.absent(
+        absence: GtexRegenDossierAbsence.notPublished,
+        message:
+            'This regen has no published profile, so GTEX holds no lineage, '
+            'personality or development record for them yet.',
+      );
+    } catch (error) {
+      return GtexRegenDossierResult.absent(
+        absence: GtexRegenDossierAbsence.loadFailed,
+        message: 'The regen dossier could not be loaded: $error',
+      );
+    }
+
+    // The lineage chain is keyed by regen profile id, not player id, and is a
+    // separate request. A regen with a dossier but an unreadable chain is
+    // still worth showing, so the chain failing is recorded rather than
+    // discarding everything else.
+    List<RegenLineageChainNode> chain = const <RegenLineageChainNode>[];
+    bool chainUnavailable = false;
+    try {
+      chain = await _worldApi.fetchLineageChain(showcase.profile.id);
+    } catch (_) {
+      chainUnavailable = true;
+    }
+
+    // Ownership state is a third request and the least critical of the three,
+    // so a failure leaves it null and the panel says the situation is
+    // unpublished rather than losing the lineage and potential above it.
+    RegenLifecycleState? lifecycle;
+    try {
+      lifecycle = await _worldApi.fetchLifecycle(playerId);
+    } catch (_) {
+      lifecycle = null;
+    }
+
+    return GtexRegenDossierResult.loaded(
+      GtexRegenDossier(
+        playerId: playerId,
+        showcase: showcase,
+        lineageChain: chain,
+        lineageChainUnavailable: chainUnavailable,
+        lifecycle: lifecycle,
+      ),
+    );
+  }
+
+  @override
+  Future<List<RegenBloodlineChain>> loadBloodlines() =>
+      _worldApi.listBloodlines();
+
+  @override
+  Future<List<RegenRankingEntry>> loadRankings() => _worldApi.listRankings();
+
+  @override
+  Future<List<RegenHallOfFameEntry>> loadHallOfFame() =>
+      _worldApi.listHallOfFame();
+
+  @override
+  bool get canActOnOwnership => isAuthenticated;
+
+  @override
+  Future<RegenLifecycleState?> setTransferListing(
+    String playerId, {
+    required bool listed,
+    String? reason,
+  }) {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to change a regen transfer listing.');
+    }
+    return _worldApi.setTransferListing(
+      playerId,
+      listed: listed,
+      reason: reason,
+    );
+  }
+
+  @override
+  Future<RegenOfferQuote> quoteContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  ) {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to price a contract offer.');
+    }
+    return _worldApi.quoteContractOffer(playerId, draft);
+  }
+
   static Future<_LiveLoadResult<T>> _safe<T>(Future<T> future) async {
     try {
       return _LiveLoadResult<T>(value: await future);
@@ -252,7 +386,13 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
     RegenCreationOrder order,
   ) {
     final RegenCreationGeneratedPlayer player = order.generatedPlayer!;
+    // A Create-a-Son order is the one browse source that already names the
+    // parent, so its card can carry the relationship without a second
+    // request. Every other lane leaves it null rather than guessing.
+    final String? parentId = order.parentPlayerId;
     return GtexRegenProspect(
+      lineageLabel: parentId == null ? null : 'Son of $parentId',
+      parentPlayerId: parentId,
       id: player.playerId,
       displayName: player.fullName,
       countryCode: player.countryCode ?? 'GTEX',
@@ -523,6 +663,63 @@ class DemoGtexRegenRepository implements GtexRegenRepository {
       (GtexRegenContractOffer offer) => offer.id == offerId,
       orElse: () => demoWorldData.contracts.first,
     );
+  }
+
+  @override
+  Future<GtexRegenDossierResult> loadDossier(String playerId) async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    // r-002 is the demo national-pool seed. Seed rows have no RegenProfile on
+    // the real backend either, so the demo keeps that asymmetry rather than
+    // pretending every regen has a dossier.
+    if (playerId == 'r-002') {
+      return const GtexRegenDossierResult.absent(
+        absence: GtexRegenDossierAbsence.notPublished,
+        message:
+            'This regen has no published profile, so GTEX holds no lineage, '
+            'personality or development record for them yet.',
+      );
+    }
+    return GtexRegenDossierResult.loaded(demoRegenDossier(playerId));
+  }
+
+  @override
+  Future<List<RegenBloodlineChain>> loadBloodlines() async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    return demoRegenBloodlines();
+  }
+
+  @override
+  Future<List<RegenRankingEntry>> loadRankings() async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    return demoRegenRankings();
+  }
+
+  @override
+  Future<List<RegenHallOfFameEntry>> loadHallOfFame() async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    return demoRegenHallOfFame();
+  }
+
+  @override
+  bool get canActOnOwnership => true;
+
+  @override
+  Future<RegenLifecycleState?> setTransferListing(
+    String playerId, {
+    required bool listed,
+    String? reason,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    return demoRegenLifecycle(transferListed: listed);
+  }
+
+  @override
+  Future<RegenOfferQuote> quoteContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    return demoRegenOfferQuote(draft);
   }
 }
 
