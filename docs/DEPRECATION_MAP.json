@@ -1327,6 +1327,12 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/features/club_redesign/data/gtex_club_ownership_api.dart",
+      "from": "/api/v2/portfolio/clubs",
+      "to": "/api/portfolio/clubs",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart",
       "from": "/api/v2/leaderboards/trophies",
       "to": "/api/leaderboards/trophies",

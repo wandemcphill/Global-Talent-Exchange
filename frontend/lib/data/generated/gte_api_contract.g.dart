@@ -10070,6 +10070,7 @@ const Map<String, String> gteApiDeprecatedAliases = <String, String>{
   '/api/v2/notifications/read-all': '/api/v2/notifications/read-all',
   '/api/v2/notifications/subscriptions': '/api/v2/notifications/subscriptions',
   '/api/v2/orders': '/api/v2/orders',
+  '/api/v2/portfolio/clubs': '/api/v2/portfolio/clubs',
   '/api/v2/profile': '/api/v2/profile',
   '/api/v2/profile/security': '/api/v2/profile/security',
   '/api/v2/profile/sessions': '/api/v2/profile/sessions',
