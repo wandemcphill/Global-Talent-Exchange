@@ -113,16 +113,31 @@ class GtexRegenCard extends StatelessWidget {
                           ? constraints.maxHeight
                           : double.infinity;
                   final bool tightHeight = availableHeight < 190;
-                  final bool mediumHeight =
-                      !tightHeight && availableHeight < 300;
                   final bool compact = constraints.maxWidth < 320;
+                  final double portraitWidth =
+                      tightHeight
+                          ? 104
+                          : compact
+                          ? 118
+                          : 132;
+                  // The ladder used to key on height alone, but in the
+                  // side-by-side layout it is the *details column* that runs
+                  // out of room: the portrait takes a fixed slice, so a
+                  // three-column grid on a wide screen leaves a narrower
+                  // column than a two-column grid on a small one. A narrow
+                  // column wraps its chips onto extra runs and overflows a
+                  // fixed cell height. Treat it as medium density so the same
+                  // least-load-bearing blocks are dropped instead.
+                  // In the stacked layout the portrait sits above the details
+                  // and the whole column is narrow, so both dimensions are
+                  // short; treat it as narrow outright.
+                  final double detailsWidth =
+                      constraints.maxWidth - portraitWidth - GtexSpacing.sm;
+                  final bool narrowDetails = compact || detailsWidth < 220;
+                  final bool mediumHeight =
+                      !tightHeight && (availableHeight < 300 || narrowDetails);
                   final Widget portrait = SizedBox(
-                    width:
-                        tightHeight
-                            ? 104
-                            : compact
-                            ? 118
-                            : 132,
+                    width: portraitWidth,
                     child: GtexRegenPortrait(
                       portraitUrl: portraitUrl,
                       seed: seed,
