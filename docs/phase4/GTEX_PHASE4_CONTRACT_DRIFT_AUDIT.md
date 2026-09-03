@@ -3,8 +3,14 @@
 **Date:** 2026-09-03
 **Measured against:** `origin/main` @ `2abe01fd` (Merge PR #91)
 **Rebased onto:** `origin/main` @ `7f7dfdc1` (Merge PR #94)
-**Branch:** `phase4/contract-drift-hardening`
+**Branch:** `phase4/contract-drift-hardening` — **merged as PR #96** (`1b138034`)
 **Scope:** API contract integrity only. No application architecture, Player Card, router, Home, Market UX, Regen UX, or Club UX changes.
+
+---
+
+## -1. Follow-up — §5.2 fixed on `phase4/ws-match-collision-fix`
+
+PR #96 (§0–§8 below) shipped and merged with §5.1 fixed and §5.2/§5.3/§6 documented but open. **§5.2 — the `/api/v2/ws/match/{match_id}` handler collision — is now fixed**, on a new branch off post-merge `main` (`1b138034`). Investigating it turned up that it was not the static ambiguity originally described, but a deterministic runtime bug already failing 5 tests in `backend/tests/api_v1/test_router.py`. Full account in the rewritten §5.2. §5.3 and §6 remain open.
 
 ---
 
@@ -20,7 +26,7 @@ What this PR still delivers, all live against `7f7dfdc1`:
 |---|---|
 | **§5.1 — the `/api/v2/admin` middleware gap** | **Fixed.** Still present on `main`. This is now the PR's primary change. |
 | **§7 — the regression guard** | **New.** Nothing on `main` prevents the drift recurring; PR #94 absorbed the backlog by luck of timing, not by a gate. |
-| **§5.2, §5.3, §6** | Documented, not fixed. Still present on `main`. |
+| **§5.2, §5.3, §6** | Documented, not fixed at merge time. §5.2 fixed since — see §-1. |
 | Residual artifact regeneration | ~40 lines. `main`'s frontend-derived docs are *already* stale again — `gtex_regen_world_api.dart` call sites landed after the last stage-1 run. A live instance of the same pattern, caught by the pipeline here. |
 
 The absorption is itself evidence for §2: PR #94 fixed the drift as a side effect of touching the same generated files, with no gate involved and nothing recording that it happened. The next agent who does not happen to regenerate re-opens it.
@@ -182,7 +188,7 @@ Implemented in this PR:
 Recommended but **deliberately not done here** (each is owned elsewhere; see §8):
 
 4. Add `generate_contract_audit.py` to `quality-gates.yml`, or better, leave CI as-is and rely on the new test. Adding stage 1 to CI would make the pipeline *silently self-heal* — it would regenerate `ROUTE_MAP.json` in the runner, never commit it, and never fail. A test that **fails loudly** is the correct gate; a regeneration step would mask the drift it is meant to catch.
-5. Resolve the `/api/v2/ws/match/{match_id}` handler collision (§5.2).
+5. ~~Resolve the `/api/v2/ws/match/{match_id}` handler collision (§5.2).~~ **Done — see §-1 and §5.2.**
 6. Sweep the Class B defensive commits in §6.
 
 ---
@@ -247,19 +253,49 @@ Tests:
 
 Not fixed, and out of scope here: prefix matching cannot cover admin surfaces mounted outside an admin prefix, e.g. `/api/competitions/admin`. Those rely entirely on their handler guard.
 
-### 5.2 Three handlers claim `/api/v2/ws/match/{match_id}`
+### 5.2 Three handlers claimed `/api/v2/ws/match/{match_id}` — **FIXED**
+
+At the static-source level, three handlers declared this path:
 
 | Handler | File | Declared as |
 |---|---|---|
-| `stream_live_match_events` | `realtime/router.py` | `/ws/match/{match_id}` → aliased to v2 — **wins in the contract** |
-| `stream_match_commentary` | `api_v1/router.py:512` | `/ws/match/{match_id}` |
-| `stream_unity_spatial_match` | `live_matches/router.py:1792` | `/api/v2/ws/match/{match_id}` — **hardcoded v2 prefix in the decorator** |
+| `stream_live_match_events` | `realtime/router.py` | `/ws/match/{match_id}` → aliased to v2 |
+| `stream_match_commentary` | `api_v1/router.py:512` | `/ws/match/{match_id}` (router prefix bakes in `/api/v2`) |
+| `stream_unity_spatial_match` | `live_matches/router.py:1792` | `/api/v2/ws/match/{match_id}` — hardcoded v2 prefix in the decorator |
 
-The contract's `route_key` collapses all three into one entry; only `stream_live_match_events` survives. This is why 28 `ROUTE_MAP` rows produce 27 contract entries, and why `ROUTE_CLASSIFICATION.md` gains a "shadowed" line in this regeneration.
+This was originally written up as a contract-generation ambiguity — "which handler serves the path depends on registration order, it is not determined by the contract." That understated it. It is a **genuine runtime bug**, deterministic and already failing tests.
 
-`live_matches/router.py` hardcoding `/api/v2/` in a `@router.websocket` decorator bypasses the alias machinery entirely and is the direct cause of the collision. Which handler actually serves the path depends on router registration order — it is not determined by the contract.
+#### What was actually happening
 
-Not fixed here: this is live match routing, outside this PR's scope.
+`register_domain_modules` (`app/core/module.py`) treats a route collision on a path starting with `/api/` as non-fatal: whichever module registers first is kept, and any later module's route at the same `(path, methods)` fingerprint is **silently dropped** — no error, no warning outside DEBUG logs. `live_matches` is eager (registers at app startup); `api_v1` is lazy (registers on first request). Eager always wins, so `live_matches.stream_unity_spatial_match` was the sole route ever bound to `/api/v2/ws/match/{match_id}` — confirmed empirically:
+
+```python
+>>> [r for r in app.router.routes if r.path == "/api/v2/ws/match/{match_id}"]
+[<APIWebSocketRoute app.live_matches.router.stream_unity_spatial_match>]
+```
+
+`api_v1.stream_match_commentary` — declared, imported, unit-testable, reviewable — never ran. And it was the better implementation: it branches on `?format=unity` to serve both plain commentary and the Unity spatial bridge (the *only* codepath either handler has for plain, non-unity commentary), and its unity branch has delivery deduplication (send only on payload change, not unconditionally every 50ms) and metrics recording that `stream_unity_spatial_match` lacked entirely. `_issue_unity_live_access_view` and `_build_active_live_match_view` (`live_matches/router.py`) hand every client `websocket_path=".../api/v2/ws/match/{match_id}?format=unity"` — so this was the client-facing contract, being served by the wrong, worse implementation.
+
+This was independently visible in `backend/tests/api_v1/test_router.py`, whose 5 websocket tests target exactly this path and assume `stream_match_commentary` answers it. Before this fix, **5 of them failed** — e.g. a plain (non-unity) connection got rejected with `"Unity live access token is required."`, because the shadowed handler's own unity-only access gate was answering instead.
+
+#### Fix
+
+Deleted `stream_unity_spatial_match` from `live_matches/router.py` (17 lines: the duplicate `@router.websocket("/api/v2/ws/match/{match_id}")` declaration and its body). It had zero other callers or test references. `_require_unity_live_access_for_websocket` and `build_unity_live_payload_for_app` — defined in the same file — remain in place and in use; `api_v1.router` already imports and calls both from its own, superior implementation.
+
+After the fix, exactly one route is bound to the path, and it is the correct one:
+
+```
+routes bound to /api/v2/ws/match/{match_id}: 1
+   app.api_v1.router stream_match_commentary
+```
+
+5→2 failures in `backend/tests/api_v1/test_router.py`. The remaining 2 are unrelated (a match-liveness timing issue in test setup, `409 Match is not currently live for spectating`) — confirmed pre-existing by reproducing them on clean `origin/main` before this fix.
+
+Regression guard: `backend/tests/app/test_websocket_route_collisions.py` hydrates the real app and asserts exactly one route answers `/api/v2/ws/match/{match_id}`, and that it is `api_v1.router.stream_match_commentary` by module and qualname. Deliberately scoped to this one path rather than a blanket "no router may duplicate another's route" — `with_api_alias` modules legitimately register the same handler two or three times under different prefixes (`/`, `/api/...`, `/api/v2/...`), and `register_versioned_route_aliases` independently derives its own alias from those, frequently duplicating the module's own registration. That produces genuine route-table duplication across large parts of the app — but every one of those duplicates dispatches to the *same* endpoint, so it's wasteful, not wrong, and fixing it is a distinct, much larger change than the two-different-implementations collision this section is about.
+
+#### Residual: the static contract still misattributes the handler
+
+`shared/api_contract.json` records this path's owner as `stream_live_match_events` (`realtime/router.py`) both before and after this fix — unchanged, because `generate_contract_audit.py`'s dedup heuristic (`route_key` + last-write-wins) has no model of `register_domain_modules`'s eager/lazy collision resolution or the `_reserved_versioned_fingerprints` mechanism that stops `realtime`'s alias from ever being created at this path in the first place. At runtime, `realtime.stream_live_match_events` is **not** reachable at `/api/v2/ws/match/{match_id}` — only at the bare `/ws/match/{match_id}` and `/ws/matches/{match_id}`. The static contract's canonical-handler attribution for this path was wrong before this PR and remains wrong after it; only the *runtime* collision (two different implementations competing for the same request) is fixed here. Bringing the generator's model in line with `register_domain_modules` is a distinct piece of work, out of scope for a route-level fix.
 
 ### 5.3 Mutating routes without a handler-level auth dependency
 
@@ -376,5 +412,5 @@ Note what this means now that PR #94 has absorbed the backlog: **test 1 would ha
 ### Residual risk after this PR
 
 - CI still does not run stage 1; the new test is the only thing consulting backend source. If the test is skipped, marked xfail, or its 31-second scan is trimmed for speed, the drift returns silently. **Do not weaken it without replacing the coverage.**
-- §5.2 and §6 are documented, not fixed. Each needs an owner outside this PR's scope. §5.1 is fixed.
+- §6 is documented, not fixed. It needs an owner outside this PR's scope. §5.1 and §5.2 are fixed.
 - Admin surfaces mounted outside an admin prefix (e.g. `/api/competitions/admin`) are still invisible to prefix matching and depend solely on their handler guard.
