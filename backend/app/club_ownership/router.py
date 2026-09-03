@@ -9,6 +9,7 @@ from app.club_ownership.schemas import (
     ClubGovernanceProposalRequest,
     ClubGovernanceVoteRequest,
     ClubOwnershipView,
+    ClubPortfolioView,
     ClubTokenTradeRequest,
     ClubTokenTradeResultView,
     ClubTreasuryView,
@@ -19,6 +20,20 @@ from app.models.user import User
 router = APIRouter(tags=["club-ownership"])
 legacy_router = APIRouter(prefix="/clubs", tags=["club-ownership"])
 api_router = APIRouter(prefix="/api/clubs", tags=["club-ownership"])
+portfolio_router = APIRouter(prefix="/api/portfolio", tags=["club-ownership"])
+
+
+@portfolio_router.get("/clubs", response_model=ClubPortfolioView)
+def get_my_club_portfolio(
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ClubPortfolioView:
+    """The signed-in user's club-share holdings, valued at the live token price.
+
+    Companion to ``GET /api/portfolio`` (player holdings); the portfolio surface
+    renders these as an explicitly-labelled club-ownership section.
+    """
+    return ClubOwnershipService(session).list_user_club_portfolio(user=user)
 
 
 @legacy_router.get("/{club_id}/ownership", response_model=ClubOwnershipView)
@@ -131,5 +146,6 @@ def get_club_treasury(club_id: str, _: User = Depends(get_current_user), session
 
 router.include_router(legacy_router)
 router.include_router(api_router)
+router.include_router(portfolio_router)
 
 __all__ = ["router"]
