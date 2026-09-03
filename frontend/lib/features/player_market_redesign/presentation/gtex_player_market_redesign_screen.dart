@@ -6,6 +6,7 @@ import '../../../providers/gte_exchange_controller.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 import '../models/gtex_market_browse_models.dart';
 import '../widgets/gtex_market_context_panel.dart';
+import '../widgets/gtex_market_movers_rail.dart';
 import '../widgets/gtex_market_player_grid.dart';
 import '../widgets/gtex_market_selected_player_panel.dart';
 
@@ -42,6 +43,9 @@ class _GtexPlayerMarketRedesignScreenState
   String? _selectedClub;
   String _selectedAvailability = 'all';
   String? _selectedPlayerId;
+  GteMarketMovers? _movers;
+  bool _isLoadingMovers = false;
+  String? _moversError;
   GtexMarketBasketState _basketState = const GtexMarketBasketState(
     <String, GtexMarketPlayerView>{},
   );
@@ -78,7 +82,35 @@ class _GtexPlayerMarketRedesignScreenState
           !widget.controller.isLoadingMarket) {
         widget.controller.bootstrap();
       }
+      _loadMovers();
     });
+  }
+
+  Future<void> _loadMovers() async {
+    if (_isLoadingMovers) {
+      return;
+    }
+    setState(() => _isLoadingMovers = true);
+    try {
+      final GteMarketMovers movers =
+          await widget.controller.api.fetchMarketMovers();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _movers = movers;
+        _moversError = null;
+        _isLoadingMovers = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _moversError = 'Market movers are unavailable right now.';
+        _isLoadingMovers = false;
+      });
+    }
   }
 
   @override
@@ -112,6 +144,12 @@ class _GtexPlayerMarketRedesignScreenState
                 )
                 : GtexMarketBrowseSummary.fromCatalog(catalog);
         final GtexMarketPlayerView? selectedPlayer = _selectedPlayer(players);
+        final Set<String> ownedPlayerIds = <String>{
+          for (final GtePortfolioHolding holding
+              in widget.controller.portfolio?.holdings ??
+                  const <GtePortfolioHolding>[])
+            holding.playerId,
+        };
 
         return GtexMasterDetailScaffold(
           title: 'Transfer Hub',
@@ -168,15 +206,16 @@ class _GtexPlayerMarketRedesignScreenState
             onAvailabilitySelected: _setAvailability,
           ),
           detail: GtexMarketPlayerGrid(
+            header: GtexMarketMoversRail(
+              movers: _movers,
+              isLoading: _isLoadingMovers,
+              error: _moversError,
+              onOpenPlayer: widget.onOpenPlayer,
+            ),
             players: players,
             // Ownership comes from the loaded portfolio; before it loads, or
             // when signed out, the market simply does not claim ownership.
-            ownedPlayerIds: <String>{
-              for (final GtePortfolioHolding holding
-                  in widget.controller.portfolio?.holdings ??
-                      const <GtePortfolioHolding>[])
-                holding.playerId,
-            },
+            ownedPlayerIds: ownedPlayerIds,
             totalPlayers: widget.controller.marketTotalPlayerCount,
             selectedPlayerId: _selectedPlayerId,
             basketState: _basketState,
@@ -195,6 +234,9 @@ class _GtexPlayerMarketRedesignScreenState
           ),
           rightPanel: GtexMarketSelectedPlayerPanel(
             selectedPlayer: selectedPlayer,
+            selectedPlayerOwned:
+                selectedPlayer != null &&
+                ownedPlayerIds.contains(selectedPlayer.playerId),
             basketState: _basketState,
             isAuthenticated: widget.controller.isAuthenticated,
             onOpenLogin: widget.onOpenLogin,
@@ -314,6 +356,7 @@ class _GtexPlayerMarketRedesignScreenState
 
   void _refresh() {
     _applyServerFilters(resetSelection: false);
+    _loadMovers();
   }
 
   void _loadMore() {

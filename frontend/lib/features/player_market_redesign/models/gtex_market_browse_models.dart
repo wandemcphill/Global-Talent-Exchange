@@ -127,6 +127,20 @@ class GtexMarketPlayerView {
   bool get isFalling => (movementPct ?? 0) < 0;
   bool get hasMovement => movementPct != null;
 
+  /// Global Scouting Index direction, from the backend's own GSI movement
+  /// figure. Null movement is not treated as a direction.
+  bool get isGsiRising => (globalScoutingIndexMovementPct ?? 0) > 0;
+  bool get isGsiFalling => (globalScoutingIndexMovementPct ?? 0) < 0;
+
+  /// An opportunity is a player the market price *and* the scouting index
+  /// agree is trending up. Both inputs are real backend signals; when either
+  /// is missing the player is simply not an opportunity rather than a guess.
+  bool get isOpportunity =>
+      isRising &&
+      isGsiRising &&
+      movementPct != null &&
+      globalScoutingIndexMovementPct != null;
+
   String get priceLabel =>
       marketValueEur == null
           ? GtexMarketFormatters.credits(price)
@@ -375,6 +389,90 @@ class GtexMarketBasketState {
     final Map<String, GtexMarketPlayerView> next =
         Map<String, GtexMarketPlayerView>.of(itemsById)..remove(playerId);
     return GtexMarketBasketState(next);
+  }
+}
+
+/// Sort orders offered over the loaded market listings.
+///
+/// Every order is computed from a field the backend already returned for the
+/// listing. Like the discovery lanes, this sorts the listings currently
+/// loaded rather than issuing a server-side ordered query - the label makes
+/// no claim the data cannot keep.
+enum GtexMarketSort {
+  relevance,
+  priceHighToLow,
+  priceLowToHigh,
+  biggestRisers,
+  biggestFallers,
+  mostWatched,
+  topRated,
+}
+
+extension GtexMarketSortX on GtexMarketSort {
+  String get label => switch (this) {
+    GtexMarketSort.relevance => 'Market order',
+    GtexMarketSort.priceHighToLow => 'Price: high to low',
+    GtexMarketSort.priceLowToHigh => 'Price: low to high',
+    GtexMarketSort.biggestRisers => 'Biggest risers',
+    GtexMarketSort.biggestFallers => 'Biggest fallers',
+    GtexMarketSort.mostWatched => 'Most watched',
+    GtexMarketSort.topRated => 'Top rated',
+  };
+
+  /// Sorts a nullable numeric key with missing values always last, keeping the
+  /// input order among equal keys (stable).
+  static List<GtexMarketPlayerView> _byKey(
+    List<GtexMarketPlayerView> players,
+    double? Function(GtexMarketPlayerView) key, {
+    required bool descending,
+  }) {
+    final List<MapEntry<int, GtexMarketPlayerView>> indexed = <
+      MapEntry<int, GtexMarketPlayerView>
+    >[
+      for (int i = 0; i < players.length; i++) MapEntry<int, GtexMarketPlayerView>(i, players[i]),
+    ];
+    indexed.sort((
+      MapEntry<int, GtexMarketPlayerView> a,
+      MapEntry<int, GtexMarketPlayerView> b,
+    ) {
+      final double? ka = key(a.value);
+      final double? kb = key(b.value);
+      if (ka == null && kb == null) return a.key.compareTo(b.key);
+      if (ka == null) return 1;
+      if (kb == null) return -1;
+      final int cmp = descending ? kb.compareTo(ka) : ka.compareTo(kb);
+      return cmp != 0 ? cmp : a.key.compareTo(b.key);
+    });
+    return indexed
+        .map((MapEntry<int, GtexMarketPlayerView> e) => e.value)
+        .toList(growable: false);
+  }
+
+  List<GtexMarketPlayerView> applyTo(List<GtexMarketPlayerView> players) {
+    switch (this) {
+      case GtexMarketSort.relevance:
+        return players;
+      case GtexMarketSort.priceHighToLow:
+        return _byKey(players, (GtexMarketPlayerView p) => p.price, descending: true);
+      case GtexMarketSort.priceLowToHigh:
+        return _byKey(players, (GtexMarketPlayerView p) => p.price, descending: false);
+      case GtexMarketSort.biggestRisers:
+        return _byKey(players, (GtexMarketPlayerView p) => p.movementPct, descending: true);
+      case GtexMarketSort.biggestFallers:
+        return _byKey(players, (GtexMarketPlayerView p) => p.movementPct, descending: false);
+      case GtexMarketSort.mostWatched:
+        return _byKey(
+          players,
+          (GtexMarketPlayerView p) => p.interestScore?.toDouble(),
+          descending: true,
+        );
+      case GtexMarketSort.topRated:
+        return _byKey(
+          players,
+          (GtexMarketPlayerView p) => p.rating,
+          descending: true,
+        );
+    }
   }
 }
 

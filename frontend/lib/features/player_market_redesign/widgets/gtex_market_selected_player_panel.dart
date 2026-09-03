@@ -14,8 +14,11 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
     required this.onToggleBasket,
     required this.onRemoveFromBasket,
     required this.onCheckout,
+    this.selectedPlayerOwned = false,
   });
 
+  /// True when the signed-in user already holds the selected player.
+  final bool selectedPlayerOwned;
   final GtexMarketPlayerView? selectedPlayer;
   final GtexMarketBasketState basketState;
   final bool isAuthenticated;
@@ -37,6 +40,7 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
                   : _SelectedPlayerDetail(
                     player: selectedPlayer!,
                     inBasket: basketState.contains(selectedPlayer!.playerId),
+                    isOwned: selectedPlayerOwned,
                     isAuthenticated: isAuthenticated,
                     onOpenLogin: onOpenLogin,
                     onOpenPlayer: () => onOpenPlayer(selectedPlayer!),
@@ -98,6 +102,7 @@ class _SelectedPlayerDetail extends StatelessWidget {
   const _SelectedPlayerDetail({
     required this.player,
     required this.inBasket,
+    required this.isOwned,
     required this.isAuthenticated,
     required this.onOpenLogin,
     required this.onOpenPlayer,
@@ -106,6 +111,7 @@ class _SelectedPlayerDetail extends StatelessWidget {
 
   final GtexMarketPlayerView player;
   final bool inBasket;
+  final bool isOwned;
   final bool isAuthenticated;
   final VoidCallback onOpenLogin;
   final VoidCallback onOpenPlayer;
@@ -116,6 +122,52 @@ class _SelectedPlayerDetail extends StatelessWidget {
   /// poster card needs, the card renders in its own compact layout instead
   /// of filling the whole pane with a clipped portrait.
   static const double _posterCardMinHeight = 380;
+
+  /// A short market read for the selected player. When the user owns the
+  /// player it frames the value movement as their position moving; otherwise
+  /// it flags an opportunity when the market and the scouting index agree.
+  /// Every figure shown is a value the backend returned - nothing is
+  /// synthesised, and the panel is absent when there is no real signal.
+  Widget? get _marketSignal {
+    final String? movement = player.movementLabel;
+    if (isOwned) {
+      final String direction = player.isRising
+          ? 'up'
+          : player.isFalling
+          ? 'down'
+          : 'flat';
+      return GtexPanel(
+        title: 'Your position',
+        subtitle: 'You already hold this player',
+        accent: GtexColors.gold,
+        child: GtexTermsList(
+          dense: true,
+          rows: <GtexTermRow>[
+            GtexTermRow('Market value', player.priceLabel),
+            GtexTermRow.orUnknown('Value movement', movement),
+            GtexTermRow('Position trend', 'Trading $direction'),
+            GtexTermRow.orUnknown('Scouting index', player.gsiTrendLabel),
+          ],
+        ),
+      );
+    }
+    if (player.isOpportunity) {
+      return GtexPanel(
+        title: 'Opportunity signal',
+        subtitle: 'Market value and scouting index are both rising',
+        accent: GtexColors.cyan,
+        child: GtexTermsList(
+          dense: true,
+          rows: <GtexTermRow>[
+            GtexTermRow.orUnknown('Value movement', movement),
+            GtexTermRow.orUnknown('Scouting index', player.gsiTrendLabel),
+            GtexTermRow.orUnknown('Market interest', player.interestLabel),
+          ],
+        ),
+      );
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -274,6 +326,23 @@ class _SelectedPlayerDetail extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: GtexSpacing.xs),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: GtexActionButton(
+            key: const Key('gtex-market-why-price'),
+            label: 'Why this price?',
+            icon: Icons.insights_outlined,
+            compact: true,
+            secondary: true,
+            accent: GtexColors.cyan,
+            onPressed: isAuthenticated ? onOpenPlayer : onOpenLogin,
+          ),
+        ),
+        if (_marketSignal != null) ...<Widget>[
+          const SizedBox(height: GtexSpacing.md),
+          _marketSignal!,
+        ],
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'Negotiation state',

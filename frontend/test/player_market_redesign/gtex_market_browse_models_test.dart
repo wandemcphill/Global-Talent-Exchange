@@ -183,6 +183,79 @@ void main() {
     });
   });
 
+  group('GtexMarketPlayerView opportunity classification', () {
+    test('is an opportunity only when value and GSI both rise', () {
+      final GtexMarketPlayerView both = GtexMarketPlayerView.fromListItem(
+        _rawPlayer(movementPct: 2.5, gsiMovementPct: 3.1),
+      );
+      expect(both.isOpportunity, isTrue);
+
+      final GtexMarketPlayerView valueOnly = GtexMarketPlayerView.fromListItem(
+        _rawPlayer(movementPct: 3.0, gsiMovementPct: null),
+      );
+      expect(valueOnly.isOpportunity, isFalse);
+
+      final GtexMarketPlayerView gsiOnly = GtexMarketPlayerView.fromListItem(
+        _rawPlayer(movementPct: -1.0, gsiMovementPct: 4.0),
+      );
+      expect(gsiOnly.isOpportunity, isFalse);
+
+      final GtexMarketPlayerView nullMovement =
+          GtexMarketPlayerView.fromListItem(
+        _rawPlayer(movementPct: null, gsiMovementPct: 4.0),
+      );
+      expect(nullMovement.hasMovement, isFalse);
+      expect(nullMovement.isOpportunity, isFalse);
+    });
+  });
+
+  group('GtexMarketSort', () {
+    List<String> ids(List<GtexMarketPlayerView> players) =>
+        players.map((GtexMarketPlayerView p) => p.playerId).toList();
+
+    final List<GtexMarketPlayerView> sample = <GtexMarketPlayerView>[
+      GtexMarketPlayerView.fromListItem(
+        _rawPlayer(id: 'cheap', price: 10, movementPct: 1, rating: 6.0),
+      ),
+      GtexMarketPlayerView.fromListItem(
+        _rawPlayer(id: 'rich', price: 900, movementPct: -5, rating: 8.5),
+      ),
+      GtexMarketPlayerView.fromListItem(
+        _rawPlayer(id: 'mid', price: 100, movementPct: 9, rating: null),
+      ),
+    ];
+
+    test('relevance keeps input order', () {
+      expect(ids(GtexMarketSort.relevance.applyTo(sample)),
+          <String>['cheap', 'rich', 'mid']);
+    });
+
+    test('price sorts ascend and descend', () {
+      expect(ids(GtexMarketSort.priceLowToHigh.applyTo(sample)),
+          <String>['cheap', 'mid', 'rich']);
+      expect(ids(GtexMarketSort.priceHighToLow.applyTo(sample)),
+          <String>['rich', 'mid', 'cheap']);
+    });
+
+    test('risers and fallers order by movement', () {
+      expect(ids(GtexMarketSort.biggestRisers.applyTo(sample)).first, 'mid');
+      expect(ids(GtexMarketSort.biggestFallers.applyTo(sample)).first, 'rich');
+    });
+
+    test('top rated pushes missing ratings last', () {
+      expect(ids(GtexMarketSort.topRated.applyTo(sample)),
+          <String>['rich', 'cheap', 'mid']);
+    });
+
+    test('does not mutate the source list', () {
+      final List<GtexMarketPlayerView> copy = List<GtexMarketPlayerView>.of(
+        sample,
+      );
+      GtexMarketSort.priceHighToLow.applyTo(sample);
+      expect(ids(sample), ids(copy));
+    });
+  });
+
   group('GtexPlayerCard', () {
     testWidgets('renders real image_url instead of fallback initials', (
       WidgetTester tester,
@@ -209,6 +282,31 @@ void main() {
       expect(find.text('GSI'), findsOneWidget);
     });
   });
+}
+
+GteMarketPlayerListItem _rawPlayer({
+  String id = 'raw',
+  double? price = 50000000,
+  double? movementPct,
+  double? gsiMovementPct,
+  double? rating,
+  int? interestScore,
+}) {
+  return GteMarketPlayerListItem(
+    playerId: id,
+    playerName: 'Raw $id',
+    position: 'CM',
+    nationality: 'Testland',
+    currentClubName: 'Test FC',
+    age: 25,
+    currentValueCredits: price,
+    movementPct: movementPct,
+    trendScore: null,
+    marketInterestScore: interestScore,
+    averageRating: rating,
+    globalScoutingIndex: 80,
+    globalScoutingIndexMovementPct: gsiMovementPct,
+  );
 }
 
 GteMarketPlayerListItem _player({
