@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 
 import '../../data/gte_authed_api.dart';
 import '../../data/gte_api_repository.dart';
+import '../../data/gte_exchange_models.dart';
 import '../../data/gte_models.dart';
+import '../../domain/ownership/gtex_ownership_models.dart';
+import '../../features/club_redesign/data/gtex_club_ownership_api.dart';
+import '../../features/club_redesign/models/gtex_club_ownership_models.dart';
 import '../../features/coin_trader_redesign/coin_trader_redesign.dart';
 import '../../features/trust_ops_redesign/trust_ops_redesign.dart';
 import '../../providers/gte_exchange_controller.dart';
 import '../../ui_gtex/ui_gtex.dart';
 import '../../widgets/gte_formatters.dart';
+import 'gtex_capital_desk_api.dart';
+import 'gtex_ownership_experience.dart';
 
 enum GtexWalletDeskModule {
   wallet,
@@ -118,6 +124,11 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
   bool _isLoadingDeposits = false;
   String? _depositError;
 
+  GtePortfolioSnapshot? _snapshot;
+  GtexClubOwnershipPortfolio? _clubPortfolio;
+  bool _isLoadingClubs = false;
+  String? _clubError;
+
   @override
   void initState() {
     super.initState();
@@ -127,6 +138,75 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
         return;
       }
       _refreshCapitalDesk();
+    });
+  }
+
+  GtexCapitalDeskApi _capitalDeskApi() {
+    final GteAuthedApi? authed = widget.authedApi;
+    if (authed != null) {
+      return GtexCapitalDeskApi(client: authed);
+    }
+    return GtexCapitalDeskApi.standard(
+      baseUrl: widget.baseUrl,
+      accessToken: widget.controller.accessToken,
+      mode: widget.backendMode,
+    );
+  }
+
+  GtexClubOwnershipApi _clubOwnershipApi() {
+    final GteAuthedApi? authed = widget.authedApi;
+    if (authed != null) {
+      return GtexClubOwnershipApi(client: authed);
+    }
+    return GtexClubOwnershipApi.standard(
+      baseUrl: widget.baseUrl,
+      accessToken: widget.controller.accessToken,
+      mode: widget.backendMode,
+    );
+  }
+
+  Future<void> _loadOwnershipExtras() async {
+    if (!widget.controller.isAuthenticated) {
+      if (mounted) {
+        setState(() {
+          _snapshot = null;
+          _clubPortfolio = null;
+          _clubError = null;
+          _isLoadingClubs = false;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _isLoadingClubs = true;
+      _clubError = null;
+    });
+    final List<Object?> results = await Future.wait<Object?>(<Future<Object?>>[
+      _capitalDeskApi().fetchPortfolioSnapshot().then<Object?>(
+            (GtePortfolioSnapshot s) => s,
+            onError: (Object _) => null,
+          ),
+      _clubOwnershipApi().fetchMyClubPortfolio().then<Object?>(
+            (GtexClubOwnershipPortfolio p) => p,
+            onError: (Object error) => _ClubLoadError(error.toString()),
+          ),
+    ]);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      final Object? snapshot = results[0];
+      if (snapshot is GtePortfolioSnapshot) {
+        _snapshot = snapshot;
+      }
+      final Object? clubs = results[1];
+      if (clubs is GtexClubOwnershipPortfolio) {
+        _clubPortfolio = clubs;
+        _clubError = null;
+      } else if (clubs is _ClubLoadError) {
+        _clubError = 'Club interests could not be synced right now.';
+      }
+      _isLoadingClubs = false;
     });
   }
 
@@ -142,6 +222,7 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
     await Future.wait<void>(<Future<void>>[
       widget.controller.refreshAccount(),
       _loadDepositRequests(),
+      _loadOwnershipExtras(),
     ]);
   }
 
@@ -398,11 +479,19 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
           onCancel: _cancelOrder,
         );
       case GtexWalletDeskModule.holdings:
-        return _HoldingsPanel(
-          holdings:
-              widget.controller.portfolio?.holdings ??
-              const <GtePortfolioHolding>[],
+        return GtexOwnershipExperience(
+          book: GtexOwnershipBook.fromPortfolio(widget.controller.portfolio),
+          summary: widget.controller.portfolioSummary,
+          walletSummary: widget.controller.walletSummary,
+          snapshot: _snapshot,
+          clubOwnership: _clubPortfolio,
+          isLoadingClubs: _isLoadingClubs,
+          clubError: _clubError,
+          portfolioError: widget.controller.portfolioError,
+          ownerName: widget.controller.session?.user.username,
+          identityLookup: _identityFor,
           onOpenPlayer: widget.onOpenPlayer,
+          onRetry: _refreshCapitalDesk,
         );
       case GtexWalletDeskModule.coinTraders:
         return GtexCoinTraderMarketplacePanel(
@@ -431,6 +520,22 @@ class _GtexLiveWalletOverviewState extends State<_GtexLiveWalletOverview> {
         );
     }
   }
+
+  GteMarketPlayerListItem? _identityFor(String playerId) {
+    for (final GteMarketPlayerListItem player in widget.controller.players) {
+      if (player.playerId == playerId) {
+        return player;
+      }
+    }
+    return null;
+  }
+}
+
+/// Sentinel wrapper so `Future.wait` can carry a club-load failure without
+/// aborting the sibling snapshot read.
+class _ClubLoadError {
+  const _ClubLoadError(this.message);
+  final String message;
 }
 
 class _ModuleTile extends StatelessWidget {
@@ -712,163 +817,6 @@ class _OrdersPanel extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _HoldingsPanel extends StatelessWidget {
-  const _HoldingsPanel({required this.holdings, this.onOpenPlayer});
-
-  final List<GtePortfolioHolding> holdings;
-  final ValueChanged<String>? onOpenPlayer;
-
-  @override
-  Widget build(BuildContext context) {
-    if (holdings.isEmpty) {
-      return const GtexEmptyState(
-        title: 'You do not own any players yet',
-        message:
-            'Players you buy on the Transfer Hub show up here with what you '
-            'paid, what they are worth now, and your profit or loss.',
-        icon: Icons.groups_2_outlined,
-      );
-    }
-
-    final double totalHoldingsValue = holdings.fold<double>(
-      0,
-      (double sum, GtePortfolioHolding item) => sum + item.marketValue,
-    );
-    final double totalPl = holdings.fold<double>(
-      0,
-      (double sum, GtePortfolioHolding item) => sum + item.unrealizedPl,
-    );
-
-    return ListView(
-      children: <Widget>[
-        GtexPanel(
-          title: 'Player Asset Portfolio',
-          subtitle:
-              '${holdings.length} player asset${holdings.length == 1 ? '' : 's'} owned',
-          accent: GtexColors.pitch,
-          child: Wrap(
-            spacing: GtexSpacing.md,
-            runSpacing: GtexSpacing.md,
-            children: <Widget>[
-              SizedBox(
-                width: 200,
-                child: GtexMetricTile(
-                  label: 'Portfolio Value',
-                  value: gteFormatGtc(totalHoldingsValue),
-                  icon: Icons.groups_2_outlined,
-                  accent: GtexColors.pitch,
-                ),
-              ),
-              SizedBox(
-                width: 200,
-                child: GtexMetricTile(
-                  label: 'Unrealized P/L',
-                  value: gteFormatGtc(totalPl),
-                  icon: totalPl >= 0 ? Icons.trending_up : Icons.trending_down,
-                  accent: totalPl >= 0 ? GtexColors.pitch : GtexColors.red,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: GtexSpacing.md),
-        Text(
-          'HOLDINGS BREAKDOWN',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: GtexColors.textMuted,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.2,
-              ),
-        ),
-        const SizedBox(height: GtexSpacing.xs),
-        ...holdings.map(
-          (GtePortfolioHolding holding) => Padding(
-            padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
-            child: GtexPanel(
-              accent: holding.unrealizedPl >= 0 ? GtexColors.pitch : GtexColors.red,
-              onTap:
-                  onOpenPlayer == null
-                      ? null
-                      : () => onOpenPlayer!(holding.playerId),
-              child: Row(
-                children: <Widget>[
-                  const Icon(Icons.person_outline, color: GtexColors.pitch),
-                  const SizedBox(width: GtexSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          holding.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: GtexColors.text,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        Text(
-                          <String>[
-                            if ((holding.clubName ?? '').trim().isNotEmpty)
-                              holding.clubName!.trim(),
-                            'Qty ${holding.quantity.toStringAsFixed(2)}',
-                            'Avg ${gteFormatGtc(holding.averageCost)}',
-                          ].join(' - '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: GtexColors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: <Widget>[
-                      Text(
-                        gteFormatGtc(holding.marketValue),
-                        style: const TextStyle(
-                          color: GtexColors.text,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Icon(
-                            holding.unrealizedPl >= 0
-                                ? Icons.arrow_drop_up
-                                : Icons.arrow_drop_down,
-                            size: 18,
-                            color:
-                                holding.unrealizedPl >= 0
-                                    ? GtexColors.pitch
-                                    : GtexColors.red,
-                          ),
-                          Text(
-                            '${holding.unrealizedPl >= 0 ? '+' : ''}'
-                            '${holding.unrealizedPlPercent.toStringAsFixed(2)}%',
-                            style: TextStyle(
-                              color:
-                                  holding.unrealizedPl >= 0
-                                      ? GtexColors.pitch
-                                      : GtexColors.red,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

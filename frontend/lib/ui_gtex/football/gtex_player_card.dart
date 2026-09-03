@@ -58,6 +58,7 @@ class GtexPlayerCard extends StatelessWidget {
     this.valueDeltaLabel,
     this.valueState = GtexValueState.recent,
     this.ownerLabel,
+    this.ownershipLabel,
     this.contractLabel,
     this.potentialLabel,
     this.heightLabel,
@@ -103,6 +104,11 @@ class GtexPlayerCard extends StatelessWidget {
   final String? valueDeltaLabel;
   final GtexValueState valueState;
   final String? ownerLabel;
+
+  /// The signed-in user's stake in this player, e.g. `"You own 2.5 shares"`.
+  /// Contributed by PHASE4-B (§4.1); `null` (the default) renders the card
+  /// exactly as before.
+  final String? ownershipLabel;
   final String? contractLabel;
   final String? potentialLabel;
 
@@ -193,6 +199,7 @@ class GtexPlayerCard extends StatelessWidget {
             availabilityLabel: availabilityLabel,
             interestLabel: interestLabel,
             isOwned: isOwned,
+            ownershipLabel: ownershipLabel,
             formResults: formResults,
             onAddToShortlist: onAddToShortlist,
             onBuyNow: onBuyNow,
@@ -224,6 +231,7 @@ class GtexPlayerCard extends StatelessWidget {
           valueDeltaLabel: valueDeltaLabel,
           valueState: valueState,
           ownerLabel: ownerLabel,
+          ownershipLabel: ownershipLabel,
           contractLabel: contractLabel,
           potentialLabel: potentialLabel,
           heightLabel: heightLabel,
@@ -274,6 +282,7 @@ class _FullPlayerCard extends StatelessWidget {
     this.portraitMissingReason,
     this.valueDeltaLabel,
     this.ownerLabel,
+    this.ownershipLabel,
     this.contractLabel,
     this.potentialLabel,
     this.heightLabel,
@@ -312,6 +321,7 @@ class _FullPlayerCard extends StatelessWidget {
   final String? valueDeltaLabel;
   final GtexValueState valueState;
   final String? ownerLabel;
+  final String? ownershipLabel;
   final String? contractLabel;
   final String? potentialLabel;
   final Color positionAccent;
@@ -547,6 +557,8 @@ class _FullPlayerCard extends StatelessWidget {
 
   List<String> get _footerSignals {
     return <String>[
+      if (ownershipLabel != null && ownershipLabel!.trim().isNotEmpty)
+        ownershipLabel!,
       if (salaryLabel != null && salaryLabel!.trim().isNotEmpty) salaryLabel!,
       if (ownerLabel != null && ownerLabel!.trim().isNotEmpty) ownerLabel!,
       if (contractLabel != null && contractLabel!.trim().isNotEmpty)
@@ -741,6 +753,7 @@ class _CompactPlayerCard extends StatelessWidget {
     this.availabilityLabel,
     this.interestLabel,
     this.isOwned = false,
+    this.ownershipLabel,
     this.onAddToShortlist,
     this.onBuyNow,
     this.buyNowLabel = 'Buy now',
@@ -765,6 +778,7 @@ class _CompactPlayerCard extends StatelessWidget {
   final String? availabilityLabel;
   final String? interestLabel;
   final bool isOwned;
+  final String? ownershipLabel;
   final GtexValueState valueState;
   final List<String> formResults;
   final VoidCallback? onAddToShortlist;
@@ -952,17 +966,19 @@ class _CompactPlayerCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (isOwned) ...<Widget>[
+                  if (isOwned || ownershipLabel != null) ...<Widget>[
                     const SizedBox(width: GtexSpacing.xs),
-                    Text(
-                      'OWNED',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: GtexColors.accentAmber,
-                        fontFamily: 'Barlow',
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.5,
+                    Flexible(
+                      child: Text(
+                        (ownershipLabel ?? 'OWNED').toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: GtexColors.accentAmber,
+                          fontFamily: 'Barlow',
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ],
