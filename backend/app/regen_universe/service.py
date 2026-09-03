@@ -1315,7 +1315,9 @@ class RegenUniverseService:
             "regen_type_badge": seed.seed_type,
             "uniqueness_badge": seed.rarity_tier,
             "legacy_score": 0.0,
-            "personality_tag": (profile.personality.personality_tags[0] if profile.personality.personality_tags else None),
+            "personality_tag": (
+                profile.personality.personality_tags[0] if profile.personality.personality_tags else None
+            ),
             "story_snippet": (profile.story_seed.snippet if profile.story_seed is not None else None),
         }
         return {
