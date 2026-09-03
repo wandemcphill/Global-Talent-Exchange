@@ -2144,6 +2144,12 @@
         "response_model": "ClubSaleOfferCollectionView"
       },
       {
+        "method": "GET",
+        "path": "/api/portfolio/clubs",
+        "handler": "get_my_club_portfolio",
+        "response_model": "ClubPortfolioView"
+      },
+      {
         "method": "POST",
         "path": "/api/rivalries/matches",
         "handler": "record_rivalry_match",

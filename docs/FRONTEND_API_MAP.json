@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 636,
+  "call_count": 641,
   "calls": [
     {
       "file": "frontend/lib/core/runtime/gtex_realtime_client.dart",
@@ -2586,6 +2586,18 @@
       "file": "frontend/lib/data/gte_exchange_api_client.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
+      "endpoint": "/api/market/movers",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
       "endpoint": "/api/market/national-teams",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
@@ -4659,6 +4671,30 @@
       ]
     },
     {
+      "file": "frontend/lib/features/club_redesign/data/gtex_club_ownership_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/portfolio/clubs",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_redesign/data/gtex_club_ownership_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
       "file": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
@@ -6339,6 +6375,42 @@
       ]
     },
     {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/$id/regen",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/${playerId.trim()}/regen/contract-offers/quote",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/${playerId.trim()}/regen/transfer-listing",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
       "file": "frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart",
       "transport_call": "string_reference",
       "method": "POST",
@@ -7531,18 +7603,6 @@
       "transport_call": "hardcoded_url",
       "method": "N/A",
       "endpoint": "https://wa.me/$digits?text=${Uri.encodeComponent(message)}",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/screens/wallet/gtex_capital_desk_api.dart",
-      "transport_call": "string_reference",
-      "method": "INFERRED",
-      "endpoint": "/api/portfolio/snapshot",
       "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [

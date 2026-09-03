@@ -3348,6 +3348,18 @@
         "source_file": "backend/app/club_sale_market/router.py",
         "response_model": "ClubSaleOfferCollectionView"
       },
+      "get_api_v2_portfolio_clubs": {
+        "method": "GET",
+        "canonical_path": "/api/v2/portfolio/clubs",
+        "aliases": [
+          "/api/portfolio/clubs",
+          "/api/v1/portfolio/clubs",
+          "/api/v2/portfolio/clubs"
+        ],
+        "handler": "get_my_club_portfolio",
+        "source_file": "backend/app/club_ownership/router.py",
+        "response_model": "ClubPortfolioView"
+      },
       "get_api_v2_social_follows_me": {
         "method": "GET",
         "canonical_path": "/api/v2/social/follows/me",
@@ -13692,18 +13704,6 @@
         "handler": "get_portfolio",
         "source_file": "backend/app/portfolio/router.py",
         "response_model": "PortfolioView"
-      },
-      "get_api_v2_portfolio_clubs": {
-        "method": "GET",
-        "canonical_path": "/api/v2/portfolio/clubs",
-        "aliases": [
-          "/api/portfolio/clubs",
-          "/api/v1/portfolio/clubs",
-          "/api/v2/portfolio/clubs"
-        ],
-        "handler": "get_my_club_portfolio",
-        "source_file": "backend/app/club_ownership/router.py",
-        "response_model": "ClubPortfolioView"
       },
       "get_api_v2_portfolio_snapshot": {
         "method": "GET",
@@ -25200,6 +25200,7 @@
     "/api/v2/managers/trade-listings": "/api/v2/managers/trade-listings",
     "/api/v2/market/browse/catalog": "/api/v2/market/browse/catalog",
     "/api/v2/market/leagues": "/api/v2/market/leagues",
+    "/api/v2/market/movers": "/api/v2/market/movers",
     "/api/v2/market/national-teams": "/api/v2/market/national-teams",
     "/api/v2/market/nationalities": "/api/v2/market/nationalities",
     "/api/v2/market/players": "/api/v2/market/players",
@@ -25221,6 +25222,7 @@
     "/api/v2/notifications/read-all": "/api/v2/notifications/read-all",
     "/api/v2/notifications/subscriptions": "/api/v2/notifications/subscriptions",
     "/api/v2/orders": "/api/v2/orders",
+    "/api/v2/portfolio/clubs": "/api/v2/portfolio/clubs",
     "/api/v2/profile": "/api/v2/profile",
     "/api/v2/profile/security": "/api/v2/profile/security",
     "/api/v2/profile/sessions": "/api/v2/profile/sessions",

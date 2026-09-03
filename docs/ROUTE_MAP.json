@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1696,
+  "route_count": 1697,
   "routes": [
     {
       "method": "POST",
@@ -7666,6 +7666,32 @@
       "response_shape": {
         "response_model": "ClubSaleOfferCollectionView",
         "returns": "ClubSaleOfferCollectionView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
+      "path": "/api/portfolio/clubs",
+      "effective_paths": [
+        "/api/portfolio/clubs"
+      ],
+      "file": "backend/app/club_ownership/router.py",
+      "handler": "get_my_club_portfolio",
+      "router_variable": "portfolio_router",
+      "module_path": "app.club_ownership.router",
+      "module_mounts": [
+        "club_ownership"
+      ],
+      "request_shape": {
+        "parameters": [
+          "user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubPortfolioView",
+        "returns": "ClubPortfolioView"
       },
       "version": "canonical",
       "domain": "club"
@@ -31818,32 +31844,6 @@
       "response_shape": {
         "response_model": "PortfolioSummaryView",
         "returns": "PortfolioSummaryView"
-      },
-      "version": "canonical",
-      "domain": "portfolio"
-    },
-    {
-      "method": "GET",
-      "path": "/api/portfolio/clubs",
-      "effective_paths": [
-        "/api/portfolio/clubs"
-      ],
-      "file": "backend/app/club_ownership/router.py",
-      "handler": "get_my_club_portfolio",
-      "router_variable": "portfolio_router",
-      "module_path": "app.club_ownership.router",
-      "module_mounts": [
-        "club_ownership"
-      ],
-      "request_shape": {
-        "parameters": [
-          "user",
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "ClubPortfolioView",
-        "returns": "ClubPortfolioView"
       },
       "version": "canonical",
       "domain": "portfolio"

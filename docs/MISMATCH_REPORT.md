@@ -1,6 +1,6 @@
 # Mismatch Report
 
-- Total mismatches detected: **1056**
+- Total mismatches detected: **1064**
 
 ## HIGH
 
@@ -131,7 +131,6 @@
 - `frontend/lib/services/match_3d_live_bootstrap_service.dart` INFERRED `/api/matches/$resolvedMatchId/unity-access` -> `/api/v2/matches/$resolvedMatchId/unity-access`: No exact backend route match found in static route inventory.
 - `frontend/lib/screens/admin/manager_admin_screen.dart` PUT `/api/admin/managers/catalog/$managerId/supply` -> `/api/v2/admin/managers/catalog/$managerId/supply`: No exact backend route match found in static route inventory.
 - `frontend/lib/screens/admin/manager_admin_screen.dart` PUT `/api/admin/access/$userId/permissions` -> `/api/v2/admin/access/$userId/permissions`: No exact backend route match found in static route inventory.
-- `frontend/lib/screens/wallet/gtex_capital_desk_api.dart` INFERRED `/api/portfolio/snapshot` -> `/api/v2/portfolio/snapshot`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/app_routes/gte_feature_route_builders.dart` INFERRED `/api/national-team-engine/entries/${route.entryId}` -> `/api/v2/national-team-engine/entries/${route.entryId}`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/app_routes/gte_feature_route_builders.dart` INFERRED `/api/broadcast/channels/$channelId/join` -> `/api/v2/broadcast/channels/$channelId/join`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/app_routes/gte_feature_route_builders.dart` INFERRED `/api/matches/fixture-final/replay` -> `/api/v2/matches/fixture-final/replay`: No exact backend route match found in static route inventory.
@@ -204,7 +203,8 @@
 - `frontend/lib/features/transfer_news_calendar/presentation/transfer_news_calendar_screen.dart` POST `/api/transfers/windows/$windowId/bids/${bid.id}/reject` -> `/api/v2/transfers/windows/$windowId/bids/${bid.id}/reject`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart` INFERRED `/api/streamer-tournaments/$tournamentId` -> `/api/v2/streamer-tournaments/$tournamentId`: No exact backend route match found in static route inventory.
 - `frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart` PATCH `/api/streamer-tournaments/$tournamentId` -> `/api/v2/streamer-tournaments/$tournamentId`: No exact backend route match found in static route inventory.
-- ... and 75 more
+- `frontend/lib/features/streamer_tournament_engine/data/streamer_tournament_engine_repository.dart` PUT `/api/streamer-tournaments/$tournamentId/rewards` -> `/api/v2/streamer-tournaments/$tournamentId/rewards`: No exact backend route match found in static route inventory.
+- ... and 77 more
 
 ## MEDIUM
 
@@ -408,7 +408,7 @@
 - `frontend/lib/data/discovery_api.dart` POST `/api/admin/discovery/featured-rails` -> `/api/v2/admin/discovery/featured-rails`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
 - `frontend/lib/data/governance_api.dart` INFERRED `/api/governance/proposals` -> `/api/v2/governance/proposals`: Frontend call is version-upgraded into legacy api_v1 space at runtime.
 - `frontend/lib/data/governance_api.dart` INFERRED `/api/governance/proposals` -> `/api/v2/governance/proposals`: Hardcoded localhost fallback bypasses the shared runtime base-url contract.
-- ... and 581 more
+- ... and 587 more
 
 ## LOW
 
