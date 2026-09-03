@@ -116,6 +116,7 @@ GtexRegenDossier demoRegenDossier(String playerId) {
         ),
       ],
     ),
+    lifecycle: demoRegenLifecycle(),
     lineageChain: const <RegenLineageChainNode>[
       RegenLineageChainNode(
         regenProfileId: 'profile-origin',
@@ -198,4 +199,58 @@ List<RegenHallOfFameEntry> demoRegenHallOfFame() {
       peakRank: 1,
     ),
   ];
+}
+
+/// Fixture lifecycle for the demo repository and widget tests.
+RegenLifecycleState demoRegenLifecycle({bool transferListed = false}) {
+  return RegenLifecycleState(
+    regenId: 'regen-r-001',
+    status: 'active',
+    lifecyclePhase: 'youth_contract',
+    contractCurrency: 'FanCoin',
+    retirementPressure: false,
+    retired: false,
+    freeAgent: false,
+    transferListed: transferListed,
+    freeAgentOfferCount: 0,
+    agencyMessage:
+        'Wants first-team minutes before 19 and a release clause if ignored.',
+    pressureState: const RegenPressureState(
+      currentState: 'unsettled',
+      transferDesire: 0.42,
+      salaryExpectationFancoinPerYear: 44000,
+      activeTransferRequest: false,
+      refusesNewContract: false,
+      endOfContractPressure: true,
+      pressureScore: 38.5,
+    ),
+    offerMarket: const RegenOfferMarket(
+      trainingFeeGtexCoin: 12000,
+      minimumSalaryFancoinPerYear: 38000,
+      visibleOfferCount: 3,
+      hiddenCompetingSalaryAmounts: true,
+      feeCurrencyCode: 'GTEX',
+      salaryCurrencyCode: 'FanCoin',
+    ),
+  );
+}
+
+/// Fixture offer quote. Deliberately returns a shortfall for offers above the
+/// demo wallet, so the affordable and unaffordable paths are both exercised.
+RegenOfferQuote demoRegenOfferQuote(GtexRegenOfferDraft draft) {
+  const double walletFancoin = 50000;
+  final double required = draft.offeredSalaryFancoinPerYear * draft.contractYears;
+  final double shortfall =
+      required > walletFancoin ? required - walletFancoin : 0;
+  return RegenOfferQuote(
+    requiredFancoin: required,
+    currentFancoinBalance: walletFancoin,
+    shortfallFancoin: shortfall,
+    currentGtexBalance: 9000,
+    gtexRequiredForConversion: shortfall / 10,
+    conversionPremiumBps: 250,
+    canCoverShortfall: shortfall <= 0 || shortfall / 10 <= 9000,
+    premiumNote: 'Conversion carries a 2.5% premium.',
+    quoteId: 'quote-demo-1',
+  );
 }

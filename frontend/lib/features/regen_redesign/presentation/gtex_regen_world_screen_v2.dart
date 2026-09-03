@@ -9,6 +9,7 @@ import '../models/gtex_regen_models.dart';
 import '../models/gtex_regen_wire_models.dart';
 import '../widgets/gtex_regen_discovery_boards.dart';
 import '../widgets/gtex_regen_dossier_panel.dart';
+import '../widgets/gtex_regen_ownership_actions.dart';
 import 'gtex_admin_create_son_screen_v2.dart';
 import 'gtex_create_son_screen_v2.dart';
 
@@ -200,6 +201,7 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
           detail: _buildDetail(data, filtered),
           rightPanel: _RegenRightPanel(
             selected: _selected,
+            repository: widget.repository,
             dossierFuture: _dossierFuture,
             onRetryDossier: _retryDossier,
             contracts: data.contracts,
@@ -657,6 +659,7 @@ class _ProspectsBoard extends StatelessWidget {
 class _RegenRightPanel extends StatelessWidget {
   const _RegenRightPanel({
     required this.selected,
+    required this.repository,
     required this.dossierFuture,
     required this.onRetryDossier,
     required this.contracts,
@@ -665,6 +668,7 @@ class _RegenRightPanel extends StatelessWidget {
   });
 
   final GtexRegenProspect? selected;
+  final GtexRegenRepository repository;
   final Future<GtexRegenDossierResult>? dossierFuture;
   final VoidCallback onRetryDossier;
   final List<GtexRegenContractOffer> contracts;
@@ -687,7 +691,11 @@ class _RegenRightPanel extends StatelessWidget {
         else ...<Widget>[
           _SelectedProspectPanel(prospect: prospect),
           const SizedBox(height: GtexSpacing.md),
-          _DossierSection(future: dossierFuture, onRetry: onRetryDossier),
+          _DossierSection(
+            future: dossierFuture,
+            onRetry: onRetryDossier,
+            repository: repository,
+          ),
         ],
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
@@ -821,16 +829,15 @@ class _SelectedProspectPanel extends StatelessWidget {
                 .toList(growable: false),
           ),
           const SizedBox(height: GtexSpacing.md),
-          GtexStatusChip(
-            label:
-                prospect.isNationalRentalOnly
-                    ? 'National rental only - not tradable'
-                    : 'Live contract endpoint unavailable',
-            color:
-                prospect.isNationalRentalOnly
-                    ? GtexColors.cyan
-                    : GtexColors.danger,
-          ),
+          // The contract situation is no longer "unavailable": it is read
+          // from the regen lifecycle endpoint and rendered by the dossier's
+          // Ownership section below, so this chip only carries the one fact
+          // the browse row itself knows.
+          if (prospect.isNationalRentalOnly)
+            const GtexStatusChip(
+              label: 'National rental only - not tradable',
+              color: GtexColors.cyan,
+            ),
           // A tradable regen is a player like any other, so it opens the one
           // canonical Player Detail through the sanctioned navigator. A
           // national-pool depth regen has no market identity, so no control is
@@ -1059,10 +1066,15 @@ class _MiniContractTile extends StatelessWidget {
 /// treatment: the identity panel above stays readable while it resolves,
 /// rather than the whole right rail flashing.
 class _DossierSection extends StatelessWidget {
-  const _DossierSection({required this.future, required this.onRetry});
+  const _DossierSection({
+    required this.future,
+    required this.onRetry,
+    required this.repository,
+  });
 
   final Future<GtexRegenDossierResult>? future;
   final VoidCallback onRetry;
+  final GtexRegenRepository repository;
 
   @override
   Widget build(BuildContext context) {
@@ -1098,7 +1110,20 @@ class _DossierSection extends StatelessWidget {
             ctaAction: onRetry,
           );
         }
-        return GtexRegenDossierPanel(result: snapshot.data!, onRetry: onRetry);
+        return GtexRegenDossierPanel(
+          result: snapshot.data!,
+          onRetry: onRetry,
+          ownershipActionsBuilder:
+              (BuildContext context, GtexRegenDossier dossier) =>
+                  GtexRegenOwnershipActions(
+                    repository: repository,
+                    dossier: dossier,
+                    // A listing change invalidates the dossier we are showing,
+                    // so re-read it rather than patching state locally and
+                    // risking a view that disagrees with the backend.
+                    onLifecycleChanged: (RegenLifecycleState? _) => onRetry(),
+                  ),
+        );
       },
     );
   }

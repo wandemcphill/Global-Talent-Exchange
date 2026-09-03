@@ -24,7 +24,7 @@ Direct inspection of the tree at the baseline, not handover text.
 | Personality | **Unreached.** `RegenPersonalityView` carries 14 real 0-100 traits plus tags. Nothing in Dart read it. |
 | Potential | Reduced to a single `potentialRating` int. The backend's `potential_range` band and `scout_confidence` were dropped on the floor. |
 | Development | **Unreached.** `RegenStoryEvent` timeline, achievements and `RegenLegacyRecord` were never requested. |
-| Contracts | `GtexRegenContractOffer` is rendered by two panels and a whole lane; `LiveGtexRegenRepository` returns `const <GtexRegenContractOffer>[]` and `submitContract` throws `UnsupportedError`. **Still true — see §4.2.** |
+| Contracts / ownership | `GtexRegenContractOffer` is rendered by two panels and a whole lane; `LiveGtexRegenRepository` returned `const <GtexRegenContractOffer>[]`. The real surface in `segments/player_lifecycle` — lifecycle phase, free agency, transfer listing, pressure state, offer market — was **unreached**. Now wired; see §4.2. |
 
 The regen was a database row because the client asked for one row's worth of
 fields, not because the data was missing.
@@ -43,6 +43,7 @@ Phase 4 contract §9.1.
 | `GET /regen-universe/bloodlines` | The Bloodlines lane — origins and their descendants |
 | `GET /regen-universe/rankings` | The Rankings lane |
 | `GET /regen-universe/hall-of-fame` | The Hall of Fame lane |
+| `GET /api/players/{id}/regen` | The dossier's Ownership section: contract phase, free agency, transfer listing, agency message, pressure state, and the offer market (floor terms plus a count of competing clubs) |
 
 ### 2.1 New files (all inside C's boundary, §6)
 
@@ -62,7 +63,7 @@ directory.
 
 ### 2.2 Honesty rules, enforced by test
 
-`test/regen_redesign/gtex_regen_dossier_panel_test.dart` (17 cases) and
+`test/regen_redesign/gtex_regen_dossier_panel_test.dart` (20 cases) and
 `gtex_regen_world_discovery_test.dart` (22 cases) defend these:
 
 1. **Unknown potential is not zero headroom.** `growthHeadroom` and
@@ -84,6 +85,12 @@ directory.
 7. **A dead control is withheld, not drawn.** Every Player Detail entry point
    goes through `GtexPlayerNavigator.tapToOpen`, which returns null outside a
    shell, and the UI renders nothing rather than a button that does nothing.
+8. **An absent offer market is not fabricated terms.** A regen with no
+   published lifecycle says "No contract situation published"; no training fee
+   or salary floor is drawn.
+9. **A deliberate rule is labelled as one.** `hidden_competing_salary_amounts`
+   means rival bids are withheld by design, and the UI says so, so it does not
+   read as missing data.
 
 ### 2.3 Player Detail
 
@@ -125,6 +132,9 @@ height likewise now follows the width of a *card* rather than of the board.
   curve, uniqueness, legacy and value components are rendered as the backend
   published them.
 - **It does not call `GET /scout/report/{player_id}`.** See §4.3.
+- **It does not wire the ownership *write* verbs** — offer quote, transfer
+  listing, contract create/renew, transfer bids. They need auth and belong to a
+  negotiation flow adjacent to D's club and B's wallet surfaces. See §4.2.
 - **It does not touch market, portfolio, club or home files.**
 
 ---
@@ -154,25 +164,55 @@ explains that national-pool depth regens do not get one. Nothing is faked.
 
 The second is cheaper and is the recommendation.
 
-### 4.2 Regen contracts are UI-only
+### 4.2 ~~Regen contracts are UI-only~~ — CORRECTED: they were unreached, not missing
 
-`GtexRegenContractOffer` drives a left-panel lane, a "Contract watch" panel and
-the contract board. `LiveGtexRegenRepository.loadWorld` returns an empty list
-for it and `submitContract` throws `UnsupportedError`. No backend verb was
-found under inspection for offering, negotiating or signing a regen contract.
+**An earlier revision of this document claimed "no backend verb was found under
+inspection" for regen contracts. That was wrong.** The search covered
+`regen_universe/`, `regen_ecosystem/` and `regen_creation/` and missed
+`app/segments/player_lifecycle/`, which exposes the whole surface:
 
-**Interim behaviour:** unchanged by this pass — the lane renders empty against
-live data, and the selected-regen panel already says "Live contract endpoint
-unavailable". **This is a pre-existing hole that C did not close**, and it is
-the largest remaining gap in the "OWN" step of the loop.
+| Endpoint | Returns |
+|---|---|
+| `GET /api/players/{id}/regen` | `RegenLifecycleView` — lifecycle phase, retirement pressure, free agency, transfer listing, agency message, personality traits, special training, **pressure state** and **offer market** |
+| `GET /api/players/{id}/regen/offer-market` | `RegenContractOfferMarketView` — floor terms plus a visible count of competing offers |
+| `POST /api/players/{id}/regen/contract-offers/quote` | currency conversion quote for an offer |
+| `POST /api/players/{id}/regen/transfer-listing` | list / unlist |
+| `GET`/`POST /api/players/{id}/contracts`, `/contracts/{id}/renew` | contract records |
+| `/api/transfers/windows/...` bids, accept, reject | transfer market |
 
-**Contract required:**
-- `GET /regens/{id}/contract-offers` → offers with wage, bonus, duration and
-  the regen's personality-driven demands
-- `POST /regens/{id}/contract-offers` → submit
-- Until then the lane should be marked `AppRouteSurfaceState.partiallyWired`
-  rather than presenting an empty board as if it were an empty world. That flag
-  lives on `app_destinations.dart`, which only H may edit — **filed for H.**
+The models `RegenContractOffer` and `RegenOfferVisibilityState`
+(`app/models/regen.py:689`) and the scoring in
+`services/regen_transfer_addon.py` (`score_contract_offer`,
+`compute_transfer_pressure`) all exist and are exercised.
+
+**So this was a §9.1 surfacing gap, not a §9.3 contract gap**, and it is now
+closed for the read path. The dossier's **Ownership** section renders
+`GET /api/players/{id}/regen`: contract phase, free-agent / listed / retiring
+state, the agency message, what the regen is agitating for (transfer request,
+refusing terms, contract running down), and the offer market — training fee,
+minimum salary and the count of competing clubs.
+
+One product rule is surfaced explicitly rather than smoothed over:
+`hidden_competing_salary_amounts` defaults true, so the backend publishes *how
+many* clubs are in but not *what* they bid. The UI says that is by design, so
+it does not read as missing data.
+
+**Still not wired, deliberately:** the write verbs (`.../quote`,
+`.../transfer-listing`, contract create/renew, transfer bids). They require
+auth and belong to a negotiation flow, not a discovery screen; they are also
+adjacent to club and wallet surfaces owned by D and B. **Filed as follow-up
+work, not a missing contract.**
+
+**Still genuinely absent:** a *world-level* aggregate of open regen contract
+offers. `GtexRegenWorldData.contracts` remains empty from live data because
+every endpoint above is keyed by a single player id. The Contracts lane
+therefore still renders an empty board.
+
+**Contract required (small):** `GET /api/regens/contract-offers?status=open`,
+or equivalent, so the Contracts lane can list the market rather than requiring
+a regen to be selected first. Until then that lane should be marked
+`AppRouteSurfaceState.partiallyWired` — that flag lives in
+`app_destinations.dart`, which only H may edit. **Filed for H.**
 
 ### 4.3 `GET /scout/report/{player_id}` writes on a GET
 
@@ -229,7 +269,7 @@ state is not later mistaken for a bug.
 | Check | Result |
 |---|---|
 | `flutter analyze` | No issues found |
-| `test/regen_redesign/` | 39 passing |
+| `test/regen_redesign/` | 42 passing |
 | `flutter test --exclude-tags golden` | See PR body — run against the 796 baseline |
 | Widths verified | 360, 420, 768, 1024, 1440, 1920 — no overflow, asserted by test |
 | Router / shell / destinations touched | None |
@@ -244,7 +284,10 @@ state is not later mistaken for a bug.
    regen world is a rich experience for a small minority of regens and a blocked
    state for the majority. That is honest but thin, and it is a product
    decision about whether seeds deserve profiles.
-2. **§4.2 contracts.** The "OWN" step of the loop has no backend. The lane
-   should arguably be hidden behind `partiallyWired` until it does — H's call.
+2. **§4.2 was filed wrong and is corrected.** Regen contracts *do* have a
+   backend, in `segments/player_lifecycle`; the read path is now wired. What
+   remains is a world-level list endpoint so the Contracts lane can show the
+   market without a regen selected, and a decision on whether the write verbs
+   belong to C or to D/B.
 3. **§4.4 two value numbers.** Needs an owner before F builds a home digest
    that quotes one of them.

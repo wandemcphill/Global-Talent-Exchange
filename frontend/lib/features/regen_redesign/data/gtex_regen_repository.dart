@@ -28,6 +28,25 @@ abstract class GtexRegenRepository {
 
   /// `GET /regen-universe/hall-of-fame` - regens whose careers are finished.
   Future<List<RegenHallOfFameEntry>> loadHallOfFame();
+
+  /// List or unlist a regen for transfer. Authenticated, and it changes what
+  /// other clubs can see, so it is only offered where the caller is signed in.
+  Future<RegenLifecycleState?> setTransferListing(
+    String playerId, {
+    required bool listed,
+    String? reason,
+  });
+
+  /// Price a contract offer without committing to it, so the shortfall is
+  /// known before anything is spent.
+  Future<RegenOfferQuote> quoteContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  );
+
+  /// Whether ownership actions should be offered at all. False for an
+  /// anonymous session, where every write would fail on auth.
+  bool get canActOnOwnership;
 }
 
 class LiveGtexRegenRepository implements GtexRegenRepository {
@@ -239,12 +258,23 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
       chainUnavailable = true;
     }
 
+    // Ownership state is a third request and the least critical of the three,
+    // so a failure leaves it null and the panel says the situation is
+    // unpublished rather than losing the lineage and potential above it.
+    RegenLifecycleState? lifecycle;
+    try {
+      lifecycle = await _worldApi.fetchLifecycle(playerId);
+    } catch (_) {
+      lifecycle = null;
+    }
+
     return GtexRegenDossierResult.loaded(
       GtexRegenDossier(
         playerId: playerId,
         showcase: showcase,
         lineageChain: chain,
         lineageChainUnavailable: chainUnavailable,
+        lifecycle: lifecycle,
       ),
     );
   }
@@ -259,6 +289,36 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
   @override
   Future<List<RegenHallOfFameEntry>> loadHallOfFame() =>
       _worldApi.listHallOfFame();
+
+  @override
+  bool get canActOnOwnership => isAuthenticated;
+
+  @override
+  Future<RegenLifecycleState?> setTransferListing(
+    String playerId, {
+    required bool listed,
+    String? reason,
+  }) {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to change a regen transfer listing.');
+    }
+    return _worldApi.setTransferListing(
+      playerId,
+      listed: listed,
+      reason: reason,
+    );
+  }
+
+  @override
+  Future<RegenOfferQuote> quoteContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  ) {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to price a contract offer.');
+    }
+    return _worldApi.quoteContractOffer(playerId, draft);
+  }
 
   static Future<_LiveLoadResult<T>> _safe<T>(Future<T> future) async {
     try {
@@ -638,6 +698,28 @@ class DemoGtexRegenRepository implements GtexRegenRepository {
   Future<List<RegenHallOfFameEntry>> loadHallOfFame() async {
     await Future<void>.delayed(const Duration(milliseconds: 40));
     return demoRegenHallOfFame();
+  }
+
+  @override
+  bool get canActOnOwnership => true;
+
+  @override
+  Future<RegenLifecycleState?> setTransferListing(
+    String playerId, {
+    required bool listed,
+    String? reason,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    return demoRegenLifecycle(transferListed: listed);
+  }
+
+  @override
+  Future<RegenOfferQuote> quoteContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    return demoRegenOfferQuote(draft);
   }
 }
 

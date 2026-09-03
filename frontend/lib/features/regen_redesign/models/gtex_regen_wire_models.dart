@@ -1071,3 +1071,330 @@ class RegenLineageChainNode {
     );
   }
 }
+
+/// `RegenContractOfferMarketView` from
+/// `GET /api/players/{player_id}/regen/offer-market`.
+///
+/// The backend deliberately publishes a *count* of competing offers and the
+/// floor terms, while hiding what rivals actually bid
+/// (`hidden_competing_salary_amounts`). That asymmetry is the product, so it
+/// is surfaced rather than smoothed over.
+class RegenOfferMarket {
+  const RegenOfferMarket({
+    required this.trainingFeeGtexCoin,
+    required this.minimumSalaryFancoinPerYear,
+    required this.visibleOfferCount,
+    required this.hiddenCompetingSalaryAmounts,
+    this.feeCurrencyCode,
+    this.salaryCurrencyCode,
+  });
+
+  final double trainingFeeGtexCoin;
+  final double minimumSalaryFancoinPerYear;
+  final int visibleOfferCount;
+  final bool hiddenCompetingSalaryAmounts;
+  final String? feeCurrencyCode;
+  final String? salaryCurrencyCode;
+
+  static RegenOfferMarket? fromJson(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'regen offer market',
+    );
+    if (json.isEmpty) {
+      return null;
+    }
+    return RegenOfferMarket(
+      trainingFeeGtexCoin: GteJson.number(json, <String>[
+        'training_fee_gtex_coin',
+        'trainingFeeGtexCoin',
+      ]),
+      minimumSalaryFancoinPerYear: GteJson.number(json, <String>[
+        'minimum_salary_fancoin_per_year',
+        'minimumSalaryFancoinPerYear',
+      ]),
+      visibleOfferCount: GteJson.integer(json, <String>[
+        'visible_offer_count',
+        'visibleOfferCount',
+      ]),
+      hiddenCompetingSalaryAmounts: GteJson.boolean(
+        json,
+        <String>['hidden_competing_salary_amounts', 'hiddenCompetingSalaryAmounts'],
+        fallback: true,
+      ),
+      feeCurrencyCode: GteJson.stringOrNull(
+        GteJson.map(
+          json['fee_currency'] ?? json['feeCurrency'],
+          label: 'fee currency',
+        ),
+        <String>['currency_code', 'currencyCode'],
+      ),
+      salaryCurrencyCode: GteJson.stringOrNull(
+        GteJson.map(
+          json['salary_currency'] ?? json['salaryCurrency'],
+          label: 'salary currency',
+        ),
+        <String>['currency_code', 'currencyCode'],
+      ),
+    );
+  }
+}
+
+/// `RegenPressureStateView` - what the regen currently wants.
+class RegenPressureState {
+  const RegenPressureState({
+    required this.currentState,
+    required this.transferDesire,
+    required this.salaryExpectationFancoinPerYear,
+    required this.activeTransferRequest,
+    required this.refusesNewContract,
+    required this.endOfContractPressure,
+    required this.pressureScore,
+  });
+
+  final String currentState;
+  final double transferDesire;
+  final double salaryExpectationFancoinPerYear;
+  final bool activeTransferRequest;
+  final bool refusesNewContract;
+  final bool endOfContractPressure;
+  final double pressureScore;
+
+  static RegenPressureState? fromJson(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'regen pressure state',
+    );
+    if (json.isEmpty) {
+      return null;
+    }
+    return RegenPressureState(
+      currentState: GteJson.string(
+        json,
+        <String>['current_state', 'currentState'],
+        fallback: 'settled',
+      ),
+      transferDesire: GteJson.number(json, <String>[
+        'transfer_desire',
+        'transferDesire',
+      ]),
+      salaryExpectationFancoinPerYear: GteJson.number(json, <String>[
+        'salary_expectation_fancoin_per_year',
+        'salaryExpectationFancoinPerYear',
+      ]),
+      activeTransferRequest: GteJson.boolean(json, <String>[
+        'active_transfer_request',
+        'activeTransferRequest',
+      ]),
+      refusesNewContract: GteJson.boolean(json, <String>[
+        'refuses_new_contract',
+        'refusesNewContract',
+      ]),
+      endOfContractPressure: GteJson.boolean(json, <String>[
+        'end_of_contract_pressure',
+        'endOfContractPressure',
+      ]),
+      pressureScore: GteJson.number(json, <String>[
+        'pressure_score',
+        'pressureScore',
+      ]),
+    );
+  }
+}
+
+/// `RegenLifecycleView` from `GET /api/players/{player_id}/regen`.
+///
+/// This is the ownership half of the regen loop: whether they are contracted,
+/// free, listed, agitating or retiring, and what the offer market around them
+/// looks like.
+class RegenLifecycleState {
+  const RegenLifecycleState({
+    required this.regenId,
+    required this.status,
+    required this.lifecyclePhase,
+    required this.contractCurrency,
+    required this.retirementPressure,
+    required this.retired,
+    required this.freeAgent,
+    required this.transferListed,
+    required this.freeAgentOfferCount,
+    this.agencyMessage,
+    this.previousClubId,
+    this.pressureState,
+    this.offerMarket,
+  });
+
+  final String regenId;
+  final String status;
+  final String lifecyclePhase;
+  final String contractCurrency;
+  final bool retirementPressure;
+  final bool retired;
+  final bool freeAgent;
+  final bool transferListed;
+  final int freeAgentOfferCount;
+  final String? agencyMessage;
+  final String? previousClubId;
+  final RegenPressureState? pressureState;
+  final RegenOfferMarket? offerMarket;
+
+  static RegenLifecycleState? fromJson(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'regen lifecycle',
+    );
+    if (json.isEmpty) {
+      return null;
+    }
+    return RegenLifecycleState(
+      regenId: GteJson.string(
+        json,
+        <String>['regen_id', 'regenId'],
+        fallback: '',
+      ),
+      status: GteJson.string(json, <String>['status'], fallback: 'active'),
+      lifecyclePhase: GteJson.string(
+        json,
+        <String>['lifecycle_phase', 'lifecyclePhase'],
+        fallback: 'unknown',
+      ),
+      contractCurrency: GteJson.string(
+        json,
+        <String>['contract_currency', 'contractCurrency'],
+        fallback: 'FanCoin',
+      ),
+      retirementPressure: GteJson.boolean(json, <String>[
+        'retirement_pressure',
+        'retirementPressure',
+      ]),
+      retired: GteJson.boolean(json, <String>['retired']),
+      freeAgent: GteJson.boolean(json, <String>['free_agent', 'freeAgent']),
+      transferListed: GteJson.boolean(json, <String>[
+        'transfer_listed',
+        'transferListed',
+      ]),
+      freeAgentOfferCount: GteJson.integer(json, <String>[
+        'free_agent_offer_count',
+        'freeAgentOfferCount',
+      ]),
+      agencyMessage: GteJson.stringOrNull(json, <String>[
+        'agency_message',
+        'agencyMessage',
+      ]),
+      previousClubId: GteJson.stringOrNull(json, <String>[
+        'previous_club_id',
+        'previousClubId',
+      ]),
+      pressureState: RegenPressureState.fromJson(
+        json['pressure_state'] ?? json['pressureState'],
+      ),
+      offerMarket: RegenOfferMarket.fromJson(
+        json['offer_market'] ?? json['offerMarket'],
+      ),
+    );
+  }
+}
+
+/// `CurrencyConversionQuoteView` from
+/// `POST /api/players/{id}/regen/contract-offers/quote`.
+///
+/// What an offer would actually cost the offering club, in the currency it
+/// must be paid in, plus whether the club can cover it. The point of quoting
+/// before committing is that the shortfall is stated up front.
+class RegenOfferQuote {
+  const RegenOfferQuote({
+    required this.requiredFancoin,
+    required this.currentFancoinBalance,
+    required this.shortfallFancoin,
+    required this.currentGtexBalance,
+    required this.gtexRequiredForConversion,
+    required this.conversionPremiumBps,
+    required this.canCoverShortfall,
+    required this.premiumNote,
+    this.quoteId,
+  });
+
+  final double requiredFancoin;
+  final double currentFancoinBalance;
+  final double shortfallFancoin;
+  final double currentGtexBalance;
+  final double gtexRequiredForConversion;
+  final int conversionPremiumBps;
+  final bool canCoverShortfall;
+  final String premiumNote;
+  final String? quoteId;
+
+  factory RegenOfferQuote.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'regen offer quote',
+    );
+    return RegenOfferQuote(
+      requiredFancoin: GteJson.number(json, <String>[
+        'required_fancoin',
+        'requiredFancoin',
+      ]),
+      currentFancoinBalance: GteJson.number(json, <String>[
+        'current_fancoin_balance',
+        'currentFancoinBalance',
+      ]),
+      shortfallFancoin: GteJson.number(json, <String>[
+        'shortfall_fancoin',
+        'shortfallFancoin',
+      ]),
+      currentGtexBalance: GteJson.number(json, <String>[
+        'current_gtex_balance',
+        'currentGtexBalance',
+      ]),
+      gtexRequiredForConversion: GteJson.number(json, <String>[
+        'gtex_required_for_conversion',
+        'gtexRequiredForConversion',
+      ]),
+      conversionPremiumBps: GteJson.integer(json, <String>[
+        'conversion_premium_bps',
+        'conversionPremiumBps',
+      ]),
+      canCoverShortfall: GteJson.boolean(json, <String>[
+        'can_cover_shortfall',
+        'canCoverShortfall',
+      ]),
+      premiumNote: GteJson.string(
+        json,
+        <String>['premium_note', 'premiumNote'],
+        fallback: '',
+      ),
+      quoteId: GteJson.stringOrNull(json, <String>['quote_id', 'quoteId']),
+    );
+  }
+
+  /// True when the offering wallet already covers the offer outright.
+  bool get isAffordableOutright => shortfallFancoin <= 0;
+}
+
+/// The inputs to a contract-offer quote — `RegenContractOfferQuoteRequest`.
+class GtexRegenOfferDraft {
+  const GtexRegenOfferDraft({
+    required this.offeringClubId,
+    required this.offeredSalaryFancoinPerYear,
+    required this.contractYears,
+  });
+
+  final String offeringClubId;
+  final double offeredSalaryFancoinPerYear;
+  final int contractYears;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'offering_club_id': offeringClubId,
+    'offered_salary_fancoin_per_year': offeredSalaryFancoinPerYear,
+    'contract_years': contractYears,
+  };
+}

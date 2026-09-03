@@ -27,6 +27,7 @@ class GtexRegenDossier {
     required this.showcase,
     this.lineageChain = const <RegenLineageChainNode>[],
     this.lineageChainUnavailable = false,
+    this.lifecycle,
   });
 
   final String playerId;
@@ -39,6 +40,12 @@ class GtexRegenDossier {
   /// True when the chain request failed, so the UI can distinguish "no
   /// ancestors" from "we could not read the ancestors".
   final bool lineageChainUnavailable;
+
+  /// The ownership state: contract phase, free agency, transfer listing, what
+  /// the regen is agitating for, and the offer market around them. Null when
+  /// the backend publishes no lifecycle row for this player - which is a real
+  /// answer, not a failure.
+  final RegenLifecycleState? lifecycle;
 
   RegenProfileDetail get profile => showcase.profile;
 
@@ -114,6 +121,13 @@ class GtexRegenDossier {
   RegenValueBreakdown? get value => showcase.latestValue;
 
   RegenPersonality? get personality => profile.personality;
+
+  /// The offer market around this regen, when one is published.
+  RegenOfferMarket? get offerMarket => lifecycle?.offerMarket;
+
+  /// True when the backend has told us anything about this regen's ownership
+  /// situation. When false the UI says so rather than drawing an empty board.
+  bool get hasLifecycle => lifecycle != null;
 
   RegenOrigin? get origin => profile.origin;
 

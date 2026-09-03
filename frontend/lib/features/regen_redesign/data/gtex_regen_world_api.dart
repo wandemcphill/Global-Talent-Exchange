@@ -70,6 +70,65 @@ class GtexRegenWorldApi {
         .toList(growable: false);
   }
 
+  /// `GET /api/players/{player_id}/regen` - the ownership half of the loop:
+  /// contract phase, free agency, transfer listing, what the regen is
+  /// agitating for, and the offer market around them.
+  ///
+  /// Returns null when the player has no regen lifecycle row, which is a real
+  /// answer and not an error.
+  Future<RegenLifecycleState?> fetchLifecycle(String playerId) async {
+    final String id = playerId.trim();
+    if (id.isEmpty) {
+      return null;
+    }
+    try {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/api/players/$id/regen',
+        auth: false,
+      );
+      return RegenLifecycleState.fromJson(payload);
+    } on GteApiException catch (error) {
+      if (error.type == GteApiErrorType.notFound || error.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// `POST /api/players/{player_id}/regen/transfer-listing` - list or unlist
+  /// a regen. Authenticated: this changes what other clubs can see.
+  Future<RegenLifecycleState?> setTransferListing(
+    String playerId, {
+    required bool listed,
+    String? reason,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/players/${playerId.trim()}/regen/transfer-listing',
+      body: <String, Object?>{
+        'listed': listed,
+        if ((reason ?? '').trim().isNotEmpty) 'reason': reason!.trim(),
+      },
+    );
+    return RegenLifecycleState.fromJson(payload);
+  }
+
+  /// `POST /api/players/{player_id}/regen/contract-offers/quote` - what an
+  /// offer would cost, and whether the offering club can cover it.
+  ///
+  /// A quote is deliberately a separate step from making the offer: it is
+  /// read-only in effect, so the shortfall is known before anything is
+  /// committed.
+  Future<RegenOfferQuote> quoteContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  ) async {
+    final Object? payload = await client.post(
+      '/api/players/${playerId.trim()}/regen/contract-offers/quote',
+      body: draft.toJson(),
+    );
+    return RegenOfferQuote.fromJson(payload);
+  }
+
   /// `GET /regen-universe/bloodlines`.
   Future<List<RegenBloodlineChain>> listBloodlines({int limit = 12}) async {
     final Map<String, dynamic> payload = await client.getMap(

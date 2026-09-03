@@ -16,10 +16,17 @@ class GtexRegenDossierPanel extends StatelessWidget {
     super.key,
     required this.result,
     this.onRetry,
+    this.ownershipActionsBuilder,
   });
 
   final GtexRegenDossierResult result;
   final VoidCallback? onRetry;
+
+  /// Optional write controls, rendered under the Ownership section. Supplied
+  /// by the screen rather than built here so this panel stays a pure view of
+  /// the dossier and remains testable without a repository.
+  final Widget Function(BuildContext context, GtexRegenDossier dossier)?
+  ownershipActionsBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +44,12 @@ class GtexRegenDossierPanel extends StatelessWidget {
         _DevelopmentSection(dossier: dossier),
         const SizedBox(height: GtexSpacing.md),
         _PersonalitySection(dossier: dossier),
+        const SizedBox(height: GtexSpacing.md),
+        _OwnershipSection(dossier: dossier),
+        if (ownershipActionsBuilder != null) ...<Widget>[
+          const SizedBox(height: GtexSpacing.md),
+          ownershipActionsBuilder!(context, dossier),
+        ],
         const SizedBox(height: GtexSpacing.md),
         _ValueSection(dossier: dossier),
       ],
@@ -650,6 +663,171 @@ class _ValueSection extends StatelessWidget {
                       )
                       .toList(growable: false),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// OWN - the contract situation, and what the regen is agitating for.
+///
+/// Reads `GET /api/players/{id}/regen`, which the client had never called.
+/// The backend deliberately publishes a *count* of competing offers and the
+/// floor terms while hiding what rivals actually bid, so that asymmetry is
+/// shown as the product rule it is rather than smoothed into a fake number.
+class _OwnershipSection extends StatelessWidget {
+  const _OwnershipSection({required this.dossier});
+
+  final GtexRegenDossier dossier;
+
+  @override
+  Widget build(BuildContext context) {
+    final RegenLifecycleState? lifecycle = dossier.lifecycle;
+    if (lifecycle == null) {
+      return const GtexPanel(
+        title: 'Ownership',
+        accent: GtexColors.mint,
+        child: GtexBlockedState(
+          compact: true,
+          title: 'No contract situation published',
+          reason:
+              'GTEX publishes no contract or offer state for this regen yet.',
+          severity: GtexBlockedSeverity.info,
+          icon: Icons.assignment_outlined,
+        ),
+      );
+    }
+
+    final RegenOfferMarket? market = lifecycle.offerMarket;
+    final RegenPressureState? pressure = lifecycle.pressureState;
+
+    return GtexPanel(
+      title: 'Ownership',
+      subtitle: 'Phase: ${lifecycle.lifecyclePhase}',
+      accent: GtexColors.mint,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              if (lifecycle.retired)
+                const GtexStatusChip(
+                  label: 'Retired',
+                  color: GtexColors.textMuted,
+                  compact: true,
+                ),
+              if (lifecycle.freeAgent)
+                const GtexStatusChip(
+                  label: 'Free agent',
+                  color: GtexColors.gold,
+                  compact: true,
+                ),
+              if (lifecycle.transferListed)
+                const GtexStatusChip(
+                  label: 'Transfer listed',
+                  color: GtexColors.cyan,
+                  compact: true,
+                ),
+              if (lifecycle.retirementPressure)
+                const GtexStatusChip(
+                  label: 'Nearing retirement',
+                  color: GtexColors.danger,
+                  compact: true,
+                ),
+              if (pressure?.activeTransferRequest ?? false)
+                const GtexStatusChip(
+                  label: 'Transfer requested',
+                  color: GtexColors.danger,
+                  compact: true,
+                ),
+              if (pressure?.refusesNewContract ?? false)
+                const GtexStatusChip(
+                  label: 'Refusing new terms',
+                  color: GtexColors.danger,
+                  compact: true,
+                ),
+              if (pressure?.endOfContractPressure ?? false)
+                const GtexStatusChip(
+                  label: 'Contract running down',
+                  color: GtexColors.gold,
+                  compact: true,
+                ),
+            ],
+          ),
+          if ((lifecycle.agencyMessage ?? '').isNotEmpty) ...<Widget>[
+            const SizedBox(height: GtexSpacing.sm),
+            Text(
+              lifecycle.agencyMessage!,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: GtexColors.textSecondary,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: GtexSpacing.md),
+          if (market == null)
+            Text(
+              'No offer market is published for this regen.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: GtexColors.textMuted,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else ...<Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: GtexMetricTile(
+                    label: 'Training fee',
+                    value:
+                        '${market.trainingFeeGtexCoin.toStringAsFixed(0)} '
+                        '${market.feeCurrencyCode ?? 'GTEX'}',
+                    accent: GtexColors.gold,
+                  ),
+                ),
+                const SizedBox(width: GtexSpacing.sm),
+                Expanded(
+                  child: GtexMetricTile(
+                    label: 'Minimum salary',
+                    value:
+                        '${market.minimumSalaryFancoinPerYear.toStringAsFixed(0)} '
+                        '${market.salaryCurrencyCode ?? lifecycle.contractCurrency}'
+                        '/yr',
+                    accent: GtexColors.mint,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: GtexSpacing.sm),
+            GtexStatusChip(
+              label:
+                  market.visibleOfferCount == 0
+                      ? 'No competing offers'
+                      : '${market.visibleOfferCount} competing offer'
+                          '${market.visibleOfferCount == 1 ? '' : 's'}',
+              color:
+                  market.visibleOfferCount == 0
+                      ? GtexColors.textMuted
+                      : GtexColors.cyan,
+              compact: true,
+            ),
+            if (market.hiddenCompetingSalaryAmounts) ...<Widget>[
+              const SizedBox(height: GtexSpacing.xs),
+              // Not a gap in the data - a deliberate rule. Saying so stops it
+              // reading as missing information.
+              Text(
+                'Rival bid amounts are hidden by design. You see how many '
+                'clubs are in, not what they offered.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: GtexColors.textMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ],
         ],
       ),

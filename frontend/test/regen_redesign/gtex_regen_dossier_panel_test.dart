@@ -224,6 +224,51 @@ void main() {
     });
   });
 
+  group('ownership', () {
+    testWidgets('shows the offer market and what the regen is agitating for', (
+      WidgetTester tester,
+    ) async {
+      await pumpDossier(tester, GtexRegenDossierResult.loaded(dossier()));
+
+      expect(find.text('Ownership'), findsOneWidget);
+      expect(find.text('Phase: youth_contract'), findsOneWidget);
+      expect(find.text('3 competing offers'), findsOneWidget);
+      expect(find.text('Contract running down'), findsOneWidget);
+      expect(
+        find.textContaining('first-team minutes before 19'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('discloses that rival bid amounts are hidden by design', (
+      WidgetTester tester,
+    ) async {
+      await pumpDossier(tester, GtexRegenDossierResult.loaded(dossier()));
+
+      // The backend hides competing salaries deliberately. Saying so stops it
+      // reading as missing data.
+      expect(find.textContaining('hidden by design'), findsOneWidget);
+    });
+
+    testWidgets('says so when no contract situation is published', (
+      WidgetTester tester,
+    ) async {
+      final GtexRegenDossier base = dossier();
+      final GtexRegenDossier noLifecycle = GtexRegenDossier(
+        playerId: base.playerId,
+        showcase: base.showcase,
+        lineageChain: base.lineageChain,
+      );
+
+      await pumpDossier(tester, GtexRegenDossierResult.loaded(noLifecycle));
+
+      expect(find.text('No contract situation published'), findsOneWidget);
+      // No fabricated terms in place of an absent offer market.
+      expect(find.text('Training fee'), findsNothing);
+      expect(find.textContaining('competing offer'), findsNothing);
+    });
+  });
+
   group('empty and blocked states', () {
     testWidgets('a regen with no published dossier says so', (
       WidgetTester tester,
