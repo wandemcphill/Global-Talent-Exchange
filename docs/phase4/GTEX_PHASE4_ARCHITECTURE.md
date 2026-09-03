@@ -485,6 +485,19 @@ number in Dart.
 | Per-user personalized home digest | F | `GET /api/home/digest` returning owned-asset events since last visit | Compose client-side from B + E + A + D; ship nothing that isn't backed |
 | Economy-linked community feed | G | `app/community_engine/` exposed **no** `@router` verbs under inspection. G must confirm and, if absent, specify `GET /api/community/feed` with typed economy events | Render only viral-feed data that already exists; do not fabricate economy posts |
 | Club-share → user-portfolio join | D → B | Portfolio must return club-share holdings alongside player holdings, or a companion `GET /api/portfolio/clubs` | Render club holdings as a separate, explicitly-labelled section |
+
+**§9.3 resolution — Club-share → user-portfolio join (D, landed):** the companion
+option was taken. `GET /api/portfolio/clubs` (read-only, `backend/app/club_ownership/router.py`,
+`ClubOwnershipService.list_user_club_portfolio`) returns `ClubPortfolioView` — every club
+in which the user holds ownership tokens, valued at the live club-token price, with
+`unrealized_pl_pct` / `ownership_pct` left `null` (never `0`) when the denominator is
+unknown. Frontend contract published for B to consume:
+`lib/features/club_redesign/models/gtex_club_ownership_models.dart`
+(`GtexClubShareHolding`, `GtexClubOwnershipPortfolio`), read via
+`lib/features/club_redesign/data/gtex_club_ownership_api.dart`. D renders it in-club through
+`GtexClubOwnershipPanel` (club-share identity, live share price, the user's stake, and the
+settled-match performance signal behind the price); B folds the same model into the portfolio
+surface as the explicitly-labelled club-ownership section.
 | Daily retention loop rewards | F | Confirm `app/daily_challenge_engine` exposes per-user claim/state | Read-only streak display until confirmed |
 | Player → match-performance history keyed by market player id | E | Confirm the id join between market players and match events | If the join fails for a player, show "no recent matches", never a zero rating |
 

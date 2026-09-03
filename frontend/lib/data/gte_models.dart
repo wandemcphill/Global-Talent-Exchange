@@ -3898,6 +3898,53 @@ class GtePortfolioView {
   }
 }
 
+/// `GET /api/portfolio/snapshot` — player positions and the cash posture behind
+/// them in one call: available, reserved (held by working orders), and total.
+class GtePortfolioSnapshot {
+  const GtePortfolioSnapshot({
+    required this.userId,
+    required this.currency,
+    required this.availableBalance,
+    required this.reservedBalance,
+    required this.totalBalance,
+    required this.holdings,
+  });
+
+  final String userId;
+  final String currency;
+  final double availableBalance;
+  final double reservedBalance;
+  final double totalBalance;
+  final List<GtePortfolioHolding> holdings;
+
+  factory GtePortfolioSnapshot.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'portfolio snapshot',
+    );
+    return GtePortfolioSnapshot(
+      userId: GteJson.string(json, <String>['user_id', 'userId'], fallback: ''),
+      currency:
+          GteJson.stringOrNull(json, <String>['currency']) ?? 'coin',
+      availableBalance: GteJson.number(json, <String>[
+        'available_balance',
+        'availableBalance',
+      ]),
+      reservedBalance: GteJson.number(json, <String>[
+        'reserved_balance',
+        'reservedBalance',
+      ]),
+      totalBalance: GteJson.number(json, <String>[
+        'total_balance',
+        'totalBalance',
+      ]),
+      holdings: GteJson.typedList(json, <String>[
+        'holdings',
+      ], GtePortfolioHolding.fromJson),
+    );
+  }
+}
+
 class GteOrderCreateRequest {
   const GteOrderCreateRequest({
     required this.playerId,

@@ -547,6 +547,12 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
+      "consumer": "frontend/lib/data/gte_exchange_api_client.dart",
+      "from": "/api/v2/market/movers",
+      "to": "/api/market/movers",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
       "consumer": "frontend/lib/data/hosted_competition_api.dart",
       "from": "/api/v2/hosted-competitions/templates",
       "to": "/api/hosted-competitions/templates",
@@ -1324,6 +1330,12 @@
       "consumer": "frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart",
       "from": "/api/v2/me/clubs/sale-market/offers",
       "to": "/api/me/clubs/sale-market/offers",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/club_redesign/data/gtex_club_ownership_api.dart",
+      "from": "/api/v2/portfolio/clubs",
+      "to": "/api/portfolio/clubs",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {

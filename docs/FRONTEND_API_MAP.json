@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 636,
+  "call_count": 639,
   "calls": [
     {
       "file": "frontend/lib/core/runtime/gtex_realtime_client.dart",
@@ -2586,6 +2586,18 @@
       "file": "frontend/lib/data/gte_exchange_api_client.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
+      "endpoint": "/api/market/movers",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_exchange_api_client.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
       "endpoint": "/api/market/national-teams",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
@@ -4648,6 +4660,30 @@
     },
     {
       "file": "frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "http://127.0.0.1:8000",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_redesign/data/gtex_club_ownership_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/portfolio/clubs",
+      "expected_shape": null,
+      "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_redesign/data/gtex_club_ownership_api.dart",
       "transport_call": "hardcoded_url",
       "method": "N/A",
       "endpoint": "http://127.0.0.1:8000",

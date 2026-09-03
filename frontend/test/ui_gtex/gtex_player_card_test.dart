@@ -89,6 +89,77 @@ void main() {
     expect(find.byIcon(Icons.badge_rounded), findsOneWidget);
   });
 
+  testWidgets('ownershipLabel surfaces the user stake on full and compact cards', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 430,
+            child: GtexPlayerCard(
+              name: 'Victor Osimhen',
+              position: 'ST',
+              clubName: 'Napoli',
+              nationality: 'Nigeria',
+              countryCode: 'NG',
+              priceLabel: 'GTC 90',
+              imageUrl: null,
+              ownershipLabel: 'You own 2.5 shares',
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('You own 2.5 shares'), findsOneWidget);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 430,
+            height: 84,
+            child: GtexPlayerCard(
+              name: 'Victor Osimhen',
+              position: 'ST',
+              clubName: 'Napoli',
+              nationality: 'Nigeria',
+              priceLabel: 'GTC 90',
+              imageUrl: null,
+              scale: GtexPlayerCardScale.compact,
+              ownershipLabel: 'You own 2.5 shares',
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('YOU OWN 2.5 SHARES'), findsOneWidget);
+  });
+
+  testWidgets('card without ownershipLabel shows no ownership text', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 430,
+            child: GtexPlayerCard(
+              name: 'Victor Osimhen',
+              position: 'ST',
+              clubName: 'Napoli',
+              nationality: 'Nigeria',
+              priceLabel: 'GTC 90',
+              imageUrl: null,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('You own'), findsNothing);
+  });
+
   testWidgets('player card uses micro layout in tight tiles', (
     WidgetTester tester,
   ) async {

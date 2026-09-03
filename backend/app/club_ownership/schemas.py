@@ -169,3 +169,41 @@ class ClubGovernanceActionView(CommonSchema):
     governance: ClubGovernanceStateView
     executed: bool = False
     execution_summary: str | None = None
+
+
+class ClubPortfolioHoldingView(CommonSchema):
+    """A single club-share position held by a user, valued at the live token price.
+
+    Every derived ratio is ``None`` rather than ``0`` when the denominator is
+    genuinely unknown, so the client can state "unknown" instead of implying a
+    real zero.
+    """
+
+    club_id: str
+    club_name: str
+    tokens_owned: int = Field(ge=0)
+    avg_price_coin: Decimal
+    share_price_coin: Decimal
+    market_value_coin: Decimal
+    cost_basis_coin: Decimal
+    unrealized_pl_coin: Decimal
+    unrealized_pl_pct: float | None = None
+    reward_tokens_earned: int = Field(ge=0)
+    holder_count: int = Field(ge=0)
+    circulating_supply: int = Field(ge=0)
+    total_supply: int = Field(ge=0)
+    ownership_pct: float | None = None
+    performance_score: Decimal
+    win_rate: Decimal
+    fan_demand_score: Decimal
+    treasury_balance_coin: Decimal
+    governance_enabled: bool
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class ClubPortfolioView(CommonSchema):
+    club_count: int = Field(ge=0)
+    total_market_value_coin: Decimal
+    total_cost_basis_coin: Decimal
+    total_unrealized_pl_coin: Decimal
+    holdings: list[ClubPortfolioHoldingView] = Field(default_factory=list)

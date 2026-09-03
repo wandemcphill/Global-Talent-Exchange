@@ -5,7 +5,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 
 ## Shared Source of Truth
 
-- Shared Flutter client files with API calls discovered: **119**
+- Shared Flutter client files with API calls discovered: **120**
 - Web and mobile therefore inherit the same endpoint usage and the same stale/legacy risks.
 
 ## Divergence Risks
@@ -109,6 +109,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/clubs/$clubId/players`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/leagues`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/leagues/$leagueId/clubs`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/movers`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/national-teams`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/national-teams/$teamId/eligible-players`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/market/nationalities`
@@ -214,6 +215,8 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/squad-registration/lock`
 - `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/squad-registration/submit`
 - `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/club_redesign/data/gtex_club_ownership_api.dart -> /api/portfolio/clubs`
+- `frontend/lib/features/club_redesign/data/gtex_club_ownership_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market`
 - `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/history`
 - `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/inquiries`

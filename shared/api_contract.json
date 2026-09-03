@@ -3348,6 +3348,18 @@
         "source_file": "backend/app/club_sale_market/router.py",
         "response_model": "ClubSaleOfferCollectionView"
       },
+      "get_api_v2_portfolio_clubs": {
+        "method": "GET",
+        "canonical_path": "/api/v2/portfolio/clubs",
+        "aliases": [
+          "/api/portfolio/clubs",
+          "/api/v1/portfolio/clubs",
+          "/api/v2/portfolio/clubs"
+        ],
+        "handler": "get_my_club_portfolio",
+        "source_file": "backend/app/club_ownership/router.py",
+        "response_model": "ClubPortfolioView"
+      },
       "get_api_v2_social_follows_me": {
         "method": "GET",
         "canonical_path": "/api/v2/social/follows/me",
@@ -21644,6 +21656,7 @@
     "/api/v2/policies/me/region": "post_api_v2_policies_me_region",
     "/api/v2/policies/me/requirements": "get_api_v2_policies_me_requirements",
     "/api/v2/portfolio": "get_api_v2_portfolio",
+    "/api/v2/portfolio/clubs": "get_api_v2_portfolio_clubs",
     "/api/v2/portfolio/snapshot": "get_api_v2_portfolio_snapshot",
     "/api/v2/portfolio/summary": "get_api_v2_portfolio_summary",
     "/api/v2/portfolios/me": "get_api_v2_portfolios_me",
@@ -23307,6 +23320,7 @@
     "/api/policies/me/region": "/api/v2/policies/me/region",
     "/api/policies/me/requirements": "/api/v2/policies/me/requirements",
     "/api/portfolio": "/api/v2/portfolio",
+    "/api/portfolio/clubs": "/api/v2/portfolio/clubs",
     "/api/portfolio/snapshot": "/api/v2/portfolio/snapshot",
     "/api/portfolio/summary": "/api/v2/portfolio/summary",
     "/api/portfolios/me": "/api/v2/portfolios/me",
@@ -24649,6 +24663,7 @@
     "/api/v1/policies/me/region": "/api/v2/policies/me/region",
     "/api/v1/policies/me/requirements": "/api/v2/policies/me/requirements",
     "/api/v1/portfolio": "/api/v2/portfolio",
+    "/api/v1/portfolio/clubs": "/api/v2/portfolio/clubs",
     "/api/v1/portfolio/snapshot": "/api/v2/portfolio/snapshot",
     "/api/v1/portfolio/summary": "/api/v2/portfolio/summary",
     "/api/v1/portfolios/me": "/api/v2/portfolios/me",
@@ -25185,6 +25200,7 @@
     "/api/v2/managers/trade-listings": "/api/v2/managers/trade-listings",
     "/api/v2/market/browse/catalog": "/api/v2/market/browse/catalog",
     "/api/v2/market/leagues": "/api/v2/market/leagues",
+    "/api/v2/market/movers": "/api/v2/market/movers",
     "/api/v2/market/national-teams": "/api/v2/market/national-teams",
     "/api/v2/market/nationalities": "/api/v2/market/nationalities",
     "/api/v2/market/players": "/api/v2/market/players",
@@ -25206,6 +25222,7 @@
     "/api/v2/notifications/read-all": "/api/v2/notifications/read-all",
     "/api/v2/notifications/subscriptions": "/api/v2/notifications/subscriptions",
     "/api/v2/orders": "/api/v2/orders",
+    "/api/v2/portfolio/clubs": "/api/v2/portfolio/clubs",
     "/api/v2/profile": "/api/v2/profile",
     "/api/v2/profile/security": "/api/v2/profile/security",
     "/api/v2/profile/sessions": "/api/v2/profile/sessions",

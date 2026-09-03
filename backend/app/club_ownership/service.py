@@ -19,6 +19,8 @@ from app.club_ownership.schemas import (
     ClubGovernanceVoteView,
     ClubHoldingView,
     ClubOwnershipView,
+    ClubPortfolioHoldingView,
+    ClubPortfolioView,
     ClubTokenTradeResultView,
     ClubTokenView,
     ClubTreasuryEntryView,
@@ -88,6 +90,74 @@ class ClubOwnershipService:
         self._require_club(club_id)
         _, treasury, _ = self._ensure_state(club_id)
         return self._treasury_view(treasury)
+
+    def list_user_club_portfolio(self, *, user: User) -> ClubPortfolioView:
+        """Every club in which ``user`` holds ownership tokens, valued live.
+
+        Read-only. This is the D -> B join: the portfolio surface folds these
+        club-share positions in alongside player holdings.
+        """
+        holdings = list(
+            self.session.scalars(
+                select(ClubHolding).where(ClubHolding.user_id == user.id).order_by(ClubHolding.updated_at.desc())
+            ).all()
+        )
+        views: list[ClubPortfolioHoldingView] = []
+        total_market = Decimal("0.0000")
+        total_cost = Decimal("0.0000")
+        for holding in holdings:
+            tokens = int(holding.tokens_owned)
+            if tokens <= 0:
+                continue
+            club = self.session.get(ClubProfile, holding.club_id)
+            if club is None:
+                continue
+            token, treasury, _ = self._ensure_state(holding.club_id)
+            share_price = Decimal(token.price).quantize(DECIMAL_QUANTUM)
+            avg_price = Decimal(holding.avg_price).quantize(DECIMAL_QUANTUM)
+            market_value = (share_price * Decimal(tokens)).quantize(DECIMAL_QUANTUM)
+            cost_basis = (avg_price * Decimal(tokens)).quantize(DECIMAL_QUANTUM)
+            unrealized = (market_value - cost_basis).quantize(DECIMAL_QUANTUM)
+            unrealized_pct = (
+                float((unrealized / cost_basis) * Decimal("100")) if cost_basis > Decimal("0.0000") else None
+            )
+            circulating = int(token.circulating_supply)
+            ownership_pct = (
+                float((Decimal(tokens) / Decimal(circulating)) * Decimal("100")) if circulating > 0 else None
+            )
+            total_market += market_value
+            total_cost += cost_basis
+            views.append(
+                ClubPortfolioHoldingView(
+                    club_id=club.id,
+                    club_name=club.club_name,
+                    tokens_owned=tokens,
+                    avg_price_coin=avg_price,
+                    share_price_coin=share_price,
+                    market_value_coin=market_value,
+                    cost_basis_coin=cost_basis,
+                    unrealized_pl_coin=unrealized,
+                    unrealized_pl_pct=unrealized_pct,
+                    reward_tokens_earned=int(holding.reward_tokens_earned),
+                    holder_count=int(token.holder_count),
+                    circulating_supply=circulating,
+                    total_supply=int(token.total_supply),
+                    ownership_pct=ownership_pct,
+                    performance_score=Decimal(token.performance_score).quantize(DECIMAL_QUANTUM),
+                    win_rate=Decimal(token.win_rate).quantize(DECIMAL_QUANTUM),
+                    fan_demand_score=Decimal(token.fan_demand_score).quantize(DECIMAL_QUANTUM),
+                    treasury_balance_coin=Decimal(treasury.balance_coin).quantize(DECIMAL_QUANTUM),
+                    governance_enabled=bool(token.governance_enabled),
+                    metadata_json=dict(holding.metadata_json or {}),
+                )
+            )
+        return ClubPortfolioView(
+            club_count=len(views),
+            total_market_value_coin=total_market.quantize(DECIMAL_QUANTUM),
+            total_cost_basis_coin=total_cost.quantize(DECIMAL_QUANTUM),
+            total_unrealized_pl_coin=(total_market - total_cost).quantize(DECIMAL_QUANTUM),
+            holdings=views,
+        )
 
     def buy_tokens(self, *, club_id: str, buyer: User, quantity: int) -> ClubTokenTradeResultView:
         if quantity <= 0:
@@ -382,7 +452,11 @@ class ClubOwnershipService:
     def _ensure_state(self, club_id: str) -> tuple[ClubToken, ClubTreasury, ClubGovernanceState]:
         token = self.session.scalar(select(ClubToken).where(ClubToken.club_id == club_id))
         if token is None:
-            token = ClubToken(club_id=club_id, price=BASE_TOKEN_PRICE, metadata_json={"matches_played": 0, "wins": 0, "draws": 0, "losses": 0})
+            token = ClubToken(
+                club_id=club_id,
+                price=BASE_TOKEN_PRICE,
+                metadata_json={"matches_played": 0, "wins": 0, "draws": 0, "losses": 0},
+            )
             self.session.add(token)
             self.session.flush()
         treasury = self.session.scalar(select(ClubTreasury).where(ClubTreasury.club_id == club_id))
@@ -557,13 +631,13 @@ class ClubOwnershipService:
 
     def _refresh_vote_totals(self, proposal: GovernanceProposal) -> None:
         votes = list(
-            self.session.scalars(
-                select(GovernanceVote).where(GovernanceVote.proposal_id == proposal.id)
-            ).all()
+            self.session.scalars(select(GovernanceVote).where(GovernanceVote.proposal_id == proposal.id)).all()
         )
         proposal.yes_weight = sum(item.influence_weight for item in votes if item.choice == GovernanceVoteChoice.YES)
         proposal.no_weight = sum(item.influence_weight for item in votes if item.choice == GovernanceVoteChoice.NO)
-        proposal.abstain_weight = sum(item.influence_weight for item in votes if item.choice == GovernanceVoteChoice.ABSTAIN)
+        proposal.abstain_weight = sum(
+            item.influence_weight for item in votes if item.choice == GovernanceVoteChoice.ABSTAIN
+        )
         proposal.unique_voter_count = len(votes)
 
     def _maybe_finalize_proposal(self, proposal: GovernanceProposal) -> tuple[bool, str | None]:
@@ -576,7 +650,9 @@ class ClubOwnershipService:
         passed = quorum_met and int(proposal.yes_weight) > int(proposal.no_weight)
         if not passed and not voting_closed:
             return False, None
-        governance = self.session.scalar(select(ClubGovernanceState).where(ClubGovernanceState.club_id == proposal.club_id))
+        governance = self.session.scalar(
+            select(ClubGovernanceState).where(ClubGovernanceState.club_id == proposal.club_id)
+        )
         if governance is None:
             raise ClubOwnershipNotFoundError("Club governance state was not found.")
         if passed:
@@ -624,19 +700,26 @@ class ClubOwnershipService:
         metadata: dict[str, object] | None = None,
         proposal_id: str | None = None,
     ) -> ClubTreasuryEntry | None:
-        if self.session.scalar(select(ClubTreasuryEntry).where(ClubTreasuryEntry.reference_key == reference_key)) is not None:
+        if (
+            self.session.scalar(select(ClubTreasuryEntry).where(ClubTreasuryEntry.reference_key == reference_key))
+            is not None
+        ):
             return None
         normalized = Decimal(amount).quantize(DECIMAL_QUANTUM)
         if normalized <= Decimal("0.0000"):
             return None
         if direction == "inflow":
             treasury.balance_coin = (Decimal(treasury.balance_coin) + normalized).quantize(DECIMAL_QUANTUM)
-            treasury.lifetime_inflow_coin = (Decimal(treasury.lifetime_inflow_coin) + normalized).quantize(DECIMAL_QUANTUM)
+            treasury.lifetime_inflow_coin = (Decimal(treasury.lifetime_inflow_coin) + normalized).quantize(
+                DECIMAL_QUANTUM
+            )
         else:
             if Decimal(treasury.balance_coin) < normalized:
                 raise ClubOwnershipError("Treasury balance is too low for this movement.")
             treasury.balance_coin = (Decimal(treasury.balance_coin) - normalized).quantize(DECIMAL_QUANTUM)
-            treasury.lifetime_outflow_coin = (Decimal(treasury.lifetime_outflow_coin) + normalized).quantize(DECIMAL_QUANTUM)
+            treasury.lifetime_outflow_coin = (Decimal(treasury.lifetime_outflow_coin) + normalized).quantize(
+                DECIMAL_QUANTUM
+            )
         if entry_type == "match_winnings":
             delta = normalized if direction == "inflow" else -normalized
             treasury.winnings_pool_coin = (Decimal(treasury.winnings_pool_coin) + delta).quantize(DECIMAL_QUANTUM)
@@ -671,7 +754,9 @@ class ClubOwnershipService:
         win_component = Decimal(token.win_rate) * Decimal("1.3500")
         demand_component = Decimal(token.fan_demand_score) * Decimal("0.2800")
         treasury_component = min(treasury_per_token, Decimal("2.5000")) * Decimal("0.1200")
-        price = (Decimal("1.0000") + performance_component + win_component + demand_component + treasury_component).quantize(DECIMAL_QUANTUM)
+        price = (
+            Decimal("1.0000") + performance_component + win_component + demand_component + treasury_component
+        ).quantize(DECIMAL_QUANTUM)
         token.price = max(price, MIN_TOKEN_PRICE)
         token.treasury_balance_snapshot = Decimal(treasury.balance_coin).quantize(DECIMAL_QUANTUM)
 
@@ -693,7 +778,10 @@ class ClubOwnershipService:
         return (WIN_BONUS * Decimal(str(snapshot.match_income_multiplier))).quantize(DECIMAL_QUANTUM)
 
     def _credit_club_treasury(self, *, club_id: str, amount: Decimal, reference_key: str, description: str) -> None:
-        if self.session.scalar(select(ClubTreasuryEntry).where(ClubTreasuryEntry.reference_key == reference_key)) is not None:
+        if (
+            self.session.scalar(select(ClubTreasuryEntry).where(ClubTreasuryEntry.reference_key == reference_key))
+            is not None
+        ):
             return
         club_account = self.wallet_service.ensure_club_treasury_account(self.session, club_id, LedgerUnit.COIN)
         source_account = self.wallet_service.ensure_operations_account(self.session, LedgerUnit.COIN)
@@ -713,11 +801,19 @@ class ClubOwnershipService:
             metadata={"club_id": club_id, "amount": str(amount)},
         )
 
-    def _maybe_distribute_dividends(self, *, club_id: str, treasury: ClubTreasury, source_amount: Decimal, match_id: str) -> None:
-        holdings = [item for item in self.session.scalars(select(ClubHolding).where(ClubHolding.club_id == club_id)).all() if int(item.tokens_owned) > 0]
+    def _maybe_distribute_dividends(
+        self, *, club_id: str, treasury: ClubTreasury, source_amount: Decimal, match_id: str
+    ) -> None:
+        holdings = [
+            item
+            for item in self.session.scalars(select(ClubHolding).where(ClubHolding.club_id == club_id)).all()
+            if int(item.tokens_owned) > 0
+        ]
         if not holdings:
             return
-        dividend_pool = (Decimal(source_amount) * Decimal(int(treasury.profit_share_bps)) / Decimal("10000")).quantize(DECIMAL_QUANTUM)
+        dividend_pool = (Decimal(source_amount) * Decimal(int(treasury.profit_share_bps)) / Decimal("10000")).quantize(
+            DECIMAL_QUANTUM
+        )
         if dividend_pool <= Decimal("0.0000") or Decimal(treasury.balance_coin) < dividend_pool:
             return
         total_tokens = sum(int(item.tokens_owned) for item in holdings)
@@ -730,7 +826,9 @@ class ClubOwnershipService:
             if index == len(holdings) - 1:
                 share = remaining
             else:
-                share = (dividend_pool * Decimal(int(holding.tokens_owned)) / Decimal(total_tokens)).quantize(DECIMAL_QUANTUM)
+                share = (dividend_pool * Decimal(int(holding.tokens_owned)) / Decimal(total_tokens)).quantize(
+                    DECIMAL_QUANTUM
+                )
                 remaining -= share
             if share <= Decimal("0.0000"):
                 continue
@@ -738,12 +836,15 @@ class ClubOwnershipService:
             if user is None:
                 continue
             reference_key = f"club-dividend:{match_id}:{club_id}:{holding.user_id}"
-            if self.session.scalar(
-                select(ClubDividendDistribution).where(
-                    ClubDividendDistribution.reference_key == f"club-dividend:{match_id}:{club_id}",
-                    ClubDividendDistribution.user_id == holding.user_id,
+            if (
+                self.session.scalar(
+                    select(ClubDividendDistribution).where(
+                        ClubDividendDistribution.reference_key == f"club-dividend:{match_id}:{club_id}",
+                        ClubDividendDistribution.user_id == holding.user_id,
+                    )
                 )
-            ) is not None:
+                is not None
+            ):
                 continue
             user_account = self.wallet_service.get_user_account(self.session, user, LedgerUnit.COIN)
             self.wallet_service.append_transaction(
@@ -815,7 +916,9 @@ class ClubOwnershipService:
             losses += 1
             outcome_signal = Decimal("-0.8500")
             token.fan_demand_score = (Decimal(token.fan_demand_score) - Decimal("0.0500")).quantize(DECIMAL_QUANTUM)
-        token.performance_score = ((Decimal(token.performance_score) * Decimal("0.78")) + outcome_signal).quantize(DECIMAL_QUANTUM)
+        token.performance_score = ((Decimal(token.performance_score) * Decimal("0.78")) + outcome_signal).quantize(
+            DECIMAL_QUANTUM
+        )
         token.win_rate = (Decimal(wins) / Decimal(matches_played)).quantize(DECIMAL_QUANTUM)
         token.metadata_json = {
             **metadata,
