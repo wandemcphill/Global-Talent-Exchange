@@ -16,12 +16,16 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 ### Hardcoded localhost callsites
 
 - `frontend/lib/data/admin_engine_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/data/admin_finance_api.dart -> /api/admin/finance/control-tower`
+- `frontend/lib/data/admin_finance_api.dart -> /api/admin/finance/simulate`
+- `frontend/lib/data/admin_finance_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/badge`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/honors-timeline`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/identity`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/jerseys`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/season-honors`
 - `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/trophy-cabinet`
+- `frontend/lib/data/club_api.dart -> /api/clubs/$clubId/v2-snapshot`
 - `frontend/lib/data/club_api.dart -> /api/leaderboards/trophies`
 - `frontend/lib/data/club_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/club_ops_api.dart -> /api/admin/clubs/academy-analytics`
@@ -74,6 +78,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/competition_api.dart -> /api/simulation-matchmaking/quick-game`
 - `frontend/lib/data/competition_api.dart -> http://127.0.0.1:8000`
 - `frontend/lib/data/creator_api.dart -> /api/creators/$creatorId`
+- `frontend/lib/data/creator_api.dart -> /api/creators/leaderboard`
 - `frontend/lib/data/creator_api.dart -> /api/creators/me/competitions`
 - `frontend/lib/data/creator_api.dart -> /api/creators/me/copilot/analyze`
 - `frontend/lib/data/creator_api.dart -> /api/creators/me/finance`
@@ -120,6 +125,7 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/matches/$matchKey/spectate`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/matches/$matchKey/stream?session_id=fixture-spectator-$matchKey`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/players/$playerId/career`
+- `frontend/lib/data/gte_exchange_api_client.dart -> /api/players/$playerId/form`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/players/$playerId/lifecycle-snapshot`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /api/players/$playerId/overview`
 - `frontend/lib/data/gte_exchange_api_client.dart -> /tts/live?voice=default`
@@ -146,6 +152,8 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/data/moderation_api.dart -> /api/moderation/me/reports`
 - `frontend/lib/data/moderation_api.dart -> /api/moderation/reports`
 - `frontend/lib/data/moderation_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/data/national_team_api.dart -> /api/market/national-teams`
+- `frontend/lib/data/national_team_api.dart -> /api/market/nationalities`
 - `frontend/lib/data/national_team_api.dart -> /api/national/competitions`
 - `frontend/lib/data/national_team_api.dart -> /api/national/competitions/$competitionId/rental-entry`
 - `frontend/lib/data/national_team_api.dart -> /api/national/competitions/$competitionId/rental-pool`
@@ -199,7 +207,6 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/dynasty/presentation/dynasty_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/dynasty/presentation/era_history_screen.dart -> http://127.0.0.1:8000`
-- `frontend/lib/features/club_identity/jerseys/presentation/club_identity_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_identity/reputation/presentation/reputation_screen.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/advance-lifecycle`
 - `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/operating-dashboard`
@@ -207,6 +214,22 @@ There is no separate Next.js/React web frontend in this repository to reconcile 
 - `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/squad-registration/lock`
 - `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> /api/clubs/$encodedClubId/squad-registration/submit`
 - `frontend/lib/features/club_lifecycle_redesign/club_lifecycle_api.dart -> http://127.0.0.1:8000`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/history`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/inquiries`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/inquiries/$inquiryId/respond`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/listing`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/listing/cancel`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/offers`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/offers/$offerId/accept`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/offers/$offerId/counter`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/offers/$offerId/reject`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/sale-market/transfer`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/$clubId/valuation`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/clubs/sale-market/listings`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/me/clubs/sale-market/listings`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> /api/me/clubs/sale-market/offers`
+- `frontend/lib/features/club_sale_market/data/club_sale_market_repository.dart -> http://127.0.0.1:8000`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/$profileId/approve`
 - `frontend/lib/features/coin_trader_redesign/coin_trader_api.dart -> /api/admin/coin-traders/$profileId/freeze`

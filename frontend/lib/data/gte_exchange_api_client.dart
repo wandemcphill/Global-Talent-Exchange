@@ -562,16 +562,28 @@ class GteExchangeApiClient {
 
   /// A footballer's recent GTEX competition form and its bounded valuation effect.
   ///
-  /// Falls back to the honest empty form rather than to invented data: a player
-  /// whose form cannot be loaded is reported as having no sample, which the UI
-  /// renders as "no GTEX competition football yet" rather than as flat form.
+  /// In fixture mode this yields the honest empty form. In live mode a transport
+  /// or contract failure *propagates* — `_loadPublicWithFallback` only substitutes
+  /// the fallback for fixtures — and the caller is responsible for degrading
+  /// gracefully. `GtexFmPlayerProfileScreen._loadForm` does exactly that, showing
+  /// "no GTEX competition football yet" rather than inventing flat form.
+  ///
+  /// The payload is copied rather than cast. A hard `as Map<String, dynamic>`
+  /// works only because `jsonDecode` happens to produce that exact type; any
+  /// other well-formed map (a stub transport, a cached decode, a future change of
+  /// transport) would throw a `CastError` that surfaces as a bogus "network"
+  /// failure.
   Future<GtexPlayerForm> fetchPlayerForm(String playerId) async {
     return _loadPublicWithFallback<GtexPlayerForm>(
-      liveCall:
-          () async => GtexPlayerForm.fromJson(
-            await _sendPublicGet('/api/players/$playerId/form')
-                as Map<String, dynamic>,
-          ),
+      liveCall: () async {
+        final Object? payload = await _sendPublicGet(
+          '/api/players/$playerId/form',
+        );
+        if (payload is! Map) {
+          return GtexPlayerForm.unknown(playerId);
+        }
+        return GtexPlayerForm.fromJson(Map<String, dynamic>.from(payload));
+      },
       fallbackCall: () async => GtexPlayerForm.unknown(playerId),
     );
   }

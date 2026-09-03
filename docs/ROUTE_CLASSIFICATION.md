@@ -4,7 +4,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 
 ## Module Mount Summary
 
-- Backend module mounts discovered: **173**
+- Backend module mounts discovered: **179**
 - Router paths mounted more than once: **0**
 
 ## KEEP
@@ -19,10 +19,14 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `DELETE /api/notifications/subscriptions/{}`: `/api/notifications/subscriptions/{subscription_id}` in `backend/app/notifications/router.py` (delete_subscription) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/player-cards/watchlist/{}`: `/api/player-cards/watchlist/{watchlist_id}` in `backend/app/player_cards/router.py` (remove_watchlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /api/social/follows`: `/api/social/follows` in `backend/app/club_social/router.py` (unfollow_target) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `DELETE /api/talent/shortlists/{}`: `/api/talent/shortlists/{shortlist_id}` in `backend/app/talent/router.py` (delete_shortlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `DELETE /api/talent/shortlists/{}/entries/{}`: `/api/talent/shortlists/{shortlist_id}/entries/{entry_id}` in `backend/app/talent/router.py` (remove_shortlist_entry) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /creator-league/tiers/{}`: `/creator-league/tiers/{tier_id}` in `backend/app/competitions/creator_league_router.py` (delete_creator_league_tier) - Highest-ranked non-v1 route for this signature.
 - `DELETE /follow/{}`: `/follow/{user_id}` in `backend/app/users/router.py` (unfollow_user) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /player-cards/watchlist/{}`: `/api/player-cards/watchlist/{watchlist_id}` in `backend/app/player_cards/router.py` (remove_watchlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `DELETE /social/follows`: `/social/follows` in `backend/app/history_engagement/router.py` (unfollow_target) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `DELETE /talent/shortlists/{}`: `/api/talent/shortlists/{shortlist_id}` in `backend/app/talent/router.py` (delete_shortlist) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `DELETE /talent/shortlists/{}/entries/{}`: `/api/talent/shortlists/{shortlist_id}/entries/{entry_id}` in `backend/app/talent/router.py` (remove_shortlist_entry) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /admin-engine/bootstrap`: `/admin-engine/bootstrap` in `backend/app/admin_engine/router.py` (get_admin_engine_bootstrap) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /admin/admin-engine/calendar-rules`: `/admin/admin-engine/calendar-rules` in `backend/app/admin_engine/router.py` (list_calendar_rules) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /admin/admin-engine/feature-flags`: `/admin/admin-engine/feature-flags` in `backend/app/admin_engine/router.py` (list_feature_flags) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -68,6 +72,9 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /admin/risk-ops/overview`: `/admin/risk-ops/overview` in `backend/app/risk_ops_engine/router.py` (get_risk_overview) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /admin/risk-ops/signals`: `/admin/risk-ops/signals` in `backend/app/risk_ops_engine/router.py` (list_signals) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /admin/risk-ops/system-events`: `/admin/risk-ops/system-events` in `backend/app/risk_ops_engine/router.py` (list_system_events) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /admin/talent/{}`: `/admin/talent/{player_id}` in `backend/app/talent/router.py` (admin_read_talent) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /admin/talent/{}/moderation-log`: `/admin/talent/{player_id}/moderation-log` in `backend/app/talent/router.py` (admin_moderation_log) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /admin/talent/{}/verification`: `/admin/talent/{player_id}/verification` in `backend/app/talent/router.py` (admin_verification_history) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /ads/performance`: `/ads/performance` in `backend/app/ads_engine/router.py` (get_ads_performance) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /agents`: `/agents` in `backend/app/agents/router.py` (list_agents) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /agents/config`: `/agents/config` in `backend/app/agents/router.py` (read_agent_config) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -146,6 +153,7 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/admin/notifications/event-matrix`: `/api/admin/notifications/event-matrix` in `backend/app/notifications/router.py` (admin_notification_event_matrix) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/operations-readiness`: `/api/admin/operations-readiness` in `backend/app/operations_readiness/router.py` (get_operations_readiness) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/payment-rails`: `/api/admin/payment-rails` in `backend/app/admin_api/router.py` (get_admin_payment_rails) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /api/admin/players/{}`: `/api/admin/players/{player_id}` in `backend/app/admin_players/router.py` (read_player) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/queues`: `/api/admin/queues` in `backend/app/admin_api/router.py` (get_admin_queues) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/ranking/events`: `/api/admin/ranking/events` in `backend/app/ranking_integrity/router.py` (list_admin_ranking_events) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/ranking/flags`: `/api/admin/ranking/flags` in `backend/app/ranking_integrity/router.py` (list_admin_ranking_flags) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -167,6 +175,9 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/admin/sponsorship/packages`: `/api/admin/sponsorship/packages` in `backend/app/sponsorship_engine/router.py` (admin_list_packages) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/streamer-tournaments/policy`: `/api/admin/streamer-tournaments/policy` in `backend/app/streamer_tournament_engine/router.py` (get_policy) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/streamer-tournaments/risk-signals`: `/api/admin/streamer-tournaments/risk-signals` in `backend/app/streamer_tournament_engine/router.py` (list_risk_signals) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /api/admin/talent/{}`: `/admin/talent/{player_id}` in `backend/app/talent/router.py` (admin_read_talent) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /api/admin/talent/{}/moderation-log`: `/admin/talent/{player_id}/moderation-log` in `backend/app/talent/router.py` (admin_moderation_log) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
+- `GET /api/admin/talent/{}/verification`: `/admin/talent/{player_id}/verification` in `backend/app/talent/router.py` (admin_verification_history) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/treasury`: `/api/admin/treasury` in `backend/app/admin_api/router.py` (get_admin_treasury) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/treasury/bank-accounts`: `/api/admin/treasury/bank-accounts` in `backend/app/treasury/router.py` (list_treasury_bank_accounts) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/admin/treasury/dashboard`: `/api/admin/treasury/dashboard` in `backend/app/treasury/router.py` (treasury_dashboard) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
@@ -198,22 +209,11 @@ Generated deterministically from `tools/audit/generate_contract_audit.py`.
 - `GET /api/broadcast/channels`: `/api/broadcast/channels` in `backend/app/broadcast_network/router.py` (list_channels) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast/home`: `/api/broadcast/home` in `backend/app/broadcast_network/router.py` (read_broadcast_home) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
 - `GET /api/broadcast/{}`: `/api/broadcast/{match_id}` in `backend/app/football_universe/router.py` (read_broadcast_session) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/calendar-engine/dashboard`: `/api/calendar-engine/dashboard` in `backend/app/calendar_engine/router.py` (get_dashboard) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/calendar-engine/events`: `/api/calendar-engine/events` in `backend/app/calendar_engine/router.py` (list_events) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/calendar-engine/lifecycle-runs`: `/api/calendar-engine/lifecycle-runs` in `backend/app/calendar_engine/router.py` (list_lifecycle_runs) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/calendar-engine/pause-status`: `/api/calendar-engine/pause-status` in `backend/app/calendar_engine/router.py` (get_pause_status) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/calendar-engine/seasons`: `/api/calendar-engine/seasons` in `backend/app/calendar_engine/router.py` (list_seasons) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/campaigns`: `/api/campaigns` in `backend/app/creator_marketplace/router.py` (list_campaigns) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/campaigns/{}/performance`: `/api/campaigns/{id}/performance` in `backend/app/creator_marketplace/router.py` (get_campaign_performance) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/challenges/links/{}`: `/api/challenges/links/{link_code}` in `backend/app/club_social/router.py` (get_challenge_by_link) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/challenges/{}`: `/api/challenges/{challenge_id}` in `backend/app/club_social/router.py` (get_challenge) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/chats/threads`: `/api/chats/threads` in `backend/app/community_engine/social_router.py` (list_chat_threads) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- `GET /api/chats/threads/{}`: `/api/chats/threads/{thread_id}` in `backend/app/community_engine/social_router.py` (get_chat_thread) - Mounted through the newer module system and preferred over legacy api_v1 handlers.
-- ... and 1715 more
+- ... and 1888 more
 
 ## MIGRATE_TO
 
-- None
+- `WEBSOCKET /api/v2/ws/match/{}`: `/api/v2/ws/match/{match_id}` in `backend/app/api_v1/router.py` (stream_match_commentary) -> `/api/v2/ws/match/{match_id}` - Legacy api_v1 surface shadowed by `/api/v2/ws/match/{match_id}`.
 
 ## DELETE
 

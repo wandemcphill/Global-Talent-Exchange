@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1667,
+  "route_count": 1696,
   "routes": [
     {
       "method": "POST",
@@ -256,6 +256,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "_",
           "session"
         ]
       },
@@ -1734,6 +1735,35 @@
     },
     {
       "method": "GET",
+      "path": "/api/admin/players/{player_id}",
+      "effective_paths": [
+        "/api/admin/players/{player_id}"
+      ],
+      "file": "backend/app/admin_players/router.py",
+      "handler": "read_player",
+      "router_variable": "router",
+      "module_path": "app.admin_players.router",
+      "module_mounts": [
+        "admin_players"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "request",
+          "session",
+          "actor",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PlayerAdminView",
+        "returns": "PlayerAdminView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "GET",
       "path": "/api/admin/queues",
       "effective_paths": [
         "/api/admin/queues"
@@ -1903,6 +1933,36 @@
       "response_shape": {
         "response_model": "WithdrawalAdminView",
         "returns": "WithdrawalAdminView"
+      },
+      "version": "canonical",
+      "domain": "admin"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/players/{player_id}",
+      "effective_paths": [
+        "/api/admin/players/{player_id}"
+      ],
+      "file": "backend/app/admin_players/router.py",
+      "handler": "edit_player",
+      "router_variable": "router",
+      "module_path": "app.admin_players.router",
+      "module_mounts": [
+        "admin_players"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "payload",
+          "request",
+          "session",
+          "actor",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PlayerAdminEditResult",
+        "returns": "PlayerAdminEditResult"
       },
       "version": "canonical",
       "domain": "admin"
@@ -6213,7 +6273,8 @@
       "request_shape": {
         "parameters": [
           "match_id",
-          "request"
+          "request",
+          "_"
         ]
       },
       "response_shape": {
@@ -7177,6 +7238,7 @@
       "request_shape": {
         "parameters": [
           "club_id",
+          "current_user",
           "service"
         ]
       },
@@ -8053,7 +8115,10 @@
         "parameters": [
           "club_id",
           "payload",
-          "service"
+          "current_user",
+          "session",
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -8080,7 +8145,10 @@
         "parameters": [
           "club_id",
           "payload",
-          "service"
+          "current_user",
+          "session",
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -8298,6 +8366,7 @@
       "request_shape": {
         "parameters": [
           "club_id",
+          "current_user",
           "service"
         ]
       },
@@ -8793,6 +8862,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -14091,6 +14161,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "_",
           "session",
           "user_id",
           "source_type",
@@ -14147,6 +14218,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "_",
           "session",
           "active_only"
         ]
@@ -14225,6 +14297,7 @@
       ],
       "request_shape": {
         "parameters": [
+          "_",
           "session",
           "active_only"
         ]
@@ -16567,6 +16640,7 @@
       "request_shape": {
         "parameters": [
           "user_id",
+          "actor",
           "service"
         ]
       },
@@ -16793,6 +16867,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "actor",
           "service"
         ]
       },
@@ -16819,6 +16894,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "actor",
           "service"
         ]
       },
@@ -20969,7 +21045,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "service"
+          "service",
+          "current_user"
         ]
       },
       "response_shape": {
@@ -20995,7 +21072,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "service"
+          "service",
+          "current_user"
         ]
       },
       "response_shape": {
@@ -22131,7 +22209,8 @@
       "request_shape": {
         "parameters": [
           "match_id",
-          "engine"
+          "engine",
+          "current_user"
         ]
       },
       "response_shape": {
@@ -22379,6 +22458,32 @@
           "match_id",
           "websocket",
           "session_id"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "None"
+      },
+      "version": "canonical",
+      "domain": "live"
+    },
+    {
+      "method": "WEBSOCKET",
+      "path": "/api/v2/ws/match/{match_id}",
+      "effective_paths": [
+        "/api/v2/ws/match/{match_id}"
+      ],
+      "file": "backend/app/live_matches/router.py",
+      "handler": "stream_unity_spatial_match",
+      "router_variable": "router",
+      "module_path": "app.live_matches.router",
+      "module_mounts": [
+        "live_matches"
+      ],
+      "request_shape": {
+        "parameters": [
+          "match_id",
+          "websocket"
         ]
       },
       "response_shape": {
@@ -26862,6 +26967,7 @@
       "request_shape": {
         "parameters": [
           "entry_id",
+          "current_user",
           "session",
           "service"
         ]
@@ -31018,6 +31124,33 @@
     },
     {
       "method": "GET",
+      "path": "/players/{player_id}/form",
+      "effective_paths": [
+        "/players/{player_id}/form"
+      ],
+      "file": "backend/app/players/router.py",
+      "handler": "get_player_form",
+      "router_variable": "router",
+      "module_path": "app.players.router",
+      "module_mounts": [
+        "players"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "include_performances",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PlayerFormView",
+        "returns": "PlayerFormView"
+      },
+      "version": "canonical",
+      "domain": "players"
+    },
+    {
+      "method": "GET",
       "path": "/players/{player_id}/rivalries",
       "effective_paths": [
         "/players/{player_id}/rivalries"
@@ -33372,6 +33505,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -33399,6 +33533,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -33426,6 +33561,7 @@
       "request_shape": {
         "parameters": [
           "player_id",
+          "current_admin",
           "service"
         ]
       },
@@ -33794,6 +33930,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_admin",
           "service"
         ]
       },
@@ -33822,6 +33959,7 @@
         "parameters": [
           "player_id",
           "event_type",
+          "current_admin",
           "service"
         ]
       },
@@ -33850,6 +33988,7 @@
         "parameters": [
           "award_id",
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -33933,6 +34072,7 @@
       "request_shape": {
         "parameters": [
           "job_name",
+          "_",
           "service"
         ]
       },
@@ -33988,6 +34128,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -34018,6 +34159,7 @@
           "limit",
           "ge",
           "le",
+          "current_admin",
           "service"
         ]
       },
@@ -36393,6 +36535,8 @@
       "request_shape": {
         "parameters": [
           "competition_id",
+          "request",
+          "actor",
           "orchestrator"
         ]
       },
@@ -37451,7 +37595,8 @@
         "parameters": [
           "competition_id",
           "payload",
-          "_",
+          "request",
+          "actor",
           "orchestrator"
         ]
       },
@@ -38145,7 +38290,8 @@
         "parameters": [
           "competition_id",
           "payload",
-          "_",
+          "request",
+          "actor",
           "orchestrator"
         ]
       },
@@ -38197,7 +38343,8 @@
         "parameters": [
           "competition_id",
           "payload",
-          "_",
+          "request",
+          "actor",
           "orchestrator"
         ]
       },
@@ -38223,7 +38370,7 @@
         "parameters": [
           "competition_id",
           "payload",
-          "_",
+          "current_user",
           "orchestrator"
         ]
       },
@@ -38327,7 +38474,7 @@
         "parameters": [
           "competition_id",
           "payload",
-          "_",
+          "current_user",
           "orchestrator"
         ]
       },
@@ -38434,7 +38581,8 @@
         "parameters": [
           "competition_id",
           "payload",
-          "_",
+          "request",
+          "actor",
           "orchestrator"
         ]
       },
@@ -38486,7 +38634,8 @@
         "parameters": [
           "competition_id",
           "payload",
-          "_",
+          "request",
+          "actor",
           "orchestrator"
         ]
       },
@@ -38591,7 +38740,8 @@
         "parameters": [
           "player_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38617,7 +38767,8 @@
           "player_id",
           "contract_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38642,7 +38793,8 @@
         "parameters": [
           "player_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38668,7 +38820,8 @@
           "player_id",
           "injury_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38693,7 +38846,8 @@
         "parameters": [
           "player_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38718,7 +38872,8 @@
         "parameters": [
           "player_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38743,7 +38898,8 @@
         "parameters": [
           "player_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38768,7 +38924,8 @@
         "parameters": [
           "player_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38793,7 +38950,8 @@
         "parameters": [
           "player_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38897,7 +39055,8 @@
         "parameters": [
           "window_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38923,7 +39082,8 @@
           "window_id",
           "bid_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38949,7 +39109,8 @@
           "window_id",
           "bid_id",
           "payload",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -38975,7 +39136,8 @@
           "window_id",
           "player_id",
           "as_of",
-          "service"
+          "service",
+          "_"
         ]
       },
       "response_shape": {
@@ -39133,6 +39295,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -39215,6 +39378,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -39241,6 +39405,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -39323,6 +39488,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
           "service"
         ]
       },
@@ -39350,6 +39516,7 @@
         "parameters": [
           "user_id",
           "payload",
+          "actor",
           "service"
         ]
       },
@@ -39377,6 +39544,7 @@
         "parameters": [
           "user_id",
           "payload",
+          "actor",
           "service"
         ]
       },
@@ -40617,6 +40785,764 @@
       "domain": "surveillance"
     },
     {
+      "method": "DELETE",
+      "path": "/talent/shortlists/{shortlist_id}",
+      "effective_paths": [
+        "/api/talent/shortlists/{shortlist_id}",
+        "/talent/shortlists/{shortlist_id}"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "delete_shortlist",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "shortlist_id",
+          "session",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "Response"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "DELETE",
+      "path": "/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+      "effective_paths": [
+        "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+        "/talent/shortlists/{shortlist_id}/entries/{entry_id}"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "remove_shortlist_entry",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "shortlist_id",
+          "entry_id",
+          "session",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": null,
+        "returns": "Response"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/talent/{player_id}",
+      "effective_paths": [
+        "/admin/talent/{player_id}",
+        "/api/admin/talent/{player_id}"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_read_talent",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "request",
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentProfileResponse",
+        "returns": "TalentProfileResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/talent/{player_id}/moderation-log",
+      "effective_paths": [
+        "/admin/talent/{player_id}/moderation-log",
+        "/api/admin/talent/{player_id}/moderation-log"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_moderation_log",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "request",
+          "limit",
+          "ge",
+          "le",
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentModerationLogResponse",
+        "returns": "TalentModerationLogResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "GET",
+      "path": "/admin/talent/{player_id}/verification",
+      "effective_paths": [
+        "/admin/talent/{player_id}/verification",
+        "/api/admin/talent/{player_id}/verification"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_verification_history",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "request",
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentVerificationHistoryResponse",
+        "returns": "TalentVerificationHistoryResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "GET",
+      "path": "/talent/search",
+      "effective_paths": [
+        "/api/talent/search",
+        "/talent/search"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "search_talent",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "q",
+          "min_length",
+          "max_length",
+          "positions",
+          "max_length",
+          "preferred_positions",
+          "max_length",
+          "tactical_roles",
+          "max_length",
+          "preferred_foot",
+          "min_age",
+          "ge",
+          "le",
+          "max_age",
+          "ge",
+          "le",
+          "nationality_codes",
+          "max_length",
+          "location_country_codes",
+          "max_length",
+          "location_region",
+          "max_length",
+          "availability",
+          "max_length",
+          "min_verification_tier",
+          "min_composite_score",
+          "ge",
+          "le",
+          "max_composite_score",
+          "ge",
+          "le",
+          "min_form_score",
+          "ge",
+          "le",
+          "min_competition_level_score",
+          "ge",
+          "le",
+          "min_experience_years",
+          "ge",
+          "le",
+          "min_ranking_confidence",
+          "ge",
+          "le",
+          "min_sample_size",
+          "ge",
+          "le",
+          "required_signals",
+          "max_length",
+          "featured_only",
+          "sort",
+          "page",
+          "ge",
+          "per_page",
+          "ge",
+          "le",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentSearchResponse",
+        "returns": "TalentSearchResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "GET",
+      "path": "/talent/shortlists",
+      "effective_paths": [
+        "/api/talent/shortlists",
+        "/talent/shortlists"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "list_shortlists",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "include_entries",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ShortlistListResponse",
+        "returns": "ShortlistListResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "GET",
+      "path": "/talent/shortlists/{shortlist_id}",
+      "effective_paths": [
+        "/api/talent/shortlists/{shortlist_id}",
+        "/talent/shortlists/{shortlist_id}"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "read_shortlist",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "shortlist_id",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ShortlistView",
+        "returns": "ShortlistView"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "GET",
+      "path": "/talent/{player_id}",
+      "effective_paths": [
+        "/api/talent/{player_id}",
+        "/talent/{player_id}"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "read_talent_profile",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentProfileResponse",
+        "returns": "TalentProfileResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "GET",
+      "path": "/talent/{player_id}/ranking",
+      "effective_paths": [
+        "/api/talent/{player_id}/ranking",
+        "/talent/{player_id}/ranking"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "read_talent_ranking",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentRankingResponse",
+        "returns": "TalentRankingResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "GET",
+      "path": "/talent/{player_id}/signals",
+      "effective_paths": [
+        "/api/talent/{player_id}/signals",
+        "/talent/{player_id}/signals"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "read_talent_signals",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentSignalsResponse",
+        "returns": "TalentSignalsResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "PATCH",
+      "path": "/talent/shortlists/{shortlist_id}",
+      "effective_paths": [
+        "/api/talent/shortlists/{shortlist_id}",
+        "/talent/shortlists/{shortlist_id}"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "update_shortlist",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "shortlist_id",
+          "payload",
+          "session",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ShortlistView",
+        "returns": "ShortlistView"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "PATCH",
+      "path": "/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+      "effective_paths": [
+        "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+        "/talent/shortlists/{shortlist_id}/entries/{entry_id}"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "update_shortlist_entry",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "shortlist_id",
+          "entry_id",
+          "payload",
+          "session",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ShortlistView",
+        "returns": "ShortlistView"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/talent/{player_id}/correction",
+      "effective_paths": [
+        "/admin/talent/{player_id}/correction",
+        "/api/admin/talent/{player_id}/correction"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_correct",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "payload",
+          "session",
+          "actor",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentAdminActionResponse",
+        "returns": "TalentAdminActionResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/talent/{player_id}/feature",
+      "effective_paths": [
+        "/admin/talent/{player_id}/feature",
+        "/api/admin/talent/{player_id}/feature"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_set_featured",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "payload",
+          "session",
+          "actor",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentAdminActionResponse",
+        "returns": "TalentAdminActionResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/talent/{player_id}/moderation",
+      "effective_paths": [
+        "/admin/talent/{player_id}/moderation",
+        "/api/admin/talent/{player_id}/moderation"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_moderate",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "payload",
+          "session",
+          "actor",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentAdminActionResponse",
+        "returns": "TalentAdminActionResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/talent/{player_id}/recompute",
+      "effective_paths": [
+        "/admin/talent/{player_id}/recompute",
+        "/api/admin/talent/{player_id}/recompute"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_recompute",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "payload",
+          "session",
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentRankingResponse",
+        "returns": "TalentRankingResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/talent/{player_id}/sync",
+      "effective_paths": [
+        "/admin/talent/{player_id}/sync",
+        "/api/admin/talent/{player_id}/sync"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_sync_talent",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "owner_user_id",
+          "embed",
+          "session",
+          "_",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentProfileResponse",
+        "returns": "TalentProfileResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/talent/{player_id}/verification",
+      "effective_paths": [
+        "/admin/talent/{player_id}/verification",
+        "/api/admin/talent/{player_id}/verification"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_record_verification",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "payload",
+          "session",
+          "actor",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentAdminActionResponse",
+        "returns": "TalentAdminActionResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/talent/{player_id}/visibility",
+      "effective_paths": [
+        "/admin/talent/{player_id}/visibility",
+        "/api/admin/talent/{player_id}/visibility"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "admin_set_visibility",
+      "router_variable": "admin_router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "payload",
+          "session",
+          "actor",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentAdminActionResponse",
+        "returns": "TalentAdminActionResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/talent/compare",
+      "effective_paths": [
+        "/api/talent/compare",
+        "/talent/compare"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "compare_talent",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentCompareResponse",
+        "returns": "TalentCompareResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/talent/search",
+      "effective_paths": [
+        "/api/talent/search",
+        "/talent/search"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "search_talent_advanced",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "TalentSearchResponse",
+        "returns": "TalentSearchResponse"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/talent/shortlists",
+      "effective_paths": [
+        "/api/talent/shortlists",
+        "/talent/shortlists"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "create_shortlist",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "session",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ShortlistView",
+        "returns": "ShortlistView"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
+      "method": "POST",
+      "path": "/talent/shortlists/{shortlist_id}/entries",
+      "effective_paths": [
+        "/api/talent/shortlists/{shortlist_id}/entries",
+        "/talent/shortlists/{shortlist_id}/entries"
+      ],
+      "file": "backend/app/talent/router.py",
+      "handler": "add_shortlist_entry",
+      "router_variable": "router",
+      "module_path": "app.talent.router",
+      "module_mounts": [
+        "talent_exchange"
+      ],
+      "request_shape": {
+        "parameters": [
+          "shortlist_id",
+          "payload",
+          "session",
+          "viewer",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ShortlistView",
+        "returns": "ShortlistView"
+      },
+      "version": "canonical",
+      "domain": "talent"
+    },
+    {
       "method": "GET",
       "path": "/tickets/event/{match_id}",
       "effective_paths": [
@@ -40831,6 +41757,7 @@
       "request_shape": {
         "parameters": [
           "payload",
+          "current_user",
           "session",
           "service"
         ]
@@ -40858,6 +41785,7 @@
       "request_shape": {
         "parameters": [
           "tournament_id",
+          "current_user",
           "session",
           "service"
         ]
@@ -40886,6 +41814,7 @@
         "parameters": [
           "tournament_id",
           "payload",
+          "current_user",
           "session",
           "service"
         ]
@@ -40915,6 +41844,7 @@
           "tournament_id",
           "match_id",
           "payload",
+          "current_user",
           "session",
           "service"
         ]
@@ -43261,7 +44191,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "runtime"
+          "runtime",
+          "current_user"
         ]
       },
       "response_shape": {
@@ -43287,7 +44218,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "runtime"
+          "runtime",
+          "_"
         ]
       },
       "response_shape": {
@@ -43313,7 +44245,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "runtime"
+          "runtime",
+          "_"
         ]
       },
       "response_shape": {
@@ -43340,6 +44273,7 @@
         "parameters": [
           "preset_id",
           "payload",
+          "_",
           "runtime"
         ]
       },
@@ -43366,7 +44300,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "runtime"
+          "runtime",
+          "_"
         ]
       },
       "response_shape": {
@@ -43419,7 +44354,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "runtime"
+          "runtime",
+          "current_user"
         ]
       },
       "response_shape": {
@@ -43445,7 +44381,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "runtime"
+          "runtime",
+          "_"
         ]
       },
       "response_shape": {
@@ -43471,7 +44408,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "runtime"
+          "runtime",
+          "_"
         ]
       },
       "response_shape": {
@@ -43498,6 +44436,7 @@
         "parameters": [
           "preset_id",
           "payload",
+          "_",
           "runtime"
         ]
       },
@@ -43524,7 +44463,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "runtime"
+          "runtime",
+          "_"
         ]
       },
       "response_shape": {
@@ -43578,7 +44518,8 @@
         "parameters": [
           "competitor_id",
           "payload",
-          "runtime"
+          "runtime",
+          "current_user"
         ]
       },
       "response_shape": {
@@ -43605,7 +44546,8 @@
         "parameters": [
           "competitor_id",
           "payload",
-          "runtime"
+          "runtime",
+          "current_user"
         ]
       },
       "response_shape": {
@@ -43938,7 +44880,8 @@
       "request_shape": {
         "parameters": [
           "payload",
-          "request"
+          "request",
+          "_"
         ]
       },
       "response_shape": {

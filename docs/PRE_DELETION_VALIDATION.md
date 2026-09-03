@@ -6,6 +6,6 @@
 
 Frontend references and route mismatches still remain, especially around the shared Flutter repository and legacy `/api/v1` usage.
 
-- Blocking mismatches: **1009**
-- Pending legacy route migrations: **218**
+- Blocking mismatches: **1056**
+- Pending legacy route migrations: **227**
 - Required next move: migrate remaining consumers onto the canonical routes in `FINAL_API_SCHEMA.json`, then re-scan.
