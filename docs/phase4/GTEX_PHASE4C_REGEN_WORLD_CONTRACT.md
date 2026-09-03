@@ -141,28 +141,74 @@ height likewise now follows the width of a *card* rather than of the board.
 
 ## 4. MISSING CONTRACTS (§9.3 filings)
 
-### 4.1 National-pool regens have no dossier — the largest population is dark
+### 4.1 ~~National-pool regens have no dossier~~ — CLOSED, with one decision left
 
-`GET /regen-universe/players/{id}` resolves through
-`select(RegenProfile).where(RegenProfile.player_id == player_id)`
-(`regen_universe/service.py:1257`). Rows in `national_regen_seeds` have **no
-`RegenProfile`**, so for them lineage, personality, potential band, development
-and value are all 404.
+`GET /regen-universe/players/{id}` resolved only through
+`select(RegenProfile).where(RegenProfile.player_id == player_id)`, and rows in
+`national_regen_seeds` have no `RegenProfile`, so every national seed 404ed.
+Since seeded national pools are the bulk of the regen population, the dossier
+was dark for most regens.
 
-These are not a corner case: `LiveGtexRegenRepository.loadWorld` lists up to 48
-of them, and per the operator notes the seeded national pools are the bulk of
-the regen population.
+**Root cause, on inspection:** `seed_preseeded_national_regens` already calls
+`RegenGenerationEngine._build_regen(...)`, which returns a **complete
+`RegenProfileView`** — personality, origin, ability and potential bands, scout
+confidence, story seed. The seeder then persisted only the flat scalars and
+five personality fields and **threw the rest away**. The data was generated
+and discarded, not missing.
 
-**Interim behaviour:** the dossier panel states "No published dossier" and
-explains that national-pool depth regens do not get one. Nothing is faked.
+**Now:**
 
-**Contract required — one of:**
-- `GET /regen-universe/players/{id}` returns a showcase for seed rows, with the
-  fields a seed genuinely has and nulls elsewhere; **or**
-- `NationalRegenSeedPageView` carries a `has_published_profile: bool` so the
-  client can render the correct state without a 404 round trip.
+- `seed_preseeded_national_regens` persists the whole `RegenProfileView` onto
+  the seed as a profile snapshot.
+- `scripts/backfill_national_seed_profiles.py` gives existing seeds one,
+  generated deterministically from each seed's immutable `seed_key`. Idempotent
+  and keyset-paginated, with one savepoint per seed so a bad row cannot roll
+  back a good batch. Supports `--dry-run`.
+- `RegenUniverseService.get_player_showcase` falls back to the seed snapshot,
+  so the dossier works for seeds.
 
-The second is cheaper and is the recommendation.
+Every field the seed already publishes — name, age, position, ratings, growth
+curve, country — is written back over the generated one, so a backfilled
+dossier can never contradict the card it was opened from. The five personality
+values the original seeding run stored are preserved, so a backfill never
+overwrites something a user may already have seen. Bands are widened where
+necessary to bracket the published ratings rather than contradict them.
+
+#### Why seeds do NOT get real `regen_profiles` rows
+
+`RegenProfile` carries three mandatory foreign keys:
+
+```
+player_id             -> ingestion_players.id   (unique, NOT NULL)
+linked_unique_card_id -> player_cards.id        (unique, NOT NULL)
+generated_for_club_id -> club_profiles.id       (NOT NULL)
+```
+
+Materialising a real profile row per seed therefore means creating one
+**tradable** `ingestion_players` row and one **mintable** `player_cards` row
+for each of the ~12k depth seeds, plus clubs to own them. That injects the
+national depth pool into the live economy — seeds are deliberately
+`national_pool_only` and non-tradable — and it is the same shape as the
+incident that required deleting 273k orphaned regen read-model rows.
+
+It is also squarely inside Phase 4's non-goals: §1 ("no new backend
+economics") and §14 (new backend models deferred).
+
+So the profile lives on the seed and the showcase serves it. Seeds gain real
+profile data and a working dossier; **no player, card or club rows are
+created and nothing becomes tradable that was not before** — pinned by
+`tests/test_national_seed_profiles.py`.
+
+Two things the snapshot deliberately drops, caught by the determinism test:
+the engine hands back a fresh `linked_unique_card_id` for a card it never
+created (a dangling reference, blanked), and wall-clock timestamps that would
+make an idempotent backfill rewrite a different snapshot every run (anchored
+to the seed's own `created_at`).
+
+**Decision still open:** whether national-pool seeds should ever become
+first-class tradable regens with real profile rows. That is an economic
+decision about the size and liquidity of the player universe, not an
+engineering one, and it is deliberately not taken here.
 
 ### 4.2 ~~Regen contracts are UI-only~~ — CORRECTED: they were unreached, not missing
 
@@ -280,10 +326,11 @@ state is not later mistaken for a bug.
 
 ## 6. OPEN QUESTIONS FOR REVIEW
 
-1. **§4.1 is the important one.** If national-pool seeds stay dossier-less, the
-   regen world is a rich experience for a small minority of regens and a blocked
-   state for the majority. That is honest but thin, and it is a product
-   decision about whether seeds deserve profiles.
+1. **§4.1 is closed for the dossier, open for the economy.** Seeds now have
+   real profile data and a working dossier without any economy rows being
+   created. Whether they should additionally become tradable regens with real
+   `regen_profiles` rows — 12k new players and cards — is still a product and
+   economics decision, and it is the one worth taking deliberately.
 2. **§4.2 was filed wrong and is corrected.** Regen contracts *do* have a
    backend, in `segments/player_lifecycle`; the read path is now wired. What
    remains is a world-level list endpoint so the Contracts lane can show the

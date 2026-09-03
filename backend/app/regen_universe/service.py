@@ -1256,7 +1256,12 @@ class RegenUniverseService:
     def get_player_showcase(self, player_id: str) -> dict[str, object] | None:
         regen = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == player_id))
         if regen is None:
-            return None
+            # National-pool seeds have no RegenProfile row - see
+            # regen_universe/seed_profile_service.py for why they deliberately
+            # do not get one - but they do carry a full generated profile.
+            # Serving it here is what makes the regen dossier work for the
+            # bulk of the regen population.
+            return self._national_seed_showcase(player_id)
 
         market_service = RegenMarketService(self.session)
         profile = market_service.get_profile_view(regen.id)
@@ -1287,6 +1292,45 @@ class RegenUniverseService:
             "discovery_badges": discovery_badges,
             "timeline": self.list_player_timeline(player_id=player_id, limit=12)["items"],
             "achievements": self.list_achievements(subject_key=player_id, limit=12)["items"],
+        }
+
+    def _national_seed_showcase(self, seed_id: str) -> dict[str, object] | None:
+        """Build a showcase for a national-pool seed, or None if not one."""
+        seed = self.session.get(NationalRegenSeed, seed_id)
+        if seed is None:
+            return None
+        from app.regen_universe.seed_profile_service import RegenSeedProfileService
+
+        profile = RegenSeedProfileService(self.session).ensure_profile(seed)
+        metadata = RegenPortraitService(self.session).ensure_national_seed_portrait(seed)
+        portrait_url = metadata.get("portraitUrl")
+        card_payload: dict[str, object] = {
+            "name": seed.display_name,
+            "image_url": portrait_url,
+            "portrait_url": portrait_url,
+            "face_seed": metadata.get("faceSeed"),
+            "position": seed.primary_position,
+            "rating": int(seed.current_rating),
+            "potential": int(seed.potential_rating),
+            "regen_type_badge": seed.seed_type,
+            "uniqueness_badge": seed.rarity_tier,
+            "legacy_score": 0.0,
+            "personality_tag": (profile.personality.personality_tags[0] if profile.personality.personality_tags else None),
+            "story_snippet": (profile.story_seed.snippet if profile.story_seed is not None else None),
+        }
+        return {
+            "player_id": seed_id,
+            "profile": profile,
+            "card": card_payload,
+            # A depth seed has no ranking, no career and no valuation. Those
+            # are absent rather than zeroed, so the client renders "not rated"
+            # instead of a row of noughts.
+            "prestige": None,
+            "legacy": None,
+            "latest_value": None,
+            "discovery_badges": [],
+            "timeline": [],
+            "achievements": [],
         }
 
     def list_player_timeline(
