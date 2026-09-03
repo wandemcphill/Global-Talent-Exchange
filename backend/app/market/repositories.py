@@ -432,16 +432,20 @@ class SqlAlchemyMarketPlayerRepository:
             # process cache; correctness over the marginal speedup.
             return self._load_player_records()
 
-        now = time.monotonic()
+        # The load below scans every tradable player, so the lock is held
+        # across the whole check-and-populate sequence (single-flight): on a
+        # cache miss, concurrent callers queue behind the first instead of
+        # each independently re-running the full scan in parallel, which is
+        # what turned a slow query into a memory-spike/crash under load.
         with _RECORDS_CACHE_LOCK:
+            now = time.monotonic()
             cached = _RECORDS_CACHE.get(bind)
             if cached is not None and (now - cached[0]) < ttl:
                 return cached[1]
 
-        records = self._load_player_records()
-        with _RECORDS_CACHE_LOCK:
+            records = self._load_player_records()
             _RECORDS_CACHE[bind] = (time.monotonic(), records)
-        return records
+            return records
 
     def _load_player_records(self) -> list[MarketPlayerRecord]:
         players = list(
@@ -478,16 +482,16 @@ class SqlAlchemyMarketPlayerRepository:
         if not isinstance(bind, Engine):
             return self._load_player_candidates()
 
-        now = time.monotonic()
+        # Single-flight: see the matching comment in list_player_records().
         with _CANDIDATES_CACHE_LOCK:
+            now = time.monotonic()
             cached = _CANDIDATES_CACHE.get(bind)
             if cached is not None and (now - cached[0]) < ttl:
                 return cached[1]
 
-        records = self._load_player_candidates()
-        with _CANDIDATES_CACHE_LOCK:
+            records = self._load_player_candidates()
             _CANDIDATES_CACHE[bind] = (time.monotonic(), records)
-        return records
+            return records
 
     def _load_player_candidates(self) -> list[MarketPlayerRecord]:
         players = list(
