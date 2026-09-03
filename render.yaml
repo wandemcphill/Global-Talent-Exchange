@@ -323,6 +323,31 @@ services:
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
 
+  # Scheduled valuation rebuild. This is what makes matchday performance reach a
+  # holder: performances persist at match settlement and form derives from them,
+  # but the published valuation only moves when this job runs. Runs the same
+  # IngestionValueEngineBridge.run() as the operator rebuild endpoint - not a
+  # second pipeline. Idempotent, so a retried run rewrites rather than duplicates.
+  # Daily at 04:00 UTC, an hour after the real-player ingest at 03:00 so fresh
+  # provider data is already in place when valuations recompute.
+  - name: gtex-value-snapshots
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 4 * * *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-value-snapshots.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
   - name: gtex-regen-rebuild
     type: cron
     runtime: python

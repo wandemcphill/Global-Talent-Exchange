@@ -188,6 +188,7 @@ from app.models.competition_history_entry import CompetitionHistoryEntry
 from app.models.competition_invite import CompetitionInvite
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.player_match_performance import PlayerMatchPerformance
 from app.models.club_ranking_integrity import ClubRankingAbuseFlag, ClubRankingEvent, CompetitionIntegrityScore
 from app.models.highlight_event import HighlightEvent
 from app.models.commentary_event import CommentaryEvent
@@ -875,6 +876,7 @@ __all__ = [
     "CompetitionInvite",
     "CompetitionMatch",
     "CompetitionMatchEvent",
+    "PlayerMatchPerformance",
     "HighlightEvent",
     "CommentaryEvent",
     "CommentatorProfile",

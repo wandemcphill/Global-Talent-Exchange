@@ -377,6 +377,10 @@ class ValueSnapshot:
     drivers: tuple[str, ...]
     reason_codes: tuple[str, ...]
     real_player_valuation: RealPlayerValuationBridgeResult | None = None
+    #: Audit trail for the bounded matchday-form overlay, when one was applied.
+    #: Stored as a plain mapping so that the value engine's core dataclasses stay
+    #: free of any dependency on the performance/form layer.
+    matchday_signal_audit: dict | None = None
 
     @property
     def published_card_value_credits(self) -> float:

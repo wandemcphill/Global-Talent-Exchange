@@ -31,6 +31,7 @@ from app.models.base import utcnow
 from app.models.player_lifecycle_event import PlayerLifecycleEvent
 from app.players.service import PlayerSummaryProjector
 from app.value_engine.jobs import ValueSnapshotJob
+from app.value_engine.matchday_provider import MatchdayValuationSignalProvider
 from app.value_engine.models import (
     DemandSignal,
     EGameSignal,
@@ -289,6 +290,10 @@ class IngestionValueSnapshotRepository:
         breakdown_payload["previous_global_scouting_index"] = snapshot.previous_global_scouting_index
         breakdown_payload["global_scouting_index_movement_pct"] = snapshot.global_scouting_index_movement_pct
         breakdown_payload["global_scouting_index_breakdown"] = asdict(snapshot.global_scouting_index_breakdown)
+        if snapshot.matchday_signal_audit is not None:
+            # Persisted so that "why did his value move?" is answerable from stored
+            # data rather than by re-running the policy against a moving window.
+            breakdown_payload["matchday_signal"] = snapshot.matchday_signal_audit
         if snapshot_record is None:
             snapshot_record = PlayerValueSnapshotRecord(
                 player_id=snapshot.player_id,
@@ -1311,6 +1316,10 @@ class IngestionValueEngineBridge:
                 snapshots = ValueSnapshotJob(
                     engine=ValueEngine(config=resolved_settings.value_engine_weighting),
                     lookback_days=lookback_days or self.default_lookback_days,
+                    matchday_signal_provider=MatchdayValuationSignalProvider(
+                        session=session,
+                        as_of=snapshot_time,
+                    ),
                 ).run(
                     repository,
                     snapshot_time,

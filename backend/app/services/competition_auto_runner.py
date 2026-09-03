@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.common.enums.competition_format import CompetitionFormat
@@ -24,8 +26,11 @@ from app.models.competition_rule_set import CompetitionRuleSet
 from app.models.user import User
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.match_engine.services.team_factory import SyntheticSquadFactory
+from app.players.performance_recorder import PlayerMatchPerformanceRecorder
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
 from app.services.match_timeline_service import MatchTimelineService
+
+logger = logging.getLogger(__name__)
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -162,13 +167,44 @@ class CompetitionAutoRunner:
         )
         self._store_match_viewer_payload(match, replay_payload)
         self._store_match_events(match, replay_payload)
-        return self.lifecycle_service.complete_match(
+        completed = self.lifecycle_service.complete_match(
             match=match,
             home_score=replay_payload.summary.home_score,
             away_score=replay_payload.summary.away_score,
             decided_by_penalties=replay_payload.summary.decided_by_penalties,
             winner_club_id=replay_payload.summary.winner_team_id,
         )
+        # Recorded *after* settlement so the performances carry the match's real
+        # completion timestamp, which is what form windows are ordered by.
+        self._store_match_performances(completed, replay_payload)
+        return completed
+
+    def _store_match_performances(self, match: CompetitionMatch, replay_payload) -> None:
+        """Persist per-player ratings so this match can reach form and valuation.
+
+        This is the link that did not previously exist: the match engine rated every
+        player and then discarded the result. Only competition matches reach this
+        path, which is exactly the eligibility boundary the economy requires.
+
+        A failure to record performance must never fail an otherwise valid match
+        settlement, so this is contained: the fixture result is authoritative, the
+        derived economic signal is best-effort.
+        """
+        summary = getattr(replay_payload, "summary", None)
+        player_stats = getattr(summary, "player_stats", None) if summary is not None else None
+        if not player_stats:
+            return
+        try:
+            PlayerMatchPerformanceRecorder(self.session).record_match(
+                match=match,
+                player_stats=player_stats,
+            )
+        except SQLAlchemyError:
+            logger.exception(
+                "Failed to record player performances for match %s in competition %s",
+                match.id,
+                match.competition_id,
+            )
 
     def _simulation_job(
         self,

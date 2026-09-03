@@ -59,6 +59,16 @@ from app.players.token_schemas import (
 )
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.players.service import PlayerSummaryQueryService
+from app.players.form_schemas import (
+    MatchdayValuationSignalView,
+    PlayerFormView,
+    PlayerPerformanceView,
+)
+from app.players.form_service import MINIMUM_MATCHES_FOR_SIGNAL, PlayerFormService
+from app.value_engine.matchday_signal import (
+    EFFECTIVE_MAX_ADJUSTMENT_PCT,
+    build_matchday_signal,
+)
 from app.regen_universe.expansion_service import (
     RegenUniverseExpansionError,
     RegenUniverseExpansionNotFoundError,
@@ -651,4 +661,57 @@ def _to_legacy_list_result(result) -> RealPlayerUniverseListResult:
         limit=result.limit,
         offset=result.offset,
         total=result.total,
+    )
+
+
+@router.get("/{player_id}/form", response_model=PlayerFormView)
+def get_player_form(
+    player_id: str,
+    include_performances: bool = Query(default=True),
+    session: Session = Depends(get_session),
+) -> PlayerFormView:
+    """Recent GTEX competition form, and the bounded effect it has on valuation.
+
+    Read-only and honest by construction: when a player has no eligible competition
+    football the response says ``has_sample=false`` and carries no signal, rather
+    than inventing a neutral one.
+    """
+    window = PlayerFormService(session).build_window(player_id)
+
+    signal_view: MatchdayValuationSignalView | None = None
+    if window.has_sample:
+        signal = build_matchday_signal(window)
+        signal_view = MatchdayValuationSignalView(
+            applied=signal.applied,
+            adjustment_pct=signal.adjustment_pct,
+            reason_code=signal.reason_code,
+            confidence=signal.confidence,
+            capped=signal.capped,
+            matches_counted=signal.matches_counted,
+            competitions_counted=signal.competitions_counted,
+            minimum_matches_required=MINIMUM_MATCHES_FOR_SIGNAL,
+            effective_max_adjustment_pct=EFFECTIVE_MAX_ADJUSTMENT_PCT,
+        )
+
+    performances: list[PlayerPerformanceView] = []
+    if include_performances:
+        performances = [
+            PlayerPerformanceView.model_validate(record)
+            for record in PlayerFormService(session).list_recent_performances(player_id)
+        ]
+
+    return PlayerFormView(
+        player_id=player_id,
+        has_sample=window.has_sample,
+        matches_counted=window.matches_counted,
+        competitions_counted=window.competitions_counted,
+        average_rating=window.average_rating,
+        trend=window.trend,
+        trend_delta=window.trend_delta,
+        total_minutes=window.total_minutes,
+        total_goals=window.total_goals,
+        total_assists=window.total_assists,
+        excluded_by_competition_cap=window.excluded_by_competition_cap,
+        signal=signal_view,
+        performances=performances,
     )

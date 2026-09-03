@@ -9,6 +9,7 @@ import 'gte_api_repository.dart';
 import 'gte_exchange_models.dart';
 import 'gte_http_transport.dart';
 import 'gte_models.dart';
+import '../domain/value/gtex_value_models.dart';
 
 class GteExchangeApiClient {
   GteExchangeApiClient({
@@ -556,6 +557,22 @@ class GteExchangeApiClient {
             await _sendPublicGet('/api/market/players/$playerId'),
           ),
       fallbackCall: () => _fallbackPlayerDetail(playerId),
+    );
+  }
+
+  /// A footballer's recent GTEX competition form and its bounded valuation effect.
+  ///
+  /// Falls back to the honest empty form rather than to invented data: a player
+  /// whose form cannot be loaded is reported as having no sample, which the UI
+  /// renders as "no GTEX competition football yet" rather than as flat form.
+  Future<GtexPlayerForm> fetchPlayerForm(String playerId) async {
+    return _loadPublicWithFallback<GtexPlayerForm>(
+      liveCall:
+          () async => GtexPlayerForm.fromJson(
+            await _sendPublicGet('/api/players/$playerId/form')
+                as Map<String, dynamic>,
+          ),
+      fallbackCall: () async => GtexPlayerForm.unknown(playerId),
     );
   }
 
