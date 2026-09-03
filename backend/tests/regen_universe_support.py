@@ -13,6 +13,7 @@ from app.ingestion.models import (
     InternalLeague,
     Match,
     Player,
+    PlayerImageMetadata,
     PlayerMatchStat,
     PlayerSeasonStat,
     Season as IngestionSeason,
@@ -49,6 +50,7 @@ from app.models.regen import (
     RegenTransferFeeRule,
     RegenTwinsGroup,
     RegenValueSnapshot,
+    RegenVisualProfile,
 )
 from app.models.regen_ecosystem import CareerEvent, NationalRegenSeed, RegenBloodlineLink
 from app.models.user import User
@@ -92,6 +94,7 @@ def build_regen_universe_session() -> Session:
             Match.__table__,
             TeamStanding.__table__,
             Player.__table__,
+            PlayerImageMetadata.__table__,
             PlayerContract.__table__,
             PlayerCareerEntry.__table__,
             PlayerLifecycleEvent.__table__,
@@ -117,6 +120,7 @@ def build_regen_universe_session() -> Session:
             RegenTransferFeeRule.__table__,
             RegenTwinsGroup.__table__,
             RegenValueSnapshot.__table__,
+            RegenVisualProfile.__table__,
             RegenMarketActivity.__table__,
             RegenDemandSignal.__table__,
             RegenScoutReport.__table__,

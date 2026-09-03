@@ -50,7 +50,11 @@ if TYPE_CHECKING:
     from app.schemas.player_lifecycle import PlayerCareerSummaryView
 
 _PRESEEDED_TYPES = {"starter_bundle", "starter_regen", "preseeded"}
-_STARTER_REGEN_TYPES = {"starter_bundle", "starter_regen", "starter_rental"}
+# Only a rented starter regen is excluded from the tradable-promotion path below: it isn't
+# owned outright, so it shouldn't convert into a permanently tradable unique asset. Owned
+# starter_bundle/starter_regen players are meant to graduate into tradable assets by starring
+# in a title-winning campaign, same as any other preseeded regen.
+_STARTER_REGEN_TYPES = {"starter_rental"}
 _PEAK_AGE_BY_POSITION = {
     "GK": (28, 32),
     "CB": (27, 31),
