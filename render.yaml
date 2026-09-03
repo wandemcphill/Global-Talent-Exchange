@@ -11,7 +11,7 @@ services:
     type: web
     runtime: python
     region: frankfurt
-    plan: starter
+    plan: standard
     buildCommand: "pip install -r backend/requirements.txt"
     preDeployCommand: "bash ops/render/production-preflight.sh && cd backend && alembic -c migrations/alembic.ini upgrade head"
     startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-1} --timeout 180 --graceful-timeout 120"
