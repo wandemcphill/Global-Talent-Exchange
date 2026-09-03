@@ -416,6 +416,12 @@
     },
     {
       "consumer": "frontend/lib/data/gte_api_repository.dart",
+      "from": "/api/v2/kyc/documents",
+      "to": "/api/kyc/documents",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/gte_api_repository.dart",
       "from": "/api/v2/bank-accounts",
       "to": "/api/bank-accounts",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
@@ -817,18 +823,6 @@
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {
-      "consumer": "frontend/lib/shared/providers/transfer_provider.dart",
-      "from": "/api/v2/transfer-market/listings",
-      "to": "/api/transfer-market/listings",
-      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
-    },
-    {
-      "consumer": "frontend/lib/shared/providers/transfer_provider.dart",
-      "from": "/api/v2/transfer-market/watchlist",
-      "to": "/api/transfer-market/watchlist",
-      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
-    },
-    {
       "consumer": "frontend/lib/screens/admin/admin_command_center_screen.dart",
       "from": "/api/v2/admin/ban-user",
       "to": "/api/admin/ban-user",
@@ -1084,12 +1078,6 @@
       "consumer": "frontend/lib/features/profile/live_profile_provider.dart",
       "from": "/api/v2/auth/me",
       "to": "/api/auth/me",
-      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
-    },
-    {
-      "consumer": "frontend/lib/features/profile/profile_admin_screen.dart",
-      "from": "/api/v2/admin/hosted-competitions/seed",
-      "to": "/api/admin/hosted-competitions/seed",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     },
     {

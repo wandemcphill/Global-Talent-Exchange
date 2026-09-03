@@ -790,6 +790,18 @@
         "source_file": "backend/app/admin_api/router.py",
         "response_model": "AdminPaymentRailsCanonicalView"
       },
+      "get_api_v2_admin_players_player_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/players/{player_id}",
+        "aliases": [
+          "/api/admin/players/{player_id}",
+          "/api/v1/admin/players/{player_id}",
+          "/api/v2/admin/players/{player_id}"
+        ],
+        "handler": "read_player",
+        "source_file": "backend/app/admin_players/router.py",
+        "response_model": "PlayerAdminView"
+      },
       "get_api_v2_admin_policies_country_policies": {
         "method": "GET",
         "canonical_path": "/api/v2/admin/policies/country-policies",
@@ -875,6 +887,18 @@
         "handler": "update_withdrawal",
         "source_file": "backend/app/admin_godmode/router.py",
         "response_model": "WithdrawalAdminView"
+      },
+      "patch_api_v2_admin_players_player_id": {
+        "method": "PATCH",
+        "canonical_path": "/api/v2/admin/players/{player_id}",
+        "aliases": [
+          "/api/admin/players/{player_id}",
+          "/api/v1/admin/players/{player_id}",
+          "/api/v2/admin/players/{player_id}"
+        ],
+        "handler": "edit_player",
+        "source_file": "backend/app/admin_players/router.py",
+        "response_model": "PlayerAdminEditResult"
       },
       "post_api_v2_admin_access": {
         "method": "POST",
@@ -13301,6 +13325,19 @@
         "source_file": "backend/app/players/router.py",
         "response_model": "PlayerDNAView"
       },
+      "get_api_v2_players_player_id_form": {
+        "method": "GET",
+        "canonical_path": "/api/v2/players/{player_id}/form",
+        "aliases": [
+          "/api/players/{player_id}/form",
+          "/api/v1/players/{player_id}/form",
+          "/api/v2/players/{player_id}/form",
+          "/players/{player_id}/form"
+        ],
+        "handler": "get_player_form",
+        "source_file": "backend/app/players/router.py",
+        "response_model": "PlayerFormView"
+      },
       "get_api_v2_players_player_id_rivalries": {
         "method": "GET",
         "canonical_path": "/api/v2/players/{player_id}/rivalries",
@@ -17705,6 +17742,320 @@
         "response_model": "list[ThinMarketAlertView]"
       }
     },
+    "talent": {
+      "delete_api_v2_talent_shortlists_shortlist_id": {
+        "method": "DELETE",
+        "canonical_path": "/api/v2/talent/shortlists/{shortlist_id}",
+        "aliases": [
+          "/api/talent/shortlists/{shortlist_id}",
+          "/api/v1/talent/shortlists/{shortlist_id}",
+          "/api/v2/talent/shortlists/{shortlist_id}",
+          "/talent/shortlists/{shortlist_id}"
+        ],
+        "handler": "delete_shortlist",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": null
+      },
+      "delete_api_v2_talent_shortlists_shortlist_id_entries_entry_id": {
+        "method": "DELETE",
+        "canonical_path": "/api/v2/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+        "aliases": [
+          "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+          "/api/v1/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+          "/api/v2/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+          "/talent/shortlists/{shortlist_id}/entries/{entry_id}"
+        ],
+        "handler": "remove_shortlist_entry",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": null
+      },
+      "get_api_v2_admin_talent_player_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/talent/{player_id}",
+        "aliases": [
+          "/admin/talent/{player_id}",
+          "/api/admin/talent/{player_id}",
+          "/api/v1/admin/talent/{player_id}",
+          "/api/v2/admin/talent/{player_id}"
+        ],
+        "handler": "admin_read_talent",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentProfileResponse"
+      },
+      "get_api_v2_admin_talent_player_id_moderation_log": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/talent/{player_id}/moderation-log",
+        "aliases": [
+          "/admin/talent/{player_id}/moderation-log",
+          "/api/admin/talent/{player_id}/moderation-log",
+          "/api/v1/admin/talent/{player_id}/moderation-log",
+          "/api/v2/admin/talent/{player_id}/moderation-log"
+        ],
+        "handler": "admin_moderation_log",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentModerationLogResponse"
+      },
+      "get_api_v2_admin_talent_player_id_verification": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/talent/{player_id}/verification",
+        "aliases": [
+          "/admin/talent/{player_id}/verification",
+          "/api/admin/talent/{player_id}/verification",
+          "/api/v1/admin/talent/{player_id}/verification",
+          "/api/v2/admin/talent/{player_id}/verification"
+        ],
+        "handler": "admin_verification_history",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentVerificationHistoryResponse"
+      },
+      "get_api_v2_talent_player_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/talent/{player_id}",
+        "aliases": [
+          "/api/talent/{player_id}",
+          "/api/v1/talent/{player_id}",
+          "/api/v2/talent/{player_id}",
+          "/talent/{player_id}"
+        ],
+        "handler": "read_talent_profile",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentProfileResponse"
+      },
+      "get_api_v2_talent_player_id_ranking": {
+        "method": "GET",
+        "canonical_path": "/api/v2/talent/{player_id}/ranking",
+        "aliases": [
+          "/api/talent/{player_id}/ranking",
+          "/api/v1/talent/{player_id}/ranking",
+          "/api/v2/talent/{player_id}/ranking",
+          "/talent/{player_id}/ranking"
+        ],
+        "handler": "read_talent_ranking",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentRankingResponse"
+      },
+      "get_api_v2_talent_player_id_signals": {
+        "method": "GET",
+        "canonical_path": "/api/v2/talent/{player_id}/signals",
+        "aliases": [
+          "/api/talent/{player_id}/signals",
+          "/api/v1/talent/{player_id}/signals",
+          "/api/v2/talent/{player_id}/signals",
+          "/talent/{player_id}/signals"
+        ],
+        "handler": "read_talent_signals",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentSignalsResponse"
+      },
+      "get_api_v2_talent_search": {
+        "method": "GET",
+        "canonical_path": "/api/v2/talent/search",
+        "aliases": [
+          "/api/talent/search",
+          "/api/v1/talent/search",
+          "/api/v2/talent/search",
+          "/talent/search"
+        ],
+        "handler": "search_talent",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentSearchResponse"
+      },
+      "get_api_v2_talent_shortlists": {
+        "method": "GET",
+        "canonical_path": "/api/v2/talent/shortlists",
+        "aliases": [
+          "/api/talent/shortlists",
+          "/api/v1/talent/shortlists",
+          "/api/v2/talent/shortlists",
+          "/talent/shortlists"
+        ],
+        "handler": "list_shortlists",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "ShortlistListResponse"
+      },
+      "get_api_v2_talent_shortlists_shortlist_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/talent/shortlists/{shortlist_id}",
+        "aliases": [
+          "/api/talent/shortlists/{shortlist_id}",
+          "/api/v1/talent/shortlists/{shortlist_id}",
+          "/api/v2/talent/shortlists/{shortlist_id}",
+          "/talent/shortlists/{shortlist_id}"
+        ],
+        "handler": "read_shortlist",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "ShortlistView"
+      },
+      "patch_api_v2_talent_shortlists_shortlist_id": {
+        "method": "PATCH",
+        "canonical_path": "/api/v2/talent/shortlists/{shortlist_id}",
+        "aliases": [
+          "/api/talent/shortlists/{shortlist_id}",
+          "/api/v1/talent/shortlists/{shortlist_id}",
+          "/api/v2/talent/shortlists/{shortlist_id}",
+          "/talent/shortlists/{shortlist_id}"
+        ],
+        "handler": "update_shortlist",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "ShortlistView"
+      },
+      "patch_api_v2_talent_shortlists_shortlist_id_entries_entry_id": {
+        "method": "PATCH",
+        "canonical_path": "/api/v2/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+        "aliases": [
+          "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+          "/api/v1/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+          "/api/v2/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+          "/talent/shortlists/{shortlist_id}/entries/{entry_id}"
+        ],
+        "handler": "update_shortlist_entry",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "ShortlistView"
+      },
+      "post_api_v2_admin_talent_player_id_correction": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/talent/{player_id}/correction",
+        "aliases": [
+          "/admin/talent/{player_id}/correction",
+          "/api/admin/talent/{player_id}/correction",
+          "/api/v1/admin/talent/{player_id}/correction",
+          "/api/v2/admin/talent/{player_id}/correction"
+        ],
+        "handler": "admin_correct",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentAdminActionResponse"
+      },
+      "post_api_v2_admin_talent_player_id_feature": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/talent/{player_id}/feature",
+        "aliases": [
+          "/admin/talent/{player_id}/feature",
+          "/api/admin/talent/{player_id}/feature",
+          "/api/v1/admin/talent/{player_id}/feature",
+          "/api/v2/admin/talent/{player_id}/feature"
+        ],
+        "handler": "admin_set_featured",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentAdminActionResponse"
+      },
+      "post_api_v2_admin_talent_player_id_moderation": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/talent/{player_id}/moderation",
+        "aliases": [
+          "/admin/talent/{player_id}/moderation",
+          "/api/admin/talent/{player_id}/moderation",
+          "/api/v1/admin/talent/{player_id}/moderation",
+          "/api/v2/admin/talent/{player_id}/moderation"
+        ],
+        "handler": "admin_moderate",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentAdminActionResponse"
+      },
+      "post_api_v2_admin_talent_player_id_recompute": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/talent/{player_id}/recompute",
+        "aliases": [
+          "/admin/talent/{player_id}/recompute",
+          "/api/admin/talent/{player_id}/recompute",
+          "/api/v1/admin/talent/{player_id}/recompute",
+          "/api/v2/admin/talent/{player_id}/recompute"
+        ],
+        "handler": "admin_recompute",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentRankingResponse"
+      },
+      "post_api_v2_admin_talent_player_id_sync": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/talent/{player_id}/sync",
+        "aliases": [
+          "/admin/talent/{player_id}/sync",
+          "/api/admin/talent/{player_id}/sync",
+          "/api/v1/admin/talent/{player_id}/sync",
+          "/api/v2/admin/talent/{player_id}/sync"
+        ],
+        "handler": "admin_sync_talent",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentProfileResponse"
+      },
+      "post_api_v2_admin_talent_player_id_verification": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/talent/{player_id}/verification",
+        "aliases": [
+          "/admin/talent/{player_id}/verification",
+          "/api/admin/talent/{player_id}/verification",
+          "/api/v1/admin/talent/{player_id}/verification",
+          "/api/v2/admin/talent/{player_id}/verification"
+        ],
+        "handler": "admin_record_verification",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentAdminActionResponse"
+      },
+      "post_api_v2_admin_talent_player_id_visibility": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/talent/{player_id}/visibility",
+        "aliases": [
+          "/admin/talent/{player_id}/visibility",
+          "/api/admin/talent/{player_id}/visibility",
+          "/api/v1/admin/talent/{player_id}/visibility",
+          "/api/v2/admin/talent/{player_id}/visibility"
+        ],
+        "handler": "admin_set_visibility",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentAdminActionResponse"
+      },
+      "post_api_v2_talent_compare": {
+        "method": "POST",
+        "canonical_path": "/api/v2/talent/compare",
+        "aliases": [
+          "/api/talent/compare",
+          "/api/v1/talent/compare",
+          "/api/v2/talent/compare",
+          "/talent/compare"
+        ],
+        "handler": "compare_talent",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentCompareResponse"
+      },
+      "post_api_v2_talent_search": {
+        "method": "POST",
+        "canonical_path": "/api/v2/talent/search",
+        "aliases": [
+          "/api/talent/search",
+          "/api/v1/talent/search",
+          "/api/v2/talent/search",
+          "/talent/search"
+        ],
+        "handler": "search_talent_advanced",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "TalentSearchResponse"
+      },
+      "post_api_v2_talent_shortlists": {
+        "method": "POST",
+        "canonical_path": "/api/v2/talent/shortlists",
+        "aliases": [
+          "/api/talent/shortlists",
+          "/api/v1/talent/shortlists",
+          "/api/v2/talent/shortlists",
+          "/talent/shortlists"
+        ],
+        "handler": "create_shortlist",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "ShortlistView"
+      },
+      "post_api_v2_talent_shortlists_shortlist_id_entries": {
+        "method": "POST",
+        "canonical_path": "/api/v2/talent/shortlists/{shortlist_id}/entries",
+        "aliases": [
+          "/api/talent/shortlists/{shortlist_id}/entries",
+          "/api/v1/talent/shortlists/{shortlist_id}/entries",
+          "/api/v2/talent/shortlists/{shortlist_id}/entries",
+          "/talent/shortlists/{shortlist_id}/entries"
+        ],
+        "handler": "add_shortlist_entry",
+        "source_file": "backend/app/talent/router.py",
+        "response_model": "ShortlistView"
+      }
+    },
     "ticketing": {
       "get_api_v2_tickets_event_match_id": {
         "method": "GET",
@@ -20384,6 +20735,7 @@
     "/api/v2/admin/player-import/jobs": "post_api_v2_admin_player_import_jobs",
     "/api/v2/admin/player-import/jobs/{job_id}": "get_api_v2_admin_player_import_jobs_job_id",
     "/api/v2/admin/player-import/youth/generate": "post_api_v2_admin_player_import_youth_generate",
+    "/api/v2/admin/players/{player_id}": "patch_api_v2_admin_players_player_id",
     "/api/v2/admin/policies/country-policies": "post_api_v2_admin_policies_country_policies",
     "/api/v2/admin/policies/documents": "post_api_v2_admin_policies_documents",
     "/api/v2/admin/policies/documents/versions": "post_api_v2_admin_policies_documents_versions",
@@ -20448,6 +20800,15 @@
     "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review": "post_api_v2_admin_streamer_tournaments_risk_signals_signal_id_review",
     "/api/v2/admin/streamer-tournaments/{tournament_id}/review": "post_api_v2_admin_streamer_tournaments_tournament_id_review",
     "/api/v2/admin/streamer-tournaments/{tournament_id}/settle": "post_api_v2_admin_streamer_tournaments_tournament_id_settle",
+    "/api/v2/admin/talent/{player_id}": "get_api_v2_admin_talent_player_id",
+    "/api/v2/admin/talent/{player_id}/correction": "post_api_v2_admin_talent_player_id_correction",
+    "/api/v2/admin/talent/{player_id}/feature": "post_api_v2_admin_talent_player_id_feature",
+    "/api/v2/admin/talent/{player_id}/moderation": "post_api_v2_admin_talent_player_id_moderation",
+    "/api/v2/admin/talent/{player_id}/moderation-log": "get_api_v2_admin_talent_player_id_moderation_log",
+    "/api/v2/admin/talent/{player_id}/recompute": "post_api_v2_admin_talent_player_id_recompute",
+    "/api/v2/admin/talent/{player_id}/sync": "post_api_v2_admin_talent_player_id_sync",
+    "/api/v2/admin/talent/{player_id}/verification": "post_api_v2_admin_talent_player_id_verification",
+    "/api/v2/admin/talent/{player_id}/visibility": "post_api_v2_admin_talent_player_id_visibility",
     "/api/v2/admin/treasury": "get_api_v2_admin_treasury",
     "/api/v2/admin/treasury/bank-accounts": "post_api_v2_admin_treasury_bank_accounts",
     "/api/v2/admin/treasury/bank-accounts/{account_id}": "put_api_v2_admin_treasury_bank_accounts_account_id",
@@ -21250,6 +21611,7 @@
     "/api/v2/players/{player_id}/contracts/{contract_id}/renew": "post_api_v2_players_player_id_contracts_contract_id_renew",
     "/api/v2/players/{player_id}/dna": "get_api_v2_players_player_id_dna",
     "/api/v2/players/{player_id}/events": "get_api_v2_players_player_id_events",
+    "/api/v2/players/{player_id}/form": "get_api_v2_players_player_id_form",
     "/api/v2/players/{player_id}/injuries": "post_api_v2_players_player_id_injuries",
     "/api/v2/players/{player_id}/injuries/{injury_id}/recover": "post_api_v2_players_player_id_injuries_injury_id_recover",
     "/api/v2/players/{player_id}/interviews": "get_api_v2_players_player_id_interviews",
@@ -21413,6 +21775,15 @@
     "/api/v2/surveillance/suspicious-players": "get_api_v2_surveillance_suspicious_players",
     "/api/v2/surveillance/thin-market-alerts": "get_api_v2_surveillance_thin_market_alerts",
     "/api/v2/sync/update": "post_api_v2_sync_update",
+    "/api/v2/talent/compare": "post_api_v2_talent_compare",
+    "/api/v2/talent/search": "post_api_v2_talent_search",
+    "/api/v2/talent/shortlists": "post_api_v2_talent_shortlists",
+    "/api/v2/talent/shortlists/{shortlist_id}": "patch_api_v2_talent_shortlists_shortlist_id",
+    "/api/v2/talent/shortlists/{shortlist_id}/entries": "post_api_v2_talent_shortlists_shortlist_id_entries",
+    "/api/v2/talent/shortlists/{shortlist_id}/entries/{entry_id}": "patch_api_v2_talent_shortlists_shortlist_id_entries_entry_id",
+    "/api/v2/talent/{player_id}": "get_api_v2_talent_player_id",
+    "/api/v2/talent/{player_id}/ranking": "get_api_v2_talent_player_id_ranking",
+    "/api/v2/talent/{player_id}/signals": "get_api_v2_talent_player_id_signals",
     "/api/v2/tasks": "get_api_v2_tasks",
     "/api/v2/tasks/{task_id}/claim": "post_api_v2_tasks_task_id_claim",
     "/api/v2/tickets/attendance/{match_id}/react": "post_api_v2_tickets_attendance_match_id_react",
@@ -21763,6 +22134,15 @@
     "/admin/streamer-tournaments/risk-signals/{signal_id}/review": "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review",
     "/admin/streamer-tournaments/{tournament_id}/review": "/api/v2/admin/streamer-tournaments/{tournament_id}/review",
     "/admin/streamer-tournaments/{tournament_id}/settle": "/api/v2/admin/streamer-tournaments/{tournament_id}/settle",
+    "/admin/talent/{player_id}": "/api/v2/admin/talent/{player_id}",
+    "/admin/talent/{player_id}/correction": "/api/v2/admin/talent/{player_id}/correction",
+    "/admin/talent/{player_id}/feature": "/api/v2/admin/talent/{player_id}/feature",
+    "/admin/talent/{player_id}/moderation": "/api/v2/admin/talent/{player_id}/moderation",
+    "/admin/talent/{player_id}/moderation-log": "/api/v2/admin/talent/{player_id}/moderation-log",
+    "/admin/talent/{player_id}/recompute": "/api/v2/admin/talent/{player_id}/recompute",
+    "/admin/talent/{player_id}/sync": "/api/v2/admin/talent/{player_id}/sync",
+    "/admin/talent/{player_id}/verification": "/api/v2/admin/talent/{player_id}/verification",
+    "/admin/talent/{player_id}/visibility": "/api/v2/admin/talent/{player_id}/visibility",
     "/admin/world/clubs/{club_id}/context": "/api/v2/admin/world/clubs/{club_id}/context",
     "/admin/world/cultures/{culture_key}": "/api/v2/admin/world/cultures/{culture_key}",
     "/admin/world/narratives/{narrative_slug}": "/api/v2/admin/world/narratives/{narrative_slug}",
@@ -22015,6 +22395,7 @@
     "/api/admin/player-import/jobs": "/api/v2/admin/player-import/jobs",
     "/api/admin/player-import/jobs/{job_id}": "/api/v2/admin/player-import/jobs/{job_id}",
     "/api/admin/player-import/youth/generate": "/api/v2/admin/player-import/youth/generate",
+    "/api/admin/players/{player_id}": "/api/v2/admin/players/{player_id}",
     "/api/admin/policies/country-policies": "/api/v2/admin/policies/country-policies",
     "/api/admin/policies/documents": "/api/v2/admin/policies/documents",
     "/api/admin/policies/documents/versions": "/api/v2/admin/policies/documents/versions",
@@ -22079,6 +22460,15 @@
     "/api/admin/streamer-tournaments/risk-signals/{signal_id}/review": "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review",
     "/api/admin/streamer-tournaments/{tournament_id}/review": "/api/v2/admin/streamer-tournaments/{tournament_id}/review",
     "/api/admin/streamer-tournaments/{tournament_id}/settle": "/api/v2/admin/streamer-tournaments/{tournament_id}/settle",
+    "/api/admin/talent/{player_id}": "/api/v2/admin/talent/{player_id}",
+    "/api/admin/talent/{player_id}/correction": "/api/v2/admin/talent/{player_id}/correction",
+    "/api/admin/talent/{player_id}/feature": "/api/v2/admin/talent/{player_id}/feature",
+    "/api/admin/talent/{player_id}/moderation": "/api/v2/admin/talent/{player_id}/moderation",
+    "/api/admin/talent/{player_id}/moderation-log": "/api/v2/admin/talent/{player_id}/moderation-log",
+    "/api/admin/talent/{player_id}/recompute": "/api/v2/admin/talent/{player_id}/recompute",
+    "/api/admin/talent/{player_id}/sync": "/api/v2/admin/talent/{player_id}/sync",
+    "/api/admin/talent/{player_id}/verification": "/api/v2/admin/talent/{player_id}/verification",
+    "/api/admin/talent/{player_id}/visibility": "/api/v2/admin/talent/{player_id}/visibility",
     "/api/admin/treasury": "/api/v2/admin/treasury",
     "/api/admin/treasury/bank-accounts": "/api/v2/admin/treasury/bank-accounts",
     "/api/admin/treasury/bank-accounts/{account_id}": "/api/v2/admin/treasury/bank-accounts/{account_id}",
@@ -22884,6 +23274,7 @@
     "/api/players/{player_id}/contracts/{contract_id}/renew": "/api/v2/players/{player_id}/contracts/{contract_id}/renew",
     "/api/players/{player_id}/dna": "/api/v2/players/{player_id}/dna",
     "/api/players/{player_id}/events": "/api/v2/players/{player_id}/events",
+    "/api/players/{player_id}/form": "/api/v2/players/{player_id}/form",
     "/api/players/{player_id}/injuries": "/api/v2/players/{player_id}/injuries",
     "/api/players/{player_id}/injuries/{injury_id}/recover": "/api/v2/players/{player_id}/injuries/{injury_id}/recover",
     "/api/players/{player_id}/interviews": "/api/v2/players/{player_id}/interviews",
@@ -23045,6 +23436,15 @@
     "/api/surveillance/suspicious-players": "/api/v2/surveillance/suspicious-players",
     "/api/surveillance/thin-market-alerts": "/api/v2/surveillance/thin-market-alerts",
     "/api/sync/update": "/api/v2/sync/update",
+    "/api/talent/compare": "/api/v2/talent/compare",
+    "/api/talent/search": "/api/v2/talent/search",
+    "/api/talent/shortlists": "/api/v2/talent/shortlists",
+    "/api/talent/shortlists/{shortlist_id}": "/api/v2/talent/shortlists/{shortlist_id}",
+    "/api/talent/shortlists/{shortlist_id}/entries": "/api/v2/talent/shortlists/{shortlist_id}/entries",
+    "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}": "/api/v2/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+    "/api/talent/{player_id}": "/api/v2/talent/{player_id}",
+    "/api/talent/{player_id}/ranking": "/api/v2/talent/{player_id}/ranking",
+    "/api/talent/{player_id}/signals": "/api/v2/talent/{player_id}/signals",
     "/api/tickets/attendance/{match_id}/react": "/api/v2/tickets/attendance/{match_id}/react",
     "/api/tickets/buy": "/api/v2/tickets/buy",
     "/api/tickets/event/{match_id}": "/api/v2/tickets/event/{match_id}",
@@ -23337,6 +23737,7 @@
     "/api/v1/admin/player-import/jobs": "/api/v2/admin/player-import/jobs",
     "/api/v1/admin/player-import/jobs/{job_id}": "/api/v2/admin/player-import/jobs/{job_id}",
     "/api/v1/admin/player-import/youth/generate": "/api/v2/admin/player-import/youth/generate",
+    "/api/v1/admin/players/{player_id}": "/api/v2/admin/players/{player_id}",
     "/api/v1/admin/policies/country-policies": "/api/v2/admin/policies/country-policies",
     "/api/v1/admin/policies/documents": "/api/v2/admin/policies/documents",
     "/api/v1/admin/policies/documents/versions": "/api/v2/admin/policies/documents/versions",
@@ -23401,6 +23802,15 @@
     "/api/v1/admin/streamer-tournaments/risk-signals/{signal_id}/review": "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review",
     "/api/v1/admin/streamer-tournaments/{tournament_id}/review": "/api/v2/admin/streamer-tournaments/{tournament_id}/review",
     "/api/v1/admin/streamer-tournaments/{tournament_id}/settle": "/api/v2/admin/streamer-tournaments/{tournament_id}/settle",
+    "/api/v1/admin/talent/{player_id}": "/api/v2/admin/talent/{player_id}",
+    "/api/v1/admin/talent/{player_id}/correction": "/api/v2/admin/talent/{player_id}/correction",
+    "/api/v1/admin/talent/{player_id}/feature": "/api/v2/admin/talent/{player_id}/feature",
+    "/api/v1/admin/talent/{player_id}/moderation": "/api/v2/admin/talent/{player_id}/moderation",
+    "/api/v1/admin/talent/{player_id}/moderation-log": "/api/v2/admin/talent/{player_id}/moderation-log",
+    "/api/v1/admin/talent/{player_id}/recompute": "/api/v2/admin/talent/{player_id}/recompute",
+    "/api/v1/admin/talent/{player_id}/sync": "/api/v2/admin/talent/{player_id}/sync",
+    "/api/v1/admin/talent/{player_id}/verification": "/api/v2/admin/talent/{player_id}/verification",
+    "/api/v1/admin/talent/{player_id}/visibility": "/api/v2/admin/talent/{player_id}/visibility",
     "/api/v1/admin/treasury": "/api/v2/admin/treasury",
     "/api/v1/admin/treasury/bank-accounts": "/api/v2/admin/treasury/bank-accounts",
     "/api/v1/admin/treasury/bank-accounts/{account_id}": "/api/v2/admin/treasury/bank-accounts/{account_id}",
@@ -24206,6 +24616,7 @@
     "/api/v1/players/{player_id}/contracts/{contract_id}/renew": "/api/v2/players/{player_id}/contracts/{contract_id}/renew",
     "/api/v1/players/{player_id}/dna": "/api/v2/players/{player_id}/dna",
     "/api/v1/players/{player_id}/events": "/api/v2/players/{player_id}/events",
+    "/api/v1/players/{player_id}/form": "/api/v2/players/{player_id}/form",
     "/api/v1/players/{player_id}/injuries": "/api/v2/players/{player_id}/injuries",
     "/api/v1/players/{player_id}/injuries/{injury_id}/recover": "/api/v2/players/{player_id}/injuries/{injury_id}/recover",
     "/api/v1/players/{player_id}/interviews": "/api/v2/players/{player_id}/interviews",
@@ -24367,6 +24778,15 @@
     "/api/v1/surveillance/suspicious-players": "/api/v2/surveillance/suspicious-players",
     "/api/v1/surveillance/thin-market-alerts": "/api/v2/surveillance/thin-market-alerts",
     "/api/v1/sync/update": "/api/v2/sync/update",
+    "/api/v1/talent/compare": "/api/v2/talent/compare",
+    "/api/v1/talent/search": "/api/v2/talent/search",
+    "/api/v1/talent/shortlists": "/api/v2/talent/shortlists",
+    "/api/v1/talent/shortlists/{shortlist_id}": "/api/v2/talent/shortlists/{shortlist_id}",
+    "/api/v1/talent/shortlists/{shortlist_id}/entries": "/api/v2/talent/shortlists/{shortlist_id}/entries",
+    "/api/v1/talent/shortlists/{shortlist_id}/entries/{entry_id}": "/api/v2/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+    "/api/v1/talent/{player_id}": "/api/v2/talent/{player_id}",
+    "/api/v1/talent/{player_id}/ranking": "/api/v2/talent/{player_id}/ranking",
+    "/api/v1/talent/{player_id}/signals": "/api/v2/talent/{player_id}/signals",
     "/api/v1/tickets/attendance/{match_id}/react": "/api/v2/tickets/attendance/{match_id}/react",
     "/api/v1/tickets/buy": "/api/v2/tickets/buy",
     "/api/v1/tickets/event/{match_id}": "/api/v2/tickets/event/{match_id}",
@@ -24749,6 +25169,7 @@
     "/api/v2/hosted-competitions/mine": "/api/v2/hosted-competitions/mine",
     "/api/v2/hosted-competitions/templates": "/api/v2/hosted-competitions/templates",
     "/api/v2/kyc": "/api/v2/kyc",
+    "/api/v2/kyc/documents": "/api/v2/kyc/documents",
     "/api/v2/leaderboards/dynasties": "/api/v2/leaderboards/dynasties",
     "/api/v2/leaderboards/trophies": "/api/v2/leaderboards/trophies",
     "/api/v2/managers/assign": "/api/v2/managers/assign",
@@ -25429,6 +25850,7 @@
     "/players/{player_id}/avatar": "/api/v2/players/{player_id}/avatar",
     "/players/{player_id}/career-events": "/api/v2/players/{player_id}/career-events",
     "/players/{player_id}/dna": "/api/v2/players/{player_id}/dna",
+    "/players/{player_id}/form": "/api/v2/players/{player_id}/form",
     "/players/{player_id}/interviews": "/api/v2/players/{player_id}/interviews",
     "/players/{player_id}/personality": "/api/v2/players/{player_id}/personality",
     "/players/{player_id}/rivalries": "/api/v2/players/{player_id}/rivalries",
@@ -25563,6 +25985,15 @@
     "/surveillance/suspicious-players": "/api/v2/surveillance/suspicious-players",
     "/surveillance/thin-market-alerts": "/api/v2/surveillance/thin-market-alerts",
     "/sync/update": "/api/v2/sync/update",
+    "/talent/compare": "/api/v2/talent/compare",
+    "/talent/search": "/api/v2/talent/search",
+    "/talent/shortlists": "/api/v2/talent/shortlists",
+    "/talent/shortlists/{shortlist_id}": "/api/v2/talent/shortlists/{shortlist_id}",
+    "/talent/shortlists/{shortlist_id}/entries": "/api/v2/talent/shortlists/{shortlist_id}/entries",
+    "/talent/shortlists/{shortlist_id}/entries/{entry_id}": "/api/v2/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+    "/talent/{player_id}": "/api/v2/talent/{player_id}",
+    "/talent/{player_id}/ranking": "/api/v2/talent/{player_id}/ranking",
+    "/talent/{player_id}/signals": "/api/v2/talent/{player_id}/signals",
     "/tickets/attendance/{match_id}/react": "/api/v2/tickets/attendance/{match_id}/react",
     "/tickets/buy": "/api/v2/tickets/buy",
     "/tickets/event/{match_id}": "/api/v2/tickets/event/{match_id}",

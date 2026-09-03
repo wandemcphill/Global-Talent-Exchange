@@ -719,6 +719,18 @@
       },
       {
         "method": "GET",
+        "path": "/api/admin/players/{player_id}",
+        "handler": "read_player",
+        "response_model": "PlayerAdminView"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/admin/players/{player_id}",
+        "handler": "edit_player",
+        "response_model": "PlayerAdminEditResult"
+      },
+      {
+        "method": "GET",
         "path": "/api/admin/queues",
         "handler": "get_admin_queues",
         "response_model": "AdminQueuesCanonicalView"
@@ -1103,12 +1115,6 @@
         "method": "WEBSOCKET",
         "path": "/api/v2/ws/market/{listing_id}",
         "handler": "stream_market_bids",
-        "response_model": null
-      },
-      {
-        "method": "WEBSOCKET",
-        "path": "/api/v2/ws/match/{match_id}",
-        "handler": "stream_match_commentary",
         "response_model": null
       },
       {
@@ -5662,6 +5668,12 @@
         "response_model": "SeasonPassClaimView"
       },
       {
+        "method": "WEBSOCKET",
+        "path": "/api/v2/ws/match/{match_id}",
+        "handler": "stream_unity_spatial_match",
+        "response_model": null
+      },
+      {
         "method": "GET",
         "path": "/match/live/active",
         "handler": "list_active_live_matches",
@@ -8293,6 +8305,12 @@
       },
       {
         "method": "GET",
+        "path": "/players/{player_id}/form",
+        "handler": "get_player_form",
+        "response_model": "PlayerFormView"
+      },
+      {
+        "method": "GET",
         "path": "/players/{player_id}/rivalries",
         "handler": "get_player_rivalries",
         "response_model": "list[PlayerRivalryView]"
@@ -10796,6 +10814,296 @@
         "response_model": "list[ThinMarketAlertView]"
       }
     ],
+    "talent": [
+      {
+        "method": "GET",
+        "path": "/admin/talent/{player_id}",
+        "handler": "admin_read_talent",
+        "response_model": "TalentProfileResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/talent/{player_id}",
+        "handler": "admin_read_talent",
+        "response_model": "TalentProfileResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/correction",
+        "handler": "admin_correct",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/correction",
+        "handler": "admin_correct",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/feature",
+        "handler": "admin_set_featured",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/feature",
+        "handler": "admin_set_featured",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/moderation",
+        "handler": "admin_moderate",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/moderation",
+        "handler": "admin_moderate",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/talent/{player_id}/moderation-log",
+        "handler": "admin_moderation_log",
+        "response_model": "TalentModerationLogResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/talent/{player_id}/moderation-log",
+        "handler": "admin_moderation_log",
+        "response_model": "TalentModerationLogResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/recompute",
+        "handler": "admin_recompute",
+        "response_model": "TalentRankingResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/recompute",
+        "handler": "admin_recompute",
+        "response_model": "TalentRankingResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/sync",
+        "handler": "admin_sync_talent",
+        "response_model": "TalentProfileResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/sync",
+        "handler": "admin_sync_talent",
+        "response_model": "TalentProfileResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/talent/{player_id}/verification",
+        "handler": "admin_verification_history",
+        "response_model": "TalentVerificationHistoryResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/talent/{player_id}/verification",
+        "handler": "admin_verification_history",
+        "response_model": "TalentVerificationHistoryResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/verification",
+        "handler": "admin_record_verification",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/verification",
+        "handler": "admin_record_verification",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/visibility",
+        "handler": "admin_set_visibility",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/talent/{player_id}/visibility",
+        "handler": "admin_set_visibility",
+        "response_model": "TalentAdminActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/talent/compare",
+        "handler": "compare_talent",
+        "response_model": "TalentCompareResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/talent/compare",
+        "handler": "compare_talent",
+        "response_model": "TalentCompareResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/search",
+        "handler": "search_talent",
+        "response_model": "TalentSearchResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/search",
+        "handler": "search_talent",
+        "response_model": "TalentSearchResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/talent/search",
+        "handler": "search_talent_advanced",
+        "response_model": "TalentSearchResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/talent/search",
+        "handler": "search_talent_advanced",
+        "response_model": "TalentSearchResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/shortlists",
+        "handler": "list_shortlists",
+        "response_model": "ShortlistListResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/shortlists",
+        "handler": "list_shortlists",
+        "response_model": "ShortlistListResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/talent/shortlists",
+        "handler": "create_shortlist",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/talent/shortlists",
+        "handler": "create_shortlist",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/talent/shortlists/{shortlist_id}",
+        "handler": "delete_shortlist",
+        "response_model": null
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/talent/shortlists/{shortlist_id}",
+        "handler": "delete_shortlist",
+        "response_model": null
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/shortlists/{shortlist_id}",
+        "handler": "read_shortlist",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/shortlists/{shortlist_id}",
+        "handler": "read_shortlist",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/talent/shortlists/{shortlist_id}",
+        "handler": "update_shortlist",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/talent/shortlists/{shortlist_id}",
+        "handler": "update_shortlist",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/talent/shortlists/{shortlist_id}/entries",
+        "handler": "add_shortlist_entry",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/talent/shortlists/{shortlist_id}/entries",
+        "handler": "add_shortlist_entry",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+        "handler": "remove_shortlist_entry",
+        "response_model": null
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+        "handler": "remove_shortlist_entry",
+        "response_model": null
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+        "handler": "update_shortlist_entry",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "PATCH",
+        "path": "/api/talent/shortlists/{shortlist_id}/entries/{entry_id}",
+        "handler": "update_shortlist_entry",
+        "response_model": "ShortlistView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/{player_id}",
+        "handler": "read_talent_profile",
+        "response_model": "TalentProfileResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/{player_id}",
+        "handler": "read_talent_profile",
+        "response_model": "TalentProfileResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/{player_id}/ranking",
+        "handler": "read_talent_ranking",
+        "response_model": "TalentRankingResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/{player_id}/ranking",
+        "handler": "read_talent_ranking",
+        "response_model": "TalentRankingResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/{player_id}/signals",
+        "handler": "read_talent_signals",
+        "response_model": "TalentSignalsResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/talent/{player_id}/signals",
+        "handler": "read_talent_signals",
+        "response_model": "TalentSignalsResponse"
+      }
+    ],
     "ticketing": [
       {
         "method": "POST",
@@ -11301,6 +11609,12 @@
         "method": "POST",
         "path": "/api/kyc",
         "handler": "submit_kyc_profile",
+        "response_model": "KycProfileView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/kyc/documents",
+        "handler": "submit_kyc_documents",
         "response_model": "KycProfileView"
       }
     ],
