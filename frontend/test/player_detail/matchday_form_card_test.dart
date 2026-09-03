@@ -176,6 +176,36 @@ void main() {
       expect(find.text('6.1'), findsOneWidget);
     });
 
+    testWidgets('an applied signal never implies the share price moved', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester, MatchdayFormCard(form: _form(signal: _signal())));
+
+      // Matchday form moves the valuation only. A share-market holder who read
+      // "raising valuation" and assumed their tradable shares had repriced
+      // would have been misled by omission, so the card says so outright.
+      expect(
+        find.textContaining('does not change the tradable share price'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the share-price disclaimer is absent when nothing is applied', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        MatchdayFormCard(
+          form: _form(signal: _signal(applied: false, adjustmentPct: 0)),
+        ),
+      );
+
+      expect(
+        find.textContaining('does not change the tradable share price'),
+        findsNothing,
+      );
+    });
+
     testWidgets('a rising trajectory is labelled as such', (
       WidgetTester tester,
     ) async {
@@ -226,7 +256,24 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('therefore to your position'), findsNothing);
+      expect(find.textContaining('the valuation this position is priced from'), findsNothing);
+    });
+
+    testWidgets('the position note states the share price is unchanged', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        OwnershipConsequenceCard(
+          holding: holding,
+          form: _form(signal: _signal(adjustmentPct: 0.0121)),
+        ),
+      );
+
+      expect(
+        find.textContaining('tradable share price is unchanged'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the form-to-position link appears when form does drive value', (
@@ -240,7 +287,7 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('therefore to your position'), findsOneWidget);
+      expect(find.textContaining('the valuation this position is priced from'), findsOneWidget);
       expect(find.textContaining('+1.21%'), findsOneWidget);
     });
   });

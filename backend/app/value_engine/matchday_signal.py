@@ -67,6 +67,11 @@ REASON_FORM_POSITIVE = "matchday_form_positive"
 REASON_FORM_NEGATIVE = "matchday_form_negative"
 REASON_FORM_NEUTRAL = "matchday_form_neutral"
 
+#: Emitted when the overlay had to clamp a signal handed to it. Its presence in a
+#: published snapshot means something upstream produced an out-of-range signal and
+#: should be investigated.
+REASON_OVERLAY_CLAMPED = "matchday_overlay_clamped"
+
 
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
@@ -198,6 +203,7 @@ __all__ = [
     "REASON_FORM_NEUTRAL",
     "REASON_FORM_POSITIVE",
     "REASON_INSUFFICIENT_SAMPLE",
+    "REASON_OVERLAY_CLAMPED",
     "MatchdayValuationSignal",
     "build_matchday_signal",
     "apply_matchday_overlay",
@@ -211,13 +217,29 @@ def apply_matchday_overlay(snapshot: "ValueSnapshot", signal: MatchdayValuationS
     remains the primary source of truth. This adjusts the published figure and
     records exactly why, leaving every underlying component value untouched so the
     two contributions stay separable forever.
+
+    **This function enforces the bound itself.** ``build_matchday_signal`` already
+    produces a bounded signal, but this is the last code between a signal and a
+    published number that people trade against, and it does not trust its caller.
+    A signal reaching here from anywhere else - a future caller, a replayed audit
+    payload, a bug upstream, a test double - is clamped to
+    ``EFFECTIVE_MAX_ADJUSTMENT_PCT`` before it can touch ``target_credits``. Two
+    independent checks must both fail before the economy can be unbounded.
     """
     if not signal.applied or signal.adjustment_pct == 0.0:
         # Still attach the audit payload: "we looked and it did not qualify" is
         # itself a fact worth being able to prove later.
         return replace(snapshot, matchday_signal_audit=signal.as_audit_payload())
 
-    adjusted_target = round(snapshot.target_credits * signal.multiplier(), 2)
+    requested_pct = signal.adjustment_pct
+    applied_pct = _clamp(
+        requested_pct,
+        -EFFECTIVE_MAX_ADJUSTMENT_PCT,
+        EFFECTIVE_MAX_ADJUSTMENT_PCT,
+    )
+    overlay_clamped = applied_pct != requested_pct
+
+    adjusted_target = round(snapshot.target_credits * (1.0 + applied_pct), 2)
 
     previous = snapshot.previous_credits
     movement_pct = (
@@ -225,11 +247,21 @@ def apply_matchday_overlay(snapshot: "ValueSnapshot", signal: MatchdayValuationS
     )
 
     reason_codes = tuple(snapshot.reason_codes) + (signal.reason_code,)
+    if overlay_clamped:
+        reason_codes = reason_codes + (REASON_OVERLAY_CLAMPED,)
+
+    # The audit records what was *asked for* as well as what was applied, so a
+    # clamp at this boundary is visible after the fact rather than silent.
+    audit = signal.as_audit_payload()
+    audit["requested_adjustment_pct"] = round(requested_pct, 6)
+    audit["applied_adjustment_pct"] = round(applied_pct, 6)
+    audit["overlay_clamped"] = overlay_clamped
+    audit["effective_max_adjustment_pct"] = EFFECTIVE_MAX_ADJUSTMENT_PCT
 
     return replace(
         snapshot,
         target_credits=adjusted_target,
         movement_pct=movement_pct,
         reason_codes=reason_codes,
-        matchday_signal_audit=signal.as_audit_payload(),
+        matchday_signal_audit=audit,
     )

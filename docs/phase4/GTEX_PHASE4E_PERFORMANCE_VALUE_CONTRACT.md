@@ -167,8 +167,86 @@ implies a causal link the backend has not made is worse than no card:
 | `tests/performance_economy/test_matchday_signal.py` | 16 | bounds, gradualism, gating, determinism, audit |
 | `tests/performance_economy/test_matchday_overlay.py` | 10 | overlay maths, component isolation, job seam, backwards compatibility |
 | `tests/performance_economy/test_chain_end_to_end.py` | 10 | every link, plus farming and single-match cases |
-| `test/player_detail/matchday_form_card_test.dart` | 12 | the honesty rules above |
-| **Total** | **65** | |
+| `tests/performance_economy/test_overlay_hard_bound.py` | 15 | the overlay's own bound enforcement |
+| `tests/performance_economy/test_scheduled_owner_path.py` | 7 | the cron path and the real owner path |
+| `tests/performance_economy/test_audit_invariants.py` | 26 | the review's 12 audit points |
+| `test/player_detail/matchday_form_card_test.dart` | 15 | the honesty rules above |
+| `test/player_detail/gtex_value_models_contract_test.dart` | 10 | API/Flutter nullability agreement |
+| **Total** | **131** | |
+
+---
+
+## 6A. PRODUCTION CADENCE (review blocker 1 — closed)
+
+The chain is no longer inert between manual rebuilds.
+
+| Piece | Path |
+|---|---|
+| Render cron service | `gtex-value-snapshots`, daily `0 4 * * *` |
+| Shell entrypoint | `ops/render/run-value-snapshots.sh` |
+| Python entrypoint | `backend/scripts/rebuild_value_snapshots.py` |
+
+**Cadence:** daily at 04:00 UTC, deliberately one hour after `gtex-realplayer-ingest`
+(03:00) so fresh provider data is in place before valuations recompute.
+
+**This is not a second pipeline.** `run_scheduled_rebuild` calls `build_bridge`,
+which constructs the same `IngestionValueEngineBridge` with the same
+`PlayerSummaryProjector` that `ApplicationContext` builds for the API. That
+bridge's `run()` is what wires `MatchdayValuationSignalProvider` into
+`ValueSnapshotJob`, so the scheduled path and
+`POST /api/value/snapshots/rebuild` compute identical numbers by construction.
+Only `run_type` / `triggered_by` differ, so the run record says who asked.
+
+Idempotent: snapshots upsert on `(player_id, as_of, snapshot_type)`.
+
+Proven by `test_scheduled_owner_path.py`:
+`test_scheduled_run_wires_the_matchday_provider_into_value_snapshot_job` spies on
+`ValueSnapshotJob` construction and asserts the provider is present.
+
+---
+
+## 6B. THE REAL OWNER PATH (review blocker 2 — closed)
+
+`test_scheduled_owner_path.py` drives the production write path with nothing
+hand-inserted: the `PlayerSummaryReadModel` is written by `PlayerSummaryProjector`
+inside the bridge, and the holding comes from real `position:` ledger entries
+created by `SettlementService`.
+
+### Which price a holder actually sees
+
+There are **two** ownership systems in GTEX, and this matters for UI honesty:
+
+| System | Holdings from | Priced by | Moved by this change |
+|---|---|---|---|
+| `GET /api/portfolio` | `position:` ledger accounts (`TRADE_SETTLEMENT`) | `PlayerSummaryReadModel.current_value_credits` | **Yes** |
+| `GET /api/players/me/shares/holdings` | `PlayerShareHolding` | `PlayerShareMarket.share_price_coin` | **No** |
+
+The player-detail ownership card reads `/api/portfolio`, so its statement that
+form moves "the valuation this position is priced from" is literally true of the
+numbers on that card — asserted by
+`test_the_owner_position_is_priced_from_the_form_adjusted_valuation`, which checks
+`holding.current_price` equals the projector-written value exactly.
+
+Because `share_price_coin` is untouched, **both** cards now state that explicitly:
+"The tradable share price is unchanged." A share-market holder must not read a
+valuation move as their shares having repriced.
+
+---
+
+## 6C. HARD-ENFORCED BOUND (review blocker 3 — closed)
+
+`apply_matchday_overlay` no longer trusts its caller. It independently clamps any
+supplied signal to `EFFECTIVE_MAX_ADJUSTMENT_PCT` (±2.4%) before touching
+`target_credits`, records `requested_adjustment_pct` / `applied_adjustment_pct` /
+`overlay_clamped` in the audit, and appends the `matchday_overlay_clamped` reason
+code. Two independent checks must both fail before the economy can be unbounded.
+
+The presence of `matchday_overlay_clamped` in a published snapshot means something
+upstream produced an out-of-range signal and should be investigated.
+
+Covered by `test_overlay_hard_bound.py` (15 tests): ±0.10 rogue signals, the
+±0.024 valid edges, normal ± signals, and a parametrised invariant over
+±1.0 / ±5.0 / ±0.99.
 
 ---
 
@@ -179,9 +257,9 @@ implies a causal link the backend has not made is worse than no card:
    competitions hosted by the player's own holder — was considered and **not**
    implemented, because it requires an ownership join at write time. Flagged rather
    than faked.
-2. **Snapshot cadence.** No scheduler currently runs `ValueSnapshotJob`; the only
-   trigger is `POST /api/value/snapshots/rebuild`. Matchday form therefore reaches
-   valuations only when that job runs. That predates this change, but it now has
-   product consequences and should be decided.
-3. **Tradable share price.** See §3. Whether matchday form should ever reach
-   `share_price_coin` is an economics decision, not an engineering one.
+2. **Tradable share price.** See §3 and §6B. Whether matchday form should ever
+   reach `share_price_coin` is an economics decision, not an engineering one. Until
+   it is taken, both UI cards state plainly that the tradable price is unchanged.
+3. **Cron frequency.** Daily at 04:00 UTC is a starting point chosen to sit after
+   the ingest. If matchday volume grows, this may want to be more frequent; the
+   job is idempotent so raising the frequency is safe.

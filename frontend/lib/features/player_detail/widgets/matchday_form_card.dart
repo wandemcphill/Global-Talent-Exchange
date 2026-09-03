@@ -206,9 +206,16 @@ class _ValuationConsequence extends StatelessWidget {
           'Applied from ${signal.matchesCounted} counted '
           '${signal.matchesCounted == 1 ? 'match' : 'matches'}. Matchday form is '
           'capped at ±${(signal.effectiveMaxAdjustmentPct * 100).toStringAsFixed(1)}% '
-          'so football moves a price gradually, never all at once.';
+          'so football moves a valuation gradually, never all at once.';
       color = positive ? _green : _red;
     }
+
+    // Matchday form moves the player's *valuation*. It deliberately does not
+    // touch the tradable share price, which changes only on trades. Saying so
+    // is not a caveat for its own sake: a share-market holder who read
+    // "raising valuation" and assumed their tradable shares had moved would
+    // have been misled by omission.
+    final bool statesAnEffect = signal != null && signal.applied;
 
     return Container(
       padding: const EdgeInsets.all(11),
@@ -234,6 +241,18 @@ class _ValuationConsequence extends StatelessWidget {
               context,
             ).textTheme.bodySmall?.copyWith(color: _textMuted, height: 1.4),
           ),
+          if (statesAnEffect) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              'This changes the player valuation. It does not change the '
+              'tradable share price, which moves only on trades.',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: _textMuted,
+                height: 1.35,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ],
       ),
     );

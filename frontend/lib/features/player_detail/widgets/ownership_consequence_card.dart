@@ -125,10 +125,16 @@ class OwnershipConsequenceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(9),
         border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
+      // The position shown above is priced from the player valuation, which is
+      // the field matchday form actually moves — so this claim is true of the
+      // numbers on this card. It is scoped to the valuation on purpose: form
+      // does not move the tradable share price, and a holder must not read this
+      // as their shares having repriced.
       child: Text(
         'His current form is ${positive ? 'adding' : 'taking'} '
         '${positive ? '+' : ''}${pct.toStringAsFixed(2)}% '
-        '${positive ? 'to' : 'off'} this valuation, and therefore to your position.',
+        '${positive ? 'to' : 'off'} the valuation this position is priced from. '
+        'The tradable share price is unchanged.',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
           color: color,
           height: 1.4,
