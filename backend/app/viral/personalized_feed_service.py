@@ -150,23 +150,17 @@ class SeenClipHistory:
 
 
 class PersonalizedFeedStore(Protocol):
-    def replace(self, user_id: str, entries: list[PersonalizedFeedEnvelope]) -> None:
-        ...
+    def replace(self, user_id: str, entries: list[PersonalizedFeedEnvelope]) -> None: ...
 
-    def top(self, user_id: str, limit: int) -> list[PersonalizedFeedEnvelope]:
-        ...
+    def top(self, user_id: str, limit: int) -> list[PersonalizedFeedEnvelope]: ...
 
-    def mark_served(self, user_id: str, entries: list[SeenClipHistory]) -> None:
-        ...
+    def mark_served(self, user_id: str, entries: list[SeenClipHistory]) -> None: ...
 
-    def recent_history(self, user_id: str, limit: int) -> list[SeenClipHistory]:
-        ...
+    def recent_history(self, user_id: str, limit: int) -> list[SeenClipHistory]: ...
 
-    def mark_seen(self, user_id: str, clip_ids: list[str]) -> None:
-        ...
+    def mark_seen(self, user_id: str, clip_ids: list[str]) -> None: ...
 
-    def seen_clip_ids(self, user_id: str) -> set[str]:
-        ...
+    def seen_clip_ids(self, user_id: str) -> set[str]: ...
 
 
 @dataclass(slots=True)
@@ -182,8 +176,7 @@ class InMemoryPersonalizedFeedStore:
     def replace(self, user_id: str, entries: list[PersonalizedFeedEnvelope]) -> None:
         with self._lock:
             self._feeds[user_id] = {
-                entry.clip_id: (float(entry.score), json.dumps(entry.payload, default=str))
-                for entry in entries
+                entry.clip_id: (float(entry.score), json.dumps(entry.payload, default=str)) for entry in entries
             }
 
     def top(self, user_id: str, limit: int) -> list[PersonalizedFeedEnvelope]:
@@ -277,7 +270,9 @@ class RedisPersonalizedFeedStore:
                 pipeline.expire(payload_key, self.feed_ttl_seconds)
             pipeline.execute()
         except RedisError:
-            logger.warning("viral.personalized_feed.redis.replace_failed user_id=%s entry_count=%s", user_id, len(entries))
+            logger.warning(
+                "viral.personalized_feed.redis.replace_failed user_id=%s entry_count=%s", user_id, len(entries)
+            )
 
     def top(self, user_id: str, limit: int) -> list[PersonalizedFeedEnvelope]:
         if limit <= 0:
@@ -427,7 +422,9 @@ class PersistentPersonalizedFeedStore:
                 session.scalars(
                     select(PersonalizedFeedCacheEntryRecord)
                     .where(PersonalizedFeedCacheEntryRecord.subject_key == user_id)
-                    .order_by(PersonalizedFeedCacheEntryRecord.position.asc(), PersonalizedFeedCacheEntryRecord.clip_id.asc())
+                    .order_by(
+                        PersonalizedFeedCacheEntryRecord.position.asc(), PersonalizedFeedCacheEntryRecord.clip_id.asc()
+                    )
                     .limit(limit)
                 ).all()
             ),
@@ -679,9 +676,7 @@ class ClipAffinityCalculator:
         try:
             connection = self.session.connection()
             if inspect(connection).has_table(UserAffinityProfile.__tablename__) and hasattr(self.session, "scalar"):
-                profile = self.session.scalar(
-                    select(UserAffinityProfile).where(UserAffinityProfile.user_id == user_id)
-                )
+                profile = self.session.scalar(select(UserAffinityProfile).where(UserAffinityProfile.user_id == user_id))
         except Exception:
             profile = None
         if profile is not None:
@@ -718,7 +713,9 @@ class ClipAffinityCalculator:
                 event_name=str(event.name),
                 clip_id=_first_non_empty(metadata, "clip_id", "base_clip_id"),
                 creator_key=_normalize_identifier(
-                    _first_non_empty(metadata, "creator_id", "creator_key", "creator_handle", "creator_name", "team_name")
+                    _first_non_empty(
+                        metadata, "creator_id", "creator_key", "creator_handle", "creator_name", "team_name"
+                    )
                 ),
                 format_key=_normalize_identifier(
                     _first_non_empty(metadata, "format_type", "format_key", "clip_format")
@@ -783,9 +780,7 @@ class ClipAffinityCalculator:
         )
         profile_affinity = min(
             1.0,
-            (0.40 * stored_format)
-            + (0.35 * stored_creator)
-            + (0.25 * snapshot.engagement_history),
+            (0.40 * stored_format) + (0.35 * stored_creator) + (0.25 * snapshot.engagement_history),
         )
         total = min(
             1.0,
@@ -982,10 +977,7 @@ class PersonalizedFeedRankingService:
     ) -> PersonalizedFeedRefreshResponse:
         resolved_limit = max(1, min(int(limit), self.cache_size))
         current_entries = self.feed_store.top(user_id, resolved_limit)
-        current_clip_ids = [
-            PersonalizedFeedClipView.model_validate(entry.payload).clip_id
-            for entry in current_entries
-        ]
+        current_clip_ids = [PersonalizedFeedClipView.model_validate(entry.payload).clip_id for entry in current_entries]
         refreshed = self.get_for_you(
             user_id=user_id,
             limit=resolved_limit,
@@ -1102,15 +1094,8 @@ class PersonalizedFeedRankingService:
         match_updates = self._match_updated_at_map({clip.match_id for clip in candidate_clips})
         max_viral_score = max(float(getattr(clip, "viral_score", 0.0) or 0.0) for clip in candidate_clips) or 1.0
         snapshot = self.affinity_calculator.build_snapshot(user_id)
-        new_user = bool(
-            mode == PERSONALIZED_FEED_SOURCE_FOR_YOU
-            and self.cold_start_manager.is_new_user(user_id)
-        )
-        history_subject = (
-            user_id
-            if mode == PERSONALIZED_FEED_SOURCE_FOR_YOU
-            else following_feed_cache_subject(user_id)
-        )
+        new_user = bool(mode == PERSONALIZED_FEED_SOURCE_FOR_YOU and self.cold_start_manager.is_new_user(user_id))
+        history_subject = user_id if mode == PERSONALIZED_FEED_SOURCE_FOR_YOU else following_feed_cache_subject(user_id)
         history = self.feed_store.recent_history(history_subject, limit=self.history_limit)
         history_counters = self._history_counters(history)
         creator_user_by_clip = {
@@ -1194,18 +1179,12 @@ class PersonalizedFeedRankingService:
                 )
                 repetition_penalty = min(1.0, candidate.history_penalty + diversity_penalty)
                 base_score = max(
-                    (
-                        (float(feed_weights.viral_score) if feed_weights is not None else 0.40)
-                        * candidate.viral_input
-                    )
+                    ((float(feed_weights.viral_score) if feed_weights is not None else 0.40) * candidate.viral_input)
                     + (
                         (float(feed_weights.user_affinity) if feed_weights is not None else 0.30)
                         * candidate.affinity.total
                     )
-                    + (
-                        (float(feed_weights.recency) if feed_weights is not None else 0.20)
-                        * candidate.recency_score
-                    )
+                    + ((float(feed_weights.recency) if feed_weights is not None else 0.20) * candidate.recency_score)
                     - (
                         (float(feed_weights.repetition_penalty) if feed_weights is not None else 0.10)
                         * repetition_penalty
@@ -1276,7 +1255,15 @@ class PersonalizedFeedRankingService:
             if mode == PERSONALIZED_FEED_SOURCE_FOLLOWING
             else PERSONALIZED_FEED_SOURCE_FOR_YOU
         )
-        for rank, (candidate, score, repetition_penalty, diversity_penalty, following_boost, base_score, session_boost) in enumerate(selected_candidates, start=1):
+        for rank, (
+            candidate,
+            score,
+            repetition_penalty,
+            diversity_penalty,
+            following_boost,
+            base_score,
+            session_boost,
+        ) in enumerate(selected_candidates, start=1):
             clip_view = PersonalizedFeedClipView(
                 **self._base_clip_payload(candidate.clip),
                 rank=rank,
@@ -1338,14 +1325,16 @@ class PersonalizedFeedRankingService:
             seen_clip_ids.add(entry.clip_id)
 
         for entry in following:
-            if len(
-                [
-                    item
-                    for item in selected
-                    if item.payload.get(PERSONALIZED_FEED_SOURCE_KEY)
-                    == PERSONALIZED_FEED_SOURCE_FOLLOWING
-                ]
-            ) >= target_following:
+            if (
+                len(
+                    [
+                        item
+                        for item in selected
+                        if item.payload.get(PERSONALIZED_FEED_SOURCE_KEY) == PERSONALIZED_FEED_SOURCE_FOLLOWING
+                    ]
+                )
+                >= target_following
+            ):
                 break
             if entry.clip_id in seen_clip_ids:
                 continue
@@ -1414,9 +1403,7 @@ class PersonalizedFeedRankingService:
         for rank, candidate in enumerate(selected[:limit], start=1):
             base_score = round(
                 max(
-                    candidate.viral_input
-                    + candidate.recency_score
-                    + candidate.affinity.total,
+                    candidate.viral_input + candidate.recency_score + candidate.affinity.total,
                     0.0,
                 ),
                 6,
@@ -1751,6 +1738,18 @@ class PersonalizedFeedRankingService:
         self.feed_store.mark_seen(user_id, [clip.clip_id for clip in clips])
         if self.creator_earnings_service is None:
             return
+        # Bucketed to the minute rather than keyed on the exact instant: this runs on
+        # every GET to /feed/for-you and /feed/following, including a plain, non-refresh
+        # request that serves the same cached items again (cache_hit=True on the
+        # following feed) and every retried or prefetched request on either. A fresh
+        # isoformat() timestamp per call made every one of those a distinct
+        # reference_key, defeating the deduplication track_impression already performs
+        # by looking up an existing ClipEarningsLog for the key -- so a creator was
+        # credited again for every repeat delivery of the same impression, not just
+        # once. Minute granularity collapses same-instant repeats (retries,
+        # double-clicks, proxy prefetch, a cache-hit response) into one credited
+        # impression while still crediting a genuinely later re-view of the same clip.
+        delivered_bucket = delivered_at.strftime("%Y-%m-%dT%H:%M")
         for slot_index, clip in enumerate(clips):
             feed_source = str(getattr(clip, PERSONALIZED_FEED_SOURCE_KEY, PERSONALIZED_FEED_SOURCE_FOR_YOU))
             self.creator_earnings_service.track_impression(
@@ -1758,7 +1757,7 @@ class PersonalizedFeedRankingService:
                 viewer_user_id=user_id,
                 feed_source=feed_source,
                 reference_key=(
-                    f"personalized-feed:{feed_source}:{user_id}:{slot_index}:{clip.clip_id}:{delivered_at.isoformat()}"
+                    f"personalized-feed:{feed_source}:{user_id}:{slot_index}:{clip.clip_id}:{delivered_bucket}"
                 ),
             )
 
@@ -1786,7 +1785,9 @@ class PersonalizedFeedRankingService:
         except Exception:
             return 1.0
 
-    def _allocate_ranked_entries(self, entries: list[PersonalizedFeedEnvelope], *, limit: int) -> list[PersonalizedFeedEnvelope]:
+    def _allocate_ranked_entries(
+        self, entries: list[PersonalizedFeedEnvelope], *, limit: int
+    ) -> list[PersonalizedFeedEnvelope]:
         if self.attention_orchestrator is None:
             return entries
         clip_views = [PersonalizedFeedClipView.model_validate(entry.payload) for entry in entries]
@@ -1842,14 +1843,14 @@ class PersonalizedFeedRankingService:
         selected_similarity_counts: Counter[str],
     ) -> float:
         similarity_signal = min(selected_similarity_counts[candidate.similarity_key] / 2.0, 1.0)
-        creator_signal = min(selected_creator_counts[candidate.creator_key] / 2.0, 1.0) if candidate.creator_key else 0.0
+        creator_signal = (
+            min(selected_creator_counts[candidate.creator_key] / 2.0, 1.0) if candidate.creator_key else 0.0
+        )
         format_signal = min(selected_format_counts[candidate.format_key] / 3.0, 1.0) if candidate.format_key else 0.0
         return round(
             min(
                 1.0,
-                (0.50 * similarity_signal)
-                + (0.30 * creator_signal)
-                + (0.20 * format_signal),
+                (0.50 * similarity_signal) + (0.30 * creator_signal) + (0.20 * format_signal),
             ),
             6,
         )
