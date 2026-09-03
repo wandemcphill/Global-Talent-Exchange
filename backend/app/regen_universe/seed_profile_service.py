@@ -121,9 +121,7 @@ def build_seed_profile_view(seed: NationalRegenSeed) -> RegenProfileView:
     # bookkeeping. Persisted, that would make an idempotent backfill rewrite a
     # different snapshot on every run. Anchor to the seed's own creation time
     # and drop the engine's internal log, which is not profile data.
-    payload["generated_at"] = (
-        seed.created_at.isoformat() if seed.created_at is not None else None
-    )
+    payload["generated_at"] = seed.created_at.isoformat() if seed.created_at is not None else None
     payload["metadata"] = {
         "source": "national_seed_snapshot",
         "seed_key": seed.seed_key,

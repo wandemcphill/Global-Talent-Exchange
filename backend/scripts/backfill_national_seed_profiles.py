@@ -78,11 +78,7 @@ def run_backfill(
             remaining = min(batch_size, limit - result.scanned)
             statement = (
                 select(NationalRegenSeed)
-                .where(
-                    NationalRegenSeed.id > last_seed_id
-                    if last_seed_id is not None
-                    else True
-                )
+                .where(NationalRegenSeed.id > last_seed_id if last_seed_id is not None else True)
                 .order_by(NationalRegenSeed.id.asc())
                 .limit(remaining)
             )
