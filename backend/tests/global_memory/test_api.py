@@ -9,7 +9,8 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_user, get_session
+from app.core.config import get_settings
 from app.global_memory.models import GlobalRegenEvolution, PlayerHistory, UserDynasty
 from app.global_memory.router import router as global_memory_router
 from app.ingestion.models import Competition, Country, Player
@@ -32,12 +33,20 @@ def global_memory_api():
 
     app = FastAPI()
     app.include_router(global_memory_router)
+    app.state.settings = get_settings()
 
     def override_session():
         with session_factory() as session:
             yield session
 
+    def override_current_user() -> User:
+        with session_factory() as session:
+            user = session.get(User, "user-global-memory")
+            assert user is not None, "global_memory_api tests must seed 'user-global-memory' before authenticating"
+            return user
+
     app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_current_user] = override_current_user
     Base.metadata.create_all(engine)
 
     with TestClient(app) as client:
@@ -194,7 +203,7 @@ def test_enter_competition_unlocks_preseeded_regen_and_records_memory(global_mem
 
     competitions_response = client.get("/competitions")
     assert competitions_response.status_code == 200
-    assert any(item["id"] == "comp-u17" for item in competitions_response.json())
+    assert any(item["id"] == "comp-u17" for item in competitions_response.json()["items"])
 
     entry_response = client.post(
         "/enter",
@@ -294,7 +303,10 @@ def test_rent_and_hall_of_fame_flow_updates_national_pool_and_dynasty(global_mem
     history_payload = history_by_path.json()
     assert history_payload["global_player_id"] == f"player:{seeded['player_id']}"
     assert history_payload["titles"] == 6
-    assert history_payload["career_arc"]["age"] == 17
+    today = date.today()
+    dob = date(2008, 4, 11)
+    expected_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    assert history_payload["career_arc"]["age"] == expected_age
     assert history_payload["career_arc"]["peak_age_range"] == [24, 29]
 
     leaderboard_response = client.get("/dynasty/leaderboard")

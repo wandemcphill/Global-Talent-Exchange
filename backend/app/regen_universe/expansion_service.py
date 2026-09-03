@@ -2016,7 +2016,13 @@ class RegenUniverseExpansionService:
         batch = preseed_batch.strip() or policy.default_batch
         total_target = max(policy.minimum_total, int(seeds_per_country))
         target_counts = self._national_seed_target_counts(total_target)
-        normalized_codes = {code.strip().upper() for code in country_codes or [] if code and code.strip()}
+        # Must use the same normalization as country_lookup's keys below (alnum-only, truncated
+        # to 8 chars) or a caller-supplied UUID country code never matches its hashed lookup key.
+        normalized_codes = {
+            normalized
+            for normalized in (_normalized_country_code(code) for code in country_codes or [])
+            if normalized is not None
+        }
         all_countries = list(self.session.scalars(select(Country).order_by(Country.name.asc(), Country.id.asc())).all())
         country_lookup: dict[str, Country] = {}
         for country in all_countries:

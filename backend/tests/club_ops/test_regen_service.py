@@ -163,10 +163,26 @@ def test_regen_naming_supports_senegalese_profiles_without_nigerian_fallback() -
         rng=random.Random(31),
     )
 
-    allowed_surnames = {"Diop", "Ndiaye", "Sarr", "Faye", "Seck", "Ndour"}
+    # Senegal is modeled as five real ethnic sub-profiles (Wolof, Halpulaar/Fulani,
+    # Serer, Mandinka, Jola) rather than one flat "senegambian" bucket — see
+    # app/services/regen_service.py's "SN" entry.
+    allowed_ethnolinguistic_profiles = {"wolof", "halpulaar_fulani", "serer", "mandinka", "jola"}
+    allowed_religion_patterns = {"muslim", "mixed"}
+    allowed_surnames = {
+        "Diop", "Ndiaye", "Fall", "Gueye", "Mbaye", "Seck", "Sarr", "Diouf",
+        "Ba", "Sow", "Diallo", "Barry", "Ka", "Sall", "Wane", "Tall",
+        "Faye", "Sene", "Tine", "Ndour", "Senghor", "Ngom",
+        "Cissokho", "Diaby", "Camara", "Sane", "Konate", "Dabo", "Souare", "Manga",
+        "Diatta", "Sambou", "Coly", "Badji", "Diedhiou", "Bassene", "Goudiaby",
+    }
     assert all(profile.origin.country_code == "SN" for profile in senegal_bundle.regens)
-    assert all(profile.origin.ethnolinguistic_profile == "senegambian" for profile in senegal_bundle.regens)
-    assert all(profile.origin.religion_naming_pattern == "muslim" for profile in senegal_bundle.regens)
+    assert all(
+        profile.origin.ethnolinguistic_profile in allowed_ethnolinguistic_profiles
+        for profile in senegal_bundle.regens
+    )
+    assert all(
+        profile.origin.religion_naming_pattern in allowed_religion_patterns for profile in senegal_bundle.regens
+    )
     assert all(profile.display_name.split(" ", 1)[1] in allowed_surnames for profile in senegal_bundle.regens)
     assert all(profile.display_name.split(" ", 1)[1] not in _NIGERIAN_SURNAMES for profile in senegal_bundle.regens)
 

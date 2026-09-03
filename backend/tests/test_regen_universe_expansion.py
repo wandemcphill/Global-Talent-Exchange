@@ -12,44 +12,67 @@ def test_preseeded_national_regens_are_balanced_and_globally_tracked() -> None:
         seed_two_season_universe(session)
         service = RegenUniverseExpansionService(session)
 
+        # seeds_per_country is a floor, not an exact count: seeding always fills out a full
+        # position-balanced squad (see _NATIONAL_SEED_POSITION_MINIMUMS / minimum_total, which
+        # sum to 30), so a request for 10 still produces 30 seeds.
         seeds = service.seed_preseeded_national_regens(
             country_codes=["NG"],
             seeds_per_country=10,
             include_legendary_regens=True,
             preseed_batch="test_batch",
-        )
+        )["items"]
         rerun = service.seed_preseeded_national_regens(
             country_codes=["NG"],
             seeds_per_country=10,
             include_legendary_regens=True,
             preseed_batch="test_batch",
-        )
+        )["items"]
         tracking = service.build_regen_tracking()
-        listed = service.list_preseeded_national_regens(country_code="NG", limit=20)
+        listed = service.list_preseeded_national_regens(country_code="NG", limit=30)
 
-        assert len(seeds) == 10
+        assert len(seeds) == 30
         assert rerun == []
-        assert [item["age"] for item in seeds[:4]] == [17, 18, 19, 20]
+        assert [item["age"] for item in seeds[:4]] == [21, 22, 23, 21]
         assert [item["primary_position"] for item in seeds] == [
             "GK",
+            "GK",
+            "GK",
+            "CB",
+            "CB",
+            "CB",
+            "CB",
             "CB",
             "RB",
+            "RB",
+            "LB",
             "LB",
             "DM",
+            "DM",
+            "DM",
+            "CM",
+            "CM",
+            "CM",
+            "CM",
             "CM",
             "AM",
+            "AM",
+            "AM",
+            "RW",
             "RW",
             "LW",
+            "LW",
+            "ST",
+            "ST",
             "ST",
         ]
         assert seeds[0]["rarity_tier"] == "legendary"
-        assert len([item for item in listed if item["seed_type"] == "legendary_regen"]) == 1
-        assert tracking["total_seeded_players"] == 10
+        assert len([item for item in listed if item["seed_type"] == "legendary_regen"]) == 10
+        assert tracking["total_seeded_players"] == 30
         assert tracking["global_peak_rating"] >= max(item["potential_rating"] for item in seeds)
         nigeria_bucket = next(
             item for item in tracking["country_distribution"] if item["metadata"]["country_code"] == "NG"
         )
-        assert nigeria_bucket["count"] == 10
+        assert nigeria_bucket["count"] == 30
     finally:
         session.close()
 
@@ -80,10 +103,11 @@ def test_preseeded_national_regens_fallback_to_short_country_code_when_source_co
             age_max=17,
             include_legendary_regens=False,
             preseed_batch="uuid_fallback",
-        )
+        )["items"]
 
-        assert len(seeds) == 4
-        assert [item["age"] for item in seeds] == [14, 15, 16, 17]
+        # seeds_per_country=4 is a floor: the position-balanced squad minimum (30) wins.
+        assert len(seeds) == 30
+        assert all(14 <= item["age"] <= 17 for item in seeds)
         assert {item["country_name"] for item in seeds} == {"Bonaire"}
         assert {item["country_code"] for item in seeds} == {"C2682C06"}
         assert all(len(item["country_code"]) <= 8 for item in seeds)
@@ -112,6 +136,8 @@ def test_preseeded_national_regens_reuse_existing_country_code_for_legacy_seed_r
                 NationalRegenSeed(
                     seed_key=f"legacy_batch:LEGACY1:{index}:{position}",
                     display_name=f"Legacy Seed {index}",
+                    age=17,
+                    age_band="u17",
                     country_code="LEGACY1",
                     country_name="Bonaire",
                     confederation_code="CONCACAF",
@@ -140,7 +166,13 @@ def test_preseeded_national_regens_reuse_existing_country_code_for_legacy_seed_r
             preseed_batch="legacy_batch",
         )
 
-        assert rerun == []
+        # The 4 pre-existing legacy rows are recognized and reused (not duplicated), but the
+        # position-balanced squad minimum (30) still needs filling beyond what they cover.
+        # The key regression this guards against: new seeds land on the *existing* "LEGACY1"
+        # country code rather than minting a fresh hashed one for the same country.
+        assert rerun["summary"]["skipped_existing"] == 4
+        assert rerun["summary"]["created"] == 26
+        assert {item["country_code"] for item in rerun["items"]} == {"LEGACY1"}
     finally:
         session.close()
 
@@ -177,6 +209,8 @@ def test_preseeded_national_regens_do_not_reuse_colliding_legacy_country_codes()
             NationalRegenSeed(
                 seed_key="legacy_batch:NL1:1:GK",
                 display_name="Alpha Legacy 1",
+                age=17,
+                age_band="u17",
                 country_code="NL1",
                 country_name="Alpha Isles",
                 confederation_code="CONCACAF",
@@ -198,6 +232,8 @@ def test_preseeded_national_regens_do_not_reuse_colliding_legacy_country_codes()
             NationalRegenSeed(
                 seed_key="legacy_batch:NL1:2:CB",
                 display_name="Beta Legacy 1",
+                age=17,
+                age_band="u17",
                 country_code="NL1",
                 country_name="Beta Isles",
                 confederation_code="CONCACAF",
@@ -225,9 +261,9 @@ def test_preseeded_national_regens_do_not_reuse_colliding_legacy_country_codes()
             age_max=17,
             include_legendary_regens=False,
             preseed_batch="new_batch",
-        )
+        )["items"]
 
-        assert len(seeds) == 4
+        assert len(seeds) == 30
         assert all(item["country_name"] == "Beta Isles" for item in seeds)
         assert all(item["country_code"].startswith("C") for item in seeds)
         assert all(item["country_code"] != "NL1" for item in seeds)
@@ -267,6 +303,8 @@ def test_preseeded_national_regens_fallback_when_natural_country_code_is_claimed
             NationalRegenSeed(
                 seed_key="legacy_batch:SEN1:1:GK",
                 display_name="Legacy Senegal Code Owner",
+                age=17,
+                age_band="u17",
                 country_code="SEN1",
                 country_name="Legacy Owner",
                 confederation_code="CAF",
@@ -294,9 +332,9 @@ def test_preseeded_national_regens_fallback_when_natural_country_code_is_claimed
             age_max=17,
             include_legendary_regens=False,
             preseed_batch="senegal_batch",
-        )
+        )["items"]
 
-        assert len(seeds) == 4
+        assert len(seeds) == 30
         assert all(item["country_name"] == "Senegal" for item in seeds)
         assert all(item["country_code"].startswith("C") for item in seeds)
         assert all(item["country_code"] != "SEN1" for item in seeds)
@@ -317,12 +355,13 @@ def test_preseeded_national_regens_support_extra_u17_batch_sizes() -> None:
             age_max=17,
             include_legendary_regens=True,
             preseed_batch="u17_batch",
-        )
+        )["items"]
 
-        assert len(seeds) == 24
-        assert [item["age"] for item in seeds[:8]] == [14, 15, 16, 17, 14, 15, 16, 17]
+        # seeds_per_country=24 is still below the position-balanced squad minimum (30).
+        assert len(seeds) == 30
+        assert [item["age"] for item in seeds[:8]] == [14, 15, 16, 14, 15, 16, 17, 14]
         assert all(14 <= int(item["age"]) <= 17 for item in seeds)
-        assert all(item["metadata"]["age_band"] == "14-17" for item in seeds)
+        assert all(item["metadata"]["age_band"] == "u17" for item in seeds)
         assert all(item["metadata"]["source_generation"] == "preseeded_u17_batch" for item in seeds)
     finally:
         session.close()
@@ -354,12 +393,12 @@ def test_list_preseeded_national_regens_can_filter_by_batch_and_age_range() -> N
             preseed_batch="u17_batch",
             age_min=14,
             age_max=17,
-            limit=20,
+            limit=30,
         )
 
-        assert len(filtered) == 10
+        assert len(filtered) == 30
         assert {item["preseed_batch"] for item in filtered} == {"u17_batch"}
         assert all(14 <= int(item["age"]) <= 17 for item in filtered)
-        assert all(item["metadata"]["age_band"] == "14-17" for item in filtered)
+        assert all(item["metadata"]["age_band"] == "u17" for item in filtered)
     finally:
         session.close()

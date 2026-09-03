@@ -1429,6 +1429,20 @@ class RegenUniverseService:
         payload.setdefault("source_type", subject.source_type)
         event = self.session.scalar(select(RegenStoryEvent).where(RegenStoryEvent.event_key == event_key))
         if event is None:
+            # Autoflush is disabled on this session, so a pending (unflushed) insert from an
+            # earlier call in the same request would be invisible to the query above. Check
+            # in-memory pending adds too, or repeated calls for the same key in one request
+            # (e.g. get_player_showcase syncing both timeline and achievements) double-insert
+            # and trip the event_key unique constraint at flush time.
+            event = next(
+                (
+                    pending
+                    for pending in self.session.new
+                    if isinstance(pending, RegenStoryEvent) and pending.event_key == event_key
+                ),
+                None,
+            )
+        if event is None:
             event = RegenStoryEvent(
                 event_key=event_key,
                 subject_key=subject.subject_key,
@@ -1474,6 +1488,17 @@ class RegenUniverseService:
         achievement = self.session.scalar(
             select(RegenAchievement).where(RegenAchievement.achievement_key == achievement_key)
         )
+        if achievement is None:
+            # See _upsert_story_event: autoflush is off, so a pending insert from an earlier
+            # call in the same request is invisible to the query above without this check.
+            achievement = next(
+                (
+                    pending
+                    for pending in self.session.new
+                    if isinstance(pending, RegenAchievement) and pending.achievement_key == achievement_key
+                ),
+                None,
+            )
         if achievement is None:
             achievement = RegenAchievement(
                 achievement_key=achievement_key,
