@@ -10,6 +10,7 @@ import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
 import '../../widgets/gte_surface_panel.dart';
+import 'widgets/gtex_community_pulse_panel.dart';
 import '../../ui_gtex/ui_gtex.dart';
 import '../engagement_redesign/engagement_widgets.dart';
 import '../matchday_economy_redesign/matchday_economy_widgets.dart';
@@ -25,6 +26,9 @@ class CommunityScreen extends StatefulWidget {
     this.currentClubName,
     this.onOpenLogin,
     this.onOpenFanWars,
+    this.onOpenClub,
+    this.onOpenMarket,
+    this.onOpenRegens,
     this.api,
   });
 
@@ -36,6 +40,13 @@ class CommunityScreen extends StatefulWidget {
   final String? currentClubName;
   final VoidCallback? onOpenLogin;
   final VoidCallback? onOpenFanWars;
+
+  /// Existing shell destinations a community signal can route into. Null when
+  /// this surface is hosted outside the shell, in which case the matching
+  /// action is not rendered rather than rendered dead.
+  final VoidCallback? onOpenClub;
+  final VoidCallback? onOpenMarket;
+  final VoidCallback? onOpenRegens;
   final CommunityApi? api;
 
   @override
@@ -52,7 +63,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   List<PrivateMessageThread> _privateThreads = const <PrivateMessageThread>[];
   List<GiftCatalogItem> _giftCatalog = const <GiftCatalogItem>[];
   List<GiftCatalogItem> _awardGiftPacks = const <GiftCatalogItem>[];
-  _CommunityModule _selectedModule = _CommunityModule.liveThreads;
+  _CommunityModule _selectedModule = _CommunityModule.footballWorld;
   bool _isLoading = false;
   bool _isMutating = false;
   String? _loadError;
@@ -776,7 +787,13 @@ class _CommunityScreenState extends State<CommunityScreen> {
         _watchlist.isNotEmpty ||
         _liveThreads.isNotEmpty ||
         _privateThreads.isNotEmpty;
-    if (_isLoading && !hasData) {
+    // The football-world lane has its own sources and its own honest states,
+    // so a slow or failing thread/gift sync must not blank it. The legacy
+    // whole-screen gates apply only to the lanes they actually feed; the
+    // failure itself still surfaces in the right rail and the overview lane.
+    final bool gateWholeScreen =
+        _selectedModule != _CommunityModule.footballWorld;
+    if (gateWholeScreen && _isLoading && !hasData) {
       return const Center(
         child: GteStatePanel(
           title: 'Loading community',
@@ -787,7 +804,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
         ),
       );
     }
-    if (_loadError != null && !hasData) {
+    if (gateWholeScreen && _loadError != null && !hasData) {
       return Center(
         child: GteStatePanel(
           title: 'Community unavailable',
@@ -878,6 +895,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   Widget _buildSelectedCommunityDetail() {
     switch (_selectedModule) {
+      case _CommunityModule.footballWorld:
+        return _CommunityDetailScroll(
+          children: <Widget>[
+            GtexCommunityPulsePanel(
+              onOpenLogin: widget.onOpenLogin,
+              onOpenClub: widget.onOpenClub,
+              onOpenMarket: widget.onOpenMarket,
+              onOpenRegens: widget.onOpenRegens,
+            ),
+          ],
+        );
       case _CommunityModule.liveThreads:
         return _CommunityDetailScroll(
           children: <Widget>[
@@ -1285,6 +1313,7 @@ class _DigestSummary extends StatelessWidget {
 }
 
 enum _CommunityModule {
+  footballWorld,
   overview,
   liveThreads,
   discussions,
@@ -1297,6 +1326,8 @@ enum _CommunityModule {
 extension _CommunityModuleX on _CommunityModule {
   String get label {
     switch (this) {
+      case _CommunityModule.footballWorld:
+        return 'Football world';
       case _CommunityModule.overview:
         return 'Overview';
       case _CommunityModule.liveThreads:
@@ -1316,6 +1347,8 @@ extension _CommunityModuleX on _CommunityModule {
 
   String get subtitle {
     switch (this) {
+      case _CommunityModule.footballWorld:
+        return 'Live football and owner activity';
       case _CommunityModule.overview:
         return 'Digest and access state';
       case _CommunityModule.liveThreads:
@@ -1335,6 +1368,8 @@ extension _CommunityModuleX on _CommunityModule {
 
   IconData get icon {
     switch (this) {
+      case _CommunityModule.footballWorld:
+        return Icons.public_outlined;
       case _CommunityModule.overview:
         return Icons.space_dashboard_outlined;
       case _CommunityModule.liveThreads:
@@ -1447,6 +1482,8 @@ class _CommunityLeftPanel extends StatelessWidget {
 
   String _countFor(_CommunityModule module) {
     switch (module) {
+      case _CommunityModule.footballWorld:
+        return 'market, matchday, owners';
       case _CommunityModule.liveThreads:
         return '$liveThreadCount live';
       case _CommunityModule.discussions:
