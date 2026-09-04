@@ -394,3 +394,29 @@ services:
         sync: false
       - key: GTE_MEDIA_SIGNING_SECRET
         sync: false
+
+  # Manual-trigger job: populates the regen world (canonical countries, the
+  # national regen pool for every enabled country, and an active regen season).
+  # Scheduled far out because it is meant to be run on demand from the Render
+  # dashboard; both steps are idempotent.
+  - name: gtex-regen-world-bootstrap
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 3 1 1 *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-regen-world-bootstrap.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SEEDS_PER_COUNTRY
+        value: "70"
+      - key: PRESEED_BATCH
+        value: "global_u21_batch"
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
