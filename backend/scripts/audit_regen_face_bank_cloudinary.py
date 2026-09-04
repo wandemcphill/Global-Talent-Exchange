@@ -74,7 +74,10 @@ class AuditError(RuntimeError):
 
 
 def _credentials_from_url() -> tuple[str, str, str] | None:
-    """Parse the combined ``cloudinary://key:secret@cloud`` form, if set.
+    """Parse the combined CLOUDINARY_URL form, if set.
+
+    Cloudinary packs the API key, API secret and cloud name into a single
+    ``cloudinary`` scheme URL, as userinfo and host respectively.
 
     The app's own helper reads the three split variables, but CLOUDINARY_URL is
     Cloudinary's canonical env var and is what the deployed workers are given,
