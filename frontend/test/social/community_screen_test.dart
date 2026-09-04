@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/data/community_api.dart';
@@ -7,6 +8,8 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
+import 'package:gte_frontend/features/social/data/gtex_community_pulse_provider.dart';
+import 'package:gte_frontend/features/social/models/gtex_community_models.dart';
 import 'package:gte_frontend/features/social/social_screen.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -19,17 +22,27 @@ void main() {
       final CommunityApi api = CommunityApi.fixture();
 
       await tester.pumpWidget(
-        MaterialApp(
-          theme: GteShellTheme.build(),
-          home: Scaffold(
-            body: CommunityScreen(
-              api: api,
-              baseUrl: 'http://127.0.0.1:8000',
-              backendMode: GteBackendMode.fixture,
-              accessToken: 'fixture-token',
-              isAuthenticated: true,
-              currentClubId: 'ibadan-lions',
-              currentClubName: 'Ibadan Lions FC',
+        ProviderScope(
+          overrides: [
+            // The football-world lane is covered by its own tests; this one
+            // exercises the thread/watchlist/DM lanes, so the lane that is
+            // not under test is pinned to a quiet, honest empty state.
+            communityPulseProvider.overrideWith(
+              (Ref ref) async => GtexCommunityPulse.anonymous(),
+            ),
+          ],
+          child: MaterialApp(
+            theme: GteShellTheme.build(),
+            home: Scaffold(
+              body: CommunityScreen(
+                api: api,
+                baseUrl: 'http://127.0.0.1:8000',
+                backendMode: GteBackendMode.fixture,
+                accessToken: 'fixture-token',
+                isAuthenticated: true,
+                currentClubId: 'ibadan-lions',
+                currentClubName: 'Ibadan Lions FC',
+              ),
             ),
           ),
         ),
@@ -37,6 +50,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('GTEX Social'), findsOneWidget);
+      // Football world is the default lane: community opens on football,
+      // not on a chat inbox.
+      expect(find.text('Live GTEX activity'), findsOneWidget);
+
+      await tester.tap(find.text('Live threads').first);
+      await tester.pumpAndSettle();
       expect(find.text('Matchday derby watch party'), findsOneWidget);
 
       await tester.tap(find.text('Club follow').first);
@@ -146,16 +165,30 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(
-          theme: GteShellTheme.build(),
-          home: GteNavigationShellScreen(
-            controller: controller,
-            apiBaseUrl: 'http://127.0.0.1:8000',
-            backendMode: GteBackendMode.fixture,
-            initialRoute: const GteNavigationRoute.community(),
+        ProviderScope(
+          overrides: [
+            communityPulseProvider.overrideWith(
+              (Ref ref) async => GtexCommunityPulse.anonymous(),
+            ),
+          ],
+          child: MaterialApp(
+            theme: GteShellTheme.build(),
+            home: GteNavigationShellScreen(
+              controller: controller,
+              apiBaseUrl: 'http://127.0.0.1:8000',
+              backendMode: GteBackendMode.fixture,
+              initialRoute: const GteNavigationRoute.community(),
+            ),
           ),
         ),
       );
+      await tester.pumpAndSettle();
+
+      // The football-world lane has its own sources, so the legacy
+      // thread/gift sync failure no longer blanks the whole destination.
+      // Select a lane that sync actually feeds to assert it still fails
+      // visibly rather than rendering seeded content.
+      await tester.tap(find.text('Live threads').first);
       await tester.pumpAndSettle();
 
       // CommunityScreen.build() calls CommunityApi.standard() when no api is
@@ -190,15 +223,22 @@ void main() {
     // test taps through. Inject the fixture factory directly, same as the
     // first test in this file.
     await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: Scaffold(
-          body: CommunityScreen(
-            api: CommunityApi.fixture(),
-            baseUrl: 'http://127.0.0.1:8000',
-            backendMode: GteBackendMode.fixture,
-            accessToken: 'fixture-token',
-            isAuthenticated: true,
+      ProviderScope(
+        overrides: [
+          communityPulseProvider.overrideWith(
+            (Ref ref) async => GtexCommunityPulse.anonymous(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: GteShellTheme.build(),
+          home: Scaffold(
+            body: CommunityScreen(
+              api: CommunityApi.fixture(),
+              baseUrl: 'http://127.0.0.1:8000',
+              backendMode: GteBackendMode.fixture,
+              accessToken: 'fixture-token',
+              isAuthenticated: true,
+            ),
           ),
         ),
       ),

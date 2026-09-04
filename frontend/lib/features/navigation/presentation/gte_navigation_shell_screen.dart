@@ -1029,6 +1029,14 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       onOpenLogin:
           () => _openLogin(targetRoute: const GteNavigationRoute.community()),
       onOpenFanWars: () => _openFeatureRoute(const FanWarsRouteData()),
+      // Existing shell destinations, handed to community signals so a club,
+      // market or regen item routes into the canonical surface instead of
+      // rendering a dead control. No new route or destination is introduced.
+      onOpenClub: () => _openPrimaryDestination(GtePrimaryDestination.club),
+      onOpenMarket:
+          () => _openPrimaryDestination(GtePrimaryDestination.market),
+      onOpenRegens:
+          () => _openPrimaryDestination(GtePrimaryDestination.regens),
     );
   }
 
