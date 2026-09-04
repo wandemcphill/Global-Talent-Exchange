@@ -28,6 +28,11 @@ _spec = importlib.util.spec_from_file_location("player_share_issuance_plan", SCR
 if _spec is None or _spec.loader is None:
     raise RuntimeError(f"Unable to load issuance planner: {SCRIPT_PATH}")
 _planner = importlib.util.module_from_spec(_spec)
+# Dataclasses resolve KW_ONLY / forward references via sys.modules.get(cls.__module__),
+# so a dynamically loaded module must be registered before exec_module runs -- Python
+# 3.14 raises AttributeError: 'NoneType' object has no attribute '__dict__' on the very
+# first frozen/slots dataclass in the module (IssuancePlan) otherwise.
+sys.modules[_spec.name] = _planner
 _spec.loader.exec_module(_planner)
 
 from app.core.database import create_database_engine, create_session_factory
@@ -42,9 +47,7 @@ _load_policy = _planner._load_policy
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Explicit, auditable bulk issuance of GTEX player-share markets."
-    )
+    parser = argparse.ArgumentParser(description="Explicit, auditable bulk issuance of GTEX player-share markets.")
     parser.add_argument(
         "--cohort-type",
         default="all",
@@ -97,9 +100,7 @@ def main() -> int:
             block_reason = _eligibility_block_reason(player, policy)
             if block_reason is not None:
                 report["counts"]["skipped_blocked"] += 1
-                report["skipped_blocked"].append(
-                    {"player_id": player.id, "reason": block_reason}
-                )
+                report["skipped_blocked"].append({"player_id": player.id, "reason": block_reason})
                 continue
 
             plan = _build_plan(player, policy)
@@ -144,14 +145,10 @@ def main() -> int:
                     "issuance_runner": Path(__file__).name,
                 }
                 report["counts"]["created"] += 1
-                report["created"].append(
-                    {"player_id": player.id, "market_id": market.id, "tier": plan.tier}
-                )
+                report["created"].append({"player_id": player.id, "market_id": market.id, "tier": plan.tier})
             except PlayerTokenMarketError as exc:
                 report["counts"]["failed"] += 1
-                report["failed"].append(
-                    {"player_id": player.id, "reason": exc.reason, "detail": exc.detail}
-                )
+                report["failed"].append({"player_id": player.id, "reason": exc.reason, "detail": exc.detail})
 
         if args.activate and not args.dry_run:
             session.commit()

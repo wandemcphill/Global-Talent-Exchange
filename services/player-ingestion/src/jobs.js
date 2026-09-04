@@ -88,7 +88,7 @@ async function processTeam(job) {
   });
   const players = await sportmonks.fetchPlayersForTeam(teamId);
   for (const player of players) {
-    await enqueuePlayer(player, { leagueId, teamId });
+    await enqueuePlayer(player, { leagueId, teamId, teamName });
   }
   await repository.setSyncState(`sportmonks:team:${teamId}`);
   logger.info("team processed", {
@@ -107,6 +107,7 @@ async function enqueuePlayer(player, context = {}) {
     ...player,
     leagueId: player.leagueId || context.leagueId || null,
     teamId: player.teamId || context.teamId || null,
+    teamName: player.teamName || context.teamName || null,
   });
   await playerQueue.add("upsert-player", normalized, {
     jobId: safeJobId("player", normalized.playerId, normalized.sourceHash),

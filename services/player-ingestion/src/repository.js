@@ -171,10 +171,59 @@ async function upsertPlayer(player) {
   return result.rowCount > 0;
 }
 
+// The app reads share-market eligibility off ingestion_players.country_id /
+// current_club_id (no free-text fallback for country) plus a handful of
+// free-text club/league fields. This mirror wrote none of them: `player`
+// already carries `nationality` and `teamId` by the time it gets here, but
+// nothing resolved either into a reference, so every player this pipeline
+// touched got permanently null country_id and current_club_id. That is the
+// entire reason ~38% of tradable real players could never be issued a share
+// market -- not a share-market bug, an ingestion mapping gap.
+async function resolveCountryIdByName(nationality) {
+  if (!nationality) {
+    return null;
+  }
+  const result = await db.query(
+    `
+      SELECT id FROM ingestion_countries
+      WHERE lower(name) = lower($1)
+         OR lower(alpha2_code) = lower($1)
+         OR lower(alpha3_code) = lower($1)
+         OR lower(fifa_code) = lower($1)
+      LIMIT 1
+    `,
+    [nationality],
+  );
+  return result.rows[0]?.id || null;
+}
+
+async function resolveClubIdBySportmonksTeamId(teamId) {
+  if (!teamId) {
+    return null;
+  }
+  const result = await db.query(
+    `
+      SELECT id FROM ingestion_clubs
+      WHERE source_provider = 'sportmonks' AND provider_external_id = $1
+      LIMIT 1
+    `,
+    [String(teamId)],
+  );
+  return result.rows[0]?.id || null;
+}
+
 async function upsertAppPlayerMirror(player) {
   if (!player?.playerId || !player?.name) {
     return null;
   }
+  const [countryId, clubId] = await Promise.all([
+    resolveCountryIdByName(player.nationality),
+    resolveClubIdBySportmonksTeamId(player.teamId),
+  ]);
+  // The team is not always in ingestion_clubs yet (smaller leagues lag club
+  // ingestion), so real_world_club_name carries the team name as a fallback
+  // eligibility signal even when the FK does not resolve.
+  const realWorldClubName = player.teamName || null;
   const result = await db.query(
     `
       INSERT INTO ingestion_players (
@@ -189,6 +238,9 @@ async function upsertAppPlayerMirror(player) {
         is_tradable,
         is_real_player,
         canonical_display_name,
+        country_id,
+        current_club_id,
+        real_world_club_name,
         source_last_refreshed_at,
         dna_profile,
         morale,
@@ -196,7 +248,7 @@ async function upsertAppPlayerMirror(player) {
         updated_at
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, NOW(), TRUE, $8, $9, NOW(), $10, $11, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, NOW(), TRUE, $8, $9, $10, $11, $12, NOW(), $13, $14, NOW(), NOW()
       )
       ON CONFLICT (source_provider, provider_external_id)
       DO UPDATE SET
@@ -208,6 +260,9 @@ async function upsertAppPlayerMirror(player) {
         is_tradable = TRUE,
         is_real_player = EXCLUDED.is_real_player,
         canonical_display_name = COALESCE(EXCLUDED.canonical_display_name, ingestion_players.canonical_display_name),
+        country_id = COALESCE(ingestion_players.country_id, EXCLUDED.country_id),
+        current_club_id = COALESCE(ingestion_players.current_club_id, EXCLUDED.current_club_id),
+        real_world_club_name = COALESCE(ingestion_players.real_world_club_name, EXCLUDED.real_world_club_name),
         source_last_refreshed_at = NOW(),
         dna_profile = CASE
           WHEN ingestion_players.dna_profile IS NULL OR ingestion_players.dna_profile::text = '{}'::text
@@ -228,6 +283,9 @@ async function upsertAppPlayerMirror(player) {
       player.position || null,
       !player.isRegen,
       player.name,
+      countryId,
+      clubId,
+      realWorldClubName,
       JSON.stringify({
         source: "sportmonks_live_ingestion",
         overall: player.overall ?? null,
@@ -483,5 +541,7 @@ module.exports = {
   upsertDefaultManager,
   upsertAppPlayerImageMetadata,
   upsertAppPlayerMirror,
+  resolveCountryIdByName,
+  resolveClubIdBySportmonksTeamId,
   upsertPlayer,
 };
