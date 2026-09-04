@@ -194,8 +194,12 @@ class PlayerTokenMarketService:
                 .limit(limit)
             )
         )
-        for player_id in player_ids:
-            self.ensure_market(player_id=player_id)
+        # Load every existing market for the page in one eager-loaded query
+        # before materializing anything.  The previous shape called
+        # ensure_market() per player first, which re-ran that same select (plus
+        # a liquidity-account lookup, a balance projection and a flush) once per
+        # row -- ~6 round-trips per listed player, so a 100-row page cost ~10s
+        # against a remote pooler and starved the connection pool.
         markets_by_player_id = {
             market.player_id: market
             for market in self.session.scalars(
@@ -207,8 +211,13 @@ class PlayerTokenMarketService:
                 )
             )
         }
+        # Only players without a market row still need the lazy-materialization
+        # path; a listing that is already fully issued does no writes at all.
+        for player_id in player_ids:
+            if player_id not in markets_by_player_id:
+                markets_by_player_id[player_id] = self.ensure_market(player_id=player_id)
         items = [
-            self._serialize_market_list_item(self._synchronize_market_defaults(markets_by_player_id[player_id]))
+            self._serialize_market_list_item(self._list_ready_market(markets_by_player_id[player_id]))
             for player_id in player_ids
             if player_id in markets_by_player_id
         ]
@@ -739,6 +748,29 @@ class PlayerTokenMarketService:
     def _assert_share_market_eligible(self, player: Player | None) -> None:
         if not is_share_market_eligible(player):
             raise PlayerTokenMarketError("Player is not eligible for a share market.", reason="market_ineligible")
+
+    def _list_ready_market(self, market: PlayerShareMarket) -> PlayerShareMarket:
+        """Return `market` ready for `_serialize_market_list_item`.
+
+        The list serializer only reads stored columns plus the cached
+        `liquidity_coin`/`market_issued` metadata, so a market that already
+        carries all of them needs no work.  Synchronizing anyway cost a
+        liquidity-account lookup, a ledger balance projection and a flush per
+        listed row, which is what made the market page scale linearly with page
+        size.  Markets that are genuinely incomplete still fall through to the
+        full defaults pass, so nothing is left unmaterialized.
+        """
+        metadata = market.metadata_json or {}
+        already_materialized = (
+            int(market.total_shares or 0) > 0
+            and self._amount(market.share_price_coin) > Decimal("0.0000")
+            and bool(market.status)
+            and metadata.get("liquidity_coin") is not None
+            and bool(metadata.get("market_issued"))
+        )
+        if already_materialized:
+            return market
+        return self._synchronize_market_defaults(market)
 
     def _synchronize_market_defaults(
         self,

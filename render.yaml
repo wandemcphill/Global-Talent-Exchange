@@ -16,8 +16,17 @@ services:
     preDeployCommand: "bash ops/render/production-preflight.sh && cd backend && alembic -c migrations/alembic.ini upgrade head"
     startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-1} --timeout 180 --graceful-timeout 120"
     envVars:
+      # Two workers so a slow request cannot monopolize the whole API.  Each
+      # worker builds a write engine and a read engine, so the pooler budget is
+      # pool_size x 2 engines x 2 workers = 16 base + max_overflow x 2 x 2 = 8,
+      # i.e. 24 connections at full stretch, under the 30-connection Supabase
+      # session-pooler limit.  Raise these together or not at all.
       - key: WEB_CONCURRENCY
-        value: "1"
+        value: "2"
+      - key: GTE_DB_POOL_SIZE
+        value: "4"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "2"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_ENABLED
@@ -71,6 +80,14 @@ services:
         value: "false"
       - key: GTE_TASK_QUEUE_ENABLED
         value: "true"
+      # Regen portraits are served from Cloudinary, not from this host's disk
+      # (Render's filesystem is ephemeral and the 8.5k face bank PNGs are not in
+      # the repo -- only the manifest is).  The uploaded public_ids mirror the
+      # /generated-media route, so this base makes _generated_media_url() emit
+      # working Cloudinary URLs.  Without it the base falls back to
+      # http://127.0.0.1:8000 and every portrait URL is persisted as localhost.
+      - key: GTE_GENERATED_MEDIA_BASE_URL
+        value: https://res.cloudinary.com/dvxiniqew/image/upload
       - key: GTE_MARKET_RECORDS_CACHE_TTL_SECONDS
         value: "300"
       - key: GTE_KAFKA_BROKERS
@@ -379,6 +396,32 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
+  # Manual-trigger job: populates the regen world (canonical countries, the
+  # national regen pool for every enabled country, and an active regen season).
+  # Scheduled far out because it is meant to be run on demand from the Render
+  # dashboard; both steps are idempotent.
+  - name: gtex-regen-world-bootstrap
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 3 1 1 *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-regen-world-bootstrap.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SEEDS_PER_COUNTRY
+        value: "70"
+      - key: PRESEED_BATCH
+        value: "global_u21_batch"
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
