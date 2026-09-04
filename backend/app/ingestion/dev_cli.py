@@ -861,7 +861,9 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=_HelpFormatter,
     )
-    national_regen_repair_parser.add_argument("--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL.")
+    national_regen_repair_parser.add_argument(
+        "--database-url", default=DEFAULT_DATABASE_URL, help="Target database URL."
+    )
     national_regen_repair_parser.add_argument(
         "--preseed-batch",
         default="global_u21_batch",
