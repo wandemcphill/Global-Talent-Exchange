@@ -127,6 +127,16 @@ def create_database_engine(database_url: str | None = None) -> Engine:
                 DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS,
                 minimum=1,
             )
+        # TCP keepalives: connect_timeout only bounds the initial handshake, not a
+        # connection that goes silently dead afterward (observed on the Supabase
+        # transaction-mode pooler, which drops idle connections without a clean
+        # FIN/RST). Without these, pool_pre_ping's liveness check can block forever
+        # on recv() against a half-open socket instead of detecting the dead
+        # connection and reconnecting.
+        connect_args.setdefault("keepalives", 1)
+        connect_args.setdefault("keepalives_idle", _get_int_env("GTE_DATABASE_KEEPALIVES_IDLE", 30, minimum=1))
+        connect_args.setdefault("keepalives_interval", _get_int_env("GTE_DATABASE_KEEPALIVES_INTERVAL", 10, minimum=1))
+        connect_args.setdefault("keepalives_count", _get_int_env("GTE_DATABASE_KEEPALIVES_COUNT", 3, minimum=1))
         engine_kwargs["pool_pre_ping"] = True
         # Cap pool size to avoid exhausting the Supabase session-mode pooler
         # (limit: 30 connections shared across all workers).  With WEB_CONCURRENCY=2
