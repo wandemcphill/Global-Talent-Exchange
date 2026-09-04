@@ -333,33 +333,52 @@ def repair_national_regen_seed_names_database(
             ensure_database_schema_current(engine)
             session_factory = create_session_factory(engine)
             with session_factory() as session:
-                stmt = select(NationalRegenSeed).where(NationalRegenSeed.preseed_batch == preseed_batch)
+                base_filters = [NationalRegenSeed.preseed_batch == preseed_batch]
                 normalized_codes = {code.strip().upper() for code in country_codes or [] if code and code.strip()}
                 if normalized_codes:
-                    stmt = stmt.where(NationalRegenSeed.country_code.in_(normalized_codes))
-                seeds = list(
-                    session.scalars(
-                        stmt.order_by(
-                            NationalRegenSeed.country_name.asc(),
-                            NationalRegenSeed.country_code.asc(),
-                            NationalRegenSeed.primary_position.asc(),
-                            NationalRegenSeed.seed_key.asc(),
-                        )
-                    ).all()
-                )
+                    base_filters.append(NationalRegenSeed.country_code.in_(normalized_codes))
+
+                # Load only the distinct (country_code, country_name) pairs up front
+                # (160 rows at most), then re-query and commit one country's seeds
+                # (~70 rows) at a time. The batch this repairs is preseeded 70 per
+                # country across every enabled country, so materializing the whole
+                # batch as ORM objects with a single commit at the very end held
+                # 11,200 seeds' pending metadata_json mutations in the session's
+                # identity map simultaneously -- comfortably enough to OOM a 512Mi
+                # worker. Country-sized batches bound peak memory to roughly what
+                # one country actually needs, with the exact same net writes.
+                country_pairs = session.execute(
+                    select(NationalRegenSeed.country_code, NationalRegenSeed.country_name)
+                    .where(*base_filters)
+                    .distinct()
+                    .order_by(NationalRegenSeed.country_name.asc(), NationalRegenSeed.country_code.asc())
+                ).all()
                 countries_by_name = {
                     country.name: country
                     for country in session.scalars(select(Country).order_by(Country.name.asc(), Country.id.asc())).all()
                 }
-                grouped: dict[tuple[str, str], list[NationalRegenSeed]] = {}
-                for seed in seeds:
-                    grouped.setdefault((seed.country_code, seed.country_name), []).append(seed)
 
                 renamed = 0
                 portrait_refreshed = 0
+                scanned = 0
                 changed_samples: list[dict[str, Any]] = []
                 portrait_service = RegenPortraitService(session)
-                for (seed_country_code, country_name), country_seeds in grouped.items():
+                for seed_country_code, country_name in country_pairs:
+                    country_seeds = list(
+                        session.scalars(
+                            select(NationalRegenSeed)
+                            .where(
+                                *base_filters,
+                                NationalRegenSeed.country_code == seed_country_code,
+                                NationalRegenSeed.country_name == country_name,
+                            )
+                            .order_by(
+                                NationalRegenSeed.primary_position.asc(),
+                                NationalRegenSeed.seed_key.asc(),
+                            )
+                        ).all()
+                    )
+                    scanned += len(country_seeds)
                     country = countries_by_name.get(country_name)
                     country_profile = resolve_country_naming_profile_for_country(
                         country_code=seed_country_code,
@@ -410,12 +429,16 @@ def repair_national_regen_seed_names_database(
                         after_portrait = dict(seed.metadata_json or {})
                         if before_portrait.get("portraitStorageKey") != after_portrait.get("portraitStorageKey"):
                             portrait_refreshed += 1
-                session.commit()
+                    # Commit and release this country's ORM objects before loading the
+                    # next one, rather than holding every country's seeds pending in
+                    # the identity map for one commit at the very end.
+                    session.commit()
+                    session.expunge_all()
                 return {
                     "database_url": _redacted_database_url(database_url),
                     "preseed_batch": preseed_batch,
-                    "scanned": len(seeds),
-                    "country_count": len(grouped),
+                    "scanned": scanned,
+                    "country_count": len(country_pairs),
                     "renamed": renamed,
                     "portrait_refreshed": portrait_refreshed,
                     "changed_sample": changed_samples,
