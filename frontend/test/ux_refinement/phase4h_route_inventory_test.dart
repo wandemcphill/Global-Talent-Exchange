@@ -16,18 +16,16 @@ import 'package:gte_frontend/navigation/app_destinations.dart';
 /// because three different screens in this app render the text "Route
 /// unavailable" and only one of them means "not registered".
 void main() {
-  /// The one published entry nothing registers, in either the router or the
+  /// Published entries nothing registers, in either the router or the
   /// feature-route registry.
   ///
-  /// `/tasks` is published as a surface, but `lib/features/tasks/` holds a
-  /// provider and no screen at all - there is nothing for a route to open, so
-  /// registering one would mean building the feature. It is declared a
-  /// placeholder instead, which is what stops Home rendering it as a working
-  /// button into an error page.
-  ///
-  /// Nothing may be added to this list. Removing the entry - by building the
-  /// surface and registering it - is the point.
-  const Set<String> unregistered = <String>{'/tasks'};
+  /// This is empty, and that is the contract: every route the product
+  /// publishes resolves. The list exists so that an entry which cannot be
+  /// registered has to be declared here, with a reason, rather than quietly
+  /// leading to the router's "Route unavailable" page - which is how
+  /// `/profile/admin`, six legacy aliases, three deep routes and `/tasks` all
+  /// went unnoticed.
+  const Set<String> unregistered = <String>{};
 
   late Set<String> registeredPaths;
 

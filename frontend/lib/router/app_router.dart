@@ -15,6 +15,7 @@ import 'package:gte_frontend/features/match/match_viewer_route_screen.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
+import 'package:gte_frontend/features/tasks/gtex_daily_challenges_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
@@ -499,6 +500,19 @@ List<RouteBase> _buildLegacyAliasRoutes({
       redirect:
           (BuildContext context, GoRouterState state) =>
               AppRoutes.transferCenter,
+    ),
+    // `/tasks` was published as a live surface and rendered as a Home quick
+    // action while `lib/features/tasks/` held only a provider - there was no
+    // screen for it to open. The screen exists now, so the route does too.
+    GoRoute(
+      path: AppRoutes.tasks,
+      pageBuilder:
+          (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: GtexDailyChallengesScreen(
+              onSignIn: () => context.go(AppRoutes.profileLogin),
+            ),
+          ),
     ),
     GoRoute(
       path: AppRoutes.streamerEngine,

@@ -237,16 +237,11 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     state: AppRouteSurfaceState.live,
     summary: 'Formation and starting-lineup editor for the active club.',
   ),
-  // Same again, and with less behind it: `lib/features/tasks/` holds a
-  // provider and no screen at all, so there is nothing for this path to open.
-  // It was rendered as a live button on the coin trader's Home.
   AppRouteSurface(
     label: 'Tasks',
     location: AppRoutes.tasks,
-    state: AppRouteSurfaceState.placeholder,
-    summary:
-        'Daily-challenge and streak workflow. A provider exists; no screen '
-        'or route does yet.',
+    state: AppRouteSurfaceState.live,
+    summary: 'Live daily-challenge and streak workflow.',
     quickAction: true,
   ),
   AppRouteSurface(

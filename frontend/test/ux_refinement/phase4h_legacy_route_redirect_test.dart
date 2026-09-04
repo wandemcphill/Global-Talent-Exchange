@@ -6,6 +6,7 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
+import 'package:gte_frontend/features/tasks/gtex_daily_challenges_screen.dart';
 import 'package:gte_frontend/features/match/match_viewer_route_screen.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
@@ -150,6 +151,17 @@ void main() {
         AppRoutes.transferCenterDetailLocation('listing-1'),
       );
     });
+  });
+
+  testWidgets('the published tasks route opens the daily-challenge desk', (
+    WidgetTester tester,
+  ) async {
+    // `/tasks` was published as live and rendered as a Home quick action
+    // while `lib/features/tasks/` held only a provider - there was no screen
+    // for the route to open, so the button reached the error page.
+    await pumpAt(tester, AppRoutes.tasks);
+    expectResolved(tester, AppRoutes.tasks);
+    expect(find.byType(GtexDailyChallengesScreen), findsOneWidget);
   });
 
   testWidgets('the streamer engine alias opens the Competition OS hub', (
