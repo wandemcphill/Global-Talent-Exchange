@@ -449,6 +449,16 @@ List<RouteBase> _buildLegacyAliasRoutes({
           (BuildContext context, GoRouterState state) =>
               const GteNavigationRoute.competitions().path,
     ),
+    // Published as "Legacy streamer-engine route redirects to the live
+    // Competition OS hub", but never registered, so it reached the router's
+    // error page instead. Sent where its own summary says, alongside the two
+    // competition aliases above.
+    GoRoute(
+      path: AppRoutes.streamerEngine,
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              const GteNavigationRoute.competitions().path,
+    ),
     // Regen World is a shell lane now. /world/regens stays the public URL
     // and hands off to the shell lane route, so the screen inherits the
     // GTEX dark canvas, the navigation rail and back behaviour instead of
@@ -784,6 +794,46 @@ List<RouteBase> _buildLegacyAliasRoutes({
           child: MatchViewerRouteScreen(matchKey: matchKey),
         );
       },
+    ),
+    // The five routes below were published in `appRouteInventory`, each with a
+    // summary naming exactly where it was supposed to go, and none of them was
+    // ever registered - so every one landed on the router's "Route
+    // unavailable" page instead of redirecting. They are registered here to
+    // the destinations their own summaries name; nothing new is decided.
+    //
+    // Matchday is `/matches`, the live match hub the inventory publishes under
+    // that label, and the canonical viewer is `/matches/viewer/:matchKey`.
+    GoRoute(
+      path: AppRoutes.matchesBroadcast,
+      redirect: (BuildContext context, GoRouterState state) {
+        final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
+        return matchKey.isEmpty
+            ? AppRoutes.matches
+            : AppRoutes.matchesViewerLocation(matchKey);
+      },
+    ),
+    GoRoute(
+      // Hidden while Unity is blocked: the 3D surface has no runtime, so the
+      // route hands the match to the 2D viewer rather than to a dead end.
+      path: AppRoutes.matchesThreeD,
+      redirect: (BuildContext context, GoRouterState state) {
+        final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
+        return matchKey.isEmpty
+            ? AppRoutes.matches
+            : AppRoutes.matchesViewerLocation(matchKey);
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.matchesNativeThreeD,
+      redirect: (BuildContext context, GoRouterState state) => AppRoutes.matches,
+    ),
+    GoRoute(
+      path: AppRoutes.matchesSpectate,
+      redirect: (BuildContext context, GoRouterState state) => AppRoutes.matches,
+    ),
+    GoRoute(
+      path: AppRoutes.matchesSimulate,
+      redirect: (BuildContext context, GoRouterState state) => AppRoutes.matches,
     ),
     GoRoute(
       path: '/match-viewer/:matchKey',

@@ -17,30 +17,31 @@ import 'package:gte_frontend/navigation/app_destinations.dart';
 /// unavailable" and only one of them means "not registered".
 void main() {
   /// Published entries nothing registers, in either the router or the
-  /// feature-route registry - verified by grep as well as by this test: none
-  /// of the six is referenced anywhere outside the inventory itself.
+  /// feature-route registry.
   ///
-  /// Registering a path means choosing where it goes, and for these that is a
-  /// product decision this phase did not have the standing to make:
+  /// Every entry whose own inventory summary named a destination has been
+  /// registered to it. What is left are the ones where registering a path
+  /// would mean *choosing* where it goes, which is a product decision rather
+  /// than a defect with an obvious fix:
   ///
-  ///  * `/national-teams` and `/tasks` are published as live surfaces but the
-  ///    navigation shell has no lane for either, so there is no destination
-  ///    to redirect them onto.
-  ///  * `/competitions/streamer/engine`, `/matches/native-3d`,
-  ///    `/matches/spectate` and `/matches/simulate` each document their own
-  ///    intended redirect in the inventory summary, so those four are
-  ///    mechanical - but they belong in a change about matchday and
-  ///    competition routing, not this one.
+  ///  * `/tasks` is published as a surface but `lib/features/tasks/` holds a
+  ///    provider and no screen at all - there is nothing to open. It is
+  ///    declared a placeholder, so it reads as "Coming soon" rather than
+  ///    leading into an error page.
+  ///  * `/national-teams` has screens but no lane, and which of them this
+  ///    path should open is unsettled. Also declared a placeholder.
+  ///  * The three deep routes have no parent to hang off: their list routes
+  ///    are unbuilt or unsettled, so a detail route cannot be pointed
+  ///    anywhere useful yet.
   ///
   /// Nothing may be added to this list. Removing an entry - by registering
   /// the route - is the point.
   const Set<String> unregistered = <String>{
     '/national-teams',
     '/tasks',
-    '/competitions/streamer/engine',
-    '/matches/native-3d',
-    '/matches/spectate',
-    '/matches/simulate',
+    '/market/transfers/:listingId',
+    '/world/federations/:federationId',
+    '/national-teams/:competitionId',
   };
 
   late Set<String> registeredPaths;
@@ -76,16 +77,43 @@ void main() {
     };
   });
 
-  test('the router registers every concrete route the inventory publishes', () {
+  /// A published template is served when some registered path has the same
+  /// shape: same segment count, with a `:param` on either side matching
+  /// anything. `/matches/broadcast/:matchKey` was invisible to an
+  /// equality-only check, and stayed dead because of it.
+  bool isServedBy(String published, String registered) {
+    if (published == registered) {
+      return true;
+    }
+    final List<String> a = published.split('/');
+    final List<String> b = registered.split('/');
+    if (a.length != b.length) {
+      return false;
+    }
+    for (int i = 0; i < a.length; i += 1) {
+      if (a[i].startsWith(':') || b[i].startsWith(':')) {
+        continue;
+      }
+      if (a[i] != b[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  test('the router registers every route the inventory publishes', () {
+    // Templates are included. Excluding them is what let two published match
+    // redirects sit unregistered through the first pass of this audit.
     final List<String> published = appRouteInventory
         .map((AppRouteSurface surface) => surface.location)
-        // Parameterised entries are templates, not destinations.
-        .where((String location) => !location.contains(':'))
         .toSet()
         .toList(growable: false);
 
     final List<String> missing = published
-        .where((String location) => !registeredPaths.contains(location))
+        .where(
+          (String location) =>
+              !registeredPaths.any((String p) => isServedBy(location, p)),
+        )
         .where((String location) => !unregistered.contains(location))
         .toList(growable: false);
 
@@ -95,8 +123,8 @@ void main() {
       reason:
           'these routes are published in appRouteInventory - and any with '
           'quickAction: true are rendered as buttons on the personalised '
-          'Home - but nothing in app_router.dart registers them, so tapping '
-          'one lands on "Route unavailable": ${missing.join(', ')}',
+          'Home - but nothing registers them, so opening one lands on '
+          '"Route unavailable": ${missing.join(', ')}',
     );
   });
 
@@ -117,7 +145,10 @@ void main() {
     // Keeps the list honest: once a route is registered its entry here has to
     // go, rather than sitting on as a stale excuse.
     final List<String> stale = unregistered
-        .where(registeredPaths.contains)
+        .where(
+          (String location) =>
+              registeredPaths.any((String p) => isServedBy(location, p)),
+        )
         .toList(growable: false);
 
     expect(
