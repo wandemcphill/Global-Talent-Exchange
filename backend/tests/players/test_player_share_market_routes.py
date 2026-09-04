@@ -19,6 +19,7 @@ from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.players.legacy_token_service import PlayerTokenMarketService
 from app.players import router as players_router_module
 from app.players.router import router as players_router
 from app.risk_ops_engine.service import RiskOpsService
@@ -345,6 +346,18 @@ def test_list_player_share_markets_returns_only_tradable_active_markets(monkeypa
         tradable = _seed_imported_real_player(session, player_id="real-player-tradable")
         blocked = _seed_imported_real_player(session, player_id="real-player-blocked")
         blocked.is_tradable = False
+        session.flush()
+        # The listing is read-only: it shows issued markets and no longer mints
+        # one per listed row inside the GET, so a market has to exist first.
+        # Only the tradable player can be issued one -- issue_market rejects an
+        # untradable player outright -- which is itself the first half of the
+        # guarantee this test covers.
+        PlayerTokenMarketService(session).issue_market(
+            actor=admin,
+            player_id=tradable.id,
+            total_shares=1000,
+            share_price_coin=Decimal("1.0000"),
+        )
         session.flush()
         client, _auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
 
