@@ -4,6 +4,7 @@ import 'package:gte_frontend/app/gte_app_config.dart';
 import 'package:gte_frontend/app/gte_frontend_app.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
+import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/match/match_viewer_route_screen.dart';
 import 'package:gte_frontend/navigation/app_destinations.dart';
@@ -97,6 +98,57 @@ void main() {
       expectResolved(tester, '/matches/broadcast/%20');
       expect(find.byType(GteLiveMatchHubRouteScreen), findsOneWidget);
       expect(find.byType(MatchViewerRouteScreen), findsNothing);
+    });
+  });
+
+  group('the published deep routes reach a real surface', () {
+    testWidgets('a federation deep link opens the federation detail screen', (
+      WidgetTester tester,
+    ) async {
+      // `FederationDetailRouteScreen` was written for this route and wired to
+      // nothing, so the published deep link hit the error page instead of the
+      // screen built for it.
+      await pumpAt(tester, AppRoutes.federationDetailLocation('fed-1'));
+      expectResolved(tester, AppRoutes.federationDetailLocation('fed-1'));
+      expect(find.byType(FederationDetailRouteScreen), findsOneWidget);
+    });
+
+    testWidgets('a federation deep link with no id opens the list', (
+      WidgetTester tester,
+    ) async {
+      await pumpAt(tester, '/world/federations/%20');
+      expectResolved(tester, '/world/federations/%20');
+      expect(find.byType(FederationDetailRouteScreen), findsNothing);
+    });
+
+    testWidgets('the national-team plural reaches the live singular', (
+      WidgetTester tester,
+    ) async {
+      // `/national-team` is the live surface; the inventory published the
+      // plural, which was simply missing its alias.
+      await pumpAt(tester, AppRoutes.nationalTeams);
+      expectResolved(tester, AppRoutes.nationalTeams);
+    });
+
+    testWidgets('a national-team deep link lands on the competitions list', (
+      WidgetTester tester,
+    ) async {
+      // No per-competition screen exists, so this degrades to the list rather
+      // than to an error page.
+      await pumpAt(tester, AppRoutes.nationalTeamDetailLocation('comp-1'));
+      expectResolved(tester, AppRoutes.nationalTeamDetailLocation('comp-1'));
+    });
+
+    testWidgets('a transfer-listing deep link lands on the transfer hub', (
+      WidgetTester tester,
+    ) async {
+      // Nothing renders a single listing, so a shared deep link degrades to
+      // the hub that does exist.
+      await pumpAt(tester, AppRoutes.transferCenterDetailLocation('listing-1'));
+      expectResolved(
+        tester,
+        AppRoutes.transferCenterDetailLocation('listing-1'),
+      );
     });
   });
 

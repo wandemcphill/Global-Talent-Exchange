@@ -14,6 +14,7 @@ import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart
 import 'package:gte_frontend/features/match/match_viewer_route_screen.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
+import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
@@ -453,6 +454,52 @@ List<RouteBase> _buildLegacyAliasRoutes({
     // Competition OS hub", but never registered, so it reached the router's
     // error page instead. Sent where its own summary says, alongside the two
     // competition aliases above.
+    // `FederationDetailRouteScreen` was written for exactly this route -
+    // federation id in, detail screen out - and was referenced by nothing, so
+    // the published deep route reached the error page instead of the screen
+    // built for it. A blank id falls back to the federations list.
+    GoRoute(
+      path: AppRoutes.federationDetail,
+      redirect: (BuildContext context, GoRouterState state) {
+        final String federationId =
+            state.pathParameters['federationId']?.trim() ?? '';
+        return federationId.isEmpty ? AppRoutes.federations : null;
+      },
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final String federationId =
+            state.pathParameters['federationId']?.trim() ?? '';
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: FederationDetailRouteScreen(
+            client: dependenciesBuilder(context).createAuthedApi(),
+            federationId: federationId,
+          ),
+        );
+      },
+    ),
+    // The national-team surface is live at `/national-team`. The inventory
+    // publishes the plural, which is the wrong spelling of it rather than a
+    // feature that was never built, so both plural forms hand off to the
+    // singular. There is no per-competition national-team screen - the
+    // registry has entries and history - so the deep form lands on the
+    // competitions list rather than on nothing.
+    GoRoute(
+      path: AppRoutes.nationalTeams,
+      redirect: (BuildContext context, GoRouterState state) => '/national-team',
+    ),
+    GoRoute(
+      path: AppRoutes.nationalTeamDetail,
+      redirect: (BuildContext context, GoRouterState state) => '/national-team',
+    ),
+    // No screen anywhere renders a single transfer listing, but the deep link
+    // is published all the same, so a shared one reached the error page. It
+    // degrades to the transfer hub that does exist rather than 404ing.
+    GoRoute(
+      path: AppRoutes.transferCenterDetail,
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              AppRoutes.transferCenter,
+    ),
     GoRoute(
       path: AppRoutes.streamerEngine,
       redirect:

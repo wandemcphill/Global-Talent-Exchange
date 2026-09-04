@@ -16,33 +16,18 @@ import 'package:gte_frontend/navigation/app_destinations.dart';
 /// because three different screens in this app render the text "Route
 /// unavailable" and only one of them means "not registered".
 void main() {
-  /// Published entries nothing registers, in either the router or the
+  /// The one published entry nothing registers, in either the router or the
   /// feature-route registry.
   ///
-  /// Every entry whose own inventory summary named a destination has been
-  /// registered to it. What is left are the ones where registering a path
-  /// would mean *choosing* where it goes, which is a product decision rather
-  /// than a defect with an obvious fix:
+  /// `/tasks` is published as a surface, but `lib/features/tasks/` holds a
+  /// provider and no screen at all - there is nothing for a route to open, so
+  /// registering one would mean building the feature. It is declared a
+  /// placeholder instead, which is what stops Home rendering it as a working
+  /// button into an error page.
   ///
-  ///  * `/tasks` is published as a surface but `lib/features/tasks/` holds a
-  ///    provider and no screen at all - there is nothing to open. It is
-  ///    declared a placeholder, so it reads as "Coming soon" rather than
-  ///    leading into an error page.
-  ///  * `/national-teams` has screens but no lane, and which of them this
-  ///    path should open is unsettled. Also declared a placeholder.
-  ///  * The three deep routes have no parent to hang off: their list routes
-  ///    are unbuilt or unsettled, so a detail route cannot be pointed
-  ///    anywhere useful yet.
-  ///
-  /// Nothing may be added to this list. Removing an entry - by registering
-  /// the route - is the point.
-  const Set<String> unregistered = <String>{
-    '/national-teams',
-    '/tasks',
-    '/market/transfers/:listingId',
-    '/world/federations/:federationId',
-    '/national-teams/:competitionId',
-  };
+  /// Nothing may be added to this list. Removing the entry - by building the
+  /// surface and registering it - is the point.
+  const Set<String> unregistered = <String>{'/tasks'};
 
   late Set<String> registeredPaths;
 

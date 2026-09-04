@@ -129,23 +129,27 @@ void main() {
   });
 
   test('no Home quick action claims a destination that resolves nowhere', () {
-    // `/tasks` and `/national-teams` were published as live and rendered as
-    // working buttons - on the coin trader's Home and the no-club Home
-    // respectively - while nothing registered either path, so tapping one
-    // landed on "Route unavailable". They are declared placeholders now, and
-    // a placeholder button says "coming soon" rather than navigating.
-    for (final String location in <String>[
-      AppRoutes.tasks,
-      AppRoutes.nationalTeams,
-    ]) {
-      expect(
-        appRouteSurfaceFor(location)?.state,
-        AppRouteSurfaceState.placeholder,
-        reason:
-            '$location is rendered as a Home quick action but no route '
-            'registers it, so it must not claim to be live',
-      );
-    }
+    // `/tasks` was published as live and rendered as a working button on the
+    // coin trader's Home while nothing registered it, so tapping it landed on
+    // "Route unavailable". `lib/features/tasks/` holds a provider and no
+    // screen, so it is declared a placeholder and the button says "coming
+    // soon" rather than navigating. `/national-teams` was in the same state
+    // for a different reason - it is the plural of the live `/national-team`
+    // and simply lacked the alias - so it is registered and live again.
+    expect(
+      appRouteSurfaceFor(AppRoutes.tasks)?.state,
+      AppRouteSurfaceState.placeholder,
+      reason:
+          '${AppRoutes.tasks} is rendered as a Home quick action but no '
+          'route registers it, so it must not claim to be live',
+    );
+    expect(
+      appRouteSurfaceFor(AppRoutes.nationalTeams)?.state,
+      AppRouteSurfaceState.live,
+      reason:
+          '${AppRoutes.nationalTeams} redirects to the live national-team '
+          'surface, so it should not be marked as unbuilt',
+    );
   });
 
   test('every route the Home quick actions navigate to is published', () {

@@ -201,20 +201,15 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     state: AppRouteSurfaceState.hidden,
     summary: 'Deep federation detail route.',
   ),
-  // Published as live, but nothing registers `/national-teams` in either the
-  // router or the feature-route registry - opening it lands on the router's
-  // "Route unavailable" page, and the personalised Home renders it as a
-  // working button for a session with no club. The national-team screens do
-  // exist; which of them this path should open is a routing decision this
-  // phase did not have the standing to make. Declared for what it is, so the
-  // button says "Coming soon" instead of leading nowhere.
+  // The live surface is `/national-team`; this plural was the wrong spelling
+  // of it and reached the router's error page for want of an alias, which is
+  // now registered. Live, as it always claimed to be.
   AppRouteSurface(
     label: 'National Teams',
     location: AppRoutes.nationalTeams,
-    state: AppRouteSurfaceState.placeholder,
+    state: AppRouteSurfaceState.live,
     summary:
-        'National-team competitions, rankings, and draft squads. No route '
-        'registers this path yet.',
+        'Live national-team competitions, rankings, and draft squad route.',
     quickAction: true,
   ),
   AppRouteSurface(
