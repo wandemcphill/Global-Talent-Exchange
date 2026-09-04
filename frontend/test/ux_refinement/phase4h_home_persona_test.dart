@@ -128,6 +128,26 @@ void main() {
     expect(errors, isEmpty, reason: errors.join(' | '));
   });
 
+  test('no Home quick action claims a destination that resolves nowhere', () {
+    // `/tasks` and `/national-teams` were published as live and rendered as
+    // working buttons - on the coin trader's Home and the no-club Home
+    // respectively - while nothing registered either path, so tapping one
+    // landed on "Route unavailable". They are declared placeholders now, and
+    // a placeholder button says "coming soon" rather than navigating.
+    for (final String location in <String>[
+      AppRoutes.tasks,
+      AppRoutes.nationalTeams,
+    ]) {
+      expect(
+        appRouteSurfaceFor(location)?.state,
+        AppRouteSurfaceState.placeholder,
+        reason:
+            '$location is rendered as a Home quick action but no route '
+            'registers it, so it must not claim to be live',
+      );
+    }
+  });
+
   test('every route the Home quick actions navigate to is published', () {
     // The panel now drops an unpublished destination rather than throwing, so
     // the failure mode became a silently missing button. This is what keeps

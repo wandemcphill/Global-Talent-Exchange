@@ -201,12 +201,20 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     state: AppRouteSurfaceState.hidden,
     summary: 'Deep federation detail route.',
   ),
+  // Published as live, but nothing registers `/national-teams` in either the
+  // router or the feature-route registry - opening it lands on the router's
+  // "Route unavailable" page, and the personalised Home renders it as a
+  // working button for a session with no club. The national-team screens do
+  // exist; which of them this path should open is a routing decision this
+  // phase did not have the standing to make. Declared for what it is, so the
+  // button says "Coming soon" instead of leading nowhere.
   AppRouteSurface(
     label: 'National Teams',
     location: AppRoutes.nationalTeams,
-    state: AppRouteSurfaceState.live,
+    state: AppRouteSurfaceState.placeholder,
     summary:
-        'Live national-team competitions, rankings, and draft squad route.',
+        'National-team competitions, rankings, and draft squads. No route '
+        'registers this path yet.',
     quickAction: true,
   ),
   AppRouteSurface(
@@ -234,11 +242,16 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     state: AppRouteSurfaceState.live,
     summary: 'Formation and starting-lineup editor for the active club.',
   ),
+  // Same again, and with less behind it: `lib/features/tasks/` holds a
+  // provider and no screen at all, so there is nothing for this path to open.
+  // It was rendered as a live button on the coin trader's Home.
   AppRouteSurface(
     label: 'Tasks',
     location: AppRoutes.tasks,
-    state: AppRouteSurfaceState.live,
-    summary: 'Live daily-challenge and streak workflow.',
+    state: AppRouteSurfaceState.placeholder,
+    summary:
+        'Daily-challenge and streak workflow. A provider exists; no screen '
+        'or route does yet.',
     quickAction: true,
   ),
   AppRouteSurface(
