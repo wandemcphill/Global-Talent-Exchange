@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote, unquote
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -1516,7 +1517,13 @@ class RegenPortraitService:
         return self._media_root() / FACE_BANK_MANIFEST
 
     def _generated_media_url(self, storage_key: str) -> str:
-        return f"{self._public_base_url()}{GENERATED_MEDIA_ROUTE}/{storage_key.lstrip('/')}"
+        # Percent-encode each path segment but keep "/" as a separator: most of
+        # the scripted face bank has spaces in its filenames (e.g.
+        # ".../Untitled-1 copy.png"), and an unencoded space produces an invalid
+        # URL that gets persisted onto dna_profile.portraitUrl and the image
+        # metadata rows.  `_storage_key_from_url` reverses this.
+        quoted_key = quote(storage_key.lstrip("/"), safe="/")
+        return f"{self._public_base_url()}{GENERATED_MEDIA_ROUTE}/{quoted_key}"
 
     @staticmethod
     def _storage_key_from_url(url: str | None) -> str | None:
@@ -1524,7 +1531,9 @@ class RegenPortraitService:
             return None
         marker = f"{GENERATED_MEDIA_ROUTE}/"
         if marker in url:
-            return url.split(marker, 1)[1]
+            # Decode so the key round-trips back to the manifest's raw form;
+            # face bank lookups compare against unencoded storage keys.
+            return unquote(url.split(marker, 1)[1])
         return None
 
     @staticmethod

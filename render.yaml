@@ -80,6 +80,14 @@ services:
         value: "false"
       - key: GTE_TASK_QUEUE_ENABLED
         value: "true"
+      # Regen portraits are served from Cloudinary, not from this host's disk
+      # (Render's filesystem is ephemeral and the 8.5k face bank PNGs are not in
+      # the repo -- only the manifest is).  The uploaded public_ids mirror the
+      # /generated-media route, so this base makes _generated_media_url() emit
+      # working Cloudinary URLs.  Without it the base falls back to
+      # http://127.0.0.1:8000 and every portrait URL is persisted as localhost.
+      - key: GTE_GENERATED_MEDIA_BASE_URL
+        value: https://res.cloudinary.com/dvxiniqew/image/upload
       - key: GTE_MARKET_RECORDS_CACHE_TTL_SECONDS
         value: "300"
       - key: GTE_KAFKA_BROKERS
