@@ -281,6 +281,11 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      # Admin user id that ingestion-time share-market issuance is attributed
+      # to.  Unset means new players are ingested without a market and will not
+      # appear in the market listing until the issuance job runs.
+      - key: GTE_INGESTION_ISSUANCE_ACTOR_USER_ID
+        sync: false
       - key: SPORTMONKS_API_TOKEN
         sync: false
       - key: SPORTMONKS_BASE_URL
@@ -422,6 +427,34 @@ services:
         value: "70"
       - key: PRESEED_BATCH
         value: "global_u21_batch"
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
+  # Manual-trigger job: issues share markets for eligible tradable players that
+  # do not have one.  Defaults to a dry run; set ISSUANCE_ACTIVATE=true to
+  # actually issue.  Idempotent, so it is safe to re-run.
+  - name: gtex-player-share-issuance
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 2 1 1 *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-player-share-issuance.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      # Admin/super-admin user id issuance is attributed to in the audit trail.
+      - key: ISSUANCE_ACTOR_USER_ID
+        sync: false
+      - key: ISSUANCE_ACTIVATE
+        value: "false"
+      - key: ISSUANCE_LIMIT
+        value: "50000"
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET

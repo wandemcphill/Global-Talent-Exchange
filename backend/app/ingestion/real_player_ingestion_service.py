@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
+from app.ingestion.share_market_issuance import issue_markets_for_ingested_players
 from app.ingestion.models import (
     Club,
     Competition,
@@ -231,6 +232,11 @@ class RealPlayerIngestionService:
                     as_of=as_of,
                 )
                 player_ids = [item.gtex_player_id for item in prepared.staged_players]
+                # Issue share markets inside the ingestion transaction so a
+                # batch either lands tradable or does not land at all.  The
+                # market listing used to create these lazily on read, which
+                # meant a GET wrote ledger postings and then rolled them back.
+                issue_markets_for_ingested_players(session, player_ids=player_ids)
                 self._complete_import_batch(
                     session=session,
                     import_batch_id=prepared.import_batch_id,

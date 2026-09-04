@@ -166,28 +166,31 @@ class PlayerTokenMarketService:
                     Player.canonical_display_name.ilike(search_pattern),
                 )
             )
-        # A tradable player is listable if it has no market yet (lazily
-        # materialized below, same as get_market/ensure_market for single-
-        # player reads) or its existing market is active. This keeps unissued
-        # markets discoverable without ever surfacing a suspended one.
-        listable = or_(PlayerShareMarket.id.is_(None), PlayerShareMarket.status == "active")
+        # Only players whose market has already been issued and is active are
+        # listable.  This used to also admit players with no market row and
+        # lazily create one per listed player, which meant a GET minted markets
+        # -- wallet, transaction and ledger postings included -- for ~17 queries
+        # a row.  Worse, the read path never commits, so that work was rolled
+        # back and redone on every single request without ever making progress.
+        # Issuance is an explicit, admin-attributed step (see
+        # issue_player_share_markets_strict.py) and now happens at ingestion.
+        listable = PlayerShareMarket.status == "active"
 
         total = int(
             self.session.scalar(
                 select(func.count(Player.id))
-                .outerjoin(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+                .join(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
                 .where(*filters, listable)
             )
             or 0
         )
-        # Paginate over players, not markets, so a tradable player with no
-        # market row yet is still reachable by page/offset instead of being
-        # structurally excluded by an inner join. Work per request stays
-        # bounded to `limit` players regardless of the total player count.
+        # Join rather than outerjoin so `total` and the page agree: an unissued
+        # player is absent from both instead of being counted and then dropped
+        # from `items`, which made the last page short and the count a lie.
         player_ids = list(
             self.session.scalars(
                 select(Player.id)
-                .outerjoin(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
+                .join(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
                 .where(*filters, listable)
                 .order_by(Player.full_name.asc(), Player.id.asc())
                 .offset(offset)
@@ -211,11 +214,6 @@ class PlayerTokenMarketService:
                 )
             )
         }
-        # Only players without a market row still need the lazy-materialization
-        # path; a listing that is already fully issued does no writes at all.
-        for player_id in player_ids:
-            if player_id not in markets_by_player_id:
-                markets_by_player_id[player_id] = self.ensure_market(player_id=player_id)
         items = [
             self._serialize_market_list_item(self._list_ready_market(markets_by_player_id[player_id]))
             for player_id in player_ids
