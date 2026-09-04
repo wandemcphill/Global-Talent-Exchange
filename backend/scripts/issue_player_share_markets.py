@@ -160,6 +160,17 @@ def _base_query(args: argparse.Namespace, policy: dict[str, Any] | None = None):
         candidate_filters.append(Player.is_real_player.is_(True))
     stmt = (
         select(Player)
+        # Outer join purely to prioritize ordering below; share_market is a 1:1
+        # relationship so this cannot duplicate rows. Without it, --limit caps at
+        # 5000 and the candidate set is ordered by updated_at with no exclusion
+        # of already-issued players, so a backlog larger than the limit (as with
+        # the 16k players once left unissued by an ingestion mapping gap) is not
+        # guaranteed to ever surface: any cohort of already-issued players that
+        # gets touched more recently (trading activity, price snapshots, live
+        # simulation ticks) can permanently crowd the unissued ones out of every
+        # run's top-N window. Surfacing PlayerShareMarket.id IS NULL first makes
+        # repeated bounded runs actually converge on the backlog.
+        .outerjoin(PlayerShareMarket, PlayerShareMarket.player_id == Player.id)
         .options(
             selectinload(Player.share_market),
             selectinload(Player.country),
@@ -169,7 +180,7 @@ def _base_query(args: argparse.Namespace, policy: dict[str, Any] | None = None):
             selectinload(Player.liquidity_band),
         )
         .where(*candidate_filters)
-        .order_by(Player.updated_at.desc(), Player.id.asc())
+        .order_by(PlayerShareMarket.id.is_(None).desc(), Player.updated_at.desc(), Player.id.asc())
     )
     value = (args.cohort_value or "").strip()
     if args.cohort_type == "all":
