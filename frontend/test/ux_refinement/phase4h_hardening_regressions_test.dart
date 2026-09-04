@@ -8,8 +8,10 @@ import 'package:gte_frontend/features/home/home_screen.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/player_market_redesign/widgets/gtex_market_movers_rail.dart';
+import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
+import 'package:gte_frontend/screens/wallet/gtex_wallet_overview_screen_v2.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 
@@ -256,6 +258,109 @@ void main() {
       );
       tester.takeException();
     });
+
+    testWidgets('a coin trader lands on Home, not the wallet desk', (
+      WidgetTester tester,
+    ) async {
+      // The other half of the same defect: a trader session was sent to the
+      // wallet desk's trader-dashboard module, which the Wallet lane already
+      // renders at /app/capital/trader-dashboard. `HomeScreen` carries a
+      // coinTrader persona of its own - trader desk copy, capabilities and
+      // quick actions - which no trader could reach.
+      tester.view.physicalSize = const Size(1440, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _traderSession();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteNavigationShellScreen(
+            controller: controller,
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+            initialRoute: const GteNavigationRoute.home(),
+          ),
+        ),
+      );
+      for (int pump = 0; pump < 60; pump += 1) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(
+        find.byType(HomeScreen),
+        findsOneWidget,
+        reason:
+            'Home handed coin traders the wallet trader dashboard, so Home '
+            'and the Wallet lane rendered the same screen',
+      );
+      expect(
+        find.byType(GtexWalletOverviewScreenV2),
+        findsNothing,
+        reason: 'the wallet desk belongs to the Wallet lane, not to Home',
+      );
+      tester.takeException();
+    });
+
+    testWidgets('a coin trader can still reach the wallet desk in one tap', (
+      WidgetTester tester,
+    ) async {
+      // Removing the override must not strand the desk: the Wallet lane has
+      // to stay in a trader's own navigation.
+      tester.view.physicalSize = const Size(1440, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _traderSession();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteNavigationShellScreen(
+            controller: controller,
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+            initialRoute: const GteNavigationRoute.home(),
+          ),
+        ),
+      );
+      for (int pump = 0; pump < 60; pump += 1) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      final Finder walletLane = find.text(
+        GtePrimaryDestination.wallet.label,
+      );
+      expect(
+        walletLane,
+        findsWidgets,
+        reason: 'a coin trader lost the Wallet lane from their navigation',
+      );
+
+      await tester.tap(walletLane.first);
+      for (int pump = 0; pump < 60; pump += 1) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(
+        find.byType(GtexWalletOverviewScreenV2),
+        findsOneWidget,
+        reason: 'the Wallet lane no longer opens the wallet desk',
+      );
+      tester.takeException();
+    });
   });
 
   group('P1 - club ownership claims no holder count it was not given', () {
@@ -336,5 +441,21 @@ void main() {
       expect(find.textContaining('18 owners'), findsOneWidget);
       tester.takeException();
     });
+  });
+}
+
+/// A signed-in session the shell resolves as a coin trader.
+GteAuthSession _traderSession() {
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'phase4h-trader-token',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    'user': <String, Object?>{
+      'id': 'phase4h-trader',
+      'email': 'phase4h-trader@gtex.test',
+      'username': 'phase4h-trader',
+      'display_name': 'Phase 4H Trader',
+      'role': 'coin_trader',
+    },
   });
 }

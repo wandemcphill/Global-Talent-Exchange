@@ -519,31 +519,22 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         );
       }
     }
-    if (widget.controller.isAuthenticated && _isCoinTraderSession) {
-      return GtexWalletOverviewScreenV2(
-        key: const PageStorageKey<String>('home-trader-dashboard-v2'),
-        controller: widget.controller,
-        baseUrl: widget.apiBaseUrl,
-        backendMode: widget.backendMode,
-        initialModule: GtexWalletDeskModule.traderDashboard,
-        onTopUp: _openWalletTopUp,
-        onWithdraw: _openWalletWithdraw,
-        onOpenLogin:
-            () => _openLogin(targetRoute: const GteNavigationRoute.home()),
-        onOpenPlayer: _openPlayer,
-        onModuleChanged: _openWalletModule,
-        authedApi: _createShellAuthedApi(),
-      );
-    }
     // Home is the personalised command surface for every remaining session
-    // state, club owners included. It used to hand owners the club owner
-    // dashboard instead, which made Home and the Club lane render the same
-    // screen - two primary destinations, one surface - and left the whole
-    // personalised Home (your players, what moved, your clubs, your
-    // prospects, what needs your attention) reachable only by users who owned
-    // no club. `HomeScreen` resolves the club-owner persona itself and
-    // carries a clubs panel, and the club workspace stays one tap away on the
-    // Club lane, so the owner loses nothing and gains their own board.
+    // state, club owners and coin traders included.
+    //
+    // Both used to be sent somewhere else from here - owners to the club
+    // owner dashboard, traders to the wallet desk's trader module - and both
+    // of those screens are already a primary destination of their own (the
+    // Club lane, and the Wallet lane's trader dashboard). So Home rendered a
+    // second copy of another lane, and the whole personalised Home (your
+    // players, what moved, your clubs, your prospects, what needs your
+    // attention) was reachable only by sessions that were neither.
+    //
+    // `HomeScreen` resolves both personas itself - a club owner gets a clubs
+    // panel, a coin trader gets the trader desk copy, capabilities and quick
+    // actions - and each workspace stays directly reachable on its own lane:
+    // Club for owners, Wallet for traders, whose desk module rail carries the
+    // trader dashboard. Neither loses a surface; both gain their own board.
     return const HomeScreen(key: PageStorageKey<String>('home-command'));
   }
 
