@@ -535,27 +535,16 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         authedApi: _createShellAuthedApi(),
       );
     }
-    final String? canonicalClubId = _canonicalClubId()?.trim();
-    if (canonicalClubId == null || canonicalClubId.isEmpty) {
-      // HomeScreen resolves its own persona (guest / no-club / creator /
-      // coin trader / admin), so both session states share this destination.
-      return const HomeScreen(key: PageStorageKey<String>('home-command'));
-    }
-    return GtexClubOwnerDashboardScreenV2(
-      key: const PageStorageKey<String>('home-club-owner-dashboard-v2'),
-      clubId: canonicalClubId,
-      clubName: _canonicalClubName(),
-      baseUrl: widget.apiBaseUrl,
-      backendMode: widget.backendMode,
-      accessToken: widget.controller.accessToken,
-      authedApi: _createShellAuthedApi(),
-      ownerName: widget.controller.session?.user.username,
-      walletCredits:
-          widget.controller.walletSummary?.availableBalance.round() ?? 0,
-      isAuthenticated: widget.controller.isAuthenticated,
-      onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.home()),
-    );
+    // Home is the personalised command surface for every remaining session
+    // state, club owners included. It used to hand owners the club owner
+    // dashboard instead, which made Home and the Club lane render the same
+    // screen - two primary destinations, one surface - and left the whole
+    // personalised Home (your players, what moved, your clubs, your
+    // prospects, what needs your attention) reachable only by users who owned
+    // no club. `HomeScreen` resolves the club-owner persona itself and
+    // carries a clubs panel, and the club workspace stays one tap away on the
+    // Club lane, so the owner loses nothing and gains their own board.
+    return const HomeScreen(key: PageStorageKey<String>('home-command'));
   }
 
   void _handleExchangeControllerChanged() {

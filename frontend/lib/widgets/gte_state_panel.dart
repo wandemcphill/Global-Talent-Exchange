@@ -5,6 +5,11 @@ import '../ui_gtex/theme/gtex_colors.dart';
 import '../ui_gtex/theme/gtex_spacing.dart';
 import 'gte_surface_panel.dart';
 
+/// Below this content width the status badge stops sitting beside the copy
+/// and stacks under it: narrower than this the two compete for the same line
+/// and the message loses.
+const double _stackHeaderWidth = 480;
+
 class GteStatePanel extends StatelessWidget {
   const GteStatePanel({
     super.key,
@@ -32,7 +37,6 @@ class GteStatePanel extends StatelessWidget {
     final Color accent = accentColor ?? GtexColors.pitch;
     final String resolvedEyebrow =
         eyebrow ?? (isLoading ? 'LIVE SYNC' : 'GTEX STATUS');
-    final bool stackHeader = MediaQuery.sizeOf(context).width < 480;
     final bool showStatusVisual = icon != null || isLoading;
     final Widget eyebrowChip = Container(
       padding: const EdgeInsets.symmetric(
@@ -122,41 +126,58 @@ class GteStatePanel extends StatelessWidget {
       emphasized: true,
       accentColor: accent,
       padding: const EdgeInsets.all(GtexSpacing.lg),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (stackHeader)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                headerCopy,
-                if (statusVisual != null) ...<Widget>[
-                  const SizedBox(height: GtexSpacing.md),
-                  statusVisual,
-                ],
+      // This panel is the app's universal loading / empty / error / blocked
+      // surface, so it renders at every width the product has: full-bleed
+      // workspaces, a 330px browse rail, a 360px summary rail and modal
+      // sheets. Deciding its header layout from the window meant a wide
+      // window kept the side-by-side header inside a narrow rail, squeezing
+      // the copy against the status badge. It measures the box it is handed
+      // instead; MediaQuery only remains the fallback for an unbounded
+      // parent, where there is no box to measure.
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final double availableWidth =
+              constraints.hasBoundedWidth
+                  ? constraints.maxWidth
+                  : MediaQuery.sizeOf(context).width;
+          final bool stackHeader = availableWidth < _stackHeaderWidth;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (stackHeader)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    headerCopy,
+                    if (statusVisual != null) ...<Widget>[
+                      const SizedBox(height: GtexSpacing.md),
+                      statusVisual,
+                    ],
+                  ],
+                )
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(child: headerCopy),
+                    if (statusVisual != null) ...<Widget>[
+                      const SizedBox(width: GtexSpacing.md),
+                      statusVisual,
+                    ],
+                  ],
+                ),
+              if (actionLabel != null && onAction != null) ...<Widget>[
+                const SizedBox(height: GtexSpacing.md),
+                GtexButton(
+                  label: actionLabel!,
+                  icon: isLoading ? Icons.refresh : Icons.arrow_forward,
+                  onPressed: onAction,
+                ),
               ],
-            )
-          else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(child: headerCopy),
-                if (statusVisual != null) ...<Widget>[
-                  const SizedBox(width: GtexSpacing.md),
-                  statusVisual,
-                ],
-              ],
-            ),
-          if (actionLabel != null && onAction != null) ...<Widget>[
-            const SizedBox(height: GtexSpacing.md),
-            GtexButton(
-              label: actionLabel!,
-              icon: isLoading ? Icons.refresh : Icons.arrow_forward,
-              onPressed: onAction,
-            ),
-          ],
-        ],
+            ],
+          );
+        },
       ),
     );
   }

@@ -392,6 +392,11 @@ class CreatorClubValuationTicker {
   final double marketPriceDeltaCoin;
   final int marketPriceDeltaBps;
   final double priceToValueRatio;
+  /// Parsed for contract fidelity but never rendered. The backend derives
+  /// this from reputation, share events, reactions, challenge wins and
+  /// follower count and floors it at 100, so it is a popularity composite
+  /// rather than a count of supporters. Showing it would be a manufactured
+  /// metric.
   final int fanCount;
   final int winsLastFive;
   final int drawsLastFive;

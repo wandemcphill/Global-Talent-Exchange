@@ -270,6 +270,11 @@ void showGtexMasterDetailPanelSheet(
                       ),
                     ),
                     IconButton(
+                      // The only way out of this sheet, and on a phone the
+                      // sheet is how the browse and summary panels are
+                      // reached at all - a bare glyph left it with no
+                      // accessible name.
+                      tooltip: 'Close $title',
                       onPressed: () => Navigator.of(context).pop(),
                       icon: const Icon(Icons.close),
                     ),
