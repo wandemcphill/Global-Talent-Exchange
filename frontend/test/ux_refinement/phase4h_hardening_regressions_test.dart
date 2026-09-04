@@ -10,6 +10,7 @@ import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.da
 import 'package:gte_frontend/features/player_market_redesign/widgets/gtex_market_movers_rail.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/screens/gte_exchange_shell_screen.dart';
 import 'package:gte_frontend/screens/wallet/gtex_wallet_overview_screen_v2.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -309,6 +310,107 @@ void main() {
       tester.takeException();
     });
 
+    testWidgets('an admin lands on Home, not the command center', (
+      WidgetTester tester,
+    ) async {
+      // The last of the three persona overrides. The admin command center is
+      // already reachable from the shell's own admin action and from the
+      // canonical /admin route, so Home rendering it made a third copy - and
+      // HomeScreen's admin operations desk persona could never be seen.
+      tester.view.physicalSize = const Size(1440, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
+      );
+      controller.session = _adminSession();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: GteShellTheme.build(),
+          home: GteNavigationShellScreen(
+            controller: controller,
+            apiBaseUrl: 'http://127.0.0.1:8000',
+            backendMode: GteBackendMode.fixture,
+            initialRoute: const GteNavigationRoute.home(),
+          ),
+        ),
+      );
+      for (int pump = 0; pump < 60; pump += 1) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(
+        find.byType(HomeScreen),
+        findsOneWidget,
+        reason:
+            'Home rendered the admin command center, which the shell action '
+            'and the /admin route already reach',
+      );
+      expect(
+        find.byType(AdminCommandCenterScreen),
+        findsNothing,
+        reason: 'the command center is opened from its own entry, not Home',
+      );
+      tester.takeException();
+    });
+
+    testWidgets('an admin keeps a way into operations on a phone', (
+      WidgetTester tester,
+    ) async {
+      // The admin action only ever existed in the wide action set, which was
+      // survivable while Home itself rendered the command center. With that
+      // gone, a narrow viewport would have left an admin with no entry at
+      // all.
+      for (final Size viewport in <Size>[
+        const Size(390, 844),
+        const Size(1440, 900),
+      ]) {
+        tester.view.physicalSize = viewport;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        final GteExchangeController controller = GteExchangeController(
+          api: GteExchangeApiClient.fixture(),
+        );
+        controller.session = _adminSession();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: GteShellTheme.build(),
+            home: KeyedSubtree(
+              key: ValueKey<String>('admin-${viewport.width}'),
+              child: GteNavigationShellScreen(
+                controller: controller,
+                apiBaseUrl: 'http://127.0.0.1:8000',
+                backendMode: GteBackendMode.fixture,
+                initialRoute: const GteNavigationRoute.home(),
+              ),
+            ),
+          ),
+        );
+        for (int pump = 0; pump < 60; pump += 1) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+
+        expect(
+          find.byTooltip('Admin dashboard'),
+          findsOneWidget,
+          reason:
+              'an admin had no way into the command center at '
+              '${viewport.width.toInt()}px',
+        );
+        tester.takeException();
+      }
+    });
+
     testWidgets('a coin trader can still reach the wallet desk in one tap', (
       WidgetTester tester,
     ) async {
@@ -456,6 +558,22 @@ GteAuthSession _traderSession() {
       'username': 'phase4h-trader',
       'display_name': 'Phase 4H Trader',
       'role': 'coin_trader',
+    },
+  });
+}
+
+/// A signed-in session the shell resolves as an admin.
+GteAuthSession _adminSession() {
+  return GteAuthSession.fromJson(<String, Object?>{
+    'access_token': 'phase4h-admin-token',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    'user': <String, Object?>{
+      'id': 'phase4h-admin',
+      'email': 'phase4h-admin@gtex.test',
+      'username': 'phase4h-admin',
+      'display_name': 'Phase 4H Admin',
+      'role': 'admin',
     },
   });
 }

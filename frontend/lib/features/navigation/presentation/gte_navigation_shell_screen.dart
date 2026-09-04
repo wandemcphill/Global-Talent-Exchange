@@ -341,6 +341,19 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
               color: GtexColors.text,
             ),
           ),
+        // The admin command center was only ever offered in the wide action
+        // set, which was survivable while Home itself rendered it for admin
+        // sessions. It no longer does, so the entry has to exist at every
+        // viewport width or an admin on a phone has no way into operations.
+        if (_isAdminSession)
+          IconButton(
+            tooltip: 'Admin dashboard',
+            onPressed: _openAdminCommandCenter,
+            icon: const Icon(
+              Icons.admin_panel_settings_outlined,
+              color: GtexColors.text,
+            ),
+          ),
         if (widget.controller.isAuthenticated)
           IconButton(
             tooltip: 'Profile and settings',
@@ -504,37 +517,26 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildHomeDestination() {
-    if (widget.controller.isAuthenticated && _isAdminSession) {
-      final String? accessToken = widget.controller.accessToken;
-      if (accessToken != null && accessToken.trim().isNotEmpty) {
-        return AdminCommandCenterScreen(
-          key: const PageStorageKey<String>('admin-command-center-home'),
-          baseUrl: widget.apiBaseUrl,
-          accessToken: accessToken,
-          backendMode: widget.backendMode,
-          authedApi: _createShellAuthedApi(),
-          capabilities: GtexAdminCapabilities.fromSession(
-            widget.controller.session,
-          ),
-        );
-      }
-    }
-    // Home is the personalised command surface for every remaining session
-    // state, club owners and coin traders included.
+    // Home is the personalised command surface for every session state.
     //
-    // Both used to be sent somewhere else from here - owners to the club
-    // owner dashboard, traders to the wallet desk's trader module - and both
-    // of those screens are already a primary destination of their own (the
-    // Club lane, and the Wallet lane's trader dashboard). So Home rendered a
-    // second copy of another lane, and the whole personalised Home (your
-    // players, what moved, your clubs, your prospects, what needs your
-    // attention) was reachable only by sessions that were neither.
+    // Three personas used to be sent somewhere else from here - club owners
+    // to the club owner dashboard, coin traders to the wallet desk's trader
+    // module, admins to the admin command center - and every one of those
+    // screens is already reachable in its own right: the Club lane, the
+    // Wallet lane's trader dashboard, and for admins both the `/admin` route
+    // and the shell's own admin action. So Home rendered a second copy of a
+    // surface the session could already open, and the whole personalised
+    // Home (your players, what moved, your clubs, your prospects, what needs
+    // your attention) was reachable only by sessions that were none of the
+    // three.
     //
-    // `HomeScreen` resolves both personas itself - a club owner gets a clubs
-    // panel, a coin trader gets the trader desk copy, capabilities and quick
-    // actions - and each workspace stays directly reachable on its own lane:
-    // Club for owners, Wallet for traders, whose desk module rail carries the
-    // trader dashboard. Neither loses a surface; both gain their own board.
+    // `HomeScreen` resolves all three personas itself - a club owner gets a
+    // clubs panel, a coin trader gets the trader desk copy, an admin gets the
+    // operations desk copy - each with its own capabilities and quick
+    // actions, and none of it could be reached before. No workspace is lost:
+    // Club for owners, Wallet for traders (its module rail carries the trader
+    // dashboard), and the admin action in the shell bar for admins, which now
+    // shows at every viewport width rather than only the wide one.
     return const HomeScreen(key: PageStorageKey<String>('home-command'));
   }
 

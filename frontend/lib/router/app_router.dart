@@ -18,6 +18,7 @@ import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.da
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
+import 'package:gte_frontend/navigation/app_destinations.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/shared/auth/gtex_admin_capabilities.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_notification_matrix_screen.dart';
@@ -988,6 +989,17 @@ List<RouteBase> _buildLegacyAliasRoutes({
                               context.go(const GteNavigationRoute.home().path),
                     ),
           ),
+    ),
+    // `/profile/admin` is published in `appRouteInventory` as the
+    // permission-gated admin entry and is where the personalised Home's
+    // "Admin controls" action navigates, but it was never registered here, so
+    // the tap fell through to the router's "Route unavailable" screen. It
+    // redirects onto the canonical admin route rather than becoming a second
+    // implementation of it - the same treatment every other legacy path in
+    // this router gets.
+    GoRoute(
+      path: AppRoutes.profileAdmin,
+      redirect: (BuildContext context, GoRouterState state) => '/admin',
     ),
     GoRoute(
       path: '/admin',
