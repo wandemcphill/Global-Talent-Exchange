@@ -486,95 +486,110 @@ class _GtexCompetitionsHubScreenV2State
       return const SizedBox.shrink();
     }
     final GtexCompetitionSummary summary = detail.summary;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        GtexPanel(
-          title: 'Competition actions',
-          subtitle: 'Join, monitor, publish, or open the operations workspace.',
-          accent: GtexColors.gold,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              GtexActionButton(
-                label: summary.isJoinable ? 'Join tournament' : 'Open monitor',
-                icon:
-                    summary.isJoinable
-                        ? Icons.login
-                        : Icons.monitor_heart_outlined,
-                accent: summary.isJoinable ? GtexColors.pitch : GtexColors.gold,
-                onPressed: () => _activateCompetitionAction(summary),
-              ),
-              const SizedBox(height: GtexSpacing.sm),
-              GtexActionButton(
-                label: 'View rules',
-                icon: Icons.rule_folder_outlined,
-                secondary: true,
-                accent: GtexColors.cyan,
-                onPressed: () => setState(() => _tabIndex = 4),
-              ),
-              const SizedBox(height: GtexSpacing.sm),
-              GtexActionButton(
-                label: 'Share competition',
-                icon: Icons.ios_share,
-                secondary: true,
-                accent: GtexColors.gold,
-                onPressed: () async {
-                  await Clipboard.setData(
-                    ClipboardData(text: 'gtex://competition/${summary.id}'),
-                  );
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Competition link copied.')),
-                  );
-                },
-              ),
-            ],
+    // The summary rail is a fixed-height pane inside the master-detail
+    // scaffold, but its content grows with the newsroom signal list. Laying
+    // it out as a bare `Column` clipped the live-payload panel off the bottom
+    // of every desktop width that admits the rail - 213px of content with no
+    // way to reach it. The rail scrolls, so the panel below the fold stays
+    // reachable at any pane height.
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          GtexPanel(
+            title: 'Competition actions',
+            subtitle:
+                'Join, monitor, publish, or open the operations workspace.',
+            accent: GtexColors.gold,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                GtexActionButton(
+                  label:
+                      summary.isJoinable
+                          ? 'Join tournament'
+                          : 'Open monitor',
+                  icon:
+                      summary.isJoinable
+                          ? Icons.login
+                          : Icons.monitor_heart_outlined,
+                  accent:
+                      summary.isJoinable
+                          ? GtexColors.pitch
+                          : GtexColors.gold,
+                  onPressed: () => _activateCompetitionAction(summary),
+                ),
+                const SizedBox(height: GtexSpacing.sm),
+                GtexActionButton(
+                  label: 'View rules',
+                  icon: Icons.rule_folder_outlined,
+                  secondary: true,
+                  accent: GtexColors.cyan,
+                  onPressed: () => setState(() => _tabIndex = 4),
+                ),
+                const SizedBox(height: GtexSpacing.sm),
+                GtexActionButton(
+                  label: 'Share competition',
+                  icon: Icons.ios_share,
+                  secondary: true,
+                  accent: GtexColors.gold,
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: 'gtex://competition/${summary.id}'),
+                    );
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Competition link copied.')),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: GtexSpacing.md),
-        GtexPanel(
-          title: 'AI News signals',
-          subtitle:
-              'Stories the GTEX newsroom can generate from this competition.',
-          accent: GtexColors.pitch,
-          child: Column(
-            children: <Widget>[
-              for (final String signal in detail.newsSignals)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const Icon(
-                        Icons.auto_awesome,
-                        color: GtexColors.pitch,
-                        size: 18,
-                      ),
-                      const SizedBox(width: GtexSpacing.xs),
-                      Expanded(
-                        child: Text(
-                          signal,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(
-                            color: GtexColors.textSecondary,
-                            height: 1.35,
+          const SizedBox(height: GtexSpacing.md),
+          GtexPanel(
+            title: 'AI News signals',
+            subtitle:
+                'Stories the GTEX newsroom can generate from this competition.',
+            accent: GtexColors.pitch,
+            child: Column(
+              children: <Widget>[
+                for (final String signal in detail.newsSignals)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Icon(
+                          Icons.auto_awesome,
+                          color: GtexColors.pitch,
+                          size: 18,
+                        ),
+                        const SizedBox(width: GtexSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            signal,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(
+                              color: GtexColors.textSecondary,
+                              height: 1.35,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: GtexSpacing.md),
-        Expanded(
-          child: GtexPanel(
+          const SizedBox(height: GtexSpacing.md),
+          GtexPanel(
             title: 'Live OS payload',
             subtitle:
-                'Derived from the Competition OS response for this competition.',
+                'Derived from the Competition OS response for this '
+                'competition.',
             accent: GtexColors.cyan,
             child: Column(
               children: <Widget>[
@@ -597,8 +612,8 @@ class _GtexCompetitionsHubScreenV2State
               ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

@@ -14,10 +14,13 @@ import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart
 import 'package:gte_frontend/features/match/match_viewer_route_screen.dart';
 import 'package:gte_frontend/features/matchday_economy_redesign/matchday_economy_screen.dart';
 import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
+import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
+import 'package:gte_frontend/features/tasks/gtex_daily_challenges_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/screens/auth/gtex_account_signup_screens.dart';
+import 'package:gte_frontend/navigation/app_destinations.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/shared/auth/gtex_admin_capabilities.dart';
 import 'package:gte_frontend/screens/admin/gtex_admin_notification_matrix_screen.dart';
@@ -448,6 +451,75 @@ List<RouteBase> _buildLegacyAliasRoutes({
           (BuildContext context, GoRouterState state) =>
               const GteNavigationRoute.competitions().path,
     ),
+    // Published as "Legacy streamer-engine route redirects to the live
+    // Competition OS hub", but never registered, so it reached the router's
+    // error page instead. Sent where its own summary says, alongside the two
+    // competition aliases above.
+    // `FederationDetailRouteScreen` was written for exactly this route -
+    // federation id in, detail screen out - and was referenced by nothing, so
+    // the published deep route reached the error page instead of the screen
+    // built for it. A blank id falls back to the federations list.
+    GoRoute(
+      path: AppRoutes.federationDetail,
+      redirect: (BuildContext context, GoRouterState state) {
+        final String federationId =
+            state.pathParameters['federationId']?.trim() ?? '';
+        return federationId.isEmpty ? AppRoutes.federations : null;
+      },
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final String federationId =
+            state.pathParameters['federationId']?.trim() ?? '';
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: FederationDetailRouteScreen(
+            client: dependenciesBuilder(context).createAuthedApi(),
+            federationId: federationId,
+          ),
+        );
+      },
+    ),
+    // The national-team surface is live at `/national-team`. The inventory
+    // publishes the plural, which is the wrong spelling of it rather than a
+    // feature that was never built, so both plural forms hand off to the
+    // singular. There is no per-competition national-team screen - the
+    // registry has entries and history - so the deep form lands on the
+    // competitions list rather than on nothing.
+    GoRoute(
+      path: AppRoutes.nationalTeams,
+      redirect: (BuildContext context, GoRouterState state) => '/national-team',
+    ),
+    GoRoute(
+      path: AppRoutes.nationalTeamDetail,
+      redirect: (BuildContext context, GoRouterState state) => '/national-team',
+    ),
+    // No screen anywhere renders a single transfer listing, but the deep link
+    // is published all the same, so a shared one reached the error page. It
+    // degrades to the transfer hub that does exist rather than 404ing.
+    GoRoute(
+      path: AppRoutes.transferCenterDetail,
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              AppRoutes.transferCenter,
+    ),
+    // `/tasks` was published as a live surface and rendered as a Home quick
+    // action while `lib/features/tasks/` held only a provider - there was no
+    // screen for it to open. The screen exists now, so the route does too.
+    GoRoute(
+      path: AppRoutes.tasks,
+      pageBuilder:
+          (BuildContext context, GoRouterState state) => NoTransitionPage<void>(
+            key: state.pageKey,
+            child: GtexDailyChallengesScreen(
+              onSignIn: () => context.go(AppRoutes.profileLogin),
+            ),
+          ),
+    ),
+    GoRoute(
+      path: AppRoutes.streamerEngine,
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              const GteNavigationRoute.competitions().path,
+    ),
     // Regen World is a shell lane now. /world/regens stays the public URL
     // and hands off to the shell lane route, so the screen inherits the
     // GTEX dark canvas, the navigation rail and back behaviour instead of
@@ -784,6 +856,46 @@ List<RouteBase> _buildLegacyAliasRoutes({
         );
       },
     ),
+    // The five routes below were published in `appRouteInventory`, each with a
+    // summary naming exactly where it was supposed to go, and none of them was
+    // ever registered - so every one landed on the router's "Route
+    // unavailable" page instead of redirecting. They are registered here to
+    // the destinations their own summaries name; nothing new is decided.
+    //
+    // Matchday is `/matches`, the live match hub the inventory publishes under
+    // that label, and the canonical viewer is `/matches/viewer/:matchKey`.
+    GoRoute(
+      path: AppRoutes.matchesBroadcast,
+      redirect: (BuildContext context, GoRouterState state) {
+        final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
+        return matchKey.isEmpty
+            ? AppRoutes.matches
+            : AppRoutes.matchesViewerLocation(matchKey);
+      },
+    ),
+    GoRoute(
+      // Hidden while Unity is blocked: the 3D surface has no runtime, so the
+      // route hands the match to the 2D viewer rather than to a dead end.
+      path: AppRoutes.matchesThreeD,
+      redirect: (BuildContext context, GoRouterState state) {
+        final String matchKey = state.pathParameters['matchKey']?.trim() ?? '';
+        return matchKey.isEmpty
+            ? AppRoutes.matches
+            : AppRoutes.matchesViewerLocation(matchKey);
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.matchesNativeThreeD,
+      redirect: (BuildContext context, GoRouterState state) => AppRoutes.matches,
+    ),
+    GoRoute(
+      path: AppRoutes.matchesSpectate,
+      redirect: (BuildContext context, GoRouterState state) => AppRoutes.matches,
+    ),
+    GoRoute(
+      path: AppRoutes.matchesSimulate,
+      redirect: (BuildContext context, GoRouterState state) => AppRoutes.matches,
+    ),
     GoRoute(
       path: '/match-viewer/:matchKey',
       pageBuilder: (BuildContext context, GoRouterState state) {
@@ -988,6 +1100,17 @@ List<RouteBase> _buildLegacyAliasRoutes({
                               context.go(const GteNavigationRoute.home().path),
                     ),
           ),
+    ),
+    // `/profile/admin` is published in `appRouteInventory` as the
+    // permission-gated admin entry and is where the personalised Home's
+    // "Admin controls" action navigates, but it was never registered here, so
+    // the tap fell through to the router's "Route unavailable" screen. It
+    // redirects onto the canonical admin route rather than becoming a second
+    // implementation of it - the same treatment every other legacy path in
+    // this router gets.
+    GoRoute(
+      path: AppRoutes.profileAdmin,
+      redirect: (BuildContext context, GoRouterState state) => '/admin',
     ),
     GoRoute(
       path: '/admin',

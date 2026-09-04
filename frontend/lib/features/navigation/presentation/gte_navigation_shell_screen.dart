@@ -341,6 +341,19 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
               color: GtexColors.text,
             ),
           ),
+        // The admin command center was only ever offered in the wide action
+        // set, which was survivable while Home itself rendered it for admin
+        // sessions. It no longer does, so the entry has to exist at every
+        // viewport width or an admin on a phone has no way into operations.
+        if (_isAdminSession)
+          IconButton(
+            tooltip: 'Admin dashboard',
+            onPressed: _openAdminCommandCenter,
+            icon: const Icon(
+              Icons.admin_panel_settings_outlined,
+              color: GtexColors.text,
+            ),
+          ),
         if (widget.controller.isAuthenticated)
           IconButton(
             tooltip: 'Profile and settings',
@@ -504,58 +517,27 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildHomeDestination() {
-    if (widget.controller.isAuthenticated && _isAdminSession) {
-      final String? accessToken = widget.controller.accessToken;
-      if (accessToken != null && accessToken.trim().isNotEmpty) {
-        return AdminCommandCenterScreen(
-          key: const PageStorageKey<String>('admin-command-center-home'),
-          baseUrl: widget.apiBaseUrl,
-          accessToken: accessToken,
-          backendMode: widget.backendMode,
-          authedApi: _createShellAuthedApi(),
-          capabilities: GtexAdminCapabilities.fromSession(
-            widget.controller.session,
-          ),
-        );
-      }
-    }
-    if (widget.controller.isAuthenticated && _isCoinTraderSession) {
-      return GtexWalletOverviewScreenV2(
-        key: const PageStorageKey<String>('home-trader-dashboard-v2'),
-        controller: widget.controller,
-        baseUrl: widget.apiBaseUrl,
-        backendMode: widget.backendMode,
-        initialModule: GtexWalletDeskModule.traderDashboard,
-        onTopUp: _openWalletTopUp,
-        onWithdraw: _openWalletWithdraw,
-        onOpenLogin:
-            () => _openLogin(targetRoute: const GteNavigationRoute.home()),
-        onOpenPlayer: _openPlayer,
-        onModuleChanged: _openWalletModule,
-        authedApi: _createShellAuthedApi(),
-      );
-    }
-    final String? canonicalClubId = _canonicalClubId()?.trim();
-    if (canonicalClubId == null || canonicalClubId.isEmpty) {
-      // HomeScreen resolves its own persona (guest / no-club / creator /
-      // coin trader / admin), so both session states share this destination.
-      return const HomeScreen(key: PageStorageKey<String>('home-command'));
-    }
-    return GtexClubOwnerDashboardScreenV2(
-      key: const PageStorageKey<String>('home-club-owner-dashboard-v2'),
-      clubId: canonicalClubId,
-      clubName: _canonicalClubName(),
-      baseUrl: widget.apiBaseUrl,
-      backendMode: widget.backendMode,
-      accessToken: widget.controller.accessToken,
-      authedApi: _createShellAuthedApi(),
-      ownerName: widget.controller.session?.user.username,
-      walletCredits:
-          widget.controller.walletSummary?.availableBalance.round() ?? 0,
-      isAuthenticated: widget.controller.isAuthenticated,
-      onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.home()),
-    );
+    // Home is the personalised command surface for every session state.
+    //
+    // Three personas used to be sent somewhere else from here - club owners
+    // to the club owner dashboard, coin traders to the wallet desk's trader
+    // module, admins to the admin command center - and every one of those
+    // screens is already reachable in its own right: the Club lane, the
+    // Wallet lane's trader dashboard, and for admins both the `/admin` route
+    // and the shell's own admin action. So Home rendered a second copy of a
+    // surface the session could already open, and the whole personalised
+    // Home (your players, what moved, your clubs, your prospects, what needs
+    // your attention) was reachable only by sessions that were none of the
+    // three.
+    //
+    // `HomeScreen` resolves all three personas itself - a club owner gets a
+    // clubs panel, a coin trader gets the trader desk copy, an admin gets the
+    // operations desk copy - each with its own capabilities and quick
+    // actions, and none of it could be reached before. No workspace is lost:
+    // Club for owners, Wallet for traders (its module rail carries the trader
+    // dashboard), and the admin action in the shell bar for admins, which now
+    // shows at every viewport width rather than only the wide one.
+    return const HomeScreen(key: PageStorageKey<String>('home-command'));
   }
 
   void _handleExchangeControllerChanged() {

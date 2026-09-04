@@ -1460,18 +1460,30 @@ class _QuickActionsPanel extends StatelessWidget {
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
+        // A quick action whose destination is not published has no surface
+        // to describe it, and asserting one into existence took the whole
+        // panel down with a null-check error rather than costing a single
+        // button. An unpublished destination is dropped instead; the route
+        // inventory test is what keeps that from going unnoticed.
         children: actions
-            .map(
-              (_QuickActionSpec action) => _RouteLaunchButton(
-                surface: appRouteSurfaceFor(action.location)!,
+            .map((_QuickActionSpec action) {
+              final AppRouteSurface? surface = appRouteSurfaceFor(
+                action.location,
+              );
+              if (surface == null) {
+                return null;
+              }
+              return _RouteLaunchButton(
+                surface: surface,
                 icon: action.icon,
                 labelOverride: action.label,
                 onPressed:
                     action.useGo
                         ? () => onGo(action.location)
                         : () => onOpen(action.location),
-              ),
-            )
+              );
+            })
+            .whereType<Widget>()
             .toList(growable: false),
       ),
     );

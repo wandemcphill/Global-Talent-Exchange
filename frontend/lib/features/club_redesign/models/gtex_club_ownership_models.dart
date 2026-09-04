@@ -20,7 +20,7 @@ class GtexClubShareHolding {
     required this.unrealizedPlCoin,
     this.unrealizedPlPercent,
     this.ownershipPercent,
-    this.holderCount = 0,
+    this.holderCount,
     this.circulatingSupply = 0,
     this.totalSupply = 0,
     this.rewardSharesEarned = 0,
@@ -43,7 +43,7 @@ class GtexClubShareHolding {
       unrealizedPlCoin: _double(json['unrealized_pl_coin']),
       unrealizedPlPercent: _doubleOrNull(json['unrealized_pl_pct']),
       ownershipPercent: _doubleOrNull(json['ownership_pct']),
-      holderCount: _int(json['holder_count']),
+      holderCount: _intOrNull(json['holder_count']),
       circulatingSupply: _int(json['circulating_supply']),
       totalSupply: _int(json['total_supply']),
       rewardSharesEarned: _int(json['reward_tokens_earned']),
@@ -65,7 +65,11 @@ class GtexClubShareHolding {
   final double unrealizedPlCoin;
   final double? unrealizedPlPercent;
   final double? ownershipPercent;
-  final int holderCount;
+  /// Number of accounts holding this club's shares, straight from the
+  /// backend. `null` when the response did not carry the field: a holding the
+  /// signed-in user owns can never truthfully have zero owners, so an absent
+  /// count is rendered as absent rather than coerced to `0`.
+  final int? holderCount;
   final int circulatingSupply;
   final int totalSupply;
   final int rewardSharesEarned;
@@ -139,6 +143,16 @@ class GtexClubOwnershipPortfolio {
 
   bool get isEmpty => holdings.isEmpty;
   bool get isInProfit => totalUnrealizedPlCoin > 0;
+}
+
+int? _intOrNull(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.round();
+  }
+  return int.tryParse(value?.toString() ?? '');
 }
 
 int _int(Object? value) {

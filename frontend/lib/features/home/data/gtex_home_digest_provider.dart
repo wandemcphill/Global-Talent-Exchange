@@ -52,53 +52,69 @@ final FutureProvider<GtexHomeDigest> homeDigestProvider =
 
       final List<String> warnings = <String>[];
 
+      // These five sources are independent of one another, so they are
+      // issued together rather than awaited one after the next. Serialising
+      // them made Home - the app's most frequently loaded screen - cost five
+      // round-trips before it could paint anything. Each still keeps its own
+      // recovery, so one source failing records its warning and leaves the
+      // other four intact.
       GtePortfolioView portfolio = const GtePortfolioView(
         holdings: <GtePortfolioHolding>[],
       );
-      try {
-        portfolio = await exchange.fetchPortfolio();
-      } catch (error) {
-        warnings.add('Your squad could not be loaded: $error');
-      }
-      final GtexOwnershipBook ownership = GtexOwnershipBook.fromPortfolio(
-        portfolio,
-      );
-
       GteMarketMovers movers = GteMarketMovers.empty;
-      try {
-        movers = await exchange.fetchMarketMovers(limit: 20);
-      } catch (error) {
-        warnings.add('Market movement could not be loaded: $error');
-      }
-
       GtexClubOwnershipPortfolio clubPortfolio =
           GtexClubOwnershipPortfolio.empty();
-      try {
-        clubPortfolio = await clubApi.fetchMyClubPortfolio();
-      } catch (error) {
-        warnings.add('Your club shares could not be loaded: $error');
-      }
-
       List<RegenRankingEntry> regenRankings = const <RegenRankingEntry>[];
-      try {
-        regenRankings = await regenApi.listRankings(
-          limit: _regenRankingLookupLimit,
-        );
-      } catch (error) {
-        warnings.add('Regen rankings could not be loaded: $error');
-      }
-
       GteOrderListView orders = const GteOrderListView(
         items: <GteOrderRecord>[],
         limit: 0,
         offset: 0,
         total: 0,
       );
-      try {
-        orders = await exchange.listOrders(limit: 20);
-      } catch (error) {
-        warnings.add('Recent activity could not be loaded: $error');
-      }
+
+      await Future.wait<void>(<Future<void>>[
+        () async {
+          try {
+            portfolio = await exchange.fetchPortfolio();
+          } catch (error) {
+            warnings.add('Your squad could not be loaded: $error');
+          }
+        }(),
+        () async {
+          try {
+            movers = await exchange.fetchMarketMovers(limit: 20);
+          } catch (error) {
+            warnings.add('Market movement could not be loaded: $error');
+          }
+        }(),
+        () async {
+          try {
+            clubPortfolio = await clubApi.fetchMyClubPortfolio();
+          } catch (error) {
+            warnings.add('Your club shares could not be loaded: $error');
+          }
+        }(),
+        () async {
+          try {
+            regenRankings = await regenApi.listRankings(
+              limit: _regenRankingLookupLimit,
+            );
+          } catch (error) {
+            warnings.add('Regen rankings could not be loaded: $error');
+          }
+        }(),
+        () async {
+          try {
+            orders = await exchange.listOrders(limit: 20);
+          } catch (error) {
+            warnings.add('Recent activity could not be loaded: $error');
+          }
+        }(),
+      ]);
+
+      final GtexOwnershipBook ownership = GtexOwnershipBook.fromPortfolio(
+        portfolio,
+      );
 
       final List<GtexOwnershipStake> stakesByMovement = ownership.stakes
           .toList(growable: false)
@@ -113,18 +129,26 @@ final FutureProvider<GtexHomeDigest> homeDigestProvider =
           .take(_ownedHighlightLimit)
           .toList(growable: false);
 
+      // Form depends on the portfolio, so it is a second wave - but the
+      // lookups within it do not depend on each other and used to run one
+      // player at a time, turning a bounded five-player highlight into five
+      // more serial round-trips.
       final Map<String, GtexPlayerForm> formById = <String, GtexPlayerForm>{};
-      for (final GtexOwnershipStake stake
-          in topStakes.take(_formLookupLimit)) {
-        try {
-          formById[stake.playerId] = await exchange.fetchPlayerForm(
-            stake.playerId,
-          );
-        } catch (_) {
-          // A single player's form failing to load must not hide the rest
-          // of the squad or the position itself (P6) - it is simply absent.
-        }
-      }
+      await Future.wait<void>(<Future<void>>[
+        for (final GtexOwnershipStake stake
+            in topStakes.take(_formLookupLimit))
+          () async {
+            try {
+              formById[stake.playerId] = await exchange.fetchPlayerForm(
+                stake.playerId,
+              );
+            } catch (_) {
+              // A single player's form failing to load must not hide the rest
+              // of the squad or the position itself (P6) - it is simply
+              // absent.
+            }
+          }(),
+      ]);
 
       final List<GtexHomePlayerHighlight> ownedPlayers = topStakes
           .map(

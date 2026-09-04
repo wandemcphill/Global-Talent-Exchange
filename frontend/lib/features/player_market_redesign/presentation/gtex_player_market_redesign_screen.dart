@@ -10,6 +10,18 @@ import '../widgets/gtex_market_movers_rail.dart';
 import '../widgets/gtex_market_player_grid.dart';
 import '../widgets/gtex_market_selected_player_panel.dart';
 
+/// Narrowest board pane that can carry the market-movers rail as a row of
+/// lanes rather than three stacked full-width blocks. Matches the rail's own
+/// internal row/stack threshold, so the rail is only admitted at a width
+/// where it reads as a rail.
+const double _moversRailMinPaneWidth = 640;
+
+/// Shortest board pane that can carry the rail and still show a listing under
+/// it. The rail is a header inside the board's scroll view, so it is paid for
+/// out of the listing's vertical budget: measured at ~132px, plus room for a
+/// player card beneath it.
+const double _moversRailMinPaneHeight = 380;
+
 class GtexPlayerMarketRedesignScreen extends StatefulWidget {
   const GtexPlayerMarketRedesignScreen({
     super.key,
@@ -144,14 +156,6 @@ class _GtexPlayerMarketRedesignScreenState
                 )
                 : GtexMarketBrowseSummary.fromCatalog(catalog);
         final GtexMarketPlayerView? selectedPlayer = _selectedPlayer(players);
-        // The movers rail is secondary chrome. Below the width at which the
-        // master-detail scaffold stops stacking, the detail pane is the whole
-        // narrow viewport and every vertical pixel belongs to the listing -
-        // the market's movement is still legible there through the per-row
-        // deltas and the discovery lanes. Show the rail only when there is
-        // room for it above the board.
-        final bool showMoversRail =
-            MediaQuery.sizeOf(context).width >= 1024;
         // Ownership comes from PHASE4-B's published contract (§4.3); before it
         // loads, or when signed out, the market simply does not claim
         // ownership.
@@ -213,32 +217,63 @@ class _GtexPlayerMarketRedesignScreenState
             onClubSelected: _setClub,
             onAvailabilitySelected: _setAvailability,
           ),
-          detail: GtexMarketPlayerGrid(
-            header: showMoversRail
-                ? GtexMarketMoversRail(
-                  movers: _movers,
-                  isLoading: _isLoadingMovers,
-                  error: _moversError,
-                  onOpenPlayer: widget.onOpenPlayer,
-                )
-                : null,
-            players: players,
-            ownedPlayerIds: ownedPlayerIds,
-            totalPlayers: widget.controller.marketTotalPlayerCount,
-            selectedPlayerId: _selectedPlayerId,
-            basketState: _basketState,
-            isLoading:
-                widget.controller.isLoadingMarket ||
-                widget.controller.isLoadingMoreMarket,
-            error: widget.controller.marketError,
-            hasMore: widget.controller.hasMorePlayers,
-            onRefresh: _refresh,
-            onLoadMore: widget.controller.hasMorePlayers ? _loadMore : null,
-            onSelectPlayer: _selectPlayer,
-            onToggleBasket: _toggleBasket,
-            onBuyNow:
-                (GtexMarketPlayerView player) =>
-                    widget.onOpenPlayer(player.playerId),
+          detail: LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints paneConstraints) {
+              // The movers rail is secondary chrome and is decided from the
+              // board's own pane, not the window: inside the shell the two
+              // differ by the nav rail plus whichever master-detail panels
+              // are inline, so a 1024px window hands this board about 544px
+              // of width and a 1440px window about 574px. Reading the window
+              // showed the rail in both, where it can only stack into three
+              // full-width lanes. The rail is also a header inside the
+              // board's scroll view, so it is paid for out of the listing's
+              // vertical budget - at a 719px window the board pane is 247px
+              // tall and a 132px rail left no room for a single player card.
+              // It therefore appears only when the pane can lay it out as a
+              // row *and* still show the listing beneath it. Below that, the
+              // market's movement stays legible through the per-row deltas
+              // and the discovery lanes.
+              final Size viewport = MediaQuery.sizeOf(context);
+              final double paneWidth =
+                  paneConstraints.hasBoundedWidth
+                      ? paneConstraints.maxWidth
+                      : viewport.width;
+              final double paneHeight =
+                  paneConstraints.hasBoundedHeight
+                      ? paneConstraints.maxHeight
+                      : viewport.height;
+              final bool showMoversRail =
+                  paneWidth >= _moversRailMinPaneWidth &&
+                  paneHeight >= _moversRailMinPaneHeight;
+              return GtexMarketPlayerGrid(
+                header: showMoversRail
+                    ? GtexMarketMoversRail(
+                      movers: _movers,
+                      isLoading: _isLoadingMovers,
+                      error: _moversError,
+                      onOpenPlayer: widget.onOpenPlayer,
+                    )
+                    : null,
+                players: players,
+                ownedPlayerIds: ownedPlayerIds,
+                totalPlayers: widget.controller.marketTotalPlayerCount,
+                selectedPlayerId: _selectedPlayerId,
+                basketState: _basketState,
+                isLoading:
+                    widget.controller.isLoadingMarket ||
+                    widget.controller.isLoadingMoreMarket,
+                error: widget.controller.marketError,
+                hasMore: widget.controller.hasMorePlayers,
+                onRefresh: _refresh,
+                onLoadMore:
+                    widget.controller.hasMorePlayers ? _loadMore : null,
+                onSelectPlayer: _selectPlayer,
+                onToggleBasket: _toggleBasket,
+                onBuyNow:
+                    (GtexMarketPlayerView player) =>
+                        widget.onOpenPlayer(player.playerId),
+              );
+            },
           ),
           rightPanel: GtexMarketSelectedPlayerPanel(
             selectedPlayer: selectedPlayer,

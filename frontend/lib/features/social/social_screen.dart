@@ -1441,11 +1441,15 @@ class _CommunityLeftPanel extends StatelessWidget {
                         ? Icons.verified_user_outlined
                         : Icons.visibility_outlined,
               ),
-              GtexStatusChip(
-                label: '${digest?.unreadHintCount ?? 0} UNREAD HINTS',
-                color: GtexColors.cyan,
-                icon: Icons.notifications_active_outlined,
-              ),
+              // Omitted while the digest is absent rather than claiming zero
+              // unread hints - a count the screen has not been given is
+              // unknown, not empty.
+              if (digest != null)
+                GtexStatusChip(
+                  label: '${digest!.unreadHintCount} UNREAD HINTS',
+                  color: GtexColors.cyan,
+                  icon: Icons.notifications_active_outlined,
+                ),
             ],
           ),
         ),
@@ -1556,21 +1560,27 @@ class _CommunityRightPanel extends StatelessWidget {
           accent: GtexColors.mint,
           child: Column(
             children: <Widget>[
+              // The social pulse reports the digest the API returned. When
+              // the digest has not arrived - still loading, its own source
+              // failed while other lanes loaded, or the session is a guest
+              // the digest is never fetched for - each line reads as unknown.
+              // Printing `0` stated four counts about the reader's own
+              // community that nothing had measured.
               _MetricLine(
                 label: 'Watchlist',
-                value: '${digest?.watchlistCount ?? 0}',
+                value: _countLabel(digest?.watchlistCount),
               ),
               _MetricLine(
                 label: 'Live threads',
-                value: '${digest?.liveThreadCount ?? 0}',
+                value: _countLabel(digest?.liveThreadCount),
               ),
               _MetricLine(
                 label: 'Direct threads',
-                value: '${digest?.privateThreadCount ?? 0}',
+                value: _countLabel(digest?.privateThreadCount),
               ),
               _MetricLine(
                 label: 'Unread hints',
-                value: '${digest?.unreadHintCount ?? 0}',
+                value: _countLabel(digest?.unreadHintCount),
               ),
             ],
           ),
@@ -1751,6 +1761,10 @@ class _CommunityDetailScroll extends StatelessWidget {
     );
   }
 }
+
+/// Renders a count the backend supplied, or GTEX's unknown token when it did
+/// not. Never substitutes zero for absent.
+String _countLabel(int? value) => value == null ? '-' : '$value';
 
 class _MetricLine extends StatelessWidget {
   const _MetricLine({required this.label, required this.value});

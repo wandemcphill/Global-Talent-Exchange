@@ -238,6 +238,28 @@ final FutureProvider<LiveTasksData> liveTasksProvider =
       );
     });
 
+/// Claims one daily challenge and reports what the backend settled.
+///
+/// The claim endpoint returns the challenge, the claim and a reward summary,
+/// but the streak that results from it lives on `/me` - so the task state is
+/// reloaded before the feedback is built, and the feedback reports the streak
+/// the backend now holds rather than one predicted here.
+Future<DailyChallengeClaimFeedback> claimDailyChallenge(
+  WidgetRef ref, {
+  required String challengeKey,
+}) async {
+  final GteAuthedApi api = ref.read(authedApiProvider);
+  final Object? payload = await api.post(
+    '/api/daily-challenges/$challengeKey/claim',
+  );
+  ref.invalidate(liveTasksProvider);
+  final LiveTasksData refreshed = await ref.read(liveTasksProvider.future);
+  return DailyChallengeClaimFeedback.fromResponse(
+    payload,
+    refreshedTasks: refreshed,
+  );
+}
+
 DailyChallengeClaimSummary _claimSummaryFromPayload(
   JsonMap item, {
   required Map<String, String> challengeTitles,

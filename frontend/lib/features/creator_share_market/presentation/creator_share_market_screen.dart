@@ -890,8 +890,13 @@ class _ValuationTickerSection extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 8),
+          // `fan_count` is deliberately not shown. The backend derives it
+          // from reputation, share events, reactions, challenge wins and
+          // follower count and floors it at 100 - a popularity composite, not
+          // a count of supporters. Rendering it as "Fans" would state a
+          // number about this club that nothing in the product measures.
           Text(
-            'Last five: ${ticker.winsLastFive}W ${ticker.drawsLastFive}D ${ticker.lossesLastFive}L | ${ticker.pointsLastFive} pts | Fans: ${ticker.fanCount} | Updated ${gteFormatRelativeTime(ticker.lastRefreshedAt)}',
+            'Last five: ${ticker.winsLastFive}W ${ticker.drawsLastFive}D ${ticker.lossesLastFive}L | ${ticker.pointsLastFive} pts | Updated ${gteFormatRelativeTime(ticker.lastRefreshedAt)}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],

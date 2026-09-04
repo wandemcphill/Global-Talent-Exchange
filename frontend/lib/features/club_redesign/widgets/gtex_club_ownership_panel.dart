@@ -218,11 +218,16 @@ class _ClubShareCard extends StatelessWidget {
                 label: 'Your avg ${_coin(holding.averagePriceCoin)}',
                 color: GtexColors.accentBlue,
               ),
-              GtexStatusChip(
-                label: '${holding.holderCount} '
-                    '${holding.holderCount == 1 ? 'owner' : 'owners'}',
-                color: GtexColors.textSecondary,
-              ),
+              // Omitted rather than shown as "0 owners" when the backend
+              // did not return a holder count - the reader owns this
+              // holding, so a zero here would be a number the product
+              // already knows is wrong.
+              if (holding.holderCount != null)
+                GtexStatusChip(
+                  label: '${holding.holderCount} '
+                      '${holding.holderCount == 1 ? 'owner' : 'owners'}',
+                  color: GtexColors.textSecondary,
+                ),
               if (holding.governanceEnabled)
                 const GtexStatusChip(
                   label: 'Voting rights',

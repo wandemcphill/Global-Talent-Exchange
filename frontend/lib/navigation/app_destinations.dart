@@ -201,6 +201,9 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     state: AppRouteSurfaceState.hidden,
     summary: 'Deep federation detail route.',
   ),
+  // The live surface is `/national-team`; this plural was the wrong spelling
+  // of it and reached the router's error page for want of an alias, which is
+  // now registered. Live, as it always claimed to be.
   AppRouteSurface(
     label: 'National Teams',
     location: AppRoutes.nationalTeams,
@@ -214,6 +217,25 @@ const List<AppRouteSurface> appRouteInventory = <AppRouteSurface>[
     location: AppRoutes.nationalTeamDetail,
     state: AppRouteSurfaceState.hidden,
     summary: 'Deep national-team competition route.',
+  ),
+  // Both of these have had a live `GoRoute` and a real screen all along -
+  // the manager market and the lineup editor, each with its own no-club
+  // blocked state - and the personalised Home's club-owner quick actions
+  // navigate to them. They were simply never published here, and
+  // `appRouteSurfaceFor` returns null for anything absent, so building those
+  // quick actions threw a null-check error and replaced the whole panel with
+  // a red error box on a club owner's Home.
+  AppRouteSurface(
+    label: 'Coaches',
+    location: AppRoutes.coaches,
+    state: AppRouteSurfaceState.live,
+    summary: 'Live manager market for hiring and comparing coaches.',
+  ),
+  AppRouteSurface(
+    label: 'Lineup',
+    location: AppRoutes.lineup,
+    state: AppRouteSurfaceState.live,
+    summary: 'Formation and starting-lineup editor for the active club.',
   ),
   AppRouteSurface(
     label: 'Tasks',
