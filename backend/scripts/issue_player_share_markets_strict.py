@@ -28,6 +28,11 @@ _spec = importlib.util.spec_from_file_location("player_share_issuance_plan", SCR
 if _spec is None or _spec.loader is None:
     raise RuntimeError(f"Unable to load issuance planner: {SCRIPT_PATH}")
 _planner = importlib.util.module_from_spec(_spec)
+# Dataclasses resolve KW_ONLY / forward references via sys.modules.get(cls.__module__),
+# so a dynamically loaded module must be registered before exec_module runs -- Python
+# 3.14 raises AttributeError: 'NoneType' object has no attribute '__dict__' on the very
+# first frozen/slots dataclass in the module (IssuancePlan) otherwise.
+sys.modules[_spec.name] = _planner
 _spec.loader.exec_module(_planner)
 
 from app.core.database import create_database_engine, create_session_factory

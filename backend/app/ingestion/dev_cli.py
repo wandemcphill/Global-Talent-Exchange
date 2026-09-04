@@ -218,6 +218,21 @@ def seed_world_visibility_database(
         return summary.to_dict()
 
 
+def _redacted_database_url(database_url: str) -> str:
+    """Render a database URL with its password masked, for safe logging.
+
+    seed_national_regen_pool_database and repair_national_regen_seed_names_database
+    both echo their inputs as a JSON summary that the CLI prints to stdout. Render
+    cron jobs capture stdout into their log stream, which is durable and often
+    exported -- printing the raw URL leaked the live database password into that
+    log history on every run.
+    """
+    try:
+        return make_url(database_url).render_as_string(hide_password=True)
+    except Exception:
+        return "<redacted: unparsable database url>"
+
+
 def seed_national_regen_pool_database(
     *,
     database_url: str,
@@ -284,7 +299,7 @@ def seed_national_regen_pool_database(
                 )
 
             return {
-                "database_url": database_url,
+                "database_url": _redacted_database_url(database_url),
                 "preseed_batch": preseed_batch,
                 "age_band": age_band,
                 "seeds_per_country": seeds_per_country,
@@ -397,7 +412,7 @@ def repair_national_regen_seed_names_database(
                             portrait_refreshed += 1
                 session.commit()
                 return {
-                    "database_url": database_url,
+                    "database_url": _redacted_database_url(database_url),
                     "preseed_batch": preseed_batch,
                     "scanned": len(seeds),
                     "country_count": len(grouped),
