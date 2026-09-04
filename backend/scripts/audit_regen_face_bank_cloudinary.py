@@ -111,16 +111,11 @@ def _credentials() -> tuple[str, str, str]:
         if not value
     ]
     if missing:
-        raise AuditError(
-            "Missing Cloudinary credentials: "
-            f"{', '.join(missing)} (or set CLOUDINARY_URL)"
-        )
+        raise AuditError("Missing Cloudinary credentials: " f"{', '.join(missing)} (or set CLOUDINARY_URL)")
     return cloud, key, secret
 
 
-def iter_cloudinary_images(
-    *, prefix: str, delivery_type: str, max_assets: int | None
-) -> Iterator[dict[str, Any]]:
+def iter_cloudinary_images(*, prefix: str, delivery_type: str, max_assets: int | None) -> Iterator[dict[str, Any]]:
     """Yield image resources from the Cloudinary Admin API, following cursors."""
     cloud, key, secret = _credentials()
     url = ADMIN_API.format(cloud=cloud)
@@ -139,9 +134,7 @@ def iter_cloudinary_images(
             if response.status_code == 401:
                 raise AuditError("Cloudinary rejected the credentials (401).")
             if response.status_code == 404:
-                raise AuditError(
-                    f"Cloudinary returned 404 for cloud '{cloud}' -- check CLOUDINARY_CLOUD_NAME."
-                )
+                raise AuditError(f"Cloudinary returned 404 for cloud '{cloud}' -- check CLOUDINARY_CLOUD_NAME.")
             response.raise_for_status()
             payload = response.json()
 
@@ -229,9 +222,7 @@ def _candidate_country_codes() -> set[str]:
     return codes
 
 
-def build_report(
-    *, resources: list[dict[str, Any]], manifest_assets: list[dict[str, Any]]
-) -> dict[str, Any]:
+def build_report(*, resources: list[dict[str, Any]], manifest_assets: list[dict[str, Any]]) -> dict[str, Any]:
     cloud_by_key: dict[str, dict[str, Any]] = {}
     unmatched_public_ids: list[str] = []
     ethnicity_counts: collections.Counter[str] = collections.Counter()
@@ -268,9 +259,7 @@ def build_report(
     cloudinary_only = sorted(set(cloud_by_key) - set(manifest_by_key))
 
     required = required_ethnicity_groups()
-    present = {
-        RegenPortraitService._normalize_ethnicity_label(label) for label in ethnicity_counts
-    }
+    present = {RegenPortraitService._normalize_ethnicity_label(label) for label in ethnicity_counts}
     return {
         "cloudinary_image_count": len(resources),
         "face_bank_shaped": len(cloud_by_key),

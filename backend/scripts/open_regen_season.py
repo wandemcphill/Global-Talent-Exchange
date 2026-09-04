@@ -62,9 +62,7 @@ def open_regen_season(*, database_url: str, season_days: int) -> dict[str, objec
                 session.commit()
                 return {
                     "created": pre_existing is None,
-                    "reason": (
-                        "seeded_by_defaults" if pre_existing is None else "active_season_already_exists"
-                    ),
+                    "reason": ("seeded_by_defaults" if pre_existing is None else "active_season_already_exists"),
                     "season_number": active.season_number,
                     "start_date": active.start_date.isoformat(),
                     "end_date": active.end_date.isoformat(),
@@ -102,10 +100,7 @@ def main(argv: list[str] | None = None) -> int:
 
     result = open_regen_season(database_url=args.database_url, season_days=args.season_days)
     if result["created"]:
-        print(
-            f"Opened regen season {result['season_number']} "
-            f"({result['start_date']} -> {result['end_date']})"
-        )
+        print(f"Opened regen season {result['season_number']} " f"({result['start_date']} -> {result['end_date']})")
     else:
         print(
             f"Regen season {result['season_number']} is already active "

@@ -223,7 +223,9 @@ class RegenPortraitService:
         existing_url = self._first_string(metadata, "portraitUrl", "portrait_url", "image_url")
         existing_recipe = metadata.get("faceRecipe") if isinstance(metadata.get("faceRecipe"), dict) else None
         portrait_country_code = (
-            self._first_string(metadata, "portraitCountryCode", "portrait_country_code", "naming_country_code", "nationality")
+            self._first_string(
+                metadata, "portraitCountryCode", "portrait_country_code", "naming_country_code", "nationality"
+            )
             or seed.country_code
         )
         face_seed = self._first_string(metadata, "faceSeed", "face_seed")
@@ -1063,14 +1065,7 @@ class RegenPortraitService:
 
     @classmethod
     def _normalize_ethnicity_label(cls, value: object) -> str:
-        return " ".join(
-            str(value or "")
-            .replace("_", " ")
-            .replace("-", " ")
-            .strip()
-            .lower()
-            .split()
-        )
+        return " ".join(str(value or "").replace("_", " ").replace("-", " ").strip().lower().split())
 
     @classmethod
     def _portrait_ethnicity_groups(cls, country_code: str | None) -> tuple[str, ...]:
@@ -1471,8 +1466,7 @@ class RegenPortraitService:
     @classmethod
     def _asset_matches_region(cls, asset: dict[str, Any], region: str) -> bool:
         label = " ".join(
-            str(asset.get(key) or "").lower()
-            for key in ("ethnicity", "hair_colour", "source_path", "storage_key")
+            str(asset.get(key) or "").lower() for key in ("ethnicity", "hair_colour", "source_path", "storage_key")
         )
         if region == "africa":
             return "african" in label or "africa" in label or "mena" in label
@@ -1509,9 +1503,7 @@ class RegenPortraitService:
             return None
 
     def _face_bank_manifest_path(self) -> Path:
-        configured = os.environ.get("GTEX_REGEN_FACE_BANK_MANIFEST") or os.environ.get(
-            "GTE_REGEN_FACE_BANK_MANIFEST"
-        )
+        configured = os.environ.get("GTEX_REGEN_FACE_BANK_MANIFEST") or os.environ.get("GTE_REGEN_FACE_BANK_MANIFEST")
         if configured:
             return Path(configured)
         return self._media_root() / FACE_BANK_MANIFEST
@@ -1549,7 +1541,6 @@ class RegenPortraitService:
             or "/portrait_overrides/" in lowered
             or "/regen_portrait_overrides/" in lowered
         )
-
 
 
 __all__ = [
