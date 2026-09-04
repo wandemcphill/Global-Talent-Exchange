@@ -16,8 +16,17 @@ services:
     preDeployCommand: "bash ops/render/production-preflight.sh && cd backend && alembic -c migrations/alembic.ini upgrade head"
     startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-1} --timeout 180 --graceful-timeout 120"
     envVars:
+      # Two workers so a slow request cannot monopolize the whole API.  Each
+      # worker builds a write engine and a read engine, so the pooler budget is
+      # pool_size x 2 engines x 2 workers = 16 base + max_overflow x 2 x 2 = 8,
+      # i.e. 24 connections at full stretch, under the 30-connection Supabase
+      # session-pooler limit.  Raise these together or not at all.
       - key: WEB_CONCURRENCY
-        value: "1"
+        value: "2"
+      - key: GTE_DB_POOL_SIZE
+        value: "4"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "2"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_ENABLED
