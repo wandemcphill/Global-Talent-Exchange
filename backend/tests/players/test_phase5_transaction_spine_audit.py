@@ -24,13 +24,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+from sqlalchemy import func, select
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.market.router import router as market_router
 from app.models.player_token_market import PlayerShareHolding
+from app.models.wallet import LedgerAccount
 from app.models.user import UserRole
 from app.orders.router import router as orders_router
 from app.players import router as players_router_module
@@ -96,16 +98,15 @@ def test_market_buy_is_visible_in_the_portfolio(monkeypatch) -> None:
         engine.dispose()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PHASE5-A P0-2: PlayerShareHolding and the position:{user}:{player} "
-        "ledger accounts are two unreconciled ownership stores. Buying through "
-        "System A leaves System B at zero, so the order book rejects a sell of "
-        "shares the user demonstrably owns."
-    ),
-)
-def test_the_two_ownership_stores_agree_after_a_market_buy(monkeypatch) -> None:
+def test_system_a_is_the_only_ownership_store_after_a_market_buy(monkeypatch) -> None:
+    """P0-2 is closed by retirement, not by bridging.
+
+    The audit found PlayerShareHolding and the position:{user}:{player} ledger
+    accounts competing as two unreconciled ownership stores. The resolution was
+    to make System A canonical and retire System B's user-facing path (PR-2A),
+    not to reconcile them - so the correct end state is exactly one store with
+    the ownership in it, and no position ledger account created at all.
+    """
     engine, session = _build_session()
     try:
         admin = _create_user(session, user_id="p5-ownership-admin", role=UserRole.ADMIN)
@@ -120,11 +121,19 @@ def test_the_two_ownership_stores_agree_after_a_market_buy(monkeypatch) -> None:
             buy_response = client.post("/market/buy", json={"player_id": player.id, "share_count": 10})
 
         assert buy_response.status_code == 201, buy_response.text
+
+        # Canonical ownership lives in exactly one place.
         holding = session.query(PlayerShareHolding).filter_by(user_id=fan.id, player_id=player.id).one()
         assert holding.share_count == 10
 
-        position_quantity = WalletService().get_available_position_quantity(session, fan, player.id)
-        assert position_quantity == Decimal("10.0000")
+        # And the retired store was never touched - no competing record exists.
+        assert WalletService().get_available_position_quantity(session, fan, player.id) == Decimal("0.0000")
+        assert (
+            session.scalar(
+                select(func.count()).select_from(LedgerAccount).where(LedgerAccount.code.like(f"position:{fan.id}:%"))
+            )
+            == 0
+        )
     finally:
         session.close()
         engine.dispose()
@@ -186,13 +195,17 @@ def test_player_shares_buy_replays_a_repeated_idempotency_key(monkeypatch) -> No
         engine.dispose()
 
 
-def test_order_book_buy_cannot_fill_and_parks_the_reservation(monkeypatch) -> None:
-    """The venue the app actually trades on has no supply to match against.
+def test_order_book_creation_is_retired_and_never_had_supply(monkeypatch) -> None:
+    """The venue the app used to trade on never had supply, and is now closed.
 
-    Production issuance writes PlayerShareMarket.circulating_shares; it never
-    credits position:{user}:{player} units, and only a settled execution can. So
-    a buy order placed from the canonical Player Detail order ticket reserves the
-    user's coin and stays OPEN with zero executions indefinitely.
+    Originally this test pinned the defect: a buy order was accepted, reserved
+    the user's coin and sat OPEN forever, because production issuance credits
+    ``PlayerShareMarket.circulating_shares`` while only a settled execution can
+    credit a ``position:{user}:{player}`` unit.
+
+    PR-2A retired order creation (410), so the reservation can no longer be
+    parked at all. The half that still matters is asserted below: an issued
+    market carries real supply, and the order book shows none of it.
     """
     engine, session = _build_session()
     try:
@@ -203,7 +216,7 @@ def test_order_book_buy_cannot_fill_and_parks_the_reservation(monkeypatch) -> No
         client, auth = _build_client(session, admin=admin, user=fan, monkeypatch=monkeypatch)
 
         with client:
-            client.post(f"/players/{player.id}/shares/market", json=ISSUE_BODY)
+            issued = client.post(f"/players/{player.id}/shares/market", json=ISSUE_BODY)
             auth["user"] = fan
             order_response = client.post(
                 "/orders",
@@ -211,18 +224,18 @@ def test_order_book_buy_cannot_fill_and_parks_the_reservation(monkeypatch) -> No
             )
             book_response = client.get(f"/orders/book/{player.id}")
 
-        assert order_response.status_code == 201, order_response.text
-        order = order_response.json()
-        assert order["status"] == "open"
-        assert order["filled_quantity"] == "0.0000"
-        assert order["execution_summary"]["execution_count"] == 0
-        assert Decimal(order["reserved_amount"]) == Decimal("2.5000")
-        assert order["hold_transaction_id"]
+        # System A holds the supply.
+        assert issued.status_code == 200, issued.text
+        assert issued.json()["total_shares"] == 1000
 
-        # The issued market holds 1000 shares, yet the book the app trades on
-        # shows no ask at all.
+        # System B can no longer take the user's coin for an order that cannot fill.
+        assert order_response.status_code == 410, order_response.text
+        assert "/market/buy" in order_response.json()["detail"]
+
+        # And it never had any of that supply to match against.
         assert book_response.status_code == 200, book_response.text
         assert book_response.json()["asks"] == []
+        assert book_response.json()["bids"] == []
     finally:
         session.close()
         engine.dispose()

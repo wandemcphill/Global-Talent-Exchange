@@ -26,6 +26,8 @@ from app.models.treasury import PaymentMode
 from app.policies.service import PolicyService
 from app.services.runtime_control_service import RuntimeControlService
 from app.treasury.service import GTEX_PLATFORM_POSITIONING, TreasuryService
+from app.orders.models import OrderSide
+from app.orders.service import OrderService
 from app.wallets.router import router
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerUnit
@@ -181,21 +183,32 @@ def test_get_portfolio_returns_empty_holdings_for_new_user(api_context) -> None:
     assert Decimal(str(payload["total_balance"])) == Decimal("0.0000")
 
 
+def _reserve_via_order(session, user, player, *, quantity: str, max_price: str) -> None:
+    """Create the buy-order fund reservation these wallet tests depend on.
+
+    POST /orders is retired (410) now that System A is the canonical player-share
+    venue, but OrderService and its reservation/ledger behaviour are still live
+    for historical records, admin buyback and the simulation harness - so the
+    reservation is created through the service directly. What these tests assert
+    (wallet summary and ledger shape after a reservation) is unchanged.
+    """
+    OrderService().place_order(
+        session,
+        user=user,
+        player_id=player.id,
+        side=OrderSide.BUY,
+        quantity=Decimal(quantity),
+        max_price=Decimal(max_price),
+    )
+    session.commit()
+
+
 def test_get_wallet_summary_returns_available_reserved_and_total_balances(api_context) -> None:
     client, session, current_user = api_context
     player = _create_player(session)
     _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
 
-    order_response = client.post(
-        "/api/orders",
-        json={
-            "player_id": player.id,
-            "side": "buy",
-            "quantity": 10,
-            "max_price": 5,
-        },
-    )
-    assert order_response.status_code == 201
+    _reserve_via_order(session, current_user, player, quantity="10", max_price="5")
 
     response = client.get("/api/wallets/summary", params={"currency": "coin"})
 
@@ -218,16 +231,7 @@ def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
     player = _create_player(session, provider_external_id="player-wallet-ledger")
     _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
 
-    order_response = client.post(
-        "/api/orders",
-        json={
-            "player_id": player.id,
-            "side": "buy",
-            "quantity": 10,
-            "max_price": 5,
-        },
-    )
-    assert order_response.status_code == 201
+    _reserve_via_order(session, current_user, player, quantity="10", max_price="5")
 
     response = client.get("/api/wallets/ledger", params={"page": 1, "page_size": 3})
 
