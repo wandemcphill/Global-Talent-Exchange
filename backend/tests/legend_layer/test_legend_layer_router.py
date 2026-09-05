@@ -70,7 +70,9 @@ def test_legend_layer_full_story_simulation(
         session.flush()
 
         home_player.market_value_eur = home_player.market_value_eur or 1_500_000.0
-        home_player.current_market_reference_value = home_player.current_market_reference_value or home_player.market_value_eur
+        home_player.current_market_reference_value = (
+            home_player.current_market_reference_value or home_player.market_value_eur
+        )
 
         market = session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == home_player.id))
         if market is None:
@@ -208,7 +210,9 @@ def test_legend_layer_full_story_simulation(
         # tradable price to the trading/issuance/governed-admin writers and left
         # the bounded matchday overlay in app.value_engine.matchday_signal as the
         # single path from form to value. The story linkage is still recorded.
-        refreshed_market = session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == home_player.id))
+        refreshed_market = session.scalar(
+            select(PlayerShareMarket).where(PlayerShareMarket.player_id == home_player.id)
+        )
         assert refreshed_market is not None
         assert Decimal(refreshed_market.share_price_coin) == old_price
         assert refreshed_market.metadata_json["last_narrative_rating"] is not None

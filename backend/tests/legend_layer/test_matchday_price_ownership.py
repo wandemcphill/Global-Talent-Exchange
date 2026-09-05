@@ -172,9 +172,9 @@ def test_matchday_narrative_does_not_fabricate_an_absent_market_value() -> None:
         )
         session.flush()
 
-        assert player.market_value_eur is None, (
-            f"an absent market value was invented from a rating: {player.market_value_eur}"
-        )
+        assert (
+            player.market_value_eur is None
+        ), f"an absent market value was invented from a rating: {player.market_value_eur}"
         assert player.current_market_reference_value is None
     finally:
         session.close()

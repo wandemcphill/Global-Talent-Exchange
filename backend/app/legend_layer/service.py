@@ -98,9 +98,7 @@ class LegendLayerService:
                 select(ClubProfile.id).where(ClubProfile.owner_user_id == current_user.id)
             ).all()
         }
-        follows = list(
-            self.session.scalars(select(SocialFollow).where(SocialFollow.user_id == current_user.id)).all()
-        )
+        follows = list(self.session.scalars(select(SocialFollow).where(SocialFollow.user_id == current_user.id)).all())
         followed_club_ids = {item.club_id for item in follows if item.club_id}
         followed_player_ids = {item.player_id for item in follows if item.player_id}
         owned_player_ids: set[str] = set()
@@ -270,9 +268,11 @@ class LegendLayerService:
             "dramatic": (
                 f"Late Drama Sends {winner_name} Through"
                 if late_drama and winner_name
-                else f"{winner_name} Take the Points in {scoreline}"
-                if winner_name
-                else f"{context['home_club_name']} and {context['away_club_name']} Share the Spoils"
+                else (
+                    f"{winner_name} Take the Points in {scoreline}"
+                    if winner_name
+                    else f"{context['home_club_name']} and {context['away_club_name']} Share the Spoils"
+                )
             ),
             "neutral": f"{context['home_club_name']} {context['home_goals']}-{context['away_goals']} {context['away_club_name']}",
             "click_worthy": (
@@ -293,7 +293,11 @@ class LegendLayerService:
             if assists:
                 contribution_parts.append(f"{assists} assist{'s' if assists != 1 else ''}")
             if contribution_parts:
-                standout_line = f"{standout.get('player_name') or 'A standout performer'} supplied " + " and ".join(contribution_parts) + "."
+                standout_line = (
+                    f"{standout.get('player_name') or 'A standout performer'} supplied "
+                    + " and ".join(contribution_parts)
+                    + "."
+                )
         commentary_excerpt = self._commentary_excerpt(context["commentary"])
         body = (
             f"{context['home_club_name']} and {context['away_club_name']} closed out a {scoreline} result in a "
@@ -514,11 +518,17 @@ class LegendLayerService:
         article_perception: dict[str, float] = {}
         for article in articles:
             if article.related_player_id:
-                article_perception[article.related_player_id] = article_perception.get(article.related_player_id, 0.0) + float(article.perception_delta or 0.0)
+                article_perception[article.related_player_id] = article_perception.get(
+                    article.related_player_id, 0.0
+                ) + float(article.perception_delta or 0.0)
             if article.related_club_id:
-                article_perception[article.related_club_id] = article_perception.get(article.related_club_id, 0.0) + float(article.perception_delta or 0.0)
+                article_perception[article.related_club_id] = article_perception.get(
+                    article.related_club_id, 0.0
+                ) + float(article.perception_delta or 0.0)
             if article.related_user_id:
-                article_perception[article.related_user_id] = article_perception.get(article.related_user_id, 0.0) + float(article.perception_delta or 0.0)
+                article_perception[article.related_user_id] = article_perception.get(
+                    article.related_user_id, 0.0
+                ) + float(article.perception_delta or 0.0)
 
         for stat in context["player_stats"]:
             player_id = self._clean(stat.get("player_id"))
@@ -589,8 +599,12 @@ class LegendLayerService:
                     perception_delta=perception_delta,
                     metadata_updates={
                         "match_id": context["match_id"],
-                        "goals_for": context["home_goals"] if club_id == context["home_club_id"] else context["away_goals"],
-                        "goals_against": context["away_goals"] if club_id == context["home_club_id"] else context["home_goals"],
+                        "goals_for": (
+                            context["home_goals"] if club_id == context["home_club_id"] else context["away_goals"]
+                        ),
+                        "goals_against": (
+                            context["away_goals"] if club_id == context["home_club_id"] else context["home_goals"]
+                        ),
                     },
                 )
                 touched.add(("club", scope, scope_season_key))
@@ -745,9 +759,7 @@ class LegendLayerService:
         )
 
     def _ensure_personality(self, player: Player) -> PlayerPersonality:
-        personality = self.session.scalar(
-            select(PlayerPersonality).where(PlayerPersonality.player_id == player.id)
-        )
+        personality = self.session.scalar(select(PlayerPersonality).where(PlayerPersonality.player_id == player.id))
         if personality is not None:
             return personality
         personality = PlayerPersonality(
@@ -787,7 +799,9 @@ class LegendLayerService:
         is_big_moment = self._is_big_moment(stat=stat, context=context)
         age = self._player_age(player)
 
-        confidence_delta = (6.0 if team_result == "win" else -5.0 if team_result == "loss" else 1.0) + ((rating - 6.5) * 2.2)
+        confidence_delta = (6.0 if team_result == "win" else -5.0 if team_result == "loss" else 1.0) + (
+            (rating - 6.5) * 2.2
+        )
         ego_delta = (goals * 3.0) + (assists * 2.0) + (3.0 if rating >= 8.2 else -2.0 if rating <= 5.8 else 0.0)
         loyalty_delta = 2.0 if team_result == "win" else -3.0 if team_result == "loss" and context["is_final"] else 0.0
         aggression_delta = (yellow_cards * 3.0) + (10.0 if red_card else -1.0 if rating >= 7.0 else 1.0)
@@ -843,17 +857,17 @@ class LegendLayerService:
         sentiment = (
             "confident"
             if personality.confidence >= 68 and team_result == "win"
-            else "defiant"
-            if personality.ego >= 72 and team_result == "loss"
-            else "measured"
+            else "defiant" if personality.ego >= 72 and team_result == "loss" else "measured"
         )
         team_name = str(stat.get("team_name") or self._team_name_for_player(context, stat))
         quote = (
             f"We stayed with the data of the game and kept pushing for {team_name}."
             if team_result == "win"
-            else f"The level was not where it needs to be, and I take responsibility for that."
-            if team_result == "loss"
-            else f"We had moments, but the match was decided by fine margins."
+            else (
+                "The level was not where it needs to be, and I take responsibility for that."
+                if team_result == "loss"
+                else "We had moments, but the match was decided by fine margins."
+            )
         )
         if int(stat.get("goals") or 0) or int(stat.get("assists") or 0):
             quote += " I knew I had to turn the chances into numbers tonight."
@@ -887,7 +901,11 @@ class LegendLayerService:
         red_card = bool(stat.get("red_card"))
         goals = int(stat.get("goals") or 0)
         assists = int(stat.get("assists") or 0)
-        if rating <= 5.8 or red_card or (personality.ego >= 72 and context["winner_team_id"] != self._clean(stat.get("team_id"))):
+        if (
+            rating <= 5.8
+            or red_card
+            or (personality.ego >= 72 and context["winner_team_id"] != self._clean(stat.get("team_id")))
+        ):
             return PlayerFanReaction(
                 player_id=player.id,
                 article_id=article.id if article is not None else None,
@@ -1079,7 +1097,8 @@ class LegendLayerService:
 
     def _late_drama(self, commentary: list[CommentaryEvent]) -> bool:
         return any(
-            int(item.minute) >= 85 and str(item.event_type or "").lower() in {"goal", "winner", "late_goal", "match_winner"}
+            int(item.minute) >= 85
+            and str(item.event_type or "").lower() in {"goal", "winner", "late_goal", "match_winner"}
             for item in commentary
         )
 
@@ -1092,7 +1111,9 @@ class LegendLayerService:
         return str(stat.get("team_name") or "Unknown Team")
 
     def _scoreline(self, context: dict[str, Any]) -> str:
-        return f"{context['home_club_name']} {context['home_goals']}-{context['away_goals']} {context['away_club_name']}"
+        return (
+            f"{context['home_club_name']} {context['home_goals']}-{context['away_goals']} {context['away_club_name']}"
+        )
 
     def _clean_tags(self, items: list[str | None]) -> list[str]:
         tags: list[str] = []
@@ -1182,7 +1203,11 @@ class LegendLayerService:
         assists = int(stat.get("assists") or 0)
         if context["is_final"] and (goals > 0 or assists > 0):
             return True
-        return bool(context["winner_team_id"]) and self._clean(stat.get("team_id")) == context["winner_team_id"] and (goals > 0 or assists > 0)
+        return (
+            bool(context["winner_team_id"])
+            and self._clean(stat.get("team_id")) == context["winner_team_id"]
+            and (goals > 0 or assists > 0)
+        )
 
     def _player_age(self, player: Player) -> int | None:
         if player.date_of_birth is None:
