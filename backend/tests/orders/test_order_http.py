@@ -22,9 +22,63 @@ from app.models.base import Base
 from app.models.user import KycStatus
 from app.models.user_wallet import UserWallet
 from app.models.wallet import LedgerEntryReason, LedgerUnit
-from app.orders.models import Order
-from app.orders.router import router
+from app.matching.service import InvalidOrderTransitionError
+from app.orders.models import Order, OrderSide
+from app.orders.router import router, _build_order_view
+from app.orders.service import OrderPlacementError, OrderService, PlayerNotFoundError
+from app.wallets.service import LedgerError
 from app.wallets.service import LedgerPosting, WalletService
+
+
+class _PlacedOrderResponse:
+    """Response-shaped result from placing an order through OrderService."""
+
+    def __init__(self, status_code: int, payload: object) -> None:
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self) -> object:
+        return self._payload
+
+    @property
+    def text(self) -> str:
+        return str(self._payload)
+
+
+def _place_order(session, user, json: dict) -> _PlacedOrderResponse:
+    """Place a System B order through OrderService rather than over HTTP.
+
+    ``POST /orders`` is retired (410) now that System A is the canonical
+    player-share venue - see tests/orders/test_phase5_system_b_retirement.py for
+    the proof of that. The order model, matching, reservation and ledger
+    behaviour these tests cover is still live for historical records, admin
+    buyback and the simulation harness, so the tests drive the surviving service
+    directly and keep asserting exactly what they always did.
+
+    The status-code mapping mirrors the router the endpoint used to have.
+    """
+    service = OrderService()
+    try:
+        order = service.place_order(
+            session,
+            user=user,
+            player_id=json["player_id"],
+            side=OrderSide(json["side"]),
+            quantity=Decimal(str(json["quantity"])),
+            max_price=None if json.get("max_price") is None else Decimal(str(json["max_price"])),
+        )
+        session.commit()
+        session.refresh(order)
+    except PlayerNotFoundError as exc:
+        session.rollback()
+        return _PlacedOrderResponse(404, {"detail": str(exc)})
+    except (InvalidOrderTransitionError, LedgerError) as exc:
+        session.rollback()
+        return _PlacedOrderResponse(409, {"detail": str(exc)})
+    except OrderPlacementError as exc:
+        session.rollback()
+        return _PlacedOrderResponse(400, {"detail": str(exc)})
+    return _PlacedOrderResponse(201, _build_order_view(service, session, order).model_dump(mode="json"))
 
 
 @pytest.fixture()
@@ -124,7 +178,16 @@ def _ledger_events_for_order(session, order_id: str) -> list[LedgerEventRecord]:
     ).all()
 
 
-def test_place_order_requires_verified_wallet_compliance(api_context) -> None:
+def test_place_order_is_retired_regardless_of_wallet_compliance(api_context) -> None:
+    """The compliance gate moved with the trading path, it was not dropped.
+
+    ``POST /orders`` used to depend on ``get_current_trading_user``, which
+    enforces wallet compliance. The endpoint is now 410 and performs no trade at
+    all, so it no longer runs - or needs - that check. The live guarantee is
+    enforced on the canonical System A endpoints by the same dependency and is
+    covered by
+    ``tests/players/test_player_share_market_routes.py::test_buy_player_shares_requires_verified_wallet_compliance``.
+    """
     client, session, auth_state = api_context
     player = _create_player(session, provider_external_id="player-order-compliance")
     _fund_user(session, auth_state["user"], amount=Decimal("100"))
@@ -143,8 +206,9 @@ def test_place_order_requires_verified_wallet_compliance(api_context) -> None:
         },
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == "Trading is unavailable until wallet compliance is verified."
+    assert response.status_code == 410
+    assert "/market/buy" in response.json()["detail"]
+    assert session.query(Order).count() == 0
 
 
 def test_place_order_returns_open_order_with_hold_details(api_context) -> None:
@@ -152,8 +216,9 @@ def test_place_order_returns_open_order_with_hold_details(api_context) -> None:
     player = _create_player(session)
     _fund_user(session, auth_state["user"], amount=Decimal("100"))
 
-    response = client.post(
-        "/api/orders",
+    response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",
@@ -207,8 +272,9 @@ def test_sell_order_requires_owned_units(api_context) -> None:
     client, session, auth_state = api_context
     player = _create_player(session, provider_external_id="player-order-owned-units")
 
-    response = client.post(
-        "/api/orders",
+    response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "sell",
@@ -244,8 +310,9 @@ def test_admin_buyback_preview_and_execution_follow_p2p_window(api_context) -> N
     )
     session.commit()
 
-    create_response = client.post(
-        "/api/orders",
+    create_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "sell",
@@ -306,8 +373,9 @@ def test_get_order_detail_returns_execution_summary(api_context) -> None:
     _grant_position(session, seller, player_id=player.id, quantity=Decimal("5"))
 
     auth_state["user"] = seller
-    sell_response = client.post(
-        "/api/orders",
+    sell_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "sell",
@@ -319,8 +387,9 @@ def test_get_order_detail_returns_execution_summary(api_context) -> None:
     sell_order_id = sell_response.json()["id"]
 
     auth_state["user"] = buyer
-    buy_response = client.post(
-        "/api/orders",
+    buy_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",
@@ -361,8 +430,9 @@ def test_list_orders_returns_recent_orders_with_status_filter(api_context) -> No
     player = _create_player(session, provider_external_id="player-order-list")
     _fund_user(session, auth_state["user"], amount=Decimal("100"))
 
-    open_response = client.post(
-        "/api/orders",
+    open_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",
@@ -373,8 +443,9 @@ def test_list_orders_returns_recent_orders_with_status_filter(api_context) -> No
     assert open_response.status_code == 201
     open_order_id = open_response.json()["id"]
 
-    cancelled_response = client.post(
-        "/api/orders",
+    cancelled_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",
@@ -409,8 +480,9 @@ def test_cancel_open_order(api_context) -> None:
     player = _create_player(session, provider_external_id="player-order-cancel-open")
     _fund_user(session, auth_state["user"], amount=Decimal("100"))
 
-    create_response = client.post(
-        "/api/orders",
+    create_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",
@@ -468,8 +540,9 @@ def test_partial_fill_emits_execution_event_and_keeps_remaining_hold(api_context
     _grant_position(session, seller, player_id=player.id, quantity=Decimal("4"))
 
     auth_state["user"] = seller
-    sell_response = client.post(
-        "/api/orders",
+    sell_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "sell",
@@ -481,8 +554,9 @@ def test_partial_fill_emits_execution_event_and_keeps_remaining_hold(api_context
     sell_order_id = sell_response.json()["id"]
 
     auth_state["user"] = buyer
-    buy_response = client.post(
-        "/api/orders",
+    buy_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",
@@ -523,8 +597,9 @@ def test_cancel_partially_filled_order_releases_remaining_hold(api_context) -> N
     _grant_position(session, seller, player_id=player.id, quantity=Decimal("4"))
 
     auth_state["user"] = seller
-    sell_response = client.post(
-        "/api/orders",
+    sell_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "sell",
@@ -535,8 +610,9 @@ def test_cancel_partially_filled_order_releases_remaining_hold(api_context) -> N
     assert sell_response.status_code == 201
 
     auth_state["user"] = buyer
-    buy_response = client.post(
-        "/api/orders",
+    buy_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",
@@ -591,8 +667,9 @@ def test_reject_cancel_for_filled_order(api_context) -> None:
     _grant_position(session, seller, player_id=player.id, quantity=Decimal("5"))
 
     auth_state["user"] = seller
-    sell_response = client.post(
-        "/api/orders",
+    sell_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "sell",
@@ -603,8 +680,9 @@ def test_reject_cancel_for_filled_order(api_context) -> None:
     assert sell_response.status_code == 201
 
     auth_state["user"] = buyer
-    buy_response = client.post(
-        "/api/orders",
+    buy_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",
@@ -637,40 +715,45 @@ def test_order_book_endpoint_returns_aggregated_depth(api_context) -> None:
 
     auth_state["user"] = buyer_one
     assert (
-        client.post(
-            "/api/orders",
+        _place_order(
+            session,
+            auth_state["user"],
             json={"player_id": player.id, "side": "buy", "quantity": 5, "max_price": 10},
         ).status_code
         == 201
     )
     auth_state["user"] = buyer_two
     assert (
-        client.post(
-            "/api/orders",
+        _place_order(
+            session,
+            auth_state["user"],
             json={"player_id": player.id, "side": "buy", "quantity": 3, "max_price": 10},
         ).status_code
         == 201
     )
     auth_state["user"] = buyer_three
     assert (
-        client.post(
-            "/api/orders",
+        _place_order(
+            session,
+            auth_state["user"],
             json={"player_id": player.id, "side": "buy", "quantity": 2, "max_price": 9},
         ).status_code
         == 201
     )
     auth_state["user"] = seller_one
     assert (
-        client.post(
-            "/api/orders",
+        _place_order(
+            session,
+            auth_state["user"],
             json={"player_id": player.id, "side": "sell", "quantity": 4, "max_price": 11},
         ).status_code
         == 201
     )
     auth_state["user"] = seller_two
     assert (
-        client.post(
-            "/api/orders",
+        _place_order(
+            session,
+            auth_state["user"],
             json={"player_id": player.id, "side": "sell", "quantity": 1, "max_price": 12},
         ).status_code
         == 201
@@ -703,8 +786,9 @@ def test_execution_events_are_written_for_both_orders(api_context) -> None:
     _grant_position(session, seller, player_id=player.id, quantity=Decimal("5"))
 
     auth_state["user"] = seller
-    sell_response = client.post(
-        "/api/orders",
+    sell_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "sell",
@@ -716,8 +800,9 @@ def test_execution_events_are_written_for_both_orders(api_context) -> None:
     sell_order_id = sell_response.json()["id"]
 
     auth_state["user"] = buyer
-    buy_response = client.post(
-        "/api/orders",
+    buy_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",
@@ -764,8 +849,9 @@ def test_price_improvement_releases_unused_reserved_funds(api_context) -> None:
     _grant_position(session, seller, player_id=player.id, quantity=Decimal("3"))
 
     auth_state["user"] = seller
-    sell_response = client.post(
-        "/api/orders",
+    sell_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "sell",
@@ -776,8 +862,9 @@ def test_price_improvement_releases_unused_reserved_funds(api_context) -> None:
     assert sell_response.status_code == 201
 
     auth_state["user"] = buyer
-    buy_response = client.post(
-        "/api/orders",
+    buy_response = _place_order(
+        session,
+        auth_state["user"],
         json={
             "player_id": player.id,
             "side": "buy",

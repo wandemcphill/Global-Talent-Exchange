@@ -3,13 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_trading_user, get_current_user, get_session
+from app.auth.dependencies import get_current_user, get_session
 from app.matching.service import InvalidOrderTransitionError, OrderBookSnapshot
 from app.models.user import User
 from app.orders.schemas import (
     AdminBuybackExecutionView,
     AdminBuybackPreviewView,
-    OrderAcceptedView,
     OrderBookLevelView,
     OrderBookView,
     OrderCreateRequest,
@@ -24,7 +23,6 @@ from app.orders.service import (
     OrderNotFoundError,
     OrderPlacementError,
     OrderService,
-    PlayerNotFoundError,
 )
 from app.wallets.service import LedgerError
 
@@ -113,37 +111,35 @@ def list_orders(
     )
 
 
-@legacy_router.post("", response_model=OrderAcceptedView, status_code=status.HTTP_201_CREATED)
-@api_router.post("", response_model=OrderAcceptedView, status_code=status.HTTP_201_CREATED)
+@legacy_router.post("", status_code=status.HTTP_410_GONE, include_in_schema=False)
+@api_router.post("", status_code=status.HTTP_410_GONE, include_in_schema=False)
 def place_order(
-    payload: OrderCreateRequest,
+    payload: OrderCreateRequest | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_trading_user),
     request: Request = None,
-) -> OrderAcceptedView:
-    service = _build_order_service(request)
-    try:
-        order = service.place_order(
-            session,
-            user=current_user,
-            player_id=payload.player_id,
-            side=payload.side,
-            quantity=payload.quantity,
-            max_price=payload.max_price,
-        )
-        session.commit()
-        session.refresh(order)
-    except PlayerNotFoundError as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except (InvalidOrderTransitionError, LedgerError) as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except OrderPlacementError as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+) -> None:
+    """Retired: the order book is no longer the player-share trading venue.
 
-    return OrderAcceptedView.model_validate(_build_order_view(service, session, order))
+    System A (PlayerShareMarket / PlayerShareHolding) is the canonical player
+    economy, and it is where every issued market and every user position lives.
+    The order book could never fill against it - production issuance credits
+    ``circulating_shares`` while only a settled execution credits a
+    ``position:{user}:{player}`` unit - so accepting new orders here only parked
+    a user's coin against something that could not execute.
+
+    Only creation is gone. Every read path, cancellation and the admin buyback
+    flow still work, so historical records stay readable and any open order can
+    still be closed. ``OrderService`` itself is untouched and remains available
+    to the simulation harness, admin tooling and historical settlement.
+    """
+    del payload, session, request
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "Player-share order placement is retired. Trade through the canonical "
+            "player-share market: POST /market/buy or POST /market/sell."
+        ),
+    )
 
 
 @legacy_router.get("/book/{player_id}", response_model=OrderBookView)
