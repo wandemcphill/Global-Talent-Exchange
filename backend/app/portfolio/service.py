@@ -66,6 +66,13 @@ class PortfolioSummary:
     total_equity: Decimal
     unrealized_pl_total: Decimal
     realized_pl_total: Decimal
+    # False when realized P/L genuinely cannot be computed, so a caller can tell
+    # "not calculated" apart from a confident zero. System A does not snapshot
+    # cost basis at time of sale (PlayerShareEvent records the sale price only,
+    # and average_cost_coin is not captured on sell), and the repository has no
+    # lot/FIFO accounting to reuse - so realized P/L is reported as unavailable
+    # rather than invented. Unrealized P/L stays exact either way.
+    realized_pl_available: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +180,7 @@ class PortfolioService:
                 total_equity=self._normalize_amount(wallet_summary.total_balance + total_market_value),
                 unrealized_pl_total=unrealized_pl_total,
                 realized_pl_total=realized_pl_total,
+                realized_pl_available=not canonical_player_ids,
             ),
             cash_unit=wallet_summary.currency,
         )

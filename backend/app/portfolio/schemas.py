@@ -78,3 +78,5 @@ class PortfolioSummaryView(BaseModel):
     total_equity: Decimal
     unrealized_pl_total: Decimal
     realized_pl_total: Decimal
+    # See PortfolioSummary: False means realized P/L is not calculated, not zero.
+    realized_pl_available: bool = True

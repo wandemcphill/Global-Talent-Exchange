@@ -183,6 +183,9 @@ def test_portfolio_api_endpoints(api_context) -> None:
         "total_equity",
         "unrealized_pl_total",
         "realized_pl_total",
+        # PHASE5-A PR-2A: distinguishes "realized P/L not calculated" from a
+        # confident zero. System A does not snapshot cost basis at time of sale.
+        "realized_pl_available",
     }
     assert Decimal(str(summary_payload["total_market_value"])) == Decimal("24.0000")
     assert Decimal(str(summary_payload["cash_balance"])) == Decimal("80.0000")
