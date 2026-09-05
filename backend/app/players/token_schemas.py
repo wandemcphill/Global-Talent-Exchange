@@ -94,6 +94,10 @@ class PlayerShareSaleView(BaseModel):
 class PlayerShareTradeRequest(BaseModel):
     player_id: str = Field(min_length=1)
     share_count: int = Field(ge=1)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
+
+    def model_post_init(self, __context: Any) -> None:
+        set_player_share_idempotency_key(self.idempotency_key)
 
 
 class PlayerSharePerformanceRequest(BaseModel):

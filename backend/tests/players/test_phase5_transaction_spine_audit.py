@@ -11,10 +11,13 @@ both exist on main:
   written by OrderService/MatchingService and reached over POST /orders. This is
   what GET /portfolio reports and what the Flutter order ticket actually calls.
 
-Nothing bridges the two. The failing tests below are marked xfail(strict) so
-they document the defect while it stands and turn into a hard suite failure the
-moment a fix lands - at which point the marker must be removed rather than the
-assertion weakened.
+PR-1 made System A internally coherent: ownership bought through the canonical
+Market path now reaches the Portfolio (P0-1) and the Market trade contract
+honours an idempotency key (P1-1). Those two are hard assertions below.
+
+P0-2 - the unbridged ownership stores themselves - is still open and stays
+marked xfail(strict); it closes in PR-2 when the order book is retired, at
+which point the marker must be removed rather than the assertion weakened.
 """
 
 from __future__ import annotations
@@ -61,15 +64,6 @@ def _build_client(session, *, admin, user, monkeypatch) -> tuple[TestClient, dic
     return TestClient(app), auth_context
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PHASE5-A P0-1: ownership bought over POST /market/buy lands in "
-        "PlayerShareHolding, but GET /portfolio is built only from "
-        "position:{user}:{player} ledger accounts, so the buyer's coin is spent "
-        "and the position is invisible."
-    ),
-)
 def test_market_buy_is_visible_in_the_portfolio(monkeypatch) -> None:
     engine, session = _build_session()
     try:
@@ -136,15 +130,6 @@ def test_the_two_ownership_stores_agree_after_a_market_buy(monkeypatch) -> None:
         engine.dispose()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PHASE5-A P1-1: PlayerShareTradeRequest (POST /market/buy, /market/sell) "
-        "carries no idempotency_key field and no model_post_init hook, so the "
-        "key is silently dropped by pydantic and a client retry executes a "
-        "second economic trade."
-    ),
-)
 def test_market_buy_honours_a_repeated_idempotency_key(monkeypatch) -> None:
     engine, session = _build_session()
     try:

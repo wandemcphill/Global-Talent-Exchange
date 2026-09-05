@@ -5,6 +5,7 @@ import binascii
 import json
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -12,6 +13,7 @@ from app.core.cache import CacheBackend, NullCacheBackend
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
 from app.ingestion.models import Player
+from app.models.player_token_market import PlayerShareMarket
 from app.market.player_eligibility_policy import is_transfer_market_eligible
 from app.market.models import (
     Listing,
@@ -757,6 +759,7 @@ class MarketPlayerListItem:
     preferred_foot: str | None
     market_value_eur: float | None
     current_value_credits: float | None
+    share_price_coin: Decimal | None
     movement_pct: float | None
     trend_score: float | None
     market_interest_score: int | None
@@ -840,6 +843,7 @@ class MarketPlayerIdentity:
 class MarketPlayerMarketProfile:
     is_tradable: bool
     market_value_eur: float | None
+    share_price_coin: Decimal | None
     supply_tier: dict[str, Any] | None
     liquidity_band: dict[str, Any] | None
     holder_count: int | None
@@ -1100,11 +1104,13 @@ class MarketPlayerQueryService:
             if has_more and page_records
             else None
         )
+        share_prices_by_player_id = self._share_prices_by_player_id(page_records)
         return MarketPlayerListResult(
             items=tuple(
                 self._build_list_item(
                     record,
                     open_listing=open_listings_by_player_id.get(record.player.id),
+                    share_price_coin=share_prices_by_player_id.get(record.player.id),
                 )
                 for record in page_records
             ),
@@ -1227,6 +1233,7 @@ class MarketPlayerQueryService:
             market_profile=MarketPlayerMarketProfile(
                 is_tradable=is_transfer_market_eligible(player),
                 market_value_eur=player.current_market_reference_value or player.market_value_eur,
+                share_price_coin=self._share_prices_by_player_id([record]).get(player.id),
                 supply_tier=self._supply_tier_payload(record),
                 liquidity_band=self._liquidity_band_payload(record),
                 holder_count=self._coerce_int(breakdown_payload.get("holder_count")),
@@ -1444,8 +1451,15 @@ class MarketPlayerQueryService:
             record for record in self.repository.list_player_records() if record.player.current_club_id == club_id
         ]
         sorted_records = self._sort_player_records(records, sort="current_value")[:limit]
+        share_prices_by_player_id = self._share_prices_by_player_id(sorted_records)
         return MarketPlayerListResult(
-            items=tuple(self._build_list_item(record) for record in sorted_records),
+            items=tuple(
+                self._build_list_item(
+                    record,
+                    share_price_coin=share_prices_by_player_id.get(record.player.id),
+                )
+                for record in sorted_records
+            ),
             limit=limit,
             next_cursor=None,
             has_more=len(records) > limit,
@@ -1483,8 +1497,15 @@ class MarketPlayerQueryService:
             or self._normalize_text(record.player.country.name if record.player.country else None) == normalized_code
         ]
         sorted_records = self._sort_player_records(records, sort="current_value")[:limit]
+        share_prices_by_player_id = self._share_prices_by_player_id(sorted_records)
         return MarketPlayerListResult(
-            items=tuple(self._build_list_item(record) for record in sorted_records),
+            items=tuple(
+                self._build_list_item(
+                    record,
+                    share_price_coin=share_prices_by_player_id.get(record.player.id),
+                )
+                for record in sorted_records
+            ),
             limit=limit,
             next_cursor=None,
             has_more=len(records) > limit,
@@ -1626,6 +1647,7 @@ class MarketPlayerQueryService:
         record: MarketPlayerRecord,
         *,
         open_listing: TransferListing | None = None,
+        share_price_coin: Decimal | None = None,
     ) -> MarketPlayerListItem:
         return MarketPlayerListItem(
             player_id=record.player.id,
@@ -1646,6 +1668,7 @@ class MarketPlayerQueryService:
             preferred_foot=record.player.preferred_foot,
             market_value_eur=self._real_world_market_value_eur(record),
             current_value_credits=self._current_value_credits(record),
+            share_price_coin=share_price_coin,
             movement_pct=self._movement_pct(record),
             trend_score=self._trend_score(record),
             market_interest_score=(record.summary.market_interest_score if record.summary is not None else None),
@@ -1670,6 +1693,25 @@ class MarketPlayerQueryService:
             image_url=self._image_url(record),
             avatar=self._avatar(record),
         )
+
+    def _share_prices_by_player_id(self, records: list[MarketPlayerRecord]) -> dict[str, Decimal]:
+        """Tradable player-share price for the records being rendered.
+
+        Batched by player id, exactly like the transfer-listing lookup beside
+        it, so this never joins against the full tradable-player scan. Players
+        without an issued share market are simply absent from the mapping and
+        surface as ``share_price_coin: null`` -- unavailable, not zero-priced.
+        Reading the market must never issue one.
+        """
+        player_ids = [record.player.id for record in records if record.player.id]
+        if not player_ids:
+            return {}
+        rows = self.session.execute(
+            select(PlayerShareMarket.player_id, PlayerShareMarket.share_price_coin).where(
+                PlayerShareMarket.player_id.in_(player_ids)
+            )
+        ).all()
+        return {player_id: price for player_id, price in rows if price is not None}
 
     def _open_transfer_listings_by_player_id(
         self,
