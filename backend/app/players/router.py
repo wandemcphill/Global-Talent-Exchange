@@ -233,11 +233,17 @@ def get_player_share_market(
     player_id: str,
     session: Session = Depends(get_session),
 ) -> PlayerShareMarketView:
+    # A public read stays a read. This used to call get_or_create_market_view,
+    # so an anonymous GET minted a share market -- with its liquidity wallet and
+    # ledger postings -- attributed to actor=None and carrying no
+    # player_share_events provenance row, then committed it. Issuance is an
+    # admin-attributed act (issue_market) or an ingestion-time step; viewing a
+    # player is not a third way to perform it. An unissued player now reads as
+    # market_not_found, which already maps to 404 above.
     try:
-        market = PlayerTokenMarketService(session).get_or_create_market_view(player_id=player_id)
+        market = PlayerTokenMarketService(session).get_market_view(player_id=player_id)
     except PlayerTokenMarketError as exc:
         raise_player_token_market_http_exception(exc)
-    session.commit()
     return PlayerShareMarketView.model_validate(market)
 
 
