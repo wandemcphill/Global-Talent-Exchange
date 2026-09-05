@@ -8,8 +8,9 @@ from decimal import Decimal
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.ingestion.models import MarketSignal
+from app.ingestion.models import MarketSignal, Player
 from app.models.user import User
+from app.models.player_token_market import PlayerShareHolding, PlayerShareMarket
 from app.models.wallet import LedgerAccount, LedgerEntry, LedgerEntryReason, LedgerUnit
 from app.players.read_models import PlayerSummaryReadModel
 from app.value_engine.read_models import PlayerValueSnapshotRecord
@@ -114,14 +115,23 @@ class PortfolioService:
             if state["quantity"] == Decimal("0.0000"):
                 state["cost_basis"] = Decimal("0.0000")
 
-        holdings: list[PortfolioHolding] = []
+        holdings: list[PortfolioHolding] = self._build_player_share_holdings(session, user)
         realized_pl_total = Decimal("0.0000")
         unrealized_pl_total = Decimal("0.0000")
         total_market_value = Decimal("0.0000")
+        for holding in holdings:
+            total_market_value = self._normalize_amount(total_market_value + holding.market_value)
+            unrealized_pl_total = self._normalize_amount(unrealized_pl_total + holding.unrealized_pl)
+        canonical_player_ids = {holding.player_id for holding in holdings}
 
         for player_id, state in sorted(position_state.items(), key=lambda item: item[0]):
             realized_pl_total = self._normalize_amount(realized_pl_total + state["realized_pl"])
             if state["quantity"] <= Decimal("0.0000"):
+                continue
+            if player_id in canonical_player_ids:
+                # System A (PlayerShareHolding) is canonical for player ownership.
+                # A legacy order-book position for the same player must not
+                # double-count; System B is retired in PR-2.
                 continue
 
             average_cost = self._normalize_amount(state["cost_basis"] / state["quantity"])
@@ -172,6 +182,87 @@ class PortfolioService:
 
     def build_summary(self, session: Session, user: User) -> PortfolioSummary:
         return self.build_for_user(session, user).summary
+
+    def _build_player_share_holdings(self, session: Session, user: User) -> list[PortfolioHolding]:
+        """Canonical player ownership: PlayerShareHolding valued at the tradable
+        share price.
+
+        Everything here is denominated in COIN, which is the unit
+        ``PlayerTokenMarketService`` actually settles in:
+
+        * ``quantity``      -- ``PlayerShareHolding.share_count``
+        * ``average_cost``  -- ``PlayerShareHolding.average_cost_coin``, the coin
+          per share actually paid (gross plus trading fee)
+        * ``current_price`` -- ``PlayerShareMarket.share_price_coin``, the
+          tradable price, NOT a valuation
+
+        so ``market_value`` and ``unrealized_pl`` are coin minus coin. No FX
+        conversion is performed or implied.
+        """
+        rows = session.execute(
+            select(PlayerShareHolding, PlayerShareMarket, Player)
+            .join(PlayerShareMarket, PlayerShareMarket.player_id == PlayerShareHolding.player_id)
+            .join(Player, Player.id == PlayerShareHolding.player_id)
+            .where(
+                PlayerShareHolding.user_id == user.id,
+                PlayerShareHolding.share_count > 0,
+            )
+        ).all()
+
+        # One batched read model lookup rather than one per holding: a portfolio
+        # can legitimately hold hundreds of players.
+        summaries_by_player_id: dict[str, PlayerSummaryReadModel] = {}
+        summary_player_ids = [holding.player_id for holding, _market, _player in rows]
+        if summary_player_ids:
+            summaries_by_player_id = {
+                summary.player_id: summary
+                for summary in session.scalars(
+                    select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(summary_player_ids))
+                ).all()
+            }
+
+        holdings: list[PortfolioHolding] = []
+        for holding, market, player in rows:
+            quantity = self._normalize_amount(holding.share_count)
+            if quantity <= Decimal("0.0000"):
+                continue
+            average_cost = self._normalize_amount(holding.average_cost_coin)
+            current_price = self._normalize_amount(market.share_price_coin)
+            cost_basis = self._normalize_amount(quantity * average_cost)
+            market_value = self._normalize_amount(quantity * current_price)
+            unrealized_pl = self._normalize_amount(market_value - cost_basis)
+            unrealized_pl_percent = Decimal("0.0000")
+            if cost_basis > Decimal("0.0000"):
+                unrealized_pl_percent = self._normalize_amount((unrealized_pl / cost_basis) * Decimal("100"))
+            summary = summaries_by_player_id.get(holding.player_id)
+            holdings.append(
+                PortfolioHolding(
+                    player_id=holding.player_id,
+                    # The read model is a projection and may lag issuance, so fall
+                    # back to the player record we already joined rather than
+                    # reporting a name we actually know as unknown.
+                    player_name=(summary.player_name if summary is not None else None) or player.full_name,
+                    club_name=(summary.current_club_name if summary is not None else None)
+                    or player.real_world_club_name,
+                    quantity=quantity,
+                    average_cost=average_cost,
+                    current_price=current_price,
+                    market_value=market_value,
+                    unrealized_pl=unrealized_pl,
+                    unrealized_pl_percent=unrealized_pl_percent,
+                )
+            )
+        return holdings
+
+    def _has_player_share_holdings(self, session: Session, user: User) -> bool:
+        return (
+            session.scalar(
+                select(PlayerShareHolding.id)
+                .where(PlayerShareHolding.user_id == user.id, PlayerShareHolding.share_count > 0)
+                .limit(1)
+            )
+            is not None
+        )
 
     def _load_settled_executions(self, session: Session, user: User) -> list[SettledExecution]:
         user_cash_account_codes = {
@@ -244,6 +335,11 @@ class PortfolioService:
         user: User,
         executions: list[SettledExecution],
     ) -> LedgerUnit:
+        if self._has_player_share_holdings(session, user):
+            # Canonical player-share ownership settles in coin, so report the
+            # cash side in coin too rather than pairing coin holdings with a
+            # credit balance.
+            return LedgerUnit.COIN
         credit_summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.CREDIT)
         coin_summary = self.wallet_service.get_wallet_summary(session, user, currency=LedgerUnit.COIN)
         if credit_summary.total_balance > coin_summary.total_balance:

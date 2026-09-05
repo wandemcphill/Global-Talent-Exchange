@@ -1310,3 +1310,64 @@ def test_get_player_records_by_ids_excludes_non_tradable_players(session) -> Non
     repository = SqlAlchemyMarketPlayerRepository(session)
     records = repository.get_player_records_by_ids(["player-1", "player-untradable"])
     assert [record.player.id for record in records] == ["player-1"]
+
+
+def _issue_share_market(session, *, player_id: str, price: str) -> None:
+    from decimal import Decimal as _Decimal
+
+    from app.models.player_token_market import PlayerShareMarket
+
+    session.add(
+        PlayerShareMarket(
+            player_id=player_id,
+            total_shares=1000,
+            circulating_shares=0,
+            share_price_coin=_Decimal(price),
+            status="active",
+            metadata_json={},
+        )
+    )
+    session.commit()
+
+
+def test_market_player_list_publishes_the_tradable_share_price(session) -> None:
+    """PHASE5-A P1-2: the Market contract must expose the tradable price, not
+    only valuation. share_price_coin comes straight from PlayerShareMarket."""
+    _seed_market_player_catalog(session)
+    _issue_share_market(session, player_id="player-1", price="0.7500")
+    clear_market_records_cache()
+
+    payload = _build_market_query_service(session).list_players(limit=20, offset=0)
+    by_id = {item.player_id: item for item in payload.items}
+
+    assert by_id["player-1"].share_price_coin == Decimal("0.7500")
+
+
+def test_market_player_list_reports_an_unissued_market_as_unavailable(session) -> None:
+    """UNKNOWN != ZERO: a player with no issued share market has no tradable
+    price, and reading the market must never issue one."""
+    from app.models.player_token_market import PlayerShareMarket
+
+    _seed_market_player_catalog(session)
+    _issue_share_market(session, player_id="player-1", price="0.7500")
+    clear_market_records_cache()
+
+    payload = _build_market_query_service(session).list_players(limit=20, offset=0)
+    by_id = {item.player_id: item for item in payload.items}
+
+    assert by_id["player-2"].share_price_coin is None
+    assert by_id["player-2"].current_value_credits is not None
+    assert session.query(PlayerShareMarket).count() == 1
+
+
+def test_market_player_detail_publishes_the_tradable_share_price(session) -> None:
+    _seed_market_player_catalog(session)
+    _issue_share_market(session, player_id="player-1", price="1.2500")
+    clear_market_records_cache()
+
+    service = _build_market_query_service(session)
+    priced = service.get_player_detail("player-1")
+    unpriced = service.get_player_detail("player-2")
+
+    assert priced.market_profile.share_price_coin == Decimal("1.2500")
+    assert unpriced.market_profile.share_price_coin is None

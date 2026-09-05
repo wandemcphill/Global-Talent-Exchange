@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -213,6 +214,9 @@ class MarketPlayerListItemView(BaseModel):
     preferred_foot: str | None = None
     market_value_eur: float | None = None
     current_value_credits: float | None
+    # Tradable player-share price (PlayerShareMarket.share_price_coin), in coin.
+    # None when no share market has been issued - unavailable, not zero.
+    share_price_coin: Decimal | None = None
     movement_pct: float | None
     trend_score: float | None
     market_interest_score: int | None
@@ -301,6 +305,7 @@ class MarketPlayerMarketProfileView(BaseModel):
 
     is_tradable: bool
     market_value_eur: float | None
+    share_price_coin: Decimal | None = None
     supply_tier: dict[str, Any] | None
     liquidity_band: dict[str, Any] | None
     holder_count: int | None
