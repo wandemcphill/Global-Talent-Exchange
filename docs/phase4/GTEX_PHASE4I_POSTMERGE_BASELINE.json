@@ -1,0 +1,59 @@
+{
+  "phase": "4I - post-merge production readiness verification",
+  "recorded_at_utc": "2026-09-05",
+  "branch": "phase4/post-merge-production-readiness",
+  "current_origin_main_head": "7bd4b90a3914744d58738eb1932ced1fb660cd02",
+  "phase_4h_merge_commit": "7bd4b90a3914744d58738eb1932ced1fb660cd02",
+  "main_has_advanced_since_phase_4h_merge": false,
+  "commits_after_7bd4b90a_on_origin_main": [],
+  "files_changed_after_7bd4b90a_on_origin_main": [],
+  "note": "origin/main HEAD IS the Phase 4H merge. There is no post-merge tail. The differential audit target is therefore the merge itself: the combination of its two parents.",
+  "merge_structure": {
+    "merge_base": "4eba7a937ee78cb19f6002e0d78aac12a403900b",
+    "first_parent_main_line": "9cb58601453258678873bf93a6910a23812532b9",
+    "second_parent_pr_105_branch": "9cdb582ae84d4259155f04e397edec240bb96b21",
+    "tcp_keepalive_commit": "9cb58601453258678873bf93a6910a23812532b9",
+    "tcp_keepalive_position": "first parent of the merge - it landed on main WHILE PR #105 was open and was combined by this merge, not after it"
+  },
+  "merge_integration_facts": {
+    "file_overlap_between_parents": 0,
+    "evil_merge_edits": 0,
+    "merge_is_exact_union_of_both_parents": true,
+    "verification": "git diff <parent> <merge> restricted to the other parent's file set is empty in both directions"
+  },
+  "main_line_delta_4eba7a93_to_9cb58601": {
+    "scope": "backend + ops only",
+    "files_changed": 18,
+    "new_backend_routes": 0,
+    "commits": [
+      "9cb58601 fix: add TCP keepalives to prevent DB connections hanging forever",
+      "5a137ba3 fix: OOM in national regen name/portrait repair",
+      "8351e66a fix: issuance job --limit cap and candidate ordering",
+      "3194093e fix: resolve country/club on ingestion, redact leaked credential",
+      "54faf9e8 fix: stop the market listing minting markets inside a GET",
+      "53afc550 fix: percent-encode regen portrait URLs, ship face bank manifest",
+      "93871bd0 feat: Cloudinary regen face bank audit script",
+      "de958b36 feat: regen world bootstrap job",
+      "35fd511b fix: remove N+1 in player share market listing, raise API concurrency"
+    ]
+  },
+  "pr_105_delta_4eba7a93_to_9cdb582a": {
+    "scope": "frontend / routing / tasks only",
+    "production_files_changed": 16,
+    "commits": [
+      "9cdb582a feat(tasks): build the daily-challenge desk behind /tasks",
+      "dd055427 fix(router): register the three published detail routes",
+      "72fa89da fix(router): register the published routes that named their own destination",
+      "395d1037 fix(nav): stop two unbuilt routes claiming to be live",
+      "06c2ff02 fix(home): repair the persona paths routing to Home just exposed",
+      "09c6b146 fix(shell): stop Home standing in for the admin command center",
+      "c7ce1c70 fix(shell): stop Home standing in for the wallet trader desk",
+      "1f1acea3 feat: GTEX Phase 4H final UX and responsive hardening"
+    ]
+  },
+  "baseline_results": {
+    "flutter_analyze": "No issues found (ran in 276.3s)",
+    "api_contract_route_declarations": "3 passed",
+    "websocket_route_collisions": "1 passed"
+  }
+}
