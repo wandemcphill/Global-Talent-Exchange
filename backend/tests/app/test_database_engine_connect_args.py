@@ -50,7 +50,7 @@ def test_postgres_engine_enables_tcp_keepalives(
     for key in ("GTE_DATABASE_KEEPALIVES_IDLE", "GTE_DATABASE_KEEPALIVES_INTERVAL", "GTE_DATABASE_KEEPALIVES_COUNT"):
         monkeypatch.delenv(key, raising=False)
 
-    database.create_database_engine("postgresql+psycopg://user:pw@example.invalid:6543/gtex")
+    database.create_database_engine("postgresql+psycopg://example.invalid:6543/gtex")
 
     connect_args = captured_engine_kwargs["connect_args"]
     assert connect_args["keepalives"] == 1
@@ -70,7 +70,7 @@ def test_keepalive_intervals_are_env_tunable(
     monkeypatch.setenv("GTE_DATABASE_KEEPALIVES_INTERVAL", "2")
     monkeypatch.setenv("GTE_DATABASE_KEEPALIVES_COUNT", "4")
 
-    database.create_database_engine("postgresql+psycopg://user:pw@example.invalid:6543/gtex")
+    database.create_database_engine("postgresql+psycopg://example.invalid:6543/gtex")
 
     connect_args = captured_engine_kwargs["connect_args"]
     assert connect_args["keepalives_idle"] == 5
@@ -84,7 +84,7 @@ def test_unparsable_keepalive_env_falls_back_to_the_default(
     """A malformed operational setting must not stop the API from booting."""
     monkeypatch.setenv("GTE_DATABASE_KEEPALIVES_IDLE", "not-a-number")
 
-    database.create_database_engine("postgresql+psycopg://user:pw@example.invalid:6543/gtex")
+    database.create_database_engine("postgresql+psycopg://example.invalid:6543/gtex")
 
     assert captured_engine_kwargs["connect_args"]["keepalives_idle"] == 30
 

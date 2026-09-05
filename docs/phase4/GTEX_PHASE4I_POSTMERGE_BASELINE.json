@@ -2,17 +2,17 @@
   "phase": "4I - post-merge production readiness verification",
   "recorded_at_utc": "2026-09-05",
   "branch": "phase4/post-merge-production-readiness",
-  "current_origin_main_head": "7bd4b90a3914744d58738eb1932ced1fb660cd02",
-  "phase_4h_merge_commit": "7bd4b90a3914744d58738eb1932ced1fb660cd02",
+  "current_origin_main_head": "7bd4b90a",
+  "phase_4h_merge_commit": "7bd4b90a",
   "main_has_advanced_since_phase_4h_merge": false,
   "commits_after_7bd4b90a_on_origin_main": [],
   "files_changed_after_7bd4b90a_on_origin_main": [],
   "note": "origin/main HEAD IS the Phase 4H merge. There is no post-merge tail. The differential audit target is therefore the merge itself: the combination of its two parents.",
   "merge_structure": {
-    "merge_base": "4eba7a937ee78cb19f6002e0d78aac12a403900b",
-    "first_parent_main_line": "9cb58601453258678873bf93a6910a23812532b9",
-    "second_parent_pr_105_branch": "9cdb582ae84d4259155f04e397edec240bb96b21",
-    "tcp_keepalive_commit": "9cb58601453258678873bf93a6910a23812532b9",
+    "merge_base": "4eba7a93",
+    "first_parent_main_line": "9cb58601",
+    "second_parent_pr_105_branch": "9cdb582a",
+    "tcp_keepalive_commit": "9cb58601",
     "tcp_keepalive_position": "first parent of the merge - it landed on main WHILE PR #105 was open and was combined by this merge, not after it"
   },
   "merge_integration_facts": {
