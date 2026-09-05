@@ -124,9 +124,10 @@ class PlayerTokenMarketService:
         # _get_player surfaces a specific "not eligible"/"player not found"
         # error before we ever check for a market row, so an ineligible
         # player is distinguishable from an eligible one that simply has no
-        # market yet (the latter stays "market not found" - this method never
-        # creates one; see get_or_create_market_view for the read path that
-        # does).
+        # market yet (the latter stays "market not found"). No read path
+        # creates a market: ensure_market exists for the authenticated trade
+        # paths (buy_shares/sell_shares), which is the only place a caller may
+        # legitimately materialize one on demand.
         self._get_player(player_id)
         market = self.session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player_id))
         if market is None:
@@ -138,16 +139,6 @@ class PlayerTokenMarketService:
 
     def get_market_view(self, *, player_id: str) -> dict[str, Any]:
         return self._serialize_market_view(self.get_market(player_id=player_id))
-
-    def get_or_create_market_view(self, *, player_id: str) -> dict[str, Any]:
-        # Used specifically by the single-player GET route: lazily
-        # materializes a market for an eligible player the same way
-        # buy_shares/sell_shares already do via ensure_market, so viewing a
-        # player's market page isn't gated behind someone having issued it
-        # first. get_market_view stays strict for callers (list_events,
-        # admin performance/dividend actions, tests) that must never create a
-        # market as a side effect of reading one.
-        return self._serialize_market_view(self.ensure_market(player_id=player_id))
 
     def list_markets(
         self,

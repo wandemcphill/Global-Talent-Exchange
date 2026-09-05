@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -14,11 +14,18 @@ from app.core.database import load_model_modules
 from app.ingestion.models import Player
 from app.market.router import router as market_router
 from app.models.base import Base
-from app.models.player_token_market import PlayerShareHolding
+from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.models.user import User, UserRole
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerEntry,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransaction,
+    LedgerUnit,
+)
 from app.players.legacy_token_service import PlayerTokenMarketService
 from app.players import router as players_router_module
 from app.players.router import router as players_router
@@ -265,7 +272,19 @@ def test_read_player_share_market_and_events_after_issue(monkeypatch) -> None:
         engine.dispose()
 
 
-def test_read_player_share_market_auto_initializes_before_manual_issue(monkeypatch) -> None:
+def test_read_player_share_market_is_unissued_before_manual_issue(monkeypatch) -> None:
+    """An unissued market reads as absent, and reading does not issue it.
+
+    This asserted the opposite until the economic-integrity remediation: the
+    route called ``get_or_create_market_view``, so an anonymous GET minted a
+    market -- plus its liquidity wallet and ledger postings -- attributed to
+    ``actor=None`` and with no ``player_share_events`` provenance row. Issuance
+    is an admin-attributed act (``issue_market``) or an ingestion-time step; a
+    public read is not a third way to perform it.
+
+    ``market_not_found`` is the repository's existing vocabulary for this and
+    already maps to 404, so no new response contract was introduced.
+    """
     engine, session = _build_session()
     try:
         admin = _create_user(session, user_id="share-unissued-admin", role=UserRole.ADMIN)
@@ -276,17 +295,77 @@ def test_read_player_share_market_auto_initializes_before_manual_issue(monkeypat
         with client:
             market_response = client.get(f"/players/{player.id}/shares/market")
 
-        assert market_response.status_code == 200, market_response.text
-        payload = market_response.json()
-        assert payload["player_id"] == player.id
-        assert payload["status"] == "active"
-        assert payload["market_issued"] is True
-        assert payload["total_shares"] == 1000
-        assert payload["circulating_shares"] == 0
-        assert Decimal(payload["share_price_coin"]) > Decimal("0.0000")
-        assert Decimal(payload["liquidity_coin"]) > Decimal("0.0000")
-        assert payload["metadata_json"]["market_issued"] is True
-        assert payload["metadata_json"]["auto_initialized"] is True
+        assert market_response.status_code == 404, market_response.text
+        assert session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id)) is None
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_public_market_read_creates_no_market_wallet_or_ledger_state(monkeypatch) -> None:
+    """A public GET must remain a read: no market, no wallet, no postings.
+
+    The route carries no auth dependency, ``app.players.router`` mounts a bare
+    ``APIRouter(prefix="/players")`` with none either, and ``/players`` is not
+    covered by ``AuthEnforcementMiddleware``'s protected prefixes -- so this is
+    reachable anonymously and every row it wrote was unattributed.
+    """
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="readonly-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="readonly-fan")
+        player = _seed_imported_real_player(session, player_id="real-player-readonly")
+        client, _auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        accounts_before = len(list(session.scalars(select(LedgerAccount))))
+        entries_before = len(list(session.scalars(select(LedgerEntry))))
+        transactions_before = len(list(session.scalars(select(LedgerTransaction))))
+
+        with client:
+            first = client.get(f"/players/{player.id}/shares/market")
+            second = client.get(f"/players/{player.id}/shares/market")
+
+        assert first.status_code == 404, first.text
+        # Repeated reads stay read-only: the old path re-did the same work on
+        # every request.
+        assert second.status_code == 404, second.text
+
+        assert session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id)) is None
+        assert list(session.scalars(select(PlayerShareEvent).where(PlayerShareEvent.player_id == player.id))) == []
+        assert len(list(session.scalars(select(LedgerAccount)))) == accounts_before
+        assert len(list(session.scalars(select(LedgerEntry)))) == entries_before
+        assert len(list(session.scalars(select(LedgerTransaction)))) == transactions_before
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_admin_issuance_still_creates_the_market_with_provenance(monkeypatch) -> None:
+    """Removing the read-side effect must not weaken the real issuance path."""
+    engine, session = _build_session()
+    try:
+        admin = _create_user(session, user_id="provenance-admin", role=UserRole.ADMIN)
+        fan = _create_user(session, user_id="provenance-fan")
+        player = _seed_imported_real_player(session, player_id="real-player-provenance")
+        client, _auth = _build_client(session, admin_user=admin, current_user=fan, monkeypatch=monkeypatch)
+
+        with client:
+            before = client.get(f"/players/{player.id}/shares/market")
+            issued = client.post(
+                f"/players/{player.id}/shares/market",
+                json={"total_shares": 1000, "share_price_coin": "1.2500", "status": "active"},
+            )
+            after = client.get(f"/players/{player.id}/shares/market")
+
+        assert before.status_code == 404, before.text
+        assert issued.status_code == 200, issued.text
+        assert after.status_code == 200, after.text
+        assert after.json()["share_price_coin"] == "1.2500"
+
+        events = list(session.scalars(select(PlayerShareEvent).where(PlayerShareEvent.player_id == player.id)))
+        assert [event.event_type for event in events] == ["issue"]
+        # Provenance: issuance is attributed to the admin who performed it.
+        assert events[0].actor_user_id == admin.id
     finally:
         session.close()
         engine.dispose()

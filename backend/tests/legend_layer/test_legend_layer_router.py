@@ -203,9 +203,15 @@ def test_legend_layer_full_story_simulation(
         assert lifetime_player_rank.prestige_score > 0
         assert seasonal_club_rank.rank_position == 1
 
+        # A match narrates the market; it does not price it. This asserted
+        # `> old_price` until the economic-integrity remediation, which returned
+        # tradable price to the trading/issuance/governed-admin writers and left
+        # the bounded matchday overlay in app.value_engine.matchday_signal as the
+        # single path from form to value. The story linkage is still recorded.
         refreshed_market = session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == home_player.id))
         assert refreshed_market is not None
-        assert Decimal(refreshed_market.share_price_coin) > old_price
+        assert Decimal(refreshed_market.share_price_coin) == old_price
+        assert refreshed_market.metadata_json["last_narrative_rating"] is not None
 
         primary_article_id = articles[0].id
         home_player_id = home_player.id

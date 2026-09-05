@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
 from typing import Any
 
 from redis import Redis
@@ -10,7 +9,6 @@ from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.economy.governor_service import EconomyGovernorService
 from app.global_memory.models import PlayerHistory, UserDynasty
 from app.ingestion.models import Player
 from app.leaderboards.season_service import SeasonService
@@ -23,7 +21,7 @@ from app.models.player_fan_reaction import PlayerFanReaction
 from app.models.player_interview import PlayerInterview
 from app.models.player_personality import PlayerPersonality
 from app.models.player_story import PlayerStory
-from app.models.player_token_market import PlayerShareEvent, PlayerShareMarket
+from app.models.player_token_market import PlayerShareMarket
 from app.models.prestige_rating import PrestigeRating
 from app.models.user import User
 from app.story_feed_engine.service import StoryFeedService
@@ -35,7 +33,6 @@ PLAYER_KEY = "leaderboard:global:players"
 CLUB_KEY = "leaderboard:global:clubs"
 USER_KEY = "leaderboard:global:users"
 NATIONAL_TEAM_KEY = "leaderboard:global:national_teams"
-PRICE_QUANTUM = Decimal("0.0001")
 
 
 class LegendLayerError(ValueError):
@@ -921,44 +918,35 @@ class LegendLayerService:
         article: NewsArticle | None,
         stat: dict[str, Any],
     ) -> None:
+        # Records the story's footprint on the market without pricing it.
+        #
+        # The valuation consequence of matchday form is owned by
+        # app.value_engine.matchday_signal -- "the contract between football and
+        # money" -- which is bounded, averaged over a rolling window, requires a
+        # minimum sample, and is applied as an overlay to a ValueSnapshot. It is
+        # live in production via MatchdayValuationSignalProvider in
+        # value_engine/service.py, so matchday still moves value; it does so
+        # there.
+        #
+        # This method predates that contract (2026-03-29 vs 2026-09-02) and used
+        # to reach around it, writing:
+        #   * market.share_price_coin -- the tradable price, whose only other
+        #     writers are trading, issuance and governed admin repricing; and
+        #   * player.market_value_eur -- which is the value engine's *input*, so
+        #     moving it shifted the very baseline the bounded overlay is computed
+        #     from. That is how one match could swing a valuation 18% while the
+        #     canonical signal is capped near 2.4%.
+        # It also invented a market value out of a rating when the player had
+        # none. Unknown is not a number a single rating can supply.
         market = self.session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id))
-        perception_delta = float(article.perception_delta or 0.0) if article is not None else 0.0
-        rating = float(stat.get("rating") or 0.0)
-        multiplier = Decimal("1.0000") + Decimal(str(max(-0.18, min(0.18, ((perception_delta / 100.0) + ((rating - 6.5) / 50.0))))))
-        current_value = player.market_value_eur or player.current_market_reference_value or 0.0
-        if current_value <= 0.0:
-            current_value = max(100_000.0, max(rating, 6.0) * 120_000.0)
-        player.market_value_eur = round(current_value * float(multiplier), 2)
-        player.current_market_reference_value = player.market_value_eur
         if market is None:
             return
-        reference_price = Decimal(market.share_price_coin or Decimal("0.0000"))
-        baseline = reference_price if reference_price > Decimal("0.0000") else Decimal("1.0000")
-        governor = EconomyGovernorService(self.session)
-        market.share_price_coin = governor.clamp_price_change(
-            reference_price=baseline,
-            proposed_price=baseline * multiplier,
-        ).quantize(PRICE_QUANTUM)
+        rating = stat.get("rating")
         market.metadata_json = {
             **dict(market.metadata_json or {}),
             "last_narrative_article_id": article.id if article is not None else None,
-            "last_narrative_rating": rating,
+            "last_narrative_rating": float(rating) if rating is not None else None,
         }
-        self.session.add(
-            PlayerShareEvent(
-                player_id=player.id,
-                actor_user_id=None,
-                event_type="narrative",
-                share_delta=0,
-                price_per_share_coin=market.share_price_coin,
-                gross_amount_coin=Decimal("0.0000"),
-                metadata_json={
-                    "article_id": article.id if article is not None else None,
-                    "perception_delta": perception_delta,
-                    "rating": rating,
-                },
-            )
-        )
 
     def _standout_stat(self, player_stats: list[dict[str, Any]]) -> dict[str, Any] | None:
         if not player_stats:
