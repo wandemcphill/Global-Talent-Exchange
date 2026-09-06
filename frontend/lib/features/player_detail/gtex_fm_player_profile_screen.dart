@@ -1491,6 +1491,36 @@ class _MarketCard extends StatelessWidget {
               ),
             ),
           ],
+          // The tradable price, stated where the decision is made. The card
+          // above it is a valuation; the user used to meet the price for the
+          // first time inside the trade ticket, with nothing on this screen
+          // to compare it against. Rendered with the same formatter the
+          // ticket uses, so the two surfaces quote an identical figure.
+          const SizedBox(height: 10),
+          const Text(
+            'SHARE PRICE',
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 10,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            mp.sharePriceCoin == null
+                ? 'No share market'
+                : gteFormatCredits(mp.sharePriceCoin!),
+            style: const TextStyle(
+              color: _text,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'What one share settles at. Value above is an estimate.',
+            style: TextStyle(color: _textMuted, fontSize: 11),
+          ),
           const SizedBox(height: 10),
           Row(
             children: <Widget>[

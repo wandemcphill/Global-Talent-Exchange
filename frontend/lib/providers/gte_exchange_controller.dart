@@ -818,6 +818,12 @@ class GteExchangeController extends ChangeNotifier {
               shareCount: shareCount,
               idempotencyKey: idempotencyKey,
             );
+      // A settled trade moves the share price. The browse list is cached, so
+      // it would keep quoting the pre-trade price until the page is refetched
+      // - which is a whole market query for one changed row. Write the
+      // server's own post-trade price into that row instead; nothing here is
+      // derived, and the next real load still wins.
+      _applySettledSharePrice(result);
       await _refreshTradingState(playerId: playerId, refreshPlayer: true);
       return result;
     } catch (error) {
@@ -967,6 +973,17 @@ class GteExchangeController extends ChangeNotifier {
       isShortlisted: !current.isShortlisted,
     );
     notifyListeners();
+  }
+
+  void _applySettledSharePrice(GtePlayerShareTradeResult result) {
+    final GteMarketPlayerListView? page = marketPage;
+    if (page == null) {
+      return;
+    }
+    marketPage = page.withSharePrice(
+      result.market.playerId,
+      result.market.sharePriceCoin,
+    );
   }
 
   Future<void> _refreshTradingState({

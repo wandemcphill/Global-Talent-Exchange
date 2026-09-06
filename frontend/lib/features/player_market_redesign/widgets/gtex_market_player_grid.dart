@@ -16,14 +16,21 @@ const double _minBrowseCardWidth = 420;
 /// Discovery lanes over the loaded listings. Each one is a filter on data
 /// the backend already returned - there is no client-side ranking engine
 /// here, and no lane exists for a signal the API does not provide.
-enum GtexMarketDiscoveryLane { all, opportunities, rising, falling, watched }
+enum GtexMarketDiscoveryLane {
+  all,
+  opportunities,
+  rising,
+  falling,
+  watched,
+}
 
 extension GtexMarketDiscoveryLaneLabel on GtexMarketDiscoveryLane {
   String get label => switch (this) {
     GtexMarketDiscoveryLane.all => 'All listings',
     GtexMarketDiscoveryLane.opportunities => 'Opportunities',
-    GtexMarketDiscoveryLane.rising => 'Rising',
-    GtexMarketDiscoveryLane.falling => 'Falling',
+    // Both lanes read the valuation movement, so both say so.
+    GtexMarketDiscoveryLane.rising => 'Value rising',
+    GtexMarketDiscoveryLane.falling => 'Value falling',
     GtexMarketDiscoveryLane.watched => 'Most watched',
   };
 
@@ -307,7 +314,11 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                       position: player.position,
                       clubName: player.clubName,
                       nationality: player.nationality,
-                      priceLabel: player.priceLabel,
+                      // The card's headline figure is the tradable share
+                      // price and nothing else. It used to be the ingested
+                      // EUR valuation, so the number the user browsed on was
+                      // never the number they were charged.
+                      priceLabel: player.sharePriceLabel,
                       imageUrl: player.imageUrl,
                       gsiLabel: player.gsiLabel,
                       gsiTierLabel: player.gsiTierLabel,
@@ -317,10 +328,12 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                       heightLabel: player.heightLabel,
                       footLabel: player.footLabel,
                       secondaryPositions: player.secondaryPositions,
-                      // Value movement is computed by the backend and was
-                      // never rendered anywhere in the product. The card
-                      // has always been able to draw it.
-                      valueDeltaLabel: player.movementLabel,
+                      // The backend's movement is a movement of the
+                      // *valuation*. It cannot sit unlabelled beside a share
+                      // price, so it travels with the valuation instead, in
+                      // the value chip below.
+                      valueDeltaLabel: null,
+                      valuationLabel: player.valueBadgeLabel,
                       availabilityLabel: player.availabilityTypeLabel,
                       interestLabel: player.interestLabel,
                       isOwned: widget.ownedPlayerIds.contains(player.playerId),

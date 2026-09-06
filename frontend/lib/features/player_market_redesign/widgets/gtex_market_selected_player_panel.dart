@@ -62,7 +62,10 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
                     id: player.playerId,
                     title: player.name,
                     subtitle: '${player.clubName} - ${player.position}',
-                    priceLabel: player.priceLabel,
+                    // The shortlist totals valuations under "Shortlist
+                    // value", so each line carries the same figure - not a
+                    // price the user would be charged.
+                    priceLabel: player.estimatedValueLabel ?? 'Value unknown',
                     onRemove: () => onRemoveFromBasket(player.playerId),
                   ),
                 )
@@ -129,7 +132,7 @@ class _SelectedPlayerDetail extends StatelessWidget {
   /// Every figure shown is a value the backend returned - nothing is
   /// synthesised, and the panel is absent when there is no real signal.
   Widget? get _marketSignal {
-    final String? movement = player.movementLabel;
+    final String? movement = player.valueMovementLabel;
     if (isOwned) {
       final String direction = player.isRising
           ? 'up'
@@ -143,7 +146,8 @@ class _SelectedPlayerDetail extends StatelessWidget {
         child: GtexTermsList(
           dense: true,
           rows: <GtexTermRow>[
-            GtexTermRow('Market value', player.priceLabel),
+            GtexTermRow('Share price', player.sharePriceLabel),
+            GtexTermRow.orUnknown('Estimated value', player.estimatedValueLabel),
             GtexTermRow.orUnknown('Value movement', movement),
             GtexTermRow('Position trend', 'Trading $direction'),
             GtexTermRow.orUnknown('Scouting index', player.gsiTrendLabel),
@@ -252,7 +256,8 @@ class _SelectedPlayerDetail extends StatelessWidget {
           position: player.position,
           clubName: player.clubName,
           nationality: player.nationality,
-          priceLabel: player.priceLabel,
+          priceLabel: player.sharePriceLabel,
+          valuationLabel: player.valueBadgeLabel,
           imageUrl: player.imageUrl,
           gsiLabel: player.gsiLabel,
           gsiTierLabel: player.gsiTierLabel,
@@ -320,8 +325,15 @@ class _SelectedPlayerDetail extends StatelessWidget {
             rows: <GtexTermRow>[
               GtexTermRow('GSI', player.gsiDetailLabel),
               GtexTermRow.orUnknown('GSI movement', player.gsiTrendLabel),
-              GtexTermRow('Market value', player.priceLabel),
-              GtexTermRow.orUnknown('Value movement', player.movementLabel),
+              GtexTermRow('Share price', player.sharePriceLabel),
+              GtexTermRow.orUnknown(
+                'Estimated value',
+                player.estimatedValueLabel,
+              ),
+              GtexTermRow.orUnknown(
+                'Value movement',
+                player.valueMovementLabel,
+              ),
               GtexTermRow('Availability', player.availabilityTypeLabel),
             ],
           ),

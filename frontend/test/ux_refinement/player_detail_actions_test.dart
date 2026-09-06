@@ -6,6 +6,7 @@ import 'package:gte_frontend/features/player_detail/gtex_fm_player_profile_scree
 import 'package:gte_frontend/data/gte_exchange_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
+import 'package:gte_frontend/widgets/gte_order_ticket_sheet.dart';
 
 /// The market's only drill-down destination used to be read-only: there was
 /// no way to act on a player anywhere it led. These cover the action states
@@ -118,7 +119,16 @@ void main() {
     // settling on the canonical System A market rather than placing a
     // System B order.
     expect(find.text('Buy shares'), findsOneWidget);
-    expect(find.text('SHARE PRICE'), findsOneWidget);
+    // Scoped to the ticket: the profile behind it now states the share price
+    // too, which is the point - both surfaces quote the same figure under
+    // the same caption, so the assertion has to say which one it means.
+    expect(
+      find.descendant(
+        of: find.byType(GteOrderTicketSheet),
+        matching: find.text('SHARE PRICE'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Place order'), findsNothing);
   });
 

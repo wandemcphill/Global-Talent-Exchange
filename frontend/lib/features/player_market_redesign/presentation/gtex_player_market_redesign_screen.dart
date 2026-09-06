@@ -119,7 +119,7 @@ class _GtexPlayerMarketRedesignScreenState
         return;
       }
       setState(() {
-        _moversError = 'Market movers are unavailable right now.';
+        _moversError = 'Value movers are unavailable right now.';
         _isLoadingMovers = false;
       });
     }
@@ -567,7 +567,8 @@ class _BasketReviewSheet extends StatelessWidget {
                 child: GtexPanel(
                   title: player.name,
                   subtitle:
-                      '${player.clubName} - ${player.position} - ${player.priceLabel}',
+                      '${player.clubName} - ${player.position} - '
+                      '${player.sharePriceLabel}',
                   child: Row(
                     children: <Widget>[
                       Expanded(
