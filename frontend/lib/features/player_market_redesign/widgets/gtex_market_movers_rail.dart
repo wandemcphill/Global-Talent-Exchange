@@ -9,6 +9,12 @@ import '../../../ui_gtex/ui_gtex.dart';
 /// pricing engine. When the backend has no movers yet the rail says so; it
 /// never renders a "0.0%" placeholder (a fabricated zero was a proven P0
 /// defect). Every row opens the canonical Player Detail.
+///
+/// The percentage each row carries is `day_change_percent`, which the pricing
+/// engine computes against the *valuation* reference price - not against
+/// `PlayerShareMarket.share_price_coin`. So the rail names it as a valuation
+/// move: a bare percentage under a heading called "Market movers" reads as a
+/// price move, and the tradable price is not what moved.
 class GtexMarketMoversRail extends StatelessWidget {
   const GtexMarketMoversRail({
     super.key,
@@ -35,8 +41,8 @@ class GtexMarketMoversRail extends StatelessWidget {
       return _MoversShell(
         child: Text(
           error != null
-              ? 'Market movers are unavailable right now.'
-              : 'Market movers will appear here once prices move today.',
+              ? 'Value movers are unavailable right now.'
+              : 'Value movers will appear here once valuations move today.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: GtexColors.textMuted,
             fontWeight: FontWeight.w700,
@@ -108,8 +114,8 @@ class _MoversShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GtexPanel(
-      title: 'Market movers',
-      subtitle: 'Live from the pricing engine',
+      title: 'Value movers',
+      subtitle: 'Valuation movement from the pricing engine - not share price',
       accent: GtexColors.cyan,
       child: child,
     );
@@ -177,7 +183,9 @@ class _MoverRow extends StatelessWidget {
     final String sign = item.dayChangePercent > 0 ? '+' : '';
     return Semantics(
       button: true,
-      label: 'Open ${item.playerName}',
+      label:
+          'Open ${item.playerName}, value $sign'
+          '${item.dayChangePercent.toStringAsFixed(1)} percent',
       child: InkWell(
         key: Key('gtex-mover-${item.playerId}'),
         borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),

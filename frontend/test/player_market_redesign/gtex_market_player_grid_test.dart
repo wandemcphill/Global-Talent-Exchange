@@ -94,7 +94,7 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('gtex-market-sort-biggestRisers')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Biggest risers'), findsWidgets);
+    expect(find.textContaining('Biggest value risers'), findsWidgets);
   });
 
   testWidgets('every market row renders through the canonical GtexPlayerCard', (

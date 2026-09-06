@@ -61,7 +61,14 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('once prices move'), findsOneWidget);
+      expect(
+        find.textContaining('once valuations move'),
+        findsOneWidget,
+      );
+      // The rail's percentages are valuation moves, and the rail says so
+      // rather than letting them read as share-price moves.
+      expect(find.text('Value movers'), findsOneWidget);
+      expect(find.textContaining('not share price'), findsOneWidget);
       expect(find.textContaining('%'), findsNothing);
       expect(find.textContaining('0.0'), findsNothing);
     });

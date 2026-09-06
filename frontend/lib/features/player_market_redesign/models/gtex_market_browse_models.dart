@@ -15,7 +15,8 @@ class GtexMarketPlayerView {
     required this.clubName,
     required this.age,
     required this.marketValueEur,
-    required this.price,
+    required this.estimatedValueCredits,
+    required this.sharePriceCoin,
     required this.movementPct,
     required this.interestScore,
     required this.rating,
@@ -49,7 +50,17 @@ class GtexMarketPlayerView {
   final String clubName;
   final int? age;
   final double? marketValueEur;
-  final double? price;
+
+  /// Valuation in credits from the value engine. A valuation - it is not
+  /// what a trade settles at, and it is never quoted as a price.
+  final double? estimatedValueCredits;
+
+  /// `PlayerShareMarket.share_price_coin`: the coin amount one share settles
+  /// at. Null when the player has no issued share market.
+  final double? sharePriceCoin;
+
+  /// Movement of the *valuation*, from the backend's own movement figure.
+  /// It is not a share-price move, and nothing here labels it as one.
   final double? movementPct;
   final int? interestScore;
   final double? rating;
@@ -93,7 +104,8 @@ class GtexMarketPlayerView {
               : 'Unattached / unknown club',
       age: player.age,
       marketValueEur: player.marketValueEur,
-      price: player.currentValueCredits,
+      estimatedValueCredits: player.currentValueCredits,
+      sharePriceCoin: player.sharePriceCoin,
       movementPct: player.movementPct,
       interestScore: player.marketInterestScore,
       rating: player.averageRating,
@@ -141,11 +153,33 @@ class GtexMarketPlayerView {
       movementPct != null &&
       globalScoutingIndexMovementPct != null;
 
-  String get priceLabel =>
-      marketValueEur == null
-          ? GtexMarketFormatters.credits(price)
-          : GtexMarketFormatters.euros(marketValueEur);
-  String get internalPriceLabel => GtexMarketFormatters.credits(price);
+  /// The tradable price, in GTEX Coin. This is the only number in the Market
+  /// that a buy or sell settles at, and the only one the card quotes.
+  String get sharePriceLabel => GtexMarketFormatters.coin(sharePriceCoin);
+
+  /// The canonical valuation, preferring the ingested EUR figure and falling
+  /// back to the value engine's credits. Null when neither exists - an
+  /// unknown valuation is never rendered as zero.
+  String? get estimatedValueLabel {
+    if (marketValueEur != null) {
+      return GtexMarketFormatters.euros(marketValueEur);
+    }
+    if (estimatedValueCredits != null) {
+      return GtexMarketFormatters.credits(estimatedValueCredits);
+    }
+    return null;
+  }
+
+  /// The valuation and its movement in one chip, explicitly named "Value" so
+  /// it can never be read as the price standing next to it.
+  String? get valueBadgeLabel {
+    final String? value = estimatedValueLabel;
+    if (value == null) {
+      return null;
+    }
+    final String? movement = valueMovementLabel;
+    return movement == null ? 'Value $value' : 'Value $value $movement';
+  }
   String get ageLabel => age == null || age! <= 0 ? 'Age TBC' : 'Age $age';
   String? get heightLabel =>
       raw.heightCm == null || raw.heightCm! <= 0 ? null : '${raw.heightCm} cm';
@@ -197,7 +231,7 @@ class GtexMarketPlayerView {
   /// Signed value movement, or null when the backend has no movement for
   /// this player. A missing movement is not a flat one: rendering "0.0%"
   /// would assert a price history that does not exist.
-  String? get movementLabel {
+  String? get valueMovementLabel {
     final double? value = movementPct;
     if (value == null) {
       return null;
@@ -365,9 +399,13 @@ class GtexMarketBasketState {
   List<GtexMarketPlayerView> get items =>
       itemsById.values.toList(growable: false);
 
+  /// Sum of the shortlisted players' *valuations*, in credits. The shortlist
+  /// is a negotiation board, not a cart: this is not a purchase cost, and the
+  /// surface that renders it says "Shortlist value".
   double get totalCredits => items.fold<double>(
     0,
-    (double total, GtexMarketPlayerView player) => total + (player.price ?? 0),
+    (double total, GtexMarketPlayerView player) =>
+        total + (player.estimatedValueCredits ?? 0),
   );
 
   String get totalLabel => GtexMarketFormatters.credits(totalCredits);
@@ -400,8 +438,10 @@ class GtexMarketBasketState {
 /// no claim the data cannot keep.
 enum GtexMarketSort {
   relevance,
-  priceHighToLow,
-  priceLowToHigh,
+  sharePriceHighToLow,
+  sharePriceLowToHigh,
+  valueHighToLow,
+  valueLowToHigh,
   biggestRisers,
   biggestFallers,
   mostWatched,
@@ -409,12 +449,18 @@ enum GtexMarketSort {
 }
 
 extension GtexMarketSortX on GtexMarketSort {
+  /// Every label names the number it ordered by. "Price" is the tradable
+  /// share price and "value" is the valuation: an order that says "price"
+  /// while sorting a valuation is the same defect as printing one as the
+  /// other, one step removed.
   String get label => switch (this) {
     GtexMarketSort.relevance => 'Market order',
-    GtexMarketSort.priceHighToLow => 'Price: high to low',
-    GtexMarketSort.priceLowToHigh => 'Price: low to high',
-    GtexMarketSort.biggestRisers => 'Biggest risers',
-    GtexMarketSort.biggestFallers => 'Biggest fallers',
+    GtexMarketSort.sharePriceHighToLow => 'Share price: high to low',
+    GtexMarketSort.sharePriceLowToHigh => 'Share price: low to high',
+    GtexMarketSort.valueHighToLow => 'Estimated value: high to low',
+    GtexMarketSort.valueLowToHigh => 'Estimated value: low to high',
+    GtexMarketSort.biggestRisers => 'Biggest value risers',
+    GtexMarketSort.biggestFallers => 'Biggest value fallers',
     GtexMarketSort.mostWatched => 'Most watched',
     GtexMarketSort.topRated => 'Top rated',
   };
@@ -452,10 +498,30 @@ extension GtexMarketSortX on GtexMarketSort {
     switch (this) {
       case GtexMarketSort.relevance:
         return players;
-      case GtexMarketSort.priceHighToLow:
-        return _byKey(players, (GtexMarketPlayerView p) => p.price, descending: true);
-      case GtexMarketSort.priceLowToHigh:
-        return _byKey(players, (GtexMarketPlayerView p) => p.price, descending: false);
+      case GtexMarketSort.sharePriceHighToLow:
+        return _byKey(
+          players,
+          (GtexMarketPlayerView p) => p.sharePriceCoin,
+          descending: true,
+        );
+      case GtexMarketSort.sharePriceLowToHigh:
+        return _byKey(
+          players,
+          (GtexMarketPlayerView p) => p.sharePriceCoin,
+          descending: false,
+        );
+      case GtexMarketSort.valueHighToLow:
+        return _byKey(
+          players,
+          (GtexMarketPlayerView p) => p.estimatedValueCredits,
+          descending: true,
+        );
+      case GtexMarketSort.valueLowToHigh:
+        return _byKey(
+          players,
+          (GtexMarketPlayerView p) => p.estimatedValueCredits,
+          descending: false,
+        );
       case GtexMarketSort.biggestRisers:
         return _byKey(players, (GtexMarketPlayerView p) => p.movementPct, descending: true);
       case GtexMarketSort.biggestFallers:
@@ -478,6 +544,23 @@ extension GtexMarketSortX on GtexMarketSort {
 
 class GtexMarketFormatters {
   const GtexMarketFormatters._();
+
+  /// The tradable share price, in GTEX Coin.
+  ///
+  /// Share prices live in a small range, so the exact figure is shown rather
+  /// than a compact one - this is the number the user is charged. Above the
+  /// range where that stays readable it compacts like every other figure.
+  /// A player with no issued share market has no price, and says so.
+  static String coin(double? value) {
+    if (value == null) {
+      return 'No share market';
+    }
+    if (value.abs() >= 10000) {
+      return 'GTEX ${compactNumber(value)}';
+    }
+    final bool whole = value == value.roundToDouble();
+    return 'GTEX ${value.toStringAsFixed(whole ? 0 : 2)}';
+  }
 
   static String credits(double? value) {
     if (value == null) {

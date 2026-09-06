@@ -131,8 +131,10 @@ void main() {
         width,
       );
 
+      // The movement is a *valuation* movement, so it travels with the
+      // valuation rather than standing bare beside the share price.
       expect(
-        find.text('+2.4%'),
+        find.text('Value GTEX 1.2M +2.4%'),
         findsWidgets,
         reason:
             'value movement is real backend data and must be visible on the '
@@ -148,8 +150,8 @@ void main() {
       900,
     );
 
-    expect(find.text('-3.7%'), findsWidgets);
-    expect(find.text('3.7%'), findsNothing);
+    expect(find.text('Value GTEX 1.2M -3.7%'), findsWidgets);
+    expect(find.text('Value GTEX 1.2M 3.7%'), findsNothing);
   });
 
   testWidgets('a player with no movement shows no delta, not 0.0%', (
@@ -171,9 +173,9 @@ void main() {
   testWidgets('the model itself refuses to invent a flat movement', (
     WidgetTester tester,
   ) async {
-    expect(playerView().movementLabel, isNull);
-    expect(playerView(movementPct: 0).movementLabel, '0.0%');
-    expect(playerView(movementPct: 1.25).movementLabel, '+1.3%');
+    expect(playerView().valueMovementLabel, isNull);
+    expect(playerView(movementPct: 0).valueMovementLabel, '0.0%');
+    expect(playerView(movementPct: 1.25).valueMovementLabel, '+1.3%');
   });
 
   testWidgets('GSI and its tier reach the browse card on a wide pane', (

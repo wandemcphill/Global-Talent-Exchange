@@ -1377,6 +1377,10 @@ class GteExchangeApiClient {
       currentClubName: player.club,
       age: player.age,
       currentValueCredits: player.marketCredits.toDouble(),
+      // The same price the fixture detail quotes and the fixture trade
+      // settles at, so fixture mode cannot browse on one number and be
+      // charged another.
+      sharePriceCoin: gteFixtureSharePriceCoin(player.id),
       movementPct: _normalizeMovement(player.valueDeltaPct),
       trendScore: player.gsi.toDouble(),
       marketInterestScore: player.recentHighlights.length * 10,

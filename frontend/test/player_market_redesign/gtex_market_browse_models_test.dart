@@ -119,8 +119,10 @@ void main() {
       expect(player.gsiTierLabel, 'High-grade GSI');
       expect(player.gsiTrendLabel, 'GSI +3.4%');
       expect(player.gsiDetailLabel, 'GSI 88 - High-grade GSI');
-      expect(player.priceLabel, 'EUR 120.0M');
-      expect(player.internalPriceLabel, 'GTEX 50.0M');
+      // The EUR figure is the valuation, and it is now labelled as one.
+      // The card's price slot carries the tradable share price instead.
+      expect(player.estimatedValueLabel, 'EUR 120.0M');
+      expect(player.sharePriceLabel, 'No share market');
     });
 
     test('does not coerce missing real-player age to zero', () {
@@ -146,7 +148,7 @@ void main() {
       expect(player.age, isNull);
       expect(player.ageLabel, 'Age TBC');
       expect(player.clubName, 'Summary FC');
-      expect(player.priceLabel, 'GTEX 125');
+      expect(player.estimatedValueLabel, 'GTEX 125');
     });
   });
 
@@ -230,10 +232,10 @@ void main() {
           <String>['cheap', 'rich', 'mid']);
     });
 
-    test('price sorts ascend and descend', () {
-      expect(ids(GtexMarketSort.priceLowToHigh.applyTo(sample)),
+    test('value sorts ascend and descend', () {
+      expect(ids(GtexMarketSort.valueLowToHigh.applyTo(sample)),
           <String>['cheap', 'mid', 'rich']);
-      expect(ids(GtexMarketSort.priceHighToLow.applyTo(sample)),
+      expect(ids(GtexMarketSort.valueHighToLow.applyTo(sample)),
           <String>['rich', 'mid', 'cheap']);
     });
 
@@ -251,7 +253,7 @@ void main() {
       final List<GtexMarketPlayerView> copy = List<GtexMarketPlayerView>.of(
         sample,
       );
-      GtexMarketSort.priceHighToLow.applyTo(sample);
+      GtexMarketSort.valueHighToLow.applyTo(sample);
       expect(ids(sample), ids(copy));
     });
   });

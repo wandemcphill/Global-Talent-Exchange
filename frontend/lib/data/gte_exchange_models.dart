@@ -230,6 +230,7 @@ class GteMarketPlayerListItem {
     this.secondaryPositions = const <String>[],
     this.marketValueEur,
     required this.currentValueCredits,
+    this.sharePriceCoin,
     required this.movementPct,
     required this.trendScore,
     required this.marketInterestScore,
@@ -274,7 +275,17 @@ class GteMarketPlayerListItem {
   final String? preferredFoot;
   final List<String> secondaryPositions;
   final double? marketValueEur;
+
+  /// Valuation in credits from the value engine's read model. A valuation,
+  /// not a price: nothing settles at this number.
   final double? currentValueCredits;
+
+  /// `PlayerShareMarket.share_price_coin` - the tradable price, in GTEX Coin,
+  /// that a buy or sell of this player's shares settles at.
+  ///
+  /// Null when no share market has been issued for the player. That is
+  /// unavailable, never zero and never a reason to quote a valuation instead.
+  final double? sharePriceCoin;
   final double? movementPct;
   final double? trendScore;
   final int? marketInterestScore;
@@ -302,6 +313,56 @@ class GteMarketPlayerListItem {
   final PlayerAvatar? avatar;
 
   bool get isRising => (movementPct ?? 0) > 0;
+
+  /// This listing with the tradable price replaced by the server's latest.
+  GteMarketPlayerListItem withSharePriceCoin(double? price) {
+    return GteMarketPlayerListItem(
+      playerId: playerId,
+      playerName: playerName,
+      position: position,
+      nationality: nationality,
+      nationalityCode: nationalityCode,
+      currentClubId: currentClubId,
+      currentClubName: currentClubName,
+      currentCompetitionId: currentCompetitionId,
+      currentCompetitionName: currentCompetitionName,
+      currentCompetitionCountryName: currentCompetitionCountryName,
+      currentDivisionId: currentDivisionId,
+      currentDivisionName: currentDivisionName,
+      age: age,
+      heightCm: heightCm,
+      preferredFoot: preferredFoot,
+      secondaryPositions: secondaryPositions,
+      marketValueEur: marketValueEur,
+      currentValueCredits: currentValueCredits,
+      sharePriceCoin: price,
+      movementPct: movementPct,
+      trendScore: trendScore,
+      marketInterestScore: marketInterestScore,
+      averageRating: averageRating,
+      globalScoutingIndex: globalScoutingIndex,
+      previousGlobalScoutingIndex: previousGlobalScoutingIndex,
+      globalScoutingIndexMovementPct: globalScoutingIndexMovementPct,
+      transferListingId: transferListingId,
+      transferListingStatus: transferListingStatus,
+      sellingClubId: sellingClubId,
+      isAvailable: isAvailable,
+      availabilityLabel: availabilityLabel,
+      askingType: askingType,
+      agentUserId: agentUserId,
+      agentName: agentName,
+      marketplaceNote: marketplaceNote,
+      isTradable: isTradable,
+      salaryAmount: salaryAmount,
+      contractYearsRemaining: contractYearsRemaining,
+      buyClauseAmount: buyClauseAmount,
+      loanTerms: loanTerms,
+      swapTerms: swapTerms,
+      availabilityTerms: availabilityTerms,
+      imageUrl: imageUrl,
+      avatar: avatar,
+    );
+  }
 
   int get displayRating {
     final double? dynamicGsi = globalScoutingIndex;
@@ -390,6 +451,10 @@ class GteMarketPlayerListItem {
       currentValueCredits: _nullableNumber(json, <String>[
         'current_value_credits',
         'currentValueCredits',
+      ]),
+      sharePriceCoin: _nullableNumber(json, <String>[
+        'share_price_coin',
+        'sharePriceCoin',
       ]),
       movementPct: _nullableNumber(json, <String>[
         'movement_pct',
@@ -505,6 +570,37 @@ class GteMarketPlayerListView {
   final String? nextCursor;
   final int offset;
   final int total;
+
+  /// The same page with one player's tradable price replaced by [price].
+  ///
+  /// A settled trade moves `PlayerShareMarket.share_price_coin`, and the
+  /// response carries the post-trade market. Without this the browse list
+  /// keeps quoting the price the user traded *away from* until the whole
+  /// page is refetched. The price written here is the server's own figure
+  /// from that response - the client never computes a new price.
+  GteMarketPlayerListView withSharePrice(String playerId, double price) {
+    bool changed = false;
+    final List<GteMarketPlayerListItem> next = items.map((
+      GteMarketPlayerListItem item,
+    ) {
+      if (item.playerId != playerId || item.sharePriceCoin == price) {
+        return item;
+      }
+      changed = true;
+      return item.withSharePriceCoin(price);
+    }).toList(growable: false);
+    if (!changed) {
+      return this;
+    }
+    return GteMarketPlayerListView(
+      items: next,
+      limit: limit,
+      hasMore: hasMore,
+      nextCursor: nextCursor,
+      offset: offset,
+      total: total,
+    );
+  }
 
   factory GteMarketPlayerListView.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(

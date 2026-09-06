@@ -56,6 +56,7 @@ class GtexPlayerCard extends StatelessWidget {
     this.badges = const <Widget>[],
     this.formResults = const <String>[],
     this.valueDeltaLabel,
+    this.valuationLabel,
     this.valueState = GtexValueState.recent,
     this.ownerLabel,
     this.ownershipLabel,
@@ -102,6 +103,15 @@ class GtexPlayerCard extends StatelessWidget {
   final List<Widget> badges;
   final List<String> formResults;
   final String? valueDeltaLabel;
+
+  /// A second economic figure that is explicitly *not* [priceLabel] - the
+  /// player's canonical valuation, e.g. `"Value EUR 120.0M +3.2%"`.
+  ///
+  /// [priceLabel] is the tradable price. Rendering a valuation in that slot
+  /// quoted the user a number nothing settles at, so a valuation now has its
+  /// own line, captioned, directly beneath the price it must not be confused
+  /// with. `null` renders the card exactly as before.
+  final String? valuationLabel;
   final GtexValueState valueState;
   final String? ownerLabel;
 
@@ -191,6 +201,7 @@ class GtexPlayerCard extends StatelessWidget {
             reduceMotion: reduceMotion,
             onTap: onTap,
             valueDeltaLabel: valueDeltaLabel,
+            valuationLabel: valuationLabel,
             valueState: valueState,
             ratingLabel: ratingLabel ?? gsiLabel,
             gsiLabel: gsiLabel,
@@ -229,6 +240,7 @@ class GtexPlayerCard extends StatelessWidget {
           badges: badges,
           formResults: formResults,
           valueDeltaLabel: valueDeltaLabel,
+          valuationLabel: valuationLabel,
           valueState: valueState,
           ownerLabel: ownerLabel,
           ownershipLabel: ownershipLabel,
@@ -281,6 +293,7 @@ class _FullPlayerCard extends StatelessWidget {
     this.chemistryLinks = const <String>[],
     this.portraitMissingReason,
     this.valueDeltaLabel,
+    this.valuationLabel,
     this.ownerLabel,
     this.ownershipLabel,
     this.contractLabel,
@@ -319,6 +332,7 @@ class _FullPlayerCard extends StatelessWidget {
   final List<Widget> badges;
   final List<String> formResults;
   final String? valueDeltaLabel;
+  final String? valuationLabel;
   final GtexValueState valueState;
   final String? ownerLabel;
   final String? ownershipLabel;
@@ -515,10 +529,14 @@ class _FullPlayerCard extends StatelessWidget {
                             deltaLabel: valueDeltaLabel,
                             state: valueState,
                             size: GtexValueDisplaySize.standard,
+                            // The caption under the headline figure names
+                            // the *other* economic number, so a valuation can
+                            // never be read as the price above it.
                             updatedLabel:
-                                valueState == GtexValueState.live
+                                valuationLabel ??
+                                (valueState == GtexValueState.live
                                     ? 'Updated live'
-                                    : null,
+                                    : null),
                           ),
                         ),
                         if (onAddToShortlist != null)
@@ -746,6 +764,7 @@ class _CompactPlayerCard extends StatelessWidget {
     this.imageUrl,
     this.onTap,
     this.valueDeltaLabel,
+    this.valuationLabel,
     this.ratingLabel,
     this.gsiLabel,
     this.gsiTierLabel,
@@ -771,6 +790,7 @@ class _CompactPlayerCard extends StatelessWidget {
   final String? imageUrl;
   final VoidCallback? onTap;
   final String? valueDeltaLabel;
+  final String? valuationLabel;
   final String? ratingLabel;
   final String? gsiLabel;
   final String? gsiTierLabel;
@@ -1032,16 +1052,42 @@ class _CompactPlayerCard extends StatelessWidget {
         const SizedBox(width: GtexSpacing.xs),
         ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 84, maxWidth: 110),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerRight,
-            child: GtexValueDisplay(
-              valueLabel: priceLabel,
-              deltaLabel: valueDeltaLabel,
-              state: valueState,
-              size: GtexValueDisplaySize.small,
-              showStateIndicator: false,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: GtexValueDisplay(
+                  valueLabel: priceLabel,
+                  deltaLabel: valueDeltaLabel,
+                  state: valueState,
+                  size: GtexValueDisplaySize.small,
+                  showStateIndicator: false,
+                ),
+              ),
+              // The valuation, on its own captioned line, so the figure
+              // above it is unambiguously the tradable price.
+              if (valuationLabel != null &&
+                  valuationLabel!.trim().isNotEmpty) ...<Widget>[
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    valuationLabel!,
+                    maxLines: 1,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: GtexColors.textTertiary,
+                      fontFamily: 'DM Sans',
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(width: GtexSpacing.xs),
