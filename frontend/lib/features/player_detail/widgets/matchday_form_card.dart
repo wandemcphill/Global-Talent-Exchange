@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../domain/value/gtex_value_models.dart';
 import '../../../ui_gtex/ui_gtex.dart';
+import '../../../widgets/gte_formatters.dart';
 
 const Color _panel = GtexColors.surfaceRaised;
 const Color _border = GtexColors.surfaceBorder;
@@ -25,9 +26,14 @@ const Color _blue = GtexColors.accentBlue;
 ///   * When form *is* moving value, the figure shown is the real, bounded
 ///     adjustment the backend applied, not a restatement of the rating.
 class MatchdayFormCard extends StatelessWidget {
-  const MatchdayFormCard({super.key, required this.form});
+  const MatchdayFormCard({super.key, required this.form, this.freshness});
 
   final GtexPlayerForm form;
+
+  /// Whether the published valuation has caught up with the football listed
+  /// here. Optional so the card still renders where a caller has no valuation
+  /// to compare against; when absent the card simply makes no timing claim.
+  final GtexValuationFreshnessReport? freshness;
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +91,7 @@ class MatchdayFormCard extends StatelessWidget {
           _RecentRatingStrip(performances: form.performances),
         ],
         const SizedBox(height: 12),
-        _ValuationConsequence(form: form),
+        _ValuationConsequence(form: form, freshness: freshness),
         if (form.excludedByCompetitionCap > 0) ...<Widget>[
           const SizedBox(height: 8),
           _FormFootnote(
@@ -163,9 +169,10 @@ class _MatchdayFormEmpty extends StatelessWidget {
 /// It must never overstate. When the backend has not applied a signal this says
 /// so plainly and says what is missing, rather than hinting at a link.
 class _ValuationConsequence extends StatelessWidget {
-  const _ValuationConsequence({required this.form});
+  const _ValuationConsequence({required this.form, this.freshness});
 
   final GtexPlayerForm form;
+  final GtexValuationFreshnessReport? freshness;
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +223,8 @@ class _ValuationConsequence extends StatelessWidget {
     // "raising valuation" and assumed their tradable shares had moved would
     // have been misled by omission.
     final bool statesAnEffect = signal != null && signal.applied;
+    final GtexValuationFreshnessReport? report = freshness;
+    final String? timing = _timingNote(report);
 
     return Container(
       padding: const EdgeInsets.all(11),
@@ -253,9 +262,48 @@ class _ValuationConsequence extends StatelessWidget {
               ),
             ),
           ],
+          if (timing != null) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              timing,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: report != null && report.isPending ? _amber : _textMuted,
+                height: 1.35,
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  /// What the page may truthfully say about *when* this reaches a valuation.
+  ///
+  /// Valuations are recalculated on a schedule rather than per match, so a
+  /// signal can be live here while the published number still predates the
+  /// matches that produced it. Returns null rather than guessing when there is
+  /// no recalculation on record to compare against.
+  static String? _timingNote(GtexValuationFreshnessReport? report) {
+    if (report == null) {
+      return null;
+    }
+    switch (report.state) {
+      case GtexValuationFreshness.pending:
+        final int count = report.pendingMatchCount;
+        return '$count eligible ${count == 1 ? 'match' : 'matches'} '
+            '${count == 1 ? 'has' : 'have'} been played since this valuation was '
+            'last recalculated on ${gteFormatDateTime(report.lastSnapshotAt)}. '
+            'The form above already counts '
+            '${count == 1 ? 'it' : 'them'}; the published valuation does not, '
+            'until the next recalculation.';
+      case GtexValuationFreshness.updated:
+        return 'Valuation last recalculated '
+            '${gteFormatDateTime(report.lastSnapshotAt)}, which already accounts '
+            'for every eligible match listed here.';
+      case GtexValuationFreshness.unknown:
+        return 'No valuation recalculation is on record for this player, so '
+            'this form has not reached a published valuation yet.';
+    }
   }
 }
 
