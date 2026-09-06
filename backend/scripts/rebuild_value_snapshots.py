@@ -37,6 +37,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.players.service import PlayerSummaryProjector
+from app.value_engine.matchday_notifications import MatchdayValueNotificationProducer
 from app.value_engine.service import IngestionValueEngineBridge
 
 
@@ -70,6 +71,31 @@ def run_scheduled_rebuild(
     )
 
 
+def notify_holders(session_factory: sessionmaker, snapshots: list) -> int:
+    """Tell holders about the players matchday actually moved.
+
+    Deliberately hung off the *scheduled* path rather than off
+    ``IngestionValueEngineBridge.run`` itself. The bridge is also driven by the
+    operator rebuild endpoint and by ingestion, and neither of those is a reason
+    to interrupt a holder: an operator re-running a rebuild is maintenance, not
+    news. The producer is idempotent per ``as_of`` regardless, so a retried cron
+    does not double-notify.
+
+    Failure here must not fail the run. The valuation is the product; the
+    notification is a courtesy on top of it, and losing the courtesy is a far
+    better outcome than a cron that exits non-zero after having already written
+    every snapshot correctly.
+    """
+    try:
+        with session_factory() as session:
+            written = MatchdayValueNotificationProducer(session).publish(snapshots)
+            session.commit()
+            return written
+    except Exception as exc:  # pragma: no cover - defensive, logged not raised
+        print(f"value snapshot rebuild: holder notifications failed: {exc}")
+        return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Scheduled value snapshot rebuild.")
     parser.add_argument("--database-url", required=True)
@@ -94,9 +120,11 @@ def main() -> int:
         if (snapshot.matchday_signal_audit or {}).get("applied") is True
         and (snapshot.matchday_signal_audit or {}).get("adjustment_pct")
     ]
+    notified = notify_holders(session_factory, snapshots)
     print(
         f"value snapshot rebuild: {len(snapshots)} snapshots, "
         f"{len(moved_by_form)} moved by matchday form, "
+        f"{notified} holders notified, "
         f"elapsed {(datetime.now(timezone.utc) - started).total_seconds():.1f}s"
     )
     return 0
