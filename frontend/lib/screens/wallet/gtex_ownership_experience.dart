@@ -293,12 +293,20 @@ class _PositionHeader extends StatelessWidget {
             unrealizedPl >= 0 ? Icons.trending_up : Icons.trending_down,
             plColor,
           ),
-          if (summary != null)
+          // UNKNOWN != ZERO - see GtePortfolioSummary.realizedPlAvailable.
+          if (summary != null && summary!.realizedPlAvailable)
             _tile(
               'Realized P/L',
               '${summary!.realizedPlTotal >= 0 ? '+' : ''}${gteFormatGtc(summary!.realizedPlTotal)}',
               Icons.savings_outlined,
               summary!.realizedPlTotal >= 0 ? GtexColors.pitch : GtexColors.red,
+            )
+          else if (summary != null)
+            _tile(
+              'Realized P/L',
+              'Not calculated',
+              Icons.savings_outlined,
+              GtexColors.textMuted,
             ),
           if (available != null)
             _tile('Cash ready', gteFormatGtc(available), Icons.account_balance_wallet_outlined,

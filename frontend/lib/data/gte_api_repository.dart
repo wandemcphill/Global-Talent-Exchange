@@ -221,8 +221,28 @@ abstract class GteApiRepository {
 
   Future<GteOrderRecord> fetchOrder(String orderId);
 
-  Future<GteOrderRecord> placeOrder(GteOrderCreateRequest request);
+  /// Buy player shares on the canonical System A market.
+  ///
+  /// [idempotencyKey] must be stable across retries of the *same* user action
+  /// and different for a new one: the server replays the original trade for a
+  /// repeated key, and rejects the key outright if it is reused with different
+  /// economic intent.
+  Future<GtePlayerShareTradeResult> buyPlayerShares({
+    required String playerId,
+    required int shareCount,
+    String? idempotencyKey,
+  });
 
+  /// Sell player shares on the canonical System A market. See
+  /// [buyPlayerShares] for the idempotency contract.
+  Future<GtePlayerShareTradeResult> sellPlayerShares({
+    required String playerId,
+    required int shareCount,
+    String? idempotencyKey,
+  });
+
+  /// Cancels a historical order-book order. Order *creation* is retired - see
+  /// [buyPlayerShares] - but existing open orders can still be closed.
   Future<GteOrderRecord> cancelOrder(String orderId);
 
   Future<GteAdminBuybackPreview> fetchAdminBuybackPreview(String orderId);
@@ -828,18 +848,72 @@ class GteModeAwareApiRepository implements GteApiRepository {
   }
 
   @override
-  Future<GteOrderRecord> placeOrder(GteOrderCreateRequest request) {
-    return _withFallback<GteOrderRecord>(
-      () async => GteOrderRecord.fromJson(
+  Future<GtePlayerShareTradeResult> buyPlayerShares({
+    required String playerId,
+    required int shareCount,
+    String? idempotencyKey,
+  }) {
+    return _withFallback<GtePlayerShareTradeResult>(
+      () async => GtePlayerShareTradeResult.fromJson(
         await _request(
           'POST',
-          '/api/orders',
-          body: request.toJson(),
+          '/api/market/buy',
+          body: _playerShareTradeBody(
+            playerId: playerId,
+            shareCount: shareCount,
+            idempotencyKey: idempotencyKey,
+          ),
           requiresAuth: true,
         ),
       ),
-      () => fixtures.placeOrder(request),
+      () => fixtures.buyPlayerShares(
+        playerId: playerId,
+        shareCount: shareCount,
+        idempotencyKey: idempotencyKey,
+      ),
     );
+  }
+
+  @override
+  Future<GtePlayerShareTradeResult> sellPlayerShares({
+    required String playerId,
+    required int shareCount,
+    String? idempotencyKey,
+  }) {
+    return _withFallback<GtePlayerShareTradeResult>(
+      () async => GtePlayerShareTradeResult.fromJson(
+        await _request(
+          'POST',
+          '/api/market/sell',
+          body: _playerShareTradeBody(
+            playerId: playerId,
+            shareCount: shareCount,
+            idempotencyKey: idempotencyKey,
+          ),
+          requiresAuth: true,
+        ),
+      ),
+      () => fixtures.sellPlayerShares(
+        playerId: playerId,
+        shareCount: shareCount,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  static Map<String, Object?> _playerShareTradeBody({
+    required String playerId,
+    required int shareCount,
+    required String? idempotencyKey,
+  }) {
+    return <String, Object?>{
+      'player_id': playerId,
+      'share_count': shareCount,
+      // The server requires at least 8 characters, and rejects a key reused
+      // with different economic intent - so omit it rather than send a short one.
+      if (idempotencyKey != null && idempotencyKey.length >= 8)
+        'idempotency_key': idempotencyKey,
+    };
   }
 
   @override

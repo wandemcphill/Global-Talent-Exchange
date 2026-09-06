@@ -7,6 +7,19 @@ import 'package:gte_frontend/domain/match/match_weights.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+int _ownedShares(GteExchangeController controller, String playerId) {
+  final GtePortfolioView? portfolio = controller.portfolio;
+  if (portfolio == null) {
+    return 0;
+  }
+  for (final GtePortfolioHolding holding in portfolio.holdings) {
+    if (holding.playerId == playerId) {
+      return holding.quantity.round();
+    }
+  }
+  return 0;
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   SharedPreferences.setMockInitialValues(const <String, Object>{});
@@ -42,7 +55,7 @@ void main() {
   });
 
   test(
-    'controller keeps wallet and order views in sync across submit and cancel',
+    'controller settles a player-share trade and syncs wallet and portfolio',
     () async {
       final GteExchangeController controller = GteExchangeController(
         api: GteExchangeApiClient.fixture(),
@@ -55,58 +68,98 @@ void main() {
       await controller.openPlayer('lamine-yamal');
       final double startingAvailable =
           controller.walletSummary!.availableBalance;
-      final double startingReserved = controller.walletSummary!.reservedBalance;
-      final int startingOpenOrders = controller.openOrders.length;
-      final GteOrderRecord? order = await controller.placeOrder(
+      final int startingShares = _ownedShares(controller, 'lamine-yamal');
+
+      final GtePlayerShareTradeResult? trade =
+          await controller.tradePlayerShares(
         playerId: 'lamine-yamal',
         side: GteOrderSide.buy,
-        quantity: 1,
-        maxPrice: 1188,
+        shareCount: 2,
+        idempotencyKey: 'controller-buy-key-1',
       );
-      expect(order, isNotNull);
-      final GteOrderRecord placedOrder = order!;
 
-      expect(
-        controller.orderForPlayer('lamine-yamal')?.status,
-        GteOrderStatus.open,
-      );
-      expect(
-        controller.recentOrders.any(
-          (GteOrderRecord item) => item.id == placedOrder.id,
-        ),
-        isTrue,
-      );
-      expect(controller.openOrders.length, greaterThan(startingOpenOrders));
+      expect(trade, isNotNull);
+      // System A settles immediately - ownership, not a pending order.
+      expect(trade!.holding.shareCount, startingShares + 2);
+      expect(trade.transactionId, isNotEmpty);
+      expect(controller.orderError, isNull);
+      expect(controller.isSubmittingOrder, isFalse);
       expect(
         controller.walletSummary!.availableBalance,
         lessThan(startingAvailable),
       );
-      expect(
-        controller.walletSummary!.reservedBalance,
-        greaterThan(startingReserved),
+      expect(_ownedShares(controller, 'lamine-yamal'), startingShares + 2);
+
+      // Selling part of the position returns coin and reduces ownership.
+      final GtePlayerShareTradeResult? sale =
+          await controller.tradePlayerShares(
+        playerId: 'lamine-yamal',
+        side: GteOrderSide.sell,
+        shareCount: 1,
+        idempotencyKey: 'controller-sell-key-1',
       );
 
-      final GteOrderRecord? cancelled = await controller.cancelOrder(
-        placedOrder.id,
+      expect(sale, isNotNull);
+      expect(sale!.holding.shareCount, startingShares + 1);
+    },
+  );
+
+  test(
+    'controller reuses an idempotency key rather than trading twice',
+    () async {
+      final GteExchangeController controller = GteExchangeController(
+        api: GteExchangeApiClient.fixture(),
       );
 
-      expect(cancelled?.status, GteOrderStatus.cancelled);
-      expect(
-        controller.openOrders.any(
-          (GteOrderRecord item) => item.id == placedOrder.id,
-        ),
-        isFalse,
+      await controller.signIn(
+        email: 'fixture.trader@gte.local',
+        password: 'DemoPass123', // pragma: allowlist secret
       );
+      await controller.openPlayer('lamine-yamal');
+      final double startingAvailable =
+          controller.walletSummary!.availableBalance;
+      final int startingShares = _ownedShares(controller, 'lamine-yamal');
+
+      final GtePlayerShareTradeResult? first =
+          await controller.tradePlayerShares(
+        playerId: 'lamine-yamal',
+        side: GteOrderSide.buy,
+        shareCount: 2,
+        idempotencyKey: 'controller-retry-key',
+      );
+      final GtePlayerShareTradeResult? retry =
+          await controller.tradePlayerShares(
+        playerId: 'lamine-yamal',
+        side: GteOrderSide.buy,
+        shareCount: 2,
+        idempotencyKey: 'controller-retry-key',
+      );
+
+      expect(retry!.transactionId, first!.transactionId);
+      expect(retry.holding.shareCount, startingShares + 2);
       expect(
         controller.walletSummary!.availableBalance,
-        closeTo(startingAvailable, 0.001),
-      );
-      expect(
-        controller.walletSummary!.reservedBalance,
-        closeTo(startingReserved, 0.001),
+        closeTo(startingAvailable - first.netAmountCoin, 0.001),
       );
     },
   );
+
+  test('controller refuses to trade while signed out', () async {
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+
+    final GtePlayerShareTradeResult? trade =
+        await controller.tradePlayerShares(
+      playerId: 'lamine-yamal',
+      side: GteOrderSide.buy,
+      shareCount: 1,
+      idempotencyKey: 'signed-out-key',
+    );
+
+    expect(trade, isNull);
+    expect(controller.orderError, 'Sign in to trade shares.');
+  });
 
   test(
     'fixture openPlayer resolves from market snapshot without loading compatibility profile',

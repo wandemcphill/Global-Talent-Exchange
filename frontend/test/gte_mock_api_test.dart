@@ -23,48 +23,97 @@ void main() {
     expect(orders.items, hasLength(2));
   });
 
-  test(
-      'mock api filters open orders and keeps balances in sync on submit and cancel',
+  test('mock api settles a player-share buy and moves the wallet', () async {
+    final GteMockApi api = GteMockApi(latency: Duration.zero);
+
+    final GteWalletSummary startingWallet = await api.fetchWalletSummary();
+    final GtePlayerShareTradeResult trade = await api.buyPlayerShares(
+      playerId: 'jude-bellingham',
+      shareCount: 2,
+      idempotencyKey: 'fixture-buy-key-1',
+    );
+    final GteWalletSummary afterWallet = await api.fetchWalletSummary();
+    final GtePortfolioView portfolio = await api.fetchPortfolio();
+
+    // System A fills instantly: ownership exists straight away, no open order.
+    expect(trade.holding.shareCount, 2);
+    expect(trade.market.circulatingShares, 2);
+    expect(trade.transactionId, isNotEmpty);
+    expect(trade.netAmountCoin, greaterThan(trade.grossAmountCoin));
+    expect(
+      afterWallet.availableBalance,
+      closeTo(startingWallet.availableBalance - trade.netAmountCoin, 0.001),
+    );
+    expect(
+      portfolio.holdings
+          .firstWhere(
+            (GtePortfolioHolding holding) =>
+                holding.playerId == 'jude-bellingham',
+          )
+          .quantity,
+      2,
+    );
+  });
+
+  test('mock api replays a repeated idempotency key instead of trading twice',
       () async {
     final GteMockApi api = GteMockApi(latency: Duration.zero);
 
     final GteWalletSummary startingWallet = await api.fetchWalletSummary();
-    final GteOrderRecord order = await api.placeOrder(
-      const GteOrderCreateRequest(
-        playerId: 'jude-bellingham',
-        side: GteOrderSide.buy,
-        quantity: 1,
-        maxPrice: 1266,
-      ),
+    final GtePlayerShareTradeResult first = await api.buyPlayerShares(
+      playerId: 'jude-bellingham',
+      shareCount: 2,
+      idempotencyKey: 'fixture-retry-key',
     );
-    final GteOrderListView openOrders = await api.listOrders(
+    final GtePlayerShareTradeResult second = await api.buyPlayerShares(
+      playerId: 'jude-bellingham',
+      shareCount: 2,
+      idempotencyKey: 'fixture-retry-key',
+    );
+    final GteWalletSummary afterWallet = await api.fetchWalletSummary();
+
+    expect(second.transactionId, first.transactionId);
+    expect(second.holding.shareCount, 2);
+    expect(
+      afterWallet.availableBalance,
+      closeTo(startingWallet.availableBalance - first.netAmountCoin, 0.001),
+    );
+  });
+
+  test('mock api sells shares back and credits the wallet', () async {
+    final GteMockApi api = GteMockApi(latency: Duration.zero);
+
+    await api.buyPlayerShares(playerId: 'jude-bellingham', shareCount: 4);
+    final GteWalletSummary afterBuy = await api.fetchWalletSummary();
+    final GtePlayerShareTradeResult sale = await api.sellPlayerShares(
+      playerId: 'jude-bellingham',
+      shareCount: 3,
+    );
+    final GteWalletSummary afterSell = await api.fetchWalletSummary();
+
+    expect(sale.holding.shareCount, 1);
+    expect(sale.netAmountCoin, lessThan(sale.grossAmountCoin));
+    expect(
+      afterSell.availableBalance,
+      closeTo(afterBuy.availableBalance + sale.netAmountCoin, 0.001),
+    );
+  });
+
+  test('mock api can still cancel a seeded historical order', () async {
+    // Order creation is retired, but existing open orders must stay closable.
+    final GteMockApi api = GteMockApi(latency: Duration.zero);
+
+    final GteOrderListView open = await api.listOrders(
       statuses: const <GteOrderStatus>[
         GteOrderStatus.open,
         GteOrderStatus.partiallyFilled,
       ],
     );
-    final GteWalletSummary reservedWallet = await api.fetchWalletSummary();
-    final GteOrderBook bookAfterPlace =
-        await api.fetchOrderBook('jude-bellingham');
-    final GteOrderRecord cancelled = await api.cancelOrder(order.id);
-    final GteWalletSummary restoredWallet = await api.fetchWalletSummary();
+    expect(open.items, isNotEmpty);
 
-    expect(openOrders.items.any((GteOrderRecord item) => item.id == order.id),
-        isTrue);
-    expect(reservedWallet.availableBalance,
-        lessThan(startingWallet.availableBalance));
-    expect(reservedWallet.reservedBalance,
-        greaterThan(startingWallet.reservedBalance));
-    expect(
-      bookAfterPlace.bids
-          .any((GteOrderBookLevel level) => level.price == order.maxPrice),
-      isTrue,
-    );
+    final GteOrderRecord cancelled = await api.cancelOrder(open.items.first.id);
+
     expect(cancelled.status, GteOrderStatus.cancelled);
-    expect(restoredWallet.availableBalance,
-        closeTo(startingWallet.availableBalance, 0.001));
-    expect(restoredWallet.reservedBalance,
-        closeTo(startingWallet.reservedBalance, 0.001));
   });
 
   test(

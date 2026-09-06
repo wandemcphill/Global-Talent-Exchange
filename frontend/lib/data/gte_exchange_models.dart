@@ -884,6 +884,7 @@ class GteMarketPlayerMarketProfile {
   const GteMarketPlayerMarketProfile({
     required this.isTradable,
     required this.marketValueEur,
+    required this.sharePriceCoin,
     required this.supplyTier,
     required this.liquidityBand,
     required this.holderCount,
@@ -897,6 +898,13 @@ class GteMarketPlayerMarketProfile {
 
   final bool isTradable;
   final double? marketValueEur;
+
+  /// Tradable player-share price in GTEX Coin, from PlayerShareMarket.
+  ///
+  /// Null when no share market has been issued for this player - unavailable,
+  /// not zero. This is a price, not a valuation: do not substitute
+  /// [marketValueEur] or any credits figure for it.
+  final double? sharePriceCoin;
   final String? supplyTier;
   final String? liquidityBand;
   final int? holderCount;
@@ -917,6 +925,10 @@ class GteMarketPlayerMarketProfile {
       marketValueEur: _nullableNumber(json, <String>[
         'market_value_eur',
         'marketValueEur',
+      ]),
+      sharePriceCoin: _nullableNumber(json, <String>[
+        'share_price_coin',
+        'sharePriceCoin',
       ]),
       supplyTier: GteJson.stringOrNull(json, <String>[
         'supply_tier',

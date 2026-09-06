@@ -742,11 +742,14 @@ class _OrdersPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (orders.isEmpty) {
+      // Player-share trades settle instantly on the canonical market, so no
+      // new orders are created here. This panel is the historical record.
       return const GtexEmptyState(
-        title: 'No orders yet',
+        title: 'No order history',
         message:
-            'Buy and sell orders you place on a player appear here while they '
-            'are working, and stay for a while once they fill.',
+            'Player share trades settle immediately, so they appear in '
+            'Holdings rather than as working orders. Any earlier orders you '
+            'placed would be listed here.',
         icon: Icons.receipt_long_outlined,
       );
     }

@@ -346,13 +346,19 @@ class _PortfolioSummaryCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 6),
+                      // UNKNOWN != ZERO: the server tells us when realized
+                      // P/L could not be calculated at all, and a fabricated
+                      // 0.00 would read as "you have broken even".
                       Text(
-                        gteFormatCredits(summary.realizedPlTotal),
+                        summary.realizedPlAvailable
+                            ? gteFormatCredits(summary.realizedPlTotal)
+                            : 'Not calculated',
                         style: Theme.of(
                           context,
                         ).textTheme.titleMedium?.copyWith(
-                          color:
-                              summary.realizedPlTotal >= 0
+                          color: !summary.realizedPlAvailable
+                              ? GteShellTheme.textMuted
+                              : summary.realizedPlTotal >= 0
                                   ? GteShellTheme.positive
                                   : GteShellTheme.negative,
                         ),

@@ -7,6 +7,7 @@ import '../../data/gte_models.dart';
 import '../../domain/value/gtex_value_models.dart';
 import '../../providers/gte_exchange_controller.dart';
 import '../../ui_gtex/ui_gtex.dart';
+import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_order_ticket_sheet.dart';
 import 'widgets/matchday_form_card.dart';
 import 'widgets/ownership_consequence_card.dart';
@@ -190,7 +191,8 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
     if (controller == null || snapshot == null) {
       return;
     }
-    final GteOrderRecord? order = await showModalBottomSheet<GteOrderRecord>(
+    final GtePlayerShareTradeResult? trade =
+        await showModalBottomSheet<GtePlayerShareTradeResult>(
       context: context,
       isScrollControlled: true,
       backgroundColor: GtexColors.panel,
@@ -201,21 +203,23 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
     if (!mounted) {
       return;
     }
-    if (order == null) {
+    if (trade == null) {
       // Either dismissed or rejected; the sheet surfaces its own error.
       return;
     }
+    // Reports what the server actually settled, never an estimate.
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: GtexColors.surfaceOverlay,
         content: Text(
-          'Order ${order.status.name} for '
-          '${snapshot.detail.identity.playerName} '
-          '(${order.side.name} ${order.quantity.toStringAsFixed(2)}).',
+          'Settled for ${snapshot.detail.identity.playerName}: '
+          'you now own ${trade.holding.shareCount} '
+          '${trade.holding.shareCount == 1 ? 'share' : 'shares'} '
+          '(${gteFormatCredits(trade.netAmountCoin)} GTEX Coin).',
           style: const TextStyle(color: _text),
         ),
         action: SnackBarAction(
-          label: 'Orders',
+          label: 'Portfolio',
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
