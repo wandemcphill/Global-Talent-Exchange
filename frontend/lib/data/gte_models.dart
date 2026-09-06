@@ -3845,6 +3845,7 @@ class GtePortfolioSummary {
     required this.totalEquity,
     required this.unrealizedPlTotal,
     required this.realizedPlTotal,
+    this.realizedPlAvailable = true,
   });
 
   final double totalMarketValue;
@@ -3852,6 +3853,12 @@ class GtePortfolioSummary {
   final double totalEquity;
   final double unrealizedPlTotal;
   final double realizedPlTotal;
+
+  /// False when the server could not calculate realized P/L at all, as opposed
+  /// to calculating it as zero. System A does not snapshot cost basis at the
+  /// time of sale, so `realizedPlTotal` is meaningless while this is false and
+  /// must not be rendered as a number.
+  final bool realizedPlAvailable;
 
   factory GtePortfolioSummary.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -3878,6 +3885,143 @@ class GtePortfolioSummary {
       realizedPlTotal: GteJson.number(json, <String>[
         'realized_pl_total',
         'realizedPlTotal',
+      ]),
+      realizedPlAvailable: GteJson.boolean(json, <String>[
+        'realized_pl_available',
+        'realizedPlAvailable',
+      ], fallback: true),
+    );
+  }
+}
+
+/// The canonical player-share market for one player.
+///
+/// `sharePriceCoin` is the *tradable* price in GTEX Coin - the price a trade
+/// actually executes at. It is not a valuation: `market_value_eur` and the
+/// value-engine credits figures answer "what is this footballer worth", which
+/// is a different question and a different unit.
+class GtePlayerShareMarket {
+  const GtePlayerShareMarket({
+    required this.playerId,
+    required this.totalShares,
+    required this.circulatingShares,
+    required this.sharePriceCoin,
+    required this.status,
+  });
+
+  final String playerId;
+  final int totalShares;
+  final int circulatingShares;
+  final double sharePriceCoin;
+  final String status;
+
+  bool get isActive => status == 'active';
+
+  int get availableShares =>
+      (totalShares - circulatingShares) < 0 ? 0 : totalShares - circulatingShares;
+
+  factory GtePlayerShareMarket.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'player share market',
+    );
+    return GtePlayerShareMarket(
+      playerId: GteJson.string(json, <String>['player_id', 'playerId']),
+      totalShares: GteJson.integer(json, <String>['total_shares', 'totalShares']),
+      circulatingShares: GteJson.integer(json, <String>[
+        'circulating_shares',
+        'circulatingShares',
+      ]),
+      sharePriceCoin: GteJson.number(json, <String>[
+        'share_price_coin',
+        'sharePriceCoin',
+      ]),
+      status: GteJson.string(json, <String>['status'], fallback: 'unknown'),
+    );
+  }
+}
+
+/// A user's canonical ownership position in one player.
+class GtePlayerShareHolding {
+  const GtePlayerShareHolding({
+    required this.playerId,
+    required this.shareCount,
+    required this.averageCostCoin,
+  });
+
+  final String playerId;
+  final int shareCount;
+  final double averageCostCoin;
+
+  factory GtePlayerShareHolding.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'player share holding',
+    );
+    return GtePlayerShareHolding(
+      playerId: GteJson.string(json, <String>['player_id', 'playerId']),
+      shareCount: GteJson.integer(json, <String>['share_count', 'shareCount']),
+      averageCostCoin: GteJson.number(json, <String>[
+        'average_cost_coin',
+        'averageCostCoin',
+      ]),
+    );
+  }
+}
+
+/// Server-authoritative result of a `POST /api/market/buy` or `/api/market/sell`.
+///
+/// Every monetary field here is what the server actually charged or credited,
+/// in GTEX Coin. The client may estimate a total before submitting, but only
+/// this result declares what happened.
+class GtePlayerShareTradeResult {
+  const GtePlayerShareTradeResult({
+    required this.market,
+    required this.holding,
+    required this.transactionId,
+    required this.grossAmountCoin,
+    required this.feeAmountCoin,
+    required this.netAmountCoin,
+  });
+
+  final GtePlayerShareMarket market;
+  final GtePlayerShareHolding holding;
+
+  /// Ledger transaction reference - the receipt for this trade.
+  final String transactionId;
+  final double grossAmountCoin;
+  final double feeAmountCoin;
+
+  /// Total debited on a buy, or credited on a sell, after fees.
+  final double netAmountCoin;
+
+  factory GtePlayerShareTradeResult.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'player share trade',
+    );
+    return GtePlayerShareTradeResult(
+      market: GtePlayerShareMarket.fromJson(
+        GteJson.value(json, <String>['market']),
+      ),
+      holding: GtePlayerShareHolding.fromJson(
+        GteJson.value(json, <String>['holding']),
+      ),
+      transactionId: GteJson.string(json, <String>[
+        'transaction_id',
+        'transactionId',
+      ]),
+      grossAmountCoin: GteJson.number(json, <String>[
+        'gross_amount_coin',
+        'grossAmountCoin',
+      ]),
+      feeAmountCoin: GteJson.number(json, <String>[
+        'fee_amount_coin',
+        'feeAmountCoin',
+      ]),
+      netAmountCoin: GteJson.number(json, <String>[
+        'net_amount_coin',
+        'netAmountCoin',
       ]),
     );
   }
@@ -3943,27 +4087,6 @@ class GtePortfolioSnapshot {
       ], GtePortfolioHolding.fromJson),
     );
   }
-}
-
-class GteOrderCreateRequest {
-  const GteOrderCreateRequest({
-    required this.playerId,
-    required this.side,
-    required this.quantity,
-    this.maxPrice,
-  });
-
-  final String playerId;
-  final GteOrderSide side;
-  final double quantity;
-  final double? maxPrice;
-
-  Map<String, Object?> toJson() => <String, Object?>{
-    'player_id': playerId,
-    'side': side.name,
-    'quantity': quantity.toStringAsFixed(4),
-    if (maxPrice != null) 'max_price': maxPrice!.toStringAsFixed(4),
-  };
 }
 
 class GteOrderExecution {

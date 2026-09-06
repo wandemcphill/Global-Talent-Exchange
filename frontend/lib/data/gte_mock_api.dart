@@ -4,6 +4,25 @@ import 'dart:math' as math;
 import 'gte_api_repository.dart';
 import 'gte_models.dart';
 
+/// Seeded tradable share prices for fixture mode, in GTEX Coin.
+///
+/// Deliberately *not* derived from the valuation reference price. A share price
+/// and a player valuation are different quantities in different units, and
+/// production issues share markets at a configured banded price rather than
+/// converting a valuation - conflating the two is exactly the defect this
+/// migration exists to remove. Shared with the fixture player detail so the
+/// price the ticket shows is the price the fixture trades at.
+const Map<String, double> _fixtureSharePricesCoin = <String, double>{
+  'lamine-yamal': 1.2500,
+  'jude-bellingham': 1.1000,
+  'jamal-musiala': 0.9500,
+  'victor-osimhen': 0.7500,
+};
+const double _fixtureDefaultSharePriceCoin = 0.5000;
+
+double gteFixtureSharePriceCoin(String playerId) =>
+    _fixtureSharePricesCoin[playerId] ?? _fixtureDefaultSharePriceCoin;
+
 class GteMockApi implements GteApiRepository {
   GteMockApi({this.latency = const Duration(milliseconds: 250)})
     : _catalog = _seedCatalog.map(_cloneSnapshot).toList(growable: false),
@@ -466,71 +485,223 @@ class GteMockApi implements GteApiRepository {
     );
   }
 
+  /// Trading fee the fixture applies, matching the backend default so estimated
+  /// and settled totals agree in fixture mode.
+  static const double _fixtureTradingFeeRate = 0.20;
+
+  final Map<String, GtePlayerShareMarket> _shareMarkets =
+      <String, GtePlayerShareMarket>{};
+  final Map<String, GtePlayerShareTradeResult> _tradesByIdempotencyKey =
+      <String, GtePlayerShareTradeResult>{};
+
+  GtePlayerShareMarket _shareMarketFor(String playerId) {
+    return _shareMarkets.putIfAbsent(playerId, () {
+      return GtePlayerShareMarket(
+        playerId: playerId,
+        totalShares: 1000,
+        circulatingShares: 0,
+        sharePriceCoin: gteFixtureSharePriceCoin(playerId),
+        status: 'active',
+      );
+    });
+  }
+
   @override
-  Future<GteOrderRecord> placeOrder(GteOrderCreateRequest request) async {
+  Future<GtePlayerShareTradeResult> buyPlayerShares({
+    required String playerId,
+    required int shareCount,
+    String? idempotencyKey,
+  }) async {
     await _delay();
-    final double? referencePrice = _referencePriceFor(
-      request.playerId,
-      request.side,
+    return _tradePlayerShares(
+      playerId: playerId,
+      shareCount: shareCount,
+      idempotencyKey: idempotencyKey,
+      isBuy: true,
     );
-    final double requestedReserve =
-        request.side == GteOrderSide.buy && request.maxPrice != null
-            ? request.quantity * request.maxPrice!
-            : 0.0;
-    final double reservedAmount = math.min(
-      requestedReserve,
-      _walletSummary.availableBalance,
-    );
-    final DateTime timestamp = _nextTimestamp();
+  }
 
-    final GteOrderRecord order = GteOrderRecord(
-      id: 'ord-${++_orderSequence}',
-      userId: _fixtureSession.user.id,
-      playerId: request.playerId,
-      side: request.side,
-      status: GteOrderStatus.open,
-      quantity: request.quantity,
-      filledQuantity: 0.0,
-      remainingQuantity: request.quantity,
-      maxPrice: request.maxPrice ?? referencePrice,
-      reservedAmount: reservedAmount,
-      currency: GteLedgerUnit.coin,
-      holdTransactionId:
-          request.side == GteOrderSide.buy && reservedAmount > 0
-              ? 'ledger-${_ledgerSequence + 1}'
-              : null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      executionSummary: const GteOrderExecutionSummary(
-        executionCount: 0,
-        totalNotional: 0.0,
-        averagePrice: null,
-      ),
+  @override
+  Future<GtePlayerShareTradeResult> sellPlayerShares({
+    required String playerId,
+    required int shareCount,
+    String? idempotencyKey,
+  }) async {
+    await _delay();
+    return _tradePlayerShares(
+      playerId: playerId,
+      shareCount: shareCount,
+      idempotencyKey: idempotencyKey,
+      isBuy: false,
     );
-    _orders.insert(0, order);
-    _sessionOrderIds.add(order.id);
+  }
 
-    if (request.side == GteOrderSide.buy && reservedAmount > 0) {
-      _walletSummary = GteWalletSummary(
-        availableBalance: _walletSummary.availableBalance - reservedAmount,
-        reservedBalance: _walletSummary.reservedBalance + reservedAmount,
-        totalBalance: _walletSummary.totalBalance,
-        currency: _walletSummary.currency,
-      );
-      _walletLedger.insert(
-        0,
-        GteWalletLedgerEntry(
-          id: 'ledger-${++_ledgerSequence}',
-          amount: -reservedAmount,
-          reason: 'order_funds_reserved',
-          description: 'Reserved GTEX Coin for ${request.playerId} buy order',
-          createdAt: timestamp,
-        ),
-      );
-      _rebuildPortfolioSummary();
+  /// Mirrors the System A trade boundary closely enough that the UI exercises
+  /// the same states in fixture mode: instant fill at the market price, a fee
+  /// on top for a buy and out of the proceeds for a sell, and an idempotency
+  /// key that replays the original trade rather than executing a second one.
+  GtePlayerShareTradeResult _tradePlayerShares({
+    required String playerId,
+    required int shareCount,
+    required String? idempotencyKey,
+    required bool isBuy,
+  }) {
+    if (idempotencyKey != null) {
+      final GtePlayerShareTradeResult? replay =
+          _tradesByIdempotencyKey[idempotencyKey];
+      if (replay != null) {
+        return replay;
+      }
+    }
+    if (shareCount <= 0) {
+      throw StateError('Share count must be greater than zero.');
     }
 
-    return order;
+    final GtePlayerShareMarket market = _shareMarketFor(playerId);
+    if (!market.isActive) {
+      throw StateError('Player share market is not active.');
+    }
+
+    final int ownedBefore = _ownedShareCount(playerId);
+    if (isBuy && shareCount > market.availableShares) {
+      throw StateError('Requested shares exceed current supply.');
+    }
+    if (!isBuy && shareCount > ownedBefore) {
+      throw StateError('Requested shares exceed current ownership.');
+    }
+
+    final double gross = market.sharePriceCoin * shareCount;
+    final double fee = gross * _fixtureTradingFeeRate;
+    final double net = isBuy ? gross + fee : gross - fee;
+    if (isBuy && net > _walletSummary.availableBalance) {
+      throw StateError('Account does not have enough balance.');
+    }
+
+    final DateTime timestamp = _nextTimestamp();
+    final int ownedAfter = isBuy ? ownedBefore + shareCount : ownedBefore - shareCount;
+    final double previousCost = _averageCostFor(playerId);
+    final double averageCost = ownedAfter <= 0
+        ? 0.0
+        : isBuy
+            ? ((previousCost * ownedBefore) + net) / ownedAfter
+            : previousCost;
+
+    _shareMarkets[playerId] = GtePlayerShareMarket(
+      playerId: playerId,
+      totalShares: market.totalShares,
+      circulatingShares: isBuy
+          ? market.circulatingShares + shareCount
+          : math.max(0, market.circulatingShares - shareCount),
+      sharePriceCoin: market.sharePriceCoin,
+      status: market.status,
+    );
+
+    _walletSummary = GteWalletSummary(
+      availableBalance:
+          _walletSummary.availableBalance + (isBuy ? -net : net),
+      reservedBalance: _walletSummary.reservedBalance,
+      totalBalance: _walletSummary.totalBalance + (isBuy ? -net : net),
+      currency: _walletSummary.currency,
+    );
+    _walletLedger.insert(
+      0,
+      GteWalletLedgerEntry(
+        id: 'ledger-${++_ledgerSequence}',
+        amount: isBuy ? -net : net,
+        reason: isBuy ? 'player_share_purchase' : 'player_share_sale',
+        description:
+            '${isBuy ? 'Bought' : 'Sold'} $shareCount player shares for $playerId',
+        createdAt: timestamp,
+      ),
+    );
+
+    _applyShareHolding(
+      playerId: playerId,
+      shareCount: ownedAfter,
+      averageCost: averageCost,
+      currentPrice: market.sharePriceCoin,
+    );
+    _rebuildPortfolioSummary();
+
+    final GtePlayerShareTradeResult result = GtePlayerShareTradeResult(
+      market: _shareMarkets[playerId]!,
+      holding: GtePlayerShareHolding(
+        playerId: playerId,
+        shareCount: ownedAfter,
+        averageCostCoin: averageCost,
+      ),
+      transactionId: 'txn-${++_ledgerSequence}',
+      grossAmountCoin: gross,
+      feeAmountCoin: fee,
+      netAmountCoin: net,
+    );
+    if (idempotencyKey != null) {
+      _tradesByIdempotencyKey[idempotencyKey] = result;
+    }
+    return result;
+  }
+
+  int _ownedShareCount(String playerId) {
+    for (final GtePortfolioHolding holding in _portfolio.holdings) {
+      if (holding.playerId == playerId) {
+        return holding.quantity.round();
+      }
+    }
+    return 0;
+  }
+
+  double _averageCostFor(String playerId) {
+    for (final GtePortfolioHolding holding in _portfolio.holdings) {
+      if (holding.playerId == playerId) {
+        return holding.averageCost;
+      }
+    }
+    return 0.0;
+  }
+
+  void _applyShareHolding({
+    required String playerId,
+    required int shareCount,
+    required double averageCost,
+    required double currentPrice,
+  }) {
+    String? existingName;
+    String? existingClub;
+    for (final GtePortfolioHolding holding in _portfolio.holdings) {
+      if (holding.playerId == playerId) {
+        existingName = holding.playerName;
+        existingClub = holding.clubName;
+      }
+    }
+    final List<GtePortfolioHolding> next = <GtePortfolioHolding>[
+      for (final GtePortfolioHolding holding in _portfolio.holdings)
+        if (holding.playerId != playerId) holding,
+    ];
+    if (shareCount > 0) {
+      final double costBasis = averageCost * shareCount;
+      final double marketValue = currentPrice * shareCount;
+      final double unrealizedPl = marketValue - costBasis;
+      next.add(
+        GtePortfolioHolding(
+          playerId: playerId,
+          // Carried forward rather than invented: the fixture has no identity
+          // source of its own, and GtePortfolioHolding.displayName already
+          // falls back to the id.
+          playerName: existingName,
+          clubName: existingClub,
+          quantity: shareCount.toDouble(),
+          averageCost: averageCost,
+          currentPrice: currentPrice,
+          marketValue: marketValue,
+          unrealizedPl: unrealizedPl,
+          unrealizedPlPercent:
+              costBasis <= 0 ? 0 : (unrealizedPl / costBasis) * 100,
+        ),
+      );
+    }
+    _portfolio = GtePortfolioView(
+      holdings: List<GtePortfolioHolding>.unmodifiable(next),
+    );
   }
 
   @override

@@ -785,14 +785,21 @@ class GteExchangeController extends ChangeNotifier {
     return task;
   }
 
-  Future<GteOrderRecord?> placeOrder({
+  /// Buys or sells player shares on the canonical System A market.
+  ///
+  /// The server is the sole authority on execution: this returns null on any
+  /// failure and only reports success once the trade result is in hand. The
+  /// caller owns [idempotencyKey] and must reuse the same value when retrying
+  /// the same user action, so a retry after a timeout replays the original
+  /// trade instead of executing a second one.
+  Future<GtePlayerShareTradeResult?> tradePlayerShares({
     required String playerId,
     required GteOrderSide side,
-    required double quantity,
-    double? maxPrice,
+    required int shareCount,
+    required String idempotencyKey,
   }) async {
     if (!isAuthenticated || isSubmittingOrder) {
-      orderError = isAuthenticated ? orderError : 'Sign in to place orders.';
+      orderError = isAuthenticated ? orderError : 'Sign in to trade shares.';
       notifyListeners();
       return null;
     }
@@ -800,15 +807,19 @@ class GteExchangeController extends ChangeNotifier {
     orderError = null;
     notifyListeners();
     try {
-      final GteOrderRecord order = await _api.placeOrder(
-        playerId: playerId,
-        side: side,
-        quantity: quantity,
-        maxPrice: maxPrice,
-      );
-      _mergeOrder(order);
+      final GtePlayerShareTradeResult result = side == GteOrderSide.buy
+          ? await _api.buyPlayerShares(
+              playerId: playerId,
+              shareCount: shareCount,
+              idempotencyKey: idempotencyKey,
+            )
+          : await _api.sellPlayerShares(
+              playerId: playerId,
+              shareCount: shareCount,
+              idempotencyKey: idempotencyKey,
+            );
       await _refreshTradingState(playerId: playerId, refreshPlayer: true);
-      return _ordersById[order.id] ?? order;
+      return result;
     } catch (error) {
       orderError = AppFeedback.messageFor(error);
       notifyListeners();

@@ -114,8 +114,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 120));
     }
 
-    // The sheet is the existing exchange order ticket, not a stub.
-    expect(find.text('Place order'), findsOneWidget);
+    // The sheet is the existing exchange trade ticket, not a stub - now
+    // settling on the canonical System A market rather than placing a
+    // System B order.
+    expect(find.text('Buy shares'), findsOneWidget);
+    expect(find.text('SHARE PRICE'), findsOneWidget);
+    expect(find.text('Place order'), findsNothing);
   });
 
   testWidgets('football sections come before the asset sections', (

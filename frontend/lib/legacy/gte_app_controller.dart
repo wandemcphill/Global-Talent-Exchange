@@ -183,27 +183,6 @@ class GteAppController extends ChangeNotifier {
     }
   }
 
-  Future<GteOrderRecord?> placeOrder(GteOrderCreateRequest request) async {
-    if (isSubmittingOrder) {
-      return null;
-    }
-
-    isSubmittingOrder = true;
-    notifyListeners();
-
-    try {
-      final GteOrderRecord created = await _api.placeOrder(request);
-      await loadTraderData();
-      return created;
-    } catch (error) {
-      errorMessage = error.toString();
-      return null;
-    } finally {
-      isSubmittingOrder = false;
-      notifyListeners();
-    }
-  }
-
   Future<void> signOut() async {
     await _api.logout();
     session = null;

@@ -745,19 +745,27 @@ class GteExchangeApiClient {
     return repository.fetchCandles(playerId, interval: interval, limit: limit);
   }
 
-  Future<GteOrderRecord> placeOrder({
+  Future<GtePlayerShareTradeResult> buyPlayerShares({
     required String playerId,
-    required GteOrderSide side,
-    required double quantity,
-    double? maxPrice,
+    required int shareCount,
+    String? idempotencyKey,
   }) {
-    return repository.placeOrder(
-      GteOrderCreateRequest(
-        playerId: playerId,
-        side: side,
-        quantity: quantity,
-        maxPrice: maxPrice,
-      ),
+    return repository.buyPlayerShares(
+      playerId: playerId,
+      shareCount: shareCount,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<GtePlayerShareTradeResult> sellPlayerShares({
+    required String playerId,
+    required int shareCount,
+    String? idempotencyKey,
+  }) {
+    return repository.sellPlayerShares(
+      playerId: playerId,
+      shareCount: shareCount,
+      idempotencyKey: idempotencyKey,
     );
   }
 
@@ -1021,9 +1029,12 @@ class GteExchangeApiClient {
         currentCompetitionName: null,
         imageUrl: null,
       ),
-      marketProfile: const GteMarketPlayerMarketProfile(
+      marketProfile: GteMarketPlayerMarketProfile(
         isTradable: true,
         marketValueEur: null,
+        // The same seeded price the fixture trade engine settles at, so the
+        // ticket never shows one number and charges another.
+        sharePriceCoin: gteFixtureSharePriceCoin(playerId),
         supplyTier: null,
         liquidityBand: null,
         holderCount: null,
