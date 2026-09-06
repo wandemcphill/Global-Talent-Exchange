@@ -48,6 +48,8 @@ GtexLiveMatchState buildMatchState({
   int timelineEvents = 0,
   int? homeMomentumPercent,
   List<GtexMatchHighlight> highlights = const <GtexMatchHighlight>[],
+  List<GtexMatchEconomyImpact> economyImpacts =
+      const <GtexMatchEconomyImpact>[],
 }) {
   return GtexLiveMatchState(
     matchId: matchId,
@@ -75,6 +77,7 @@ GtexLiveMatchState buildMatchState({
       formation: '4-2-3-1',
       players: const <GtexLineupPlayer>[],
     ),
+    economyImpacts: economyImpacts,
     minute: minute,
     phase: phase,
     pitchPlayers: const <GtexPitchPlayer>[],

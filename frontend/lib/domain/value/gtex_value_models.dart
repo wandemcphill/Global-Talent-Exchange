@@ -87,7 +87,8 @@ class GtexPlayerForm {
 
   /// True only when the backend is actually moving this player's value from his
   /// form. Anything else and the UI must not claim causality.
-  bool get movesValuation => signal?.applied == true && signal?.adjustmentPct != 0;
+  bool get movesValuation =>
+      signal?.applied == true && signal?.adjustmentPct != 0;
 }
 
 /// The bounded valuation influence a player's competition form carries.
@@ -157,8 +158,9 @@ class GtexPlayerPerformance {
       matchId: (json['match_id'] as Object?)?.toString() ?? '',
       competitionId: (json['competition_id'] as Object?)?.toString() ?? '',
       occurredAt:
-          DateTime.tryParse((json['occurred_at'] as Object?)?.toString() ?? '')
-              ?.toLocal(),
+          DateTime.tryParse(
+            (json['occurred_at'] as Object?)?.toString() ?? '',
+          )?.toLocal(),
       rating: _double(json['rating']),
       minutesPlayed: _int(json['minutes_played']),
       goals: _int(json['goals']),
@@ -202,4 +204,78 @@ double? _doubleOrNull(Object? value) {
     return value.toDouble();
   }
   return double.tryParse(value?.toString() ?? '');
+}
+
+/// Whether the published valuation has caught up with the football on this page.
+///
+/// GTEX recalculates valuations on a schedule, not per match: performances are
+/// persisted the moment a competition match settles, but the number a holder
+/// sees only moves when the value snapshot job next runs. Between those two
+/// instants the form card can truthfully show a signal that the published
+/// valuation does not yet contain, and saying nothing about it would let the
+/// page imply an effect that has not been applied.
+enum GtexValuationFreshness {
+  /// Every eligible performance on this page predates the last recalculation,
+  /// so the published valuation already accounts for them.
+  updated,
+
+  /// At least one eligible performance postdates the last recalculation. Its
+  /// effect is real but not yet published.
+  pending,
+
+  /// No recalculation is on record for this player, so no claim can be made in
+  /// either direction.
+  unknown,
+}
+
+/// The freshness of a player's published valuation relative to his form.
+///
+/// Derived entirely from data the page already holds -- the valuation's own
+/// `lastSnapshotAt` and the performance timestamps returned with form -- so
+/// stating it costs no extra request and invents no timestamp.
+@immutable
+class GtexValuationFreshnessReport {
+  const GtexValuationFreshnessReport({
+    required this.state,
+    this.lastSnapshotAt,
+    this.pendingMatchCount = 0,
+  });
+
+  /// Only *eligible* performances can count as pending: an ineligible cameo
+  /// will never move a valuation however long it waits, so treating one as
+  /// unpublished work would promise a change that is never coming.
+  factory GtexValuationFreshnessReport.from({
+    required DateTime? lastSnapshotAt,
+    required List<GtexPlayerPerformance> performances,
+  }) {
+    if (lastSnapshotAt == null) {
+      return const GtexValuationFreshnessReport(
+        state: GtexValuationFreshness.unknown,
+      );
+    }
+    final DateTime boundary = lastSnapshotAt.toUtc();
+    final int pending =
+        performances
+            .where(
+              (GtexPlayerPerformance performance) =>
+                  performance.eligibleForValuation &&
+                  performance.occurredAt != null &&
+                  performance.occurredAt!.toUtc().isAfter(boundary),
+            )
+            .length;
+    return GtexValuationFreshnessReport(
+      state:
+          pending > 0
+              ? GtexValuationFreshness.pending
+              : GtexValuationFreshness.updated,
+      lastSnapshotAt: lastSnapshotAt,
+      pendingMatchCount: pending,
+    );
+  }
+
+  final GtexValuationFreshness state;
+  final DateTime? lastSnapshotAt;
+  final int pendingMatchCount;
+
+  bool get isPending => state == GtexValuationFreshness.pending;
 }
