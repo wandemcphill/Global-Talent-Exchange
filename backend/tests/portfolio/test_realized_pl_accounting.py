@@ -21,9 +21,19 @@ def _event(*, event_id: str, player_id: str, event_type: str, delta: int, price:
     )
 
 
-def _session(events):
+def _holding(*, player_id: str, shares: int):
+    return SimpleNamespace(player_id=player_id, share_count=shares)
+
+
+def _scalar_result(rows):
+    result = Mock()
+    result.all.return_value = rows
+    return result
+
+
+def _session(events, holdings=()):
     session = Mock()
-    session.scalars.return_value.all.return_value = events
+    session.scalars.side_effect = [_scalar_result(events), _scalar_result(holdings)]
     return session
 
 
@@ -38,7 +48,7 @@ def test_weighted_average_cost_buy_buy_partial_sell():
         _event(event_id="s1", player_id="p1", event_type="sell", delta=-2, price="30.0000", gross="60.0000", fee="6.0000"),
     ]
 
-    result = calculate_user_realized_pl(_session(events), _user())
+    result = calculate_user_realized_pl(_session(events, [_holding(player_id="p1", shares=2)]), _user())
 
     assert result.available is True
     assert result.total == Decimal("21.0000")
@@ -83,3 +93,14 @@ def test_sale_without_preceding_cost_basis_is_unavailable():
     assert result.available is False
     assert result.rows == []
     assert "cost basis" in (result.unavailable_reason or "").lower()
+
+
+def test_owned_position_without_events_is_unavailable():
+    result = calculate_user_realized_pl(
+        _session([], [_holding(player_id="p1", shares=3)]),
+        _user(),
+    )
+
+    assert result.available is False
+    assert result.total == Decimal("0.0000")
+    assert result.rows == []
