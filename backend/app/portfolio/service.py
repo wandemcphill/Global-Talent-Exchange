@@ -8,6 +8,8 @@ from decimal import Decimal
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.common.freshness import evaluate_freshness
+from app.common.schemas.freshness import FreshnessInfo
 from app.ingestion.models import MarketSignal, Player
 from app.models.user import User
 from app.models.player_token_market import PlayerShareHolding, PlayerShareMarket
@@ -57,6 +59,8 @@ class PortfolioHolding:
     market_value: Decimal
     unrealized_pl: Decimal
     unrealized_pl_percent: Decimal
+    price_freshness: FreshnessInfo | None = None
+    valuation_freshness: FreshnessInfo | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,6 +247,8 @@ class PortfolioService:
             if cost_basis > Decimal("0.0000"):
                 unrealized_pl_percent = self._normalize_amount((unrealized_pl / cost_basis) * Decimal("100"))
             summary = summaries_by_player_id.get(holding.player_id)
+            price_freshness = evaluate_freshness(market.updated_at or market.created_at)
+            val_freshness = evaluate_freshness(summary.last_snapshot_at if summary is not None else None)
             holdings.append(
                 PortfolioHolding(
                     player_id=holding.player_id,
@@ -258,6 +264,8 @@ class PortfolioService:
                     market_value=market_value,
                     unrealized_pl=unrealized_pl,
                     unrealized_pl_percent=unrealized_pl_percent,
+                    price_freshness=price_freshness,
+                    valuation_freshness=val_freshness,
                 )
             )
         return holdings

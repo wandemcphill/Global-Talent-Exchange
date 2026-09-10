@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/value/gtex_value_models.dart';
+import '../../../ui_gtex/models/gtex_freshness.dart';
+import '../../../ui_gtex/components/gtex_freshness_chip.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 
 const Color _panel = GtexColors.surfaceRaised;
@@ -18,10 +20,12 @@ class MatchdayFormCard extends StatelessWidget {
     super.key,
     required this.form,
     this.freshness,
+    this.formFreshness,
   });
 
   final GtexPlayerForm form;
   final GtexValuationFreshnessReport? freshness;
+  final GtexFreshnessInfo? formFreshness;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +84,15 @@ class MatchdayFormCard extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         _ValuationConsequence(form: form),
+        if (formFreshness != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              const Text('Form freshness: ', style: TextStyle(color: _textMuted, fontSize: 12)),
+              GtexFreshnessChip(freshness: formFreshness!, compact: true),
+            ],
+          ),
+        ],
         if (freshness != null) ...<Widget>[
           const SizedBox(height: 8),
           _FreshnessBadge(freshness: freshness!),

@@ -4,6 +4,7 @@ import '../components/gtex_action_button.dart';
 import '../components/gtex_live_status_chip.dart';
 import '../components/gtex_status_chip.dart';
 import '../components/gtex_value_display.dart';
+import '../models/gtex_freshness.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_spacing.dart';
 import 'gtex_player_portrait.dart';
@@ -58,6 +59,8 @@ class GtexPlayerCard extends StatelessWidget {
     this.valueDeltaLabel,
     this.valuationLabel,
     this.valueState = GtexValueState.recent,
+    this.valuationFreshness,
+    this.marketFreshness,
     this.ownerLabel,
     this.ownershipLabel,
     this.contractLabel,
@@ -113,6 +116,8 @@ class GtexPlayerCard extends StatelessWidget {
   /// with. `null` renders the card exactly as before.
   final String? valuationLabel;
   final GtexValueState valueState;
+  final GtexFreshnessInfo? valuationFreshness;
+  final GtexFreshnessInfo? marketFreshness;
   final String? ownerLabel;
 
   /// The signed-in user's stake in this player, e.g. `"You own 2.5 shares"`.

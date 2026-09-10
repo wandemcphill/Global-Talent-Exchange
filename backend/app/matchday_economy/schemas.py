@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.common.schemas.freshness import FreshnessInfo
+
 
 class MatchdayEconomyMetricView(BaseModel):
     key: str
@@ -36,6 +38,7 @@ class MatchdayEconomyOverviewView(BaseModel):
     audience: str
     sections: list[MatchdayEconomySectionView]
     totals: dict[str, float] = Field(default_factory=dict)
+    economy_freshness: FreshnessInfo | None = None
 
 
 class FederationSanctionResolutionRequest(BaseModel):
