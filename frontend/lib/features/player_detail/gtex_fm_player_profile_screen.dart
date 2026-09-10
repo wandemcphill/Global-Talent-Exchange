@@ -380,7 +380,13 @@ class _ProfileBody extends StatelessWidget {
         const SizedBox(height: 14),
         _SectionLabel('MATCHDAY FORM'),
         const SizedBox(height: 8),
-        MatchdayFormCard(form: form!),
+        MatchdayFormCard(
+          form: form!,
+          freshness: GtexValuationFreshnessReport.from(
+            lastSnapshotAt: detail.value.lastSnapshotAt,
+            performances: form!.performances,
+          ),
+        ),
       ],
       // Career is only drawn when the backend actually returned history.
       // Nothing here is synthesised.
