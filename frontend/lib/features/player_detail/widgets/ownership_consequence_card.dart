@@ -54,7 +54,7 @@ class OwnershipConsequenceCard extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           'His matchday form moves his published player valuation, but with no position '
-          'it does not affect your portfolio.',
+          'it does not move your portfolio.',
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: _textMuted, height: 1.4),
@@ -114,11 +114,10 @@ class OwnershipConsequenceCard extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
       child: Text(
-        'His current matchday form is ${positive ? 'adding' : 'taking'} '
+        'His current form is ${positive ? 'adding' : 'taking'} '
         '${positive ? '+' : ''}${pct.toStringAsFixed(2)}% '
         '${positive ? 'to' : 'off'} his published player valuation. '
-        'Your position market value remains based on the tradable share price, '
-        'which is unchanged.',
+        'Position market value is based on the share market, and the tradable share price is unchanged.',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
           color: color,
           height: 1.4,
