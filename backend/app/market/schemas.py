@@ -304,6 +304,8 @@ class MarketPlayerMarketProfileView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     is_tradable: bool
+    lifecycle_status: str = "active_tradable"
+    lifecycle_status_label: str = "Active / Tradable"
     market_value_eur: float | None
     share_price_coin: Decimal | None = None
     supply_tier: dict[str, Any] | None
