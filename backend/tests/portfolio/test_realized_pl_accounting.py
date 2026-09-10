@@ -41,7 +41,7 @@ def test_weighted_average_cost_buy_buy_partial_sell():
     result = calculate_user_realized_pl(_session(events), _user())
 
     assert result.available is True
-    assert result.total == Decimal("16.0000")
+    assert result.total == Decimal("21.0000")
     assert len(result.rows) == 1
     assert result.rows[0].cost_basis == Decimal("33.0000")
     assert result.rows[0].realized_pl == Decimal("21.0000")
