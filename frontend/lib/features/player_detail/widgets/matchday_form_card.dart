@@ -13,21 +13,15 @@ const Color _red = GtexColors.accentRed;
 const Color _blue = GtexColors.accentBlue;
 
 /// Recent GTEX competition form, and the bounded effect it has on valuation.
-///
-/// This card is the visible half of the chain
-/// `match -> performance -> form -> valuation -> market -> ownership`. It is
-/// written to be honest in three specific ways, because the alternative is a UI
-/// that implies an economy the backend does not actually run:
-///
-///   * A player with no eligible competition football says so. It does not draw
-///     flat form, which would read as "he played and was average".
-///   * Form that is not yet moving value says that too, and says what is missing.
-///   * When form *is* moving value, the figure shown is the real, bounded
-///     adjustment the backend applied, not a restatement of the rating.
 class MatchdayFormCard extends StatelessWidget {
-  const MatchdayFormCard({super.key, required this.form});
+  const MatchdayFormCard({
+    super.key,
+    required this.form,
+    this.freshness,
+  });
 
   final GtexPlayerForm form;
+  final GtexValuationFreshnessReport? freshness;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +80,10 @@ class MatchdayFormCard extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         _ValuationConsequence(form: form),
+        if (freshness != null) ...<Widget>[
+          const SizedBox(height: 8),
+          _FreshnessBadge(freshness: freshness!),
+        ],
         if (form.excludedByCompetitionCap > 0) ...<Widget>[
           const SizedBox(height: 8),
           _FormFootnote(
@@ -110,8 +108,6 @@ class MatchdayFormCard extends StatelessWidget {
     }
   }
 
-  /// Shared so the summary rating and the per-match pips agree on what a given
-  /// rating looks like.
   static Color ratingColor(double rating) {
     if (rating >= 7.5) {
       return _green;
@@ -126,10 +122,53 @@ class MatchdayFormCard extends StatelessWidget {
   }
 }
 
-/// The state for a player who has not played eligible GTEX competition football.
-///
-/// Deliberately explicit. Drawing empty form here would read as "he played and
-/// did nothing", which is a different and false claim.
+class _FreshnessBadge extends StatelessWidget {
+  const _FreshnessBadge({required this.freshness});
+
+  final GtexValuationFreshnessReport freshness;
+
+  @override
+  Widget build(BuildContext context) {
+    final String text;
+    final Color color;
+
+    switch (freshness.state) {
+      case GtexValuationFreshness.pending:
+        text =
+            'Form includes ${freshness.pendingMatchCount} eligible '
+            '${freshness.pendingMatchCount == 1 ? 'match' : 'matches'} postdating '
+            'the last valuation snapshot: the published valuation does not '
+            'include them yet.';
+        color = _amber;
+        break;
+      case GtexValuationFreshness.updated:
+        final String ts =
+            freshness.lastSnapshotAt
+                ?.toIso8601String()
+                .replaceAll('T', ' ')
+                .split('.')
+                .first ??
+            '';
+        text =
+            'Published valuation already accounts for every eligible match on '
+            'record (recalculated $ts UTC).';
+        color = _textMuted;
+        break;
+      case GtexValuationFreshness.unknown:
+        text = 'No valuation recalculation is on record for this player.';
+        color = _textMuted;
+        break;
+    }
+
+    return Text(
+      text,
+      style: Theme.of(
+        context,
+      ).textTheme.labelSmall?.copyWith(color: color, height: 1.35),
+    );
+  }
+}
+
 class _MatchdayFormEmpty extends StatelessWidget {
   const _MatchdayFormEmpty();
 
@@ -158,10 +197,6 @@ class _MatchdayFormEmpty extends StatelessWidget {
   }
 }
 
-/// The one place in the app that states what form is doing to a valuation.
-///
-/// It must never overstate. When the backend has not applied a signal this says
-/// so plainly and says what is missing, rather than hinting at a link.
 class _ValuationConsequence extends StatelessWidget {
   const _ValuationConsequence({required this.form});
 
@@ -210,11 +245,6 @@ class _ValuationConsequence extends StatelessWidget {
       color = positive ? _green : _red;
     }
 
-    // Matchday form moves the player's *valuation*. It deliberately does not
-    // touch the tradable share price, which changes only on trades. Saying so
-    // is not a caveat for its own sake: a share-market holder who read
-    // "raising valuation" and assumed their tradable shares had moved would
-    // have been misled by omission.
     final bool statesAnEffect = signal != null && signal.applied;
 
     return Container(
@@ -259,11 +289,6 @@ class _ValuationConsequence extends StatelessWidget {
   }
 }
 
-/// The last few match ratings, newest first, as a compact readable strip.
-///
-/// Performances that do not count toward valuation are dimmed rather than
-/// hidden: a holder is entitled to see the cameo appearance, and hiding it would
-/// be more confusing than showing it as excluded.
 class _RecentRatingStrip extends StatelessWidget {
   const _RecentRatingStrip({required this.performances});
 

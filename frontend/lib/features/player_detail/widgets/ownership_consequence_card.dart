@@ -11,12 +11,7 @@ const Color _textMuted = GtexColors.textTertiary;
 const Color _green = GtexColors.accentPrimary;
 const Color _red = GtexColors.accentRed;
 
-/// The last link of the chain: what this player's football means to *you*.
-///
-/// Without this the page can tell a reader that a footballer played well, that
-/// his form is rising and that his value moved, and still leave the only
-/// question that matters unanswered. This card answers it, and only with facts
-/// the backend actually returned: it never estimates a position.
+/// What this player's football means to the owner's position.
 class OwnershipConsequenceCard extends StatelessWidget {
   const OwnershipConsequenceCard({
     super.key,
@@ -24,11 +19,7 @@ class OwnershipConsequenceCard extends StatelessWidget {
     this.form,
   });
 
-  /// The viewer's position in this player, or null when they hold none, are not
-  /// signed in, or the portfolio could not be read. All three render as "no
-  /// position" rather than as a fabricated zero holding.
   final GtePortfolioHolding? holding;
-
   final GtexPlayerForm? form;
 
   @override
@@ -62,8 +53,8 @@ class OwnershipConsequenceCard extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          'His matchday form moves his valuation, but with no position it does '
-          'not move your portfolio.',
+          'His matchday form moves his published player valuation, but with no position '
+          'it does not move your portfolio.',
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: _textMuted, height: 1.4),
@@ -84,8 +75,8 @@ class OwnershipConsequenceCard extends StatelessWidget {
         valueColor: GtexColors.accentBlue,
       ),
       GtexTermRow('Average cost', '${_trimmed(position.averageCost)} cr'),
-      GtexTermRow('Current price', '${_trimmed(position.currentPrice)} cr'),
-      GtexTermRow('Position value', '${_trimmed(position.marketValue)} cr'),
+      GtexTermRow('Current share price', '${_trimmed(position.currentPrice)} cr'),
+      GtexTermRow('Position market value', '${_trimmed(position.marketValue)} cr'),
       GtexTermRow(
         'Unrealised P/L',
         '${up ? '+' : ''}${_trimmed(position.unrealizedPl)} cr '
@@ -106,9 +97,6 @@ class OwnershipConsequenceCard extends StatelessWidget {
     );
   }
 
-  /// Ties the position back to the football, but only when form is genuinely
-  /// driving the valuation. When it is not, this stays silent rather than
-  /// implying the connection.
   Widget? _formNote(BuildContext context) {
     final GtexPlayerForm? current = form;
     if (current == null || !current.movesValuation) {
@@ -125,16 +113,11 @@ class OwnershipConsequenceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(9),
         border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
-      // The position shown above is priced from the player valuation, which is
-      // the field matchday form actually moves — so this claim is true of the
-      // numbers on this card. It is scoped to the valuation on purpose: form
-      // does not move the tradable share price, and a holder must not read this
-      // as their shares having repriced.
       child: Text(
         'His current form is ${positive ? 'adding' : 'taking'} '
         '${positive ? '+' : ''}${pct.toStringAsFixed(2)}% '
-        '${positive ? 'to' : 'off'} the valuation this position is priced from. '
-        'The tradable share price is unchanged.',
+        '${positive ? 'to' : 'off'} his published player valuation. '
+        'Position market value is based on the share market, and the tradable share price is unchanged.',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
           color: color,
           height: 1.4,
@@ -144,8 +127,6 @@ class OwnershipConsequenceCard extends StatelessWidget {
     );
   }
 
-  /// Credits are carried as doubles but read as money, so trailing noise is
-  /// trimmed rather than shown.
   static String _trimmed(double value) {
     if (value == value.roundToDouble() && value.abs() < 1000000) {
       return value.toStringAsFixed(0);

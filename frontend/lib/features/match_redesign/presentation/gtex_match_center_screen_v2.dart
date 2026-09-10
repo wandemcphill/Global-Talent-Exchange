@@ -1000,7 +1000,7 @@ class _EconomyImpactPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'ECONOMY IMPACT',
+            'MATCHDAY → VALUATION',
             style: TextStyle(
               color: _GtexMatchColors.text,
               fontWeight: FontWeight.w900,
@@ -1011,14 +1011,20 @@ class _EconomyImpactPanel extends StatelessWidget {
           const SizedBox(height: 10),
           if (impacts.isEmpty)
             const Text(
-              'No live valuation movement returned for this match.',
+              'No live valuation movement returned for this match. Open a player from the lineups to view his matchday form.',
               style: TextStyle(color: _GtexMatchColors.muted, height: 1.35),
             )
-          else
+          else ...[
             for (final GtexMatchEconomyImpact impact in impacts) ...[
               _EconomyImpactRow(impact: impact),
               if (impact != impacts.last) const SizedBox(height: 8),
             ],
+            const SizedBox(height: 8),
+            const Text(
+              'Valuation movements are published periodically from matchday form. They are not share price movements.',
+              style: TextStyle(color: _GtexMatchColors.muted, fontSize: 11, height: 1.35),
+            ),
+          ],
         ],
       ),
     );

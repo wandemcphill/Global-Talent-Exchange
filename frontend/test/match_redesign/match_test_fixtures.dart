@@ -48,6 +48,7 @@ GtexLiveMatchState buildMatchState({
   int timelineEvents = 0,
   int? homeMomentumPercent,
   List<GtexMatchHighlight> highlights = const <GtexMatchHighlight>[],
+  List<GtexMatchEconomyImpact> economyImpacts = const <GtexMatchEconomyImpact>[],
 }) {
   return GtexLiveMatchState(
     matchId: matchId,
@@ -101,6 +102,7 @@ GtexLiveMatchState buildMatchState({
     ),
     highlights: highlights,
     homeMomentumPercent: homeMomentumPercent,
+    economyImpacts: economyImpacts,
   );
 }
 

@@ -256,7 +256,7 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('the valuation this position is priced from'), findsNothing);
+      expect(find.textContaining('published player valuation'), findsNothing);
     });
 
     testWidgets('the position note states the share price is unchanged', (
@@ -287,7 +287,7 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('the valuation this position is priced from'), findsOneWidget);
+      expect(find.textContaining('published player valuation'), findsOneWidget);
       expect(find.textContaining('+1.21%'), findsOneWidget);
     });
   });
