@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
+from app.common.schemas.freshness import FreshnessInfo
+
 
 class PortfolioHoldingView(BaseModel):
     model_config = ConfigDict(
@@ -33,6 +35,8 @@ class PortfolioHoldingView(BaseModel):
     market_value: Decimal
     unrealized_pl: Decimal
     unrealized_pl_percent: Decimal
+    price_freshness: FreshnessInfo | None = None
+    valuation_freshness: FreshnessInfo | None = None
 
 
 class PortfolioView(BaseModel):
@@ -80,3 +84,4 @@ class PortfolioSummaryView(BaseModel):
     realized_pl_total: Decimal
     # See PortfolioSummary: False means realized P/L is not calculated, not zero.
     realized_pl_available: bool = True
+    portfolio_freshness: FreshnessInfo | None = None

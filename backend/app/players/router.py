@@ -59,6 +59,7 @@ from app.players.token_schemas import (
 )
 from app.players.token_service import PlayerTokenMarketError, PlayerTokenMarketService
 from app.players.service import PlayerSummaryQueryService
+from app.common.freshness import evaluate_freshness
 from app.players.form_schemas import (
     MatchdayValuationSignalView,
     PlayerFormView,
@@ -701,10 +702,18 @@ def get_player_form(
 
     performances: list[PlayerPerformanceView] = []
     if include_performances:
-        performances = [
-            PlayerPerformanceView.model_validate(record)
-            for record in PlayerFormService(session).list_recent_performances(player_id)
-        ]
+        raw_performances = PlayerFormService(session).list_recent_performances(player_id)
+        for record in raw_performances:
+            perf_view = PlayerPerformanceView.model_validate(record)
+            perf_view.performance_freshness = evaluate_freshness(record.occurred_at)
+            performances.append(perf_view)
+
+    latest_form_as_of = (
+        max((entry.occurred_at for entry in window.entries), default=None)
+        if window.has_sample and window.entries
+        else None
+    )
+    form_freshness = evaluate_freshness(latest_form_as_of)
 
     return PlayerFormView(
         player_id=player_id,
@@ -720,4 +729,5 @@ def get_player_form(
         excluded_by_competition_cap=window.excluded_by_competition_cap,
         signal=signal_view,
         performances=performances,
+        form_freshness=form_freshness,
     )

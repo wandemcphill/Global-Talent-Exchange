@@ -7,6 +7,7 @@ from pydantic import Field
 
 from app.common.enums.match_status import MatchStatus
 from app.common.schemas.base import CommonSchema
+from app.common.schemas.freshness import FreshnessInfo
 from app.models.match_event import MatchEventTeam, MatchEventType
 
 
@@ -65,6 +66,7 @@ class MatchReplayView(CommonSchema):
     match_id: str
     timeline: list[MatchReplayEventView] = Field(default_factory=list)
     summary: MatchReplaySummaryView
+    match_freshness: FreshnessInfo | None = None
 
 
 class MatchAnalysisView(CommonSchema):

@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.common.enums.match_status import MatchStatus
+from app.common.freshness import evaluate_freshness
 from app.match_engine.schemas import MatchEventView, MatchReplayPayloadView, ReplayEventLogEntryView
 from app.match_engine.simulation.models import MatchEventType as EngineMatchEventType
 from app.matches.lifecycle import (
@@ -33,7 +34,6 @@ from .schemas import (
     MatchReplayTeamStatsView,
     MatchReplayView,
 )
-
 
 #: Replay log entries carry the *match engine* event vocabulary
 #: (``app.match_engine.simulation.models.MatchEventType``), not the persisted
@@ -86,10 +86,21 @@ class ReplayService:
         events = self._events(match_id)
         if not events:
             raise MatchReplayNotFoundError(match_id)
+
+        match = self.session.get(CompetitionMatch, match_id)
+        as_of = (
+            match.completed_at or match.updated_at
+            if match is not None
+            else max((e.created_at for e in events if e.created_at is not None), default=None)
+        )
+        is_live = match is not None and match.status == MatchStatus.IN_PROGRESS.value
+        match_freshness = evaluate_freshness(as_of, is_live=is_live)
+
         return MatchReplayView(
             match_id=match_id,
             timeline=[self._event_view(item) for item in events],
             summary=self.generate_summary(events),
+            match_freshness=match_freshness,
         )
 
     def generate_summary(self, events: Iterable[MatchEvent]) -> MatchReplaySummaryView:
@@ -212,8 +223,9 @@ class ReplayService:
         pass_accuracy = 0.0
         if bucket["passes"]:
             pass_accuracy = float(
-                (Decimal(bucket["completed_passes"]) * Decimal("100") / Decimal(bucket["passes"]))
-                .quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+                (Decimal(bucket["completed_passes"]) * Decimal("100") / Decimal(bucket["passes"])).quantize(
+                    Decimal("0.1"), rounding=ROUND_HALF_UP
+                )
             )
         total_control = float(bucket["control_score"] + opponent_bucket["control_score"])
         possession = 50 if total_control <= 0 else round((float(bucket["control_score"]) / total_control) * 100)
@@ -348,8 +360,7 @@ class AnalysisService:
         opponent = MatchEventTeam.AWAY if team is MatchEventTeam.HOME else MatchEventTeam.HOME
         substitutions = sum(1 for event in timeline if event.team is team and event.type is MatchEventType.SUBSTITUTION)
         late_goals_conceded = any(
-            event.team is opponent and event.type is MatchEventType.GOAL and event.minute >= 75
-            for event in timeline
+            event.team is opponent and event.type is MatchEventType.GOAL and event.minute >= 75 for event in timeline
         )
         late_chances_conceded = sum(
             1
@@ -466,7 +477,9 @@ class MatchEventLoggerService:
                 sequence += 1
                 continue
             if item.event_type.name == "SHOT_ON_TARGET":
-                self._update_pending_shot(pending_shots, team=team, player_id=item.player_id, minute=item.minute, on_target=True)
+                self._update_pending_shot(
+                    pending_shots, team=team, player_id=item.player_id, minute=item.minute, on_target=True
+                )
                 continue
             if item.event_type.name in {"GOALKEEPER_SAVE", "DOUBLE_SAVE"}:
                 self._update_pending_shot(
@@ -670,7 +683,9 @@ class MatchEventLoggerService:
             },
         )
 
-    def _team_for_source(self, item: ReplayEventLogEntryView, replay_payload: MatchReplayPayloadView) -> MatchEventTeam | None:
+    def _team_for_source(
+        self, item: ReplayEventLogEntryView, replay_payload: MatchReplayPayloadView
+    ) -> MatchEventTeam | None:
         if item.team_id == replay_payload.summary.home_stats.team_id:
             return MatchEventTeam.HOME
         if item.team_id == replay_payload.summary.away_stats.team_id:
@@ -1018,9 +1033,7 @@ class MatchCommandService:
             if value is None or not str(value).strip()
         ]
         if missing_fields:
-            raise MatchCommandError(
-                "Missing fields for new match creation: " + ", ".join(sorted(missing_fields)) + "."
-            )
+            raise MatchCommandError("Missing fields for new match creation: " + ", ".join(sorted(missing_fields)) + ".")
         now = payload.scheduled_at or _utcnow()
         match_date = payload.match_date or now.date()
         return CompetitionMatch(

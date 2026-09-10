@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from app.common.enums.match_status import MatchStatus
+from app.common.schemas.freshness import FreshnessInfo, FreshnessStatus
+
+
+def evaluate_freshness(
+    as_of: datetime | None,
+    *,
+    is_live: bool = False,
+    is_pending: bool = False,
+    pending_reason: str | None = None,
+    stale_threshold_seconds: float = 86400.0,
+    reference_time: datetime | None = None,
+) -> FreshnessInfo:
+    """Evaluate timestamp freshness with timestamp evidence as a hard prerequisite.
+
+    Backward-compatible live/pending flags are retained for existing callers,
+    but they can never produce a non-UNKNOWN result when timestamp evidence is
+    absent. New domain code should prefer a specialized evaluator when a domain
+    state can legitimately produce LIVE or PENDING_RECALCULATION.
+    """
+    if as_of is None:
+        return FreshnessInfo(
+            status=FreshnessStatus.UNKNOWN,
+            as_of=None,
+            label="Unknown",
+        )
+
+    if is_live:
+        return FreshnessInfo(
+            status=FreshnessStatus.LIVE,
+            as_of=as_of,
+            label="LIVE",
+        )
+
+    if is_pending:
+        return FreshnessInfo(
+            status=FreshnessStatus.PENDING_RECALCULATION,
+            as_of=as_of,
+            label="Pending Recalculation",
+            pending_reason=pending_reason or "Recalculation queued",
+        )
+
+    now = reference_time or datetime.now(timezone.utc)
+    ts = as_of if as_of.tzinfo is not None else as_of.replace(tzinfo=timezone.utc)
+    now_ts = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+
+    age_seconds = (now_ts - ts).total_seconds()
+
+    if age_seconds < 0:
+        return FreshnessInfo(
+            status=FreshnessStatus.RECENT,
+            as_of=as_of,
+            label="Recent",
+        )
+
+    if age_seconds > stale_threshold_seconds:
+        hours = int(age_seconds // 3600)
+        return FreshnessInfo(
+            status=FreshnessStatus.STALE,
+            as_of=as_of,
+            label="Stale",
+            stale_reason=f"Data is {hours} hours old",
+        )
+
+    return FreshnessInfo(
+        status=FreshnessStatus.RECENT,
+        as_of=as_of,
+        label="Recent",
+    )
+
+
+def evaluate_match_freshness(
+    as_of: datetime | None,
+    *,
+    match_status: MatchStatus | str | None,
+    stale_threshold_seconds: float = 86400.0,
+    reference_time: datetime | None = None,
+) -> FreshnessInfo:
+    """Evaluate freshness for a persisted match using its canonical status.
+
+    LIVE is granted only from the match domain's IN_PROGRESS state plus a real
+    timestamp. Missing timestamp evidence remains UNKNOWN even for IN_PROGRESS.
+    """
+    if as_of is None:
+        return FreshnessInfo(
+            status=FreshnessStatus.UNKNOWN,
+            as_of=None,
+            label="Unknown",
+        )
+
+    raw_status = match_status.value if isinstance(match_status, MatchStatus) else match_status
+    if raw_status == MatchStatus.IN_PROGRESS.value:
+        return FreshnessInfo(
+            status=FreshnessStatus.LIVE,
+            as_of=as_of,
+            label="LIVE",
+        )
+
+    return evaluate_freshness(
+        as_of,
+        stale_threshold_seconds=stale_threshold_seconds,
+        reference_time=reference_time,
+    )
+
+
+__all__ = ["evaluate_freshness", "evaluate_match_freshness"]

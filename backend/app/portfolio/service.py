@@ -8,6 +8,8 @@ from decimal import Decimal
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.common.freshness import evaluate_freshness
+from app.common.schemas.freshness import FreshnessInfo
 from app.ingestion.models import MarketSignal, Player
 from app.models.user import User
 from app.models.player_token_market import PlayerShareHolding, PlayerShareMarket
@@ -57,6 +59,8 @@ class PortfolioHolding:
     market_value: Decimal
     unrealized_pl: Decimal
     unrealized_pl_percent: Decimal
+    price_freshness: FreshnessInfo | None = None
+    valuation_freshness: FreshnessInfo | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +77,7 @@ class PortfolioSummary:
     # lot/FIFO accounting to reuse - so realized P/L is reported as unavailable
     # rather than invented. Unrealized P/L stays exact either way.
     realized_pl_available: bool = True
+    portfolio_freshness: FreshnessInfo | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +177,16 @@ class PortfolioService:
             user,
             currency=self._select_reporting_cash_unit(session, user, executions),
         )
+        max_as_of = max(
+            [
+                h.price_freshness.as_of
+                for h in holdings
+                if h.price_freshness is not None and h.price_freshness.as_of is not None
+            ],
+            default=None,
+        )
+        portfolio_freshness = evaluate_freshness(max_as_of)
+
         return PortfolioSnapshot(
             holdings=holdings,
             summary=PortfolioSummary(
@@ -181,6 +196,7 @@ class PortfolioService:
                 unrealized_pl_total=unrealized_pl_total,
                 realized_pl_total=realized_pl_total,
                 realized_pl_available=not canonical_player_ids,
+                portfolio_freshness=portfolio_freshness,
             ),
             cash_unit=wallet_summary.currency,
         )
@@ -243,6 +259,8 @@ class PortfolioService:
             if cost_basis > Decimal("0.0000"):
                 unrealized_pl_percent = self._normalize_amount((unrealized_pl / cost_basis) * Decimal("100"))
             summary = summaries_by_player_id.get(holding.player_id)
+            price_freshness = evaluate_freshness(market.updated_at or market.created_at)
+            val_freshness = evaluate_freshness(summary.last_snapshot_at if summary is not None else None)
             holdings.append(
                 PortfolioHolding(
                     player_id=holding.player_id,
@@ -258,6 +276,8 @@ class PortfolioService:
                     market_value=market_value,
                     unrealized_pl=unrealized_pl,
                     unrealized_pl_percent=unrealized_pl_percent,
+                    price_freshness=price_freshness,
+                    valuation_freshness=val_freshness,
                 )
             )
         return holdings
