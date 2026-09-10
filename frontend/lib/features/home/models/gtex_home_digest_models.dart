@@ -156,12 +156,16 @@ class GtexHomeActivityItem {
     required this.label,
     required this.timestampLabel,
     this.playerId,
+    this.routeLocation,
   });
 
   final String id;
   final String label;
   final String timestampLabel;
   final String? playerId;
+
+  /// Optional route destination backed by domain evidence (e.g., wallet activity).
+  final String? routeLocation;
 }
 
 /// The whole personalized Home composition: a presentation aggregation over
