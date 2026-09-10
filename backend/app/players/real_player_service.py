@@ -11,6 +11,7 @@ from sqlalchemy import Integer, String, and_, case, cast, func, literal, or_, se
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Country, Player
+from app.market.lifecycle_status import resolve_player_lifecycle_status
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.players.read_models import PlayerSummaryReadModel
@@ -503,6 +504,9 @@ class RealPlayerUniverseQueryService:
             assists=profile.assists,
             clean_sheets=profile.clean_sheets,
             injury_status=profile.injury_status,
+            is_tradable=bool(player.is_tradable),
+            lifecycle_status=resolve_player_lifecycle_status(player, getattr(player, "share_market", None))[0],
+            lifecycle_status_label=resolve_player_lifecycle_status(player, getattr(player, "share_market", None))[1],
             real_player_tier=player.real_player_tier,
             identity_confidence_score=player.identity_confidence_score,
             image_url=self._profile_image_url(profile),
