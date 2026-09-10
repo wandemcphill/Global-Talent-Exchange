@@ -115,11 +115,11 @@ class HomeScreen extends ConsumerWidget {
                 if (authenticated) ...<Widget>[
                   _HomeYourPlayersPanel(digestValue: digestValue),
                   const SizedBox(height: 16),
-                  _HomeWhatMovedPanel(digestValue: digestValue),
+                  HomeWhatMovedPanel(digestValue: digestValue),
                   const SizedBox(height: 16),
-                  _HomeYourClubsPanel(digestValue: digestValue),
+                  HomeYourClubsPanel(digestValue: digestValue),
                   const SizedBox(height: 16),
-                  _HomeYourProspectsPanel(digestValue: digestValue),
+                  HomeYourProspectsPanel(digestValue: digestValue),
                   const SizedBox(height: 16),
                   _HomeAttentionPanel(
                     digestValue: digestValue,
@@ -187,7 +187,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 if (authenticated) ...<Widget>[
                   const SizedBox(height: 16),
-                  _HomeRecentActivityPanel(digestValue: digestValue),
+                  HomeRecentActivityPanel(digestValue: digestValue),
                 ],
               ],
             );
@@ -1108,13 +1108,14 @@ class _PulseLine {
 }
 
 class _PulseRow extends StatelessWidget {
-  const _PulseRow({required this.line});
+  const _PulseRow({required this.line, this.onTap});
 
   final _PulseLine line;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final Widget content = Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -1161,7 +1162,28 @@ class _PulseRow extends StatelessWidget {
             line.metric,
             style: _dataStyle(context, size: 12, color: line.color),
           ),
+          if (onTap != null) ...<Widget>[
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.open_in_new,
+              size: 14,
+              color: _GtexCommandColors.textSecondary,
+            ),
+          ],
         ],
+      ),
+    );
+
+    if (onTap == null) {
+      return content;
+    }
+    return Semantics(
+      button: true,
+      label: 'Open ${line.label}',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: content,
       ),
     );
   }
@@ -2129,8 +2151,8 @@ class _HomePlayerHighlightTile extends StatelessWidget {
   }
 }
 
-class _HomeWhatMovedPanel extends StatelessWidget {
-  const _HomeWhatMovedPanel({required this.digestValue});
+class HomeWhatMovedPanel extends StatelessWidget {
+  const HomeWhatMovedPanel({super.key, required this.digestValue});
 
   final AsyncValue<GtexHomeDigest> digestValue;
 
@@ -2161,6 +2183,7 @@ class _HomeWhatMovedPanel extends StatelessWidget {
                         ? _GtexCommandColors.accentPrimary
                         : _GtexCommandColors.accentRed,
               ),
+              onTap: GtexPlayerNavigator.tapToOpen(context, mover.playerId),
             ),
           ),
           ...digest.opportunityMovers.map(
@@ -2171,6 +2194,7 @@ class _HomeWhatMovedPanel extends StatelessWidget {
                 metric: mover.movementLabel,
                 color: _GtexCommandColors.accentAmber,
               ),
+              onTap: GtexPlayerNavigator.tapToOpen(context, mover.playerId),
             ),
           ),
         ];
@@ -2180,8 +2204,8 @@ class _HomeWhatMovedPanel extends StatelessWidget {
   }
 }
 
-class _HomeYourClubsPanel extends StatelessWidget {
-  const _HomeYourClubsPanel({required this.digestValue});
+class HomeYourClubsPanel extends StatelessWidget {
+  const HomeYourClubsPanel({super.key, required this.digestValue});
 
   final AsyncValue<GtexHomeDigest> digestValue;
 
@@ -2213,6 +2237,7 @@ class _HomeYourClubsPanel extends StatelessWidget {
                               ? _GtexCommandColors.accentPrimary
                               : _GtexCommandColors.accentRed,
                     ),
+                    onTap: () => context.go(const GteNavigationRoute.club().path),
                   ),
                 )
                 .toList(growable: false),
@@ -2221,8 +2246,8 @@ class _HomeYourClubsPanel extends StatelessWidget {
   }
 }
 
-class _HomeYourProspectsPanel extends StatelessWidget {
-  const _HomeYourProspectsPanel({required this.digestValue});
+class HomeYourProspectsPanel extends StatelessWidget {
+  const HomeYourProspectsPanel({super.key, required this.digestValue});
 
   final AsyncValue<GtexHomeDigest> digestValue;
 
@@ -2249,6 +2274,7 @@ class _HomeYourProspectsPanel extends StatelessWidget {
                       metric: regen.rankLabel,
                       color: _GtexCommandColors.accentViolet,
                     ),
+                    onTap: GtexPlayerNavigator.tapToOpen(context, regen.playerId),
                   ),
                 )
                 .toList(growable: false),
@@ -2300,8 +2326,8 @@ class _HomeAttentionPanel extends StatelessWidget {
   }
 }
 
-class _HomeRecentActivityPanel extends StatelessWidget {
-  const _HomeRecentActivityPanel({required this.digestValue});
+class HomeRecentActivityPanel extends StatelessWidget {
+  const HomeRecentActivityPanel({super.key, required this.digestValue});
 
   final AsyncValue<GtexHomeDigest> digestValue;
 
@@ -2321,14 +2347,23 @@ class _HomeRecentActivityPanel extends StatelessWidget {
           (BuildContext context, GtexHomeDigest digest) => Column(
             children: digest.recentActivity
                 .map(
-                  (GtexHomeActivityItem item) => _PulseRow(
-                    line: _PulseLine(
-                      label: item.label,
-                      detail: item.timestampLabel,
-                      metric: '',
-                      color: _GtexCommandColors.textSecondary,
-                    ),
-                  ),
+                  (GtexHomeActivityItem item) {
+                    VoidCallback? onTap;
+                    if (item.playerId != null && item.playerId!.trim().isNotEmpty) {
+                      onTap = GtexPlayerNavigator.tapToOpen(context, item.playerId!);
+                    } else if (item.routeLocation != null && item.routeLocation!.trim().isNotEmpty) {
+                      onTap = () => context.go(item.routeLocation!);
+                    }
+                    return _PulseRow(
+                      line: _PulseLine(
+                        label: item.label,
+                        detail: item.timestampLabel,
+                        metric: '',
+                        color: _GtexCommandColors.textSecondary,
+                      ),
+                      onTap: onTap,
+                    );
+                  },
                 )
                 .toList(growable: false),
           ),

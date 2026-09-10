@@ -87,6 +87,7 @@ class GtexLiveMatchState {
 class GtexMatchEconomyImpact {
   const GtexMatchEconomyImpact({
     required this.playerName,
+    this.playerId,
     this.teamId,
     this.currentValueLabel,
     this.deltaLabel,
@@ -94,6 +95,7 @@ class GtexMatchEconomyImpact {
   });
 
   final String playerName;
+  final String? playerId;
   final String? teamId;
   final String? currentValueLabel;
   final String? deltaLabel;

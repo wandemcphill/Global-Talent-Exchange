@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../player_detail/gtex_player_navigator.dart';
 import '../data/gtex_match_feed.dart';
 import '../data/gtex_match_models.dart';
 import '../data/gtex_match_repository.dart';
@@ -34,9 +36,13 @@ class GtexMatchCenterScreenV2 extends StatefulWidget {
     this.repository,
     this.onOpenReplay,
     this.onExit,
+    this.onOpenPortfolio,
+    this.onOpenMarket,
   });
 
   final String matchId;
+  final VoidCallback? onOpenPortfolio;
+  final VoidCallback? onOpenMarket;
   final GtexMatchRepository? repository;
 
   /// Opens the replay archive for this fixture. When null the replay CTA is
@@ -137,6 +143,8 @@ class _GtexMatchCenterScreenV2State extends State<GtexMatchCenterScreenV2> {
                                   match: match,
                                   controller: controller,
                                   onOpenReplay: widget.onOpenReplay,
+                                onOpenPortfolio: widget.onOpenPortfolio ?? () => context.go('/app/portfolio'),
+                                onOpenMarket: widget.onOpenMarket ?? () => context.go('/app/market'),
                                 ),
                               ),
                               const SizedBox(width: 16),
@@ -177,11 +185,15 @@ class _MainPitchWorkspace extends StatelessWidget {
     required this.match,
     required this.controller,
     this.onOpenReplay,
+    this.onOpenPortfolio,
+    this.onOpenMarket,
   });
 
   final GtexLiveMatchState match;
   final GtexMatchCenterController controller;
   final ValueChanged<String>? onOpenReplay;
+  final VoidCallback? onOpenPortfolio;
+  final VoidCallback? onOpenMarket;
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +218,11 @@ class _MainPitchWorkspace extends StatelessWidget {
         const SizedBox(height: 12),
         _LineupStrip(home: match.home, away: match.away),
         if (match.phase == GtexMatchPhase.fullTime) ...<Widget>[
-          GtexPostMatchPanel(match: match),
+          GtexPostMatchPanel(
+            match: match,
+            onOpenPortfolio: onOpenPortfolio,
+            onOpenMarket: onOpenMarket,
+          ),
           _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
         ],
       ],
@@ -847,7 +863,12 @@ class _LineupChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final bool hasRealId =
+        player.id.trim().isNotEmpty && player.id.trim() != player.name.trim();
+    final VoidCallback? onTap =
+        hasRealId ? GtexPlayerNavigator.tapToOpen(context, player.id) : null;
+
+    final Widget chip = Container(
       width: 172,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -904,6 +925,20 @@ class _LineupChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+
+    if (onTap == null) {
+      return chip;
+    }
+    return Semantics(
+      button: true,
+      label: 'Open ${player.name}',
+      child: InkWell(
+        key: Key('gtex-lineup-chip-open-${player.id}'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: chip,
       ),
     );
   }
@@ -1016,7 +1051,7 @@ class _EconomyImpactPanel extends StatelessWidget {
             )
           else ...[
             for (final GtexMatchEconomyImpact impact in impacts) ...[
-              _EconomyImpactRow(impact: impact),
+              _EconomyImpactRow(impact: impact, match: match),
               if (impact != impacts.last) const SizedBox(height: 8),
             ],
             const SizedBox(height: 8),
@@ -1032,16 +1067,39 @@ class _EconomyImpactPanel extends StatelessWidget {
 }
 
 class _EconomyImpactRow extends StatelessWidget {
-  const _EconomyImpactRow({required this.impact});
+  const _EconomyImpactRow({required this.impact, required this.match});
 
   final GtexMatchEconomyImpact impact;
+  final GtexLiveMatchState match;
+
+  String? get _resolvedPlayerId {
+    if (impact.playerId != null && impact.playerId!.trim().isNotEmpty) {
+      return impact.playerId;
+    }
+    final String targetName = impact.playerName.trim().toLowerCase();
+    for (final p in match.home.players) {
+      if (p.name.trim().toLowerCase() == targetName) {
+        return p.id;
+      }
+    }
+    for (final p in match.away.players) {
+      if (p.name.trim().toLowerCase() == targetName) {
+        return p.id;
+      }
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final double delta = impact.deltaPercent ?? 0;
     final Color tone =
         delta < 0 ? _GtexMatchColors.red : _GtexMatchColors.primary;
-    return Row(
+    final String? playerId = _resolvedPlayerId;
+    final VoidCallback? onTap =
+        playerId != null ? GtexPlayerNavigator.tapToOpen(context, playerId) : null;
+
+    final Widget row = Row(
       children: [
         Expanded(
           child: Text(
@@ -1074,7 +1132,28 @@ class _EconomyImpactRow extends StatelessWidget {
             fontSize: 11,
           ),
         ),
+        if (onTap != null) ...[
+          const SizedBox(width: 6),
+          Icon(Icons.open_in_new, size: 13, color: _GtexMatchColors.primary),
+        ],
       ],
+    );
+
+    if (onTap == null) {
+      return row;
+    }
+    return Semantics(
+      button: true,
+      label: 'Open ${impact.playerName}',
+      child: InkWell(
+        key: Key('gtex-economy-impact-open-$playerId'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: row,
+        ),
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_exchange_api_client.dart';
@@ -220,7 +221,7 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
         ),
         action: SnackBarAction(
           label: 'Portfolio',
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () => context.go('/app/portfolio'),
         ),
       ),
     );

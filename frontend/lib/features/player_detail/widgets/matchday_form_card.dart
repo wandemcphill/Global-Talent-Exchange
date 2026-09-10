@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../domain/value/gtex_value_models.dart';
 import '../../../ui_gtex/ui_gtex.dart';
@@ -18,10 +19,12 @@ class MatchdayFormCard extends StatelessWidget {
     super.key,
     required this.form,
     this.freshness,
+    this.onOpenMatchday,
   });
 
   final GtexPlayerForm form;
   final GtexValuationFreshnessReport? freshness;
+  final VoidCallback? onOpenMatchday;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +35,22 @@ class MatchdayFormCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _border),
       ),
-      child: form.hasSample ? _buildForm(context) : const _MatchdayFormEmpty(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          form.hasSample ? _buildForm(context) : const _MatchdayFormEmpty(),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: const Key('gtex-form-open-matchday-btn'),
+              onPressed: onOpenMatchday ?? () => context.go('/app/matches'),
+              icon: const Icon(Icons.sports_soccer_outlined, size: 16),
+              label: const Text('Open Matchday Center'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
