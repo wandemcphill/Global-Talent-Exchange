@@ -9,20 +9,39 @@ from app.common.schemas.freshness import FreshnessInfo, FreshnessStatus
 def evaluate_freshness(
     as_of: datetime | None,
     *,
+    is_live: bool = False,
+    is_pending: bool = False,
+    pending_reason: str | None = None,
     stale_threshold_seconds: float = 86400.0,
     reference_time: datetime | None = None,
 ) -> FreshnessInfo:
-    """Evaluate timestamp age only.
+    """Evaluate timestamp freshness with timestamp evidence as a hard prerequisite.
 
-    The generic evaluator never allows callers to assert LIVE or PENDING. Those
-    states require domain-specific evidence and must be produced by a
-    specialized evaluator or an explicit persisted status.
+    Backward-compatible live/pending flags are retained for existing callers,
+    but they can never produce a non-UNKNOWN result when timestamp evidence is
+    absent. New domain code should prefer a specialized evaluator when a domain
+    state can legitimately produce LIVE or PENDING_RECALCULATION.
     """
     if as_of is None:
         return FreshnessInfo(
             status=FreshnessStatus.UNKNOWN,
             as_of=None,
             label="Unknown",
+        )
+
+    if is_live:
+        return FreshnessInfo(
+            status=FreshnessStatus.LIVE,
+            as_of=as_of,
+            label="LIVE",
+        )
+
+    if is_pending:
+        return FreshnessInfo(
+            status=FreshnessStatus.PENDING_RECALCULATION,
+            as_of=as_of,
+            label="Pending Recalculation",
+            pending_reason=pending_reason or "Recalculation queued",
         )
 
     now = reference_time or datetime.now(timezone.utc)
