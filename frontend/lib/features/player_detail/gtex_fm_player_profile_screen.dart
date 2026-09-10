@@ -1531,6 +1531,11 @@ class _MarketCard extends StatelessWidget {
           Row(
             children: <Widget>[
               _MarketStat(
+                label: 'Status',
+                value: mp.lifecycleStatusLabel,
+                color: _statusColor(mp.lifecycleStatus),
+              ),
+              _MarketStat(
                 label: 'Tradable',
                 value: mp.isTradable ? 'Yes' : 'No',
                 color: mp.isTradable ? _green : _textMuted,
@@ -1557,6 +1562,19 @@ class _MarketCard extends StatelessWidget {
       return '${_compact(credits)} GTC';
     }
     return _unpricedLabel;
+  }
+
+  static Color _statusColor(String status) {
+    switch (status) {
+      case 'active_tradable':
+        return _green;
+      case 'active_not_tradable':
+        return const Color(0xFFE6A23C);
+      case 'inactive_retired':
+      case 'unknown_unavailable':
+      default:
+        return _textMuted;
+    }
   }
 
   static const String _unpricedLabel = 'Unpriced';

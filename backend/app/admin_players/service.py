@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.ingestion.models import Club, Competition, Player
+from app.ingestion.models import Club, Player
+from app.market.lifecycle_status import sync_player_lifecycle_and_market_status
 from app.players.read_models import PlayerSummaryReadModel
 from app.value_engine.banded_pricing import (
     SOFIFA_SNAPSHOT_DATE,
@@ -100,11 +100,11 @@ class AdminPlayerService:
             changed.append("current_club_id")
 
         if edits.retire:
-            player.is_tradable = False
+            sync_player_lifecycle_and_market_status(session, player, is_retired=True)
             self._move_club(session, player, None)
             changed.append("retire")
         elif edits.is_tradable is not None:
-            player.is_tradable = edits.is_tradable
+            sync_player_lifecycle_and_market_status(session, player, is_tradable=edits.is_tradable)
             changed.append("is_tradable")
 
         player.last_synced_at = datetime.now(UTC)
