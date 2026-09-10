@@ -231,7 +231,7 @@ void main() {
 
       expect(find.textContaining('You hold no shares'), findsOneWidget);
       expect(
-        find.textContaining('it does not move your portfolio'),
+        find.textContaining('it does not affect your portfolio'),
         findsOneWidget,
       );
     });
@@ -256,7 +256,10 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('the valuation this position is priced from'), findsNothing);
+      expect(
+        find.textContaining('the valuation this position is priced from'),
+        findsNothing,
+      );
     });
 
     testWidgets('the position note states the share price is unchanged', (
@@ -271,7 +274,7 @@ void main() {
       );
 
       expect(
-        find.textContaining('tradable share price is unchanged'),
+        find.textContaining('position market value remains based on the tradable share price'),
         findsOneWidget,
       );
     });
@@ -287,7 +290,7 @@ void main() {
         ),
       );
 
-      expect(find.textContaining('the valuation this position is priced from'), findsOneWidget);
+      expect(find.textContaining('his published player valuation'), findsOneWidget);
       expect(find.textContaining('+1.21%'), findsOneWidget);
     });
   });
