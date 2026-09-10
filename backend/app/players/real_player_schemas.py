@@ -96,9 +96,9 @@ class RealPlayerUniverseDetailView(BaseModel):
     assists: int | None
     clean_sheets: int | None
     injury_status: str | None
-    is_tradable: bool = True
-    lifecycle_status: str = "active_tradable"
-    lifecycle_status_label: str = "Active / Tradable"
+    is_tradable: bool
+    lifecycle_status: str = "unknown_unavailable"
+    lifecycle_status_label: str = "Unknown / Unavailable"
     real_player_tier: str | None
     identity_confidence_score: float | None
     image_url: str | None
