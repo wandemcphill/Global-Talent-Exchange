@@ -339,6 +339,11 @@ GtexMatchEconomyImpact _parseEconomyImpact(Map<String, Object?> json) {
   ], 'economy impact player name');
   return GtexMatchEconomyImpact(
     playerName: playerName,
+    playerId: _nullableString(json, const <String>[
+      'player_id',
+      'playerId',
+      'id',
+    ]),
     teamId: _nullableString(json, const <String>['team_id', 'teamId']),
     currentValueLabel: _nullableString(json, const <String>[
       'current_value_label',

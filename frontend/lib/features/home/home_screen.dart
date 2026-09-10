@@ -1108,13 +1108,14 @@ class _PulseLine {
 }
 
 class _PulseRow extends StatelessWidget {
-  const _PulseRow({required this.line});
+  const _PulseRow({required this.line, this.onTap});
 
   final _PulseLine line;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final Widget content = Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -1161,7 +1162,28 @@ class _PulseRow extends StatelessWidget {
             line.metric,
             style: _dataStyle(context, size: 12, color: line.color),
           ),
+          if (onTap != null) ...<Widget>[
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.open_in_new,
+              size: 14,
+              color: _GtexCommandColors.textSecondary,
+            ),
+          ],
         ],
+      ),
+    );
+
+    if (onTap == null) {
+      return content;
+    }
+    return Semantics(
+      button: true,
+      label: 'Open ${line.label}',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: content,
       ),
     );
   }
@@ -2161,6 +2183,7 @@ class _HomeWhatMovedPanel extends StatelessWidget {
                         ? _GtexCommandColors.accentPrimary
                         : _GtexCommandColors.accentRed,
               ),
+              onTap: GtexPlayerNavigator.tapToOpen(context, mover.playerId),
             ),
           ),
           ...digest.opportunityMovers.map(
@@ -2171,6 +2194,7 @@ class _HomeWhatMovedPanel extends StatelessWidget {
                 metric: mover.movementLabel,
                 color: _GtexCommandColors.accentAmber,
               ),
+              onTap: GtexPlayerNavigator.tapToOpen(context, mover.playerId),
             ),
           ),
         ];
@@ -2213,6 +2237,7 @@ class _HomeYourClubsPanel extends StatelessWidget {
                               ? _GtexCommandColors.accentPrimary
                               : _GtexCommandColors.accentRed,
                     ),
+                    onTap: () => context.go(const GteNavigationRoute.club().path),
                   ),
                 )
                 .toList(growable: false),
@@ -2249,6 +2274,7 @@ class _HomeYourProspectsPanel extends StatelessWidget {
                       metric: regen.rankLabel,
                       color: _GtexCommandColors.accentViolet,
                     ),
+                    onTap: GtexPlayerNavigator.tapToOpen(context, regen.playerId),
                   ),
                 )
                 .toList(growable: false),
@@ -2328,6 +2354,9 @@ class _HomeRecentActivityPanel extends StatelessWidget {
                       metric: '',
                       color: _GtexCommandColors.textSecondary,
                     ),
+                    onTap: item.playerId != null && item.playerId!.trim().isNotEmpty
+                        ? GtexPlayerNavigator.tapToOpen(context, item.playerId!)
+                        : () => context.go(const GteNavigationRoute.wallet().path),
                   ),
                 )
                 .toList(growable: false),

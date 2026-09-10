@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../data/gte_models.dart';
 import '../../../domain/value/gtex_value_models.dart';
@@ -17,10 +18,12 @@ class OwnershipConsequenceCard extends StatelessWidget {
     super.key,
     required this.holding,
     this.form,
+    this.onOpenPortfolio,
   });
 
   final GtePortfolioHolding? holding;
   final GtexPlayerForm? form;
+  final VoidCallback? onOpenPortfolio;
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +96,16 @@ class OwnershipConsequenceCard extends StatelessWidget {
           const SizedBox(height: 10),
           note,
         ],
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const Key('gtex-ownership-review-portfolio-btn'),
+            onPressed: onOpenPortfolio ?? () => context.go('/app/portfolio'),
+            icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
+            label: const Text('Review in Portfolio'),
+          ),
+        ),
       ],
     );
   }
