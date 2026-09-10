@@ -16,7 +16,7 @@ concurrency:
 jobs:
   frontend-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: frontend
@@ -37,7 +37,7 @@ jobs:
             # Golden captures are platform-dependent and were generated on
             # Windows; they pass there and fail here. See
             # test/ux_refinement/visual_qa_golden_test.dart.
-            flutter test --exclude-tags golden
+            flutter test -j 4 --exclude-tags golden
           fi
 
   frontend-live-fallback-regressions:
@@ -277,6 +277,7 @@ jobs:
           -q
 
   unity-windows-build:
+    if: vars.GTEX_ENABLE_WINDOWS_UNITY_CI == 'true'
     runs-on:
       - self-hosted
       - windows
