@@ -236,9 +236,7 @@ class _ReplayEntryBar extends StatelessWidget {
         width: double.infinity,
         child: FilledButton.icon(
           onPressed: () => open(matchId),
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-          ),
+          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
           icon: const Icon(Icons.replay_circle_filled_outlined),
           label: const Text('Watch replay'),
         ),
@@ -1000,7 +998,7 @@ class _EconomyImpactPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'ECONOMY IMPACT',
+            'MATCHDAY → VALUATION',
             style: TextStyle(
               color: _GtexMatchColors.text,
               fontWeight: FontWeight.w900,
@@ -1010,17 +1008,82 @@ class _EconomyImpactPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (impacts.isEmpty)
-            const Text(
-              'No live valuation movement returned for this match.',
-              style: TextStyle(color: _GtexMatchColors.muted, height: 1.35),
-            )
-          else
+            const _MatchdayValuationContract()
+          else ...<Widget>[
             for (final GtexMatchEconomyImpact impact in impacts) ...[
               _EconomyImpactRow(impact: impact),
               if (impact != impacts.last) const SizedBox(height: 8),
             ],
+            const SizedBox(height: 10),
+            const Text(
+              'These are valuation movements. They are not share price '
+              'movements: the tradable price moves only on trades.',
+              style: TextStyle(
+                color: _GtexMatchColors.muted,
+                fontSize: 11,
+                height: 1.35,
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// What a match actually does to a valuation, stated rather than implied.
+///
+/// This panel used to say "No live valuation movement returned for this match",
+/// which told the reader that per-match live valuation movement is something
+/// GTEX produces and had merely failed to return. It is not. No backend route
+/// emits `economy_impacts`, and by design none could: a performance is not
+/// persisted until the fixture settles, it then has to earn its place in a
+/// rolling six-match window, and the bounded overlay only reaches a published
+/// valuation when the daily snapshot runs.
+///
+/// So the empty state states the real contract instead of apologising for a
+/// feed that does not exist. The rest of the chain is one tap away: the lineup
+/// rows open the canonical player detail, which is where form, the bounded
+/// signal and the reader's own position are actually shown.
+class _MatchdayValuationContract extends StatelessWidget {
+  const _MatchdayValuationContract();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'A match does not reprice a footballer while it is being played.',
+          style: TextStyle(
+            color: _GtexMatchColors.text,
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+            height: 1.35,
+          ),
+        ),
+        SizedBox(height: 6),
+        Text(
+          'Performances are recorded at full time, counted in a rolling '
+          'six-match window, and reach the published valuation at the next '
+          'daily recalculation. One match never carries it.',
+          style: TextStyle(
+            color: _GtexMatchColors.muted,
+            fontSize: 11,
+            height: 1.4,
+          ),
+        ),
+        SizedBox(height: 6),
+        Text(
+          'Open a player from the lineups to see his form and what it is '
+          'doing to his valuation.',
+          style: TextStyle(
+            color: _GtexMatchColors.muted,
+            fontSize: 11,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 }

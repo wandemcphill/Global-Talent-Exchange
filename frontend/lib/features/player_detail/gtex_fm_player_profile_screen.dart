@@ -98,7 +98,9 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
   /// rather than inventing form.
   Future<void> _loadForm() async {
     try {
-      final GtexPlayerForm form = await _client.fetchPlayerForm(widget.playerId);
+      final GtexPlayerForm form = await _client.fetchPlayerForm(
+        widget.playerId,
+      );
       if (mounted) {
         setState(() => _form = form);
       }
@@ -193,13 +195,15 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
     }
     final GtePlayerShareTradeResult? trade =
         await showModalBottomSheet<GtePlayerShareTradeResult>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: GtexColors.panel,
-      builder:
-          (BuildContext context) =>
-              GteOrderTicketSheet(controller: controller, snapshot: snapshot),
-    );
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: GtexColors.panel,
+          builder:
+              (BuildContext context) => GteOrderTicketSheet(
+                controller: controller,
+                snapshot: snapshot,
+              ),
+        );
     if (!mounted) {
       return;
     }
@@ -380,7 +384,17 @@ class _ProfileBody extends StatelessWidget {
         const SizedBox(height: 14),
         _SectionLabel('MATCHDAY FORM'),
         const SizedBox(height: 8),
-        MatchdayFormCard(form: form!),
+        MatchdayFormCard(
+          form: form!,
+          // Both halves of this come from reads the page has already made:
+          // the valuation's own recalculation time and the performance
+          // timestamps that arrived with form. No extra request, and no
+          // invented timing.
+          freshness: GtexValuationFreshnessReport.from(
+            lastSnapshotAt: detail.value.lastSnapshotAt,
+            performances: form!.performances,
+          ),
+        ),
       ],
       // Career is only drawn when the backend actually returned history.
       // Nothing here is synthesised.
