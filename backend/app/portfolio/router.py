@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, get_session
 from app.models.user import User
+from app.portfolio.realized_accounting import calculate_user_realized_pl
+from app.portfolio.realized_accounting_schemas import RealizedPLView
 from app.portfolio.schemas import PortfolioHoldingView, PortfolioSummaryView, PortfolioView
 from app.portfolio.service import PortfolioService
 from app.wallets.schemas import PortfolioSnapshotView
@@ -43,5 +45,25 @@ def get_portfolio_summary(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> PortfolioSummaryView:
-    summary = PortfolioService().build_summary(session, current_user)
-    return PortfolioSummaryView.model_validate(summary)
+    summary = PortfolioSummaryView.model_validate(PortfolioService().build_summary(session, current_user))
+    realized = calculate_user_realized_pl(session, current_user)
+    return summary.model_copy(
+        update={
+            "realized_pl_total": realized.total if realized.available else summary.realized_pl_total,
+            "realized_pl_available": realized.available,
+        }
+    )
+
+
+@router.get("/realized-pl", response_model=RealizedPLView)
+def get_realized_pl(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> RealizedPLView:
+    summary = calculate_user_realized_pl(session, current_user)
+    return RealizedPLView(
+        total=summary.total,
+        available=summary.available,
+        rows=[row for row in summary.rows],
+        unavailable_reason=summary.unavailable_reason,
+    )
