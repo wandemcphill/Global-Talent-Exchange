@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_spacing.dart';
 import '../theme/gtex_typography.dart';
+import '../models/gtex_freshness.dart';
+import 'gtex_freshness_chip.dart';
 import 'gtex_live_status_chip.dart';
 
 enum GtexValueState { live, recent, estimated, locked, unavailable }
@@ -21,6 +23,7 @@ class GtexValueDisplay extends StatelessWidget {
     this.showDelta = true,
     this.showStateIndicator = true,
     this.updatedLabel,
+    this.freshnessInfo,
   });
 
   final String valueLabel;
@@ -30,6 +33,7 @@ class GtexValueDisplay extends StatelessWidget {
   final bool showDelta;
   final bool showStateIndicator;
   final String? updatedLabel;
+  final GtexFreshnessInfo? freshnessInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +86,12 @@ class GtexValueDisplay extends StatelessWidget {
             spacing: GtexSpacing.xs,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
-              if (showStateIndicator)
+              if (freshnessInfo != null)
+                GtexFreshnessChip(
+                  freshness: freshnessInfo!,
+                  compact: true,
+                )
+              else if (showStateIndicator)
                 GtexLiveStatusChip(
                   status: _liveStatusFor(state),
                   label: _labelFor(state),

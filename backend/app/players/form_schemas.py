@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.common.schemas.freshness import FreshnessInfo
+
 
 class PlayerPerformanceView(BaseModel):
     """One persisted competition performance."""
@@ -27,6 +29,7 @@ class PlayerPerformanceView(BaseModel):
     red_card: bool
     eligible_for_valuation: bool
     ineligibility_reason: str | None = None
+    performance_freshness: FreshnessInfo | None = None
 
 
 class MatchdayValuationSignalView(BaseModel):
@@ -56,9 +59,7 @@ class PlayerFormView(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     player_id: str
-    has_sample: bool = Field(
-        description="False when this player has no eligible GTEX competition football yet."
-    )
+    has_sample: bool = Field(description="False when this player has no eligible GTEX competition football yet.")
     matches_counted: int
     competitions_counted: int
     average_rating: float | None = None
@@ -76,6 +77,7 @@ class PlayerFormView(BaseModel):
     )
     signal: MatchdayValuationSignalView | None = None
     performances: list[PlayerPerformanceView] = Field(default_factory=list)
+    form_freshness: FreshnessInfo | None = None
 
 
 __all__ = [

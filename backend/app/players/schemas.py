@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from app.common.schemas.freshness import FreshnessInfo
 from app.schemas.regen_universe import RegenPlayerPrestigeSummaryView
 
 
@@ -26,6 +27,7 @@ class RealPlayerSummaryIdentityView(BaseModel):
     normalization_profile_version: str | None = None
     pricing_snapshot_id: str | None = None
     valuation_lineage_id: str | None = None
+    source_freshness: FreshnessInfo | None = None
 
 
 class PlayerSummaryView(BaseModel):
@@ -50,3 +52,5 @@ class PlayerSummaryView(BaseModel):
     real_player_universe: RealPlayerSummaryIdentityView | None = None
     regen_universe: RegenPlayerPrestigeSummaryView | None = None
     updated_at: datetime
+    valuation_freshness: FreshnessInfo | None = None
+    market_freshness: FreshnessInfo | None = None

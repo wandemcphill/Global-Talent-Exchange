@@ -30,7 +30,13 @@ from app.models.fan_prediction import (
     FanPredictionSubmissionStatus,
 )
 from app.models.fan_war import FanWarPoint, FanWarProfile, FanbaseRanking, NationsCupEntry
-from app.models.federation import Federation, FederationLeague, FederationMembership, FederationProposal, FederationSanction
+from app.models.federation import (
+    Federation,
+    FederationLeague,
+    FederationMembership,
+    FederationProposal,
+    FederationSanction,
+)
 from app.models.club_profile import ClubProfile
 from app.models.notification_center import NotificationPreference
 from app.models.notification_record import NotificationRecord
@@ -41,7 +47,11 @@ from app.models.player_cards import (
     PlayerCardOwnerHistory,
     PlayerCardSale,
 )
-from app.models.scale_backbone import OrchestratorClipStateRecord, ViralDispatchPoolEntryRecord, ViralLeaderboardEntryRecord
+from app.models.scale_backbone import (
+    OrchestratorClipStateRecord,
+    ViralDispatchPoolEntryRecord,
+    ViralLeaderboardEntryRecord,
+)
 from app.models.sponsored_clip import SponsoredClip
 from app.models.ticketing import StadiumEvent, StadiumTicket, TicketReaction, TicketWaitlist
 from app.models.user import User, UserRole
@@ -57,7 +67,6 @@ from .schemas import (
     PredictionRewardSettlementRequest,
     TicketCheckInRequest,
 )
-
 
 SECTION_CATALOG: tuple[dict[str, str], ...] = (
     {
@@ -409,6 +418,8 @@ class MatchdayEconomyService:
         )
 
     def overview(self, *, user: User | None = None, admin: bool = False) -> MatchdayEconomyOverviewView:
+        from app.common.freshness import evaluate_freshness
+
         sections = [
             self._federation_section(),
             self._fan_economy_section(),
@@ -418,8 +429,9 @@ class MatchdayEconomyService:
         ]
         if not admin:
             sections = [section for section in sections if self._section_visible_to_client(section, user)]
+        generated_at = utcnow()
         return MatchdayEconomyOverviewView(
-            generated_at=utcnow(),
+            generated_at=generated_at,
             audience="admin" if admin else self._audience_for(user),
             sections=sections,
             totals={
@@ -427,6 +439,7 @@ class MatchdayEconomyService:
                 "metrics": float(sum(len(section.metrics) for section in sections)),
                 "alerts": float(sum(len(section.alerts) for section in sections)),
             },
+            economy_freshness=evaluate_freshness(generated_at),
         )
 
     def _federation_section(self) -> MatchdayEconomySectionView:
@@ -441,8 +454,12 @@ class MatchdayEconomyService:
                 self._metric("federations", "Federations", federations, route="/app/play"),
                 self._metric("leagues", "Federation leagues", leagues, route="/app/play"),
                 self._metric("memberships", "Active memberships", active_memberships, route="/app/play"),
-                self._metric("proposals", "Open proposals", open_proposals, status="attention" if open_proposals else "ok"),
-                self._metric("sanctions", "Active sanctions", active_sanctions, status="attention" if active_sanctions else "ok"),
+                self._metric(
+                    "proposals", "Open proposals", open_proposals, status="attention" if open_proposals else "ok"
+                ),
+                self._metric(
+                    "sanctions", "Active sanctions", active_sanctions, status="attention" if active_sanctions else "ok"
+                ),
             ],
             alerts=self._alerts_for_counts(
                 ("No federation profiles have been created yet.", federations == 0),
@@ -464,7 +481,9 @@ class MatchdayEconomyService:
             "fan_economy",
             metrics=[
                 self._metric("prediction_fixtures", "Prediction fixtures", fixtures, route="/app/community"),
-                self._metric("open_predictions", "Open predictions", open_fixtures, status="live" if open_fixtures else "ok"),
+                self._metric(
+                    "open_predictions", "Open predictions", open_fixtures, status="live" if open_fixtures else "ok"
+                ),
                 self._metric("submissions", "Prediction submissions", submissions),
                 self._metric("reward_grants", "Reward grants", rewards, unit="grants"),
                 self._metric("fan_profiles", "Fan war profiles", profiles, route="/app/community"),
@@ -693,12 +712,17 @@ class MatchdayEconomyService:
         if flag is None:
             return False
         state = cls._launch_state(flag)
-        return bool(flag.enabled) and not bool(flag.kill_switch_enabled) and state not in {
-            "hidden",
-            "disabled",
-            "paused",
-            "maintenance",
-        }
+        return (
+            bool(flag.enabled)
+            and not bool(flag.kill_switch_enabled)
+            and state
+            not in {
+                "hidden",
+                "disabled",
+                "paused",
+                "maintenance",
+            }
+        )
 
     @classmethod
     def _health_status(cls, flag: AdminFeatureFlag | None) -> str:
