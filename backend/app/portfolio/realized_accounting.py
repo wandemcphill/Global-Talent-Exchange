@@ -59,13 +59,16 @@ def calculate_user_realized_pl(session: Session, user: User) -> RealizedPLSummar
         ).all()
     )
 
+    holdings = {
+        holding.player_id: _amount(holding.share_count)
+        for holding in session.scalars(
+            select(PlayerShareHolding).where(PlayerShareHolding.user_id == user.id)
+        ).all()
+        if holding.share_count
+    }
+
     if not events:
-        has_owned_position = session.scalar(
-            select(PlayerShareHolding.id)
-            .where(PlayerShareHolding.user_id == user.id, PlayerShareHolding.share_count > 0)
-            .limit(1)
-        )
-        if has_owned_position is not None:
+        if holdings:
             return _unavailable(
                 "Realized P/L is not calculated because this position has no complete trade-event history."
             )
@@ -132,6 +135,16 @@ def calculate_user_realized_pl(session: Session, user: User) -> RealizedPLSummar
                     str(meta.get("idempotency_reference")) if meta.get("idempotency_reference") else None
                 ),
             )
+        )
+
+    derived_quantities = {
+        player_id: state["quantity"]
+        for player_id, state in state.items()
+        if state["quantity"] > Decimal("0.0000")
+    }
+    if derived_quantities != holdings:
+        return _unavailable(
+            "Realized P/L is not calculated because the current ownership position does not reconcile with its trade history."
         )
 
     total = _amount(sum((row.realized_pl for row in rows), Decimal("0.0000")))
