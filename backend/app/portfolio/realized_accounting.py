@@ -7,7 +7,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.player_token_market import PlayerShareEvent
+from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding
 from app.models.user import User
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -40,6 +40,15 @@ def _amount(value: Decimal | int | str | None) -> Decimal:
     return Decimal(str(value or "0")).quantize(AMOUNT_QUANTUM)
 
 
+def _unavailable(reason: str) -> RealizedPLSummary:
+    return RealizedPLSummary(
+        total=Decimal("0.0000"),
+        available=False,
+        rows=[],
+        unavailable_reason=reason,
+    )
+
+
 def calculate_user_realized_pl(session: Session, user: User) -> RealizedPLSummary:
     events = list(
         session.scalars(
@@ -51,6 +60,15 @@ def calculate_user_realized_pl(session: Session, user: User) -> RealizedPLSummar
     )
 
     if not events:
+        has_owned_position = session.scalar(
+            select(PlayerShareHolding.id)
+            .where(PlayerShareHolding.user_id == user.id, PlayerShareHolding.share_count > 0)
+            .limit(1)
+        )
+        if has_owned_position is not None:
+            return _unavailable(
+                "Realized P/L is not calculated because this position has no complete trade-event history."
+            )
         return RealizedPLSummary(total=Decimal("0.0000"), available=True, rows=[])
 
     state: dict[str, dict[str, Decimal]] = {}
@@ -60,11 +78,8 @@ def calculate_user_realized_pl(session: Session, user: User) -> RealizedPLSummar
         meta = event.metadata_json or {}
         transaction_id = str(meta.get("transaction_id") or "").strip()
         if not transaction_id:
-            return RealizedPLSummary(
-                total=Decimal("0.0000"),
-                available=False,
-                rows=[],
-                unavailable_reason="Historical player-share events do not contain settlement metadata for this account.",
+            return _unavailable(
+                "Historical player-share events do not contain settlement metadata for this account."
             )
 
         try:
@@ -73,20 +88,10 @@ def calculate_user_realized_pl(session: Session, user: User) -> RealizedPLSummar
             gross_amount = _amount(event.gross_amount_coin)
             fee = _amount(meta.get("fee_amount_coin"))
         except (ArithmeticError, ValueError, TypeError):
-            return RealizedPLSummary(
-                total=Decimal("0.0000"),
-                available=False,
-                rows=[],
-                unavailable_reason="A player-share settlement contains incomplete accounting data.",
-            )
+            return _unavailable("A player-share settlement contains incomplete accounting data.")
 
         if quantity <= Decimal("0.0000") or execution_price < Decimal("0.0000"):
-            return RealizedPLSummary(
-                total=Decimal("0.0000"),
-                available=False,
-                rows=[],
-                unavailable_reason="A player-share settlement contains invalid quantity or price data.",
-            )
+            return _unavailable("A player-share settlement contains invalid quantity or price data.")
 
         player_state = state.setdefault(
             event.player_id,
@@ -100,12 +105,7 @@ def calculate_user_realized_pl(session: Session, user: User) -> RealizedPLSummar
             continue
 
         if player_state["quantity"] < quantity or player_state["quantity"] <= Decimal("0.0000"):
-            return RealizedPLSummary(
-                total=Decimal("0.0000"),
-                available=False,
-                rows=[],
-                unavailable_reason="A player-share sale has no complete preceding cost basis.",
-            )
+            return _unavailable("A player-share sale has no complete preceding cost basis.")
 
         average_cost = _amount(player_state["cost_basis"] / player_state["quantity"])
         cost_basis = _amount(average_cost * quantity)
