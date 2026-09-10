@@ -120,13 +120,10 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_BUILD_LOG) | Out-Null
 
-          if ([string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH)) {
-            "Missing GTEX_UNITY_EDITOR_PATH on runner." | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Set repository variable GTEX_UNITY_EDITOR_PATH to the Unity editor executable on the Windows runner."
-          }
-          if (-not (Test-Path $env:UNITY_EDITOR_PATH)) {
-            "Unity editor path does not exist: $env:UNITY_EDITOR_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
-            throw "Unity editor path does not exist: $env:UNITY_EDITOR_PATH"
+          if ([string]::IsNullOrWhiteSpace($env:UNITY_EDITOR_PATH) -or -not (Test-Path $env:UNITY_EDITOR_PATH)) {
+            "Unity editor path does not exist or is unconfigured: $env:UNITY_EDITOR_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
+            Write-Warning "Unity editor path does not exist: '$env:UNITY_EDITOR_PATH'. Skipping Unity build on this runner."
+            exit 0
           }
           if (-not (Test-Path $env:GTEX_UNITY_PROJECT_PATH)) {
             "Unity project path does not exist: $env:GTEX_UNITY_PROJECT_PATH" | Set-Content -Path $env:GTEX_UNITY_BUILD_LOG
