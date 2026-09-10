@@ -979,6 +979,8 @@ class GteMarketPlayerIdentity {
 class GteMarketPlayerMarketProfile {
   const GteMarketPlayerMarketProfile({
     required this.isTradable,
+    this.lifecycleStatus = 'active_tradable',
+    this.lifecycleStatusLabel = 'Active / Tradable',
     required this.marketValueEur,
     required this.sharePriceCoin,
     required this.supplyTier,
@@ -993,6 +995,8 @@ class GteMarketPlayerMarketProfile {
   });
 
   final bool isTradable;
+  final String lifecycleStatus;
+  final String lifecycleStatusLabel;
   final double? marketValueEur;
 
   /// Tradable player-share price in GTEX Coin, from PlayerShareMarket.
@@ -1016,8 +1020,19 @@ class GteMarketPlayerMarketProfile {
       value,
       label: 'market profile',
     );
+    final bool isTradable = GteJson.boolean(json, <String>['is_tradable', 'isTradable']);
     return GteMarketPlayerMarketProfile(
-      isTradable: GteJson.boolean(json, <String>['is_tradable', 'isTradable']),
+      isTradable: isTradable,
+      lifecycleStatus: GteJson.stringOrNull(json, <String>[
+            'lifecycle_status',
+            'lifecycleStatus',
+          ]) ??
+          (isTradable ? 'active_tradable' : 'active_not_tradable'),
+      lifecycleStatusLabel: GteJson.stringOrNull(json, <String>[
+            'lifecycle_status_label',
+            'lifecycleStatusLabel',
+          ]) ??
+          (isTradable ? 'Active / Tradable' : 'Active / Not Tradable'),
       marketValueEur: _nullableNumber(json, <String>[
         'market_value_eur',
         'marketValueEur',

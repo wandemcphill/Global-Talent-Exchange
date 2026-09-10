@@ -14,6 +14,7 @@ from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.football_events_engine.service import PlayerRealWorldImpact, RealWorldFootballEventService
 from app.ingestion.models import Player
 from app.models.player_token_market import PlayerShareMarket
+from app.market.lifecycle_status import resolve_player_lifecycle_status
 from app.market.player_eligibility_policy import is_transfer_market_eligible
 from app.market.models import (
     Listing,
@@ -842,6 +843,8 @@ class MarketPlayerIdentity:
 @dataclass(frozen=True, slots=True)
 class MarketPlayerMarketProfile:
     is_tradable: bool
+    lifecycle_status: str
+    lifecycle_status_label: str
     market_value_eur: float | None
     share_price_coin: Decimal | None
     supply_tier: dict[str, Any] | None
@@ -1204,6 +1207,7 @@ class MarketPlayerQueryService:
         player = record.player
         breakdown_payload = self._breakdown_payload(record)
         real_world_impact = self._real_world_impact(player.id)
+        status_code, status_label = resolve_player_lifecycle_status(player, getattr(player, "share_market", None))
 
         return MarketPlayerDetail(
             player_id=player.id,
@@ -1232,6 +1236,8 @@ class MarketPlayerQueryService:
             ),
             market_profile=MarketPlayerMarketProfile(
                 is_tradable=is_transfer_market_eligible(player),
+                lifecycle_status=status_code,
+                lifecycle_status_label=status_label,
                 market_value_eur=player.current_market_reference_value or player.market_value_eur,
                 share_price_coin=self._share_prices_by_player_id([record]).get(player.id),
                 supply_tier=self._supply_tier_payload(record),
