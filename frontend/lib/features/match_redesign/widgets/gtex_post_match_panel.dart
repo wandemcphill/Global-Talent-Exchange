@@ -4,9 +4,16 @@ import '../data/gtex_match_models.dart';
 import 'gtex_match_visual_tokens.dart';
 
 class GtexPostMatchPanel extends StatelessWidget {
-  const GtexPostMatchPanel({super.key, required this.match});
+  const GtexPostMatchPanel({
+    super.key,
+    required this.match,
+    this.onOpenPortfolio,
+    this.onOpenMarket,
+  });
 
   final GtexLiveMatchState match;
+  final VoidCallback? onOpenPortfolio;
+  final VoidCallback? onOpenMarket;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +105,50 @@ class GtexPostMatchPanel extends StatelessWidget {
               ),
             ],
           ),
+          if (finalWhistle) ...[
+            const SizedBox(height: 16),
+            const Divider(color: GtexMatchVisualTokens.border),
+            const SizedBox(height: 12),
+            const Text(
+              'MATCHDAY → OWNER DECISION LOOP',
+              style: TextStyle(
+                color: GtexMatchVisualTokens.live,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.0,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Performance in this fixture has updated published player valuations. Review your portfolio position or explore new talent on the market.',
+              style: TextStyle(
+                color: GtexMatchVisualTokens.textSecondary,
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                if (onOpenPortfolio != null)
+                  FilledButton.icon(
+                    key: const Key('gtex-post-match-portfolio-btn'),
+                    onPressed: onOpenPortfolio,
+                    icon: const Icon(Icons.account_balance_wallet_outlined, size: 16),
+                    label: const Text('Review Portfolio'),
+                  ),
+                if (onOpenMarket != null)
+                  OutlinedButton.icon(
+                    key: const Key('gtex-post-match-market-btn'),
+                    onPressed: onOpenMarket,
+                    icon: const Icon(Icons.storefront_outlined, size: 16),
+                    label: const Text('Explore Transfer Hub'),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
