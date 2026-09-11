@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from app.phase6.foundation import (
@@ -154,6 +156,6 @@ def test_season_reference_only_defines_calendar_boundaries() -> None:
         GtexSeasonRef(
             season_number=12,
             status=GtexSeasonStatus.COMPLETED,
-            starts_on=season_end := __import__("datetime").date(2027, 1, 2),
-            ends_on=__import__("datetime").date(2027, 1, 1),
+            starts_on=date(2027, 1, 2),
+            ends_on=date(2027, 1, 1),
         )
