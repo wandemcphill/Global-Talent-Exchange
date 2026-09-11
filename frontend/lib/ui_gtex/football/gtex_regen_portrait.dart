@@ -50,17 +50,26 @@ class GtexRegenPortrait extends StatelessWidget {
   }
 
   bool _isApprovedRegenPortraitUrl(String url) {
-    final String lowerPath =
-        Uri.tryParse(url)?.path.toLowerCase() ?? url.toLowerCase();
+    final Uri? parsed = Uri.tryParse(url);
+    final String lowerPath = parsed?.path.toLowerCase() ?? url.toLowerCase();
     final bool isRaster =
         lowerPath.endsWith('.png') ||
         lowerPath.endsWith('.jpg') ||
         lowerPath.endsWith('.jpeg') ||
         lowerPath.endsWith('.webp');
-    return isRaster &&
-        lowerPath.contains(
-          '/generated-media/regen_newgen_faces/script_skin_hair/',
-        );
+    if (!isRaster) return false;
+
+    // Production stores the regen face bank in Cloudinary. The backend's
+    // GTE_GENERATED_MEDIA_BASE_URL intentionally turns the generated-media
+    // storage key into a Cloudinary delivery URL, so both forms are
+    // authoritative portrait URLs and must be rendered by the same widget.
+    final bool isGeneratedMediaPath = lowerPath.contains(
+      '/generated-media/regen_newgen_faces/script_skin_hair/',
+    );
+    final bool isCloudinaryFaceBankPath =
+        parsed?.host.toLowerCase() == 'res.cloudinary.com' &&
+        lowerPath.contains('/regen_newgen_faces/script_skin_hair/');
+    return isGeneratedMediaPath || isCloudinaryFaceBankPath;
   }
 
   String _resolveMediaUrl(String url) {
