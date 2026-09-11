@@ -16,6 +16,7 @@ class PlayerShareMarketView(BaseModel):
     id: str
     player_id: str
     total_shares: int
+    released_shares: int | None = None
     circulating_shares: int
     share_price_coin: Decimal
     liquidity_coin: Decimal = Decimal("0.0000")
@@ -41,6 +42,10 @@ class PlayerShareMarketIssueRequest(BaseModel):
         validation_alias=AliasChoices("liquidity_coin", "liquidity"),
     )
     status: str = Field(default="active", min_length=2, max_length=24)
+
+
+class PlayerShareReleaseRequest(BaseModel):
+    release_count: int = Field(ge=1)
 
 
 class PlayerSharePurchaseRequest(BaseModel):
@@ -141,6 +146,7 @@ class PlayerShareMarketListItemView(BaseModel):
     share_price_coin: Decimal
     liquidity_coin: Decimal
     total_shares: int
+    released_shares: int | None = None
     circulating_shares: int
     status: str
     market_issued: bool = True
