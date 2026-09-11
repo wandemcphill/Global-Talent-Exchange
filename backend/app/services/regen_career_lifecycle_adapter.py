@@ -1,0 +1,154 @@
+from __future__ import annotations
+
+from dataclasses import replace
+from datetime import date, datetime
+from typing import Any, Callable
+
+from app.models.regen import RegenProfile
+from app.regen_career.policy_service import RegenCareerPolicyService
+from app.services.player_lifecycle_service import PlayerLifecycleService
+
+_POLICY_INSTALLED = False
+_ORIGINAL_SYNC: Callable[..., dict[str, Any]] | None = None
+
+
+def _subtract_months(value: date, months: int) -> date:
+    """Return a calendar date `months` before `value` without external dependencies."""
+    total = value.year * 12 + (value.month - 1) - int(months)
+    year, month_index = divmod(total, 12)
+    month = month_index + 1
+    month_lengths = (
+        31,
+        29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    )
+    day = min(value.day, month_lengths[month - 1])
+    return date(year, month, day)
+
+
+def _assessment_payload(context: Any) -> dict[str, Any]:
+    assessment = context.assessment
+    return {
+        "retirement_policy": "phase6_dynamic",
+        "retirement_policy_status": "assessed",
+        "virtual_age_months": assessment.virtual_age_months,
+        "career_stage": assessment.career_stage,
+        "retirement_pressure": assessment.retirement_pressure,
+        "retirement_pressure_band": assessment.pressure_band.value,
+        "expected_longevity_months": assessment.expected_longevity_months,
+        "retirement_watch": assessment.should_enter_retirement_watch,
+        "retirement_decision_eligible": assessment.eligible_for_retirement_decision,
+        "retirement_drivers": list(assessment.drivers),
+        "generation_season_number": context.generation_season_number,
+        "current_season_number": context.current_season_number,
+    }
+
+
+def _policy_sync(
+    self: PlayerLifecycleService,
+    player,
+    regen: RegenProfile,
+    *,
+    reference_on: date,
+    contract_summary,
+    bids,
+) -> dict[str, Any]:
+    global _ORIGINAL_SYNC
+    if _ORIGINAL_SYNC is None:
+        raise RuntimeError("Phase 6C lifecycle policy adapter is not installed")
+
+    policy_context = None
+    try:
+        policy_context = RegenCareerPolicyService(self.session).assess(
+            player.id,
+            reference_on=reference_on,
+        )
+    except (ValueError, KeyError):
+        # Until the GTEX season timeline publishes explicit virtual-age indexes,
+        # retirement must remain unknown rather than fall back to wall-clock age.
+        policy_context = None
+
+    original_settings = self.settings
+    original_generated_at = regen.generated_at
+    try:
+        if policy_context is None:
+            regen_config = replace(self.settings.regen_generation, regen_lifecycle_retirement_months=10**9)
+            self.settings = replace(self.settings, regen_generation=regen_config)
+        else:
+            age_months = policy_context.assessment.virtual_age_months
+            if age_months is None:
+                regen_config = replace(self.settings.regen_generation, regen_lifecycle_retirement_months=10**9)
+                self.settings = replace(self.settings, regen_generation=regen_config)
+            else:
+                # Run the existing retirement side effects using the authoritative
+                # GTEX-season age instead of wall-clock lifetime.
+                regen_date = _subtract_months(reference_on, age_months)
+                regen.generated_at = datetime.combine(regen_date, original_generated_at.timetz())
+                regen_config = replace(
+                    self.settings.regen_generation,
+                    regen_lifecycle_retirement_months=(
+                        0 if policy_context.assessment.eligible_for_retirement_decision else 10**9
+                    ),
+                )
+                self.settings = replace(self.settings, regen_generation=regen_config)
+
+        state = _ORIGINAL_SYNC(
+            self,
+            player,
+            regen,
+            reference_on=reference_on,
+            contract_summary=contract_summary,
+            bids=bids,
+        )
+    finally:
+        regen.generated_at = original_generated_at
+        self.settings = original_settings
+
+    if policy_context is None:
+        state.update(
+            {
+                "retirement_policy": "phase6_dynamic",
+                "retirement_policy_status": "age_unknown",
+                "virtual_age_months": None,
+                "retirement_pressure": False,
+                "retirement_pressure_band": "unknown",
+                "retirement_watch": False,
+                "retirement_decision_eligible": False,
+                "retirement_drivers": [],
+            }
+        )
+    else:
+        state.update(_assessment_payload(policy_context))
+        if policy_context.assessment.eligible_for_retirement_decision:
+            state["lifecycle_phase"] = "retired"
+            state["retired"] = True
+        elif policy_context.assessment.virtual_age_months is not None:
+            state["retired"] = False
+
+    self._set_regen_career_state(regen, state)
+    self.session.flush()
+    return state
+
+
+def install() -> None:
+    global _POLICY_INSTALLED, _ORIGINAL_SYNC
+    if _POLICY_INSTALLED:
+        return
+    _ORIGINAL_SYNC = PlayerLifecycleService._sync_regen_state
+    PlayerLifecycleService._sync_regen_state = _policy_sync  # type: ignore[method-assign]
+    _POLICY_INSTALLED = True
+
+
+install()
+
+
+__all__ = ["install"]
