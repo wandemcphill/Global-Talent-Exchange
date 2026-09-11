@@ -216,9 +216,10 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
         },
       ),
       api.getList('/api/transfer-market/listings', auth: false),
-      query.isEmpty
-          ? Future<PaginatedPlayers?>.value(null)
-          : playerService.getPlayers(search: query, limit: resultWindow),
+      playerService.getPlayers(
+        search: query.isEmpty ? null : query,
+        limit: resultWindow,
+      ),
     ],
     eagerError: true,
   );
