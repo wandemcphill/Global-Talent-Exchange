@@ -17,7 +17,21 @@ def _subtract_months(value: date, months: int) -> date:
     total = value.year * 12 + (value.month - 1) - int(months)
     year, month_index = divmod(total, 12)
     month = month_index + 1
-    day = min(value.day, [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28, 31, 30, 31, 30, 31, 31, 31, 30, 31, 30, 31][month - 1])
+    month_lengths = (
+        31,
+        29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    )
+    day = min(value.day, month_lengths[month - 1])
     return date(year, month, day)
 
 
@@ -67,18 +81,12 @@ def _policy_sync(
     original_generated_at = regen.generated_at
     try:
         if policy_context is None:
-            regen_config = replace(
-                self.settings.regen_generation,
-                regen_lifecycle_retirement_months=10**9,
-            )
+            regen_config = replace(self.settings.regen_generation, regen_lifecycle_retirement_months=10**9)
             self.settings = replace(self.settings, regen_generation=regen_config)
         else:
             age_months = policy_context.assessment.virtual_age_months
             if age_months is None:
-                regen_config = replace(
-                    self.settings.regen_generation,
-                    regen_lifecycle_retirement_months=10**9,
-                )
+                regen_config = replace(self.settings.regen_generation, regen_lifecycle_retirement_months=10**9)
                 self.settings = replace(self.settings, regen_generation=regen_config)
             else:
                 # Run the existing retirement side effects using the authoritative
