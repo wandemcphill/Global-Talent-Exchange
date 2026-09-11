@@ -1,27 +1,19 @@
 #!/usr/bin/env bash
-# Issue player-share markets for every eligible tradable player missing one.
+# Automatically issue player-share markets for every eligible tradable player
+# missing one. Runs co-located with the database so per-issuance latency does
+# not make a laptop/manual operator run the normal path.
 #
-# Triggered manually from Render (cron job "gtex-player-share-issuance" ->
-# Trigger Run) so it runs co-located with the database.  Per-issuance latency
-# over a remote pooler makes a laptop run impractical at this volume: each
-# issuance writes a market, a wallet, a transaction and ledger entries.
+# The job is intentionally decoupled from ingestion. A player can be ingested
+# successfully and be issued later by this independent, idempotent process.
 #
-# Context: the market listing used to lazily create a market per listed row
-# inside a GET, then roll it back because a read path never commits -- so the
-# work was redone on every request and never persisted.  The listing is now
-# read-only and only shows issued markets, so unissued players are invisible
-# until this runs.  Ingestion issues markets for new players from here on; this
-# job closes the backlog that accumulated before that.
+# The strict issuer is bounded to 5,000 candidates per pass. Repeated passes
+# therefore converge on a larger backlog without requiring an operator to
+# trigger the job repeatedly.
 #
-# issue_player_share_markets_strict.py hard-caps --limit at 5000 and commits
-# once per invocation, so a backlog bigger than that needs multiple calls.
-# This loops calls of ISSUANCE_LIMIT (<=5000) each, stopping once a call
-# issues nothing more -- either the backlog is clear, or everything left is
-# genuinely blocked (missing country/club context) and further calls would
-# just repeat the same result.
-#
-# Idempotent: players that already hold a market are skipped, so it is safe to
-# re-run after an interruption; a partial run picks up where it left off.
+# Production safety: while the production database is read-only,
+# GTEX_PLAYER_ISSUANCE_WRITE_ENABLED must remain false. Once write access is
+# restored, flipping that environment variable enables the already-scheduled
+# automatic activation path without another code deployment.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.." || exit 1
@@ -37,11 +29,18 @@ if [ -z "${ISSUANCE_ACTOR_USER_ID:-}" ]; then
   exit 1
 fi
 
-# issue_player_share_markets_strict.py rejects anything outside 1-5000.
-ISSUANCE_LIMIT="${ISSUANCE_LIMIT:-5000}"
-# Bounds how many 5000-player calls one trigger makes; 20 covers a 100k
-# backlog. Loop still stops early once a call issues 0, so this is a safety
-# ceiling, not a target.
+# The strict issuer hard-caps --limit at 5000. Clamp rather than forwarding a
+# stale Render setting such as the historical 50000 value.
+REQUESTED_ISSUANCE_LIMIT="${ISSUANCE_LIMIT:-5000}"
+if ! [[ "${REQUESTED_ISSUANCE_LIMIT}" =~ ^[0-9]+$ ]] || [ "${REQUESTED_ISSUANCE_LIMIT}" -lt 1 ]; then
+  echo "FATAL: ISSUANCE_LIMIT must be a positive integer" >&2
+  exit 1
+fi
+ISSUANCE_LIMIT="${REQUESTED_ISSUANCE_LIMIT}"
+if [ "${ISSUANCE_LIMIT}" -gt 5000 ]; then
+  ISSUANCE_LIMIT=5000
+fi
+
 ISSUANCE_MAX_ITERATIONS="${ISSUANCE_MAX_ITERATIONS:-20}"
 REPORT_FILE="$(mktemp)"
 trap 'rm -f "${REPORT_FILE}"' EXIT
@@ -60,19 +59,21 @@ created_count() {
   python -c "import json,sys; print(json.load(open(sys.argv[1]))['counts']['created'])" "${REPORT_FILE}"
 }
 
-echo "== Dry run: planning issuance (up to ${ISSUANCE_LIMIT} players per pass) =="
+echo "== Player-share issuance: dry-run planning (${ISSUANCE_LIMIT} players/pass) =="
 run_pass --dry-run >/dev/null
 
-if [ "${ISSUANCE_ACTIVATE:-false}" != "true" ]; then
+# Safety gate. The schedule may run continuously while production writes are
+# unavailable, but no activation is attempted until this explicit switch is on.
+if [ "${ISSUANCE_ACTIVATE:-true}" != "true" ] || [ "${GTEX_PLAYER_ISSUANCE_WRITE_ENABLED:-false}" != "true" ]; then
   echo
-  echo "== Dry run only.  Set ISSUANCE_ACTIVATE=true to actually issue. =="
+  echo "== Planning only. Issuance activation is guarded by GTEX_PLAYER_ISSUANCE_WRITE_ENABLED. =="
   exit 0
 fi
 
 echo
 total_created=0
 for ((i = 1; i <= ISSUANCE_MAX_ITERATIONS; i++)); do
-  echo "== Activating issuance: pass ${i}/${ISSUANCE_MAX_ITERATIONS} =="
+  echo "== Automatic issuance: pass ${i}/${ISSUANCE_MAX_ITERATIONS} =="
   run_pass --activate >/dev/null
   pass_created="$(created_count)"
   total_created=$((total_created + pass_created))
@@ -84,4 +85,4 @@ for ((i = 1; i <= ISSUANCE_MAX_ITERATIONS; i++)); do
 done
 
 echo
-echo "== Player share issuance complete: ${total_created} markets issued =="
+echo "== Player share automatic issuance complete: ${total_created} markets issued =="
