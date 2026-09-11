@@ -9,8 +9,8 @@ The canonical player-share economy is System A (`PlayerShareMarket`, `PlayerShar
 ## What this retires
 
 - Admin buyback is removed from the product surface.
-- `/orders/{order_id}/admin-buyback-preview` is no longer exposed.
-- `/orders/{order_id}/admin-buyback` is no longer exposed.
+- `/orders/{order_id}/admin-buyback-preview` is no longer a supported route and now returns HTTP 410.
+- `/orders/{order_id}/admin-buyback` is no longer a supported route and now returns HTTP 410.
 - The portfolio/order detail UI no longer presents an admin fallback sale.
 - Synthetic System B orders are prohibited for any future exit flow.
 
