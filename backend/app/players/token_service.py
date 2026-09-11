@@ -33,7 +33,7 @@ _legacy.generate_uuid = _ledger_reference_token
 
 
 class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
-    """Production-facing player-share service with a strict trade boundary."""
+    """Production-facing player-share service with strict trade and supply boundaries."""
 
     @staticmethod
     def _trade_reference(*, market_id: str, actor_id: str, side: str, circulating_shares: int, share_count: int) -> str:
@@ -44,10 +44,6 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
 
     @staticmethod
     def _idempotency_reference(*, actor_id: str, key: str) -> str:
-        # Scoped to (actor, key) only - NOT player/side/share_count - so that reusing
-        # the same key for a different trade lands on the same lookup bucket and is
-        # caught as a conflict by _replay_idempotent_trade's metadata check below,
-        # rather than silently executing as an unrelated trade.
         digest = sha256(f"{actor_id}|{key}".encode("utf-8")).hexdigest()
         return f"trade-idempotency:{digest}"
 
@@ -188,10 +184,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         resolved_idempotency_key = idempotency_key or consume_player_share_idempotency_key()
         market = self._require_trade_market(player_id)
         if resolved_idempotency_key:
-            reference = self._idempotency_reference(
-                actor_id=actor.id,
-                key=resolved_idempotency_key.strip(),
-            )
+            reference = self._idempotency_reference(actor_id=actor.id, key=resolved_idempotency_key.strip())
         else:
             reference = self._trade_reference(
                 market_id=market.id,
@@ -229,6 +222,11 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             _trade_market_override.reset(market_token)
             _trade_reference.reset(reference_token)
 
+    def _primary_available_shares(self, market: PlayerShareMarket) -> int:
+        if market.released_shares is None:
+            return int(market.total_shares or 0) - int(market.circulating_shares or 0)
+        return int(market.released_shares) - int(market.circulating_shares or 0)
+
     def buy_shares(
         self,
         *,
@@ -237,6 +235,17 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         share_count: int,
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
+        market = self._require_trade_market(player_id)
+        self._assert_share_market_eligible(market.player)
+        if market.status != "active":
+            raise PlayerTokenMarketError("Player share market is not active.", reason="market_inactive")
+        if share_count <= 0:
+            raise PlayerTokenMarketError("Share count must be greater than zero.", reason="share_count_invalid")
+        if share_count > max(0, self._primary_available_shares(market)):
+            raise PlayerTokenMarketError(
+                "Requested shares exceed currently released supply.", reason="share_supply_insufficient"
+            )
+
         return self._run_trade_with_boundary(
             actor=actor,
             player_id=player_id,
@@ -266,6 +275,68 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
                 actor=actor, player_id=player_id, share_count=share_count
             ),
         )
+
+    def release_shares(
+        self,
+        *,
+        actor: User,
+        player_id: str,
+        release_count: int,
+    ) -> PlayerShareMarket:
+        self._require_admin(actor)
+        if release_count <= 0:
+            raise PlayerTokenMarketError("Release count must be greater than zero.", reason="release_invalid")
+
+        market = self.session.scalar(
+            select(PlayerShareMarket)
+            .options(selectinload(PlayerShareMarket.player))
+            .where(PlayerShareMarket.player_id == player_id)
+            .with_for_update()
+        )
+        if market is None:
+            raise PlayerTokenMarketError("Player share market was not found.", reason="market_not_found")
+        if market.released_shares is None:
+            raise PlayerTokenMarketError(
+                "Released supply is unknown for this legacy market and must be reconciled before more supply is released.",
+                reason="released_supply_unknown",
+            )
+
+        released_before = int(market.released_shares)
+        released_after = released_before + int(release_count)
+        if released_after > int(market.total_shares or 0):
+            raise PlayerTokenMarketError(
+                "Released supply cannot exceed lifetime total supply.", reason="released_supply_exceeds_total"
+            )
+
+        market.released_shares = released_after
+        self._record_event(
+            player_id=player_id,
+            actor_user_id=actor.id,
+            event_type="release",
+            share_delta=0,
+            price_per_share_coin=self._amount(market.share_price_coin),
+            gross_amount_coin=self._amount(0),
+            metadata_json={
+                "market_id": market.id,
+                "released_before": released_before,
+                "released_after": released_after,
+                "release_count": int(release_count),
+                "total_shares": int(market.total_shares or 0),
+                "circulating_shares": int(market.circulating_shares or 0),
+            },
+        )
+        self.session.flush()
+        return market
+
+    def _serialize_market_view(self, market: PlayerShareMarket) -> dict[str, Any]:
+        payload = super()._serialize_market_view(market)
+        payload["released_shares"] = market.released_shares
+        return payload
+
+    def _serialize_market_list_item(self, market: PlayerShareMarket) -> dict[str, Any]:
+        payload = super()._serialize_market_list_item(market)
+        payload["released_shares"] = market.released_shares
+        return payload
 
 
 __all__ = ["PlayerTokenMarketError", "PlayerTokenMarketService"]
