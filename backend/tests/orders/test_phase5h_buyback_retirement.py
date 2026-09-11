@@ -14,12 +14,20 @@ def _test_client() -> TestClient:
     return TestClient(app)
 
 
-def test_admin_buyback_routes_are_not_exposed() -> None:
-    app = FastAPI()
-    app.include_router(router)
-    paths = {route.path for route in app.routes}
+def test_admin_buyback_preview_is_retired() -> None:
+    client = _test_client()
+    response = client.get("/api/orders/order-123/admin-buyback-preview")
 
-    assert all("admin-buyback" not in path for path in paths)
+    assert response.status_code == 410
+    assert response.json()["detail"] == "Admin buyback is retired. GTEX does not buy player shares from users."
+
+
+def test_admin_buyback_execution_is_retired() -> None:
+    client = _test_client()
+    response = client.post("/api/orders/order-123/admin-buyback")
+
+    assert response.status_code == 410
+    assert response.json()["detail"] == "Admin buyback is retired. GTEX does not buy player shares from users."
 
 
 def test_player_order_creation_remains_retired() -> None:
