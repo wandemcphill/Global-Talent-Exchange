@@ -24,6 +24,7 @@ class PlayerShareMarket(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     total_shares: Mapped[int] = mapped_column(Integer, nullable=False, default=1000, server_default="1000")
+    released_shares: Mapped[int | None] = mapped_column(Integer, nullable=True)
     circulating_shares: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     share_price_coin: Mapped[Decimal] = mapped_column(
         Numeric(18, 4),
@@ -46,6 +47,12 @@ class PlayerShareMarket(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     def liquidity_coin(self) -> Decimal:
         raw_value = (self.metadata_json or {}).get("liquidity_coin", "0.0000")
         return Decimal(str(raw_value or "0.0000")).quantize(Decimal("0.0001"))
+
+    @property
+    def primary_available_shares(self) -> int | None:
+        if self.released_shares is None:
+            return None
+        return max(0, int(self.released_shares) - int(self.circulating_shares or 0))
 
 
 class PlayerShareHolding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
