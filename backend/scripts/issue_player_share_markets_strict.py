@@ -28,10 +28,6 @@ _spec = importlib.util.spec_from_file_location("player_share_issuance_plan", SCR
 if _spec is None or _spec.loader is None:
     raise RuntimeError(f"Unable to load issuance planner: {SCRIPT_PATH}")
 _planner = importlib.util.module_from_spec(_spec)
-# Dataclasses resolve KW_ONLY / forward references via sys.modules.get(cls.__module__),
-# so a dynamically loaded module must be registered before exec_module runs -- Python
-# 3.14 raises AttributeError: 'NoneType' object has no attribute '__dict__' on the very
-# first frozen/slots dataclass in the module (IssuancePlan) otherwise.
 sys.modules[_spec.name] = _planner
 _spec.loader.exec_module(_planner)
 
@@ -120,6 +116,7 @@ def main() -> int:
                         "tier": plan.tier,
                         "status": plan.status,
                         "total_shares": plan.total_shares,
+                        "released_shares": plan.initial_circulating_cap,
                         "share_price_coin": str(plan.share_price_coin),
                         "liquidity_coin": str(plan.liquidity_coin),
                         "mode": "dry_run",
@@ -136,16 +133,25 @@ def main() -> int:
                     liquidity_coin=plan.liquidity_coin,
                     status=plan.status,
                 )
+                market.released_shares = int(plan.initial_circulating_cap)
                 market.metadata_json = {
                     **(market.metadata_json or {}),
                     "issuance_tier": plan.tier,
                     "initial_circulating_cap": plan.initial_circulating_cap,
+                    "initial_released_shares": plan.initial_circulating_cap,
                     "initial_mm_inventory_target": plan.initial_mm_inventory_target,
                     "bulk_issuance_policy": Path(args.policy_path).name,
                     "issuance_runner": Path(__file__).name,
                 }
                 report["counts"]["created"] += 1
-                report["created"].append({"player_id": player.id, "market_id": market.id, "tier": plan.tier})
+                report["created"].append(
+                    {
+                        "player_id": player.id,
+                        "market_id": market.id,
+                        "tier": plan.tier,
+                        "released_shares": int(market.released_shares),
+                    }
+                )
             except PlayerTokenMarketError as exc:
                 report["counts"]["failed"] += 1
                 report["failed"].append({"player_id": player.id, "reason": exc.reason, "detail": exc.detail})
