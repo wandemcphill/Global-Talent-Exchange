@@ -50,8 +50,8 @@ run_redacted() {
   "$@" >"$RUN_LOG" 2>&1
   local code=$?
   sed -E \
-    -e 's#(postgres(ql)?://)[^[:space:]"'"'<>]+#\1<redacted-database-url>#g' \
-    -e 's#([?&](api[_-]?token|access[_-]?token|token|key)=)[^&[:space:]"'"'<>]+#\1<redacted>#gi' \
+    -e 's#(postgres(ql)?://)[^[:space:]"<>]+#\1<redacted-database-url>#g' \
+    -e 's#([?&](api[_-]?token|access[_-]?token|token|key)=)[^&[:space:]"<>]+#\1<redacted>#gi' \
     -e 's#("(SPORTMONKS_API_TOKEN|DATABASE_URL|GTE_DATABASE_URL)"[[:space:]]*:[[:space:]]*")[^"]+"#\1<redacted>"#g' \
     "$RUN_LOG"
   return "$code"
