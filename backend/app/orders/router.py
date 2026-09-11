@@ -7,8 +7,6 @@ from app.auth.dependencies import get_current_user, get_session
 from app.matching.service import InvalidOrderTransitionError, OrderBookSnapshot
 from app.models.user import User
 from app.orders.schemas import (
-    AdminBuybackExecutionView,
-    AdminBuybackPreviewView,
     OrderBookLevelView,
     OrderBookView,
     OrderCreateRequest,
@@ -19,7 +17,6 @@ from app.orders.schemas import (
 )
 from app.orders.models import OrderStatus
 from app.orders.service import (
-    AdminBuybackError,
     OrderNotFoundError,
     OrderPlacementError,
     OrderService,
@@ -121,16 +118,7 @@ def place_order(
     """Retired: the order book is no longer the player-share trading venue.
 
     System A (PlayerShareMarket / PlayerShareHolding) is the canonical player
-    economy, and it is where every issued market and every user position lives.
-    The order book could never fill against it - production issuance credits
-    ``circulating_shares`` while only a settled execution credits a
-    ``position:{user}:{player}`` unit - so accepting new orders here only parked
-    a user's coin against something that could not execute.
-
-    Only creation is gone. Every read path, cancellation and the admin buyback
-    flow still work, so historical records stay readable and any open order can
-    still be closed. ``OrderService`` itself is untouched and remains available
-    to the simulation harness, admin tooling and historical settlement.
+    economy. New player-share trades belong on /market/buy and /market/sell.
     """
     del payload, session, request
     raise HTTPException(
@@ -194,57 +182,6 @@ def cancel_order(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return _build_order_view(service, session, order)
-
-
-@legacy_router.get("/{order_id}/admin-buyback-preview", response_model=AdminBuybackPreviewView)
-@api_router.get("/{order_id}/admin-buyback-preview", response_model=AdminBuybackPreviewView)
-def preview_admin_buyback(
-    order_id: str,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-    request: Request = None,
-) -> AdminBuybackPreviewView:
-    service = _build_order_service(request)
-    try:
-        preview = service.preview_admin_buyback(session, order_id=order_id, user=current_user)
-    except OrderNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except AdminBuybackError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return AdminBuybackPreviewView.model_validate(preview)
-
-
-@legacy_router.post("/{order_id}/admin-buyback", response_model=AdminBuybackExecutionView)
-@api_router.post("/{order_id}/admin-buyback", response_model=AdminBuybackExecutionView)
-def execute_admin_buyback(
-    order_id: str,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-    request: Request = None,
-) -> AdminBuybackExecutionView:
-    service = _build_order_service(request)
-    try:
-        execution = service.execute_admin_buyback(session, order_id=order_id, user=current_user)
-        session.commit()
-        session.refresh(execution.order)
-    except OrderNotFoundError as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except (AdminBuybackError, OrderPlacementError) as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except (InvalidOrderTransitionError, LedgerError) as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-
-    return AdminBuybackExecutionView(
-        preview=AdminBuybackPreviewView.model_validate(execution.preview),
-        order=_build_order_view(service, session, execution.order),
-        quantity=execution.quantity,
-        unit_price=execution.unit_price,
-        total=execution.total,
-        executed_at=execution.executed_at,
-    )
 
 
 router.include_router(legacy_router)
