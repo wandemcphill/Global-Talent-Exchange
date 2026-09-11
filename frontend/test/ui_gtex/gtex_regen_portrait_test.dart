@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../lib/ui_gtex/football/gtex_regen_portrait.dart';
 
-gvoid main() {
+void main() {
   testWidgets('renders a Cloudinary regen face-bank portrait URL', (
     WidgetTester tester,
   ) async {
