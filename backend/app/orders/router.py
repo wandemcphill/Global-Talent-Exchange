@@ -184,5 +184,25 @@ def cancel_order(
     return _build_order_view(service, session, order)
 
 
+@legacy_router.get("/{order_id}/admin-buyback-preview", include_in_schema=False)
+@api_router.get("/{order_id}/admin-buyback-preview", include_in_schema=False)
+def preview_admin_buyback_retired(order_id: str) -> None:
+    del order_id
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Admin buyback is retired. GTEX does not buy player shares from users.",
+    )
+
+
+@legacy_router.post("/{order_id}/admin-buyback", include_in_schema=False)
+@api_router.post("/{order_id}/admin-buyback", include_in_schema=False)
+def execute_admin_buyback_retired(order_id: str) -> None:
+    del order_id
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Admin buyback is retired. GTEX does not buy player shares from users.",
+    )
+
+
 router.include_router(legacy_router)
 router.include_router(api_router)
