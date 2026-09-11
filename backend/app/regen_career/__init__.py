@@ -6,10 +6,13 @@ from .clock import (
     RegenRetirementInputs,
     RetirementPressureBand,
 )
+from .policy_service import RegenCareerPolicyContext, RegenCareerPolicyService
 
 __all__ = [
     "RegenCareerAssessment",
     "RegenCareerClock",
+    "RegenCareerPolicyContext",
+    "RegenCareerPolicyService",
     "RegenRetirementInputs",
     "RetirementPressureBand",
 ]
