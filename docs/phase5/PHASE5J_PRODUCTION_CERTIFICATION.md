@@ -8,7 +8,7 @@
 
 - Canonical production branch: `main`.
 - Phase 5G realized P/L accounting is merged.
-- Phase 5H admin-buyback boundary is documented and intentionally blocks executable System A buyback until authoritative platform-liquidity funding semantics are proven.
+- Phase 5H is now a product retirement decision: GTEX does not buy player shares from users and exposes no admin-funded exit path.
 - Phase 5I historical-repair boundary is merged as a read-only, no-write contract.
 
 ## Production deployment evidence
@@ -26,7 +26,7 @@ A live Render signal also shows the `gtex-player-ingestion-worker` is suspended 
 3. Player-share trading is routed through System A rather than the retired System B order-book path.
 4. Matchday performance changes published player valuation, while tradable `share_price_coin` remains economically separate.
 5. Lifecycle freshness and historical-accounting paths fail closed when evidence is missing.
-6. Phase 5H explicitly prohibits synthetic System B orders and unbalanced credit-only buybacks.
+6. Phase 5H explicitly removes admin buyback from supported product routes and prohibits synthetic System B exits.
 7. Phase 5I explicitly prohibits historical cost-basis reconstruction from present-day holdings, current share price, or current valuation.
 
 ## Certification gates
@@ -63,9 +63,9 @@ The first Phase 5I implementation is explicitly read-only and classifies evidenc
 
 ### Gate F — Admin buyback
 
-Executable System A buyback is not certified. Funding must be a named, balanced Coin-denominated liquidity account before implementation.
+Admin buyback is not a launch capability and is not part of the canonical player-share exit contract. GTEX does not act as the buyer of last resort.
 
-**Status: BLOCKED by accounting policy/funding-source proof.**
+**Status: RETIRED.**
 
 ### Gate G — Production worker continuity
 
@@ -88,10 +88,9 @@ The repository contains Quality Gates, Phase A Economic Regressions, Final Platf
 - Healthy player ingestion worker with a successful fresh ingestion cycle.
 - Production certification of the KoraPay/payment callback surface where applicable.
 - Resolution or explicit classification of the current GitHub release-gate failures.
-- A named, balanced admin-buyback liquidity account before Phase 5H runtime implementation.
 
 ## Final decision
 
 **GTEX is not yet production-certified.**
 
-The software architecture and major Phase 5 economic contracts are materially hardened, but certification stops at the boundary where production database evidence, worker health, and authoritative admin-liquidity semantics are required. No data mutation, historical repair, or synthetic trading path should be introduced merely to manufacture a green certification result.
+The software architecture and major Phase 5 economic contracts are materially hardened, but certification stops at the boundary where production database evidence and worker health are required. No data mutation, historical repair, admin-funded exit path, or synthetic trading path should be introduced merely to manufacture a green certification result.

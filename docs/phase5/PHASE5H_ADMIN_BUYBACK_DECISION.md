@@ -1,42 +1,53 @@
-# Phase 5H — Admin Buyback Decision Boundary
-
-## Current state
-
-The existing admin buyback implementation is attached to the retired System B order-book domain (`Order`, `TradeExecution`, order reservations, and `MatchingService`). System A is now the canonical player-share economy (`PlayerShareMarket`, `PlayerShareHolding`, `PlayerTokenMarketService`).
-
-## Safe conclusions
-
-- Existing `/orders/{order_id}/admin-buyback-preview` and `/orders/{order_id}/admin-buyback` cannot be the canonical System A exit path because both require an `Order`.
-- Creating a synthetic System B order solely to reuse these methods would reintroduce the retired trading venue.
-- A System A admin buyback must operate from `PlayerShareHolding` and settle against a defined platform/admin liquidity source.
-- User ownership must be reduced atomically with the payout, with a balanced ledger transaction and a canonical player-share event.
-- Fallback/admin pricing must remain distinct from the tradable `share_price_coin`.
-- An admin exit must not mutate `share_price_coin` merely because the exit occurred.
-
-## Blocking accounting decision
-
-The repository does not currently expose a clearly authoritative System A funding account for admin buybacks. The generic `credit_trade_proceeds()` helper cannot safely be assumed to represent an approved admin-liquidity debit without proving its balancing account and accounting policy.
-
-Therefore Phase 5H must not mint payout liquidity by calling a credit helper without a corresponding source posting.
-
-## Required executable contract
-
-1. Canonical input: authenticated user + player + quantity against `PlayerShareHolding`.
-2. Eligibility: KYC, integrity, minimum-hold, country and policy checks remain explicit and fail closed.
-3. Pricing: an explicit fallback/admin buyback price, separate from `share_price_coin`.
-4. Funding: a named and balanced Coin-denominated system liquidity account with explicit debit/credit postings.
-5. Settlement: one atomic transaction that reduces the holding, moves platform liquidity, credits user Coin, and records a `PlayerShareEvent` with settlement metadata.
-6. Idempotency: required on execution.
-7. History: buyback must appear as a canonical player-share exit event without creating a System B order.
-8. Realized P/L: the Phase 5G calculator must include the buyback event under the same accounting rules or explicitly return unavailable. No silent special case.
-
-## Out of scope
-
-- Rehoming old System B orders into System A.
-- Creating synthetic orders for compatibility.
-- Historical P/L backfill.
-- Changing tradable share price because of an admin exit.
+# Phase 5H — Retire Admin Buyback
 
 ## Decision
 
-**Do not ship an executable System A admin buyback until the authoritative liquidity/funding account and its ledger semantics are identified and tested.** The existing System B buyback remains legacy tooling only.
+GTEX will **not buy player shares from users**. The platform is a marketplace operator, not the buyer of last resort.
+
+The canonical player-share economy is System A (`PlayerShareMarket`, `PlayerShareHolding`, `PlayerTokenMarketService`). Users may buy and sell through the canonical market. GTEX does not promise an admin-funded exit when market liquidity is unavailable.
+
+## What this retires
+
+- Admin buyback is removed from the product surface.
+- `/orders/{order_id}/admin-buyback-preview` is no longer a supported route and now returns HTTP 410.
+- `/orders/{order_id}/admin-buyback` is no longer a supported route and now returns HTTP 410.
+- The portfolio/order detail UI no longer presents an admin fallback sale.
+- Synthetic System B orders are prohibited for any future exit flow.
+
+## What remains
+
+Legacy System B order and buyback implementation may remain in the repository temporarily for historical inspection, simulation fixtures, or controlled migration work. It is **not a supported player-share exit path** and must not be reintroduced into product routes.
+
+Admin remains a market governor, not a counterparty. Admin controls may still:
+
+- suspend or halt a market;
+- retire or disable a player listing;
+- investigate abuse or corrupted state;
+- correct integrity issues through an explicitly audited repair process.
+
+Those controls do not purchase, assume, or liquidate a user's player shares.
+
+## Exit and liquidity contract
+
+GTEX must not describe a player-share position as instantly liquid or imply that the platform will always provide a buyer. Product copy should distinguish:
+
+- **tradable:** the market currently accepts a sell action;
+- **filled:** a sell actually matched or settled;
+- **liquidity unavailable:** there is no guaranteed immediate counterparty.
+
+A future liquidity improvement may add better discovery, matching, market-making, or external counterparties. Such work must use System A and must not resurrect the retired System B venue.
+
+## Accounting boundary
+
+Removing admin buyback removes the need for an admin-liquidity funding account, payout band, P2P-priority timer, or admin buyback ledger settlement. These concepts are not part of the canonical player-share contract.
+
+Phase 5G realized P/L continues to account only for canonical player-share events. No special admin-buyer accounting branch is required for the launch economy.
+
+## Acceptance criteria
+
+1. No supported backend route can execute an admin buyback.
+2. No supported frontend surface offers an admin buyback or "quick exit".
+3. Canonical buy/sell remains System A only.
+4. No synthetic `Order` is created to emulate a player-share exit.
+5. Product copy does not promise platform-funded liquidity.
+6. Historical System B code is clearly treated as legacy and cannot silently become the live player-share venue.
