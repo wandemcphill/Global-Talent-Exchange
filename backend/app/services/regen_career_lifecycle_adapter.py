@@ -148,6 +148,7 @@ def _policy_sync(
         state["retirement_pressure_band"] = "unknown"
         state["expected_longevity_months"] = None
         state["retirement_watch"] = False
+        state["retirement_decision_eligible"] = False
         state["eligible_for_retirement_decision"] = False
         state["policy_drivers"] = []
         state["retirement_drivers"] = []
