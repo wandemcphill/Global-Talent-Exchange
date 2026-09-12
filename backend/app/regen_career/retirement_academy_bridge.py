@@ -48,8 +48,7 @@ class RegenRetirementAcademyBridge:
         )
         if existing_run is not None:
             prospect_ids = tuple(
-                str(item)
-                for item in dict(existing_run.metadata_json or {}).get("legacy_prospect_ids", [])
+                str(item) for item in dict(existing_run.metadata_json or {}).get("legacy_prospect_ids", [])
             )
             return RetirementAcademyBridgeResult(
                 status="completed",
@@ -82,9 +81,7 @@ class RegenRetirementAcademyBridge:
         if len(prospect_ids) != count:
             raise RuntimeError("Academy generator did not create the requested successor count")
 
-        for prospect in self.session.scalars(
-            select(AcademyProspect).where(AcademyProspect.id.in_(prospect_ids))
-        ).all():
+        for prospect in self.session.scalars(select(AcademyProspect).where(AcademyProspect.id.in_(prospect_ids))).all():
             prospect.current_ability = max(int(prospect.current_ability), effective_quality_floor)
             prospect.potential = max(int(prospect.potential), effective_quality_floor, int(prospect.current_ability))
             prospect.metadata_json = {

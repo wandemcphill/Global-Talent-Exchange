@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 import pytest
 from sqlalchemy import select
@@ -8,24 +7,20 @@ from app.club_growth.schemas import AcademyGenerateProspectsRequest
 
 from app.common.enums.academy_player_status import AcademyPlayerStatus
 from app.ingestion.models import Player
-from app.models.club_growth import AcademyProfile, AcademyProspect
-from app.models.club_infra import ClubFacility
+from app.models.club_growth import AcademyProspect
 from app.models.club_profile import ClubProfile
-from app.models.regen import RegenProfile
 from app.models.user import User
 from app.models.wallet import LedgerUnit
 from app.regen_career.clock import RegenCareerClock, RegenRetirementInputs
 from app.regen_career.retirement_academy_bridge import RegenRetirementAcademyBridge
 from app.schemas.academy_core import AcademyPlayerView
-from app.schemas.club_ops_requests import CreateAcademyPlayerRequest, UpdateAcademyPlayerRequest
+from app.schemas.club_ops_requests import UpdateAcademyPlayerRequest
 from app.services.academy_facility_economy_service import (
     AcademyFacilityEconomyService,
-    FacilityEconomyError,
     calculate_completion_seasons,
     calculate_upgrade_cost,
 )
 from app.services.academy_progression_service import AcademyProgressionService
-from app.services.academy_service import AcademyService
 from app.club_growth.service import ClubGrowthError, ClubGrowthService
 from app.wallets.service import WalletService
 from tests.regen_universe_support import build_regen_universe_session
@@ -33,6 +28,7 @@ from tests.regen_universe_support import build_regen_universe_session
 
 def _seed_test_club_and_owner(session, prefix: str = "test-6e") -> tuple[ClubProfile, User]:
     from app.models.base import Base
+
     Base.metadata.create_all(session.get_bind())
 
     owner = User(
@@ -117,15 +113,11 @@ def test_facility_progression_across_seasons() -> None:
         assert facility.training_level == 1
         assert "training" in facility.in_progress_upgrades_json
 
-        completed_season_1 = service.advance_season_facility_upgrades(
-            club_id=club.id, current_season_number=1
-        )
+        completed_season_1 = service.advance_season_facility_upgrades(club_id=club.id, current_season_number=1)
         assert completed_season_1 == []
         assert facility.training_level == 1
 
-        completed_season_2 = service.advance_season_facility_upgrades(
-            club_id=club.id, current_season_number=2
-        )
+        completed_season_2 = service.advance_season_facility_upgrades(club_id=club.id, current_season_number=2)
         assert completed_season_2 == ["training"]
         assert facility.training_level == 2
         assert "training" not in facility.in_progress_upgrades_json
@@ -160,6 +152,7 @@ def test_academy_quality_and_capacity_calculations() -> None:
 def test_development_effects_are_deterministic() -> None:
     progression_service = AcademyProgressionService()
     from datetime import datetime, timezone
+
     player = AcademyPlayerView(
         id="acpl-test-dev",
         club_id="club-1",
@@ -260,9 +253,9 @@ def test_retirement_legacy_planning_consumes_academy_context() -> None:
         assert result.status == "completed"
         assert len(result.prospect_ids) == 2
 
-        prospects = list(session.scalars(
-            select(AcademyProspect).where(AcademyProspect.id.in_(result.prospect_ids))
-        ).all())
+        prospects = list(
+            session.scalars(select(AcademyProspect).where(AcademyProspect.id.in_(result.prospect_ids))).all()
+        )
         for prospect in prospects:
             assert prospect.current_ability >= 65
             assert prospect.metadata_json.get("facility_quality_score") is not None

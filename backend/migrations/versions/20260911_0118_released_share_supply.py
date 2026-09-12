@@ -47,6 +47,8 @@ def downgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "sqlite":
         op.drop_constraint("ck_player_share_markets_released_not_above_total", "player_share_markets", type_="check")
-        op.drop_constraint("ck_player_share_markets_released_not_below_circulating", "player_share_markets", type_="check")
+        op.drop_constraint(
+            "ck_player_share_markets_released_not_below_circulating", "player_share_markets", type_="check"
+        )
         op.drop_constraint("ck_player_share_markets_released_shares_nonnegative", "player_share_markets", type_="check")
     op.drop_column("player_share_markets", "released_shares")

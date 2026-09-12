@@ -37,10 +37,12 @@ def calculate_upgrade_cost(facility_key: str, target_level: int) -> Decimal:
     """Calculate the escalating Fan Coin investment cost for upgrading a facility."""
     normalized_key = facility_key.strip().lower()
     if normalized_key not in FACILITY_FIELD_MAP:
-        raise FacilityEconomyError(f"Invalid facility key '{facility_key}'. Must be one of {tuple(FACILITY_FIELD_MAP)}.")
+        raise FacilityEconomyError(
+            f"Invalid facility key '{facility_key}'. Must be one of {tuple(FACILITY_FIELD_MAP)}."
+        )
     if target_level <= 1 or target_level > 10:
         raise FacilityEconomyError("Target level must be between 2 and 10.")
-    multiplier = Decimal(str(round(target_level ** 1.6, 4)))
+    multiplier = Decimal(str(round(target_level**1.6, 4)))
     return (BASE_FACILITY_UPGRADE_FANCOIN * multiplier).quantize(Decimal("0.0001"))
 
 
@@ -48,7 +50,9 @@ def calculate_completion_seasons(facility_key: str, target_level: int) -> int:
     """Calculate the GTEX season build duration for completing a facility upgrade."""
     normalized_key = facility_key.strip().lower()
     if normalized_key not in FACILITY_FIELD_MAP:
-        raise FacilityEconomyError(f"Invalid facility key '{facility_key}'. Must be one of {tuple(FACILITY_FIELD_MAP)}.")
+        raise FacilityEconomyError(
+            f"Invalid facility key '{facility_key}'. Must be one of {tuple(FACILITY_FIELD_MAP)}."
+        )
     return 1 + (target_level // 3)
 
 
@@ -105,7 +109,9 @@ class AcademyFacilityEconomyService:
         normalized_key = facility_key.strip().lower()
         attr_name = FACILITY_FIELD_MAP.get(normalized_key)
         if attr_name is None:
-            raise FacilityEconomyError(f"Invalid facility key '{facility_key}'. Must be one of {tuple(FACILITY_FIELD_MAP)}.")
+            raise FacilityEconomyError(
+                f"Invalid facility key '{facility_key}'. Must be one of {tuple(FACILITY_FIELD_MAP)}."
+            )
 
         facility = self.ensure_facility(club_id)
         current_level = int(getattr(facility, attr_name, 1))
