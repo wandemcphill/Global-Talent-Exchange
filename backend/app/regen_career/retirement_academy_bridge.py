@@ -44,18 +44,12 @@ class RegenRetirementAcademyBridge:
             return RetirementAcademyBridgeResult(status="pending", trigger_key=trigger_key)
 
         existing_run = self.session.scalar(
-            select(AcademyGenerationRun).where(
-                AcademyGenerationRun.metadata_json["legacy_trigger_key"].as_string() == trigger_key
-            )
+            select(AcademyGenerationRun).where(AcademyGenerationRun.run_seed == trigger_key)
         )
         if existing_run is not None:
             prospect_ids = tuple(
-                str(row.id)
-                for row in self.session.scalars(
-                    select(AcademyProspect).where(
-                        AcademyProspect.metadata_json["legacy_trigger_key"].as_string() == trigger_key
-                    )
-                ).all()
+                str(item)
+                for item in dict(existing_run.metadata_json or {}).get("legacy_prospect_ids", [])
             )
             return RetirementAcademyBridgeResult(
                 status="completed",
@@ -112,6 +106,7 @@ class RegenRetirementAcademyBridge:
                 "retirement_player_id": plan.get("retiring_player_id"),
                 "successor_quality_floor_gsi": quality_floor,
                 "legacy_generation": True,
+                "legacy_prospect_ids": list(prospect_ids),
             }
 
         return RetirementAcademyBridgeResult(
