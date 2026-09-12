@@ -104,27 +104,29 @@ def _policy_sync(
     except (ValueError, KeyError):
         policy_context = None
 
+    if policy_context is None or policy_context.assessment.virtual_age_months is None:
+        existing_career_state = dict((regen.metadata_json or {}).get("career_state") or {})
+        existing_career_state["virtual_age_months"] = None
+        existing_career_state["retirement_policy_status"] = "age_unknown"
+        self._set_regen_career_state(regen, existing_career_state)
+
     original_settings = self.settings
     original_generated_at = regen.generated_at
     try:
-        if policy_context is None:
+        if policy_context is None or policy_context.assessment.virtual_age_months is None:
             regen_config = replace(self.settings.regen_generation, regen_lifecycle_retirement_months=10**9)
             self.settings = replace(self.settings, regen_generation=regen_config)
         else:
             age_months = policy_context.assessment.virtual_age_months
-            if age_months is None:
-                regen_config = replace(self.settings.regen_generation, regen_lifecycle_retirement_months=10**9)
-                self.settings = replace(self.settings, regen_generation=regen_config)
-            else:
-                regen_date = _subtract_months(reference_on, age_months)
-                regen.generated_at = datetime.combine(regen_date, original_generated_at.timetz())
-                regen_config = replace(
-                    self.settings.regen_generation,
-                    regen_lifecycle_retirement_months=(
-                        0 if policy_context.assessment.eligible_for_retirement_decision else 10**9
-                    ),
-                )
-                self.settings = replace(self.settings, regen_generation=regen_config)
+            regen_date = _subtract_months(reference_on, age_months)
+            regen.generated_at = datetime.combine(regen_date, original_generated_at.timetz())
+            regen_config = replace(
+                self.settings.regen_generation,
+                regen_lifecycle_retirement_months=(
+                    0 if policy_context.assessment.eligible_for_retirement_decision else 10**9
+                ),
+            )
+            self.settings = replace(self.settings, regen_generation=regen_config)
 
         state = _ORIGINAL_SYNC(
             self,

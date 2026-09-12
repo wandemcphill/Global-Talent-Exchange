@@ -20,29 +20,25 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "player_share_markets",
-        sa.Column("released_shares", sa.Integer(), nullable=True),
-    )
-    op.create_check_constraint(
-        "ck_player_share_markets_released_shares_nonnegative",
-        "player_share_markets",
-        "released_shares IS NULL OR released_shares >= 0",
-    )
-    op.create_check_constraint(
-        "ck_player_share_markets_released_not_below_circulating",
-        "player_share_markets",
-        "released_shares IS NULL OR released_shares >= circulating_shares",
-    )
-    op.create_check_constraint(
-        "ck_player_share_markets_released_not_above_total",
-        "player_share_markets",
-        "released_shares IS NULL OR released_shares <= total_shares",
-    )
+    with op.batch_alter_table("player_share_markets") as batch_op:
+        batch_op.add_column(sa.Column("released_shares", sa.Integer(), nullable=True))
+        batch_op.create_check_constraint(
+            "ck_player_share_markets_released_shares_nonnegative",
+            "released_shares IS NULL OR released_shares >= 0",
+        )
+        batch_op.create_check_constraint(
+            "ck_player_share_markets_released_not_below_circulating",
+            "released_shares IS NULL OR released_shares >= circulating_shares",
+        )
+        batch_op.create_check_constraint(
+            "ck_player_share_markets_released_not_above_total",
+            "released_shares IS NULL OR released_shares <= total_shares",
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_player_share_markets_released_not_above_total", "player_share_markets", type_="check")
-    op.drop_constraint("ck_player_share_markets_released_not_below_circulating", "player_share_markets", type_="check")
-    op.drop_constraint("ck_player_share_markets_released_shares_nonnegative", "player_share_markets", type_="check")
-    op.drop_column("player_share_markets", "released_shares")
+    with op.batch_alter_table("player_share_markets") as batch_op:
+        batch_op.drop_constraint("ck_player_share_markets_released_not_above_total", type_="check")
+        batch_op.drop_constraint("ck_player_share_markets_released_not_below_circulating", type_="check")
+        batch_op.drop_constraint("ck_player_share_markets_released_shares_nonnegative", type_="check")
+        batch_op.drop_column("released_shares")

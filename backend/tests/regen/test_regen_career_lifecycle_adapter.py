@@ -112,3 +112,80 @@ def test_virtual_age_unavailable_prevents_retirement() -> None:
         assert regen.metadata_json["career_state"].get("retirement_decision_eligible") is False
     finally:
         session.close()
+
+
+def test_already_retired_player_preserves_retired_state_and_legacy_plan_on_resync() -> None:
+    from datetime import datetime, timezone
+
+    from app.ingestion.models import Player
+    from app.models.base import Base
+    from app.models.regen import RegenProfile
+    from app.services.player_lifecycle_service import PlayerLifecycleService
+    from tests.regen_universe_support import build_regen_universe_session
+
+    session = build_regen_universe_session()
+    Base.metadata.create_all(session.get_bind())
+    try:
+        player = Player(
+            id="test-retired-player",
+            source_provider="manual",
+            provider_external_id="ext-retired-player",
+            first_name="Retired",
+            last_name="Legend",
+            full_name="Retired Legend Player",
+            position="CB",
+            date_of_birth=date(1990, 1, 1),
+            is_tradable=False,
+        )
+        regen = RegenProfile(
+            id="regen-retired-legend",
+            regen_id="RGN-RETIRED-LEGEND",
+            player_id=player.id,
+            linked_unique_card_id="card-retired-legend",
+            generated_for_club_id="club-1",
+            birth_country_code="NG",
+            primary_position="CB",
+            secondary_positions_json=[],
+            generated_at=datetime(2020, 1, 1, 12, 0, tzinfo=timezone.utc),
+            current_gsi=88,
+            scout_confidence="high",
+            generation_source="academy",
+            status="retired",
+            metadata_json={
+                "career_state": {
+                    "virtual_age_months": 420,
+                    "lifecycle_age_months": 420,
+                    "career_stage": "late_career",
+                    "retirement_pressure": False,
+                    "retirement_pressure_band": "decision",
+                    "expected_longevity_months": 0,
+                    "retirement_watch": True,
+                    "retirement_decision_eligible": True,
+                    "eligible_for_retirement_decision": True,
+                    "policy_drivers": ["virtual_age"],
+                    "retirement_drivers": ["virtual_age"],
+                    "retirement_policy_status": "assessed",
+                    "retirement_policy": "phase6_dynamic",
+                    "lifecycle_phase": "retired",
+                    "retired": True,
+                    "retired_on": "2025-01-01",
+                    "previous_club_id": "club-1",
+                }
+            },
+        )
+        session.add_all([player, regen])
+        session.flush()
+
+        service = PlayerLifecycleService(session)
+        summary = service.get_regen_summary(player.id, on_date=date(2025, 6, 1))
+
+        assert summary is not None
+        assert summary.retired is True
+        assert summary.lifecycle_phase == "retired"
+
+        career_state = regen.metadata_json.get("career_state", {})
+        assert career_state.get("retired") is True
+        assert career_state.get("lifecycle_phase") == "retired"
+        assert career_state.get("retired_on") == "2025-01-01"
+    finally:
+        session.close()
