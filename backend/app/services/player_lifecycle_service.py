@@ -75,7 +75,6 @@ from app.schemas.player_lifecycle import (
     RegenBidResolutionView,
     RegenContractOfferMarketView,
     RegenContractOfferQuoteRequest,
-    RegenContractOfferView,
     RegenLifecycleView,
     RegenPressureResolutionRequest,
     RegenPressureStateView,
@@ -100,9 +99,7 @@ from app.schemas.player_agency import ContractDecisionRequest, TransferDecisionR
 from app.services.player_agency_context_service import clamp
 from app.services.team_dynamics_service import TeamDynamicsService
 from app.services.regen_transfer_addon import (
-    AUTO_CONVERSION_PREMIUM_BPS,
     BigClubApproachInputs,
-    ContractOfferScoreInputs,
     TeamDynamicsInputs,
     TransferPressureInputs,
     build_team_dynamics,
@@ -113,12 +110,11 @@ from app.services.regen_transfer_addon import (
     quote_conversion,
     render_transfer_headline,
     resolution_for_event,
-    score_contract_offer,
     unresolved_days_since,
 )
 from app.services.player_agency_service import PlayerAgencyService
 from app.story_feed_engine.service import StoryFeedService
-from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.wallets.service import LedgerPosting, WalletService
 
 CONTRACT_EXPIRING_SOON_DAYS = 90
 DEFAULT_INJURY_RECOVERY_DAYS: dict[InjurySeverity, int] = {
@@ -256,7 +252,9 @@ class PlayerLifecycleService:
         statement = select(PlayerLifecycleEvent).where(PlayerLifecycleEvent.player_id == player_id)
         if event_types:
             statement = statement.where(PlayerLifecycleEvent.event_type.in_(event_types))
-        statement = statement.order_by(PlayerLifecycleEvent.occurred_on.desc(), PlayerLifecycleEvent.created_at.desc()).limit(limit)
+        statement = statement.order_by(
+            PlayerLifecycleEvent.occurred_on.desc(), PlayerLifecycleEvent.created_at.desc()
+        ).limit(limit)
         return list(self.session.scalars(statement))
 
     def list_transfer_windows(
@@ -305,7 +303,8 @@ class PlayerLifecycleService:
         active_contracts = [
             contract
             for contract in self.get_club_contracts(club_id)
-            if self._resolve_contract_status(contract, reference_on=reference_on) in {ContractStatus.ACTIVE, ContractStatus.EXPIRING}
+            if self._resolve_contract_status(contract, reference_on=reference_on)
+            in {ContractStatus.ACTIVE, ContractStatus.EXPIRING}
         ]
         if not active_contracts:
             return ()
@@ -327,7 +326,9 @@ class PlayerLifecycleService:
                 reason = f"injured until {(self._resolve_unavailable_until(active_injury) or reference_on).isoformat()}"
             elif active_suspension is not None:
                 available = False
-                reason = f"suspended until {(active_suspension.effective_to or active_suspension.occurred_on).isoformat()}"
+                reason = (
+                    f"suspended until {(active_suspension.effective_to or active_suspension.occurred_on).isoformat()}"
+                )
             else:
                 available = True
                 reason = None
@@ -399,7 +400,9 @@ class PlayerLifecycleService:
                     },
                     notes=bid.notes,
                 )
-            contract.status = self._resolve_new_contract_status(contract.starts_on, contract.ends_on, reference_on=reference_on).value
+            contract.status = self._resolve_new_contract_status(
+                contract.starts_on, contract.ends_on, reference_on=reference_on
+            ).value
             bid.status = TransferBidStatus.COMPLETED.value
             terms.setdefault("completed_on", reference_on.isoformat())
             bid.structured_terms_json = terms
@@ -438,7 +441,9 @@ class PlayerLifecycleService:
 
         current_contract = self._select_current_contract(contracts, reference_on=reference_on)
         managed_club = self._get_club_profile(
-            current_contract.club_id if current_contract is not None and current_contract.club_id else player.current_club_profile_id
+            current_contract.club_id
+            if current_contract is not None and current_contract.club_id
+            else player.current_club_profile_id
         )
         seasonal_progression = self._build_season_progression(player, career_entries)
 
@@ -450,9 +455,15 @@ class PlayerLifecycleService:
                 if current_contract is not None and current_contract.club_id
                 else player.current_club_profile_id or player.current_club_id
             ),
-            current_club_name=managed_club.club_name if managed_club is not None else (player.current_club.name if player.current_club is not None else None),
+            current_club_name=(
+                managed_club.club_name
+                if managed_club is not None
+                else (player.current_club.name if player.current_club is not None else None)
+            ),
             current_competition_id=player.current_competition_id,
-            current_competition_name=player.current_competition.name if player.current_competition is not None else None,
+            current_competition_name=(
+                player.current_competition.name if player.current_competition is not None else None
+            ),
             totals=self._build_career_totals(player, career_entries, progression=seasonal_progression),
             seasonal_progression=seasonal_progression,
             injury_summary=self._build_injury_summary(injuries, reference_on=reference_on),
@@ -504,15 +515,11 @@ class PlayerLifecycleService:
         available = active_injury is None and active_suspension is None
         if active_suspension is not None:
             status_reason = (
-                f"Suspended until {suspended_until.isoformat()}"
-                if suspended_until is not None
-                else "Suspended"
+                f"Suspended until {suspended_until.isoformat()}" if suspended_until is not None else "Suspended"
             )
         elif active_injury is not None:
             status_reason = (
-                f"Injured until {unavailable_until.isoformat()}"
-                if unavailable_until is not None
-                else "Injured"
+                f"Injured until {unavailable_until.isoformat()}" if unavailable_until is not None else "Injured"
             )
         else:
             status_reason = None
@@ -577,7 +584,11 @@ class PlayerLifecycleService:
             eligible=eligible,
             reason=reason,
             last_bid_status=TransferBidStatus(last_bid.status) if last_bid is not None else None,
-            outside_window_exempt=bool((last_bid.structured_terms_json or {}).get("outside_window_exempt")) if last_bid is not None else False,
+            outside_window_exempt=(
+                bool((last_bid.structured_terms_json or {}).get("outside_window_exempt"))
+                if last_bid is not None
+                else False
+            ),
         )
 
     def get_player_overview(
@@ -604,10 +615,7 @@ class PlayerLifecycleService:
             contract_badge=self._build_contract_badge(career_summary.contract_summary),
             transfer_status=transfer_status,
             regen_summary=regen_summary,
-            recent_events=tuple(
-                self.to_event_view(event)
-                for event in self.list_events(player_id, limit=event_limit)
-            ),
+            recent_events=tuple(self.to_event_view(event) for event in self.list_events(player_id, limit=event_limit)),
         )
 
     def get_player_lifecycle_snapshot(
@@ -665,12 +673,22 @@ class PlayerLifecycleService:
         projected_ceiling = int((regen.potential_range_json or {}).get("maximum", regen.current_gsi))
         current_ceiling = int((regen.current_ability_range_json or {}).get("maximum", regen.current_gsi))
         training_state = self._regen_training_state(regen)
-        club_id_for_caps = contract_summary.active_contract.club_id if contract_summary and contract_summary.active_contract else player.current_club_profile_id
-        pressure_state = self._ensure_pressure_state(player, regen, reference_on=reference_on, contract_summary=contract_summary)
+        club_id_for_caps = (
+            contract_summary.active_contract.club_id
+            if contract_summary and contract_summary.active_contract
+            else player.current_club_profile_id
+        )
+        pressure_state = self._ensure_pressure_state(
+            player, regen, reference_on=reference_on, contract_summary=contract_summary
+        )
         offer_market = self._ensure_offer_visibility_state(
             regen,
             reference_on=reference_on,
-            current_salary=contract_summary.active_contract.wage_amount if contract_summary and contract_summary.active_contract else Decimal("0.0000"),
+            current_salary=(
+                contract_summary.active_contract.wage_amount
+                if contract_summary and contract_summary.active_contract
+                else Decimal("0.0000")
+            ),
         )
         dynamics = self._sync_team_dynamics_effect(player, regen, pressure_state, reference_on=reference_on)
         self.session.commit()
@@ -678,7 +696,9 @@ class PlayerLifecycleService:
             regen_id=regen.regen_id,
             status=regen.status,
             lifecycle_phase=str(state.get("lifecycle_phase", "development")),
-            lifecycle_age_months=int(state.get("lifecycle_age_months", 0)),
+            lifecycle_age_months=(
+                int(state["lifecycle_age_months"]) if state.get("lifecycle_age_months") is not None else None
+            ),
             contract_currency="FanCoin",
             retirement_pressure=bool(state.get("retirement_pressure", False)),
             retired=bool(state.get("retired", False)),
@@ -694,7 +714,11 @@ class PlayerLifecycleService:
                 current_ceiling=current_ceiling,
                 major_used_count=int(training_state.get("major_used_count", 0)),
                 minor_used_count=int(training_state.get("minor_used_count", 0)),
-                cooldown_until=date.fromisoformat(training_state["cooldown_until"]) if training_state.get("cooldown_until") else None,
+                cooldown_until=(
+                    date.fromisoformat(training_state["cooldown_until"])
+                    if training_state.get("cooldown_until")
+                    else None
+                ),
                 club_season_slots_used=self._count_regen_special_training_for_club(
                     club_id_for_caps,
                     season_label=self._season_label(reference_on),
@@ -732,7 +756,11 @@ class PlayerLifecycleService:
         visibility = self._ensure_offer_visibility_state(
             regen,
             reference_on=reference_on,
-            current_salary=contract_summary.active_contract.wage_amount if contract_summary and contract_summary.active_contract else Decimal("0.0000"),
+            current_salary=(
+                contract_summary.active_contract.wage_amount
+                if contract_summary and contract_summary.active_contract
+                else Decimal("0.0000")
+            ),
         )
         self.session.commit()
         return self._to_regen_offer_market_view(visibility)
@@ -762,13 +790,21 @@ class PlayerLifecycleService:
         visibility = self._ensure_offer_visibility_state(
             regen,
             reference_on=effective_date,
-            current_salary=contract_summary.active_contract.wage_amount if contract_summary and contract_summary.active_contract else Decimal("0.0000"),
+            current_salary=(
+                contract_summary.active_contract.wage_amount
+                if contract_summary and contract_summary.active_contract
+                else Decimal("0.0000")
+            ),
         )
         if payload.offered_salary_fancoin_per_year < visibility.minimum_salary_fancoin_per_year:
             raise PlayerLifecycleValidationError("Salary offer is below the regen minimum for the current market")
         wallet_service = WalletService()
-        fancoin_balance = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.CREDIT).available_balance
-        gtex_balance = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.COIN).available_balance
+        fancoin_balance = wallet_service.get_wallet_summary(
+            self.session, owner, currency=LedgerUnit.CREDIT
+        ).available_balance
+        gtex_balance = wallet_service.get_wallet_summary(
+            self.session, owner, currency=LedgerUnit.COIN
+        ).available_balance
         conversion = quote_conversion(
             required_fancoin=payload.offered_salary_fancoin_per_year * payload.contract_years,
             current_fancoin_balance=fancoin_balance,
@@ -825,11 +861,17 @@ class PlayerLifecycleService:
         approaching_context = self._regen_club_context(approaching_club.id, regen)
         if approaching_club.id == current_club_id:
             raise PlayerLifecycleValidationError("A club cannot unsettle its own contracted regen")
-        if float(approaching_context["prestige"]) <= float(current_context["prestige"]) and float(approaching_context["trophy_score"]) <= float(current_context["trophy_score"]):
+        if float(approaching_context["prestige"]) <= float(current_context["prestige"]) and float(
+            approaching_context["trophy_score"]
+        ) <= float(current_context["trophy_score"]):
             raise PlayerLifecycleValidationError("Only materially bigger clubs can trigger an unsettling approach")
-        current_reputation = self.session.scalar(select(ClubReputationProfile).where(ClubReputationProfile.club_id == current_club_id))
+        current_reputation = self.session.scalar(
+            select(ClubReputationProfile).where(ClubReputationProfile.club_id == current_club_id)
+        )
         traits = self._resolve_regen_traits(regen)
-        tenure_months = self._months_between((current_contract.starts_on if current_contract is not None else regen.generated_at.date()), effective_date)
+        tenure_months = self._months_between(
+            (current_contract.starts_on if current_contract is not None else regen.generated_at.date()), effective_date
+        )
         approach = evaluate_big_club_approach(
             BigClubApproachInputs(
                 approaching_prestige=float(approaching_context["prestige"]),
@@ -841,12 +883,15 @@ class PlayerLifecycleService:
                 loyalty=traits["loyalty"],
                 hometown_resistance=float(current_context["hometown_score"]),
                 rising_club_resistance=75.0 if getattr(current_reputation, "prestige_tier", "") == "Rising" else 10.0,
-                already_considering_move=pressure.current_state in {"attracted_by_bigger_club", "considering_transfer", "transfer_requested", "unsettled"},
+                already_considering_move=pressure.current_state
+                in {"attracted_by_bigger_club", "considering_transfer", "transfer_requested", "unsettled"},
             )
         )
         pressure.ambition_pressure = min(100.0, pressure.ambition_pressure + approach.ambition_pressure_delta)
         pressure.transfer_desire = min(100.0, pressure.transfer_desire + approach.transfer_desire_delta)
-        pressure.prestige_dissatisfaction = min(100.0, pressure.prestige_dissatisfaction + approach.prestige_dissatisfaction_delta)
+        pressure.prestige_dissatisfaction = min(
+            100.0, pressure.prestige_dissatisfaction + approach.prestige_dissatisfaction_delta
+        )
         pressure.title_frustration = min(100.0, pressure.title_frustration + approach.title_frustration_delta)
         pressure.pressure_score = min(100.0, max(pressure.pressure_score, approach.effect_score))
         pressure.current_state = approach.resulting_state
@@ -866,8 +911,12 @@ class PlayerLifecycleService:
                 regen_id=regen.id,
                 current_club_id=current_club_id,
                 approaching_club_id=approaching_club.id,
-                prestige_gap_score=max(0.0, float(approaching_context["prestige"]) - float(current_context["prestige"])),
-                trophy_gap_score=max(0.0, float(approaching_context["trophy_score"]) - float(current_context["trophy_score"])),
+                prestige_gap_score=max(
+                    0.0, float(approaching_context["prestige"]) - float(current_context["prestige"])
+                ),
+                trophy_gap_score=max(
+                    0.0, float(approaching_context["trophy_score"]) - float(current_context["trophy_score"])
+                ),
                 resistance_score=approach.resistance_score,
                 contract_tenure_months=tenure_months,
                 effect_score=approach.effect_score,
@@ -921,8 +970,14 @@ class PlayerLifecycleService:
         player = self._require_player(player_id)
         regen = self._require_regen_profile(player_id)
         contract_summary = self.get_contract_summary(player_id, on_date=effective_date)
-        pressure = self._ensure_pressure_state(player, regen, reference_on=effective_date, contract_summary=contract_summary)
-        current_salary = contract_summary.active_contract.wage_amount if contract_summary and contract_summary.active_contract else Decimal("0.0000")
+        pressure = self._ensure_pressure_state(
+            player, regen, reference_on=effective_date, contract_summary=contract_summary
+        )
+        current_salary = (
+            contract_summary.active_contract.wage_amount
+            if contract_summary and contract_summary.active_contract
+            else Decimal("0.0000")
+        )
         resolution = resolution_for_event(
             payload.resolution_type,
             salary_raise_pct=payload.salary_raise_pct,
@@ -935,17 +990,27 @@ class PlayerLifecycleService:
             min(100.0, pressure.ambition_pressure + (resolution.transfer_desire_delta * 0.65)),
         )
         pressure.transfer_desire = max(0.0, min(100.0, pressure.transfer_desire + resolution.transfer_desire_delta))
-        pressure.prestige_dissatisfaction = max(0.0, min(100.0, pressure.prestige_dissatisfaction + resolution.prestige_dissatisfaction_delta))
-        pressure.title_frustration = max(0.0, min(100.0, pressure.title_frustration + resolution.title_frustration_delta))
+        pressure.prestige_dissatisfaction = max(
+            0.0, min(100.0, pressure.prestige_dissatisfaction + resolution.prestige_dissatisfaction_delta)
+        )
+        pressure.title_frustration = max(
+            0.0, min(100.0, pressure.title_frustration + resolution.title_frustration_delta)
+        )
         metadata = dict(pressure.metadata_json or {})
         metadata["relief_score"] = float(metadata.get("relief_score", 0.0)) + resolution.relief_score_delta
-        metadata["unresolved_bonus"] = max(0.0, float(metadata.get("unresolved_bonus", 0.0)) + resolution.unresolved_bonus_delta)
+        metadata["unresolved_bonus"] = max(
+            0.0, float(metadata.get("unresolved_bonus", 0.0)) + resolution.unresolved_bonus_delta
+        )
         if resolution.relief_score_delta >= 10.0:
             metadata["manual_transfer_request"] = False
         pressure.metadata_json = metadata
         if payload.resolution_type == "salary_improved" and payload.salary_raise_pct > 0:
-            improved_salary = current_salary * (Decimal("1.0") + (Decimal(str(payload.salary_raise_pct)) / Decimal("100")))
-            pressure.salary_expectation_fancoin_per_year = max(current_salary, min(pressure.salary_expectation_fancoin_per_year, improved_salary))
+            improved_salary = current_salary * (
+                Decimal("1.0") + (Decimal(str(payload.salary_raise_pct)) / Decimal("100"))
+            )
+            pressure.salary_expectation_fancoin_per_year = max(
+                current_salary, min(pressure.salary_expectation_fancoin_per_year, improved_salary)
+            )
         if resolution.unresolved_bonus_delta < 0:
             pressure.last_resolved_at = datetime.combine(effective_date, datetime.min.time())
         if resolution.relief_score_delta >= 10.0:
@@ -993,9 +1058,7 @@ class PlayerLifecycleService:
         listed_before = bool(state.get("transfer_listed", False))
         state["transfer_listed"] = payload.listed
         state["agency_message"] = (
-            "Requested to be transfer listed."
-            if payload.listed
-            else "Transfer-list request withdrawn."
+            "Requested to be transfer listed." if payload.listed else "Transfer-list request withdrawn."
         )
         self._set_regen_career_state(regen, state)
         pressure = self._ensure_pressure_state(
@@ -1062,16 +1125,22 @@ class PlayerLifecycleService:
         floor_delta = 3 if payload.package_type == "major" else 1
         potential["maximum"] = min(85, maximum_key + delta)
         potential["minimum"] = min(potential["maximum"], minimum_key + floor_delta)
-        current_ability["maximum"] = min(int(potential["maximum"]), int(current_ability.get("maximum", regen.current_gsi)) + 1)
+        current_ability["maximum"] = min(
+            int(potential["maximum"]), int(current_ability.get("maximum", regen.current_gsi)) + 1
+        )
         regen.potential_range_json = potential
         regen.current_ability_range_json = current_ability
-        regen.current_gsi = min(int(potential["maximum"]), regen.current_gsi + (2 if payload.package_type == "major" else 1))
+        regen.current_gsi = min(
+            int(potential["maximum"]), regen.current_gsi + (2 if payload.package_type == "major" else 1)
+        )
         if payload.package_type == "major":
             training_state["major_used_count"] = int(training_state.get("major_used_count", 0)) + 1
         else:
             training_state["minor_used_count"] = int(training_state.get("minor_used_count", 0)) + 1
         training_state["last_trained_on"] = effective_date.isoformat()
-        training_state["cooldown_until"] = (effective_date + timedelta(days=REGEN_SPECIAL_TRAINING_COOLDOWN_DAYS)).isoformat()
+        training_state["cooldown_until"] = (
+            effective_date + timedelta(days=REGEN_SPECIAL_TRAINING_COOLDOWN_DAYS)
+        ).isoformat()
         training_state["last_package_type"] = payload.package_type
         training_state["season_label"] = self._season_label(effective_date)
         self._set_regen_training_state(regen, training_state)
@@ -1139,7 +1208,11 @@ class PlayerLifecycleService:
                 player_id,
                 TransferDecisionRequest(
                     destination_club_id=bid.buying_club_id or regen.generated_for_club_id,
-                    offered_wage_amount=(offer.offered_salary_fancoin_per_year if offer is not None else (bid.wage_offer_amount or Decimal("0.0000"))),
+                    offered_wage_amount=(
+                        offer.offered_salary_fancoin_per_year
+                        if offer is not None
+                        else (bid.wage_offer_amount or Decimal("0.0000"))
+                    ),
                     contract_years=(offer.contract_years if offer is not None else 3),
                     expected_role="starter",
                     requested_on=effective_date,
@@ -1350,7 +1423,10 @@ class PlayerLifecycleService:
         contract = PlayerContract(
             player_id=player_id,
             club_id=payload.club_id,
-            status=(payload.status or self._resolve_new_contract_status(payload.starts_on, payload.ends_on, reference_on=reference_date)).value,
+            status=(
+                payload.status
+                or self._resolve_new_contract_status(payload.starts_on, payload.ends_on, reference_on=reference_date)
+            ).value,
             wage_amount=payload.wage_amount,
             bonus_terms=payload.bonus_terms,
             release_clause_amount=payload.release_clause_amount,
@@ -1392,7 +1468,9 @@ class PlayerLifecycleService:
             state["previous_club_id"] = payload.club_id
             state["agency_message"] = "Committed to a FanCoin contract."
             self._set_regen_career_state(regen, state)
-            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            agency_state = self.session.scalar(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
+            )
             if agency_state is not None:
                 agency_state.current_club_id = payload.club_id
                 agency_state.transfer_request_status = "no_action"
@@ -1458,14 +1536,20 @@ class PlayerLifecycleService:
         )
         regen = self._get_regen_profile(player_id)
         if regen is not None:
-            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            agency_state = self.session.scalar(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
+            )
             if agency_state is not None:
                 agency_state.current_club_id = contract.club_id
                 agency_state.contract_stance = "stable"
                 agency_state.morale = max(60.0, agency_state.morale)
                 agency_state.happiness = max(62.0, agency_state.happiness)
                 agency_state.wage_satisfaction = max(agency_state.wage_satisfaction, 60.0)
-                agency_state.transfer_request_status = "no_action" if agency_state.transfer_request_status == "private_unrest" else agency_state.transfer_request_status
+                agency_state.transfer_request_status = (
+                    "no_action"
+                    if agency_state.transfer_request_status == "private_unrest"
+                    else agency_state.transfer_request_status
+                )
         self.session.commit()
         self.session.refresh(contract)
         return contract
@@ -1498,7 +1582,9 @@ class PlayerLifecycleService:
             exemption_reason=payload.exemption_reason,
         )
 
-        active_contract = self._select_current_contract(self.get_contracts(payload.player_id), reference_on=reference_on)
+        active_contract = self._select_current_contract(
+            self.get_contracts(payload.player_id), reference_on=reference_on
+        )
         selling_club_id = payload.selling_club_id
         current_contract_summary = self.get_contract_summary(payload.player_id, on_date=reference_on)
         is_regen_free_agent_offer = regen is not None and active_contract is None
@@ -1558,7 +1644,11 @@ class PlayerLifecycleService:
                     destination_club_id=payload.buying_club_id,
                     offered_wage_amount=offered_salary or Decimal("0.0000"),
                     contract_years=payload.contract_years or 3,
-                    expected_role="starter" if payload.wage_offer_amount and payload.wage_offer_amount > Decimal("0") else "rotation",
+                    expected_role=(
+                        "starter"
+                        if payload.wage_offer_amount and payload.wage_offer_amount > Decimal("0")
+                        else "rotation"
+                    ),
                     transfer_denied_recently=False,
                     requested_on=reference_on,
                 ),
@@ -1598,7 +1688,9 @@ class PlayerLifecycleService:
             bid_amount=proposed_bid_amount,
         )
         if ownership_validation["blocked"]:
-            raise PlayerLifecycleValidationError(ownership_validation["reason"] or "Ownership-group transfer validation failed")
+            raise PlayerLifecycleValidationError(
+                ownership_validation["reason"] or "Ownership-group transfer validation failed"
+            )
         structured_terms["ownership_group_validation"] = {
             "group_id": ownership_validation.get("group_id"),
             "fair_value": self._serialize_decimal(ownership_validation.get("fair_value")),
@@ -1621,12 +1713,22 @@ class PlayerLifecycleService:
         )
         self.session.add(bid)
         self.session.flush()
-        if offer_market is not None and regen is not None and payload.buying_club_id is not None and offered_salary is not None and payload.contract_years is not None:
+        if (
+            offer_market is not None
+            and regen is not None
+            and payload.buying_club_id is not None
+            and offered_salary is not None
+            and payload.contract_years is not None
+        ):
             club = self._require_club_profile(payload.buying_club_id)
             owner = self._require_user(club.owner_user_id)
             wallet_service = WalletService()
-            fancoin_balance = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.CREDIT).available_balance
-            gtex_balance = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.COIN).available_balance
+            fancoin_balance = wallet_service.get_wallet_summary(
+                self.session, owner, currency=LedgerUnit.CREDIT
+            ).available_balance
+            gtex_balance = wallet_service.get_wallet_summary(
+                self.session, owner, currency=LedgerUnit.COIN
+            ).available_balance
             conversion = quote_conversion(
                 required_fancoin=offered_salary * payload.contract_years,
                 current_fancoin_balance=fancoin_balance,
@@ -1719,7 +1821,9 @@ class PlayerLifecycleService:
             exemption_reason=(bid.structured_terms_json or {}).get("exemption_reason"),
         )
 
-        current_contract = self._select_primary_contract(self.get_contracts(bid.player_id), reference_on=contract_starts_on)
+        current_contract = self._select_primary_contract(
+            self.get_contracts(bid.player_id), reference_on=contract_starts_on
+        )
         ownership_validation = OwnershipGroupService(self.session).validate_transfer(
             player_id=player.id,
             selling_club_id=bid.selling_club_id,
@@ -1727,10 +1831,14 @@ class PlayerLifecycleService:
             bid_amount=offer.training_fee_gtex_coin if offer is not None else bid.bid_amount,
         )
         if ownership_validation["blocked"]:
-            raise PlayerLifecycleValidationError(ownership_validation["reason"] or "Ownership-group transfer validation failed")
+            raise PlayerLifecycleValidationError(
+                ownership_validation["reason"] or "Ownership-group transfer validation failed"
+            )
         if current_contract is not None:
             if bid.selling_club_id is not None and current_contract.club_id != bid.selling_club_id:
-                raise PlayerLifecycleValidationError("Transfer bid selling club no longer matches the player's contract")
+                raise PlayerLifecycleValidationError(
+                    "Transfer bid selling club no longer matches the player's contract"
+                )
             if current_contract.club_id == bid.buying_club_id:
                 raise PlayerLifecycleValidationError("Player is already contracted to the buying club")
             if current_contract.starts_on <= contract_starts_on and current_contract.ends_on >= contract_starts_on:
@@ -1772,11 +1880,7 @@ class PlayerLifecycleService:
             wage_amount=(
                 payload.wage_amount
                 if payload.wage_amount is not None
-                else (
-                    offer.offered_salary_fancoin_per_year
-                    if offer is not None
-                    else (bid.wage_offer_amount or 0)
-                )
+                else (offer.offered_salary_fancoin_per_year if offer is not None else (bid.wage_offer_amount or 0))
             ),
             bonus_terms=payload.bonus_terms,
             release_clause_amount=payload.release_clause_amount,
@@ -1800,7 +1904,9 @@ class PlayerLifecycleService:
         if contract_starts_on <= acceptance_on:
             bid.status = TransferBidStatus.COMPLETED.value
             terms["completed_on"] = acceptance_on.isoformat()
-            self._sync_player_active_club_affiliation(player.id, reference_on=acceptance_on, preferred_profile_id=bid.buying_club_id)
+            self._sync_player_active_club_affiliation(
+                player.id, reference_on=acceptance_on, preferred_profile_id=bid.buying_club_id
+            )
         else:
             bid.status = TransferBidStatus.ACCEPTED.value
             self._sync_player_active_club_affiliation(player.id, reference_on=acceptance_on)
@@ -1888,7 +1994,9 @@ class PlayerLifecycleService:
                 effect.performance_penalty = 0.0
                 effect.influences_younger_players = False
                 effect.unresolved_since = None
-            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            agency_state = self.session.scalar(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
+            )
             if agency_state is not None:
                 agency_state.current_club_id = new_contract.club_id
                 agency_state.transfer_appetite = min(18.0, agency_state.transfer_appetite)
@@ -1918,7 +2026,11 @@ class PlayerLifecycleService:
                 "contract_id": new_contract.id,
             },
         )
-        if ownership_validation.get("group_id") is not None and bid.selling_club_id is not None and bid.buying_club_id is not None:
+        if (
+            ownership_validation.get("group_id") is not None
+            and bid.selling_club_id is not None
+            and bid.buying_club_id is not None
+        ):
             OwnershipGroupService(self.session).record_internal_transfer(
                 group_id=ownership_validation["group_id"],
                 source_club_id=bid.selling_club_id,
@@ -1955,7 +2067,11 @@ class PlayerLifecycleService:
             self._sync_offer_visibility_counts(offer.regen_id)
         regen = self._get_regen_profile(bid.player_id)
         preview = dict((terms or {}).get("player_agency_preview") or {})
-        if regen is not None and preview.get("decision_code") in {"eager_to_join", "open_to_join", "requests_transfer_if_blocked"}:
+        if regen is not None and preview.get("decision_code") in {
+            "eager_to_join",
+            "open_to_join",
+            "requests_transfer_if_blocked",
+        }:
             self._agency_service().record_blocked_move(
                 bid.player_id,
                 reference_on=date.today(),
@@ -2286,10 +2402,14 @@ class PlayerLifecycleService:
         return regen
 
     def _get_regen_origin(self, regen_profile_id: str) -> RegenOriginMetadata | None:
-        return self.session.scalar(select(RegenOriginMetadata).where(RegenOriginMetadata.regen_profile_id == regen_profile_id))
+        return self.session.scalar(
+            select(RegenOriginMetadata).where(RegenOriginMetadata.regen_profile_id == regen_profile_id)
+        )
 
     def _get_regen_personality(self, regen_profile_id: str) -> RegenPersonalityProfile | None:
-        return self.session.scalar(select(RegenPersonalityProfile).where(RegenPersonalityProfile.regen_profile_id == regen_profile_id))
+        return self.session.scalar(
+            select(RegenPersonalityProfile).where(RegenPersonalityProfile.regen_profile_id == regen_profile_id)
+        )
 
     def _regen_career_state(self, regen: RegenProfile) -> dict[str, Any]:
         metadata = dict(regen.metadata_json or {})
@@ -2316,10 +2436,14 @@ class PlayerLifecycleService:
         return user
 
     def _get_pressure_state(self, regen_profile_id: str) -> RegenTransferPressureState | None:
-        return self.session.scalar(select(RegenTransferPressureState).where(RegenTransferPressureState.regen_id == regen_profile_id))
+        return self.session.scalar(
+            select(RegenTransferPressureState).where(RegenTransferPressureState.regen_id == regen_profile_id)
+        )
 
     def _get_offer_visibility_state(self, regen_profile_id: str) -> RegenOfferVisibilityState | None:
-        return self.session.scalar(select(RegenOfferVisibilityState).where(RegenOfferVisibilityState.regen_id == regen_profile_id))
+        return self.session.scalar(
+            select(RegenOfferVisibilityState).where(RegenOfferVisibilityState.regen_id == regen_profile_id)
+        )
 
     def _get_team_dynamics_effect(self, regen_profile_id: str, club_id: str | None) -> RegenTeamDynamicsEffect | None:
         if club_id is None:
@@ -2334,7 +2458,9 @@ class PlayerLifecycleService:
         )
 
     def _count_visible_contract_offers(self, regen_profile_id: str) -> int:
-        offers = self.session.scalars(select(RegenContractOffer).where(RegenContractOffer.regen_id == regen_profile_id)).all()
+        offers = self.session.scalars(
+            select(RegenContractOffer).where(RegenContractOffer.regen_id == regen_profile_id)
+        ).all()
         return sum(1 for offer in offers if offer.status not in {"rejected", "withdrawn", "expired"})
 
     def _get_contract_offer_by_bid_id(self, bid_id: str) -> RegenContractOffer | None:
@@ -2348,7 +2474,9 @@ class PlayerLifecycleService:
         visibility = self._get_offer_visibility_state(regen_profile_id)
         if visibility is None:
             return None
-        offers = self.session.scalars(select(RegenContractOffer).where(RegenContractOffer.regen_id == regen_profile_id)).all()
+        offers = self.session.scalars(
+            select(RegenContractOffer).where(RegenContractOffer.regen_id == regen_profile_id)
+        ).all()
         visible_count = sum(1 for offer in offers if offer.status not in {"rejected", "withdrawn", "expired"})
         visibility.visible_offer_count = visible_count
         if visible_count > 0:
@@ -2488,7 +2616,9 @@ class PlayerLifecycleService:
         previous_salary_expectation = _decimal_or_zero(pressure.salary_expectation_fancoin_per_year)
         current_contract = contract_summary.active_contract if contract_summary is not None else None
         current_salary = current_contract.wage_amount if current_contract is not None else Decimal("0.0000")
-        visibility = self._ensure_offer_visibility_state(regen, reference_on=reference_on, current_salary=current_salary)
+        visibility = self._ensure_offer_visibility_state(
+            regen, reference_on=reference_on, current_salary=current_salary
+        )
         current_club_id = current_contract.club_id if current_contract is not None else player.current_club_profile_id
         current_club_context = self._regen_club_context(current_club_id, regen)
         pressure.current_club_id = current_club_id
@@ -2499,9 +2629,7 @@ class PlayerLifecycleService:
             "transfer_request": "transfer_requested",
             "public_unhappy_state": "unsettled",
         }.get(agency_state.transfer_request_status, "content")
-        baseline_ambition_pressure = clamp(
-            max(0.0, agency_personality.ambition - agency_state.club_project_belief)
-        )
+        baseline_ambition_pressure = clamp(max(0.0, agency_personality.ambition - agency_state.club_project_belief))
         baseline_transfer_desire = _float_or_zero(agency_state.transfer_appetite)
         baseline_prestige_dissatisfaction = clamp(
             max(0.0, agency_personality.ambition - agency_state.club_project_belief)
@@ -2555,9 +2683,7 @@ class PlayerLifecycleService:
         )
         if pressure_resolved:
             pressure.current_state = (
-                previous_state
-                if _pressure_rank(previous_state) >= _pressure_rank(baseline_state)
-                else baseline_state
+                previous_state if _pressure_rank(previous_state) >= _pressure_rank(baseline_state) else baseline_state
             )
         else:
             pressure.current_state = (
@@ -2603,16 +2729,12 @@ class PlayerLifecycleService:
             pressure.current_state = previous_state
             pressure.active_transfer_request = previous_active_transfer_request or pressure.active_transfer_request
             pressure.refuses_new_contract = previous_refuses_new_contract or pressure.refuses_new_contract
-            pressure.end_of_contract_pressure = (
-                previous_end_of_contract_pressure or pressure.end_of_contract_pressure
-            )
+            pressure.end_of_contract_pressure = previous_end_of_contract_pressure or pressure.end_of_contract_pressure
             pressure.pressure_score = max(previous_pressure_score, pressure.pressure_score)
         if pressure.active_transfer_request:
             pressure.last_resolved_at = None
         if pressure.active_transfer_request and pressure.unresolved_since is None:
-            pressure.unresolved_since = previous_unresolved_since or datetime.combine(
-                reference_on, datetime.min.time()
-            )
+            pressure.unresolved_since = previous_unresolved_since or datetime.combine(reference_on, datetime.min.time())
         if not pressure.active_transfer_request and pressure.current_state in {"content", "monitoring_situation"}:
             pressure.last_resolved_at = datetime.combine(reference_on, datetime.min.time())
         pressure.metadata_json = {
@@ -2698,7 +2820,9 @@ class PlayerLifecycleService:
             influences_younger_players=effect.influences_younger_players,
         )
 
-    def _to_regen_offer_market_view(self, visibility: RegenOfferVisibilityState | None) -> RegenContractOfferMarketView | None:
+    def _to_regen_offer_market_view(
+        self, visibility: RegenOfferVisibilityState | None
+    ) -> RegenContractOfferMarketView | None:
         if visibility is None:
             return None
         return RegenContractOfferMarketView(
@@ -2721,7 +2845,10 @@ class PlayerLifecycleService:
             gtex_required_for_conversion=quote.source_amount_required,
             conversion_premium_bps=quote.premium_bps,
             can_cover_shortfall=quote.can_cover_shortfall,
-            premium_note=str((quote.metadata_json or {}).get("premium_note") or "Direct Fan Coin purchase remains cheaper than GTex Coin auto-conversion."),
+            premium_note=str(
+                (quote.metadata_json or {}).get("premium_note")
+                or "Direct Fan Coin purchase remains cheaper than GTex Coin auto-conversion."
+            ),
             fee_currency=GTEX_CURRENCY_BRANDING,
             salary_currency=FANCOIN_CURRENCY_BRANDING,
         )
@@ -2841,7 +2968,9 @@ class PlayerLifecycleService:
             currency=LedgerUnit.CREDIT,
         ).available_balance
         if refreshed_fancoin_balance < salary_package:
-            raise PlayerLifecycleValidationError("Buying club owner does not have enough Fan Coin for the salary package")
+            raise PlayerLifecycleValidationError(
+                "Buying club owner does not have enough Fan Coin for the salary package"
+            )
 
         free_agent_terms = dict((bid.structured_terms_json or {}).get("free_agent_capture_split") or {})
         previous_club_id = bid.selling_club_id or free_agent_terms.get("previous_club_id")
@@ -2854,9 +2983,7 @@ class PlayerLifecycleService:
         previous_share = Decimal("0.0000")
         if previous_owner is not None:
             previous_share = (
-                offer.training_fee_gtex_coin
-                * Decimal(str(REGEN_FREE_AGENT_PREVIOUS_CLUB_SHARE_PCT))
-                / Decimal("100")
+                offer.training_fee_gtex_coin * Decimal(str(REGEN_FREE_AGENT_PREVIOUS_CLUB_SHARE_PCT)) / Decimal("100")
             ).quantize(Decimal("0.0001"))
             platform_share = offer.training_fee_gtex_coin - previous_share
         payer_account = wallet_service.get_user_account(self.session, owner, LedgerUnit.COIN)
@@ -3102,15 +3229,31 @@ class PlayerLifecycleService:
         decision_traits = dict(metadata.get("decision_traits") or {})
         personality = self._get_regen_personality(regen.id)
         resolved = {
-            "ambition": int(decision_traits.get("ambition", getattr(personality, "ambition", 50) if personality is not None else 50)),
-            "loyalty": int(decision_traits.get("loyalty", getattr(personality, "loyalty", 50) if personality is not None else 50)),
-            "professionalism": int(decision_traits.get("professionalism", getattr(personality, "work_rate", 50) if personality is not None else 50)),
+            "ambition": int(
+                decision_traits.get("ambition", getattr(personality, "ambition", 50) if personality is not None else 50)
+            ),
+            "loyalty": int(
+                decision_traits.get("loyalty", getattr(personality, "loyalty", 50) if personality is not None else 50)
+            ),
+            "professionalism": int(
+                decision_traits.get(
+                    "professionalism", getattr(personality, "work_rate", 50) if personality is not None else 50
+                )
+            ),
             "greed": int(decision_traits.get("greed", 50)),
-            "patience": int(decision_traits.get("patience", getattr(personality, "resilience", 50) if personality is not None else 50)),
+            "patience": int(
+                decision_traits.get(
+                    "patience", getattr(personality, "resilience", 50) if personality is not None else 50
+                )
+            ),
             "hometown_affinity": int(decision_traits.get("hometown_affinity", 50)),
             "trophy_hunger": int(decision_traits.get("trophy_hunger", 50)),
             "media_appetite": int(decision_traits.get("media_appetite", 50)),
-            "temperament": int(decision_traits.get("temperament", getattr(personality, "temperament", 50) if personality is not None else 50)),
+            "temperament": int(
+                decision_traits.get(
+                    "temperament", getattr(personality, "temperament", 50) if personality is not None else 50
+                )
+            ),
             "adaptability": int(decision_traits.get("adaptability", 50)),
         }
         return {key: max(0, min(100, value)) for key, value in resolved.items()}
@@ -3127,17 +3270,39 @@ class PlayerLifecycleService:
         del bids
         state = self._regen_career_state(regen)
         traits = self._resolve_regen_traits(regen)
-        _agency_player, _agency_regen, _agency_personality, agency_state, transfer_request = self._agency_service().sync(
+        (
+            _agency_player,
+            _agency_regen,
+            _agency_personality,
+            agency_state,
+            transfer_request,
+        ) = self._agency_service().sync(
             player.id,
             reference_on=reference_on,
         )
-        lifecycle_age_months = self._months_between(regen.generated_at.date(), reference_on)
-        phase = self._regen_phase_for_age(lifecycle_age_months)
-        retired = lifecycle_age_months >= self.settings.regen_generation.regen_lifecycle_retirement_months
-        state["lifecycle_age_months"] = lifecycle_age_months
-        state["lifecycle_phase"] = "retired" if retired else phase
-        state["retirement_pressure"] = phase == "retirement_pressure"
-        state["career_stage"] = agency_state.career_stage
+        age_unknown = state.get("virtual_age_months") is None or state.get("retirement_policy_status") == "age_unknown"
+        if age_unknown:
+            retired = bool(state.get("retired", False))
+            state["virtual_age_months"] = None
+            state.pop("lifecycle_age_months", None)
+            state["career_stage"] = "age_unknown"
+            state["retirement_pressure"] = False
+            state["retirement_pressure_band"] = "unknown"
+            state["expected_longevity_months"] = None
+            state["retirement_watch"] = False
+            state["eligible_for_retirement_decision"] = False
+            state["policy_drivers"] = []
+            state["retirement_drivers"] = []
+            state["retirement_policy_status"] = "age_unknown"
+            state["lifecycle_phase"] = "retired" if retired else "age_unknown"
+        else:
+            lifecycle_age_months = self._months_between(regen.generated_at.date(), reference_on)
+            phase = self._regen_phase_for_age(lifecycle_age_months)
+            retired = lifecycle_age_months >= self.settings.regen_generation.regen_lifecycle_retirement_months
+            state["lifecycle_age_months"] = lifecycle_age_months
+            state["lifecycle_phase"] = "retired" if retired else phase
+            state["retirement_pressure"] = phase == "retirement_pressure"
+            state["career_stage"] = agency_state.career_stage
         state["career_target_band"] = agency_state.career_target_band
         state["transfer_request_status"] = agency_state.transfer_request_status
         state["transfer_request_score"] = transfer_request.decision_score
@@ -3145,7 +3310,9 @@ class PlayerLifecycleService:
             state["previous_club_id"] = contract_summary.active_contract.club_id
         elif not state.get("previous_club_id"):
             last_contract = self._select_primary_contract(self.get_contracts(player.id), reference_on=reference_on)
-            state["previous_club_id"] = last_contract.club_id if last_contract is not None else regen.generated_for_club_id
+            state["previous_club_id"] = (
+                last_contract.club_id if last_contract is not None else regen.generated_for_club_id
+            )
         free_agent = not retired and (contract_summary is None or contract_summary.active_contract is None)
         state["free_agent"] = free_agent
         if free_agent and not state.get("free_agent_since"):
@@ -3171,10 +3338,10 @@ class PlayerLifecycleService:
                 (pressure.active_transfer_request if pressure is not None else False)
                 or (
                     pressure is not None
-                    and pressure.current_state in {"attracted_by_bigger_club", "considering_transfer", "transfer_requested", "unsettled"}
+                    and pressure.current_state
+                    in {"attracted_by_bigger_club", "considering_transfer", "transfer_requested", "unsettled"}
                 )
-                or
-                (playing_time_ratio < 0.45 and traits["ambition"] >= 68 and traits["patience"] <= 58)
+                or (playing_time_ratio < 0.45 and traits["ambition"] >= 68 and traits["patience"] <= 58)
                 or (
                     contract_summary is not None
                     and contract_summary.expiring_soon
@@ -3250,7 +3417,11 @@ class PlayerLifecycleService:
                 state["agency_message"] = "Publicly unhappy and pushing for a move."
             elif agency_state.transfer_request_status == "agent_warning":
                 state["agency_message"] = "Agent has warned the club about growing unrest."
-            elif pressure is not None and state.get("transfer_listed") and bool((pressure.metadata_json or {}).get("manual_transfer_request")):
+            elif (
+                pressure is not None
+                and state.get("transfer_listed")
+                and bool((pressure.metadata_json or {}).get("manual_transfer_request"))
+            ):
                 state["agency_message"] = "Requested to be transfer listed."
             elif pressure is not None and pressure.current_state == "unsettled":
                 state["agency_message"] = "Unsettled after interest from a bigger club."
@@ -3273,7 +3444,11 @@ class PlayerLifecycleService:
                     summary=f"{player.full_name} wants more playing time",
                     details={"playing_time_ratio": round(playing_time_ratio, 2)},
                 )
-            elif contract_summary is not None and contract_summary.expiring_soon and (traits["greed"] >= 65 or traits["ambition"] >= 70):
+            elif (
+                contract_summary is not None
+                and contract_summary.expiring_soon
+                and (traits["greed"] >= 65 or traits["ambition"] >= 70)
+            ):
                 state["agency_message"] = "Wants an improved contract offer."
                 self._record_regen_agency_event(
                     player_id=player.id,
@@ -3393,7 +3568,9 @@ class PlayerLifecycleService:
     ) -> None:
         projected_ceiling = int((regen.potential_range_json or {}).get("maximum", regen.current_gsi))
         if projected_ceiling > 75:
-            raise PlayerLifecycleValidationError("Only regens with projected future potential of 75 or lower are eligible")
+            raise PlayerLifecycleValidationError(
+                "Only regens with projected future potential of 75 or lower are eligible"
+            )
         state = self._regen_career_state(regen)
         if bool(state.get("retired", False)):
             raise PlayerLifecycleValidationError("Retired regens cannot receive special training")
@@ -3401,15 +3578,29 @@ class PlayerLifecycleService:
         cooldown_until = training_state.get("cooldown_until")
         if cooldown_until and reference_on < date.fromisoformat(cooldown_until):
             raise PlayerLifecycleValidationError("Special training is on cooldown for this regen")
-        if payload.package_type == "major" and int(training_state.get("major_used_count", 0)) >= REGEN_SPECIAL_TRAINING_MAJOR_MAX:
+        if (
+            payload.package_type == "major"
+            and int(training_state.get("major_used_count", 0)) >= REGEN_SPECIAL_TRAINING_MAJOR_MAX
+        ):
             raise PlayerLifecycleValidationError("A regen can only receive one major special training package")
-        if payload.package_type == "minor" and int(training_state.get("minor_used_count", 0)) >= REGEN_SPECIAL_TRAINING_MINOR_MAX:
+        if (
+            payload.package_type == "minor"
+            and int(training_state.get("minor_used_count", 0)) >= REGEN_SPECIAL_TRAINING_MINOR_MAX
+        ):
             raise PlayerLifecycleValidationError("A regen can only receive two minor special training packages")
         club_id = payload.club_id or player.current_club_profile_id
         season_label = self._season_label(reference_on)
-        if self._count_regen_special_training_for_club(club_id, season_label=season_label) >= REGEN_SPECIAL_TRAINING_SEASON_CAP:
+        if (
+            self._count_regen_special_training_for_club(club_id, season_label=season_label)
+            >= REGEN_SPECIAL_TRAINING_SEASON_CAP
+        ):
             raise PlayerLifecycleValidationError("Club special-training season cap reached")
-        if self._count_regen_special_training_for_club(club_id, season_label=season_label, active_only=True, reference_on=reference_on) >= REGEN_SPECIAL_TRAINING_CONCURRENT_CAP:
+        if (
+            self._count_regen_special_training_for_club(
+                club_id, season_label=season_label, active_only=True, reference_on=reference_on
+            )
+            >= REGEN_SPECIAL_TRAINING_CONCURRENT_CAP
+        ):
             raise PlayerLifecycleValidationError("Club concurrent special-training cap reached")
 
     def _count_regen_special_training_for_club(
@@ -3431,7 +3622,12 @@ class PlayerLifecycleService:
             details = event.details_json or {}
             if details.get("season_label") not in {None, season_label}:
                 continue
-            if active_only and reference_on is not None and event.effective_to is not None and event.effective_to < reference_on:
+            if (
+                active_only
+                and reference_on is not None
+                and event.effective_to is not None
+                and event.effective_to < reference_on
+            ):
                 continue
             count += 1
         return count
@@ -3460,7 +3656,14 @@ class PlayerLifecycleService:
             ),
         )
         development_score = float(
-            (((facility.training_level if facility is not None else 1) + (facility.academy_level if facility is not None else 1)) / 2) * 20
+            (
+                (
+                    (facility.training_level if facility is not None else 1)
+                    + (facility.academy_level if facility is not None else 1)
+                )
+                / 2
+            )
+            * 20
         )
         hometown_score = 0.0
         cross_border = False
@@ -3468,7 +3671,9 @@ class PlayerLifecycleService:
             cross_border = bool(profile.country_code and profile.country_code != origin.country_code)
             if profile.city_name and origin.city_name and profile.city_name.lower() == origin.city_name.lower():
                 hometown_score = 100.0
-            elif profile.region_name and origin.region_name and profile.region_name.lower() == origin.region_name.lower():
+            elif (
+                profile.region_name and origin.region_name and profile.region_name.lower() == origin.region_name.lower()
+            ):
                 hometown_score = 80.0
             elif profile.country_code and profile.country_code == origin.country_code:
                 hometown_score = 45.0
@@ -3643,7 +3848,8 @@ class PlayerLifecycleService:
         current = [
             contract
             for contract in contracts
-            if self._resolve_contract_status(contract, reference_on=reference_on) in {ContractStatus.ACTIVE, ContractStatus.EXPIRING}
+            if self._resolve_contract_status(contract, reference_on=reference_on)
+            in {ContractStatus.ACTIVE, ContractStatus.EXPIRING}
         ]
         if not current:
             return None
@@ -3699,9 +3905,7 @@ class PlayerLifecycleService:
         if self._resolve_window_status(window, reference_on=reference_on) is TransferWindowStatus.OPEN:
             return
         if not allow_outside_window:
-            raise PlayerLifecycleValidationError(
-                f"Transfer window {window.id} is closed on {reference_on.isoformat()}"
-            )
+            raise PlayerLifecycleValidationError(f"Transfer window {window.id} is closed on {reference_on.isoformat()}")
         if not exemption_reason:
             raise PlayerLifecycleValidationError("Outside-window transfers require an exemption reason")
 
@@ -3765,18 +3969,29 @@ class PlayerLifecycleService:
             club_ids.update({item.club_id for item in player.match_stats if item.club_id})
             competition_ids.update({item.competition_id for item in player.match_stats if item.competition_id})
 
-        season_lookup = {
-            season.id: season
-            for season in self.session.scalars(select(Season).where(Season.id.in_(season_ids)))
-        } if season_ids else {}
-        club_lookup = {
-            club.id: club.name
-            for club in self.session.scalars(select(IngestionClub).where(IngestionClub.id.in_(club_ids)))
-        } if club_ids else {}
-        competition_lookup = {
-            competition.id: competition.name
-            for competition in self.session.scalars(select(IngestionCompetition).where(IngestionCompetition.id.in_(competition_ids)))
-        } if competition_ids else {}
+        season_lookup = (
+            {season.id: season for season in self.session.scalars(select(Season).where(Season.id.in_(season_ids)))}
+            if season_ids
+            else {}
+        )
+        club_lookup = (
+            {
+                club.id: club.name
+                for club in self.session.scalars(select(IngestionClub).where(IngestionClub.id.in_(club_ids)))
+            }
+            if club_ids
+            else {}
+        )
+        competition_lookup = (
+            {
+                competition.id: competition.name
+                for competition in self.session.scalars(
+                    select(IngestionCompetition).where(IngestionCompetition.id.in_(competition_ids))
+                )
+            }
+            if competition_ids
+            else {}
+        )
 
         rows: dict[tuple[str, str | None, str | None], dict[str, Any]] = {}
 
@@ -3818,7 +4033,9 @@ class PlayerLifecycleService:
                     row["average_rating"] = item.average_rating
         elif player.match_stats:
             for item in player.match_stats:
-                season_label = season_lookup.get(item.season_id).label if item.season_id in season_lookup else "match-log"
+                season_label = (
+                    season_lookup.get(item.season_id).label if item.season_id in season_lookup else "match-log"
+                )
                 row = ensure_row(season_label=season_label, competition_id=item.competition_id, club_id=item.club_id)
                 row["appearances"] += item.appearances or 0
                 row["starts"] += item.starts or 0
@@ -3841,17 +4058,16 @@ class PlayerLifecycleService:
 
         ordered_rows = sorted(
             rows.values(),
-            key=lambda row: (row["_season_sort"], row["season_label"], row["competition_name"] or "", row["club_name"] or ""),
+            key=lambda row: (
+                row["_season_sort"],
+                row["season_label"],
+                row["competition_name"] or "",
+                row["club_name"] or "",
+            ),
             reverse=True,
         )
         return tuple(
-            SeasonProgressionView.model_validate(
-                {
-                    key: value
-                    for key, value in row.items()
-                    if not key.startswith("_")
-                }
-            )
+            SeasonProgressionView.model_validate({key: value for key, value in row.items() if not key.startswith("_")})
             for row in ordered_rows
         )
 
@@ -3884,9 +4100,7 @@ class PlayerLifecycleService:
 
     def _build_transfer_summary(self, bids: list[TransferBid]) -> TransferSummaryView:
         accepted_or_completed = [
-            bid
-            for bid in bids
-            if bid.status in {TransferBidStatus.ACCEPTED.value, TransferBidStatus.COMPLETED.value}
+            bid for bid in bids if bid.status in {TransferBidStatus.ACCEPTED.value, TransferBidStatus.COMPLETED.value}
         ]
         completed = [bid for bid in bids if bid.status == TransferBidStatus.COMPLETED.value]
         latest_transfer = max(accepted_or_completed, key=self._transfer_sort_key, default=None)
@@ -3972,7 +4186,11 @@ class PlayerLifecycleService:
         territory_code: str | None,
     ) -> TransferWindow | None:
         resolved_territory = territory_code or self._infer_territory_code(player)
-        windows = self.list_transfer_windows(territory_code=resolved_territory) if resolved_territory else self.list_transfer_windows()
+        windows = (
+            self.list_transfer_windows(territory_code=resolved_territory)
+            if resolved_territory
+            else self.list_transfer_windows()
+        )
         if not windows:
             return None
         active = [

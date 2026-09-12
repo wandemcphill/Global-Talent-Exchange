@@ -138,25 +138,36 @@ def _policy_sync(
         regen.generated_at = original_generated_at
         self.settings = original_settings
 
-    if policy_context is None:
-        state.update(
-            {
-                "retirement_policy": "phase6_dynamic",
-                "retirement_policy_status": "age_unknown",
-                "virtual_age_months": None,
-                "retirement_pressure": False,
-                "retirement_pressure_band": "unknown",
-                "retirement_watch": False,
-                "retirement_decision_eligible": False,
-                "retirement_drivers": [],
-            }
-        )
+    already_retired = bool(state.get("retired", False))
+
+    if policy_context is None or policy_context.assessment.virtual_age_months is None:
+        state["virtual_age_months"] = None
+        state.pop("lifecycle_age_months", None)
+        state["career_stage"] = "age_unknown"
+        state["retirement_pressure"] = False
+        state["retirement_pressure_band"] = "unknown"
+        state["expected_longevity_months"] = None
+        state["retirement_watch"] = False
+        state["retirement_decision_eligible"] = False
+        state["eligible_for_retirement_decision"] = False
+        state["policy_drivers"] = []
+        state["retirement_drivers"] = []
+        state["retirement_policy_status"] = "age_unknown"
+        state["retirement_policy"] = "phase6_dynamic"
+        if already_retired:
+            state["retired"] = True
+            state["lifecycle_phase"] = "retired"
+        else:
+            state["retired"] = False
+            state["lifecycle_phase"] = "age_unknown"
     else:
         state.update(_assessment_payload(policy_context))
+        state["policy_drivers"] = list(policy_context.assessment.drivers)
+        state["eligible_for_retirement_decision"] = policy_context.assessment.eligible_for_retirement_decision
         if policy_context.assessment.eligible_for_retirement_decision:
             state["lifecycle_phase"] = "retired"
             state["retired"] = True
-        elif policy_context.assessment.virtual_age_months is not None:
+        else:
             state["retired"] = False
 
     legacy_plan = _retirement_legacy_plan(regen, player.id, state)
