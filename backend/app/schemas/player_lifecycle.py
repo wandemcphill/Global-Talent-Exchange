@@ -327,7 +327,7 @@ class RegenLifecycleView(CommonSchema):
     regen_id: str
     status: str
     lifecycle_phase: str
-    lifecycle_age_months: int = Field(ge=0)
+    lifecycle_age_months: int | None = Field(default=None, ge=0)
     contract_currency: str = "FanCoin"
     retirement_pressure: bool = False
     retired: bool = False
@@ -356,8 +356,6 @@ class PlayerOverviewView(CommonSchema):
     transfer_status: TransferWindowEligibilityView
     regen_summary: RegenLifecycleView | None = None
     recent_events: tuple[PlayerLifecycleEventView, ...] = Field(default_factory=tuple)
-
-
 
 
 class PlayerLifecycleSnapshotView(CommonSchema):

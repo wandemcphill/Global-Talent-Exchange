@@ -136,11 +136,6 @@ def test_policy_assessment_controls_retirement_when_eligible(
         ),
     )
 
-    season2 = session.scalar(select(RegenSeason).where(RegenSeason.season_number == 2))
-    assert season2 is not None
-    season2.metadata_json = {"virtual_age_month_index": 680}
-    session.commit()
-
     from app.regen_career.clock import RegenCareerAssessment, RetirementPressureBand
     from app.regen_career.policy_service import RegenCareerPolicyContext
 
@@ -222,14 +217,15 @@ def test_virtual_age_unavailable_prevents_retirement(
         ),
     )
 
-    for season in session.scalars(select(RegenSeason)).all():
-        season.metadata_json = {}
+    for season_obj in session.scalars(select(RegenSeason)).all():
+        season_obj.metadata_json = {}
     session.commit()
 
     summary = lifecycle_service.get_regen_summary("p-no-mapping", on_date=date(2021, 6, 1))
 
     assert summary is not None
     assert summary.retired is False
+    assert summary.lifecycle_age_months is None
     regen_updated = session.get(RegenProfile, regen.id)
     assert regen_updated is not None
     career_state = (regen_updated.metadata_json or {}).get("career_state", {})

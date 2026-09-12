@@ -693,11 +693,12 @@ class PlayerLifecycleService:
         )
         dynamics = self._sync_team_dynamics_effect(player, regen, pressure_state, reference_on=reference_on)
         self.session.commit()
+        raw_age = state.get("lifecycle_age_months")
         return RegenLifecycleView(
             regen_id=regen.regen_id,
             status=regen.status,
             lifecycle_phase=str(state.get("lifecycle_phase", "development")),
-            lifecycle_age_months=int(state.get("lifecycle_age_months", 0)),
+            lifecycle_age_months=int(raw_age) if raw_age is not None else None,
             contract_currency="FanCoin",
             retirement_pressure=bool(state.get("retirement_pressure", False)),
             retired=bool(state.get("retired", False)),
@@ -3293,16 +3294,18 @@ class PlayerLifecycleService:
         except ValueError as exc:
             state["retirement_policy_status"] = "age_unknown"
             state["retirement_policy_error"] = str(exc)
+            state.pop("virtual_age_months", None)
+            state.pop("expected_longevity_months", None)
+            state.pop("retirement_pressure_band", None)
+            state.pop("retirement_watch", None)
+            state.pop("eligible_for_retirement_decision", None)
+            state.pop("policy_drivers", None)
 
         if policy_context is not None:
             assessment = policy_context.assessment
             virtual_age = assessment.virtual_age_months
             state["virtual_age_months"] = virtual_age
-            state["lifecycle_age_months"] = (
-                virtual_age
-                if virtual_age is not None
-                else self._months_between(regen.generated_at.date(), reference_on)
-            )
+            state["lifecycle_age_months"] = virtual_age
             state["career_stage"] = assessment.career_stage
             state["retirement_pressure"] = assessment.should_enter_retirement_watch
             state["retirement_pressure_band"] = assessment.pressure_band.value
@@ -3316,20 +3319,16 @@ class PlayerLifecycleService:
             phase = (
                 "retired"
                 if retired
-                else (
-                    assessment.career_stage
-                    if assessment.career_stage != "age_unknown"
-                    else self._regen_phase_for_age(state["lifecycle_age_months"])
-                )
+                else (assessment.career_stage if assessment.career_stage != "age_unknown" else "development")
             )
             state["lifecycle_phase"] = phase
         else:
-            lifecycle_age_months = self._months_between(regen.generated_at.date(), reference_on)
-            state["lifecycle_age_months"] = lifecycle_age_months
+            state["lifecycle_age_months"] = None
             retired = already_retired
-            phase = "retired" if retired else self._regen_phase_for_age(lifecycle_age_months)
+            phase = "retired" if retired else "development"
             state["lifecycle_phase"] = phase
-
+            state["retirement_pressure"] = False
+        state["career_stage"] = agency_state.career_stage
         state["career_target_band"] = agency_state.career_target_band
         state["transfer_request_status"] = agency_state.transfer_request_status
         state["transfer_request_score"] = transfer_request.decision_score
@@ -3379,9 +3378,6 @@ class PlayerLifecycleService:
         )
         transfer_listed_before = bool(state.get("transfer_listed", False))
         state["transfer_listed"] = bool(wants_transfer)
-        lifecycle_age_months = state.get("lifecycle_age_months") or self._months_between(
-            regen.generated_at.date(), reference_on
-        )
         if retired:
             state["retired"] = True
             state["agency_message"] = "Retired from the active football economy."
@@ -3401,7 +3397,7 @@ class PlayerLifecycleService:
                     related_entity_type="regen_profile",
                     related_entity_id=regen.id,
                     summary=f"{player.full_name} retired",
-                    details={"regen_id": regen.regen_id, "lifecycle_age_months": lifecycle_age_months},
+                    details={"regen_id": regen.regen_id, "lifecycle_age_months": state.get("lifecycle_age_months")},
                     notes=None,
                 )
                 from app.services.regen_legacy_service import RegenLegacyService
