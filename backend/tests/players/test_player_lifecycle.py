@@ -1059,12 +1059,17 @@ def test_lifecycle_snapshot_endpoint_returns_ui_ready_contract(
     assert payload["availability_badge"]["available"] is True
 
 
+from unittest.mock import patch
+from app.regen_career.clock import RegenCareerAssessment, RetirementPressureBand
+from app.regen_career.policy_service import RegenCareerPolicyContext
+
+
 def test_regen_summary_can_retire_player_and_archive_market_state(
     lifecycle_service: PlayerLifecycleService,
     lifecycle_session: Session,
 ) -> None:
     context = seed_base_context(lifecycle_session)
-    seed_regen_context(
+    regen = seed_regen_context(
         lifecycle_session,
         player_id=context["player_id"],
         generated_for_club_id=context["club_profile_id"],
@@ -1082,7 +1087,30 @@ def test_regen_summary_can_retire_player_and_archive_market_state(
         ),
     )
 
-    regen_summary = lifecycle_service.get_regen_summary(context["player_id"], on_date=date(2026, 3, 12))
+    mock_assessment = RegenCareerAssessment(
+        virtual_age_months=450,
+        career_stage="late_career",
+        retirement_pressure=0.92,
+        pressure_band=RetirementPressureBand.DECISION,
+        expected_longevity_months=450,
+        should_enter_retirement_watch=True,
+        eligible_for_retirement_decision=True,
+        drivers=("virtual_age", "injury_burden"),
+    )
+    mock_context = RegenCareerPolicyContext(
+        player_id=context["player_id"],
+        regen_id=regen.regen_id,
+        generation_season_number=1,
+        current_season_number=10,
+        position="forward",
+        personality={},
+        current_contract_id=contract.id,
+        active_injury_count=0,
+        assessment=mock_assessment,
+    )
+
+    with patch("app.regen_career.policy_service.RegenCareerPolicyService.assess", return_value=mock_context):
+        regen_summary = lifecycle_service.get_regen_summary(context["player_id"], on_date=date(2026, 3, 12))
     lifecycle_session.refresh(contract)
 
     assert regen_summary is not None
