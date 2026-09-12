@@ -19,10 +19,11 @@ def test_service_package_installs_phase6_adapter() -> None:
 
 def test_virtual_age_unavailable_prevents_retirement() -> None:
     from datetime import datetime, timezone
+
     from app.ingestion.models import Player
+    from app.models.base import Base
     from app.models.regen import RegenProfile
     from app.services.player_lifecycle_service import PlayerLifecycleService
-    from app.models.base import Base
     from tests.regen_universe_support import build_regen_universe_session
 
     session = build_regen_universe_session()
@@ -53,7 +54,25 @@ def test_virtual_age_unavailable_prevents_retirement() -> None:
             scout_confidence="high",
             generation_source="academy",
             status="active",
-            metadata_json={},
+            metadata_json={
+                "career_state": {
+                    "virtual_age_months": 144,
+                    "lifecycle_age_months": 144,
+                    "career_stage": "late_career",
+                    "retirement_pressure": True,
+                    "retirement_pressure_band": "high",
+                    "expected_longevity_months": 12,
+                    "retirement_watch": True,
+                    "retirement_decision_eligible": True,
+                    "eligible_for_retirement_decision": True,
+                    "policy_drivers": ["stale-driver"],
+                    "retirement_drivers": ["stale-driver"],
+                    "retirement_policy_status": "assessed",
+                    "retirement_policy": "phase6_dynamic",
+                    "lifecycle_phase": "retirement_watch",
+                    "retired": False,
+                }
+            },
         )
         session.add_all([player, regen])
         session.flush()
@@ -67,15 +86,21 @@ def test_virtual_age_unavailable_prevents_retirement() -> None:
 
         career_state = regen.metadata_json.get("career_state", {})
         assert career_state.get("virtual_age_months") is None
+        assert "lifecycle_age_months" not in career_state
         assert career_state.get("career_stage") == "age_unknown"
         assert career_state.get("retirement_pressure") is False
         assert career_state.get("retirement_pressure_band") == "unknown"
         assert career_state.get("expected_longevity_months") is None
         assert career_state.get("retirement_watch") is False
+        assert career_state.get("retirement_decision_eligible") is False
         assert career_state.get("eligible_for_retirement_decision") is False
         assert career_state.get("policy_drivers") == []
+        assert career_state.get("retirement_drivers") == []
+        assert career_state.get("retirement_policy_status") == "age_unknown"
+        assert career_state.get("retirement_policy") == "phase6_dynamic"
+        assert career_state.get("retired") is False
 
-        # Also test already-retired regen with unknown age
+        # Also test already-retired regen with unknown age.
         regen.metadata_json["career_state"]["retired"] = True
         regen.metadata_json["career_state"]["retired_on"] = "2025-01-01"
         session.flush()
@@ -84,5 +109,6 @@ def test_virtual_age_unavailable_prevents_retirement() -> None:
         assert summary_retired is not None
         assert summary_retired.retired is True
         assert summary_retired.lifecycle_phase == "retired"
+        assert regen.metadata_json["career_state"].get("retirement_decision_eligible") is False
     finally:
         session.close()
