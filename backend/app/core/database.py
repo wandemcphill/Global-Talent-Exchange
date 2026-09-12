@@ -25,6 +25,8 @@ MIGRATIONS_ROOT = BACKEND_ROOT / "migrations"
 ALEMBIC_INI_PATH = MIGRATIONS_ROOT / "alembic.ini"
 MODEL_MODULES = (
     "app.models",
+    "app.models.club_infra",
+    "app.models.club_growth",
     "app.agents.models",
     "app.ledger.models",
     "app.leaderboards.models",

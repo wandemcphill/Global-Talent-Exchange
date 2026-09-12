@@ -159,7 +159,7 @@ class RegenPortraitService:
         width = self._optional_int(bank_asset.get("width")) or PORTRAIT_SIZE
         height = self._optional_int(bank_asset.get("height")) or PORTRAIT_SIZE
         source_provider = self._asset_source_provider(bank_asset)
-        provider_external_id = f"{source_provider}:{storage_key}"
+        provider_external_id = f"{source_provider}:{player.id}:{storage_key}"
         portrait_status = self._asset_status(bank_asset)
 
         image = self._portrait_image_row(player.id)
@@ -1506,7 +1506,10 @@ class RegenPortraitService:
         configured = os.environ.get("GTEX_REGEN_FACE_BANK_MANIFEST") or os.environ.get("GTE_REGEN_FACE_BANK_MANIFEST")
         if configured:
             return Path(configured)
-        return self._media_root() / FACE_BANK_MANIFEST
+        primary = self._media_root() / FACE_BANK_MANIFEST
+        if primary.exists():
+            return primary
+        return Path(__file__).resolve().parents[3] / GENERATED_MEDIA_DIR / FACE_BANK_MANIFEST
 
     def _generated_media_url(self, storage_key: str) -> str:
         # Percent-encode each path segment but keep "/" as a separator: most of

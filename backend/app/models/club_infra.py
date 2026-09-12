@@ -37,7 +37,10 @@ class ClubFacility(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     academy_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     medical_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     branding_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    youth_recruitment_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     upkeep_cost_fancoin: Mapped[Decimal] = mapped_column(Numeric(18,4), nullable=False, default=Decimal("0.0000"), server_default="0")
+    in_progress_upgrades_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    facility_effects_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class ClubSupporterToken(Base, UUIDPrimaryKeyMixin, TimestampMixin):

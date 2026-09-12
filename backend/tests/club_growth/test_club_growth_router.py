@@ -31,6 +31,7 @@ from app.models.club_growth import (
     ClubStaffPerformanceLog,
     ClubStaffProfile,
 )
+from app.models.club_infra import ClubFacility
 from app.models.club_profile import ClubProfile
 from app.models.club_sponsorship_asset import ClubSponsorshipAsset
 from app.models.club_sponsorship_contract import ClubSponsorshipContract
@@ -59,6 +60,7 @@ def session() -> Iterator[Session]:
             Player.__table__,
             PlayerImageMetadata.__table__,
             PlayerShareMarket.__table__,
+            ClubFacility.__table__,
             ClubStaffProfile.__table__,
             ClubStaffContract.__table__,
             ClubStaffAssignment.__table__,

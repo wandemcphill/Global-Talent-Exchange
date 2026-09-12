@@ -67,6 +67,12 @@ class RegenRetirementAcademyBridge:
         if owner is None:
             raise ValueError(f"Retirement academy club owner {club.owner_user_id} was not found")
 
+        from app.services.academy_facility_economy_service import AcademyFacilityEconomyService
+
+        facility_service = AcademyFacilityEconomyService(self.session)
+        _capacity, facility_quality_score = facility_service.get_academy_capacity_and_quality(club_id)
+        effective_quality_floor = min(99, quality_floor + (facility_quality_score // 10))
+
         generated = ClubGrowthService(self.session).generate_prospects(
             actor=owner,
             club_id=club_id,
@@ -79,14 +85,16 @@ class RegenRetirementAcademyBridge:
         for prospect in self.session.scalars(
             select(AcademyProspect).where(AcademyProspect.id.in_(prospect_ids))
         ).all():
-            prospect.current_ability = max(int(prospect.current_ability), quality_floor)
-            prospect.potential = max(int(prospect.potential), quality_floor, int(prospect.current_ability))
+            prospect.current_ability = max(int(prospect.current_ability), effective_quality_floor)
+            prospect.potential = max(int(prospect.potential), effective_quality_floor, int(prospect.current_ability))
             prospect.metadata_json = {
                 **dict(prospect.metadata_json or {}),
                 "legacy_trigger_key": trigger_key,
                 "retirement_regen_id": plan.get("retiring_regen_id"),
                 "retirement_player_id": plan.get("retiring_player_id"),
                 "successor_quality_floor_gsi": quality_floor,
+                "effective_quality_floor_gsi": effective_quality_floor,
+                "facility_quality_score": facility_quality_score,
                 "legacy_generation": True,
             }
 

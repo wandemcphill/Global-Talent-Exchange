@@ -25,6 +25,10 @@ from app.models.club_growth import (
 from app.models.club_profile import ClubProfile
 from app.models.user import User
 from app.notifications.service import NotificationEventMatrixService
+from app.services.academy_facility_economy_service import (
+    AcademyFacilityEconomyService,
+    FacilityEconomyError,
+)
 from app.services.regen_portrait_service import (
     FACE_RECIPE_VERSION,
     NEWGEN_FACE_BANK_COLLECTION,
@@ -294,17 +298,24 @@ class ClubGrowthService:
         self.session.flush()
         return profile
 
-    def upgrade_academy(self, *, actor: User, club_id: str) -> AcademyProfileView:
-        profile = self.ensure_academy_profile(club_id=club_id)
-        previous = {"level": profile.level, "investment_minor": profile.investment_minor}
-        profile.level += 1
-        profile.investment_minor += profile.level * 50000
+    def upgrade_academy(self, *, actor: User, club_id: str, current_season_number: int = 1) -> AcademyProfileView:
+        service = AcademyFacilityEconomyService(self.session)
+        try:
+            result = service.start_facility_upgrade(
+                actor=actor,
+                club_id=club_id,
+                facility_key="academy",
+                current_season_number=current_season_number,
+            )
+        except FacilityEconomyError as exc:
+            raise ClubGrowthError(str(exc)) from exc
+        profile = service.ensure_academy_profile(club_id)
         self._audit(
             actor=actor,
             club_id=club_id,
             action="academy_upgraded",
-            previous_json=previous,
-            next_json={"level": profile.level, "investment_minor": profile.investment_minor},
+            previous_json={"level": result["current_level"]},
+            next_json={"level": result["target_level"], "cost_fancoin": str(result["cost_fancoin"])},
         )
         self.session.flush()
         return self._academy_profile_view(profile)
@@ -335,18 +346,26 @@ class ClubGrowthService:
     ) -> list[AcademyProspectView]:
         club = self._ensure_club(club_id)
         academy = self.ensure_academy_profile(club_id=club_id)
+        facility_service = AcademyFacilityEconomyService(self.session)
+        capacity, quality_score = facility_service.get_academy_capacity_and_quality(club_id)
+
         existing_count = int(
             self.session.scalar(select(func.count(AcademyProspect.id)).where(AcademyProspect.club_id == club_id))
             or 0
         )
+        if existing_count + payload.count > capacity:
+            raise ClubGrowthError(
+                f"Academy capacity limit reached. Capacity: {capacity}, Current prospects: {existing_count}, Requested: {payload.count}."
+            )
+
         seed = payload.seed or f"{club_id}:{academy.level}:{existing_count}:{payload.count}"
         generated: list[AcademyProspect] = []
         for index in range(payload.count):
             digest = sha256(f"{seed}:{index}".encode("utf-8")).hexdigest()
             position = POSITIONS[int(digest[0:2], 16) % len(POSITIONS)]
             personality = PERSONALITIES[int(digest[2:4], 16) % len(PERSONALITIES)]
-            ability = 32 + (int(digest[4:6], 16) % 20) + academy.level
-            potential = min(99, ability + 18 + (int(digest[6:8], 16) % 24))
+            ability = 32 + (int(digest[4:6], 16) % 18) + (quality_score // 8)
+            potential = min(99, ability + 18 + (int(digest[6:8], 16) % 20) + (quality_score // 10))
             portrait_asset_ref = self._select_academy_portrait_asset_ref(
                 seed=f"{seed}:{index}",
                 nationality=club.country_code,
@@ -369,6 +388,8 @@ class ClubGrowthService:
                     "portrait_source_provider": NEWGEN_FACE_BANK_PROVIDER,
                     "portrait_source_collection": NEWGEN_FACE_BANK_COLLECTION,
                     "source": "academy_to_regen_batch_26",
+                    "academy_quality_score": quality_score,
+                    "academy_capacity_limit": capacity,
                 },
             )
             self.session.add(prospect)
@@ -378,14 +399,18 @@ class ClubGrowthService:
             run_seed=seed,
             prospects_created=payload.count,
             status="completed",
-            metadata_json={"academy_level": academy.level},
+            metadata_json={
+                "academy_level": academy.level,
+                "academy_quality_score": quality_score,
+                "academy_capacity_limit": capacity,
+            },
         )
         self.session.add(run)
         self._audit(
             actor=actor,
             club_id=club_id,
             action="academy_prospects_generated",
-            next_json={"run_seed": seed, "prospects_created": payload.count},
+            next_json={"run_seed": seed, "prospects_created": payload.count, "quality_score": quality_score},
         )
         self.session.flush()
         self._publish_matrix_notification(

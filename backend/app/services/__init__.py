@@ -4,5 +4,17 @@
 # package is imported. The adapter only changes retirement gating; all existing
 # lifecycle side effects remain owned by PlayerLifecycleService.
 from app.services import regen_career_lifecycle_adapter as _regen_career_lifecycle_adapter
+from app.services.academy_facility_economy_service import (
+    AcademyFacilityEconomyService,
+    FacilityEconomyError,
+    calculate_completion_seasons,
+    calculate_upgrade_cost,
+)
 
-__all__ = ["_regen_career_lifecycle_adapter"]
+__all__ = [
+    "_regen_career_lifecycle_adapter",
+    "AcademyFacilityEconomyService",
+    "FacilityEconomyError",
+    "calculate_completion_seasons",
+    "calculate_upgrade_cost",
+]

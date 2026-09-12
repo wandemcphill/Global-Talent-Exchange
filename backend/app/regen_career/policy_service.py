@@ -130,7 +130,7 @@ class RegenCareerPolicyService:
                 select(RegenGenerationEvent)
                 .where(RegenGenerationEvent.regen_profile_id == regen_profile_id)
                 .order_by(RegenGenerationEvent.created_at.asc(), RegenGenerationEvent.id.asc())
-            )
+            ).all()
         )
         for event in events:
             raw_values = (

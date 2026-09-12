@@ -10,6 +10,7 @@ from app.economy.service import EconomyConfigService
 from app.models.club_infra import ClubFacility, ClubStadium, ClubSupporterHolding, ClubSupporterToken, SupporterTokenStatus
 from app.models.club_profile import ClubProfile
 from app.models.user import User
+from app.services.academy_facility_economy_service import AcademyFacilityEconomyService, FacilityEconomyError
 
 
 class ClubInfraError(ValueError):
@@ -108,22 +109,18 @@ class ClubInfraService:
         self.session.flush()
         return self.dashboard_for_club(club_id=club.id, viewer=actor)
 
-    def upgrade_facility(self, *, actor: User, facility_key: str, increment: int):
+    def upgrade_facility(self, *, actor: User, facility_key: str, increment: int = 1, current_season_number: int = 1):
         club = self._club_for_user(actor)
-        _, facilities, _ = self.ensure_defaults_for_club(club)
-        field_map = {
-            'training': 'training_level',
-            'academy': 'academy_level',
-            'medical': 'medical_level',
-            'branding': 'branding_level',
-        }
-        attr = field_map.get(facility_key.strip().lower())
-        if attr is None:
-            raise ClubInfraError('Facility key must be one of training, academy, medical, branding.')
-        current = int(getattr(facilities, attr))
-        setattr(facilities, attr, min(10, current + increment))
-        facilities.upkeep_cost_fancoin = Decimal(facilities.upkeep_cost_fancoin) + Decimal('50.0000') * Decimal(increment)
-        self.session.flush()
+        service = AcademyFacilityEconomyService(self.session)
+        try:
+            service.start_facility_upgrade(
+                actor=actor,
+                club_id=club.id,
+                facility_key=facility_key,
+                current_season_number=current_season_number,
+            )
+        except FacilityEconomyError as exc:
+            raise ClubInfraError(str(exc)) from exc
         return self.dashboard_for_club(club_id=club.id, viewer=actor)
 
     def support_club(self, *, actor: User, club_id: str, quantity: int):

@@ -20,6 +20,8 @@ class AcademyProgressionService:
         player: AcademyPlayerView,
         payload: UpdateAcademyPlayerRequest,
         training_cycle_id: str | None,
+        facility_training_level: int = 1,
+        facility_medical_level: int = 1,
     ) -> AcademyPlayerProgressView:
         previous_overall = player.overall_rating
         attributes = dict(player.development_attributes or {})
@@ -34,7 +36,8 @@ class AcademyProgressionService:
         attendance = payload.attendance_score if payload.attendance_score is not None else 70
         coach_assessment = payload.coach_assessment if payload.coach_assessment is not None else 65
         completed_cycles = player.completed_cycles + payload.completed_cycles_delta
-        base_delta = max(-2, min(6, ((attendance - 65) // 10) + ((coach_assessment - 60) // 15) + payload.completed_cycles_delta))
+        facility_bonus = (facility_training_level // 2) + (facility_medical_level // 3)
+        base_delta = max(-2, min(8, ((attendance - 65) // 10) + ((coach_assessment - 60) // 15) + payload.completed_cycles_delta + facility_bonus))
 
         if payload.attribute_deltas:
             for key, delta in payload.attribute_deltas.items():

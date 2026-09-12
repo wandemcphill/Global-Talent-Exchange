@@ -20,29 +20,33 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
     op.add_column(
         "player_share_markets",
         sa.Column("released_shares", sa.Integer(), nullable=True),
     )
-    op.create_check_constraint(
-        "ck_player_share_markets_released_shares_nonnegative",
-        "player_share_markets",
-        "released_shares IS NULL OR released_shares >= 0",
-    )
-    op.create_check_constraint(
-        "ck_player_share_markets_released_not_below_circulating",
-        "player_share_markets",
-        "released_shares IS NULL OR released_shares >= circulating_shares",
-    )
-    op.create_check_constraint(
-        "ck_player_share_markets_released_not_above_total",
-        "player_share_markets",
-        "released_shares IS NULL OR released_shares <= total_shares",
-    )
+    if bind.dialect.name != "sqlite":
+        op.create_check_constraint(
+            "ck_player_share_markets_released_shares_nonnegative",
+            "player_share_markets",
+            "released_shares IS NULL OR released_shares >= 0",
+        )
+        op.create_check_constraint(
+            "ck_player_share_markets_released_not_below_circulating",
+            "player_share_markets",
+            "released_shares IS NULL OR released_shares >= circulating_shares",
+        )
+        op.create_check_constraint(
+            "ck_player_share_markets_released_not_above_total",
+            "player_share_markets",
+            "released_shares IS NULL OR released_shares <= total_shares",
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_player_share_markets_released_not_above_total", "player_share_markets", type_="check")
-    op.drop_constraint("ck_player_share_markets_released_not_below_circulating", "player_share_markets", type_="check")
-    op.drop_constraint("ck_player_share_markets_released_shares_nonnegative", "player_share_markets", type_="check")
+    bind = op.get_bind()
+    if bind.dialect.name != "sqlite":
+        op.drop_constraint("ck_player_share_markets_released_not_above_total", "player_share_markets", type_="check")
+        op.drop_constraint("ck_player_share_markets_released_not_below_circulating", "player_share_markets", type_="check")
+        op.drop_constraint("ck_player_share_markets_released_shares_nonnegative", "player_share_markets", type_="check")
     op.drop_column("player_share_markets", "released_shares")
