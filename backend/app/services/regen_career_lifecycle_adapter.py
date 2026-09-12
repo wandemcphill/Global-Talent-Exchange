@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from app.models.regen import RegenProfile
 from app.regen_career.policy_service import RegenCareerPolicyService
+from app.regen_career.retirement_legacy_plan import build_retirement_legacy_plan
 from app.services.player_lifecycle_service import PlayerLifecycleService
 
 _POLICY_INSTALLED = False
@@ -16,6 +17,7 @@ def _subtract_months(value: date, months: int) -> date:
     """Return a calendar date `months` before `value` without external dependencies."""
     total = value.year * 12 + (value.month - 1) - int(months)
     year, month_index = divmod(total, 12)
+    month = month_index + 1
     month = month_index + 1
     month_lengths = (
         31,
@@ -50,6 +52,33 @@ def _assessment_payload(context: Any) -> dict[str, Any]:
         "retirement_drivers": list(assessment.drivers),
         "generation_season_number": context.generation_season_number,
         "current_season_number": context.current_season_number,
+    }
+
+
+def _retirement_legacy_plan(regen: RegenProfile, player_id: str, state: dict[str, Any]) -> dict[str, Any] | None:
+    club_id = state.get("previous_club_id")
+    if not state.get("retired") or not club_id or state.get("retired_on") is None:
+        return None
+    potential_range = dict(regen.potential_range_json or {})
+    potential_floor = potential_range.get("minimum")
+    plan = build_retirement_legacy_plan(
+        retiring_regen_id=regen.regen_id,
+        retiring_player_id=player_id,
+        club_id=club_id,
+        current_gsi=regen.current_gsi,
+        potential_floor_gsi=potential_floor,
+    )
+    return {
+        "status": "planned",
+        "trigger_key": plan.trigger_key,
+        "retiring_regen_id": plan.retiring_regen_id,
+        "retiring_player_id": plan.retiring_player_id,
+        "club_id": plan.club_id,
+        "successor_count": plan.successor_count,
+        "successor_quality_floor_gsi": plan.successor_quality_floor_gsi,
+        "exceptional_successor_candidate": plan.exceptional_successor_candidate,
+        "generation_owner": "existing_academy_pipeline",
+        "generation_status": "pending",
     }
 
 
@@ -133,6 +162,10 @@ def _policy_sync(
             state["retired"] = True
         elif policy_context.assessment.virtual_age_months is not None:
             state["retired"] = False
+
+    legacy_plan = _retirement_legacy_plan(regen, player.id, state)
+    if legacy_plan is not None:
+        state["legacy_intake_plan"] = legacy_plan
 
     self._set_regen_career_state(regen, state)
     self.session.flush()
