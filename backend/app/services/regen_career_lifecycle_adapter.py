@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from app.models.regen import RegenProfile
 from app.regen_career.policy_service import RegenCareerPolicyService
+from app.regen_career.retirement_academy_bridge import RegenRetirementAcademyBridge
 from app.regen_career.retirement_legacy_plan import build_retirement_legacy_plan
 from app.services.player_lifecycle_service import PlayerLifecycleService
 
@@ -161,6 +162,13 @@ def _policy_sync(
     legacy_plan = _retirement_legacy_plan(regen, player.id, state)
     if legacy_plan is not None:
         state["legacy_intake_plan"] = legacy_plan
+        bridge_result = RegenRetirementAcademyBridge(self.session).consume(state=state)
+        if bridge_result is not None:
+            state["legacy_intake_plan"] = {
+                **legacy_plan,
+                "generation_status": bridge_result.status,
+                "prospect_ids": list(bridge_result.prospect_ids),
+            }
 
     self._set_regen_career_state(regen, state)
     self.session.flush()
