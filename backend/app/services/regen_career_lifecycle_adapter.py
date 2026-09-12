@@ -18,7 +18,6 @@ def _subtract_months(value: date, months: int) -> date:
     total = value.year * 12 + (value.month - 1) - int(months)
     year, month_index = divmod(total, 12)
     month = month_index + 1
-    month = month_index + 1
     month_lengths = (
         31,
         29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
