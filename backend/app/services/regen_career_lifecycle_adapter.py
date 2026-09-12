@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from app.models.regen import RegenProfile
 from app.regen_career.policy_service import RegenCareerPolicyService
+from app.regen_career.retirement_legacy_plan import build_retirement_legacy_plan
 from app.services.player_lifecycle_service import PlayerLifecycleService
 
 _POLICY_INSTALLED = False
@@ -53,6 +54,33 @@ def _assessment_payload(context: Any) -> dict[str, Any]:
     }
 
 
+def _retirement_legacy_plan(regen: RegenProfile, player_id: str, state: dict[str, Any]) -> dict[str, Any] | None:
+    club_id = state.get("previous_club_id")
+    if not state.get("retired") or not club_id or state.get("retired_on") is None:
+        return None
+    potential_range = dict(regen.potential_range_json or {})
+    potential_floor = potential_range.get("minimum")
+    plan = build_retirement_legacy_plan(
+        retiring_regen_id=regen.regen_id,
+        retiring_player_id=player_id,
+        club_id=club_id,
+        current_gsi=regen.current_gsi,
+        potential_floor_gsi=potential_floor,
+    )
+    return {
+        "status": "planned",
+        "trigger_key": plan.trigger_key,
+        "retiring_regen_id": plan.retiring_regen_id,
+        "retiring_player_id": plan.retiring_player_id,
+        "club_id": plan.club_id,
+        "successor_count": plan.successor_count,
+        "successor_quality_floor_gsi": plan.successor_quality_floor_gsi,
+        "exceptional_successor_candidate": plan.exceptional_successor_candidate,
+        "generation_owner": "existing_academy_pipeline",
+        "generation_status": "pending",
+    }
+
+
 def _policy_sync(
     self: PlayerLifecycleService,
     player,
@@ -73,8 +101,6 @@ def _policy_sync(
             reference_on=reference_on,
         )
     except (ValueError, KeyError):
-        # Until the GTEX season timeline publishes explicit virtual-age indexes,
-        # retirement must remain unknown rather than fall back to wall-clock age.
         policy_context = None
 
     original_settings = self.settings
@@ -89,8 +115,6 @@ def _policy_sync(
                 regen_config = replace(self.settings.regen_generation, regen_lifecycle_retirement_months=10**9)
                 self.settings = replace(self.settings, regen_generation=regen_config)
             else:
-                # Run the existing retirement side effects using the authoritative
-                # GTEX-season age instead of wall-clock lifetime.
                 regen_date = _subtract_months(reference_on, age_months)
                 regen.generated_at = datetime.combine(regen_date, original_generated_at.timetz())
                 regen_config = replace(
@@ -133,6 +157,10 @@ def _policy_sync(
             state["retired"] = True
         elif policy_context.assessment.virtual_age_months is not None:
             state["retired"] = False
+
+    legacy_plan = _retirement_legacy_plan(regen, player.id, state)
+    if legacy_plan is not None:
+        state["legacy_intake_plan"] = legacy_plan
 
     self._set_regen_career_state(regen, state)
     self.session.flush()
