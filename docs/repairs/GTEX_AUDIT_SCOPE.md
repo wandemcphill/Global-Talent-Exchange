@@ -1,0 +1,1 @@
+Audit scope from lifecycle review: academy promotion, staff signing, scouting, national-team rental, platform purchase separation, competitions, awards. Existing gameplay rules remain unchanged.
