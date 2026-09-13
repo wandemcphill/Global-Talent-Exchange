@@ -3,6 +3,7 @@
 Revision ID: 20260913_0121_gift_profile_club_identity
 Revises: 20260912_0120_personal_manager
 
+The recipient club is context only. Gift beneficiary identity remains the user profile.
 """
 
 from __future__ import annotations
