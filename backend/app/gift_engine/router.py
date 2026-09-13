@@ -448,7 +448,7 @@ def get_user_gift_stats_alias(user_id: str, session: Session = Depends(get_sessi
     return get_user_gift_stats(user_id=user_id, session=session)
 
 
-gift_stats_router.get("/discussions/threads/{thread_id}/gift-stats")
+@gift_stats_router.get("/discussions/threads/{thread_id}/gift-stats", response_model=GiftStatsView)
 def get_discussion_thread_gift_stats_alias(thread_id: str, session: Session = Depends(get_session)) -> GiftStatsView:
     return get_discussion_thread_gift_stats(thread_id=thread_id, session=session)
 
