@@ -167,8 +167,9 @@ class RegenCareerPolicyService:
         mapping: dict[int, int] = {}
         for season in seasons:
             raw = (season.metadata_json or {}).get("virtual_age_month_index")
-            if raw is not None:
-                mapping[season.season_number] = int(raw)
+            if raw is None:
+                raise ValueError("GTEX season virtual-age mapping is incomplete")
+            mapping[season.season_number] = int(raw)
         return mapping
 
     def _personality(self, regen_profile_id: str) -> dict[str, float]:
