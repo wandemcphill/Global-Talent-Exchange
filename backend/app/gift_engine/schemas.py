@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field
 
 
 class GiftSendRequest(BaseModel):
+    # Gifting identity is always the authenticated profile/user. Club context
+    # is optional and can only identify the recipient's club.
     recipient_user_id: str | None = Field(default=None, min_length=1, max_length=36)
+    recipient_club_id: str | None = Field(default=None, min_length=1, max_length=36)
     gift_key: str = Field(min_length=2, max_length=64)
     quantity: Decimal = Field(default=Decimal("1.0000"), gt=0, le=1000)
     note: str | None = Field(default=None, max_length=500)
@@ -44,6 +47,7 @@ class GiftTransactionView(BaseModel):
     id: str
     sender_user_id: str
     recipient_user_id: str
+    recipient_club_id: str | None = None
     gift_key: str
     gift_display_name: str
     fallback_gift_name: str | None = None
