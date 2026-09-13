@@ -19,6 +19,7 @@ from app.gift_engine.schemas import (
 )
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
 from app.gift_engine.service import GiftEngineError, GiftEngineService
+from app.models.club_profile import ClubProfile
 from app.models.economic_conversion import EconomicConversion
 from app.models.economy_config import GiftCatalogItem
 from app.models.gift_transaction import GiftAbuseFlag, GiftStats, GiftTransactionStatus
@@ -32,6 +33,56 @@ router = APIRouter(prefix="/gift-engine", tags=["gift-engine"])
 gifts_router = APIRouter(prefix="/gifts", tags=["gifts"])
 gift_stats_router = APIRouter(tags=["gifts"])
 admin_gifts_router = APIRouter(prefix="/admin/gifts", tags=["admin-gifts"])
+
+
+def _resolve_recipient_context(
+    *,
+    payload: GiftSendRequest,
+    session: Session,
+) -> tuple[str | None, str | None]:
+    """Resolve club targeting without ever changing the authenticated sender identity.
+
+    A club is only recipient context. The beneficiary remains the club owner's
+    profile/user wallet, and a caller cannot name a club owned by somebody else
+    while naming a different recipient profile.
+    """
+    recipient_user_id = payload.recipient_user_id
+    recipient_club_id = payload.recipient_club_id
+    if recipient_club_id is None:
+        return recipient_user_id, None
+
+    club = session.get(ClubProfile, recipient_club_id)
+    if club is None or club.owner_user_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient club was not found.")
+    if recipient_user_id is not None and recipient_user_id != club.owner_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Recipient profile does not own the selected recipient club.",
+        )
+    return club.owner_user_id, club.id
+
+
+def _attach_recipient_club_context(
+    *,
+    item: GiftTransaction,
+    recipient_club_id: str | None,
+    session: Session,
+) -> None:
+    if recipient_club_id is None:
+        return
+    if item.recipient_club_id is not None and item.recipient_club_id != recipient_club_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Idempotent gift reference already belongs to a different recipient club.",
+        )
+    item.recipient_club_id = recipient_club_id
+    item.metadata_json = {
+        **dict(item.metadata_json or {}),
+        "recipient_profile_id": item.recipient_user_id,
+        "recipient_club_id": recipient_club_id,
+        "identity_semantics": "profile_is_canonical_sender_recipient_identity_club_is_context_only",
+    }
+    session.flush()
 
 
 def _map_catalog_item(item: GiftCatalogItem) -> GiftCatalogItemView:
@@ -62,6 +113,7 @@ def _map_transaction(item: GiftTransaction) -> GiftTransactionView:
         id=item.id,
         sender_user_id=item.sender_user_id,
         recipient_user_id=item.recipient_user_id,
+        recipient_club_id=item.recipient_club_id,
         gift_key=gift_item.key,
         gift_display_name=gift_item.display_name,
         fallback_gift_name=gift_item.fallback_display_name,
@@ -105,6 +157,8 @@ def _map_transaction(item: GiftTransaction) -> GiftTransactionView:
             "discussion_thread_id": item.discussion_thread_id,
             "match_id": item.match_id,
             "competition_id": item.competition_id,
+            "recipient_profile_id": item.recipient_user_id,
+            "recipient_club_id": item.recipient_club_id,
         },
         note=item.note,
         status=item.status.value,
@@ -139,7 +193,7 @@ def _map_abuse_flag(item: GiftAbuseFlag) -> GiftAbuseFlagView:
         flag_key=item.flag_key,
         sender_user_id=item.sender_user_id,
         recipient_type=item.recipient_type,
-        recipient_id=item.recipient_id,
+        recipient_id=item.recipient_entity_id or "",
         gift_transaction_id=item.gift_transaction_id,
         flag_type=item.flag_type,
         severity=item.severity,
@@ -213,10 +267,11 @@ def send_gift(
     payload: GiftSendRequest, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)
 ) -> GiftTransactionView:
     service = GiftEngineService(session)
+    recipient_user_id, recipient_club_id = _resolve_recipient_context(payload=payload, session=session)
     try:
         item = service.send_gift(
             sender=current_user,
-            recipient_user_id=payload.recipient_user_id,
+            recipient_user_id=recipient_user_id,
             gift_key=payload.gift_key,
             quantity=payload.quantity,
             note=payload.note,
@@ -230,11 +285,12 @@ def send_gift(
         )
     except GiftEngineError as exc:
         status_code = (
-            status.HTTP_409_CONFLICT if exc.reason == "spending_controls_blocked" else status.HTTP_400_BAD_REQUEST
+            status.HTTP_409_CONFLICT if exc.reason in {"spending_controls_blocked", "match_gift_rate_limited"} else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
     except InsufficientBalanceError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    _attach_recipient_club_context(item=item, recipient_club_id=recipient_club_id, session=session)
     session.commit()
     session.refresh(item)
     return _map_transaction(item)
@@ -303,10 +359,11 @@ def send_public_gift(
     session: Session = Depends(get_session),
 ) -> GiftTransactionView:
     service = GiftEngineService(session)
+    recipient_user_id, recipient_club_id = _resolve_recipient_context(payload=payload, session=session)
     try:
         item = service.send_gift(
             sender=current_user,
-            recipient_user_id=payload.recipient_user_id,
+            recipient_user_id=recipient_user_id,
             gift_key=payload.gift_key,
             quantity=payload.quantity,
             note=payload.note,
@@ -320,11 +377,12 @@ def send_public_gift(
         )
     except GiftEngineError as exc:
         status_code = (
-            status.HTTP_409_CONFLICT if exc.reason == "spending_controls_blocked" else status.HTTP_400_BAD_REQUEST
+            status.HTTP_409_CONFLICT if exc.reason in {"spending_controls_blocked", "match_gift_rate_limited"} else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
     except InsufficientBalanceError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    _attach_recipient_club_context(item=item, recipient_club_id=recipient_club_id, session=session)
     session.commit()
     session.refresh(item)
     return _map_transaction(item)
@@ -456,10 +514,6 @@ def admin_refund_gift_event(
     )
 
     if conversion is not None:
-        # Canonical FanCoin -> GTEX Coin gift. Reversing it in one unit would
-        # refund the sender in withdrawable Coin for a FanCoin debit that was
-        # never unwound, so the compensation runs through the conversion
-        # authority that posted the original two legs.
         try:
             FanCoinGiftConversionService(session, wallet_service=wallet_service).reverse(
                 conversion=conversion,
@@ -471,7 +525,6 @@ def admin_refund_gift_event(
         except EconomicConversionError as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     elif transaction.source_ledger_unit is transaction.destination_ledger_unit:
-        # Legacy single-unit gift recorded before cross-currency conversion.
         legacy_unit = transaction.source_ledger_unit
         sender_account = wallet_service.get_user_account(session, sender, legacy_unit)
         recipient_account = wallet_service.get_user_account(session, recipient, legacy_unit)
@@ -485,12 +538,8 @@ def admin_refund_gift_event(
             wallet_service.append_transaction(
                 session,
                 postings=[
-                    LedgerPosting(
-                        account=recipient_account, amount=-transaction.recipient_net_amount, source_tag=source_tag
-                    ),
-                    LedgerPosting(
-                        account=platform_account, amount=-transaction.platform_rake_amount, source_tag=source_tag
-                    ),
+                    LedgerPosting(account=recipient_account, amount=-transaction.recipient_net_amount, source_tag=source_tag),
+                    LedgerPosting(account=platform_account, amount=-transaction.platform_rake_amount, source_tag=source_tag),
                     LedgerPosting(account=sender_account, amount=transaction.gross_amount, source_tag=source_tag),
                 ],
                 reason=LedgerEntryReason.ADJUSTMENT,
