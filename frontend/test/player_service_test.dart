@@ -357,96 +357,85 @@ void main() {
     },
   );
 
-  test(
-    'player actions fail closed before transport when routes are not mounted',
-    () async {
-      final _RecordingTransport transport =
-          _RecordingTransport(<GteTransportResponse>[
-            const GteTransportResponse(statusCode: 200, body: null),
-            const GteTransportResponse(statusCode: 200, body: null),
-            const GteTransportResponse(statusCode: 200, body: null),
-          ]);
-      final PlayerService service = PlayerService(
-        client: GteAuthedApi(
-          config: const GteRepositoryConfig(
-            baseUrl: 'http://127.0.0.1:8000',
-            mode: GteBackendMode.live,
-          ),
-          transport: transport,
-          accessToken: 'demo-token',
+  test('scout and contact trigger live scout report route', () async {
+    final _RecordingTransport transport = _RecordingTransport(<GteTransportResponse>[
+      GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'report': <String, Object?>{'scout_identity': 'Scout 1'},
+        },
+      ),
+      GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'report': <String, Object?>{'scout_identity': 'Scout 1'},
+        },
+      ),
+    ]);
+    final PlayerService service = PlayerService(
+      client: GteAuthedApi(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.live,
         ),
-      );
+        transport: transport,
+        accessToken: 'demo-token',
+        mode: GteBackendMode.live,
+      ),
+    );
 
-      await expectLater(
-        service.scout('player-osimhen'),
-        throwsA(
-          isA<GteApiException>().having(
-            (GteApiException error) => error.type,
-            'type',
-            GteApiErrorType.unavailable,
-          ),
-        ),
-      );
-      await expectLater(
-        service.shortlist('player-osimhen'),
-        throwsA(isA<GteApiException>()),
-      );
-      await expectLater(
-        service.contact('player-osimhen'),
-        throwsA(isA<GteApiException>()),
-      );
-      expect(transport.requests, isEmpty);
-    },
-  );
+    await service.scout('player-osimhen');
+    await service.contact('player-osimhen');
 
-  test(
-    'player action failures stay unavailable across all legacy entry points',
-    () async {
-      final _RecordingTransport transport = _RecordingTransport(
-        <GteTransportResponse>[
-          GteTransportResponse(
-            statusCode: 404,
-            body: <String, Object?>{'detail': 'Not found'},
-          ),
-          GteTransportResponse(
-            statusCode: 503,
-            body: <String, Object?>{'detail': 'Unavailable'},
-          ),
-          GteTransportResponse(
-            statusCode: 500,
-            body: <String, Object?>{'detail': 'Error'},
-          ),
-        ],
-      );
-      final PlayerService service = PlayerService(
-        client: GteAuthedApi(
-          config: const GteRepositoryConfig(
-            baseUrl: 'http://127.0.0.1:8000',
-            mode: GteBackendMode.live,
-          ),
-          transport: transport,
-          accessToken: 'demo-token',
+    expect(transport.requests, hasLength(2));
+    expect(
+      transport.requests.first.uri.path,
+      '/api/v2/scout/report/player-osimhen',
+    );
+  });
+
+  test('shortlist queries and adds to talent shortlist route', () async {
+    final _RecordingTransport transport = _RecordingTransport(<GteTransportResponse>[
+      GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'shortlists': <Object?>[
+            <String, Object?>{'id': 'sl-1', 'name': 'Scout Shortlist'},
+          ],
+        },
+      ),
+      GteTransportResponse(
+        statusCode: 200,
+        body: <String, Object?>{
+          'id': 'sl-1',
+          'entries': <Object?>[],
+        },
+      ),
+    ]);
+    final PlayerService service = PlayerService(
+      client: GteAuthedApi(
+        config: const GteRepositoryConfig(
+          baseUrl: 'http://127.0.0.1:8000',
           mode: GteBackendMode.live,
         ),
-      );
+        transport: transport,
+        accessToken: 'demo-token',
+        mode: GteBackendMode.live,
+      ),
+    );
 
-      await expectLater(
-        service.scout('player-osimhen'),
-        throwsA(isA<GteApiException>()),
-      );
-      await expectLater(
-        service.shortlist('player-osimhen'),
-        throwsA(isA<GteApiException>()),
-      );
-      await expectLater(
-        service.contact('player-osimhen'),
-        throwsA(isA<GteApiException>()),
-      );
+    await service.shortlist('player-osimhen');
 
-      expect(transport.requests, isEmpty);
-    },
-  );
+    expect(transport.requests, hasLength(2));
+    expect(
+      transport.requests[0].uri.path,
+      '/api/v2/talent/shortlists',
+    );
+    expect(
+      transport.requests[1].uri.path,
+      '/api/v2/talent/shortlists/sl-1/entries',
+    );
+  });
 }
 
 class _RecordingTransport implements GteTransport {

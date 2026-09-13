@@ -20,7 +20,8 @@ def _sqlite_add_constraint(self, constraint):
     except NotImplementedError:
         table_name = constraint.table.name
         with op.batch_alter_table(table_name) as batch_op:
-            batch_op.create_check_constraint(constraint.name, constraint.sqltext)
+            if hasattr(constraint, "sqltext"):
+                batch_op.create_check_constraint(constraint.name, constraint.sqltext)
 
 
 def _sqlite_drop_constraint(self, constraint):

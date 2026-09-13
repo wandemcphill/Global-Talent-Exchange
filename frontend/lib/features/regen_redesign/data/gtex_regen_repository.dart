@@ -12,7 +12,7 @@ import 'gtex_regen_world_api.dart';
 abstract class GtexRegenRepository {
   Future<GtexRegenWorldData> loadWorld();
   Future<GtexCreateSonOrder> createSon(GtexCreateSonDraft draft);
-  Future<GtexRegenContractOffer> submitContract(String offerId);
+  Future<GtexRegenContractOffer> submitContract(String offerId, {String? playerId});
 
   /// The full record for one regen: lineage, potential band, personality,
   /// development timeline, legacy and value. Never throws for a regen that
@@ -218,9 +218,24 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
   }
 
   @override
-  Future<GtexRegenContractOffer> submitContract(String offerId) {
-    throw UnsupportedError(
-      'Live regen contract submission is not exposed yet.',
+  Future<GtexRegenContractOffer> submitContract(String offerId, {String? playerId}) async {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to submit or accept a contract offer.');
+    }
+    final String targetPlayerId = (playerId ?? '').trim();
+    if (targetPlayerId.isEmpty) {
+      throw ArgumentError('playerId is required to accept a regen contract offer.');
+    }
+    final Map<String, dynamic> response = await _worldApi.acceptContractOffer(targetPlayerId, offerId);
+    return GtexRegenContractOffer(
+      id: offerId,
+      regenId: targetPlayerId,
+      regenName: GteJson.stringOrNull(response, <String>['player_id']) ?? targetPlayerId,
+      status: GtexRegenContractStatus.signed,
+      weeklyWageCoin: GteJson.integerOrNull(response, <String>['wage_amount']) ?? 0,
+      signingBonusCoin: 0,
+      durationSeasons: 1,
+      personalityNote: 'Contract offer accepted successfully.',
     );
   }
 
@@ -657,7 +672,7 @@ class DemoGtexRegenRepository implements GtexRegenRepository {
   }
 
   @override
-  Future<GtexRegenContractOffer> submitContract(String offerId) async {
+  Future<GtexRegenContractOffer> submitContract(String offerId, {String? playerId}) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     return demoWorldData.contracts.firstWhere(
       (GtexRegenContractOffer offer) => offer.id == offerId,

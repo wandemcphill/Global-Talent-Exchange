@@ -131,23 +131,53 @@ class PlayerService {
   }
 
   Future<void> scout(String id) async {
-    _throwBlockedPlayerAction('scout', id);
+    final String playerId = id.trim();
+    if (playerId.isEmpty) return;
+    await _client.getMap(
+      '/api/scout/report/$playerId',
+      auth: false,
+    );
   }
 
   Future<void> shortlist(String id) async {
-    _throwBlockedPlayerAction('shortlist', id);
+    final String playerId = id.trim();
+    if (playerId.isEmpty) return;
+    final Map<String, dynamic> shortlistsPayload = await _client.getMap('/api/talent/shortlists');
+    final List<Object?> items = GteJson.list(shortlistsPayload['shortlists'] ?? const <Object?>[]);
+    String? shortlistId;
+    if (items.isNotEmpty) {
+      final Map<String, dynamic> first = Map<String, dynamic>.from(items.first as Map);
+      shortlistId = GteJson.stringOrNull(first, <String>['id']);
+    }
+    if (shortlistId == null) {
+      final Object? newShortlist = await _client.post(
+        '/api/talent/shortlists',
+        body: <String, Object?>{
+          'name': 'Default Shortlist',
+          'description': 'Main scouting shortlist',
+        },
+      );
+      final Map<String, dynamic> created = Map<String, dynamic>.from(newShortlist as Map);
+      shortlistId = GteJson.stringOrNull(created, <String>['id']);
+    }
+    if (shortlistId != null) {
+      await _client.post(
+        '/api/talent/shortlists/$shortlistId/entries',
+        body: <String, Object?>{
+          'player_id': playerId,
+          'priority': 'medium',
+          'scout_note': 'Shortlisted via player detail',
+        },
+      );
+    }
   }
 
   Future<void> contact(String id) async {
-    _throwBlockedPlayerAction('contact', id);
-  }
-
-  Never _throwBlockedPlayerAction(String action, String id) {
-    final String playerId = id.trim().isEmpty ? 'unknown-player' : id.trim();
-    throw GteApiException(
-      type: GteApiErrorType.unavailable,
-      message:
-          'Player action "$action" is blocked for "$playerId" because no live backend route is mounted for it.',
+    final String playerId = id.trim();
+    if (playerId.isEmpty) return;
+    await _client.getMap(
+      '/api/scout/report/$playerId',
+      auth: false,
     );
   }
 

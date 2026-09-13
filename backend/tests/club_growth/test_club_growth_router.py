@@ -37,6 +37,7 @@ from app.models.club_sponsorship_asset import ClubSponsorshipAsset
 from app.models.club_sponsorship_contract import ClubSponsorshipContract
 from app.models.club_sponsorship_package import ClubSponsorshipPackage
 from app.models.club_sponsorship_payout import ClubSponsorshipPayout
+from app.models.club_squad_tier import ClubSquadTierMembership
 from app.models.player_token_market import PlayerShareMarket
 from app.models.sponsorship_engine import SponsorshipLead
 from app.models.user import KycStatus, User, UserRole
@@ -62,6 +63,7 @@ def session() -> Iterator[Session]:
             Player.__table__,
             PlayerImageMetadata.__table__,
             PlayerShareMarket.__table__,
+            ClubSquadTierMembership.__table__,
             ClubStaffProfile.__table__,
             ClubStaffContract.__table__,
             ClubStaffAssignment.__table__,

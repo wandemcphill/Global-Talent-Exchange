@@ -129,6 +129,18 @@ class GtexRegenWorldApi {
     return RegenOfferQuote.fromJson(payload);
   }
 
+  /// `POST /api/players/{player_id}/regen/contract-offers/{offer_id}/accept`
+  /// Accepts a submitted regen contract offer for the player.
+  Future<Map<String, dynamic>> acceptContractOffer(
+    String playerId,
+    String offerId,
+  ) async {
+    final Object? payload = await client.post(
+      '/api/players/${playerId.trim()}/regen/contract-offers/${offerId.trim()}/accept',
+    );
+    return Map<String, dynamic>.from(payload as Map);
+  }
+
   /// `GET /regen-universe/bloodlines`.
   Future<List<RegenBloodlineChain>> listBloodlines({int limit = 12}) async {
     final Map<String, dynamic> payload = await client.getMap(

@@ -42,6 +42,7 @@ from app.services.regen_portrait_service import (
     NEWGEN_FACE_BANK_PROVIDER,
     RegenPortraitService,
 )
+from app.squad_tiers.service import SquadTierService
 from app.sponsorship_engine.service import SponsorshipEngineService
 from app.wallets.service import LedgerSourceTag, LedgerUnit, WalletService
 
@@ -134,9 +135,7 @@ class ClubGrowthService:
         actor: User,
         payload: PersonalManagerCreateRequest,
     ) -> PersonalManagerView:
-        existing = self.session.scalar(
-            select(PersonalManager).where(PersonalManager.user_id == actor.id)
-        )
+        existing = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == actor.id))
         try:
             band = PersonalManagerBand(payload.quality_band)
             creation = validate_personal_manager_creation(
@@ -183,9 +182,7 @@ class ClubGrowthService:
         return self._personal_manager_view(manager)
 
     def get_personal_manager_me(self, *, actor: User) -> PersonalManagerView:
-        manager = self.session.scalar(
-            select(PersonalManager).where(PersonalManager.user_id == actor.id)
-        )
+        manager = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == actor.id))
         if manager is None:
             raise ClubGrowthError("personal_manager_not_found")
         return self._personal_manager_view(manager)
@@ -197,9 +194,7 @@ class ClubGrowthService:
         club_id: str,
     ) -> StaffContractView:
         self._ensure_club(club_id)
-        manager = self.session.scalar(
-            select(PersonalManager).where(PersonalManager.user_id == actor.id)
-        )
+        manager = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == actor.id))
         if manager is None:
             raise ClubGrowthError("personal_manager_not_found")
 
@@ -212,9 +207,7 @@ class ClubGrowthService:
             raise ClubGrowthError(decision.reason)
 
         market_key = f"personal-manager:{actor.id}"
-        staff_profile = self.session.scalar(
-            select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key)
-        )
+        staff_profile = self.session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key))
         if staff_profile is None:
             staff_profile = ClubStaffProfile(
                 market_key=market_key,
@@ -679,6 +672,12 @@ class ClubGrowthService:
                 nationality=prospect.nationality,
             )
         senior_player = self._ensure_senior_player_for_prospect(club_id=club_id, prospect=prospect)
+        SquadTierService(self.session).ensure_membership(
+            club_id=club_id,
+            player_id=senior_player.id,
+            tier="reserve",
+            source="academy_promotion",
+        )
         previous = {"status": prospect.status}
         prospect.status = "promoted_to_senior"
         history = existing_history
