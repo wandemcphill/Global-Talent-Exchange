@@ -130,10 +130,24 @@ def run_migrations_online() -> None:
         # Inspector queries above can autobegin a transaction on SQLAlchemy 2.x.
         # Commit that preflight work so Alembic controls the migration transaction.
         connection.commit()
+        if connection.dialect.name == "sqlite":
+            from alembic.ddl.sqlite import SQLiteImpl
+
+            _orig_add_constraint = SQLiteImpl.add_constraint
+
+            def _sqlite_add_constraint(self, const, **kw):
+                try:
+                    return _orig_add_constraint(self, const, **kw)
+                except NotImplementedError:
+                    pass
+
+            SQLiteImpl.add_constraint = _sqlite_add_constraint
+
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            render_as_batch=connection.dialect.name == "sqlite",
         )
 
         with context.begin_transaction():
