@@ -13,6 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.access_control.service import AccessControlService
 from app.auth.dependencies import get_current_user, get_session
+from app.club_growth.personal_manager_policy import PersonalManagerBand
 from app.club_growth.router import router as club_growth_router
 from app.club_growth.schemas import PersonalManagerCreateRequest
 from app.club_growth.service import ClubGrowthService
@@ -65,7 +66,6 @@ def session() -> Iterator[Session]:
         db_session.flush()
 
         from app.wallets.service import WalletService
-
         wallet = WalletService()
         wallet.credit_trade_proceeds(
             db_session,

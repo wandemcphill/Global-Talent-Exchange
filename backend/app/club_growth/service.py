@@ -130,7 +130,9 @@ class ClubGrowthService:
         actor: User,
         payload: PersonalManagerCreateRequest,
     ) -> PersonalManagerView:
-        existing = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == actor.id))
+        existing = self.session.scalar(
+            select(PersonalManager).where(PersonalManager.user_id == actor.id)
+        )
         try:
             band = PersonalManagerBand(payload.quality_band)
             creation = validate_personal_manager_creation(
@@ -177,7 +179,9 @@ class ClubGrowthService:
         return self._personal_manager_view(manager)
 
     def get_personal_manager_me(self, *, actor: User) -> PersonalManagerView:
-        manager = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == actor.id))
+        manager = self.session.scalar(
+            select(PersonalManager).where(PersonalManager.user_id == actor.id)
+        )
         if manager is None:
             raise ClubGrowthError("personal_manager_not_found")
         return self._personal_manager_view(manager)
@@ -189,7 +193,9 @@ class ClubGrowthService:
         club_id: str,
     ) -> StaffContractView:
         self._ensure_club(club_id)
-        manager = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == actor.id))
+        manager = self.session.scalar(
+            select(PersonalManager).where(PersonalManager.user_id == actor.id)
+        )
         if manager is None:
             raise ClubGrowthError("personal_manager_not_found")
 
@@ -202,7 +208,9 @@ class ClubGrowthService:
             raise ClubGrowthError(decision.reason)
 
         market_key = f"personal-manager:{actor.id}"
-        staff_profile = self.session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key))
+        staff_profile = self.session.scalar(
+            select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key)
+        )
         if staff_profile is None:
             staff_profile = ClubStaffProfile(
                 market_key=market_key,
@@ -305,7 +313,10 @@ class ClubGrowthService:
         )
 
     def seed_staff_defaults(self) -> None:
-        existing = {item[0] for item in self.session.execute(select(ClubStaffProfile.market_key)).all()}
+        existing = {
+            item[0]
+            for item in self.session.execute(select(ClubStaffProfile.market_key)).all()
+        }
         for payload in DEFAULT_STAFF_MARKET:
             market_key = str(payload["market_key"])
             if market_key in existing:
@@ -502,7 +513,8 @@ class ClubGrowthService:
         club = self._ensure_club(club_id)
         academy = self.ensure_academy_profile(club_id=club_id)
         existing_count = int(
-            self.session.scalar(select(func.count(AcademyProspect.id)).where(AcademyProspect.club_id == club_id)) or 0
+            self.session.scalar(select(func.count(AcademyProspect.id)).where(AcademyProspect.club_id == club_id))
+            or 0
         )
         seed = payload.seed or f"{club_id}:{academy.level}:{existing_count}:{payload.count}"
         generated: list[AcademyProspect] = []
@@ -630,11 +642,7 @@ class ClubGrowthService:
     def promote_prospect(self, *, actor: User, club_id: str, prospect_id: str) -> AcademyProspectView:
         prospect = self._get_prospect(club_id=club_id, prospect_id=prospect_id)
         existing_history = self._promotion_history(prospect_id=prospect.id)
-        if (
-            prospect.status == "promoted_to_senior"
-            and existing_history is not None
-            and existing_history.senior_player_id
-        ):
+        if prospect.status == "promoted_to_senior" and existing_history is not None and existing_history.senior_player_id:
             return self._academy_prospect_view(prospect)
         if prospect.status != "youth_signed":
             raise ClubGrowthError("prospect_not_promotable")
@@ -838,19 +846,9 @@ class ClubGrowthService:
 
     def _staff_effects(self, contracts: list[ClubStaffContract]) -> dict[str, int]:
         active = [item for item in contracts if item.status == "active" and item.staff_profile is not None]
-        scout_quality = sum(
-            item.staff_profile.rating
-            for item in active
-            if item.staff_profile.staff_type in {"scout", "academy_director"}
-        )
-        training_bonus = sum(
-            item.staff_profile.rating for item in active if item.staff_profile.staff_type in {"coach", "manager"}
-        )
-        negotiation_bonus = sum(
-            item.staff_profile.rating
-            for item in active
-            if item.staff_profile.staff_type in {"agent", "negotiation_specialist"}
-        )
+        scout_quality = sum(item.staff_profile.rating for item in active if item.staff_profile.staff_type in {"scout", "academy_director"})
+        training_bonus = sum(item.staff_profile.rating for item in active if item.staff_profile.staff_type in {"coach", "manager"})
+        negotiation_bonus = sum(item.staff_profile.rating for item in active if item.staff_profile.staff_type in {"agent", "negotiation_specialist"})
         return {
             "scout_quality": min(100, scout_quality),
             "training_bonus": min(100, training_bonus),

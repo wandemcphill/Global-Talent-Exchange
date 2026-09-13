@@ -245,7 +245,9 @@ class PlayerAgencyContextService:
         has_personal_manager = False
         manager_name = None
         if profile is not None and profile.owner_user_id:
-            pm = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == profile.owner_user_id))
+            pm = self.session.scalar(
+                select(PersonalManager).where(PersonalManager.user_id == profile.owner_user_id)
+            )
             if pm is not None:
                 has_personal_manager = True
                 manager_name = pm.display_name
@@ -396,10 +398,7 @@ class PlayerAgencyContextService:
     ) -> str:
         del personality
         career_state = dict((regen.metadata_json or {}).get("career_state") or {})
-        if (
-            career_state.get("career_stage") == "age_unknown"
-            or career_state.get("retirement_policy_status") == "age_unknown"
-        ):
+        if career_state.get("career_stage") == "age_unknown" or career_state.get("retirement_policy_status") == "age_unknown":
             return "age_unknown"
 
         age_years = self.resolve_age_years(player, regen=regen, reference_on=reference_on)

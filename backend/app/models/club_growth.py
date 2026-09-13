@@ -11,7 +11,9 @@ from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKey
 
 class ClubStaffProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "club_staff_profiles"
-    __table_args__ = (UniqueConstraint("market_key", name="uq_club_staff_profiles_market_key"),)
+    __table_args__ = (
+        UniqueConstraint("market_key", name="uq_club_staff_profiles_market_key"),
+    )
 
     market_key: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -57,7 +59,9 @@ class ClubStaffContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class ClubStaffAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "club_staff_assignments"
-    __table_args__ = (UniqueConstraint("club_id", "role_key", name="uq_club_staff_assignments_club_role"),)
+    __table_args__ = (
+        UniqueConstraint("club_id", "role_key", name="uq_club_staff_assignments_club_role"),
+    )
 
     club_id: Mapped[str] = mapped_column(
         String(36),
@@ -246,7 +250,9 @@ class ClubGrowthAuditEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 class PersonalManager(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "personal_managers"
-    __table_args__ = (UniqueConstraint("user_id", name="uq_personal_managers_user_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_personal_managers_user_id"),
+    )
 
     user_id: Mapped[str] = mapped_column(
         String(36),
