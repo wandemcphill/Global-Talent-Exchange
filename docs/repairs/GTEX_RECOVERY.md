@@ -1,0 +1,1 @@
+The repair branch must be cleaned before merge. No temporary files are intended to ship.
