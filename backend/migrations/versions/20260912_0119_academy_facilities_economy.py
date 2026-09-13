@@ -31,7 +31,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "academy_profiles",
-        sa.Column("capacity_limit", sa.Integer(), nullable=False, server_default="18"),
+        sa.Column("capacity_limit", sa.Integer(), nullable=False, server_default="15"),
     )
 
 

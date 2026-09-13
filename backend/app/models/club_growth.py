@@ -110,7 +110,7 @@ class AcademyProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     level: Mapped[int] = mapped_column(default=1, nullable=False, server_default="1")
     investment_minor: Mapped[int] = mapped_column(default=0, nullable=False, server_default="0")
-    capacity_limit: Mapped[int] = mapped_column(default=18, nullable=False, server_default="18")
+    capacity_limit: Mapped[int] = mapped_column(default=15, nullable=False, server_default="15")
     generation_cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 

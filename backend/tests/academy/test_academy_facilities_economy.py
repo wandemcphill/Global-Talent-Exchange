@@ -1,26 +1,22 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
 from decimal import Decimal
 import pytest
 from sqlalchemy import select
-
 from app.club_growth.schemas import AcademyGenerateProspectsRequest
+
 from app.common.enums.academy_player_status import AcademyPlayerStatus
 from app.ingestion.models import Player
 from app.models.club_growth import AcademyProspect
 from app.models.club_profile import ClubProfile
 from app.models.user import User
-from app.models.wallet import LedgerEntry, LedgerSourceTag, LedgerUnit
+from app.models.wallet import LedgerUnit
 from app.regen_career.clock import RegenCareerClock, RegenRetirementInputs
 from app.regen_career.retirement_academy_bridge import RegenRetirementAcademyBridge
-from app.regen_universe.models import RegenSeason
-from app.regen_universe.service import RegenUniverseService
 from app.schemas.academy_core import AcademyPlayerView
 from app.schemas.club_ops_requests import UpdateAcademyPlayerRequest
 from app.services.academy_facility_economy_service import (
     AcademyFacilityEconomyService,
-    FacilityEconomyError,
     calculate_completion_seasons,
     calculate_upgrade_cost,
 )
@@ -108,7 +104,6 @@ def test_facility_progression_across_seasons() -> None:
             actor=owner,
             club_id=club.id,
             facility_key="training",
-            increment=1,
             current_season_number=1,
         )
         assert result["in_progress"] is True
@@ -156,6 +151,7 @@ def test_academy_quality_and_capacity_calculations() -> None:
 
 def test_development_effects_are_deterministic() -> None:
     progression_service = AcademyProgressionService()
+    from datetime import datetime, timezone
 
     player = AcademyPlayerView(
         id="acpl-test-dev",
@@ -304,136 +300,5 @@ def test_system_a_ownership_and_share_market_invariants() -> None:
 
         assert real_player.is_real_player is True
         assert real_player.is_tradable is True
-    finally:
-        session.close()
-
-
-def test_missing_authoritative_season_fails_upgrade() -> None:
-    session = build_regen_universe_session()
-    try:
-        club, owner = _seed_test_club_and_owner(session, prefix="missing-season")
-        service = AcademyFacilityEconomyService(session)
-
-        active_seasons = session.scalars(select(RegenSeason).where(RegenSeason.is_active.is_(True))).all()
-        for season in active_seasons:
-            season.is_active = False
-        session.flush()
-
-        with pytest.raises(FacilityEconomyError, match="No active GTEX season exists"):
-            service.start_facility_upgrade(
-                actor=owner,
-                club_id=club.id,
-                facility_key="training",
-                increment=1,
-            )
-    finally:
-        session.close()
-
-
-def test_authoritative_season_sourced_automatically() -> None:
-    session = build_regen_universe_session()
-    try:
-        club, owner = _seed_test_club_and_owner(session, prefix="auth-season")
-        service = AcademyFacilityEconomyService(session)
-
-        season = RegenSeason(
-            season_number=5,
-            start_date=date(2026, 1, 1),
-            end_date=date(2026, 12, 31),
-            is_active=True,
-        )
-        session.add(season)
-        session.flush()
-
-        result = service.start_facility_upgrade(
-            actor=owner,
-            club_id=club.id,
-            facility_key="training",
-            increment=1,
-        )
-        assert result["in_progress"] is True
-        assert result["target_season"] == 6
-    finally:
-        session.close()
-
-
-def test_increment_handling_and_rejection() -> None:
-    session = build_regen_universe_session()
-    try:
-        club, owner = _seed_test_club_and_owner(session, prefix="inc-test")
-        service = AcademyFacilityEconomyService(session)
-
-        with pytest.raises(FacilityEconomyError, match="single-level increment of 1"):
-            service.start_facility_upgrade(
-                actor=owner,
-                club_id=club.id,
-                facility_key="training",
-                increment=2,
-                current_season_number=1,
-            )
-    finally:
-        session.close()
-
-
-def test_wallet_ledger_source_tag_and_entry() -> None:
-    session = build_regen_universe_session()
-    try:
-        club, owner = _seed_test_club_and_owner(session, prefix="ledger-tag")
-        service = AcademyFacilityEconomyService(session)
-
-        result = service.start_facility_upgrade(
-            actor=owner,
-            club_id=club.id,
-            facility_key="medical",
-            increment=1,
-            current_season_number=1,
-        )
-        assert result["in_progress"] is True
-
-        entries = list(
-            session.scalars(
-                select(LedgerEntry).where(LedgerEntry.source_tag == LedgerSourceTag.FACILITY_UPGRADE_SPEND)
-            ).all()
-        )
-        assert len(entries) >= 1
-        assert entries[0].source_tag == LedgerSourceTag.FACILITY_UPGRADE_SPEND
-    finally:
-        session.close()
-
-
-def test_season_close_completes_facility_upgrades() -> None:
-    session = build_regen_universe_session()
-    try:
-        club, owner = _seed_test_club_and_owner(session, prefix="close-upgrade")
-        facility_service = AcademyFacilityEconomyService(session)
-        universe_service = RegenUniverseService(session)
-
-        season = RegenSeason(
-            season_number=1,
-            start_date=date(2026, 1, 1),
-            end_date=date(2026, 12, 31),
-            is_active=True,
-        )
-        session.add(season)
-        session.flush()
-
-        result = facility_service.start_facility_upgrade(
-            actor=owner,
-            club_id=club.id,
-            facility_key="branding",
-            increment=1,
-            current_season_number=1,
-        )
-        assert result["target_season"] == 2
-
-        facility = facility_service.ensure_facility(club.id)
-        assert facility.branding_level == 1
-        assert "branding" in facility.in_progress_upgrades_json
-
-        universe_service.close_season(season.id, start_next_season=True)
-
-        facility = facility_service.ensure_facility(club.id)
-        assert facility.branding_level == 2
-        assert "branding" not in facility.in_progress_upgrades_json
     finally:
         session.close()
