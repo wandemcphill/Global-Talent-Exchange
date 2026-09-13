@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.gift_engine.router import _resolve_recipient_context
+from app.gift_engine.router import _resolve_recipient_context, _validate_existing_gift_identity
 from app.gift_engine.schemas import GiftSendRequest
 
 
@@ -60,3 +60,63 @@ def test_missing_club_is_rejected() -> None:
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Recipient club was not found."
+
+
+def _transaction(*, sender: str, recipient: str, club: str | None) -> MagicMock:
+    return MagicMock(sender_user_id=sender, recipient_user_id=recipient, recipient_club_id=club)
+
+
+def test_idempotent_replay_allows_same_profile_and_club_context() -> None:
+    item = _transaction(sender="sender-1", recipient="recipient-1", club="club-1")
+
+    _validate_existing_gift_identity(
+        item=item,
+        sender_user_id="sender-1",
+        recipient_user_id="recipient-1",
+        recipient_club_id="club-1",
+    )
+
+
+def test_idempotent_replay_rejects_different_profile() -> None:
+    item = _transaction(sender="sender-1", recipient="recipient-1", club="club-1")
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_existing_gift_identity(
+            item=item,
+            sender_user_id="sender-2",
+            recipient_user_id="recipient-1",
+            recipient_club_id="club-1",
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Idempotent gift reference belongs to a different sender or recipient profile."
+
+
+def test_idempotent_replay_rejects_different_club_context() -> None:
+    item = _transaction(sender="sender-1", recipient="recipient-1", club="club-1")
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_existing_gift_identity(
+            item=item,
+            sender_user_id="sender-1",
+            recipient_user_id="recipient-1",
+            recipient_club_id="club-2",
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Idempotent gift reference belongs to a different recipient club context."
+
+
+def test_idempotent_replay_cannot_introduce_club_context_to_profile_only_gift() -> None:
+    item = _transaction(sender="sender-1", recipient="recipient-1", club=None)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_existing_gift_identity(
+            item=item,
+            sender_user_id="sender-1",
+            recipient_user_id="recipient-1",
+            recipient_club_id="club-1",
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Idempotent gift reference belongs to a different recipient club context."
