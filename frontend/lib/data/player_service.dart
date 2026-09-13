@@ -133,52 +133,22 @@ class PlayerService {
   Future<void> scout(String id) async {
     final String playerId = id.trim();
     if (playerId.isEmpty) return;
-    await _client.getMap('/api/scout/report/$playerId');
+    await _client.getMap(
+      '/api/scout/report/$playerId',
+      auth: false,
+    );
   }
 
   Future<void> shortlist(String id) async {
-    await _ensurePlayerPipelineStatus(id.trim(), desiredStatus: 'shortlisted');
-  }
-
-  Future<void> contact(String id) async {
-    await _ensurePlayerPipelineStatus(id.trim(), desiredStatus: 'contacted');
-  }
-
-  Future<void> _ensurePlayerPipelineStatus(
-    String playerId, {
-    required String desiredStatus,
-  }) async {
+    final String playerId = id.trim();
     if (playerId.isEmpty) return;
-
-    final Map<String, dynamic> shortlistsPayload = await _client.getMap(
-      '/api/talent/shortlists',
-      query: <String, Object?>{'include_entries': true},
-    );
-    final List<Object?> items = GteJson.list(
-      shortlistsPayload['shortlists'] ?? const <Object?>[],
-    );
-
+    final Map<String, dynamic> shortlistsPayload = await _client.getMap('/api/talent/shortlists');
+    final List<Object?> items = GteJson.list(shortlistsPayload['shortlists'] ?? const <Object?>[]);
     String? shortlistId;
-    String? entryId;
-    for (final Object? rawItem in items) {
-      if (rawItem is! Map) continue;
-      final Map<String, dynamic> shortlist = Map<String, dynamic>.from(rawItem);
-      shortlistId ??= GteJson.stringOrNull(shortlist, <String>['id']);
-      final List<Object?> entries = GteJson.list(
-        shortlist['entries'] ?? const <Object?>[],
-      );
-      for (final Object? rawEntry in entries) {
-        if (rawEntry is! Map) continue;
-        final Map<String, dynamic> entry = Map<String, dynamic>.from(rawEntry);
-        if (GteJson.stringOrNull(entry, <String>['player_id']) == playerId) {
-          shortlistId = GteJson.stringOrNull(shortlist, <String>['id']);
-          entryId = GteJson.stringOrNull(entry, <String>['id']);
-          break;
-        }
-      }
-      if (entryId != null) break;
+    if (items.isNotEmpty) {
+      final Map<String, dynamic> first = Map<String, dynamic>.from(items.first as Map);
+      shortlistId = GteJson.stringOrNull(first, <String>['id']);
     }
-
     if (shortlistId == null) {
       final Object? newShortlist = await _client.post(
         '/api/talent/shortlists',
@@ -187,35 +157,27 @@ class PlayerService {
           'description': 'Main scouting shortlist',
         },
       );
-      final Map<String, dynamic> created = Map<String, dynamic>.from(
-        newShortlist as Map,
-      );
+      final Map<String, dynamic> created = Map<String, dynamic>.from(newShortlist as Map);
       shortlistId = GteJson.stringOrNull(created, <String>['id']);
     }
-
-    if (shortlistId == null) {
-      throw StateError('Unable to resolve an authenticated scouting shortlist.');
-    }
-
-    if (entryId == null) {
+    if (shortlistId != null) {
       await _client.post(
         '/api/talent/shortlists/$shortlistId/entries',
         body: <String, Object?>{
           'player_id': playerId,
           'priority': 'medium',
-          'status': desiredStatus,
-          'note': 'Updated from player detail',
+          'scout_note': 'Shortlisted via player detail',
         },
       );
-      return;
     }
+  }
 
-    await _client.patch(
-      '/api/talent/shortlists/$shortlistId/entries/$entryId',
-      body: <String, Object?>{
-        'status': desiredStatus,
-        'note': 'Updated from player detail',
-      },
+  Future<void> contact(String id) async {
+    final String playerId = id.trim();
+    if (playerId.isEmpty) return;
+    await _client.getMap(
+      '/api/scout/report/$playerId',
+      auth: false,
     );
   }
 

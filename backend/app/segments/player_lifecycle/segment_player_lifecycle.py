@@ -256,49 +256,6 @@ def list_transfer_window_bids(
     return [service.to_transfer_bid_view(item) for item in service.list_window_bids(window_id)]
 
 
-@router.post(
-    "/api/transfers/windows/{window_id}/bids", response_model=TransferBidView, status_code=status.HTTP_201_CREATED
-)
-def create_transfer_bid(
-    window_id: str,
-    payload: TransferBidCreateRequest,
-    service: PlayerLifecycleService = Depends(_service),
-    _: User = Depends(get_current_user),
-) -> TransferBidView:
-    try:
-        return service.to_transfer_bid_view(service.create_bid(window_id, payload))
-    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
-        _raise_for_lifecycle_error(exc)
-
-
-@router.post("/api/transfers/windows/{window_id}/bids/{bid_id}/accept", response_model=TransferBidView)
-def accept_transfer_bid(
-    window_id: str,
-    bid_id: str,
-    payload: TransferBidAcceptRequest,
-    service: PlayerLifecycleService = Depends(_service),
-    _: User = Depends(get_current_user),
-) -> TransferBidView:
-    try:
-        return service.to_transfer_bid_view(service.accept_bid(window_id, bid_id, payload))
-    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
-        _raise_for_lifecycle_error(exc)
-
-
-@router.post("/api/transfers/windows/{window_id}/bids/{bid_id}/reject", response_model=TransferBidView)
-def reject_transfer_bid(
-    window_id: str,
-    bid_id: str,
-    payload: TransferBidRejectRequest,
-    service: PlayerLifecycleService = Depends(_service),
-    _: User = Depends(get_current_user),
-) -> TransferBidView:
-    try:
-        return service.to_transfer_bid_view(service.reject_bid(window_id, bid_id, payload))
-    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
-        _raise_for_lifecycle_error(exc)
-
-
 @router.get("/api/players/{player_id}/regen", response_model=RegenLifecycleView | None)
 def get_player_regen_summary(
     player_id: str,

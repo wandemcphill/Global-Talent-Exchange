@@ -31,6 +31,12 @@ def accept_regen_contract_offer(
     offer = session.get(RegenContractOffer, offer_id)
     if offer is None:
         raise PlayerLifecycleNotFoundError(f"Regen contract offer {offer_id} was not found")
+    if offer.decision_deadline.date() < effective_date:
+        offer.status = "expired"
+        session.commit()
+        raise RegenContractOfferServiceError("Regen contract offer has expired")
+    if offer.status not in {"submitted", "pending"}:
+        raise RegenContractOfferServiceError(f"Offer {offer_id} is no longer actionable")
     if offer.transfer_bid_id is None:
         raise RegenContractOfferServiceError("Regen contract offer is missing its transfer bid")
 
@@ -46,19 +52,6 @@ def accept_regen_contract_offer(
     club = service._require_club_profile(offer.offering_club_id)
     if club.owner_user_id != actor.id:
         raise RegenContractOfferServiceError("Only the owning club user can accept this contract offer")
-
-    if offer.status == "accepted":
-        accepted_by = str((offer.metadata_json or {}).get("accepted_by_user_id") or "")
-        if accepted_by and accepted_by != actor.id:
-            raise RegenContractOfferServiceError("Contract offer was already accepted by another actor")
-        return bid
-
-    if offer.decision_deadline.date() < effective_date:
-        offer.status = "expired"
-        session.commit()
-        raise RegenContractOfferServiceError("Regen contract offer has expired")
-    if offer.status not in {"submitted", "pending"}:
-        raise RegenContractOfferServiceError(f"Offer {offer_id} is no longer actionable")
 
     starts_on = effective_date
     ends_on = starts_on + timedelta(days=365 * offer.contract_years - 1)

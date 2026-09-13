@@ -145,7 +145,6 @@ def discover_regens(
 def get_scout_report(
     player_id: str,
     scout_id: str | None = Query(default=None),
-    _current_user: User = Depends(get_current_user),
     service: RegenEcosystemService = Depends(_service),
 ) -> ScoutReportView:
     try:
