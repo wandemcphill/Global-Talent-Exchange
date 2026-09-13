@@ -48,3 +48,15 @@ def test_cannot_pair_a_club_with_a_different_profile() -> None:
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail == "Recipient profile does not own the selected recipient club."
+
+
+def test_missing_club_is_rejected() -> None:
+    session = MagicMock()
+    session.get.return_value = None
+    payload = GiftSendRequest(recipient_club_id="missing-club", gift_key="fire")
+
+    with pytest.raises(HTTPException) as exc_info:
+        _resolve_recipient_context(payload=payload, session=session)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Recipient club was not found."
