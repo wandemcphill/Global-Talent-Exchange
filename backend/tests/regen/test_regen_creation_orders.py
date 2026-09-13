@@ -15,10 +15,11 @@ from app.auth.service import AuthService
 from app.ingestion.models import Country, Player
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
+from app.models.club_squad_tier import ClubSquadTierMembership
 from app.models.regen import RegenProfile
 from app.models.regen_ecosystem import CareerEvent, RegenBloodlineLink
 from app.models.user import User
-from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.regen_universe.models import RegenAchievement, RegenStoryEvent
 from app.regen_creation.router import router
 from app.regen_creation.service import RegenCreationService
@@ -329,6 +330,167 @@ def test_duplicate_generation_call_returns_existing_generated_regen(session) -> 
         select(func.count(RegenProfile.id)).where(RegenProfile.generation_source == "requested_son")
     )
     assert int(regen_count or 0) == 1
+
+
+def test_pricing_snapshot_and_ledger_source_tag(session) -> None:
+    user = _create_user(session, email="snapshot@example.com", username="snapshotuser", full_name="Snapshot User")
+    club = _create_club(session, owner=user, slug="snapshot-fc", name="Snapshot FC")
+    country = _create_country(session)
+    player = _create_player(session, club=club, country=country, external_id="snap-parent", full_name="Obinna Eze")
+    _fund_user(session, user, amount=Decimal("1000.0000"))
+
+    client = _client(session, current_user=user)
+    response = client.post(
+        "/api/regens/request-son",
+        json={
+            "parent_player_id": player.id,
+            "requested_name": "Tobi Eze",
+            "requested_position": "CM",
+            "payment_method": "wallet",
+        },
+    )
+    assert response.status_code == 201
+    order_id = response.json()["id"]
+
+    # Verify order metadata contains immutable pricing snapshot
+    from app.models.regen_creation_order import RegenCreationOrder
+    order_obj = session.get(RegenCreationOrder, order_id)
+    assert order_obj is not None
+    snapshot = (order_obj.metadata_json or {}).get("pricing_snapshot")
+    assert snapshot is not None
+    assert snapshot["pricing_version"] == "v1"
+    assert Decimal(snapshot["base_price_coin"]) == Decimal("125.0000")
+    assert Decimal(snapshot["name_price_coin"]) == Decimal("25.0000")
+    assert Decimal(snapshot["customization_price_coin"]) == Decimal("35.0000")
+    assert Decimal(snapshot["total_price_coin"]) == Decimal("185.0000")
+
+    pay_res = client.post(f"/api/regens/creation-orders/{order_id}/pay-with-wallet")
+    assert pay_res.status_code == 200
+
+    # Verify ledger entry was recorded with BUILD_A_SON_SPEND
+    entries = session.scalars(
+        select(LedgerEntry).where(LedgerEntry.source_tag == LedgerSourceTag.BUILD_A_SON_SPEND)
+    ).all()
+    assert len(entries) > 0
+
+
+def test_squad_tier_reserve_membership_created_on_son_generation(session) -> None:
+    user = _create_user(session, email="tier@example.com", username="tieruser", full_name="Tier User")
+    club = _create_club(session, owner=user, slug="tier-fc", name="Tier FC")
+    country = _create_country(session)
+    player = _create_player(session, club=club, country=country, external_id="tier-parent", full_name="Babatunde Raji")
+    _fund_user(session, user, amount=Decimal("1000.0000"))
+
+    client = _client(session, current_user=user)
+    create_res = client.post(
+        "/api/regens/request-son",
+        json={
+            "parent_player_id": player.id,
+            "requested_name": "Farouq Raji",
+            "payment_method": "wallet",
+        },
+    )
+    order_id = create_res.json()["id"]
+    pay_res = client.post(f"/api/regens/creation-orders/{order_id}/pay-with-wallet")
+    assert pay_res.status_code == 200
+    gen_player_id = pay_res.json()["generated_player_id"]
+
+    # Verify Squad Tier membership exists in Reserve
+    membership = session.scalar(
+        select(ClubSquadTierMembership).where(
+            ClubSquadTierMembership.club_id == club.id,
+            ClubSquadTierMembership.player_id == gen_player_id,
+            ClubSquadTierMembership.status == "active",
+        )
+    )
+    assert membership is not None
+    assert membership.tier == "reserve"
+    assert membership.source == "son"
+
+
+def test_korapay_mismatched_amount_fails_order(session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", "test-secret")
+    monkeypatch.setattr("app.regen_creation.service.provider_live_deposit_ready", lambda provider: True)
+
+    class _FakeKoraPayInitializeResponse:
+        @staticmethod
+        def raise_for_status() -> None:
+            return None
+
+        @staticmethod
+        def json() -> dict[str, object]:
+            return {
+                "data": {
+                    "checkout_url": "https://checkout.korapay.test/pay/mismatch",
+                    "payment_reference": "ref-mismatch-123",
+                    "reference": "ref-mismatch-123",
+                }
+            }
+
+    monkeypatch.setattr("app.regen_creation.service.httpx.post", lambda *a, **kw: _FakeKoraPayInitializeResponse())
+
+    user = _create_user(session, email="mismatch@example.com", username="mismatchuser", full_name="Mismatch User")
+    club = _create_club(session, owner=user, slug="mismatch-fc", name="Mismatch FC")
+    country = _create_country(session)
+    player = _create_player(session, club=club, country=country, external_id="mismatch-p", full_name="Efe Ambrose")
+
+    client = _client(session, current_user=user)
+    create_res = client.post(
+        "/api/regens/request-son",
+        json={
+            "parent_player_id": player.id,
+            "payment_method": "korapay",
+        },
+    )
+    assert create_res.status_code == 201
+    order_id = create_res.json()["id"]
+
+    # Mock KoraPay verify with wrong amount
+    monkeypatch.setattr(
+        RegenCreationService,
+        "_verify_korapay_transaction",
+        lambda self, *, reference: {
+            "data": {
+                "status": "success",
+                "payment_reference": reference,
+                "reference": reference,
+                "currency": "NGN",
+                "amount": Decimal("1.0000"),  # Mismatched amount
+            }
+        },
+    )
+
+    gen_res = client.post(f"/api/regens/creation-orders/{order_id}/generate-after-payment")
+    assert gen_res.status_code == 409
+    assert "amount does not match" in gen_res.json()["detail"].lower()
+
+
+def test_pending_request_limit_enforced(session) -> None:
+    user = _create_user(session, email="limit@example.com", username="limituser", full_name="Limit User")
+    club = _create_club(session, owner=user, slug="limit-fc", name="Limit FC")
+    country = _create_country(session)
+    player = _create_player(session, club=club, country=country, external_id="limit-parent", full_name="Godwin Oboabona")
+
+    client = _client(session, current_user=user)
+    res1 = client.post(
+        "/api/regens/request-son",
+        json={
+            "parent_player_id": player.id,
+            "payment_method": "wallet",
+        },
+    )
+    assert res1.status_code == 201
+
+    # Second concurrent order while first is still pending payment should fail with limit error
+    res2 = client.post(
+        "/api/regens/request-son",
+        json={
+            "parent_player_id": player.id,
+            "payment_method": "wallet",
+        },
+    )
+    assert res2.status_code == 409
+    assert "limit_reached" in res2.json()["detail"].lower()
 
 
 def test_korapay_paid_callback_generates_exactly_once(session, monkeypatch: pytest.MonkeyPatch) -> None:
