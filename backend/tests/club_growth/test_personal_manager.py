@@ -29,7 +29,7 @@ from app.models.player_agency_state import PlayerAgencyState
 from app.models.player_personality import PlayerPersonality
 from app.models.regen import RegenProfile
 from app.models.user import KycStatus, User, UserRole
-from app.models.wallet import LedgerUnit
+from app.models.wallet import LedgerSourceTag, LedgerTransaction, LedgerUnit
 from app.services.player_agency_context_service import PlayerAgencyContextService
 from app.ingestion.models import Player
 
@@ -66,6 +66,7 @@ def session() -> Iterator[Session]:
         db_session.flush()
 
         from app.wallets.service import WalletService
+
         wallet = WalletService()
         wallet.credit_trade_proceeds(
             db_session,
@@ -136,7 +137,7 @@ def test_create_personal_manager_success(client: TestClient, session: Session) -
         json={
             "display_name": "Boss Pep",
             "quality_band": 4,  # BAND_91_95
-            "fan_coin_price": 2500,
+            "fan_coin_price": 2500,  # client value is ignored; server policy supplies 1000
             "tactical_identity": {
                 "formation": "4-3-3",
                 "mentality": "attacking",
@@ -152,7 +153,7 @@ def test_create_personal_manager_success(client: TestClient, session: Session) -
     assert payload["gsi_min"] == 91
     assert payload["gsi_max"] == 95
     assert payload["gsi_rating"] == 93
-    assert payload["fan_coin_price"] == 2500
+    assert payload["fan_coin_price"] == 1000
     assert payload["permanent"] is True
     assert payload["transferable"] is False
     assert payload["salary_bearing"] is False
@@ -163,6 +164,14 @@ def test_create_personal_manager_success(client: TestClient, session: Session) -
     assert manager_in_db.permanent is True
     assert manager_in_db.transferable is False
     assert manager_in_db.salary_bearing is False
+
+    transaction = session.scalar(
+        select(LedgerTransaction).where(
+            LedgerTransaction.reference == "personal-manager:create:user-owner"
+        )
+    )
+    assert transaction is not None
+    assert transaction.source_tag == LedgerSourceTag.PERSONAL_MANAGER_CREATION_SPEND
 
 
 def test_duplicate_creation_rejected(client: TestClient, session: Session) -> None:
@@ -295,7 +304,6 @@ def test_self_lookup_me(client: TestClient) -> None:
 def test_appoint_personal_manager_succeeds(client: TestClient, session: Session) -> None:
     club = _club(session, owner_id="user-owner")
 
-    # Create manager first
     client.post(
         "/api/clubs/personal-manager",
         json={
@@ -313,7 +321,6 @@ def test_appoint_personal_manager_succeeds(client: TestClient, session: Session)
     assert contract_data["salary_minor"] == 0
     assert contract_data["role_scope"] == "first_team_manager"
 
-    # Verify canonical staff profile, contract, assignment
     staff_profile = session.scalar(
         select(ClubStaffProfile).where(ClubStaffProfile.market_key == "personal-manager:user-owner")
     )
@@ -355,7 +362,6 @@ def test_player_agency_context_manager_and_unknown_virtual_age(session: Session)
     assert owner is not None
     club = _club(session, owner_id="user-owner")
 
-    # Create Personal Manager
     ClubGrowthService(session).create_personal_manager(
         actor=owner,
         payload=PersonalManagerCreateRequest(
@@ -367,7 +373,6 @@ def test_player_agency_context_manager_and_unknown_virtual_age(session: Session)
     )
     session.commit()
 
-    # Create player and regen
     player = Player(
         id="player-agency-1",
         source_provider="gtex_test",
@@ -413,7 +418,6 @@ def test_player_agency_context_manager_and_unknown_virtual_age(session: Session)
 
     context_service = PlayerAgencyContextService(session)
 
-    # Check club context exposes personal manager
     club_ctx = context_service.build_club_context(
         player=player,
         regen=regen,
@@ -423,7 +427,6 @@ def test_player_agency_context_manager_and_unknown_virtual_age(session: Session)
     assert club_ctx.has_personal_manager is True
     assert club_ctx.manager_name == "Context Boss"
 
-    # Check career stage is age_unknown when virtual age is unavailable
     career_stage = context_service.infer_career_stage(
         player=player,
         regen=regen,
