@@ -11,6 +11,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.wallet import LedgerUnit
 
 if TYPE_CHECKING:
+    from app.models.club_profile import ClubProfile
     from app.models.economy_config import GiftCatalogItem
     from app.models.user import User
 
@@ -43,6 +44,14 @@ class GiftTransaction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    # Profile/user identity is canonical for gifting. This optional club is
+    # target context only and never replaces the sender or recipient profile.
+    recipient_club_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("club_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     recipient_type: Mapped[str] = mapped_column(String(32), nullable=False, default="user", server_default="user")
     recipient_entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     chat_thread_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
@@ -102,6 +111,7 @@ class GiftTransaction(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     sender_user: Mapped["User"] = relationship(foreign_keys=[sender_user_id])
     recipient_user: Mapped["User"] = relationship(foreign_keys=[recipient_user_id])
+    recipient_club: Mapped["ClubProfile | None"] = relationship(foreign_keys=[recipient_club_id])
     gift_catalog_item: Mapped["GiftCatalogItem"] = relationship()
 
 
