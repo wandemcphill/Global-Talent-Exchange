@@ -72,6 +72,7 @@ class LedgerSourceTag(StrEnum):
     USER_COMPETITION_ENTRY_SPEND = "user_competition_entry_spend"
     VIDEO_VIEW_SPEND = "video_view_spend"
     STADIUM_UPGRADE_SPEND = "stadium_upgrade_spend"
+    FACILITY_UPGRADE_SPEND = "facility_upgrade_spend"
     COSMETIC_SPEND = "cosmetic_spend"
     PLAYER_CARD_SALE = "player_card_sale"
     PLAYER_CARD_PURCHASE = "player_card_purchase"

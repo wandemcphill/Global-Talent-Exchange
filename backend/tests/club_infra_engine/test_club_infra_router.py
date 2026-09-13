@@ -23,32 +23,30 @@ def _ensure_club(session, owner: User) -> ClubProfile:
     return club
 
 
-def test_club_infra_seed_and_support_flow(client, app_session_factory, demo_seed, demo_auth_headers):
+def test_club_infra_seed_and_support_flow(
+    client, app_session_factory, demo_seed, demo_auth_headers, bootstrap_admin_headers
+):
     with app_session_factory() as session:
         owner = session.get(User, demo_seed.demo_users[0].user_id)
         club = _ensure_club(session, owner)
 
-    admin_login = client.post('/auth/login', json={'email': 'vidvimedialtd@gmail.com', 'password': 'NewPass1234!'})
-    assert admin_login.status_code == 200, admin_login.text
-    admin_headers = {'Authorization': f"Bearer {admin_login.json()['access_token']}"}
-
-    seed = client.post('/admin/club-infra/seed', headers=admin_headers)
+    seed = client.post("/admin/club-infra/seed", headers=bootstrap_admin_headers)
     assert seed.status_code == 200, seed.text
-    assert seed.json()['seeded_clubs'] >= 1
+    assert seed.json()["seeded_clubs"] >= 1
 
-    mine = client.get('/club-infra/my', headers=demo_auth_headers)
+    mine = client.get("/club-infra/my", headers=demo_auth_headers)
     assert mine.status_code == 200, mine.text
     body = mine.json()
-    assert body['club_id'] == club.id
-    assert body['stadium']['capacity'] >= 5000
-    assert body['supporter_token']['metadata_json']['non_financial'] is True
+    assert body["club_id"] == club.id
+    assert body["stadium"]["capacity"] >= 5000
+    assert body["supporter_token"]["metadata_json"]["non_financial"] is True
 
-    support = client.post(f'/club-infra/clubs/{club.id}/support', headers=demo_auth_headers, json={'quantity': 3})
+    support = client.post(f"/club-infra/clubs/{club.id}/support", headers=demo_auth_headers, json={"quantity": 3})
     assert support.status_code == 200, support.text
-    supported = support.json()['dashboard']
-    assert supported['my_holding']['token_balance'] >= 3
-    assert supported['supporter_token']['circulating_supply'] >= 3
+    supported = support.json()["dashboard"]
+    assert supported["my_holding"]["token_balance"] >= 3
+    assert supported["supporter_token"]["circulating_supply"] >= 3
 
-    upgrade = client.post('/club-infra/my/stadium/upgrade', headers=demo_auth_headers, json={'target_level': 2})
+    upgrade = client.post("/club-infra/my/stadium/upgrade", headers=demo_auth_headers, json={"target_level": 2})
     assert upgrade.status_code == 200, upgrade.text
-    assert upgrade.json()['dashboard']['stadium']['level'] == 2
+    assert upgrade.json()["dashboard"]["stadium"]["level"] == 2

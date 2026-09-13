@@ -11,9 +11,7 @@ from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKey
 
 class ClubStaffProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "club_staff_profiles"
-    __table_args__ = (
-        UniqueConstraint("market_key", name="uq_club_staff_profiles_market_key"),
-    )
+    __table_args__ = (UniqueConstraint("market_key", name="uq_club_staff_profiles_market_key"),)
 
     market_key: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -59,9 +57,7 @@ class ClubStaffContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class ClubStaffAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "club_staff_assignments"
-    __table_args__ = (
-        UniqueConstraint("club_id", "role_key", name="uq_club_staff_assignments_club_role"),
-    )
+    __table_args__ = (UniqueConstraint("club_id", "role_key", name="uq_club_staff_assignments_club_role"),)
 
     club_id: Mapped[str] = mapped_column(
         String(36),
@@ -114,6 +110,7 @@ class AcademyProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     level: Mapped[int] = mapped_column(default=1, nullable=False, server_default="1")
     investment_minor: Mapped[int] = mapped_column(default=0, nullable=False, server_default="0")
+    capacity_limit: Mapped[int] = mapped_column(default=15, nullable=False, server_default="15")
     generation_cooldown_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 

@@ -554,9 +554,18 @@ class RegenUniverseService:
         story_service.apply_evolution_cycle(season_id=season.id)
 
         next_season_id: str | None = None
+        from app.services.academy_facility_economy_service import AcademyFacilityEconomyService
+
         if start_next_season:
             next_season = self._ensure_next_active_season(season)
             next_season_id = next_season.id
+            AcademyFacilityEconomyService(self.session).advance_all_facility_upgrades(
+                current_season_number=next_season.season_number
+            )
+        else:
+            AcademyFacilityEconomyService(self.session).advance_all_facility_upgrades(
+                current_season_number=season.season_number + 1
+            )
 
         hall_of_fame_count = self._refresh_hall_of_fame()
         self._sync_season_story_surfaces(season.id)
