@@ -1,0 +1,1 @@
+Search targets: _ensure_senior_player_for_prospect, squad tier membership, staff contract acceptance, player_service scout, shortlist, national rental, competition lifecycle, awards downstream.
