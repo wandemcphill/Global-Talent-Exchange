@@ -81,23 +81,10 @@ def recruit_manager(
     current_user: User = Depends(get_current_user),
     service: ManagerMarketService = Depends(get_service),
 ) -> TeamManagersView:
-    try:
-        result = service.recruit_manager(
-            request.app,
-            session,
-            current_user,
-            payload.manager_id,
-            payload.slot,
-            salary_fancoin=payload.salary_fancoin,
-        )
-        session.commit()
-        return result
-    except CapacityError as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except ManagerMarketError as exc:
-        session.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Legacy manager recruitment is disabled; use the canonical club staff offer and acceptance lifecycle.",
+    )
 
 
 @public_router.post("/create", response_model=TeamManagersView, status_code=status.HTTP_201_CREATED)
