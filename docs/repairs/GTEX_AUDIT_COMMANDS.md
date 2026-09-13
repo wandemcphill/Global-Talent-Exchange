@@ -1,0 +1,1 @@
+Use repository search to inspect: `_ensure_senior_player_for_prospect`, `squad_tier`, `def promote_prospect`, `def scout(`, `shortlist`, `staff_contract`, `first_team_manager`, `rental_only`, `CompetitionLifecycleService` before changing runtime code.
