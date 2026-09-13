@@ -21,6 +21,7 @@ from app.ingestion.models import (
 )
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
+from app.models.club_infra import ClubFacility
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
@@ -81,6 +82,7 @@ def build_regen_universe_session() -> Session:
         tables=[
             User.__table__,
             ClubProfile.__table__,
+            ClubFacility.__table__,
             Country.__table__,
             InternalLeague.__table__,
             Competition.__table__,

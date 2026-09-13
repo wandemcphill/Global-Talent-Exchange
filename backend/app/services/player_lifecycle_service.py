@@ -2308,6 +2308,14 @@ class PlayerLifecycleService:
             ingestion_club = self._resolve_ingestion_club_for_profile(profile_id)
             if ingestion_club is not None:
                 player.current_club_id = ingestion_club.id
+            from app.squad_tiers.service import SquadTierService
+
+            SquadTierService(self.session).ensure_membership(
+                club_id=profile_id,
+                player_id=player.id,
+                tier="first_team",
+                source="transfer",
+            )
 
     def _resolve_ingestion_club_for_profile(self, club_profile_id: str | None) -> IngestionClub | None:
         profile = self._get_club_profile(club_profile_id)
