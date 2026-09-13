@@ -62,6 +62,26 @@ def _resolve_recipient_context(
     return club.owner_user_id, club.id
 
 
+def _validate_existing_gift_identity(
+    *,
+    item: GiftTransaction,
+    sender_user_id: str,
+    recipient_user_id: str,
+    recipient_club_id: str | None,
+) -> None:
+    """Prevent an idempotency replay from crossing profile or club identity boundaries."""
+    if item.sender_user_id != sender_user_id or item.recipient_user_id != recipient_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Idempotent gift reference belongs to a different sender or recipient profile.",
+        )
+    if item.recipient_club_id != recipient_club_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Idempotent gift reference belongs to a different recipient club context.",
+        )
+
+
 def _attach_recipient_club_context(
     *,
     item: GiftTransaction,
@@ -290,6 +310,12 @@ def send_gift(
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
     except InsufficientBalanceError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    _validate_existing_gift_identity(
+        item=item,
+        sender_user_id=current_user.id,
+        recipient_user_id=recipient_user_id or "",
+        recipient_club_id=recipient_club_id,
+    )
     _attach_recipient_club_context(item=item, recipient_club_id=recipient_club_id, session=session)
     session.commit()
     session.refresh(item)
@@ -382,6 +408,12 @@ def send_public_gift(
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
     except InsufficientBalanceError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    _validate_existing_gift_identity(
+        item=item,
+        sender_user_id=current_user.id,
+        recipient_user_id=recipient_user_id or "",
+        recipient_club_id=recipient_club_id,
+    )
     _attach_recipient_club_context(item=item, recipient_club_id=recipient_club_id, session=session)
     session.commit()
     session.refresh(item)
@@ -416,7 +448,7 @@ def get_user_gift_stats_alias(user_id: str, session: Session = Depends(get_sessi
     return get_user_gift_stats(user_id=user_id, session=session)
 
 
-@gift_stats_router.get("/discussions/threads/{thread_id}/gift-stats", response_model=GiftStatsView)
+gift_stats_router.get("/discussions/threads/{thread_id}/gift-stats")
 def get_discussion_thread_gift_stats_alias(thread_id: str, session: Session = Depends(get_session)) -> GiftStatsView:
     return get_discussion_thread_gift_stats(thread_id=thread_id, session=session)
 
