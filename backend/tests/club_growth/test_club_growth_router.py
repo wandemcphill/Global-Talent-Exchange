@@ -38,6 +38,7 @@ from app.models.club_sponsorship_contract import ClubSponsorshipContract
 from app.models.club_sponsorship_package import ClubSponsorshipPackage
 from app.models.club_sponsorship_payout import ClubSponsorshipPayout
 from app.models.club_squad_tier import ClubSquadTierMembership
+from app.models.player_contract import PlayerContract
 from app.models.player_token_market import PlayerShareMarket
 from app.models.sponsorship_engine import SponsorshipLead
 from app.models.user import KycStatus, User, UserRole
@@ -64,6 +65,7 @@ def session() -> Iterator[Session]:
             PlayerImageMetadata.__table__,
             PlayerShareMarket.__table__,
             ClubSquadTierMembership.__table__,
+            PlayerContract.__table__,
             ClubStaffProfile.__table__,
             ClubStaffContract.__table__,
             ClubStaffAssignment.__table__,
@@ -265,7 +267,37 @@ def test_academy_prospect_contract_and_promotion_flow(client: TestClient, sessio
     history = session.scalar(select(AcademyPromotionHistory).where(AcademyPromotionHistory.prospect_id == prospect_id))
     assert history
     assert history.senior_player_id == promoted.json()["senior_player_id"]
-    assert session.get(Player, promoted.json()["senior_player_id"]) is not None
+    player = session.get(Player, promoted.json()["senior_player_id"])
+    assert player is not None
+    assert player.current_club_profile_id == club.id
+
+    contracts = list(
+        session.scalars(
+            select(PlayerContract).where(
+                PlayerContract.player_id == player.id,
+                PlayerContract.club_id == club.id,
+                PlayerContract.status == "active",
+            )
+        )
+    )
+    assert len(contracts) == 1
+    assert contracts[0].wage_amount == 1000
+    assert contracts[0].starts_on <= contracts[0].ends_on
+
+    replay = client.post(f"/api/clubs/{club.id}/growth/academy/prospects/{prospect_id}/promote")
+    assert replay.status_code == 200, replay.text
+    replay_contracts = list(
+        session.scalars(
+            select(PlayerContract).where(
+                PlayerContract.player_id == player.id,
+                PlayerContract.club_id == club.id,
+                PlayerContract.status == "active",
+            )
+        )
+    )
+    assert len(replay_contracts) == 1
+    assert replay.json()["senior_player_id"] == player.id
+
     audit_actions = list(session.scalars(select(ClubGrowthAuditEvent.action)).all())
     assert "academy_prospects_generated" in audit_actions
     assert "academy_contract_offered" in audit_actions
