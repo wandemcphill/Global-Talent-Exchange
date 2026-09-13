@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+from decimal import Decimal
 from hashlib import sha256
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
@@ -9,6 +10,11 @@ from uuid import NAMESPACE_URL, uuid5
 from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session
 
+from app.club_growth.personal_manager_policy import (
+    PersonalManagerBand,
+    validate_personal_manager_creation,
+)
+from app.club_growth.staff_role_policy import evaluate_staff_role
 from app.ingestion.models import ImageModerationStatus, Player, PlayerImageMetadata
 from app.models.base import utcnow
 from app.models.club_growth import (
@@ -21,6 +27,7 @@ from app.models.club_growth import (
     ClubStaffAssignment,
     ClubStaffContract,
     ClubStaffProfile,
+    PersonalManager,
 )
 from app.models.club_profile import ClubProfile
 from app.models.user import User
@@ -36,6 +43,7 @@ from app.services.regen_portrait_service import (
     RegenPortraitService,
 )
 from app.sponsorship_engine.service import SponsorshipEngineService
+from app.wallets.service import LedgerSourceTag, LedgerUnit, WalletService
 
 from .schemas import (
     AcademyContractOfferRequest,
@@ -46,6 +54,8 @@ from .schemas import (
     AcademyProfileView,
     AcademyProspectView,
     ClubGrowthDashboardView,
+    PersonalManagerCreateRequest,
+    PersonalManagerView,
     SponsorshipClubSummaryView,
     StaffContractView,
     StaffOfferRequest,
@@ -117,6 +127,173 @@ def _staff_profile_id(market_key: str) -> str:
 @dataclass(slots=True)
 class ClubGrowthService:
     session: Session
+
+    def create_personal_manager(
+        self,
+        *,
+        actor: User,
+        payload: PersonalManagerCreateRequest,
+    ) -> PersonalManagerView:
+        existing = self.session.scalar(
+            select(PersonalManager).where(PersonalManager.user_id == actor.id)
+        )
+        try:
+            band = PersonalManagerBand(payload.quality_band)
+            creation = validate_personal_manager_creation(
+                user_id=actor.id,
+                quality_band=band,
+                fan_coin_price=payload.fan_coin_price,
+                already_exists=existing is not None,
+            )
+        except ValueError as exc:
+            raise ClubGrowthError(str(exc)) from exc
+
+        wallet_service = WalletService()
+        summary = wallet_service.get_wallet_summary(self.session, actor, currency=LedgerUnit.CREDIT)
+        if summary.available_balance < Decimal(creation.fan_coin_price):
+            raise ClubGrowthError("insufficient_fan_coin_balance")
+
+        wallet_service.settle_available_funds(
+            self.session,
+            user=actor,
+            amount=Decimal(creation.fan_coin_price),
+            reference=f"personal-manager:create:{actor.id}",
+            description=f"Personal manager creation ({band.name})",
+            external_reference=actor.id,
+            unit=LedgerUnit.CREDIT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+        )
+
+        manager = PersonalManager(
+            user_id=actor.id,
+            display_name=payload.display_name,
+            quality_band=band.name if hasattr(band, "name") else str(band.value),
+            gsi_min=creation.minimum_gsi,
+            gsi_max=creation.maximum_gsi,
+            gsi_rating=(creation.minimum_gsi + creation.maximum_gsi) // 2,
+            fan_coin_price=creation.fan_coin_price,
+            permanent=creation.permanent,
+            transferable=creation.transferable,
+            salary_bearing=creation.salary_bearing,
+            tactical_identity_json=payload.tactical_identity,
+            metadata_json={"source": "personal_manager_creation_v1"},
+        )
+        self.session.add(manager)
+        self.session.flush()
+        return self._personal_manager_view(manager)
+
+    def get_personal_manager_me(self, *, actor: User) -> PersonalManagerView:
+        manager = self.session.scalar(
+            select(PersonalManager).where(PersonalManager.user_id == actor.id)
+        )
+        if manager is None:
+            raise ClubGrowthError("personal_manager_not_found")
+        return self._personal_manager_view(manager)
+
+    def appoint_personal_manager(
+        self,
+        *,
+        actor: User,
+        club_id: str,
+    ) -> StaffContractView:
+        self._ensure_club(club_id)
+        manager = self.session.scalar(
+            select(PersonalManager).where(PersonalManager.user_id == actor.id)
+        )
+        if manager is None:
+            raise ClubGrowthError("personal_manager_not_found")
+
+        decision = evaluate_staff_role(
+            role_key="first_team_manager",
+            staff_type="personal_manager",
+            personal_manager=True,
+        )
+        if not decision.allowed:
+            raise ClubGrowthError(decision.reason)
+
+        market_key = f"personal-manager:{actor.id}"
+        staff_profile = self.session.scalar(
+            select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key)
+        )
+        if staff_profile is None:
+            staff_profile = ClubStaffProfile(
+                market_key=market_key,
+                display_name=manager.display_name,
+                staff_type="personal_manager",
+                rarity="personal",
+                skills_json=list(manager.tactical_identity_json.keys()),
+                salary_minor=0,
+                commission_bps=0,
+                rating=manager.gsi_rating,
+                active=True,
+                metadata_json={"personal_manager_id": manager.id, "user_id": actor.id},
+            )
+            self.session.add(staff_profile)
+            self.session.flush()
+        else:
+            staff_profile.display_name = manager.display_name
+            staff_profile.rating = manager.gsi_rating
+            staff_profile.salary_minor = 0
+
+        contract = self.session.scalar(
+            select(ClubStaffContract).where(
+                ClubStaffContract.club_id == club_id,
+                ClubStaffContract.staff_profile_id == staff_profile.id,
+            )
+        )
+        if contract is None:
+            contract = ClubStaffContract(
+                club_id=club_id,
+                staff_profile_id=staff_profile.id,
+                status="active",
+                salary_minor=0,
+                commission_bps=0,
+                duration_days=3650,
+                role_scope="first_team_manager",
+                exclusive=True,
+                started_at=utcnow(),
+                metadata_json={"source": "personal_manager_appointment"},
+            )
+            self.session.add(contract)
+            self.session.flush()
+        else:
+            contract.status = "active"
+            contract.salary_minor = 0
+            contract.commission_bps = 0
+            contract.role_scope = "first_team_manager"
+
+        assignment = self.session.scalar(
+            select(ClubStaffAssignment).where(
+                ClubStaffAssignment.club_id == club_id,
+                ClubStaffAssignment.role_key == "first_team_manager",
+            )
+        )
+        if assignment is None:
+            self.session.add(
+                ClubStaffAssignment(
+                    club_id=club_id,
+                    staff_contract_id=contract.id,
+                    role_key="first_team_manager",
+                    active=True,
+                    metadata_json={"personal_manager_id": manager.id},
+                )
+            )
+        else:
+            assignment.staff_contract_id = contract.id
+            assignment.active = True
+
+        self._audit(
+            actor=actor,
+            club_id=club_id,
+            action="personal_manager_appointed",
+            next_json={
+                "personal_manager_id": manager.id,
+                "staff_profile_id": staff_profile.id,
+                "contract_id": contract.id,
+            },
+        )
+        self.session.flush()
+        return self._staff_contract_view(contract)
 
     def get_dashboard(self, *, club_id: str) -> ClubGrowthDashboardView:
         self._ensure_club(club_id)
@@ -773,6 +950,25 @@ class ClubGrowthService:
         return all(
             inspector.has_table(table_name)
             for table_name in ("notification_records", "notification_preferences", "users")
+        )
+
+    def _personal_manager_view(self, manager: PersonalManager) -> PersonalManagerView:
+        return PersonalManagerView(
+            id=manager.id,
+            user_id=manager.user_id,
+            display_name=manager.display_name,
+            quality_band=manager.quality_band,
+            gsi_min=manager.gsi_min,
+            gsi_max=manager.gsi_max,
+            gsi_rating=manager.gsi_rating,
+            fan_coin_price=manager.fan_coin_price,
+            permanent=manager.permanent,
+            transferable=manager.transferable,
+            salary_bearing=manager.salary_bearing,
+            tactical_identity=dict(manager.tactical_identity_json or {}),
+            metadata=dict(manager.metadata_json or {}),
+            created_at=manager.created_at,
+            updated_at=manager.updated_at,
         )
 
     def _staff_profile_view(self, profile: ClubStaffProfile) -> StaffProfileView:

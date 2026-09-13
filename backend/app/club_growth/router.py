@@ -17,6 +17,8 @@ from .schemas import (
     AcademyProfileView,
     AcademyProspectView,
     ClubGrowthDashboardView,
+    PersonalManagerCreateRequest,
+    PersonalManagerView,
     StaffContractView,
     StaffOfferRequest,
 )
@@ -48,6 +50,54 @@ def _require_club_operator(session: Session, club_id: str, current_user: User) -
             forbidden_detail="club_owner_required",
         )
     except (LookupError, PermissionError) as exc:
+        raise _to_http_error(exc) from exc
+
+
+@router.post("/personal-manager", response_model=PersonalManagerView)
+def create_personal_manager(
+    payload: PersonalManagerCreateRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> PersonalManagerView:
+    try:
+        view = ClubGrowthService(session).create_personal_manager(
+            actor=current_user,
+            payload=payload,
+        )
+        session.commit()
+        return view
+    except Exception as exc:
+        session.rollback()
+        raise _to_http_error(exc) from exc
+
+
+@router.get("/personal-manager/me", response_model=PersonalManagerView)
+def get_personal_manager_me(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> PersonalManagerView:
+    try:
+        return ClubGrowthService(session).get_personal_manager_me(actor=current_user)
+    except Exception as exc:
+        raise _to_http_error(exc) from exc
+
+
+@router.post("/{club_id}/growth/personal-manager/appoint", response_model=StaffContractView)
+def appoint_personal_manager(
+    club_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> StaffContractView:
+    _require_club_operator(session, club_id, current_user)
+    try:
+        view = ClubGrowthService(session).appoint_personal_manager(
+            actor=current_user,
+            club_id=club_id,
+        )
+        session.commit()
+        return view
+    except Exception as exc:
+        session.rollback()
         raise _to_http_error(exc) from exc
 
 

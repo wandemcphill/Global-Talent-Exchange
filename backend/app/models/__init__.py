@@ -103,6 +103,7 @@ from app.models.club_growth import (
     ClubStaffContract,
     ClubStaffPerformanceLog,
     ClubStaffProfile,
+    PersonalManager,
 )
 from app.models.club_profile import ClubProfile
 from app.models.club_sale import (
@@ -828,6 +829,7 @@ __all__ = [
     "ClubStaffContract",
     "ClubStaffPerformanceLog",
     "ClubStaffProfile",
+    "PersonalManager",
     "ClubProfile",
     "ClubSaleAuditEvent",
     "ClubSaleInquiry",

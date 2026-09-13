@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.club_identity.models.reputation import ClubReputationProfile
 from app.ingestion.models import Competition, Player, PlayerSeasonStat
+from app.models.club_growth import PersonalManager
 from app.models.club_infra import ClubFacility
 from app.models.club_profile import ClubProfile
 from app.models.player_agency_state import PlayerAgencyState
@@ -64,6 +65,8 @@ class AgencyClubContext:
     trophy_score: float
     geography_score: float
     continental_football: bool
+    manager_name: str | None = None
+    has_personal_manager: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,6 +242,16 @@ class PlayerAgencyContextService:
             )
 
         profile = self.session.get(ClubProfile, club_id)
+        has_personal_manager = False
+        manager_name = None
+        if profile is not None and profile.owner_user_id:
+            pm = self.session.scalar(
+                select(PersonalManager).where(PersonalManager.user_id == profile.owner_user_id)
+            )
+            if pm is not None:
+                has_personal_manager = True
+                manager_name = pm.display_name
+
         reputation = self.session.scalar(select(ClubReputationProfile).where(ClubReputationProfile.club_id == club_id))
         facility = self.session.scalar(select(ClubFacility).where(ClubFacility.club_id == club_id))
         origin = self.session.scalar(
@@ -328,6 +341,8 @@ class PlayerAgencyContextService:
             trophy_score=trophy_score,
             geography_score=resolved_geography_score,
             continental_football=resolved_continental,
+            manager_name=manager_name,
+            has_personal_manager=has_personal_manager,
         )
 
     def get_current_contract(self, player_id: str, *, reference_on: date) -> PlayerContract | None:
@@ -367,7 +382,11 @@ class PlayerAgencyContextService:
             if (reference_on.month, reference_on.day) < (player.date_of_birth.month, player.date_of_birth.day):
                 years -= 1
             return max(0, years)
-        return 17 + (self.lifecycle_months(regen, reference_on=reference_on) // 12)
+        career_state = dict((regen.metadata_json or {}).get("career_state") or {})
+        virtual_age_months = career_state.get("virtual_age_months")
+        if virtual_age_months is not None:
+            return int(virtual_age_months) // 12
+        return None
 
     def infer_career_stage(
         self,
@@ -378,32 +397,26 @@ class PlayerAgencyContextService:
         reference_on: date,
     ) -> str:
         del personality
+        career_state = dict((regen.metadata_json or {}).get("career_state") or {})
+        if career_state.get("career_stage") == "age_unknown" or career_state.get("retirement_policy_status") == "age_unknown":
+            return "age_unknown"
+
         age_years = self.resolve_age_years(player, regen=regen, reference_on=reference_on)
+        if age_years is None:
+            return "age_unknown"
+
         potential_gap = max(
             0, int((regen.potential_range_json or {}).get("maximum", regen.current_gsi)) - regen.current_gsi
         )
-        lifecycle_months = self.lifecycle_months(regen, reference_on=reference_on)
-        if age_years is not None:
-            if age_years <= 19 and potential_gap >= 12:
-                return "wonderkid"
-            if age_years <= 21:
-                return "prospect"
-            if age_years <= 23:
-                return "breakout"
-            if age_years <= 27:
-                return "established"
-            if age_years <= 31:
-                return "prime"
-            return "veteran"
-        if lifecycle_months <= 6 and potential_gap >= 12:
+        if age_years <= 19 and potential_gap >= 12:
             return "wonderkid"
-        if lifecycle_months <= 12:
+        if age_years <= 21:
             return "prospect"
-        if lifecycle_months <= 18:
+        if age_years <= 23:
             return "breakout"
-        if lifecycle_months <= 28:
+        if age_years <= 27:
             return "established"
-        if lifecycle_months <= 40:
+        if age_years <= 31:
             return "prime"
         return "veteran"
 
