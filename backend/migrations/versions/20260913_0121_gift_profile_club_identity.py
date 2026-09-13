@@ -1,4 +1,4 @@
-"""Make gift recipient club context explicit while keeping profile identity canonical.
+"""Persist explicit recipient-club context without changing profile identity.
 
 Revision ID: 20260913_0121_gift_profile_club_identity
 Revises: 20260912_0120_personal_manager
