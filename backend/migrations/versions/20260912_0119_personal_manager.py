@@ -1,7 +1,7 @@
 """Add personal_managers table with unique user constraint.
 
-Revision ID: 20260912_0119_personal_manager
-Revises: 20260911_0118_released_share_supply
+Revision ID: 20260912_0120_personal_manager
+Revises: 20260912_0119_academy_facilities_economy
 
 """
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20260912_0119_personal_manager"
-down_revision = "20260911_0118_released_share_supply"
+revision = "20260912_0120_personal_manager"
+down_revision = "20260912_0119_academy_facilities_economy"
 branch_labels = None
 depends_on = None
 
