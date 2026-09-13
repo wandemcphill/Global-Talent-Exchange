@@ -13,6 +13,9 @@ from app.schemas.player_lifecycle import ContractCreateRequest
 from app.services.player_lifecycle_service import PlayerLifecycleService
 
 
+ACADEMY_CONTRACT_WAGE_UNIT = "FanCoin"
+
+
 class AcademyContractBridgeError(ValueError):
     """Raised when an academy promotion cannot be represented canonically."""
 
@@ -78,6 +81,8 @@ def ensure_academy_player_contract(*, service, club_id: str, prospect_id: str) -
         player.id,
         ContractCreateRequest(
             club_id=club_id,
+            # AcademyRegenContractOffer.wage_minor is already expressed in the
+            # canonical FanCoin salary unit used by PlayerContract.
             wage_amount=Decimal(str(offer.wage_minor)),
             bonus_terms="Academy graduation contract.",
             release_clause_amount=None,
