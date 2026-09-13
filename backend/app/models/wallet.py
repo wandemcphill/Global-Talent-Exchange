@@ -74,6 +74,7 @@ class LedgerSourceTag(StrEnum):
     STADIUM_UPGRADE_SPEND = "stadium_upgrade_spend"
     FACILITY_UPGRADE_SPEND = "facility_upgrade_spend"
     COSMETIC_SPEND = "cosmetic_spend"
+    BUILD_A_SON_SPEND = "build_a_son_spend"
     PERSONAL_MANAGER_CREATION_SPEND = "personal_manager_creation_spend"
     PLAYER_CARD_SALE = "player_card_sale"
     PLAYER_CARD_PURCHASE = "player_card_purchase"

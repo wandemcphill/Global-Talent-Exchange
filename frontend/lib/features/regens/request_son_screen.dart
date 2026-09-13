@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/regen_creation_api.dart';
@@ -71,21 +72,28 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
     super.dispose();
   }
 
-  double get _quotedAmount {
-    final RegenCreationPricing? pricing = _options?.pricing;
-    if (pricing == null) {
-      return 0;
+  RegenCreationParentPlayer? get _selectedParent {
+    final String? currentId = _parentPlayerId;
+    final RequestSonOptions? options = _options;
+    if (currentId == null || options == null) {
+      return null;
     }
-    double total = pricing.baseCostCoin;
-    if (_nameController.text.trim().isNotEmpty) {
-      total += pricing.nameCostCoin;
+    for (final RegenCreationParentPlayer parent in options.eligibleParents) {
+      if (parent.playerId == currentId) {
+        return parent;
+      }
     }
-    if (_countryController.text.trim().isNotEmpty ||
-        (_position ?? '').trim().isNotEmpty) {
-      total += pricing.customizationCostCoin;
-    }
-    return total;
+    return options.eligibleParents.isEmpty ? null : options.eligibleParents.first;
   }
+
+  double get _baseCost => _options?.pricing.baseCostCoin ?? 0;
+  double get _nameCost => _nameController.text.trim().isNotEmpty ? (_options?.pricing.nameCostCoin ?? 0) : 0;
+  double get _customizationCost =>
+      (_countryController.text.trim().isNotEmpty || (_position ?? '').trim().isNotEmpty)
+          ? (_options?.pricing.customizationCostCoin ?? 0)
+          : 0;
+
+  double get _quotedAmount => _baseCost + _nameCost + _customizationCost;
 
   Future<void> _reload({String? activeOrderId}) async {
     setState(() {
@@ -384,7 +392,7 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
                                 DropdownButtonFormField<String>(
                                   value: _parentPlayerId,
                                   decoration: const InputDecoration(
-                                    labelText: 'Parent player',
+                                    labelText: 'Select parent player',
                                     border: OutlineInputBorder(),
                                   ),
                                   items: options.eligibleParents
@@ -392,7 +400,7 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
                                         return DropdownMenuItem<String>(
                                           value: parent.playerId,
                                           child: Text(
-                                            '${parent.fullName} / ${parent.position ?? 'N/A'} / ${parent.countryCode ?? '---'}',
+                                            '${parent.fullName} (${parent.position ?? 'N/A'} • ${parent.countryCode ?? '---'})',
                                           ),
                                         );
                                       })
@@ -404,6 +412,10 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
                                             () => _parentPlayerId = value,
                                           ),
                                 ),
+                                if (_selectedParent != null) ...<Widget>[
+                                  const SizedBox(height: 10),
+                                  _buildSelectedParentCard(_selectedParent!),
+                                ],
                                 const SizedBox(height: 14),
                                 TextField(
                                   controller: _nameController,
@@ -465,9 +477,13 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 14),
+                                const SizedBox(height: 14),
+                                _buildPricingBreakdown(),
+                                const SizedBox(height: 14),
                                 Wrap(
                                   spacing: 10,
                                   runSpacing: 10,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: <Widget>[
                                     ChoiceChip(
                                       label: const Text('Wallet'),
@@ -489,11 +505,6 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
                                                 () =>
                                                     _paymentMethod = 'korapay',
                                               ),
-                                    ),
-                                    GteMetricChip(
-                                      label: 'Quote',
-                                      value: gteFormatCredits(_quotedAmount),
-                                      positive: true,
                                     ),
                                   ],
                                 ),
@@ -606,38 +617,13 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
           ),
           const SizedBox(height: 14),
           Wrap(spacing: 10, runSpacing: 10, children: actions),
+          if (order.status == 'generating') ...<Widget>[
+            const SizedBox(height: 16),
+            _buildGeneratingProgress(),
+          ],
           if (order.generatedPlayer != null) ...<Widget>[
             const SizedBox(height: 16),
-            GteSurfacePanel(
-              accentColor: GteShellTheme.accentWarm,
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: <Widget>[
-                  GteMetricChip(
-                    label: 'Generated son',
-                    value: order.generatedPlayer!.fullName,
-                  ),
-                  GteMetricChip(
-                    label: 'Age',
-                    value: order.generatedPlayer!.age.toString(),
-                  ),
-                  GteMetricChip(
-                    label: 'Position',
-                    value: order.generatedPlayer!.position,
-                  ),
-                  GteMetricChip(
-                    label: 'GSI',
-                    value: order.generatedPlayer!.resolvedGsi.toString(),
-                  ),
-                  GteMetricChip(
-                    label: 'Potential',
-                    value: order.generatedPlayer!.potentialRating.toString(),
-                    positive: true,
-                  ),
-                ],
-              ),
-            ),
+            _buildSonRevealCard(order, order.generatedPlayer!),
           ],
         ],
       ),
@@ -720,6 +706,256 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
                   })
                   .toList(growable: false),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedParentCard(RegenCreationParentPlayer parent) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: GteShellTheme.accent.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: <Widget>[
+          CircleAvatar(
+            radius: 20,
+            backgroundImage:
+                parent.imageUrl != null && parent.imageUrl!.isNotEmpty
+                    ? NetworkImage(parent.imageUrl!)
+                    : null,
+            child:
+                parent.imageUrl == null || parent.imageUrl!.isEmpty
+                    ? const Icon(Icons.person, size: 20)
+                    : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  parent.fullName,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                Text(
+                  '${parent.position ?? 'Position N/A'} • ${parent.countryCode ?? 'Country N/A'} • ${parent.clubName ?? 'Club'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPricingBreakdown() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Price Breakdown',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              const Text('Base Son Request:'),
+              Text(gteFormatCredits(_baseCost)),
+            ],
+          ),
+          if (_nameCost > 0)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                const Text('Custom Name:'),
+                Text('+${gteFormatCredits(_nameCost)}'),
+              ],
+            ),
+          if (_customizationCost > 0)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                const Text('Custom Position/Country:'),
+                Text('+${gteFormatCredits(_customizationCost)}'),
+              ],
+            ),
+          const Divider(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Text(
+                'Total Price:',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              Text(
+                gteFormatCredits(_quotedAmount),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: GteShellTheme.accentWarm,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeneratingProgress() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: GteShellTheme.accent.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Generating Son Attributes...',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '• Payment confirmed\n• Creating bloodline lineage\n• Generating DNA & portrait\n• Minting unique player card\n• Placing in Reserve squad (source = son)',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSonRevealCard(
+    RegenCreationOrder order,
+    RegenCreationGeneratedPlayer son,
+  ) {
+    return GteSurfacePanel(
+      emphasized: true,
+      accentColor: const Color(0xFF2CB67D),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2CB67D).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: const Color(0xFF2CB67D).withValues(alpha: 0.6),
+                  ),
+                ),
+                child: Text(
+                  'RESERVE SQUAD • SON GENERATED',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFF2CB67D),
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: <Widget>[
+              CircleAvatar(
+                radius: 32,
+                backgroundImage:
+                    son.imageUrl != null && son.imageUrl!.isNotEmpty
+                        ? NetworkImage(son.imageUrl!)
+                        : null,
+                child:
+                    son.imageUrl == null || son.imageUrl!.isEmpty
+                        ? const Icon(Icons.face, size: 32)
+                        : null,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      son.fullName,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${son.position} • Age ${son.age} • ${son.countryCode ?? 'Unknown'}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    if (son.clubName != null)
+                      Text(
+                        son.clubName!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              GteMetricChip(
+                label: 'GSI Rating',
+                value: son.resolvedGsi.toString(),
+              ),
+              GteMetricChip(
+                label: 'Potential',
+                value: son.potentialRating.toString(),
+                positive: true,
+              ),
+              GteMetricChip(
+                label: 'Squad Tier',
+                value: 'Reserve',
+              ),
+              if (son.cardId != null)
+                GteMetricChip(
+                  label: 'Player Card',
+                  value: 'Unique',
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () {
+              context.push('/player/${son.playerId}');
+            },
+            icon: const Icon(Icons.person_search_outlined),
+            label: const Text('View Player Detail'),
+          ),
         ],
       ),
     );

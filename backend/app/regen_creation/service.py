@@ -55,6 +55,7 @@ from app.regen_creation.schemas import (
     RequestSonCreateRequest,
     RequestSonOptionsView,
 )
+from app.squad_tiers.service import SquadTierService
 from app.services.regen_service import OwnerSonContext, OwnerSonRequest, RegenClubContext, RegenGenerationEngine
 from app.services.regen_portrait_service import RegenPortraitService
 from app.treasury.service import TreasuryError, TreasuryService
@@ -132,6 +133,9 @@ class RegenCreationService:
         )
         self._enforce_request_limit(actor)
 
+        pricing_snapshot = self._pricing_snapshot(payload)
+        amount_coin = Decimal(pricing_snapshot["total_price_coin"])
+
         order = RegenCreationOrder(
             user_id=actor.id,
             club_id=club.id,
@@ -140,7 +144,7 @@ class RegenCreationService:
             requested_name=payload.requested_name,
             requested_country_code=payload.requested_country_code,
             requested_position=payload.requested_position,
-            amount_coin=self._request_son_price(payload),
+            amount_coin=amount_coin,
             amount_minor=None,
             currency="COIN",
             payment_method=RegenCreationPaymentMethod(payload.payment_method),
@@ -150,6 +154,7 @@ class RegenCreationService:
                 "request_source": "request_son",
                 "parent_player_name": parent_player.full_name,
                 "club_name": club.club_name,
+                "pricing_snapshot": pricing_snapshot,
             },
         )
         self.session.add(order)
@@ -180,6 +185,8 @@ class RegenCreationService:
             raise RegenCreationValidationError("This order is not payable with wallet.")
         if order.status == RegenCreationOrderStatus.GENERATED:
             return self._order_view(order)
+        if order.status in {RegenCreationOrderStatus.FAILED, RegenCreationOrderStatus.REFUNDED}:
+            raise RegenCreationValidationError("Cannot pay for a failed or refunded order.")
         if order.status == RegenCreationOrderStatus.PENDING_PAYMENT:
             self._debit_wallet_for_order(order=order, actor=actor)
             order.status = RegenCreationOrderStatus.PAID
@@ -193,6 +200,8 @@ class RegenCreationService:
         order = self._owned_order(actor=actor, order_id=order_id)
         if order.status == RegenCreationOrderStatus.GENERATED:
             return self._order_view(order)
+        if order.status in {RegenCreationOrderStatus.FAILED, RegenCreationOrderStatus.REFUNDED}:
+            raise RegenCreationValidationError("Cannot generate from a failed or refunded order.")
         if order.payment_method == RegenCreationPaymentMethod.WALLET:
             if order.status != RegenCreationOrderStatus.PAID:
                 raise RegenCreationPaymentError("Payment must be settled before generation.")
@@ -240,7 +249,11 @@ class RegenCreationService:
 
     def _enforce_request_limit(self, actor: User) -> None:
         assert self.settings is not None
-        active_count = self.session.scalar(
+        lifetime_count = self._owner_son_lifetime_count(actor.id)
+        if lifetime_count >= int(self.settings.regen_generation.owner_son_lifetime_cap):
+            raise RegenCreationConflictError("owner_son_lifetime_cap_reached")
+
+        pending_count = self.session.scalar(
             select(func.count(RegenCreationOrder.id)).where(
                 RegenCreationOrder.user_id == actor.id,
                 RegenCreationOrder.request_type == RegenCreationRequestType.SON,
@@ -249,23 +262,37 @@ class RegenCreationService:
                         RegenCreationOrderStatus.PENDING_PAYMENT,
                         RegenCreationOrderStatus.PAID,
                         RegenCreationOrderStatus.GENERATING,
-                        RegenCreationOrderStatus.GENERATED,
                     )
                 ),
             )
         )
-        if int(active_count or 0) >= int(self.settings.regen_generation.owner_son_paid_request_limit):
+        if int(pending_count or 0) >= int(self.settings.regen_generation.owner_son_paid_request_limit):
             raise RegenCreationConflictError("owner_son_paid_request_limit_reached")
 
-    def _request_son_price(self, payload: RequestSonCreateRequest) -> Decimal:
+    def _pricing_snapshot(self, payload: RequestSonCreateRequest) -> dict[str, str]:
         assert self.settings is not None
         config = self.settings.regen_generation
-        total = Decimal(config.owner_son_paid_request_base_cost)
-        if payload.requested_name:
-            total += Decimal(config.owner_son_paid_request_name_cost)
-        if payload.requested_country_code or payload.requested_position:
-            total += Decimal(config.owner_son_paid_request_customization_cost)
-        return self._normalize_amount(total)
+        base = self._normalize_amount(config.owner_son_paid_request_base_cost)
+        name_cost = self._normalize_amount(config.owner_son_paid_request_name_cost if payload.requested_name else 0)
+        custom_cost = self._normalize_amount(
+            config.owner_son_paid_request_customization_cost
+            if (payload.requested_country_code or payload.requested_position)
+            else 0
+        )
+        total = base + name_cost + custom_cost
+        return {
+            "pricing_version": "v1",
+            "payment_unit": "COIN",
+            "currency": "COIN",
+            "base_price_coin": str(base),
+            "name_price_coin": str(name_cost),
+            "customization_price_coin": str(custom_cost),
+            "total_price_coin": str(total),
+        }
+
+    def _request_son_price(self, payload: RequestSonCreateRequest) -> Decimal:
+        snapshot = self._pricing_snapshot(payload)
+        return Decimal(snapshot["total_price_coin"])
 
     def _pricing_view(self) -> RegenCreationPricingView:
         assert self.settings is not None
@@ -288,13 +315,20 @@ class RegenCreationService:
                     LedgerPosting(account=operations_account, amount=self._normalize_amount(order.amount_coin)),
                 ],
                 reason=LedgerEntryReason.ADJUSTMENT,
-                source_tag=LedgerSourceTag.COSMETIC_SPEND,
+                source_tag=LedgerSourceTag.BUILD_A_SON_SPEND,
                 transaction_type=LedgerTransactionType.ADJUSTMENT,
                 reference=f"regen-create-wallet:{order.id}",
                 description="Wallet payment for requested son regen order.",
                 actor=actor,
                 idempotency_key=f"regen-create-wallet:{order.id}",
-                metadata={"regen_creation_order_id": order.id, "request_type": order.request_type.value},
+                metadata={
+                    "regen_creation_order_id": order.id,
+                    "request_type": order.request_type.value,
+                    "parent_player_id": order.parent_player_id,
+                    "pricing_version": (order.metadata_json or {}).get("pricing_snapshot", {}).get("pricing_version", "v1"),
+                    "wallet_unit": "coin",
+                    "generated_player_id": order.generated_player_id,
+                },
             )
         except InsufficientBalanceError as exc:
             raise RegenCreationPaymentError("Wallet balance is insufficient for this request.") from exc
@@ -362,6 +396,8 @@ class RegenCreationService:
         order.metadata_json = metadata
 
     def _verify_and_mark_korapay_paid(self, order: RegenCreationOrder) -> None:
+        if order.status in {RegenCreationOrderStatus.PAID, RegenCreationOrderStatus.GENERATING, RegenCreationOrderStatus.GENERATED}:
+            return
         if not provider_live_deposit_ready("korapay"):
             raise RegenCreationPaymentError("KoraPay is not configured for live deposits.")
         if not order.payment_reference:
@@ -431,18 +467,29 @@ class RegenCreationService:
         order.status = RegenCreationOrderStatus.GENERATING
         self.session.flush()
 
-        player, regen = self._persist_requested_son(
-            order=order,
-            club=club,
-            actor=actor,
-            parent_player=parent_player,
-        )
-        order.generated_player_id = player.id
-        order.generated_regen_profile_id = regen.id
-        order.status = RegenCreationOrderStatus.GENERATED
-        order.paid_at = order.paid_at or utcnow()
-        order.generated_at = utcnow()
-        self.session.flush()
+        try:
+            player, regen = self._persist_requested_son(
+                order=order,
+                club=club,
+                actor=actor,
+                parent_player=parent_player,
+            )
+            order.generated_player_id = player.id
+            order.generated_regen_profile_id = regen.id
+            order.status = RegenCreationOrderStatus.GENERATED
+            order.paid_at = order.paid_at or utcnow()
+            order.generated_at = utcnow()
+            self.session.flush()
+        except Exception as exc:
+            order.status = RegenCreationOrderStatus.FAILED
+            metadata = dict(order.metadata_json or {})
+            metadata["generation_error"] = str(exc)
+            metadata["failed_at"] = utcnow().isoformat()
+            metadata["refund_required"] = True
+            order.metadata_json = metadata
+            self.session.flush()
+            raise RegenCreationError(f"Failed to generate requested son: {exc}") from exc
+
         return self._order_view(order)
 
     def _persist_requested_son(
@@ -826,6 +873,13 @@ class RegenCreationService:
                 player.height_cm = int(raw_height)
             except (TypeError, ValueError):
                 pass
+
+        SquadTierService(self.session).ensure_membership(
+            club_id=club.id,
+            player_id=player.id,
+            tier="reserve",
+            source="son",
+        )
 
         self.session.flush()
         return player, regen
