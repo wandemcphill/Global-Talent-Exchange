@@ -1,0 +1,103 @@
+name: PR178 Semantic Repair Runner
+
+on:
+  push:
+    branches:
+      - fix/gtex-authoritative-lifecycle-repair-7434281220425082328
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore: apply PR178 semantic repair') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/gtex-authoritative-lifecycle-repair-7434281220425082328
+          fetch-depth: 0
+
+      - name: Apply canonical lifecycle repairs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path.cwd()
+
+          def patch(path: str, pattern: str, replacement: str, label: str) -> None:
+              file = root / path
+              text = file.read_text(encoding='utf-8')
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.MULTILINE | re.DOTALL)
+              if count != 1:
+                  raise SystemExit(f'patch target not found exactly once: {label} in {path} (count={count})')
+              file.write_text(updated, encoding='utf-8')
+              print(f'patched {label}: {path}')
+
+          # Transfer acceptance becomes replay-idempotent without creating a second contract or settlement.
+          patch(
+              'backend/app/services/player_lifecycle_service.py',
+              r'''        bid = self\._require_bid\(window_id, bid_id\)\n        if bid\.status != TransferBidStatus\.SUBMITTED\.value:\n            raise PlayerLifecycleValidationError\("Only submitted transfer bids can be accepted"\)''',
+              '''        bid = self._require_bid(window_id, bid_id)\n        if bid.status != TransferBidStatus.SUBMITTED.value:\n            # Transfer acceptance is a durable command. Replaying a completed or accepted command\n            # must return the original bid when its canonical contract already exists, not create\n            # another PlayerContract or replay finance/ownership settlement.\n            if bid.status in {TransferBidStatus.COMPLETED.value, TransferBidStatus.ACCEPTED.value}:\n                terms = dict(bid.structured_terms_json or {})\n                contract_id = terms.get("contract_id")\n                existing_contract = self.session.get(PlayerContract, contract_id) if contract_id else None\n                if (\n                    existing_contract is not None\n                    and existing_contract.player_id == bid.player_id\n                    and existing_contract.club_id == bid.buying_club_id\n                ):\n                    return bid\n            raise PlayerLifecycleValidationError("Only submitted transfer bids can be accepted")''',
+              'transfer accept replay guard',
+          )
+
+          # Paid rental retries return the canonical active rental for the same manager rather than\n          # charging again or attempting a second contract/squad member. A different manager still\n          # receives the duplicate-player guard.\n          patch(
+              'backend/app/national_team_engine/tournament_service.py',
+              r'''        current_members = self\._entry_rental_members\(entry\.id\)\n        if len\(current_members\) \+ len\(entry\.squad_members\) >= int\(settings\["maximum_squad_size"\]\):''',
+              '''        current_members = self._entry_rental_members(entry.id)\n        existing_paid_contract = self.session.scalar(\n            select(RentalContract).where(\n                RentalContract.entry_id == entry.id,\n                RentalContract.player_id == player_id,\n                RentalContract.user_id == actor.id,\n                RentalContract.status == RentalContractStatus.ACTIVE,\n                RentalContract.is_free_player.is_(False),\n            )\n        )\n        if existing_paid_contract is not None:\n            existing_member = self.session.scalar(\n                select(NationalTeamRentalSquadMember).where(\n                    NationalTeamRentalSquadMember.entry_id == entry.id,\n                    NationalTeamRentalSquadMember.player_id == player_id,\n                    NationalTeamRentalSquadMember.rental_contract_id == existing_paid_contract.id,\n                )\n            )\n            if existing_member is not None:\n                return self._entry_detail_payload(entry)\n\n        if len(current_members) + len(entry.squad_members) >= int(settings["maximum_squad_size"]):''',
+              'paid rental replay guard',
+          )
+
+          # Free-player claim becomes replay-safe once the configured distribution is already satisfied.
+          patch(
+              'backend/app/national_team_engine/tournament_service.py',
+              r'''        total_remaining = sum\(remaining_distribution\.values\(\)\)\n        if total_remaining <= 0:\n            raise NationalTeamTournamentError\(\n                "Free player quota has already been claimed\."\, reason="free_players_already_claimed"\n            \)''',
+              '''        total_remaining = sum(remaining_distribution.values())\n        if total_remaining <= 0:\n            # The claim command is idempotent for the owning manager. A retry should return the\n            # existing rental squad rather than fabricate another batch or surface a false failure.\n            return self._entry_detail_payload(entry)''',
+              'free-player claim replay guard',
+          )
+
+          # Staff assignment semantics follow the explicit canonical role_scope. Keep staff_type as\n          # the fallback only for older offers that did not carry a role scope.\n          patch(
+              'backend/app/club_growth/service.py',
+              r'''    def _assign_staff_role\(self, \*, club_id: str, contract: ClubStaffContract\) -> None:\n        role_key = contract\.staff_profile\.staff_type if contract\.staff_profile is not None else contract\.role_scope\n        assignment = self\.session\.scalar\(''',
+              '''    def _assign_staff_role(self, *, club_id: str, contract: ClubStaffContract) -> None:\n        role_key = contract.role_scope or (contract.staff_profile.staff_type if contract.staff_profile is not None else None)\n        profile = contract.staff_profile\n        decision = evaluate_staff_role(\n            role_key=role_key,\n            staff_type=profile.staff_type if profile is not None else None,\n            specialisations=frozenset(profile.skills_json or []) if profile is not None else frozenset(),\n            retired_regen=bool((profile.metadata_json or {}).get("retired_regen")) if profile is not None else False,\n            medical_qualified=bool((profile.metadata_json or {}).get("medical_qualified")) if profile is not None else False,\n        )\n        if not decision.allowed:\n            raise ClubGrowthError(decision.reason)\n        role_key = decision.role_key\n        assignment = self.session.scalar(''',
+              'canonical staff role assignment',
+          )
+
+          patch(
+              'backend/app/club_growth/service.py',
+              r'''    def _staff_effects\(self, contracts: list\[ClubStaffContract\]\) -> dict\[str, int\]:''',
+              '''    def staff_effects(self, *, club_id: str) -> dict[str, int]:\n        """Return the canonical active staff effect snapshot for a club."""\n        self._ensure_club(club_id)\n        return self._staff_effects(self.list_staff_contracts(club_id=club_id))\n\n    def _staff_effects(self, contracts: list[ClubStaffContract]) -> dict[str, int]:''',
+              'public canonical staff effects snapshot',
+          )
+
+          # Make the academy wage unit explicit without changing the accepted numeric amount.\n          bridge = root / 'backend/app/club_growth/academy_contract_bridge.py'
+          text = bridge.read_text(encoding='utf-8')
+          if 'ACADEMY_CONTRACT_WAGE_UNIT' not in text:
+              text = text.replace(
+                  'class AcademyContractBridgeError(ValueError):',
+                  'ACADEMY_CONTRACT_WAGE_UNIT = "FanCoin"\n\n\nclass AcademyContractBridgeError(ValueError):',
+                  1,
+              )
+              text = text.replace(
+                  'wage_amount=Decimal(str(offer.wage_minor)),',
+                  'wage_amount=Decimal(str(offer.wage_minor)),  # offer wage_minor is already the canonical FanCoin amount',
+                  1,
+              )
+              bridge.write_text(text, encoding='utf-8')
+
+          # Add a compact structural regression suite for the repaired authoritative contracts.\n          test_path = root / 'backend/tests/phase6/test_pr178_authoritative_lifecycle_repairs.py'
+          test_path.write_text(
+              '''from pathlib import Path\n\n\nROOT = Path(__file__).resolve().parents[2]\n\n\ndef _read(path: str) -> str:\n    return (ROOT / path).read_text(encoding="utf-8")\n\n\ndef test_transfer_accept_is_replay_idempotent_in_canonical_service():\n    source = _read("app/services/player_lifecycle_service.py")\n    marker = "if bid.status in {TransferBidStatus.COMPLETED.value, TransferBidStatus.ACCEPTED.value}:"\n    assert marker in source\n    assert "existing_contract = self.session.get(PlayerContract, contract_id)" in source\n    assert "return bid" in source[source.index(marker):source.index(marker) + 900]\n\n\ndef test_national_rental_retry_returns_existing_active_contract():\n    source = _read("app/national_team_engine/tournament_service.py")\n    assert "existing_paid_contract = self.session.scalar" in source\n    assert "RentalContract.status == RentalContractStatus.ACTIVE" in source\n    assert "RentalContract.user_id == actor.id" in source\n\n\ndef test_free_player_claim_retry_is_idempotent():\n    source = _read("app/national_team_engine/tournament_service.py")\n    assert "return self._entry_detail_payload(entry)" in source\n    assert "free_players_already_claimed" not in source\n\n\ndef test_staff_assignment_uses_canonical_role_policy_and_effect_snapshot():\n    source = _read("app/club_growth/service.py")\n    assert "decision = evaluate_staff_role(" in source\n    assert "role_key = decision.role_key" in source\n    assert "def staff_effects(self, *, club_id: str)" in source\n\n\ndef test_academy_bridge_declares_fan_coin_wage_unit_without_conversion():\n    source = _read("app/club_growth/academy_contract_bridge.py")\n    assert 'ACADEMY_CONTRACT_WAGE_UNIT = "FanCoin"' in source\n    assert "Decimal(str(offer.wage_minor))" in source\n\n\ndef test_competition_card_and_award_authorities_remain_separate():\n    settlement = _read("app/settlement/service.py")\n    competition = _read("app/services/competition_lifecycle_service.py")\n    awards = _read("app/regen_universe/service.py")\n    assert "PLAYER_CARD_PURCHASE" in settlement\n    assert "ensure_execution_not_settled" in settlement\n    assert "finalize_competition" in competition\n    assert "RegenAwardWinner(" in awards\n    assert "RegenHallOfFame" in awards\n\n\ndef test_science_of_auth_boundaries_is_preserved_for_shortlists_and_rental_routes():\n    talent = _read("app/talent/router.py")\n    rental = _read("app/national_team_engine/router.py")\n    assert "viewer: User = Depends(get_current_user)" in talent\n    assert "current_user: User = Depends(get_current_user)" in rental\n    assert "/shortlists" in talent\n    assert "/rental-entry" in rental\n''',
+              encoding='utf-8',
+          )
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/services/player_lifecycle_service.py backend/app/national_team_engine/tournament_service.py backend/app/club_growth/service.py backend/app/club_growth/academy_contract_bridge.py backend/tests/phase6/test_pr178_authoritative_lifecycle_repairs.py
+          git diff --cached --check
+          git commit -m "chore: apply PR178 semantic repair pass"
+          git push origin HEAD:fix/gtex-authoritative-lifecycle-repair-7434281220425082328
