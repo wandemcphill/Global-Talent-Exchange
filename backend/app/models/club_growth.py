@@ -11,9 +11,7 @@ from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKey
 
 class ClubStaffProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "club_staff_profiles"
-    __table_args__ = (
-        UniqueConstraint("market_key", name="uq_club_staff_profiles_market_key"),
-    )
+    __table_args__ = (UniqueConstraint("market_key", name="uq_club_staff_profiles_market_key"),)
 
     market_key: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -59,9 +57,7 @@ class ClubStaffContract(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class ClubStaffAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "club_staff_assignments"
-    __table_args__ = (
-        UniqueConstraint("club_id", "role_key", name="uq_club_staff_assignments_club_role"),
-    )
+    __table_args__ = (UniqueConstraint("club_id", "role_key", name="uq_club_staff_assignments_club_role"),)
 
     club_id: Mapped[str] = mapped_column(
         String(36),
@@ -246,3 +242,28 @@ class ClubGrowthAuditEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     actor = relationship("User")
+
+
+class PersonalManager(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "personal_managers"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_personal_managers_user_id"),)
+
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    quality_band: Mapped[str] = mapped_column(String(32), nullable=False)
+    gsi_min: Mapped[int] = mapped_column(nullable=False)
+    gsi_max: Mapped[int] = mapped_column(nullable=False)
+    gsi_rating: Mapped[int] = mapped_column(nullable=False)
+    fan_coin_price: Mapped[int] = mapped_column(default=0, nullable=False, server_default="0")
+    permanent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    transferable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    salary_bearing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    tactical_identity_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+    user = relationship("User")

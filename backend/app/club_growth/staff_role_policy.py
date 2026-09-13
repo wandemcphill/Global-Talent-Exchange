@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 ROLE_FIRST_TEAM_MANAGER = "first_team_manager"
 ROLE_YOUTH_COACH = "youth_coach"
 ROLE_FIRST_TEAM_COACH = "first_team_coach"
@@ -11,20 +10,24 @@ ROLE_AGENT = "agent"
 ROLE_MEDICAL = "medical"
 ROLE_PERFORMANCE_ANALYST = "performance_analyst"
 
-COACH_SPECIALISATIONS = frozenset({
-    "coach",
-    "youth_coach",
-    "goalkeeping_coach",
-    "fitness_coach",
-    "technical_coach",
-    "tactical_coach",
-})
-MEDICAL_SPECIALISATIONS = frozenset({
-    "medical",
-    "physio",
-    "doctor",
-    "sports_scientist",
-})
+COACH_SPECIALISATIONS = frozenset(
+    {
+        "coach",
+        "youth_coach",
+        "goalkeeping_coach",
+        "fitness_coach",
+        "technical_coach",
+        "tactical_coach",
+    }
+)
+MEDICAL_SPECIALISATIONS = frozenset(
+    {
+        "medical",
+        "physio",
+        "doctor",
+        "sports_scientist",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)

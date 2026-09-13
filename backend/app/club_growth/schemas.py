@@ -132,6 +132,35 @@ class AcademyGenerationRunView(BaseModel):
     created_at: datetime
 
 
+class PersonalManagerCreateRequest(BaseModel):
+    display_name: str = Field(..., min_length=1, max_length=120)
+    quality_band: int = Field(..., ge=1, le=5)
+    fan_coin_price: int = Field(..., gt=0)
+    tactical_identity: dict[str, Any] = Field(default_factory=dict)
+
+
+class PersonalManagerView(BaseModel):
+    id: str
+    user_id: str
+    display_name: str
+    quality_band: str
+    gsi_min: int
+    gsi_max: int
+    gsi_rating: int
+    fan_coin_price: int
+    permanent: bool
+    transferable: bool
+    salary_bearing: bool
+    tactical_identity: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+
+
+class PersonalManagerAppointRequest(BaseModel):
+    pass
+
+
 class SponsorshipClubSummaryView(BaseModel):
     active_contracts: int = 0
     pending_contracts: int = 0
