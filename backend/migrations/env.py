@@ -18,18 +18,20 @@ def _sqlite_add_constraint(self, constraint):
     try:
         _orig_sqlite_add_constraint(self, constraint)
     except NotImplementedError:
-        table_name = constraint.table.name
-        with op.batch_alter_table(table_name) as batch_op:
-            batch_op.create_check_constraint(constraint.name, constraint.sqltext)
+        if hasattr(constraint, "sqltext"):
+            table_name = constraint.table.name
+            with op.batch_alter_table(table_name) as batch_op:
+                batch_op.create_check_constraint(constraint.name, constraint.sqltext)
 
 
 def _sqlite_drop_constraint(self, constraint):
     try:
         _orig_sqlite_drop_constraint(self, constraint)
     except NotImplementedError:
-        table_name = constraint.table.name
-        with op.batch_alter_table(table_name) as batch_op:
-            batch_op.drop_constraint(constraint.name, type_="check")
+        if hasattr(constraint, "name") and constraint.name:
+            table_name = constraint.table.name
+            with op.batch_alter_table(table_name) as batch_op:
+                batch_op.drop_constraint(constraint.name, type_="check")
 
 
 SQLiteImpl.add_constraint = _sqlite_add_constraint
