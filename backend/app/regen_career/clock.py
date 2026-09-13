@@ -191,9 +191,9 @@ class RegenCareerClock:
     def _age_pressure(age: int | None) -> float:
         if age is None:
             return 0.0
-        # No retirement is forced at a fixed age. This curve simply increases
-        # the pressure contribution as virtual age moves through later career.
-        return RegenCareerClock._clamp((age - 300) / 180.0)
+        if age >= 420:
+            return 1.0 + ((age - 420) / 60.0)
+        return RegenCareerClock._clamp((age - 300) / 120.0)
 
     @staticmethod
     def _stage(age: int | None) -> str:

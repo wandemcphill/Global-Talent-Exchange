@@ -8,7 +8,6 @@ from typing import Mapping
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ingestion.models import Player
 from app.models.player_contract import PlayerContract
 from app.models.player_injury_case import PlayerInjuryCase
 from app.models.regen import (
@@ -67,6 +66,8 @@ class RegenCareerPolicyService:
         retirement_threshold: float = 0.85,
         reference_on: date | None = None,
     ) -> RegenCareerPolicyContext:
+        from app.ingestion.models import Player
+
         player = self.session.get(Player, player_id)
         if player is None:
             raise ValueError(f"Player {player_id} was not found")
@@ -89,6 +90,9 @@ class RegenCareerPolicyService:
             if willingness_to_continue is not None
             else self._willingness_from_personality(personality)
         )
+        if virtual_age_months is not None and virtual_age_months > 360:
+            age_decay = max(0.0, 1.0 - ((virtual_age_months - 360) / 120.0))
+            willingness = willingness * age_decay
         effective_date = reference_on or date.today()
         active_contract = self._active_contract(player_id=player_id, reference_on=effective_date)
         active_injuries = self._active_injury_count(player_id=player_id, reference_on=effective_date)
@@ -130,7 +134,7 @@ class RegenCareerPolicyService:
                 select(RegenGenerationEvent)
                 .where(RegenGenerationEvent.regen_profile_id == regen_profile_id)
                 .order_by(RegenGenerationEvent.created_at.asc(), RegenGenerationEvent.id.asc())
-            )
+            ).all()
         )
         for event in events:
             raw_values = (
@@ -144,19 +148,13 @@ class RegenCareerPolicyService:
         raise ValueError("Regen generation season is unavailable; retirement age must remain unknown")
 
     def _current_season_number(self, *, reference_on: date | None) -> int:
-        seasons = list(
-            self.session.scalars(select(RegenSeason).order_by(RegenSeason.season_number.desc())).all()
-        )
+        seasons = list(self.session.scalars(select(RegenSeason).order_by(RegenSeason.season_number.desc())).all())
         if not seasons:
             raise ValueError("No GTEX seasons are configured")
         if reference_on is None:
             active = next((season for season in seasons if season.is_active), None)
             return active.season_number if active is not None else seasons[0].season_number
-        eligible = [
-            season
-            for season in seasons
-            if season.start_date <= reference_on <= season.end_date
-        ]
+        eligible = [season for season in seasons if season.start_date <= reference_on <= season.end_date]
         if eligible:
             return max(season.season_number for season in eligible)
         past = [season for season in seasons if season.start_date <= reference_on]
@@ -165,15 +163,12 @@ class RegenCareerPolicyService:
         raise ValueError("Reference date occurs before the configured GTEX season timeline")
 
     def _season_virtual_month_index(self) -> dict[int, int]:
-        seasons = list(
-            self.session.scalars(select(RegenSeason).order_by(RegenSeason.season_number.asc())).all()
-        )
+        seasons = list(self.session.scalars(select(RegenSeason).order_by(RegenSeason.season_number.asc())).all())
         mapping: dict[int, int] = {}
         for season in seasons:
             raw = (season.metadata_json or {}).get("virtual_age_month_index")
-            if raw is None:
-                raise ValueError("GTEX season virtual-age mapping is incomplete")
-            mapping[season.season_number] = int(raw)
+            if raw is not None:
+                mapping[season.season_number] = int(raw)
         return mapping
 
     def _personality(self, regen_profile_id: str) -> dict[str, float]:

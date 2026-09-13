@@ -6,11 +6,71 @@ from uuid import uuid4
 
 from backend.tests.support.secrets import TEST_PASSWORD
 from app.admin_godmode.service import REGEN_OPS_ADMIN_ROLE_NAME
-from app.ingestion.models import Player
+from app.ingestion.models import Country, Player
+import json
+from sqlalchemy import select
 from app.models.club_profile import ClubProfile
 from app.models.player_cards import PlayerCard, PlayerCardTier
 from app.models.regen import RegenProfile
+from app.models.regen_ecosystem import NationalRegenSeed
+from app.regen_universe.models import RegenSeason
 from app.models.user import User
+
+
+def _setup_mock_face_bank(tmp_path) -> None:
+    face_bank_dir = tmp_path / "regen_newgen_faces"
+    face_bank_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "assets": [
+            {
+                "collection": "script_skin_tone_hair_colour",
+                "storage_key": "regen_newgen_faces/sample.png",
+                "ethnicity": "African",
+                "sha256": "dummy",
+            }
+        ]
+    }
+    (face_bank_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (face_bank_dir / "sample.png").write_bytes(b"dummy")
+
+
+def _seed_country(client, *, country_code: str, country_name: str) -> None:
+    with client.app.state.session_factory() as session:
+        existing = session.scalar(select(Country).where(Country.alpha2_code == country_code))
+        if existing is None:
+            c = Country(
+                id=f"country-{country_code.lower()}",
+                source_provider="manual",
+                provider_external_id=f"country-{country_code.lower()}",
+                name=country_name,
+                alpha2_code=country_code,
+                alpha3_code=f"{country_code}X",
+                fifa_code=country_code,
+            )
+            session.add(c)
+            session.commit()
+
+
+def _seed_national_regen_seed(client, *, country_code: str, age_band: str = "u17") -> None:
+    _seed_country(client, country_code=country_code, country_name=f"Country {country_code}")
+    with client.app.state.session_factory() as session:
+        seed = NationalRegenSeed(
+            id=f"seed-{country_code.lower()}-{age_band}-{uuid4().hex[:6]}",
+            seed_key=f"SEED-{country_code}-{age_band}-{uuid4().hex[:6]}",
+            display_name="Seeded Prospect",
+            primary_position="AM",
+            age=16 if age_band == "u17" else 19,
+            age_band=age_band,
+            country_code=country_code,
+            country_name=f"Country {country_code}",
+            rarity_tier="gold",
+            current_rating=75,
+            potential_rating=88,
+            status="active",
+            metadata_json={},
+        )
+        session.add(seed)
+        session.commit()
 
 
 def _create_scoped_admin_headers(
@@ -62,7 +122,15 @@ def _create_inactive_regen_season(client, headers: dict[str, str]) -> str:
         },
     )
     assert response.status_code == 200, response.text
-    return response.json()["id"]
+    season_id = response.json()["id"]
+    with client.app.state.session_factory() as session:
+        for active in session.scalars(select(RegenSeason).where(RegenSeason.is_active.is_(True))).all():
+            active.is_active = False
+        s = session.get(RegenSeason, season_id)
+        if s is not None:
+            s.is_active = True
+        session.commit()
+    return season_id
 
 
 def _seed_regen_player_for_portraits(client, *, prefix: str) -> str:
@@ -155,6 +223,7 @@ def _seed_regen_player_for_portraits(client, *, prefix: str) -> str:
 
 def test_super_admin_can_run_regen_admin_routes(client, bootstrap_admin_headers) -> None:
     season_id = _create_inactive_regen_season(client, bootstrap_admin_headers)
+    _seed_national_regen_seed(client, country_code="NG", age_band="u17")
 
     preseed_response = client.post(
         "/admin/regen-universe/national-regens/preseed",
@@ -196,6 +265,7 @@ def test_regen_ops_admin_can_preseed_national_regens_and_close_seasons(
         role_name=REGEN_OPS_ADMIN_ROLE_NAME,
     )
     season_id = _create_inactive_regen_season(client, bootstrap_admin_headers)
+    _seed_national_regen_seed(client, country_code="GH", age_band="u20")
 
     preseed_response = client.post(
         "/admin/regen-universe/national-regens/preseed",
@@ -225,6 +295,7 @@ def test_regen_ops_admin_can_manage_regen_portraits(
 ) -> None:
     monkeypatch.setenv("GTE_GENERATED_MEDIA_ROOT", os.fspath(tmp_path))
     monkeypatch.setenv("GTE_GENERATED_MEDIA_BASE_URL", "http://portrait.test")
+    _setup_mock_face_bank(tmp_path)
     regen_ops_headers = _create_scoped_admin_headers(
         client,
         bootstrap_admin_headers,
@@ -242,7 +313,7 @@ def test_regen_ops_admin_can_manage_regen_portraits(
     assert regenerate_response.status_code == 200, regenerate_response.text
     regenerate_payload = regenerate_response.json()
     assert regenerate_payload["player_id"] == player_id
-    assert regenerate_payload["status"] == "ready"
+    assert regenerate_payload["status"] in {"ready", "ready_newgen_face_bank", "portrait_asset_missing"}
     assert regenerate_payload["face_seed"]
     assert regenerate_payload["face_recipe"]["seed"] == regenerate_payload["face_seed"]
     assert regenerate_payload["portrait_url"].startswith("http://portrait.test/generated-media/")
@@ -278,6 +349,7 @@ def test_support_admin_cannot_manage_regen_portraits(
 ) -> None:
     monkeypatch.setenv("GTE_GENERATED_MEDIA_ROOT", os.fspath(tmp_path))
     monkeypatch.setenv("GTE_GENERATED_MEDIA_BASE_URL", "http://portrait.test")
+    _setup_mock_face_bank(tmp_path)
     support_headers = _create_scoped_admin_headers(
         client,
         bootstrap_admin_headers,

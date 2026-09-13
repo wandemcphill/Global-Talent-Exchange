@@ -6,7 +6,34 @@ from pathlib import Path
 import sys
 
 from alembic import context
+from alembic import op
+from alembic.ddl.sqlite import SQLiteImpl
 from sqlalchemy import Column, MetaData, String, Table, create_engine, inspect, pool, text
+
+_orig_sqlite_add_constraint = SQLiteImpl.add_constraint
+_orig_sqlite_drop_constraint = SQLiteImpl.drop_constraint
+
+
+def _sqlite_add_constraint(self, constraint):
+    try:
+        _orig_sqlite_add_constraint(self, constraint)
+    except NotImplementedError:
+        table_name = constraint.table.name
+        with op.batch_alter_table(table_name) as batch_op:
+            batch_op.create_check_constraint(constraint.name, constraint.sqltext)
+
+
+def _sqlite_drop_constraint(self, constraint):
+    try:
+        _orig_sqlite_drop_constraint(self, constraint)
+    except NotImplementedError:
+        table_name = constraint.table.name
+        with op.batch_alter_table(table_name) as batch_op:
+            batch_op.drop_constraint(constraint.name, type_="check")
+
+
+SQLiteImpl.add_constraint = _sqlite_add_constraint
+SQLiteImpl.drop_constraint = _sqlite_drop_constraint
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
