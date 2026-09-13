@@ -51,7 +51,6 @@ from app.models.transfer_window import TransferWindow
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.club_identity.models.reputation import ClubReputationProfile
-from app.club_finance.service import ClubFinanceError, ClubFinanceService
 from app.ownership_groups.service import OwnershipGroupService
 from app.schemas.player_lifecycle import (
     AvailabilityBadgeView,
@@ -1568,6 +1567,8 @@ class PlayerLifecycleService:
             raise PlayerLifecycleValidationError("Transfer bids require a buying club")
         self._require_club_profile(payload.buying_club_id)
         try:
+            from app.club_finance.service import ClubFinanceError, ClubFinanceService
+
             ClubFinanceService(self.session).assert_transfer_allowed_for_club(club_id=payload.buying_club_id)
         except ClubFinanceError as exc:
             raise PlayerLifecycleValidationError(exc.detail) from exc
@@ -2016,6 +2017,8 @@ class PlayerLifecycleService:
                 offer=offer,
                 contract=new_contract,
             )
+        from app.club_finance.service import ClubFinanceService
+
         ClubFinanceService(self.session).record_transfer_movement(
             buying_club_id=bid.buying_club_id,
             selling_club_id=bid.selling_club_id,
