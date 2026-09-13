@@ -15,6 +15,7 @@ from app.gift_engine.service import (
     GiftEngineService as LegacyGiftEngineService,
 )
 from app.models.base import generate_uuid
+from app.models.club_profile import ClubProfile
 from app.models.economy_burn_event import EconomyBurnEvent
 from app.models.economy_config import GiftCatalogItem
 from app.models.gift_combo_event import GiftComboEvent
@@ -53,9 +54,38 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             return "user_hosted"
         return "user_hosted"
 
+    def _resolve_canonical_recipient_identity(
+        self,
+        *,
+        recipient_user_id: str | None,
+        recipient_club_id: str | None,
+    ) -> tuple[str | None, str | None]:
+        """Validate optional club context at the canonical service boundary.
+
+        The authenticated sender/recipient profiles remain the economic identity.
+        A club is optional recipient context and, when supplied, must belong to
+        the recipient profile. This keeps direct service callers subject to the
+        same identity contract as the HTTP router.
+        """
+        if recipient_club_id is None:
+            return recipient_user_id, None
+
+        club = self.session.get(ClubProfile, recipient_club_id)
+        if club is None or club.owner_user_id is None:
+            raise GiftEngineError("Recipient club was not found.", reason="recipient_club_not_found")
+        if recipient_user_id is not None and recipient_user_id != club.owner_user_id:
+            raise GiftEngineError(
+                "Recipient profile does not own the selected recipient club.",
+                reason="recipient_club_identity_mismatch",
+            )
+        return club.owner_user_id, club.id
+
     def send_gift(self, *, sender: User, **kwargs: Any):  # type: ignore[override]
         requested_scope = self._normalize_scope(kwargs.get("source_scope"))
-        recipient_user_id = kwargs.get("recipient_user_id")
+        recipient_user_id, recipient_club_id = self._resolve_canonical_recipient_identity(
+            recipient_user_id=kwargs.get("recipient_user_id"),
+            recipient_club_id=kwargs.get("recipient_club_id"),
+        )
         self.ensure_football_gift_catalog()
         normalized_idempotency_key = kwargs.get("idempotency_key")
         normalized_idempotency_key = normalized_idempotency_key.strip() if normalized_idempotency_key else None
@@ -64,6 +94,19 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 select(GiftTransaction).where(GiftTransaction.idempotency_key == normalized_idempotency_key)
             )
             if existing_transaction is not None:
+                if (
+                    existing_transaction.recipient_user_id != recipient_user_id
+                    or existing_transaction.recipient_club_id != recipient_club_id
+                ):
+                    raise GiftEngineError(
+                        "Idempotent gift reference belongs to a different recipient profile or club context.",
+                        reason="recipient_identity_conflict",
+                    )
+                if existing_transaction.sender_user_id != sender.id:
+                    raise GiftEngineError(
+                        "Idempotent gift reference belongs to a different sender profile.",
+                        reason="sender_identity_conflict",
+                    )
                 return existing_transaction
 
         resolved = self._resolve_recipient_context(
@@ -168,6 +211,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             recipient_user_id=recipient.id,
             gift_catalog_item_id=gift.id,
             idempotency_key=normalized_idempotency_key,
+            recipient_club_id=recipient_club_id,
             recipient_type=recipient_type,
             recipient_entity_id=recipient_entity_id,
             chat_thread_id=chat_thread_id,
@@ -199,6 +243,9 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 "destination_ledger_unit": LedgerUnit.COIN.value,
                 "fee_policy_rule_key": split.rule_key,
                 "fee_policy_version": split.policy_version,
+                "recipient_profile_id": recipient.id,
+                "recipient_club_id": recipient_club_id,
+                "identity_semantics": "profile_is_canonical_sender_recipient_identity_club_is_context_only",
             },
         )
         self.session.add(transaction)
@@ -222,6 +269,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                     "gift_key": gift.key,
                     "source_scope": requested_scope,
                     "quantity": str(normalized_quantity),
+                    "recipient_profile_id": recipient.id,
+                    "recipient_club_id": recipient_club_id,
                 },
             )
         except EconomicConversionError as exc:
@@ -297,6 +346,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             "gift_display_name": gift.display_name,
             "sender_user_id": sender.id,
             "recipient_user_id": recipient.id,
+            "recipient_club_id": recipient_club_id,
             "quantity": str(normalized_quantity),
             "gross_amount": str(gross_amount),
             "recipient_net_amount": str(recipient_net),
@@ -368,6 +418,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 "gift_transaction_id": transaction.id,
                 "sender_user_id": sender.id,
                 "recipient_user_id": recipient.id,
+                "recipient_club_id": recipient_club_id,
                 "gift_key": gift.key,
                 "gift_name": gift.display_name,
                 "fallback_gift_name": gift.fallback_display_name,
