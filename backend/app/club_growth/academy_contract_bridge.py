@@ -7,9 +7,10 @@ from decimal import Decimal
 from sqlalchemy import select
 
 from app.ingestion.models import Player
-from app.models.base import utcnow
 from app.models.club_growth import AcademyRegenContractOffer
 from app.models.player_contract import PlayerContract
+from app.schemas.player_lifecycle import ContractCreateRequest
+from app.services.player_lifecycle_service import PlayerLifecycleService
 
 
 class AcademyContractBridgeError(ValueError):
@@ -24,13 +25,7 @@ def _add_months(value: date, months: int) -> date:
 
 
 def ensure_academy_player_contract(*, service, club_id: str, prospect_id: str) -> PlayerContract:
-    """Idempotently materialize the accepted academy offer as the canonical PlayerContract.
-
-    ``wage_minor`` is copied exactly into the existing PlayerContract decimal field.
-    No new exchange-rate or salary-conversion rule is introduced here. The academy
-    offer already owns the salary value; this bridge only carries it across lifecycle
-    boundaries.
-    """
+    """Idempotently bridge an accepted academy offer into PlayerLifecycleService."""
     session = service.session
     offer = session.scalar(
         select(AcademyRegenContractOffer)
@@ -62,7 +57,7 @@ def ensure_academy_player_contract(*, service, club_id: str, prospect_id: str) -
     if existing is not None:
         if player.current_club_profile_id != club_id:
             player.current_club_profile_id = club_id
-        session.flush()
+            session.flush()
         return existing
 
     other_active = session.scalar(
@@ -76,20 +71,20 @@ def ensure_academy_player_contract(*, service, club_id: str, prospect_id: str) -
             "canonical academy player already has an active contract with another club"
         )
 
-    starts_on = utcnow().date()
+    starts_on = date.today()
     ends_on = _add_months(starts_on, max(1, int(offer.duration_months))) - timedelta(days=1)
-    contract = PlayerContract(
-        player_id=player.id,
-        club_id=club_id,
-        status="active",
-        wage_amount=Decimal(str(offer.wage_minor)),
-        bonus_terms=None,
-        release_clause_amount=None,
-        signed_on=starts_on,
-        starts_on=starts_on,
-        ends_on=ends_on,
+
+    contract = PlayerLifecycleService(session).create_contract(
+        player.id,
+        ContractCreateRequest(
+            club_id=club_id,
+            wage_amount=Decimal(str(offer.wage_minor)),
+            bonus_terms="Academy graduation contract.",
+            release_clause_amount=None,
+            starts_on=starts_on,
+            ends_on=ends_on,
+            signed_on=starts_on,
+        ),
+        reference_on=starts_on,
     )
-    session.add(contract)
-    player.current_club_profile_id = club_id
-    session.flush()
     return contract
