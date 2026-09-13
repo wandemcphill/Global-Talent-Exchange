@@ -3,45 +3,9 @@ from __future__ import annotations
 import ast
 from alembic import command
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.orm import sessionmaker
 
 from app.core.config import BACKEND_ROOT
 from app.core.database import build_alembic_config, ensure_database_schema_current
-from app.ingestion.models import Player
-from app.models.real_player_profile import RealPlayerProfile
-from app.models.real_player_source_link import RealPlayerSourceLink
-
-
-def _migration_graph_heads() -> set[str]:
-    versions_dir = BACKEND_ROOT / "migrations" / "versions"
-    revisions: set[str] = set()
-    down_revisions: set[str] = set()
-
-    for path in versions_dir.glob("*.py"):
-        module = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
-        revision: str | None = None
-        down_revision: str | tuple[str, ...] | None = None
-        for node in module.body:
-            if not isinstance(node, ast.Assign):
-                continue
-            for target in node.targets:
-                if not isinstance(target, ast.Name):
-                    continue
-                if target.id == "revision":
-                    revision = ast.literal_eval(node.value)
-                elif target.id == "down_revision":
-                    down_revision = ast.literal_eval(node.value)
-        if revision is None:
-            continue
-        revisions.add(revision)
-        if isinstance(down_revision, str):
-            down_revisions.add(down_revision)
-        elif isinstance(down_revision, tuple):
-            down_revisions.update(item for item in down_revision if item)
-
-    heads = revisions - down_revisions
-    assert len(heads) == 1
-    return heads
 
 
 def _migration_graph_heads() -> set[str]:
@@ -381,48 +345,39 @@ def test_player_share_market_repair_migration_restores_missing_tables(tmp_path) 
 
     command.upgrade(config, "20260329_0073_social_warfare_layer")
 
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    with SessionLocal() as session:
-        player = Player(
-            id="repair-real-player",
-            source_provider="transfermarkt_2nd_zip",
-            provider_external_id="repair-real-player",
-            full_name="Repair Proof Player",
-            canonical_display_name="Repair Proof Player",
-            is_real_player=True,
-            current_market_reference_value=95_000_000.0,
-            market_reference_currency="EUR",
-        )
-        session.add(player)
-        session.flush()
-
-        source_link = RealPlayerSourceLink(
-            id="repair-source-link",
-            gtex_player_id=player.id,
-            source_name="transfermarkt_2nd_zip",
-            source_player_key="repair-real-player",
-            canonical_name=player.full_name,
-            identity_confidence_score=0.99,
-            is_verified_real_player=True,
-            verification_state="verified",
-        )
-        session.add(source_link)
-        session.flush()
-
-        session.add(
-            RealPlayerProfile(
-                id="repair-profile",
-                gtex_player_id=player.id,
-                source_link_id=source_link.id,
-                source_name="transfermarkt_2nd_zip",
-                source_player_key="repair-real-player",
-                canonical_name=player.full_name,
-                current_market_reference_value=95_000_000.0,
-                market_reference_currency="EUR",
-                ingestion_batch_id="repair-batch",
-            )
-        )
-        session.commit()
+    with engine.begin() as connection:
+        connection.execute(text("""
+                INSERT INTO ingestion_players (
+                    id, source_provider, provider_external_id, full_name,
+                    canonical_display_name, is_real_player, current_market_reference_value,
+                    market_reference_currency, last_synced_at
+                ) VALUES (
+                    'repair-real-player', 'transfermarkt_2nd_zip', 'repair-real-player',
+                    'Repair Proof Player', 'Repair Proof Player', 1, 95000000.0, 'EUR',
+                    '2026-09-13 00:00:00'
+                )
+            """))
+        connection.execute(text("""
+                INSERT INTO real_player_source_links (
+                    id, gtex_player_id, source_name, source_player_key,
+                    canonical_name, identity_confidence_score, is_verified_real_player,
+                    verification_state
+                ) VALUES (
+                    'repair-source-link', 'repair-real-player', 'transfermarkt_2nd_zip',
+                    'repair-real-player', 'Repair Proof Player', 0.99, 1, 'verified'
+                )
+            """))
+        connection.execute(text("""
+                INSERT INTO real_player_profiles (
+                    id, gtex_player_id, source_link_id, source_name,
+                    source_player_key, canonical_name, current_market_reference_value,
+                    market_reference_currency, ingestion_batch_id
+                ) VALUES (
+                    'repair-profile', 'repair-real-player', 'repair-source-link',
+                    'transfermarkt_2nd_zip', 'repair-real-player', 'Repair Proof Player',
+                    95000000.0, 'EUR', 'repair-batch'
+                )
+            """))
 
     with engine.begin() as connection:
         connection.execute(text("DROP TABLE player_share_events"))

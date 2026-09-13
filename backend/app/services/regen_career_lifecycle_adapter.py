@@ -4,10 +4,8 @@ from dataclasses import replace
 from datetime import date, datetime
 from typing import Any, Callable
 
+from app.common.enums.contract_status import ContractStatus
 from app.models.regen import RegenProfile
-from app.regen_career.policy_service import RegenCareerPolicyService
-from app.regen_career.retirement_academy_bridge import RegenRetirementAcademyBridge
-from app.regen_career.retirement_legacy_plan import build_retirement_legacy_plan
 from app.services.player_lifecycle_service import PlayerLifecycleService
 
 _POLICY_INSTALLED = False
@@ -56,6 +54,8 @@ def _assessment_payload(context: Any) -> dict[str, Any]:
 
 
 def _retirement_legacy_plan(regen: RegenProfile, player_id: str, state: dict[str, Any]) -> dict[str, Any] | None:
+    from app.regen_career.retirement_legacy_plan import build_retirement_legacy_plan
+
     club_id = state.get("previous_club_id")
     if not state.get("retired") or not club_id or state.get("retired_on") is None:
         return None
@@ -94,6 +94,9 @@ def _policy_sync(
     global _ORIGINAL_SYNC
     if _ORIGINAL_SYNC is None:
         raise RuntimeError("Phase 6C lifecycle policy adapter is not installed")
+
+    from app.regen_career.policy_service import RegenCareerPolicyService
+    from app.regen_career.retirement_academy_bridge import RegenRetirementAcademyBridge
 
     policy_context = None
     try:
@@ -138,7 +141,13 @@ def _policy_sync(
         regen.generated_at = original_generated_at
         self.settings = original_settings
 
-    already_retired = bool(state.get("retired", False))
+    already_retired = (
+        bool(state.get("retired", False))
+        or bool(regen.metadata_json and (regen.metadata_json.get("career_state") or {}).get("retired"))
+        or bool(
+            regen.metadata_json and (regen.metadata_json.get("career_state") or {}).get("career_stage") == "retired"
+        )
+    )
 
     if policy_context is None or policy_context.assessment.virtual_age_months is None:
         state["virtual_age_months"] = None
@@ -146,7 +155,9 @@ def _policy_sync(
         state["career_stage"] = "age_unknown"
         state["retirement_pressure"] = False
         state["retirement_pressure_band"] = "unknown"
+        state["pressure_band"] = "unknown"
         state["expected_longevity_months"] = None
+        state["longevity_months"] = None
         state["retirement_watch"] = False
         state["retirement_decision_eligible"] = False
         state["eligible_for_retirement_decision"] = False
@@ -163,10 +174,54 @@ def _policy_sync(
     else:
         state.update(_assessment_payload(policy_context))
         state["policy_drivers"] = list(policy_context.assessment.drivers)
+        state["retirement_drivers"] = list(policy_context.assessment.drivers)
+        state["retirement_decision_eligible"] = policy_context.assessment.eligible_for_retirement_decision
         state["eligible_for_retirement_decision"] = policy_context.assessment.eligible_for_retirement_decision
-        if policy_context.assessment.eligible_for_retirement_decision:
+        if already_retired or policy_context.assessment.eligible_for_retirement_decision:
             state["lifecycle_phase"] = "retired"
             state["retired"] = True
+            state["agency_message"] = "Retired from the active football economy."
+            regen.status = "retired"
+            player.is_tradable = False
+            player.current_club_profile_id = None
+            if not state.get("retired_on"):
+                state["retired_on"] = reference_on.isoformat()
+                self._record_event(
+                    player_id=player.id,
+                    club_id=state.get("previous_club_id"),
+                    event_type="regen_retired",
+                    event_status="archived",
+                    occurred_on=reference_on,
+                    effective_from=reference_on,
+                    effective_to=None,
+                    related_entity_type="regen_profile",
+                    related_entity_id=regen.id,
+                    summary=f"{player.full_name} retired",
+                    details={
+                        "regen_id": regen.regen_id,
+                        "lifecycle_age_months": policy_context.assessment.virtual_age_months,
+                    },
+                    notes=None,
+                )
+                from app.services.regen_legacy_service import RegenLegacyService
+
+                RegenLegacyService(self.session).snapshot_legacy(
+                    regen.id,
+                    club_id=state.get("previous_club_id"),
+                    retired_on=reference_on,
+                )
+                from app.regen_universe.expansion_service import RegenUniverseExpansionService
+
+                RegenUniverseExpansionService(self.session).refresh_story(
+                    player.id,
+                    trigger="retirement",
+                    notify=False,
+                    publish=True,
+                )
+            active_contract = self._select_current_contract(self.get_contracts(player.id), reference_on=reference_on)
+            if active_contract is not None and active_contract.status != ContractStatus.TERMINATED.value:
+                active_contract.status = ContractStatus.TERMINATED.value
+                active_contract.ends_on = min(active_contract.ends_on, reference_on)
         else:
             state["retired"] = False
 

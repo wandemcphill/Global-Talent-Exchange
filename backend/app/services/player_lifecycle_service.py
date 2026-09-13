@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.common.enums.contract_status import ContractStatus
 from app.common.enums.injury_severity import InjurySeverity
@@ -2419,6 +2420,7 @@ class PlayerLifecycleService:
         metadata = dict(regen.metadata_json or {})
         metadata["career_state"] = state
         regen.metadata_json = metadata
+        flag_modified(regen, "metadata_json")
 
     def _regen_training_state(self, regen: RegenProfile) -> dict[str, Any]:
         metadata = dict(regen.metadata_json or {})
@@ -2428,6 +2430,7 @@ class PlayerLifecycleService:
         metadata = dict(regen.metadata_json or {})
         metadata["special_training"] = training_state
         regen.metadata_json = metadata
+        flag_modified(regen, "metadata_json")
 
     def _require_user(self, user_id: str | None) -> User:
         user = self.session.get(User, user_id) if user_id else None
@@ -3288,8 +3291,11 @@ class PlayerLifecycleService:
             state["career_stage"] = "age_unknown"
             state["retirement_pressure"] = False
             state["retirement_pressure_band"] = "unknown"
+            state["pressure_band"] = "unknown"
             state["expected_longevity_months"] = None
+            state["longevity_months"] = None
             state["retirement_watch"] = False
+            state["retirement_decision_eligible"] = False
             state["eligible_for_retirement_decision"] = False
             state["policy_drivers"] = []
             state["retirement_drivers"] = []
