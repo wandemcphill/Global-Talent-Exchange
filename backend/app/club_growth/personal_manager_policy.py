@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 
+import app.wallets.personal_manager_ledger  # noqa: F401
+
 
 class PersonalManagerBand(IntEnum):
     BAND_60_70 = 1
