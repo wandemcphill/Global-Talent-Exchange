@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.player_lifecycle_service import PlayerLifecycleValidationError
 from app.segments.player_lifecycle.transfer_authorization_routes import _require_club_owner
 
 
