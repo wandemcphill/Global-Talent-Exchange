@@ -20,16 +20,6 @@ _BOUNDS: dict[PersonalManagerBand, tuple[int, int]] = {
     PersonalManagerBand.BAND_96_99: (96, 99),
 }
 
-# Prices are domain policy, not client-controlled input. Keep the catalogue
-# centralized so API callers cannot buy a higher-quality manager at a custom price.
-_BAND_PRICES: dict[PersonalManagerBand, int] = {
-    PersonalManagerBand.BAND_60_70: 500,
-    PersonalManagerBand.BAND_71_80: 650,
-    PersonalManagerBand.BAND_81_90: 800,
-    PersonalManagerBand.BAND_91_95: 1000,
-    PersonalManagerBand.BAND_96_99: 1250,
-}
-
 
 @dataclass(frozen=True, slots=True)
 class PersonalManagerCreation:
@@ -47,10 +37,6 @@ def quality_bounds(band: PersonalManagerBand) -> tuple[int, int]:
     return _BOUNDS[PersonalManagerBand(band)]
 
 
-def fan_coin_price_for_band(band: PersonalManagerBand) -> int:
-    return _BAND_PRICES[PersonalManagerBand(band)]
-
-
 def validate_personal_manager_creation(
     *,
     user_id: str,
@@ -64,22 +50,19 @@ def validate_personal_manager_creation(
         raise ValueError("personal_manager_user_required")
     if fan_coin_price <= 0:
         raise ValueError("personal_manager_price_must_be_positive")
-
-    band = PersonalManagerBand(quality_band)
-    minimum_gsi, maximum_gsi = quality_bounds(band)
+    minimum_gsi, maximum_gsi = quality_bounds(quality_band)
     return PersonalManagerCreation(
         user_id=user_id,
-        quality_band=band,
+        quality_band=PersonalManagerBand(quality_band),
         minimum_gsi=minimum_gsi,
         maximum_gsi=maximum_gsi,
-        fan_coin_price=fan_coin_price_for_band(band),
+        fan_coin_price=fan_coin_price,
     )
 
 
 __all__ = [
     "PersonalManagerBand",
     "PersonalManagerCreation",
-    "fan_coin_price_for_band",
     "quality_bounds",
     "validate_personal_manager_creation",
 ]

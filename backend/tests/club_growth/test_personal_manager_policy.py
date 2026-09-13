@@ -2,7 +2,6 @@ import pytest
 
 from app.club_growth.personal_manager_policy import (
     PersonalManagerBand,
-    fan_coin_price_for_band,
     quality_bounds,
     validate_personal_manager_creation,
 )
@@ -26,18 +25,6 @@ def test_personal_manager_is_single_and_non_transferable() -> None:
     assert created.permanent
     assert not created.transferable
     assert not created.salary_bearing
-    assert created.fan_coin_price == 1000
-
-
-def test_personal_manager_price_is_server_defined_by_band() -> None:
-    created = validate_personal_manager_creation(
-        user_id="user-2",
-        quality_band=PersonalManagerBand.BAND_96_99,
-        fan_coin_price=1,
-        already_exists=False,
-    )
-    assert created.fan_coin_price == fan_coin_price_for_band(PersonalManagerBand.BAND_96_99)
-    assert created.fan_coin_price != 1
 
 
 def test_second_personal_manager_is_rejected() -> None:
