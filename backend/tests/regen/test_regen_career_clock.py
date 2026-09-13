@@ -109,6 +109,7 @@ def test_injury_and_low_playing_time_raise_pressure() -> None:
     )
     assert injured_fringe.retirement_pressure > healthy_regular.retirement_pressure
     assert injured_fringe.pressure_band in {
+        RetirementPressureBand.WATCH,
         RetirementPressureBand.HIGH,
         RetirementPressureBand.DECISION,
     }

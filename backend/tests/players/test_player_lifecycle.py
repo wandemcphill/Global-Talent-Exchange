@@ -33,6 +33,7 @@ from app.models.regen import (
     CurrencyConversionQuote,
     MajorTransferAnnouncement,
     RegenBigClubApproach,
+    RegenGenerationEvent,
     RegenOfferVisibilityState,
     RegenOriginMetadata,
     RegenPersonalityProfile,
@@ -40,6 +41,7 @@ from app.models.regen import (
     RegenTeamDynamicsEffect,
     TransferHeadlineMediaRecord,
 )
+from app.regen_universe.models import RegenSeason
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.story_feed import StoryFeedItem
 from app.models.transfer_market import PlayerDecisionProfile
@@ -1064,13 +1066,52 @@ def test_regen_summary_can_retire_player_and_archive_market_state(
     lifecycle_session: Session,
 ) -> None:
     context = seed_base_context(lifecycle_session)
-    seed_regen_context(
+    regen = seed_regen_context(
         lifecycle_session,
         player_id=context["player_id"],
         generated_for_club_id=context["club_profile_id"],
         generated_at=datetime(2023, 2, 1, 12, 0),
         potential_max=72,
     )
+    lifecycle_session.add_all(
+        [
+            RegenSeason(
+                id="season-gen",
+                season_number=1,
+                start_date=date(2020, 1, 1),
+                end_date=date(2020, 12, 31),
+                is_active=False,
+                metadata_json={"virtual_age_month_index": 216},
+            ),
+            RegenSeason(
+                id="season-retire",
+                season_number=10,
+                start_date=date(2026, 1, 1),
+                end_date=date(2026, 12, 31),
+                is_active=True,
+                metadata_json={"virtual_age_month_index": 786},
+            ),
+            RegenGenerationEvent(
+                id=f"gen-event-{context['player_id']}",
+                regen_profile_id=regen.id,
+                club_id=context["club_profile_id"],
+                generation_source="academy",
+                season_label="Season 1",
+                metadata_json={"season_number": 1},
+            ),
+            PlayerInjuryCase(
+                id=f"retire-injury-{context['player_id']}",
+                player_id=context["player_id"],
+                club_id=context["club_profile_id"],
+                severity=InjurySeverity.SEASON_ENDING.value,
+                injury_type="Career-ending knee injury",
+                occurred_on=date(2026, 1, 1),
+                expected_return_on=date(2026, 12, 31),
+                recovery_days=365,
+            ),
+        ]
+    )
+    lifecycle_session.commit()
     contract = lifecycle_service.create_contract(
         context["player_id"],
         ContractCreateRequest(
