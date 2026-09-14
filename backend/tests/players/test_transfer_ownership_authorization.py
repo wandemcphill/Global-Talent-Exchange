@@ -110,6 +110,29 @@ def test_bid_creation_accepts_owned_buying_club(lifecycle_session: Session) -> N
     assert response.json()["buying_club_id"] == context["buyer_profile_id"]
 
 
+def test_sellerless_bid_creation_requires_admin(lifecycle_session: Session) -> None:
+    context = seed_base_context(lifecycle_session)
+    add_window(
+        lifecycle_session,
+        window_id="window-auth-sellerless",
+        opens_on=date(2026, 1, 1),
+        closes_on=date(2026, 12, 31),
+    )
+
+    payload = {
+        "player_id": context["player_id"],
+        "selling_club_id": None,
+        "buying_club_id": None,
+        "bid_amount": "1000000.00",
+    }
+
+    with _client(lifecycle_session, user_id="user-owner") as client:
+        response = client.post("/api/transfers/windows/window-auth-sellerless/bids", json=payload)
+
+    assert response.status_code == 403, response.text
+    assert lifecycle_session.scalars(select(TransferBid)).all() == []
+
+
 def test_bid_acceptance_requires_selling_club_owner(lifecycle_session: Session) -> None:
     context = seed_base_context(lifecycle_session)
     buyer = _add_user_and_club(
@@ -167,6 +190,57 @@ def test_bid_acceptance_requires_selling_club_owner(lifecycle_session: Session) 
     assert refreshed is not None
     assert refreshed.status == "submitted"
     assert lifecycle_session.query(PlayerContract).filter_by(player_id=context["player_id"]).count() == 1
+
+
+def test_bid_rejection_requires_selling_club_owner(lifecycle_session: Session) -> None:
+    context = seed_base_context(lifecycle_session)
+    buyer = _add_user_and_club(
+        lifecycle_session,
+        user_id="transfer-buyer-reject",
+        club_id="club-transfer-buyer-reject",
+    )
+    window = add_window(
+        lifecycle_session,
+        window_id="window-auth-reject",
+        opens_on=date(2026, 1, 1),
+        closes_on=date(2026, 12, 31),
+    )
+    service = PlayerLifecycleService(lifecycle_session)
+    service.create_contract(
+        context["player_id"],
+        ContractCreateRequest(
+            club_id=context["club_profile_id"],
+            wage_amount=Decimal("75000.00"),
+            signed_on=date(2026, 1, 1),
+            starts_on=date(2026, 1, 1),
+            ends_on=date(2027, 1, 1),
+        ),
+    )
+    bid = service.create_bid(
+        window.id,
+        TransferBidCreateRequest(
+            player_id=context["player_id"],
+            buying_club_id=buyer.id,
+            bid_amount=Decimal("1000000.00"),
+        ),
+        submitted_on=date(2026, 3, 12),
+    )
+
+    attacker = _add_user_and_club(
+        lifecycle_session,
+        user_id="reject-attacker",
+        club_id="club-reject-attacker",
+    )
+    with _client(lifecycle_session, user_id=attacker.owner_user_id) as client:
+        response = client.post(
+            f"/api/transfers/windows/{window.id}/bids/{bid.id}/reject",
+            json={"reason": "Not authorized"},
+        )
+
+    assert response.status_code == 403, response.text
+    refreshed = lifecycle_session.get(TransferBid, bid.id)
+    assert refreshed is not None
+    assert refreshed.status == "submitted"
 
 
 def test_bid_acceptance_accepts_owned_selling_club(lifecycle_session: Session) -> None:
