@@ -16,6 +16,8 @@ INJURY_MARKER = "/injuries"
 
 
 def _assert_club_owner(session: Session, *, actor: User, club_id: str | None, action: str) -> None:
+    if actor.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        return
     if not club_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -24,8 +26,6 @@ def _assert_club_owner(session: Session, *, actor: User, club_id: str | None, ac
     club = session.get(ClubProfile, club_id)
     if club is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lifecycle club was not found")
-    if actor.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
-        return
     if club.owner_user_id != actor.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
