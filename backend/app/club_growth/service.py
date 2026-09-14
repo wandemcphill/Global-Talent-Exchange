@@ -134,9 +134,7 @@ class ClubGrowthService:
         actor: User,
         payload: PersonalManagerCreateRequest,
     ) -> PersonalManagerView:
-        existing = self.session.scalar(
-            select(PersonalManager).where(PersonalManager.user_id == actor.id)
-        )
+        existing = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == actor.id))
         try:
             band = PersonalManagerBand(payload.quality_band)
             creation = validate_personal_manager_creation(
@@ -183,9 +181,7 @@ class ClubGrowthService:
         return self._personal_manager_view(manager)
 
     def get_personal_manager_me(self, *, actor: User) -> PersonalManagerView:
-        manager = self.session.scalar(
-            select(PersonalManager).where(PersonalManager.user_id == actor.id)
-        )
+        manager = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == actor.id))
         if manager is None:
             raise ClubGrowthError("personal_manager_not_found")
         return self._personal_manager_view(manager)
@@ -197,9 +193,7 @@ class ClubGrowthService:
         club_id: str,
     ) -> StaffContractView:
         self._ensure_club(club_id)
-        manager = self.session.scalar(
-            select(PersonalManager).where(PersonalManager.user_id == actor.id)
-        )
+        manager = self.session.scalar(select(PersonalManager).where(PersonalManager.user_id == actor.id))
         if manager is None:
             raise ClubGrowthError("personal_manager_not_found")
 
@@ -212,9 +206,7 @@ class ClubGrowthService:
             raise ClubGrowthError(decision.reason)
 
         market_key = f"personal-manager:{actor.id}"
-        staff_profile = self.session.scalar(
-            select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key)
-        )
+        staff_profile = self.session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == market_key))
         if staff_profile is None:
             staff_profile = ClubStaffProfile(
                 market_key=market_key,
@@ -679,6 +671,7 @@ class ClubGrowthService:
                 nationality=prospect.nationality,
             )
         senior_player = self._ensure_senior_player_for_prospect(club_id=club_id, prospect=prospect)
+        self._ensure_contract_and_squad_for_promoted_prospect(club_id=club_id, prospect=prospect, player=senior_player)
         previous = {"status": prospect.status}
         prospect.status = "promoted_to_senior"
         history = existing_history
@@ -715,6 +708,56 @@ class ClubGrowthService:
         )
         self.session.flush()
         return self._academy_prospect_view(prospect)
+
+    def _ensure_contract_and_squad_for_promoted_prospect(
+        self, *, club_id: str, prospect: AcademyProspect, player: Player
+    ) -> None:
+        from app.models.player_contract import PlayerContract
+        from app.schemas.player_lifecycle import ContractCreateRequest
+        from app.services.player_lifecycle_service import PlayerLifecycleService
+        from app.squad_tiers.service import SquadTierService
+
+        active_contract = self.session.scalar(
+            select(PlayerContract).where(
+                PlayerContract.player_id == player.id,
+                PlayerContract.club_id == club_id,
+                PlayerContract.status == "active",
+            )
+        )
+        if active_contract is None:
+            accepted_offer = self.session.scalar(
+                select(AcademyRegenContractOffer).where(
+                    AcademyRegenContractOffer.prospect_id == prospect.id,
+                    AcademyRegenContractOffer.club_id == club_id,
+                    AcademyRegenContractOffer.status == "accepted",
+                )
+            )
+            wage_amount = (
+                Decimal(accepted_offer.wage_minor) / Decimal("100.00")
+                if accepted_offer is not None
+                else Decimal("10.00")
+            )
+            duration_months = accepted_offer.duration_months if accepted_offer is not None else 24
+            now_date = utcnow().date()
+            PlayerLifecycleService(self.session).create_contract(
+                player.id,
+                ContractCreateRequest(
+                    club_id=club_id,
+                    status="active",
+                    wage_amount=wage_amount,
+                    signed_on=now_date,
+                    starts_on=now_date,
+                    ends_on=now_date + timedelta(days=duration_months * 30),
+                ),
+            )
+
+        player.current_club_profile_id = club_id
+        SquadTierService(self.session).ensure_membership(
+            club_id=club_id,
+            player_id=player.id,
+            tier="reserve",
+            source="academy",
+        )
 
     def _select_academy_portrait_asset_ref(self, *, seed: str, nationality: str | None) -> str:
         service = RegenPortraitService(self.session)
@@ -851,7 +894,9 @@ class ClubGrowthService:
         return prospect
 
     def _assign_staff_role(self, *, club_id: str, contract: ClubStaffContract) -> None:
-        role_key = contract.staff_profile.staff_type if contract.staff_profile is not None else contract.role_scope
+        role_key = contract.role_scope or (
+            contract.staff_profile.staff_type if contract.staff_profile is not None else "club"
+        )
         assignment = self.session.scalar(
             select(ClubStaffAssignment).where(
                 ClubStaffAssignment.club_id == club_id,
@@ -873,19 +918,17 @@ class ClubGrowthService:
 
     def _staff_effects(self, contracts: list[ClubStaffContract]) -> dict[str, int]:
         active = [item for item in contracts if item.status == "active" and item.staff_profile is not None]
-        scout_quality = sum(
-            item.staff_profile.rating
-            for item in active
-            if item.staff_profile.staff_type in {"scout", "academy_director"}
-        )
-        training_bonus = sum(
-            item.staff_profile.rating for item in active if item.staff_profile.staff_type in {"coach", "manager"}
-        )
-        negotiation_bonus = sum(
-            item.staff_profile.rating
-            for item in active
-            if item.staff_profile.staff_type in {"agent", "negotiation_specialist"}
-        )
+        scout_quality = 0
+        training_bonus = 0
+        negotiation_bonus = 0
+        for item in active:
+            role_key = item.role_scope or item.staff_profile.staff_type
+            if role_key in {"scout", "academy_director"}:
+                scout_quality += item.staff_profile.rating
+            if role_key in {"coach", "manager", "first_team_manager"}:
+                training_bonus += item.staff_profile.rating
+            if role_key in {"agent", "negotiation_specialist"}:
+                negotiation_bonus += item.staff_profile.rating
         return {
             "scout_quality": min(100, scout_quality),
             "training_bonus": min(100, training_bonus),

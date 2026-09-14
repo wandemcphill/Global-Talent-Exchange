@@ -133,9 +133,13 @@ class RegenCareerClock:
         )
         pressure = round(self._clamp(pressure), 4)
 
+        expected = self._expected_longevity(age=age, pressure=pressure, longevity=longevity)
         band = self._pressure_band(pressure)
         watch = pressure >= 0.55 or (age is not None and age >= 300)
-        decision = pressure >= inputs.retirement_threshold and age is not None
+        decision = (
+            pressure >= inputs.retirement_threshold
+            or (age is not None and expected is not None and age >= expected)
+        ) and age is not None
 
         drivers = self._drivers(
             age=age,
@@ -151,8 +155,6 @@ class RegenCareerClock:
             achievement=achievement,
             opportunity=opportunity,
         )
-
-        expected = self._expected_longevity(age=age, pressure=pressure, longevity=longevity)
         return RegenCareerAssessment(
             virtual_age_months=age,
             career_stage=stage,

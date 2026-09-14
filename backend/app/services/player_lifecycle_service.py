@@ -1801,6 +1801,11 @@ class PlayerLifecycleService:
         reference_on: date | None = None,
     ) -> TransferBid:
         bid = self._require_bid(window_id, bid_id)
+        if bid.status in {TransferBidStatus.ACCEPTED.value, TransferBidStatus.COMPLETED.value}:
+            terms = dict(bid.structured_terms_json or {})
+            existing_contract_id = terms.get("contract_id")
+            if existing_contract_id and self.session.get(PlayerContract, existing_contract_id) is not None:
+                return bid
         if bid.status != TransferBidStatus.SUBMITTED.value:
             raise PlayerLifecycleValidationError("Only submitted transfer bids can be accepted")
         if bid.buying_club_id is None:
@@ -2308,6 +2313,14 @@ class PlayerLifecycleService:
             ingestion_club = self._resolve_ingestion_club_for_profile(profile_id)
             if ingestion_club is not None:
                 player.current_club_id = ingestion_club.id
+            from app.squad_tiers.service import SquadTierService
+
+            SquadTierService(self.session).ensure_membership(
+                club_id=profile_id,
+                player_id=player.id,
+                tier="first_team",
+                source="transfer",
+            )
 
     def _resolve_ingestion_club_for_profile(self, club_profile_id: str | None) -> IngestionClub | None:
         profile = self._get_club_profile(club_profile_id)
@@ -3283,7 +3296,7 @@ class PlayerLifecycleService:
             player.id,
             reference_on=reference_on,
         )
-        age_unknown = state.get("virtual_age_months") is None or state.get("retirement_policy_status") == "age_unknown"
+        age_unknown = state.get("virtual_age_months") is None and state.get("retirement_policy_status") == "age_unknown"
         if age_unknown:
             retired = bool(state.get("retired", False))
             state["virtual_age_months"] = None
