@@ -437,7 +437,7 @@ class PlayerAgencyContextService:
         )
         if personality.greed >= 78:
             return "money-first"
-        if (stage in {"wonderkid", "prospect"} or personality.development_focus >= 78) and personality.development_focus >= 62:
+        if stage in {"wonderkid", "prospect"} and personality.development_focus >= 62:
             return "development-first"
         if state.playing_time_satisfaction < 45 or (personality.ego >= 75 and stage in {"breakout", "established"}):
             return "minutes-first"

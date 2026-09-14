@@ -3296,7 +3296,7 @@ class PlayerLifecycleService:
             player.id,
             reference_on=reference_on,
         )
-        age_unknown = state.get("virtual_age_months") is None and state.get("retirement_policy_status") == "age_unknown"
+        age_unknown = state.get("virtual_age_months") is None or state.get("retirement_policy_status") == "age_unknown"
         if age_unknown:
             retired = bool(state.get("retired", False))
             state["virtual_age_months"] = None

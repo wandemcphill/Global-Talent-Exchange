@@ -204,7 +204,7 @@ class ContractDecisionService:
             not same_club_renewal
             and player_context.career_target_band == "development-first"
             and development_score >= 80.0
-            and role_score >= 60.0
+            and role_score >= 72.0
             and club_context.club_stature >= player_context.current_club.club_stature + 10.0
             and wage_score >= 40.0
         ):
