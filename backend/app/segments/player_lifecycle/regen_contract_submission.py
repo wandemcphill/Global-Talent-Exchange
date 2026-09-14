@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,7 +9,11 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user, get_session
 from app.common.enums.transfer_bid_status import TransferBidStatus
 from app.models.user import User, UserRole
-from app.schemas.player_lifecycle import RegenContractOfferQuoteRequest, RegenLifecycleView, TransferBidCreateRequest
+from app.schemas.player_lifecycle import (
+    RegenContractOfferQuoteRequest,
+    RegenLifecycleView,
+    TransferBidCreateRequest,
+)
 from app.services.player_lifecycle_service import (
     PlayerLifecycleNotFoundError,
     PlayerLifecycleService,
@@ -80,13 +85,11 @@ def submit_regen_contract_offer(
             None,
         )
         if existing is None:
+            active_windows = service.list_transfer_windows(active_on=date.today())
+            if not active_windows:
+                raise PlayerLifecycleValidationError("No active transfer window is available for this regen offer")
             service.create_bid(
-                service.list_transfer_windows(active_on=None)[0].id
-                if False
-                else next(
-                    window.id
-                    for window in service.list_transfer_windows(active_on=date.today())
-                ),
+                active_windows[0].id,
                 TransferBidCreateRequest(
                     player_id=player_id,
                     buying_club_id=payload.offering_club_id,
