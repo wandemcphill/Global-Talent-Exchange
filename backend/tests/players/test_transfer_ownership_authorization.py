@@ -224,4 +224,4 @@ def test_bid_acceptance_accepts_owned_selling_club(lifecycle_session: Session) -
         )
     ).all()
     assert len(contracts) == 1
-    assert contracts[0].status in {ContractStatus.ACTIVE.value, ContractStatus.ACCEPTED.value}
+    assert contracts[0].status in {ContractStatus.ACTIVE.value, ContractStatus.AGREED.value}
