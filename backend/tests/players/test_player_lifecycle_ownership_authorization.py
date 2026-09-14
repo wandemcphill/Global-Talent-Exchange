@@ -160,3 +160,29 @@ def test_injury_recovery_requires_existing_club_owner(lifecycle_session: Session
     refreshed = lifecycle_session.get(PlayerInjuryCase, injury.id)
     assert refreshed is not None
     assert refreshed.recovered_on is None
+
+
+def test_regen_big_club_approach_requires_approaching_club_owner(lifecycle_session: Session) -> None:
+    context = seed_base_context(lifecycle_session)
+    _add_user_and_club(lifecycle_session, user_id="regen-attacker", club_id="regen-attacker-club")
+
+    with _client(lifecycle_session, user_id="regen-attacker") as client:
+        response = client.post(
+            f"/api/players/{context['player_id']}/regen/big-club-approaches",
+            json={"approaching_club_id": context["club_profile_id"]},
+        )
+
+    assert response.status_code == 403, response.text
+
+
+def test_regen_club_owned_actions_require_current_club_owner(lifecycle_session: Session) -> None:
+    context = seed_base_context(lifecycle_session)
+    _add_user_and_club(lifecycle_session, user_id="regen-action-attacker", club_id="regen-action-attacker-club")
+
+    with _client(lifecycle_session, user_id="regen-action-attacker") as client:
+        response = client.post(
+            f"/api/players/{context['player_id']}/regen/transfer-listing",
+            json={"listed": True},
+        )
+
+    assert response.status_code == 403, response.text
