@@ -9,7 +9,13 @@ from sqlalchemy.pool import StaticPool
 from app.coin_traders.schemas import CoinTradeOrderCreateRequest, CoinTradeProofRequest
 from app.coin_traders.service import CoinTraderService
 from app.models.base import Base
-from app.models.coin_trader import CoinTradeDirection, CoinTraderProfile, CoinTraderProfileStatus, CoinTraderRate, CoinTraderTier
+from app.models.coin_trader import (
+    CoinTradeDirection,
+    CoinTraderProfile,
+    CoinTraderProfileStatus,
+    CoinTraderRate,
+    CoinTraderTier,
+)
 from app.models.treasury import TreasurySettings
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerPosting, LedgerUnit
@@ -63,30 +69,30 @@ def _seed_coin(session, user: User, amount: Decimal) -> None:
     session.commit()
 
 
-def test_coin_trader_user_buy_roundtrip_moves_one_coin_balance_once() -> None:
+def test_coin_trader_user_buy_roundtrip_moves_coin_once() -> None:
     session = _make_session()
     try:
         buyer = _user(session, "coin-buyer", UserRole.USER)
         trader = _user(session, "coin-trader", UserRole.COIN_TRADER)
         _seed_coin(session, trader, Decimal("100.0000"))
 
-        treasury = session.scalar(session.query(TreasurySettings)) if False else None
-        del treasury
-        settings = TreasurySettings(settings_key="default")
-        settings.currency_code = "NGN"
-        settings.deposit_rate_value = Decimal("1000.0000")
-        settings.withdrawal_rate_value = Decimal("1000.0000")
-        settings.min_trader_buy_rate_fiat = Decimal("1.0000")
-        settings.max_trader_buy_rate_fiat = Decimal("5000.0000")
-        settings.min_trader_sell_rate_fiat = Decimal("1.0000")
-        settings.max_trader_sell_rate_fiat = Decimal("5000.0000")
-        settings.max_trader_spread_fiat = Decimal("5000.0000")
-        settings.max_buy_above_withdrawal_fiat = Decimal("5000.0000")
-        settings.max_sell_below_deposit_fiat = Decimal("5000.0000")
-        settings.min_deposit = Decimal("1.0000")
-        settings.max_deposit = Decimal("100000000.0000")
-        settings.min_withdrawal = Decimal("1.0000")
-        settings.max_withdrawal = Decimal("100000000.0000")
+        settings = TreasurySettings(
+            settings_key="default",
+            currency_code="NGN",
+            deposit_rate_value=Decimal("1000.0000"),
+            withdrawal_rate_value=Decimal("1000.0000"),
+            min_trader_buy_rate_fiat=Decimal("1.0000"),
+            max_trader_buy_rate_fiat=Decimal("5000.0000"),
+            min_trader_sell_rate_fiat=Decimal("1.0000"),
+            max_trader_sell_rate_fiat=Decimal("5000.0000"),
+            max_trader_spread_fiat=Decimal("5000.0000"),
+            max_buy_above_withdrawal_fiat=Decimal("5000.0000"),
+            max_sell_below_deposit_fiat=Decimal("5000.0000"),
+            min_deposit=Decimal("1.0000"),
+            max_deposit=Decimal("100000000.0000"),
+            min_withdrawal=Decimal("1.0000"),
+            max_withdrawal=Decimal("100000000.0000"),
+        )
         session.add(settings)
         session.flush()
 
@@ -104,18 +110,19 @@ def test_coin_trader_user_buy_roundtrip_moves_one_coin_balance_once() -> None:
         )
         session.add(profile)
         session.flush()
-        rate = CoinTraderRate(
-            trader_profile_id=profile.id,
-            coin_unit=LedgerUnit.COIN,
-            fiat_currency="NGN",
-            buy_rate_fiat=Decimal("950.0000"),
-            sell_rate_fiat=Decimal("1050.0000"),
-            min_coin_amount=Decimal("1.0000"),
-            max_coin_amount=Decimal("100.0000"),
-            available_liquidity=Decimal("100.0000"),
-            is_active=True,
+        session.add(
+            CoinTraderRate(
+                trader_profile_id=profile.id,
+                coin_unit=LedgerUnit.COIN,
+                fiat_currency="NGN",
+                buy_rate_fiat=Decimal("950.0000"),
+                sell_rate_fiat=Decimal("1050.0000"),
+                min_coin_amount=Decimal("1.0000"),
+                max_coin_amount=Decimal("100.0000"),
+                available_liquidity=Decimal("100.0000"),
+                is_active=True,
+            )
         )
-        session.add(rate)
         session.commit()
 
         service = CoinTraderService(session)
