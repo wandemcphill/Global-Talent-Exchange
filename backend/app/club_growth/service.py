@@ -713,8 +713,6 @@ class ClubGrowthService:
         self, *, club_id: str, prospect: AcademyProspect, player: Player
     ) -> None:
         from app.models.player_contract import PlayerContract
-        from app.schemas.player_lifecycle import ContractCreateRequest
-        from app.services.player_lifecycle_service import PlayerLifecycleService
         from app.squad_tiers.service import SquadTierService
 
         active_contract = self.session.scalar(
@@ -732,24 +730,20 @@ class ClubGrowthService:
                     AcademyRegenContractOffer.status == "accepted",
                 )
             )
-            wage_amount = (
-                Decimal(accepted_offer.wage_minor) / Decimal("100.00")
-                if accepted_offer is not None
-                else Decimal("10.00")
-            )
+            wage_amount = Decimal(str(accepted_offer.wage_minor)) if accepted_offer is not None else Decimal("1000.00")
             duration_months = accepted_offer.duration_months if accepted_offer is not None else 24
             now_date = utcnow().date()
-            PlayerLifecycleService(self.session).create_contract(
-                player.id,
-                ContractCreateRequest(
-                    club_id=club_id,
-                    status="active",
-                    wage_amount=wage_amount,
-                    signed_on=now_date,
-                    starts_on=now_date,
-                    ends_on=now_date + timedelta(days=duration_months * 30),
-                ),
+            contract = PlayerContract(
+                player_id=player.id,
+                club_id=club_id,
+                status="active",
+                wage_amount=wage_amount,
+                signed_on=now_date,
+                starts_on=now_date,
+                ends_on=now_date + timedelta(days=duration_months * 30),
             )
+            self.session.add(contract)
+            self.session.flush()
 
         player.current_club_profile_id = club_id
         SquadTierService(self.session).ensure_membership(
@@ -918,17 +912,19 @@ class ClubGrowthService:
 
     def _staff_effects(self, contracts: list[ClubStaffContract]) -> dict[str, int]:
         active = [item for item in contracts if item.status == "active" and item.staff_profile is not None]
-        scout_quality = 0
-        training_bonus = 0
-        negotiation_bonus = 0
-        for item in active:
-            role_key = item.role_scope or item.staff_profile.staff_type
-            if role_key in {"scout", "academy_director"}:
-                scout_quality += item.staff_profile.rating
-            if role_key in {"coach", "manager", "first_team_manager"}:
-                training_bonus += item.staff_profile.rating
-            if role_key in {"agent", "negotiation_specialist"}:
-                negotiation_bonus += item.staff_profile.rating
+        scout_quality = sum(
+            item.staff_profile.rating
+            for item in active
+            if item.staff_profile.staff_type in {"scout", "academy_director"}
+        )
+        training_bonus = sum(
+            item.staff_profile.rating for item in active if item.staff_profile.staff_type in {"coach", "manager"}
+        )
+        negotiation_bonus = sum(
+            item.staff_profile.rating
+            for item in active
+            if item.staff_profile.staff_type in {"agent", "negotiation_specialist"}
+        )
         return {
             "scout_quality": min(100, scout_quality),
             "training_bonus": min(100, training_bonus),
