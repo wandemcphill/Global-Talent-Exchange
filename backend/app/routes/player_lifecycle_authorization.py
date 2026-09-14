@@ -13,6 +13,13 @@ from app.models.user import User, UserRole
 PLAYER_LIFECYCLE_MUTATION_PREFIX = "/api/players/"
 CONTRACT_MARKER = "/contracts"
 INJURY_MARKER = "/injuries"
+REGEN_MARKER = "/regen/"
+REGEN_BIG_CLUB_APPROACH_MARKER = "/regen/big-club-approaches"
+REGEN_CLUB_OWNED_ACTIONS = (
+    "/regen/transfer-listing",
+    "/regen/pressure-resolution",
+    "/regen/special-training",
+)
 
 
 def _assert_club_owner(session: Session, *, actor: User, club_id: str | None, action: str) -> None:
@@ -33,6 +40,15 @@ def _assert_club_owner(session: Session, *, actor: User, club_id: str | None, ac
         )
 
 
+def _player_current_club_id(session: Session, player_id: str) -> str | None:
+    from app.ingestion.models import Player
+
+    player = session.get(Player, player_id)
+    if player is None:
+        return None
+    return player.current_club_profile_id
+
+
 async def authorize_player_lifecycle_mutation(
     request: Request,
     actor: User = Depends(get_current_user),
@@ -44,6 +60,8 @@ async def authorize_player_lifecycle_mutation(
     path = request.url.path
     if not path.startswith(PLAYER_LIFECYCLE_MUTATION_PREFIX):
         return
+
+    player_id = path.split(PLAYER_LIFECYCLE_MUTATION_PREFIX, 1)[1].split("/", 1)[0]
 
     if CONTRACT_MARKER in path:
         tail = path.split(CONTRACT_MARKER, 1)[1]
@@ -74,15 +92,7 @@ async def authorize_player_lifecycle_mutation(
         tail = path.split(INJURY_MARKER, 1)[1]
         if tail == "":
             payload = await request.json()
-            player_id = path.split(PLAYER_LIFECYCLE_MUTATION_PREFIX, 1)[1].split("/", 1)[0]
-            club_id = str(payload.get("club_id") or "").strip()
-            if not club_id:
-                from app.ingestion.models import Player
-
-                player = session.get(Player, player_id)
-                if player is None:
-                    return
-                club_id = player.current_club_profile_id
+            club_id = str(payload.get("club_id") or "").strip() or _player_current_club_id(session, player_id)
             _assert_club_owner(
                 session,
                 actor=actor,
@@ -102,3 +112,23 @@ async def authorize_player_lifecycle_mutation(
                 club_id=injury.club_id,
                 action="injury",
             )
+            return
+
+    if REGEN_BIG_CLUB_APPROACH_MARKER in path:
+        payload = await request.json()
+        _assert_club_owner(
+            session,
+            actor=actor,
+            club_id=str(payload.get("approaching_club_id") or "").strip(),
+            action="approaching",
+        )
+        return
+
+    if REGEN_MARKER in path and any(path.endswith(marker) for marker in REGEN_CLUB_OWNED_ACTIONS):
+        _assert_club_owner(
+            session,
+            actor=actor,
+            club_id=_player_current_club_id(session, player_id),
+            action="player",
+        )
+        return
