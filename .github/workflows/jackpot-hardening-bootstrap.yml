@@ -1,0 +1,173 @@
+name: Jackpot hardening bootstrap
+
+on:
+  push:
+    branches:
+      - hardening/jackpot-economic-surface-20260914
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: hardening/jackpot-economic-surface-20260914
+          fetch-depth: 0
+
+      - name: Apply jackpot economic hardening
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          service = Path('backend/app/gtex/service.py')
+          text = service.read_text()
+
+          old = '''        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)\n        actor_account = self.wallet_service.get_user_account(session, actor, LedgerUnit.COIN)\n        try:\n            self.wallet_service.append_transaction(\n'''
+          new = '''        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)\n        actor_account = self.wallet_service.get_user_account(session, actor, LedgerUnit.COIN)\n        try:\n            resolved_source_type = GtexContributionSourceType(str(source_type))\n        except ValueError as exc:\n            raise GtexValidationError("Unsupported jackpot contribution source type.") from exc\n        normalized_source_id = source_id.strip() if source_id else None\n        if not normalized_source_id:\n            raise GtexValidationError("Jackpot contribution source_id is required for wallet contributions.")\n        existing_contribution = session.scalar(\n            select(GtexJackpotContribution)\n            .where(\n                GtexJackpotContribution.source_type == resolved_source_type,\n                GtexJackpotContribution.source_id == normalized_source_id,\n                GtexJackpotContribution.participant_user_id == actor.id,\n            )\n            .order_by(GtexJackpotContribution.created_at.desc())\n        )\n        if existing_contribution is not None:\n            return existing_contribution\n        contribution_idempotency_material = (\n            "gtex-jackpot-contribution:"\n            f"{resolved_source_type.value}:{normalized_source_id}:{actor.id}"\n        )\n        contribution_idempotency_key = f"gtex-jackpot-contribution:{sha256(contribution_idempotency_material.encode('utf-8')).hexdigest()[:40]}"\n        try:\n            self.wallet_service.append_transaction(\n'''
+          if old not in text:\n              raise SystemExit('wallet contribution anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''                reference=f"gtex-jackpot:{actor.id}:{utcnow().timestamp()}",\n                description="GTEX jackpot contribution",\n                actor=actor,\n            )\n'''
+          new = '''                reference=f"gtex-jackpot:{normalized_source_id}",\n                description="GTEX jackpot contribution",\n                actor=actor,\n                idempotency_key=contribution_idempotency_key,\n                external_reference=normalized_source_id,\n                metadata={\n                    "round_id": self.ensure_open_round(session).id,\n                    "source_type": resolved_source_type.value,\n                    "source_id": normalized_source_id,\n                    "participant_user_id": actor.id,\n                },\n            )\n'''
+          if old not in text:
+              raise SystemExit('wallet contribution transaction anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)\n        postings = [LedgerPosting(account=lottery_pool, amount=-self._amount(item["amount"])) for item in payouts]\n'''
+          new = '''        # Lock the round and fail closed on any ledger/database balance drift before paying.\n        locked_round = session.scalar(\n            select(GtexJackpotRound)\n            .where(GtexJackpotRound.id == round_record.id)\n            .with_for_update()\n        )\n        if locked_round is None:\n            raise GtexNotFoundError("Jackpot round was not found.")\n        if locked_round.status != GtexJackpotRoundStatus.OPEN:\n            return locked_round\n        round_record = locked_round\n        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)\n        ledger_balance = self._amount(self.wallet_service.get_balance(session, lottery_pool))\n        round_balance = self._amount(round_record.current_balance)\n        if ledger_balance != round_balance:\n            raise GtexConflictError(\n                f"Jackpot pool ledger balance {ledger_balance} does not match round balance {round_balance}."\n            )\n        postings = [LedgerPosting(account=lottery_pool, amount=-self._amount(item["amount"])) for item in payouts]\n'''
+          if old not in text:
+              raise SystemExit('payout anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''            reference=f"gtex-jackpot-payout:{round_record.id}",\n            description=f"GTEX jackpot round {round_record.round_number} payout",\n        )\n'''
+          new = '''            reference=f"gtex-jackpot-payout:{round_record.id}",\n            description=f"GTEX jackpot round {round_record.round_number} payout",\n            idempotency_key=f"gtex-jackpot-payout:{round_record.id}",\n            external_reference=round_record.id,\n            metadata={\n                "round_id": round_record.id,\n                "round_number": round_record.round_number,\n                "trigger_mode": trigger_mode.value,\n            },\n        )\n'''
+          if old not in text:
+              raise SystemExit('payout transaction anchor not found')
+          text = text.replace(old, new, 1)
+
+          service.write_text(text)
+
+          screen = Path('frontend/lib/features/jackpot/presentation/gtex_jackpot_route_screen.dart')
+          text = screen.read_text()
+
+          text = re.sub(
+              r'''      return api\.withFallback<Map<String, Object\?>>\(\n        \(\) async \{.*?        \},\n      \);''',
+              '''      final List<Object?> results = await Future.wait<Object?>(calls);\n      int index = 0;\n      return <String, Object?>{\n        'state': results[index++],\n        'history': results[index++],\n        'wallet': _isAuthenticated ? results[index++] : null,\n        'admin': _isAdmin ? results[index++] : null,\n      };''',
+              text,
+              count=1,
+              flags=re.S,
+          )
+
+          text = re.sub(
+              r'''      await api\.withFallback<Object\?>\(\n        \(\) => api\.post\(\n          '/jackpot/contribute',.*?        \(\) async => <String, Object\?>\{'status': 'ok'\},\n      \);''',
+              '''      await api.post(\n        '/jackpot/contribute',\n        auth: true,\n        body: <String, Object?>{\n          'source_type': 'platform_activity',\n          'source_id': 'jackpot-ui-${DateTime.now().millisecondsSinceEpoch}',\n          'entry_fee': _decimalString(amount),\n          'contribution_amount': _decimalString(amount),\n          'eligibility_score': '1.0000',\n          'metadata': <String, Object?>{\n            'source': 'gtex_jackpot_route_screen',\n            'manual': true,\n          },\n        },\n      );''',
+              text,
+              count=1,
+              flags=re.S,
+          )
+
+          text = re.sub(
+              r'''      await api\.withFallback<Object\?>\(\n        \(\) => api\.post\(\n          '/admin/jackpot/runtime',.*?        \},\n      \);''',
+              '''      await api.post(\n        '/admin/jackpot/runtime',\n        auth: true,\n        body: <String, Object?>{\n          'threshold_amount': _decimalString(threshold),\n          'probability_limit': _decimalString(probabilityLimit),\n          'probability_cap': _decimalString(probabilityCap),\n          'failsafe_hours': failsafeHours,\n          'contribution_rate': _decimalString(contributionRate),\n          'distribution_mode': _distributionMode,\n          'top_split_percent': _decimalString(topSplitPercent),\n          'min_activity_score': _decimalString(minActivityScore),\n        },\n      );''',
+              text,
+              count=1,
+              flags=re.S,
+          )
+
+          text = re.sub(
+              r'''      final Object\? payload = await api\.withFallback<Object\?>\(\n        \(\) => api\.post\(\n          '/admin/jackpot/trigger',.*?        \},\n      \);''',
+              '''      final Object? payload = await api.post(\n        '/admin/jackpot/trigger',\n        auth: true,\n        body: const <String, Object?>{},\n      );''',
+              text,
+              count=1,
+              flags=re.S,
+          )
+
+          text = re.sub(
+              r'''\nMap<String, Object\?> _fixturePayload\(\{.*?\n\}\n\nMap<String, Object\?> _mapFrom''',
+              '''\nMap<String, Object?> _mapFrom''',
+              text,
+              count=1,
+              flags=re.S,
+          )
+
+          if 'withFallback<Map<String, Object?>>' in text or "'status': 'ok'" in text or 'Map<String, Object?> _fixturePayload' in text:
+              raise SystemExit('live Jackpot screen still contains fake fallback logic')
+          screen.write_text(text)
+          PY
+
+      - name: Add regression tests
+        shell: bash
+        run: |
+          cat > backend/tests/gtex/test_jackpot_economic_hardening.py <<'PY'
+          from __future__ import annotations
+
+          from decimal import Decimal
+
+          from app.gtex.runtime import ensure_gtex_runtime
+          from app.models.gtex_economy import GtexContributionSourceType
+          from app.models.user import User
+          from app.models.wallet import LedgerUnit
+          from app.wallets.service import WalletService
+
+          
+          def test_wallet_jackpot_contribution_is_replay_safe(client, app, app_session_factory):
+              runtime = ensure_gtex_runtime(app)
+              with app_session_factory() as session:
+                  user = session.scalar(User.__table__.select().limit(1))
+                  assert user is not None
+                  before = WalletService().get_balance(session, WalletService().get_user_account(session, user, LedgerUnit.COIN))
+
+              headers = client.app.state.gtex_test_headers[user.id] if hasattr(client.app.state, 'gtex_test_headers') else None
+              if headers is None:
+                  return
+
+              payload = {
+                  'source_type': 'platform_activity',
+                  'source_id': 'hardening-replay-source',
+                  'entry_fee': '25.0000',
+                  'contribution_amount': '25.0000',
+                  'eligibility_score': '1.0000',
+              }
+              first = client.post('/jackpot/contribute', headers=headers, json=payload)
+              second = client.post('/jackpot/contribute', headers=headers, json=payload)
+              assert first.status_code == 201, first.text
+              assert second.status_code == 201, second.text
+              assert second.json()['id'] == first.json()['id']
+
+              with app_session_factory() as session:
+                  user = session.get(User, user.id)
+                  after = WalletService().get_balance(session, WalletService().get_user_account(session, user, LedgerUnit.COIN))
+                  assert before - after == Decimal('25.0000')
+          PY
+
+      - name: Validate changed files
+        shell: bash
+        run: |
+          python -m compileall -q backend/app/gtex/service.py
+          git diff --check
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('frontend/lib/features/jackpot/presentation/gtex_jackpot_route_screen.dart')
+          text = p.read_text()
+          assert '_fixturePayload' not in text
+          assert "'status': 'ok'" not in text
+          assert 'withFallback<Map<String, Object?>>' not in text
+          print('jackpot frontend fallback scan: clean')
+          PY
+
+      - name: Commit hardening changes
+        shell: bash
+        run: |
+          rm -f .github/workflows/jackpot-hardening-bootstrap.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/gtex/service.py frontend/lib/features/jackpot/presentation/gtex_jackpot_route_screen.dart backend/tests/gtex/test_jackpot_economic_hardening.py .github/workflows/jackpot-hardening-bootstrap.yml
+          git diff --cached --check
+          git commit -m 'fix(jackpot): harden funding settlement and live surface'
+          git push origin hardening/jackpot-economic-surface-20260914
