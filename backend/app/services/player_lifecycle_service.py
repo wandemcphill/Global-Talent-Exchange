@@ -1801,6 +1801,11 @@ class PlayerLifecycleService:
         reference_on: date | None = None,
     ) -> TransferBid:
         bid = self._require_bid(window_id, bid_id)
+        if bid.status in {TransferBidStatus.ACCEPTED.value, TransferBidStatus.COMPLETED.value}:
+            terms = dict(bid.structured_terms_json or {})
+            existing_contract_id = terms.get("contract_id")
+            if existing_contract_id and self.session.get(PlayerContract, existing_contract_id) is not None:
+                return bid
         if bid.status != TransferBidStatus.SUBMITTED.value:
             raise PlayerLifecycleValidationError("Only submitted transfer bids can be accepted")
         if bid.buying_club_id is None:
@@ -3377,7 +3382,10 @@ class PlayerLifecycleService:
                     related_entity_type="regen_profile",
                     related_entity_id=regen.id,
                     summary=f"{player.full_name} retired",
-                    details={"regen_id": regen.regen_id, "lifecycle_age_months": lifecycle_age_months},
+                    details={
+                        "regen_id": regen.regen_id,
+                        "lifecycle_age_months": state.get("lifecycle_age_months") or state.get("virtual_age_months"),
+                    },
                     notes=None,
                 )
                 from app.services.regen_legacy_service import RegenLegacyService

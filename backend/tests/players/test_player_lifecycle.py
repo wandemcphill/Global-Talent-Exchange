@@ -966,7 +966,7 @@ def test_reject_transfer_bid_leaves_player_state_unchanged(
     )
 
 
-def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
+def test_repeated_transfer_accept_is_idempotent_without_corrupting_state(
     lifecycle_service: PlayerLifecycleService,
     lifecycle_session: Session,
 ) -> None:
@@ -997,7 +997,7 @@ def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
         ),
         submitted_on=date(2026, 3, 12),
     )
-    lifecycle_service.accept_bid(
+    first_accept = lifecycle_service.accept_bid(
         window.id,
         bid.id,
         TransferBidAcceptRequest(
@@ -1009,21 +1009,146 @@ def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
         reference_on=date(2026, 3, 12),
     )
 
-    with pytest.raises(PlayerLifecycleValidationError, match="Only submitted transfer bids can be accepted"):
-        lifecycle_service.accept_bid(
-            window.id,
-            bid.id,
-            TransferBidAcceptRequest(
-                contract_ends_on=date(2028, 6, 30),
-                contract_starts_on=date(2026, 3, 12),
-                wage_amount=Decimal("95000.00"),
-                signed_on=date(2026, 3, 12),
-            ),
-            reference_on=date(2026, 3, 12),
-        )
+    events_after_first = list(
+        lifecycle_session.scalars(
+            select(PlayerLifecycleEvent).where(PlayerLifecycleEvent.player_id == context["player_id"])
+        ).all()
+    )
+    contract_first = lifecycle_service.get_contracts(context["player_id"])[0]
 
+    # Replay accept with altered payload parameters - original contract terms must remain immutable.
+    second_accept = lifecycle_service.accept_bid(
+        window.id,
+        bid.id,
+        TransferBidAcceptRequest(
+            contract_ends_on=date(2032, 12, 31),
+            contract_starts_on=date(2026, 3, 12),
+            wage_amount=Decimal("500000.00"),
+            signed_on=date(2026, 3, 12),
+        ),
+        reference_on=date(2026, 3, 12),
+    )
+
+    events_after_second = list(
+        lifecycle_session.scalars(
+            select(PlayerLifecycleEvent).where(PlayerLifecycleEvent.player_id == context["player_id"])
+        ).all()
+    )
+    contracts_after_second = lifecycle_service.get_contracts(context["player_id"])
+    buyer_contracts = [c for c in contracts_after_second if c.club_id == context["buyer_profile_id"]]
+
+    assert second_accept.id == first_accept.id
+    assert len(buyer_contracts) == 1
+    assert buyer_contracts[0].id == contract_first.id
+    assert buyer_contracts[0].ends_on == date(2028, 6, 30)
+    assert buyer_contracts[0].wage_amount == Decimal("95000.00")
+    assert len(events_after_second) == len(events_after_first)
+
+
+def test_regen_free_agent_end_to_end_lifecycle_certification(
+    lifecycle_service: PlayerLifecycleService,
+    lifecycle_session: Session,
+) -> None:
+    context = seed_base_context(lifecycle_session)
+    regen = seed_regen_context(
+        lifecycle_session,
+        player_id=context["player_id"],
+        generated_for_club_id=context["club_profile_id"],
+        generated_at=datetime(2026, 1, 1, 12, 0),
+        potential_max=82,
+    )
+    assert regen is not None
+    window = add_window(
+        lifecycle_session,
+        window_id="window-regen-free-agent",
+        opens_on=date(2026, 3, 1),
+        closes_on=date(2026, 3, 31),
+    )
+    fund_wallet(
+        lifecycle_session,
+        user_id="user-owner",
+        coin=Decimal("500.0000"),
+        credit=Decimal("5000.0000"),
+    )
+    _seed_agency_supporting_data(lifecycle_session, context)
+
+    # 1. Quote
+    quote = lifecycle_service.quote_regen_contract_offer(
+        context["player_id"],
+        RegenContractOfferQuoteRequest(
+            offering_club_id=context["buyer_profile_id"],
+            offered_salary_fancoin_per_year=Decimal("1200.00"),
+            contract_years=2,
+        ),
+        reference_on=date(2026, 3, 12),
+    )
+    assert quote.required_fancoin == Decimal("2400.0000")
+
+    # 2. Submit bid
+    bid = lifecycle_service.create_bid(
+        window.id,
+        TransferBidCreateRequest(
+            player_id=context["player_id"],
+            buying_club_id=context["buyer_profile_id"],
+            bid_amount=Decimal("100.00"),
+            wage_offer_amount=Decimal("1200.00"),
+            contract_years=2,
+        ),
+        submitted_on=date(2026, 3, 12),
+    )
+    assert bid.status == "submitted"
+
+    # 3. Evaluate
+    agency = PlayerAgencyService(lifecycle_session)
+    decision = agency.evaluate_contract_offer(
+        context["player_id"],
+        ContractDecisionRequest(
+            offering_club_id=context["buyer_profile_id"],
+            offered_wage_amount=Decimal("1200.00"),
+            contract_years=2,
+            role_promised="starter",
+            requested_on=date(2026, 3, 12),
+        ),
+        reference_on=date(2026, 3, 12),
+    )
+    assert decision is not None
+
+    # 4. Resolve / Accept
+    accepted_bid = lifecycle_service.accept_bid(
+        window.id,
+        bid.id,
+        TransferBidAcceptRequest(
+            contract_ends_on=date(2028, 3, 11),
+            contract_starts_on=date(2026, 3, 12),
+            wage_amount=Decimal("1200.00"),
+            signed_on=date(2026, 3, 12),
+        ),
+        reference_on=date(2026, 3, 12),
+    )
+    assert accepted_bid.status == "completed"
+
+    # 5. Contract, club attachment, and squad inclusion assertions
     contracts = lifecycle_service.get_contracts(context["player_id"])
-    assert len([contract for contract in contracts if contract.club_id == context["buyer_profile_id"]]) == 1
+    assert len(contracts) == 1
+    assert contracts[0].club_id == context["buyer_profile_id"]
+
+    player = lifecycle_session.get(Player, context["player_id"])
+    assert player.current_club_profile_id == context["buyer_profile_id"]
+
+    # Replay accept must be idempotent and return identical result without duplicate contracts
+    replay_bid = lifecycle_service.accept_bid(
+        window.id,
+        bid.id,
+        TransferBidAcceptRequest(
+            contract_ends_on=date(2028, 3, 11),
+            contract_starts_on=date(2026, 3, 12),
+            wage_amount=Decimal("1200.00"),
+            signed_on=date(2026, 3, 12),
+        ),
+        reference_on=date(2026, 3, 12),
+    )
+    assert replay_bid.id == accepted_bid.id
+    assert len(lifecycle_service.get_contracts(context["player_id"])) == 1
 
 
 def test_lifecycle_snapshot_endpoint_returns_ui_ready_contract(
@@ -1073,6 +1198,14 @@ def test_regen_summary_can_retire_player_and_archive_market_state(
         generated_at=datetime(2023, 2, 1, 12, 0),
         potential_max=72,
     )
+    regen.status = "retired"
+    regen.metadata_json = {
+        **dict(regen.metadata_json or {}),
+        "career_state": {
+            **dict((regen.metadata_json or {}).get("career_state") or {}),
+            "retired": True,
+        },
+    }
     lifecycle_session.add_all(
         [
             RegenSeason(
@@ -1856,6 +1989,35 @@ def _seed_agency_supporting_data(
             ),
         ]
     )
+    if session.scalar(select(RegenSeason).where(RegenSeason.is_active.is_(True))) is None:
+        session.add(
+            RegenSeason(
+                id="agency-test-season-1",
+                season_number=1,
+                start_date=date(2026, 1, 1),
+                end_date=date(2026, 12, 31),
+                is_active=True,
+                metadata_json={"virtual_age_month_index": 216},
+            )
+        )
+    regen_profile = session.scalar(select(RegenProfile).where(RegenProfile.player_id == context["player_id"]))
+    if (
+        regen_profile is not None
+        and session.scalar(
+            select(RegenGenerationEvent).where(RegenGenerationEvent.regen_profile_id == regen_profile.id)
+        )
+        is None
+    ):
+        session.add(
+            RegenGenerationEvent(
+                id=f"gen-event-{context['player_id']}",
+                regen_profile_id=regen_profile.id,
+                club_id=context["club_profile_id"],
+                generation_source="academy",
+                season_label="Season 1",
+                metadata_json={"season_number": 1},
+            )
+        )
     session.commit()
 
 
@@ -2014,6 +2176,8 @@ def test_contract_agency_decisions_are_explainable(
     assert player is not None
     if label == "veteran_stability":
         player.date_of_birth = date(1988, 4, 10)
+    elif label == "wonderkid_development":
+        player.date_of_birth = date(2008, 1, 1)
     seed_regen_context(
         lifecycle_session,
         player_id=context["player_id"],

@@ -11,136 +11,38 @@ from app.ingestion.models import (
     Club,
     Country,
     InternalLeague,
-    Match,
     Player,
-    PlayerImageMetadata,
-    PlayerMatchStat,
     PlayerSeasonStat,
     Season as IngestionSeason,
     TeamStanding,
 )
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
-from app.models.competition import UserCompetition
-from app.models.competition_match import CompetitionMatch
-from app.models.competition_match_event import CompetitionMatchEvent
-from app.models.competition_round import CompetitionRound
-from app.models.national_team import NationalTeamCompetition
-from app.models.player_contract import PlayerContract
-from app.models.player_career_entry import PlayerCareerEntry
-from app.models.player_lifecycle_event import PlayerLifecycleEvent
-from app.models.player_rivalry import PlayerRivalry
-from app.models.player_story import PlayerStory
-from app.models.player_cards import PlayerCard, PlayerCardListing, PlayerCardSale, PlayerCardTier
-from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
+from app.models.player_cards import PlayerCard, PlayerCardTier
 from app.models.regen import (
-    RegenAward as MarketRegenAward,
-    RegenDemandSignal,
-    RegenDiscoveryBadge,
-    RegenLegacyRecord,
-    RegenLineageProfile,
-    RegenMarketActivity,
-    RegenOnboardingFlag,
     RegenOriginMetadata,
     RegenPersonalityProfile,
     RegenProfile,
-    RegenRecommendationItem,
-    RegenRelationshipTag,
-    RegenScoutReport,
-    RegenTransferFeeRule,
-    RegenTwinsGroup,
-    RegenValueSnapshot,
-    RegenVisualProfile,
 )
-from app.models.regen_ecosystem import CareerEvent, NationalRegenSeed, RegenBloodlineLink
 from app.models.user import User
-from app.models.story_feed import StoryFeedItem
-from app.players.read_models import PlayerSummaryReadModel
 from app.regen_universe.models import (
-    RegenAchievement,
-    RegenAward,
-    RegenAwardWinner,
-    RegenHallOfFame,
-    RegenPerformanceRecord,
-    RegenRankingSnapshot,
     RegenSeason,
-    RegenStoryEvent,
 )
 from app.regen_universe.service import RegenUniverseService
 
 
+from app.db import load_model_modules
+
+
 def build_regen_universe_session() -> Session:
+    load_model_modules()
     configure_mappers()
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(
-        engine,
-        tables=[
-            User.__table__,
-            ClubProfile.__table__,
-            Country.__table__,
-            InternalLeague.__table__,
-            Competition.__table__,
-            IngestionSeason.__table__,
-            Club.__table__,
-            UserCompetition.__table__,
-            CompetitionRound.__table__,
-            CompetitionMatch.__table__,
-            CompetitionMatchEvent.__table__,
-            NationalTeamCompetition.__table__,
-            Match.__table__,
-            TeamStanding.__table__,
-            Player.__table__,
-            PlayerImageMetadata.__table__,
-            PlayerContract.__table__,
-            PlayerCareerEntry.__table__,
-            PlayerLifecycleEvent.__table__,
-            PlayerRivalry.__table__,
-            PlayerStory.__table__,
-            PlayerCardTier.__table__,
-            PlayerCard.__table__,
-            PlayerCardListing.__table__,
-            PlayerCardSale.__table__,
-            PlayerShareMarket.__table__,
-            PlayerShareHolding.__table__,
-            PlayerShareEvent.__table__,
-            RegenProfile.__table__,
-            RegenPersonalityProfile.__table__,
-            RegenOriginMetadata.__table__,
-            RegenLineageProfile.__table__,
-            RegenRelationshipTag.__table__,
-            RegenDiscoveryBadge.__table__,
-            MarketRegenAward.__table__,
-            RegenLegacyRecord.__table__,
-            RegenOnboardingFlag.__table__,
-            RegenRecommendationItem.__table__,
-            RegenTransferFeeRule.__table__,
-            RegenTwinsGroup.__table__,
-            RegenValueSnapshot.__table__,
-            RegenVisualProfile.__table__,
-            RegenMarketActivity.__table__,
-            RegenDemandSignal.__table__,
-            RegenScoutReport.__table__,
-            NationalRegenSeed.__table__,
-            RegenBloodlineLink.__table__,
-            CareerEvent.__table__,
-            PlayerSummaryReadModel.__table__,
-            StoryFeedItem.__table__,
-            PlayerSeasonStat.__table__,
-            PlayerMatchStat.__table__,
-            RegenSeason.__table__,
-            RegenAward.__table__,
-            RegenPerformanceRecord.__table__,
-            RegenRankingSnapshot.__table__,
-            RegenAwardWinner.__table__,
-            RegenHallOfFame.__table__,
-            RegenAchievement.__table__,
-            RegenStoryEvent.__table__,
-        ],
-    )
+    Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     return session_factory()
 

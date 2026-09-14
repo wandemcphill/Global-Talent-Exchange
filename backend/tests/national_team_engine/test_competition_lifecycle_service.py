@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.ingestion.models import Country
-from app.global_memory.models import NationalTeamCountryRanking
 from app.models import Base
-from app.models.competition import UserCompetition
-from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
+from app.models.national_team import NationalTeamCompetition
 from app.models.user import User, UserRole
 from app.national_team_engine.competition_lifecycle_service import (
     NationalCompetitionLifecycleError,
@@ -19,20 +17,20 @@ from app.national_team_engine.schemas import NationalTeamCompetitionEntrySubmitR
 from app.national_team_engine.tournament_service import NationalTeamTournamentService
 
 
+from app.db import load_model_modules
+from app.models.national_team_tournament import RentalContract, NationalTeamRentalSquadMember
+from app.models.regen_ecosystem import NationalRegenSeed
+from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+from app.wallets.service import LedgerPosting, WalletService
+from decimal import Decimal
+import pytest
+
+
 def _build_session_factory(database_path: Path) -> sessionmaker:
+    load_model_modules()
     engine = create_engine(f"sqlite:///{database_path}", connect_args={"check_same_thread": False})
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    Base.metadata.create_all(
-        engine,
-        tables=[
-            User.__table__,
-            UserCompetition.__table__,
-            Country.__table__,
-            NationalTeamCountryRanking.__table__,
-            NationalTeamCompetition.__table__,
-            NationalTeamCompetitionEntry.__table__,
-        ],
-    )
+    Base.metadata.create_all(engine)
     return SessionLocal
 
 
@@ -191,3 +189,140 @@ def test_lifecycle_engine_handles_age_locking_prequalifiers_qualifiers_and_tourn
             "qualifier",
             "tournament",
         ]
+
+
+def test_national_team_rental_full_lifecycle_and_replay_idempotency(tmp_path: Path) -> None:
+    session_factory = _build_session_factory(tmp_path / "rental-lifecycle.db")
+    with session_factory() as session:
+        user = _create_user(session, suffix=99)
+        _seed_country(session, name="Nigeria", alpha2="NG", fifa="NGA", confederation="CAF")
+
+        wallet_service = WalletService()
+        user_acct = wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+        platform_acct = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+        wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(
+                    account=platform_acct, amount=Decimal("-1000.00"), source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT
+                ),
+                LedgerPosting(
+                    account=user_acct, amount=Decimal("1000.00"), source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference="fund-user-rental",
+            description="Fund user for rental test",
+            actor=user,
+        )
+        session.commit()
+
+        competition = NationalTeamCompetition(
+            key="gtex-world-cup-rental-test",
+            title="GTEX World Cup Rental Test",
+            season_label="2030",
+            region_type="global",
+            age_band="senior",
+            format_type="cup",
+            status="published",
+            metadata_json={
+                "minimum_squad_size": 1,
+                "maximum_squad_size": 25,
+            },
+            created_by_user_id=user.id,
+        )
+        session.add(competition)
+        session.flush()
+
+        from app.models.national_team import NationalTeamEntry
+
+        entry_obj = NationalTeamEntry(
+            id="nat-entry-rental-test",
+            competition_id=competition.id,
+            country_code="NG",
+            country_name="Nigeria",
+            entry_owner_user_id=user.id,
+            manager_user_id=user.id,
+            metadata_json={},
+        )
+        session.add(entry_obj)
+        session.commit()
+        entry_id = entry_obj.id
+
+        tournament_service = NationalTeamTournamentService(session)
+
+        seed = NationalRegenSeed(
+            id="seed-rental-player-1",
+            seed_key="seed-ng-1",
+            country_code="NG",
+            country_name="Nigeria",
+            display_name="Tunde Rental Star",
+            primary_position="fw",
+            current_rating=85,
+            potential_rating=90,
+            age=23,
+            age_band="senior",
+            status="available",
+            metadata_json={"loan_price_coin": "10.0000", "base_value_coin": "50.0000"},
+        )
+        session.add(seed)
+        session.commit()
+
+        initial_balance = wallet_service.get_balance(session, user_acct)
+
+        # Rent player
+        result = tournament_service.rent_player(
+            entry_id=entry_id,
+            actor=user,
+            player_id=seed.id,
+        )
+        session.commit()
+
+        assert result is not None
+        post_rental_balance = wallet_service.get_balance(session, user_acct)
+        assert post_rental_balance < initial_balance
+
+        contracts = list(session.scalars(select(RentalContract).where(RentalContract.entry_id == entry_id)).all())
+        members = list(
+            session.scalars(
+                select(NationalTeamRentalSquadMember).where(NationalTeamRentalSquadMember.entry_id == entry_id)
+            ).all()
+        )
+        assert len(contracts) == 1
+        assert len(members) == 1
+        assert contracts[0].player_id == seed.id
+
+        # Replay attempt must raise duplicate_player error without double-charging
+        from app.national_team_engine.tournament_service import NationalTeamTournamentError
+
+        with pytest.raises(NationalTeamTournamentError) as exc_info:
+            tournament_service.rent_player(
+                entry_id=entry_id,
+                actor=user,
+                player_id=seed.id,
+            )
+        assert exc_info.value.reason == "duplicate_player"
+        assert wallet_service.get_balance(session, user_acct) == post_rental_balance
+        assert len(session.scalars(select(RentalContract).where(RentalContract.entry_id == entry_id)).all()) == 1
+
+        # Test Expiry/Release Idempotency
+        from datetime import datetime, timedelta, timezone
+
+        contracts[0].end_date = datetime.now(timezone.utc) - timedelta(days=1)
+        session.commit()
+
+        cleanup_1 = tournament_service.cleanup_expired_rentals(competition_id=competition.id)
+        session.commit()
+        assert cleanup_1["released_contracts"] == 1
+
+        members_after_cleanup = list(
+            session.scalars(
+                select(NationalTeamRentalSquadMember).where(NationalTeamRentalSquadMember.entry_id == entry_id)
+            ).all()
+        )
+        assert len(members_after_cleanup) == 0
+
+        # Replay cleanup must be idempotent
+        cleanup_2 = tournament_service.cleanup_expired_rentals(competition_id=competition.id)
+        session.commit()
+        assert cleanup_2["released_contracts"] == 0
