@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -12,7 +13,12 @@ from app.models.regen import CurrencyConversionQuote, RegenContractOffer
 from app.models.transfer_bid import TransferBid
 from app.models.user import User
 from app.routes.player_lifecycle import router
-from tests.players.test_player_lifecycle import add_window, seed_base_context, seed_regen_context
+from tests.players.test_player_lifecycle import (
+    add_window,
+    fund_wallet,
+    seed_base_context,
+    seed_regen_context,
+)
 
 
 def _client(session, *, user_id: str) -> TestClient:
@@ -63,6 +69,12 @@ def _prepare_free_agent(session) -> dict[str, str]:
     player = session.get(Player, context["player_id"])
     assert player is not None
     player.current_club_profile_id = None
+    fund_wallet(
+        session,
+        user_id="user-owner",
+        coin=Decimal("1000.0000"),
+        credit=Decimal("500000.0000"),
+    )
     session.commit()
     return {**context, "window_id": window.id}
 
