@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/gtex_regen_repository.dart';
-import '../data/gtex_regen_submission.dart';
 import '../models/gtex_regen_dossier.dart';
 import '../models/gtex_regen_wire_models.dart';
 
