@@ -134,10 +134,9 @@ class PlayerService {
     _throwBlockedPlayerAction('scout', id);
   }
 
-  /// Adds a player to the first authenticated shortlist owned by the caller.
-  /// If the caller has no shortlist yet, create the canonical talent shortlist
-  /// once and then add the player to it. The backend remains authoritative for
-  /// ownership, duplicate handling, and shortlist persistence.
+  /// Adds a player to the first active authenticated shortlist owned by the
+  /// caller. The backend remains authoritative for ownership and persistence.
+  /// Repeated calls are read-before-write no-ops for an existing entry.
   Future<void> shortlist(String id) async {
     final String playerId = id.trim();
     if (playerId.isEmpty) {
@@ -149,6 +148,7 @@ class PlayerService {
 
     final Map<String, dynamic> payload = await _client.getMap(
       '/talent/shortlists',
+      query: <String, Object?>{'include_entries': true},
       auth: true,
     );
     final List<Object?> shortlists = GteJson.list(
@@ -157,13 +157,31 @@ class PlayerService {
     );
 
     String? shortlistId;
-    if (shortlists.isNotEmpty) {
-      final Map<String, Object?> first =
-          Map<String, Object?>.from(GteJson.map(shortlists.first, label: 'shortlist'));
-      shortlistId = GteJson.stringOrNull(first, <String>['id']);
+    for (final Object? raw in shortlists) {
+      final Map<String, Object?> item = GteJson.map(raw, label: 'shortlist');
+      if (GteJson.boolean(item, <String>['is_archived'])) {
+        continue;
+      }
+      final String? idValue = GteJson.stringOrNull(item, <String>['id']);
+      if (idValue == null || idValue.trim().isEmpty) {
+        continue;
+      }
+      final List<Object?> entries = GteJson.list(
+        GteJson.value(item, <String>['entries']),
+        label: 'shortlist entries',
+      );
+      final bool alreadyListed = entries.any((Object? rawEntry) {
+        final Map<String, Object?> entry = GteJson.map(rawEntry, label: 'shortlist entry');
+        return GteJson.stringOrNull(entry, <String>['player_id']) == playerId;
+      });
+      if (alreadyListed) {
+        return;
+      }
+      shortlistId = idValue;
+      break;
     }
 
-    if (shortlistId == null || shortlistId.trim().isEmpty) {
+    if (shortlistId == null) {
       final Object? created = await _client.post(
         '/talent/shortlists',
         body: <String, Object?>{
