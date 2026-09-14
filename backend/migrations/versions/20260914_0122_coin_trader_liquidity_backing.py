@@ -38,23 +38,48 @@ def upgrade() -> None:
         sa.column("allow_negative", sa.Boolean()),
         sa.column("is_active", sa.Boolean()),
     )
+    balance_projections = sa.table(
+        "ledger_balance_projections",
+        sa.column("account_id", sa.String(length=36)),
+        sa.column("balance", sa.Numeric(20, 4)),
+    )
 
     connection = op.get_bind()
+    liquidity_codes = [f"platform:{unit}:liquidity_pool" for unit, _ in LIQUIDITY_ACCOUNTS]
     existing_codes = {
         row[0]
         for row in connection.execute(
-            sa.select(wallets.c.code).where(
-                wallets.c.code.in_([f"platform:{unit}:liquidity_pool" for unit, _ in LIQUIDITY_ACCOUNTS])
-            )
+            sa.select(wallets.c.code).where(wallets.c.code.in_(liquidity_codes))
         ).fetchall()
     }
 
-    # Harden existing liquidity pools first. This is intentionally independent
-    # of the application helper's historical allow_negative default so deployed
-    # accounts are safe as soon as this migration commits.
+    # Fail closed if a deployed liquidity pool is already economically
+    # inconsistent. Changing allow_negative on an already-negative account
+    # would leave an invalid opening balance in place and hide the reconciliation
+    # work required by treasury operations.
+    negative_rows = connection.execute(
+        sa.select(wallets.c.code, balance_projections.c.balance)
+        .select_from(
+            wallets.outerjoin(
+                balance_projections,
+                wallets.c.id == balance_projections.c.account_id,
+            )
+        )
+        .where(
+            wallets.c.code.in_(liquidity_codes),
+            balance_projections.c.balance < sa.literal(0),
+        )
+    ).fetchall()
+    if negative_rows:
+        details = ", ".join(f"{code}={balance}" for code, balance in negative_rows)
+        raise RuntimeError(
+            "Cannot harden liquidity pools while an existing liquidity account is negative. "
+            f"Treasury reconciliation is required first: {details}"
+        )
+
     connection.execute(
         sa.update(wallets)
-        .where(wallets.c.code.in_([f"platform:{unit}:liquidity_pool" for unit, _ in LIQUIDITY_ACCOUNTS]))
+        .where(wallets.c.code.in_(liquidity_codes))
         .values(allow_negative=False)
     )
 
@@ -83,6 +108,10 @@ def downgrade() -> None:
     )
     op.execute(
         sa.update(wallets)
-        .where(wallets.c.code.in_([f"platform:{unit}:liquidity_pool" for unit, _ in LIQUIDITY_ACCOUNTS]))
+        .where(
+            wallets.c.code.in_(
+                [f"platform:{unit}:liquidity_pool" for unit, _ in LIQUIDITY_ACCOUNTS]
+            )
+        )
         .values(allow_negative=True)
     )
