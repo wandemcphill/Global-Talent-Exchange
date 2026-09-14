@@ -131,11 +131,86 @@ class PlayerService {
   }
 
   Future<void> scout(String id) async {
-    _throwBlockedPlayerAction('scout', id);
+    final String playerId = id.trim();
+    if (playerId.isEmpty) {
+      throw GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Player id is required to scout.',
+      );
+    }
+    await _client.post('/scout/report/$playerId');
   }
 
+  /// Adds a player to the first active authenticated shortlist owned by the
+  /// caller. The backend remains authoritative for ownership and persistence.
+  /// Repeated calls are read-before-write no-ops for an existing entry.
   Future<void> shortlist(String id) async {
-    _throwBlockedPlayerAction('shortlist', id);
+    final String playerId = id.trim();
+    if (playerId.isEmpty) {
+      throw GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Player id is required to add a shortlist entry.',
+      );
+    }
+
+    final Map<String, dynamic> payload = await _client.getMap(
+      '/talent/shortlists',
+      query: <String, Object?>{'include_entries': true},
+      auth: true,
+    );
+    final List<Object?> shortlists = GteJson.list(
+      GteJson.value(payload, <String>['shortlists']),
+      label: 'shortlists',
+    );
+
+    String? shortlistId;
+    for (final Object? raw in shortlists) {
+      final Map<String, Object?> item = GteJson.map(raw, label: 'shortlist');
+      if (GteJson.boolean(item, <String>['is_archived'])) {
+        continue;
+      }
+      final String? idValue = GteJson.stringOrNull(item, <String>['id']);
+      if (idValue == null || idValue.trim().isEmpty) {
+        continue;
+      }
+      final List<Object?> entries = GteJson.list(
+        GteJson.value(item, <String>['entries']),
+        label: 'shortlist entries',
+      );
+      final bool alreadyListed = entries.any((Object? rawEntry) {
+        final Map<String, Object?> entry = GteJson.map(rawEntry, label: 'shortlist entry');
+        return GteJson.stringOrNull(entry, <String>['player_id']) == playerId;
+      });
+      if (alreadyListed) {
+        return;
+      }
+      shortlistId = idValue;
+      break;
+    }
+
+    if (shortlistId == null) {
+      final Object? created = await _client.post(
+        '/talent/shortlists',
+        body: <String, Object?>{
+          'name': 'Scouting shortlist',
+          'description': 'Primary shortlist for player discovery actions.',
+        },
+      );
+      final Map<String, Object?> createdMap =
+          GteJson.map(created, label: 'created shortlist');
+      shortlistId = GteJson.stringOrNull(createdMap, <String>['id']);
+      if (shortlistId == null || shortlistId.trim().isEmpty) {
+        throw GteApiException(
+          type: GteApiErrorType.unavailable,
+          message: 'The live talent API did not return a shortlist id.',
+        );
+      }
+    }
+
+    await _client.post(
+      '/talent/shortlists/${shortlistId.trim()}/entries',
+      body: <String, Object?>{'player_id': playerId},
+    );
   }
 
   Future<void> contact(String id) async {

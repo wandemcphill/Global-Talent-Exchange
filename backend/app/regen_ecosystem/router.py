@@ -20,7 +20,6 @@ from app.schemas.regen_ecosystem import (
     RegenLineageChainView,
     ScoutCreateRequest,
     ScoutDiscoveryResultView,
-    ScoutReportView,
     ScoutView,
     YouthAcademyUpsertRequest,
     YouthAcademyView,
@@ -141,16 +140,18 @@ def discover_regens(
     return result
 
 
-@router.get("/scout/report/{player_id}", response_model=ScoutReportView)
-def get_scout_report(
-    player_id: str,
-    scout_id: str | None = Query(default=None),
-    service: RegenEcosystemService = Depends(_service),
-) -> ScoutReportView:
-    try:
-        return service.get_scout_report(player_id, scout_id=scout_id)
-    except RegenEcosystemError as exc:
-        _raise(exc)
+@router.get("/scout/report/{player_id}", status_code=status.HTTP_405_METHOD_NOT_ALLOWED)
+def legacy_get_scout_report(player_id: str) -> None:
+    """Quarantine the historical GET write surface.
+
+    Scouting is a mutation and now uses the authenticated POST lifecycle
+    route. The legacy GET must not execute the write-producing service.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        detail="Scouting is a write action. Use POST /scout/report/{player_id}.",
+        headers={"Allow": "POST"},
+    )
 
 
 @router.post("/agents", response_model=AgentView, status_code=status.HTTP_201_CREATED)

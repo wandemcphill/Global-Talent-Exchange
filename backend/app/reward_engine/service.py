@@ -67,6 +67,16 @@ class RewardEngineService:
         note: str | None = None,
         ledger_unit: LedgerUnit = LedgerUnit.COIN,
     ) -> RewardSettlement:
+        existing = self.session.scalar(
+            select(RewardSettlement).where(
+                RewardSettlement.competition_key == competition_key,
+                RewardSettlement.user_id == user_id,
+                RewardSettlement.reward_source == reward_source,
+            )
+        )
+        if existing is not None:
+            return existing
+
         user = self.session.get(User, user_id)
         if user is None or not user.is_active:
             raise RewardEngineError("Reward recipient user was not found.", reason="recipient_not_found")

@@ -174,17 +174,9 @@ def test_regen_ecosystem_end_to_end(regen_api) -> None:
 
     player_id = generated_players[0]["player_id"]
     candidate_id = generated_players[0]["academy_candidate_id"]
-    report_response = client.get(f"/scout/report/{player_id}?scout_id={scout_id}")
-    assert report_response.status_code == 200
-    report_payload = report_response.json()
-    assert report_payload["accuracy"] == 86
-    assert set(report_payload["visible_stats"].keys()) == {"technical", "physical", "mental", "tactical"}
-    assert set(report_payload["hidden_stats"].keys()) == {
-        "consistency",
-        "injury_proneness",
-        "clutch_factor",
-        "growth_variance",
-    }
+    legacy_report_response = client.get(f"/scout/report/{player_id}?scout_id={scout_id}")
+    assert legacy_report_response.status_code == 405
+    assert legacy_report_response.headers["allow"] == "POST"
 
     # The deterministic academy-generation seed (club_id + season_label + slot
     # count) can legitimately produce candidates younger than the

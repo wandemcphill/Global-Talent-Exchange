@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.db import load_model_modules  # noqa: F401
 from app.access_control.service import AccessControlService
 from app.auth.dependencies import get_current_user, get_session
 from app.club_growth.router import router as club_growth_router
@@ -37,7 +38,9 @@ from app.models.club_sponsorship_asset import ClubSponsorshipAsset
 from app.models.club_sponsorship_contract import ClubSponsorshipContract
 from app.models.club_sponsorship_package import ClubSponsorshipPackage
 from app.models.club_sponsorship_payout import ClubSponsorshipPayout
+from app.models.player_contract import PlayerContract
 from app.models.player_token_market import PlayerShareMarket
+from app.models.club_squad_tier import ClubSquadTierMembership
 from app.models.sponsorship_engine import SponsorshipLead
 from app.models.user import KycStatus, User, UserRole
 
@@ -62,6 +65,8 @@ def session() -> Iterator[Session]:
             Player.__table__,
             PlayerImageMetadata.__table__,
             PlayerShareMarket.__table__,
+            PlayerContract.__table__,
+            ClubSquadTierMembership.__table__,
             ClubStaffProfile.__table__,
             ClubStaffContract.__table__,
             ClubStaffAssignment.__table__,
@@ -264,6 +269,45 @@ def test_academy_prospect_contract_and_promotion_flow(client: TestClient, sessio
     assert history
     assert history.senior_player_id == promoted.json()["senior_player_id"]
     assert session.get(Player, promoted.json()["senior_player_id"]) is not None
+    # Verify ACTIVE PlayerContract exists
+    player_id = promoted.json()["senior_player_id"]
+    active_contract = session.scalar(
+        select(PlayerContract).where(
+            PlayerContract.player_id == player_id,
+            PlayerContract.club_id == club.id,
+            PlayerContract.status == "active",
+        )
+    )
+    assert active_contract is not None
+    assert active_contract.wage_amount == 1000
+
+    # Verify reserve SquadTier membership exists
+    squad_membership = session.scalar(
+        select(ClubSquadTierMembership).where(
+            ClubSquadTierMembership.player_id == player_id,
+            ClubSquadTierMembership.club_id == club.id,
+            ClubSquadTierMembership.status == "active",
+        )
+    )
+    assert squad_membership is not None
+    assert squad_membership.tier == "reserve"
+    assert squad_membership.source == "academy"
+
+    # Verify repeated promotion is idempotent
+    promoted_again = client.post(f"/api/clubs/{club.id}/growth/academy/prospects/{prospect_id}/promote")
+    assert promoted_again.status_code == 200
+    assert promoted_again.json()["senior_player_id"] == player_id
+
+    contract_count = len(
+        session.scalars(
+            select(PlayerContract).where(
+                PlayerContract.player_id == player_id,
+                PlayerContract.club_id == club.id,
+            )
+        ).all()
+    )
+    assert contract_count == 1
+
     audit_actions = list(session.scalars(select(ClubGrowthAuditEvent.action)).all())
     assert "academy_prospects_generated" in audit_actions
     assert "academy_contract_offered" in audit_actions

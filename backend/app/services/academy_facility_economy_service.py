@@ -275,7 +275,8 @@ class AcademyFacilityEconomyService:
             contract.staff_profile.rating
             for contract in active_contracts
             if contract.staff_profile is not None
-            and contract.staff_profile.staff_type in {"coach", "scout", "manager", "academy_director"}
+            and (contract.role_scope or contract.staff_profile.staff_type)
+            in {"coach", "scout", "manager", "first_team_manager", "academy_director"}
         )
         return min(35, total_rating // 4)
 

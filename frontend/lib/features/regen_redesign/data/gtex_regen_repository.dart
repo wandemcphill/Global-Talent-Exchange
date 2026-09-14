@@ -12,40 +12,23 @@ import 'gtex_regen_world_api.dart';
 abstract class GtexRegenRepository {
   Future<GtexRegenWorldData> loadWorld();
   Future<GtexCreateSonOrder> createSon(GtexCreateSonDraft draft);
-  Future<GtexRegenContractOffer> submitContract(String offerId);
-
-  /// The full record for one regen: lineage, potential band, personality,
-  /// development timeline, legacy and value. Never throws for a regen that
-  /// simply has no dossier - that case comes back as an absence with a
-  /// reason, so the caller states it instead of rendering blanks.
+  Future<RegenLifecycleState?> submitContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  );
   Future<GtexRegenDossierResult> loadDossier(String playerId);
-
-  /// `GET /regen-universe/bloodlines` - parent lines and their descendants.
   Future<List<RegenBloodlineChain>> loadBloodlines();
-
-  /// `GET /regen-universe/rankings` - the live regen leaderboard.
   Future<List<RegenRankingEntry>> loadRankings();
-
-  /// `GET /regen-universe/hall-of-fame` - regens whose careers are finished.
   Future<List<RegenHallOfFameEntry>> loadHallOfFame();
-
-  /// List or unlist a regen for transfer. Authenticated, and it changes what
-  /// other clubs can see, so it is only offered where the caller is signed in.
   Future<RegenLifecycleState?> setTransferListing(
     String playerId, {
     required bool listed,
     String? reason,
   });
-
-  /// Price a contract offer without committing to it, so the shortfall is
-  /// known before anything is spent.
   Future<RegenOfferQuote> quoteContractOffer(
     String playerId,
     GtexRegenOfferDraft draft,
   );
-
-  /// Whether ownership actions should be offered at all. False for an
-  /// anonymous session, where every write would fail on auth.
   bool get canActOnOwnership;
 }
 
@@ -218,10 +201,14 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
   }
 
   @override
-  Future<GtexRegenContractOffer> submitContract(String offerId) {
-    throw UnsupportedError(
-      'Live regen contract submission is not exposed yet.',
-    );
+  Future<RegenLifecycleState?> submitContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  ) {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to submit a regen contract offer.');
+    }
+    return _worldApi.submitContractOffer(playerId, draft);
   }
 
   GtexRegenWorldApi get _worldApi =>
@@ -246,10 +233,6 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
       );
     }
 
-    // The lineage chain is keyed by regen profile id, not player id, and is a
-    // separate request. A regen with a dossier but an unreadable chain is
-    // still worth showing, so the chain failing is recorded rather than
-    // discarding everything else.
     List<RegenLineageChainNode> chain = const <RegenLineageChainNode>[];
     bool chainUnavailable = false;
     try {
@@ -258,9 +241,6 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
       chainUnavailable = true;
     }
 
-    // Ownership state is a third request and the least critical of the three,
-    // so a failure leaves it null and the panel says the situation is
-    // unpublished rather than losing the lineage and potential above it.
     RegenLifecycleState? lifecycle;
     try {
       lifecycle = await _worldApi.fetchLifecycle(playerId);
@@ -386,9 +366,6 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
     RegenCreationOrder order,
   ) {
     final RegenCreationGeneratedPlayer player = order.generatedPlayer!;
-    // A Create-a-Son order is the one browse source that already names the
-    // parent, so its card can carry the relationship without a second
-    // request. Every other lane leaves it null rather than guessing.
     final String? parentId = order.parentPlayerId;
     return GtexRegenProspect(
       lineageLabel: parentId == null ? null : 'Son of $parentId',
@@ -616,10 +593,6 @@ const RegenGenerationTracking _emptyTracking = RegenGenerationTracking(
   trackedAchievements: <String>[],
 );
 
-/// Safe demo repository for local smoke tests and for Codex wiring.
-///
-/// Production routes should replace this with an adapter around the existing
-/// `RegenUniverseApi` and `RegenCreationApi` rather than using demo data.
 class DemoGtexRegenRepository implements GtexRegenRepository {
   const DemoGtexRegenRepository();
 
@@ -657,20 +630,17 @@ class DemoGtexRegenRepository implements GtexRegenRepository {
   }
 
   @override
-  Future<GtexRegenContractOffer> submitContract(String offerId) async {
+  Future<RegenLifecycleState?> submitContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  ) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
-    return demoWorldData.contracts.firstWhere(
-      (GtexRegenContractOffer offer) => offer.id == offerId,
-      orElse: () => demoWorldData.contracts.first,
-    );
+    return demoRegenLifecycle();
   }
 
   @override
   Future<GtexRegenDossierResult> loadDossier(String playerId) async {
     await Future<void>.delayed(const Duration(milliseconds: 40));
-    // r-002 is the demo national-pool seed. Seed rows have no RegenProfile on
-    // the real backend either, so the demo keeps that asymmetry rather than
-    // pretending every regen has a dossier.
     if (playerId == 'r-002') {
       return const GtexRegenDossierResult.absent(
         absence: GtexRegenDossierAbsence.notPublished,
