@@ -134,8 +134,58 @@ class PlayerService {
     _throwBlockedPlayerAction('scout', id);
   }
 
+  /// Adds a player to the first authenticated shortlist owned by the caller.
+  /// If the caller has no shortlist yet, create the canonical talent shortlist
+  /// once and then add the player to it. The backend remains authoritative for
+  /// ownership, duplicate handling, and shortlist persistence.
   Future<void> shortlist(String id) async {
-    _throwBlockedPlayerAction('shortlist', id);
+    final String playerId = id.trim();
+    if (playerId.isEmpty) {
+      throw GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Player id is required to add a shortlist entry.',
+      );
+    }
+
+    final Map<String, dynamic> payload = await _client.getMap(
+      '/talent/shortlists',
+      auth: true,
+    );
+    final List<Object?> shortlists = GteJson.list(
+      GteJson.value(payload, <String>['shortlists']),
+      label: 'shortlists',
+    );
+
+    String? shortlistId;
+    if (shortlists.isNotEmpty) {
+      final Map<String, Object?> first =
+          Map<String, Object?>.from(GteJson.map(shortlists.first, label: 'shortlist'));
+      shortlistId = GteJson.stringOrNull(first, <String>['id']);
+    }
+
+    if (shortlistId == null || shortlistId.trim().isEmpty) {
+      final Object? created = await _client.post(
+        '/talent/shortlists',
+        body: <String, Object?>{
+          'name': 'Scouting shortlist',
+          'description': 'Primary shortlist for player discovery actions.',
+        },
+      );
+      final Map<String, Object?> createdMap =
+          GteJson.map(created, label: 'created shortlist');
+      shortlistId = GteJson.stringOrNull(createdMap, <String>['id']);
+      if (shortlistId == null || shortlistId.trim().isEmpty) {
+        throw GteApiException(
+          type: GteApiErrorType.unavailable,
+          message: 'The live talent API did not return a shortlist id.',
+        );
+      }
+    }
+
+    await _client.post(
+      '/talent/shortlists/${shortlistId.trim()}/entries',
+      body: <String, Object?>{'player_id': playerId},
+    );
   }
 
   Future<void> contact(String id) async {
