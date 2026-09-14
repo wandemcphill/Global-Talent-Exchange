@@ -1,4 +1,5 @@
 import '../models/gtex_regen_wire_models.dart';
+import 'gtex_regen_demo_dossier.dart';
 import 'gtex_regen_repository.dart';
 import 'gtex_regen_world_api.dart';
 
@@ -17,10 +18,9 @@ extension GtexRegenSubmission on GtexRegenRepository {
 
     if (this is LiveGtexRegenRepository) {
       final LiveGtexRegenRepository live = this as LiveGtexRegenRepository;
-      return GtexRegenWorldApi(client: live.universeApi.client).submitContractOffer(
-        playerId,
-        draft,
-      );
+      return GtexRegenWorldApi(
+        client: live.universeApi.client,
+      ).submitContractOffer(playerId, draft);
     }
 
     if (this is DemoGtexRegenRepository) {
