@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
-from decimal import Decimal
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -80,6 +77,39 @@ def test_contract_creation_requires_club_owner(lifecycle_session: Session) -> No
     ).all() == []
 
 
+def test_contract_renewal_requires_existing_club_owner(lifecycle_session: Session) -> None:
+    context = seed_base_context(lifecycle_session)
+    _add_user_and_club(lifecycle_session, user_id="contract-renew-attacker", club_id="contract-renew-attacker-club")
+
+    create_payload = {
+        "club_id": context["club_profile_id"],
+        "wage_amount": "1000.00",
+        "signed_on": "2026-03-12",
+        "starts_on": "2026-03-12",
+        "ends_on": "2027-03-11",
+    }
+    with _client(lifecycle_session, user_id="user-owner") as owner_client:
+        create_response = owner_client.post(
+            f"/api/players/{context['player_id']}/contracts",
+            json=create_payload,
+        )
+    assert create_response.status_code == 201, create_response.text
+    contract = lifecycle_session.scalars(
+        select(PlayerContract).where(PlayerContract.player_id == context["player_id"])
+    ).one()
+
+    with _client(lifecycle_session, user_id="contract-renew-attacker") as client:
+        response = client.post(
+            f"/api/players/{context['player_id']}/contracts/{contract.id}/renew",
+            json={"new_ends_on": "2028-03-11"},
+        )
+
+    assert response.status_code == 403, response.text
+    refreshed = lifecycle_session.get(PlayerContract, contract.id)
+    assert refreshed is not None
+    assert refreshed.ends_on.isoformat() == "2027-03-11"
+
+
 def test_injury_creation_requires_club_owner(lifecycle_session: Session) -> None:
     context = seed_base_context(lifecycle_session)
     _add_user_and_club(lifecycle_session, user_id="injury-attacker", club_id="injury-attacker-club")
@@ -98,3 +128,35 @@ def test_injury_creation_requires_club_owner(lifecycle_session: Session) -> None
     assert lifecycle_session.scalars(
         select(PlayerInjuryCase).where(PlayerInjuryCase.player_id == context["player_id"])
     ).all() == []
+
+
+def test_injury_recovery_requires_existing_club_owner(lifecycle_session: Session) -> None:
+    context = seed_base_context(lifecycle_session)
+    _add_user_and_club(lifecycle_session, user_id="injury-recover-attacker", club_id="injury-recover-attacker-club")
+
+    create_payload = {
+        "club_id": context["club_profile_id"],
+        "severity": InjurySeverity.MINOR.value,
+        "injury_type": "ankle",
+        "occurred_on": "2026-03-12",
+    }
+    with _client(lifecycle_session, user_id="user-owner") as owner_client:
+        create_response = owner_client.post(
+            f"/api/players/{context['player_id']}/injuries",
+            json=create_payload,
+        )
+    assert create_response.status_code == 201, create_response.text
+    injury = lifecycle_session.scalars(
+        select(PlayerInjuryCase).where(PlayerInjuryCase.player_id == context["player_id"])
+    ).one()
+
+    with _client(lifecycle_session, user_id="injury-recover-attacker") as client:
+        response = client.post(
+            f"/api/players/{context['player_id']}/injuries/{injury.id}/recover",
+            json={"recovered_on": "2026-03-20"},
+        )
+
+    assert response.status_code == 403, response.text
+    refreshed = lifecycle_session.get(PlayerInjuryCase, injury.id)
+    assert refreshed is not None
+    assert refreshed.recovered_on is None
