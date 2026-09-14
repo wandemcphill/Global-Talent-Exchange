@@ -2,16 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/gtex_regen_repository.dart';
+import '../data/gtex_regen_submission.dart';
 import '../models/gtex_regen_dossier.dart';
 import '../models/gtex_regen_wire_models.dart';
 
-/// The write half of OWN: list a regen for transfer, and price a contract
-/// offer before committing to it.
-///
-/// These are the only two write verbs the regen lane exposes. Both are
-/// authenticated, so the whole block is withheld from an anonymous session
-/// rather than shown as controls that would fail on auth. Actually *placing*
-/// an offer moves club money and is left to the club and wallet surfaces.
+/// The write half of OWN: list a regen, price an offer, then submit that same
+/// canonical offer through the authenticated lifecycle API.
 class GtexRegenOwnershipActions extends StatefulWidget {
   const GtexRegenOwnershipActions({
     super.key,
@@ -54,8 +50,7 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
           compact: true,
           title: 'Sign in to act',
           reason:
-              'Listing a regen and pricing a contract offer both need a signed-in '
-              'account.',
+              'Listing a regen and submitting a contract offer both need a signed-in account.',
           severity: GtexBlockedSeverity.locked,
           icon: Icons.lock_outline_rounded,
         ),
@@ -66,6 +61,8 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
     if (lifecycle == null) {
       return const SizedBox.shrink();
     }
+
+    final bool offerReady = _quote != null;
 
     return GtexPanel(
       title: 'Ownership actions',
@@ -92,13 +89,21 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
           ),
           const SizedBox(height: GtexSpacing.md),
           Text(
-            'Price a contract offer',
+            'Offer a contract',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: GtexColors.textSecondary,
               fontWeight: FontWeight.w900,
             ),
           ),
           const SizedBox(height: GtexSpacing.xs),
+          Text(
+            'Quote first, then submit the exact same FanCoin salary and term through the canonical transfer lifecycle.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: GtexColors.textMuted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: GtexSpacing.sm),
           TextField(
             controller: _clubIdController,
             style: const TextStyle(color: GtexColors.text),
@@ -106,6 +111,11 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
               labelText: 'Offering club id',
               isDense: true,
             ),
+            onChanged: (_) {
+              if (_quote != null) {
+                setState(() => _quote = null);
+              }
+            },
           ),
           const SizedBox(height: GtexSpacing.sm),
           TextField(
@@ -119,9 +129,13 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
               helperText:
                   lifecycle.offerMarket == null
                       ? null
-                      : 'Floor: '
-                          '${lifecycle.offerMarket!.minimumSalaryFancoinPerYear.toStringAsFixed(0)}',
+                      : 'Floor: ${lifecycle.offerMarket!.minimumSalaryFancoinPerYear.toStringAsFixed(0)}',
             ),
+            onChanged: (_) {
+              if (_quote != null) {
+                setState(() => _quote = null);
+              }
+            },
           ),
           const SizedBox(height: GtexSpacing.sm),
           Row(
@@ -134,8 +148,6 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
                 ),
               ),
               const SizedBox(width: GtexSpacing.sm),
-              // The backend caps contract_years at 1..5; the control cannot
-              // offer a value the API would reject.
               Expanded(
                 child: Slider(
                   value: _contractYears.toDouble(),
@@ -147,8 +159,10 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
                   onChanged:
                       _busy
                           ? null
-                          : (double value) =>
-                              setState(() => _contractYears = value.round()),
+                          : (double value) => setState(() {
+                            _contractYears = value.round();
+                            _quote = null;
+                          }),
                 ),
               ),
               Text(
@@ -161,11 +175,28 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
             ],
           ),
           const SizedBox(height: GtexSpacing.sm),
-          GtexActionButton(
-            label: 'Get quote',
-            icon: Icons.calculate_outlined,
-            accent: GtexColors.gold,
-            onPressed: _busy ? null : _requestQuote,
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: GtexActionButton(
+                  label: 'Get quote',
+                  icon: Icons.calculate_outlined,
+                  accent: GtexColors.gold,
+                  onPressed: _busy ? null : _requestQuote,
+                ),
+              ),
+              if (offerReady) ...<Widget>[
+                const SizedBox(width: GtexSpacing.sm),
+                Expanded(
+                  child: GtexActionButton(
+                    label: 'Submit offer',
+                    icon: Icons.send_outlined,
+                    accent: GtexColors.mint,
+                    onPressed: _busy ? null : _submitOffer,
+                  ),
+                ),
+              ],
+            ],
           ),
           if (_quote != null) ...<Widget>[
             const SizedBox(height: GtexSpacing.md),
@@ -173,6 +204,19 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
           ],
         ],
       ),
+    );
+  }
+
+  GtexRegenOfferDraft _draft() {
+    final String clubId = _clubIdController.text.trim();
+    final double? salary = double.tryParse(_salaryController.text.trim());
+    if (clubId.isEmpty || salary == null || salary < 0) {
+      throw const FormatException('Enter an offering club id and a valid salary.');
+    }
+    return GtexRegenOfferDraft(
+      offeringClubId: clubId,
+      offeredSalaryFancoinPerYear: salary,
+      contractYears: _contractYears,
     );
   }
 
@@ -184,15 +228,11 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
     try {
       final RegenLifecycleState? updated = await widget.repository
           .setTransferListing(widget.dossier.playerId, listed: listed);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       widget.onLifecycleChanged?.call(updated);
       setState(() => _busy = false);
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _busy = false;
         _error = 'Could not update the transfer listing: $error';
@@ -201,15 +241,14 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
   }
 
   Future<void> _requestQuote() async {
-    final String clubId = _clubIdController.text.trim();
-    final double? salary = double.tryParse(_salaryController.text.trim());
-    if (clubId.isEmpty || salary == null || salary < 0) {
-      setState(
-        () =>
-            _error = 'Enter an offering club id and a salary before quoting.',
-      );
+    late final GtexRegenOfferDraft draft;
+    try {
+      draft = _draft();
+    } on FormatException catch (error) {
+      setState(() => _error = error.message);
       return;
     }
+
     setState(() {
       _busy = true;
       _error = null;
@@ -217,26 +256,57 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
     try {
       final RegenOfferQuote quote = await widget.repository.quoteContractOffer(
         widget.dossier.playerId,
-        GtexRegenOfferDraft(
-          offeringClubId: clubId,
-          offeredSalaryFancoinPerYear: salary,
-          contractYears: _contractYears,
-        ),
+        draft,
       );
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _busy = false;
         _quote = quote;
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _busy = false;
         _error = 'Could not price this offer: $error';
+      });
+    }
+  }
+
+  Future<void> _submitOffer() async {
+    late final GtexRegenOfferDraft draft;
+    try {
+      draft = _draft();
+    } on FormatException catch (error) {
+      setState(() => _error = error.message);
+      return;
+    }
+
+    if (_quote == null) {
+      setState(() => _error = 'Get a fresh quote before submitting the offer.');
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final RegenLifecycleState? updated =
+          await widget.repository.submitContractOffer(
+        widget.dossier.playerId,
+        draft,
+      );
+      if (!mounted) return;
+      widget.onLifecycleChanged?.call(updated);
+      setState(() {
+        _busy = false;
+        _quote = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'Could not submit this offer: $error';
       });
     }
   }
@@ -272,8 +342,6 @@ class _QuoteSummary extends StatelessWidget {
           ],
         ),
         const SizedBox(height: GtexSpacing.sm),
-        // The shortfall is the whole point of quoting first, so it is stated
-        // plainly either way rather than only on failure.
         GtexStatusChip(
           label:
               quote.isAffordableOutright
@@ -287,8 +355,7 @@ class _QuoteSummary extends StatelessWidget {
           GtexStatusChip(
             label:
                 quote.canCoverShortfall
-                    ? 'Convertible from '
-                        '${quote.gtexRequiredForConversion.toStringAsFixed(0)} GTEX'
+                    ? 'Convertible from ${quote.gtexRequiredForConversion.toStringAsFixed(0)} GTEX'
                     : 'Not convertible from the current GTEX balance',
             color: quote.canCoverShortfall ? GtexColors.gold : GtexColors.danger,
             compact: true,
