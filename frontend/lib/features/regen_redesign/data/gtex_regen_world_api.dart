@@ -129,6 +129,20 @@ class GtexRegenWorldApi {
     return RegenOfferQuote.fromJson(payload);
   }
 
+  /// Submit the canonical free-agent regen contract offer. The backend maps
+  /// this into the existing transfer-bid/RegenContractOffer path, so no second
+  /// offer engine is created. Repeating the same offer is replay-safe.
+  Future<RegenLifecycleState?> submitContractOffer(
+    String playerId,
+    GtexRegenOfferDraft draft,
+  ) async {
+    final Object? payload = await client.post(
+      '/api/players/${playerId.trim()}/regen/contract-offers/submit',
+      body: draft.toJson(),
+    );
+    return RegenLifecycleState.fromJson(payload);
+  }
+
   /// `GET /regen-universe/bloodlines`.
   Future<List<RegenBloodlineChain>> listBloodlines({int limit = 12}) async {
     final Map<String, dynamic> payload = await client.getMap(
