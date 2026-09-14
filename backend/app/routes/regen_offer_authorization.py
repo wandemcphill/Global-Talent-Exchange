@@ -26,14 +26,7 @@ async def authorize_regen_offer_quote(
     if actor.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
         return
 
-    try:
-        payload = await request.json()
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A valid regen contract-offer payload is required",
-        ) from exc
-
+    payload = await request.json()
     offering_club_id = str(payload.get("offering_club_id") or "").strip()
     if not offering_club_id:
         raise HTTPException(
