@@ -966,7 +966,7 @@ def test_reject_transfer_bid_leaves_player_state_unchanged(
     )
 
 
-def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
+def test_repeated_transfer_accept_is_idempotent_without_corrupting_state(
     lifecycle_service: PlayerLifecycleService,
     lifecycle_session: Session,
 ) -> None:
@@ -997,7 +997,7 @@ def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
         ),
         submitted_on=date(2026, 3, 12),
     )
-    lifecycle_service.accept_bid(
+    first_accept = lifecycle_service.accept_bid(
         window.id,
         bid.id,
         TransferBidAcceptRequest(
@@ -1009,19 +1009,19 @@ def test_repeated_transfer_accept_is_blocked_without_corrupting_state(
         reference_on=date(2026, 3, 12),
     )
 
-    with pytest.raises(PlayerLifecycleValidationError, match="Only submitted transfer bids can be accepted"):
-        lifecycle_service.accept_bid(
-            window.id,
-            bid.id,
-            TransferBidAcceptRequest(
-                contract_ends_on=date(2028, 6, 30),
-                contract_starts_on=date(2026, 3, 12),
-                wage_amount=Decimal("95000.00"),
-                signed_on=date(2026, 3, 12),
-            ),
-            reference_on=date(2026, 3, 12),
-        )
+    second_accept = lifecycle_service.accept_bid(
+        window.id,
+        bid.id,
+        TransferBidAcceptRequest(
+            contract_ends_on=date(2028, 6, 30),
+            contract_starts_on=date(2026, 3, 12),
+            wage_amount=Decimal("95000.00"),
+            signed_on=date(2026, 3, 12),
+        ),
+        reference_on=date(2026, 3, 12),
+    )
 
+    assert second_accept.id == first_accept.id
     contracts = lifecycle_service.get_contracts(context["player_id"])
     assert len([contract for contract in contracts if contract.club_id == context["buyer_profile_id"]]) == 1
 

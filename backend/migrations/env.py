@@ -18,16 +18,32 @@ def _sqlite_add_constraint(self, constraint):
     try:
         _orig_sqlite_add_constraint(self, constraint)
     except NotImplementedError:
-        table_name = constraint.table.name
+        table_name = getattr(constraint, "table", None)
+        if table_name is not None:
+            table_name = table_name.name
+        elif hasattr(constraint, "table_name"):
+            table_name = constraint.table_name
+        if not table_name:
+            return
         with op.batch_alter_table(table_name) as batch_op:
-            batch_op.create_check_constraint(constraint.name, constraint.sqltext)
+            if hasattr(constraint, "sqltext"):
+                batch_op.create_check_constraint(constraint.name, constraint.sqltext)
+            elif constraint.__class__.__name__ == "ForeignKeyConstraint":
+                # Foreign keys in SQLite via batch mode or no-op in SQLite migration
+                pass
 
 
 def _sqlite_drop_constraint(self, constraint):
     try:
         _orig_sqlite_drop_constraint(self, constraint)
     except NotImplementedError:
-        table_name = constraint.table.name
+        table_name = getattr(constraint, "table", None)
+        if table_name is not None:
+            table_name = table_name.name
+        elif hasattr(constraint, "table_name"):
+            table_name = constraint.table_name
+        if not table_name:
+            return
         with op.batch_alter_table(table_name) as batch_op:
             batch_op.drop_constraint(constraint.name, type_="check")
 
