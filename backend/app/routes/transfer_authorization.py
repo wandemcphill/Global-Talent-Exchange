@@ -10,7 +10,7 @@ from app.models.user import User, UserRole
 
 
 TRANSFER_BID_CREATE_PATH_PREFIX = "/api/transfers/windows/"
-TRANSFER_BID_ACCEPT_PATH_MARKER = "/bids/"
+TRANSFER_BID_ACTION_MARKER = "/bids/"
 
 
 def _assert_club_owner(session: Session, *, actor: User, club_id: str, action: str) -> None:
@@ -38,37 +38,46 @@ async def authorize_transfer_mutation(
     if not path.startswith(TRANSFER_BID_CREATE_PATH_PREFIX):
         return
 
-    if not path.endswith("/bids") and "/bids/" not in path:
-        return
-
     if path.endswith("/bids"):
         payload = await request.json()
         buying_club_id = str(payload.get("buying_club_id") or "").strip()
-        if buying_club_id:
-            _assert_club_owner(
-                session,
-                actor=actor,
-                club_id=buying_club_id,
-                action="buying",
-            )
+        if not buying_club_id:
+            if actor.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only an administrator can create a transfer bid without a buying club",
+                )
+            return
+        _assert_club_owner(
+            session,
+            actor=actor,
+            club_id=buying_club_id,
+            action="buying",
+        )
         return
 
-    marker_index = path.find(TRANSFER_BID_ACCEPT_PATH_MARKER)
-    if marker_index < 0:
-        return
-    tail = path[marker_index + len(TRANSFER_BID_ACCEPT_PATH_MARKER) :]
-    bid_id = tail.split("/", 1)[0].strip()
-    if not bid_id:
+    if TRANSFER_BID_ACTION_MARKER not in path:
         return
 
-    bid = session.get(TransferBid, bid_id)
+    marker_index = path.find(TRANSFER_BID_ACTION_MARKER)
+    tail = path[marker_index + len(TRANSFER_BID_ACTION_MARKER) :]
+    parts = [part.strip() for part in tail.split("/") if part.strip()]
+    if not parts:
+        return
+
+    bid = session.get(TransferBid, parts[0])
     if bid is None:
         return
+
+    action = parts[1] if len(parts) > 1 else None
+    if action not in {"accept", "reject"}:
+        return
+
     if bid.selling_club_id is None:
         if actor.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only an administrator can directly accept a bid without a selling club",
+                detail=f"Only an administrator can directly {action} a bid without a selling club",
             )
         return
 
