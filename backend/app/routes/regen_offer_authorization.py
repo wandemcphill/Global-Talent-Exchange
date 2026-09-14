@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_session
+from app.auth.dependencies import get_current_user, get_session
 from app.models.club_profile import ClubProfile
 from app.models.user import User, UserRole
 
@@ -12,7 +12,11 @@ REGEN_QUOTE_PATH_MARKER = "/api/players/"
 REGEN_QUOTE_PATH_SUFFIX = "/regen/contract-offers/quote"
 
 
-async def authorize_regen_offer_quote(request: Request, actor: User, session: Session) -> None:
+async def authorize_regen_offer_quote(
+    request: Request,
+    actor: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> None:
     if request.method != "POST":
         return
     path = request.url.path
@@ -45,11 +49,3 @@ async def authorize_regen_offer_quote(request: Request, actor: User, session: Se
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the offering club owner can quote a regen contract offer",
         )
-
-
-async def authorize_regen_offer_quote_from_dependencies(
-    request: Request,
-    actor: User,
-    session: Session = get_session(),
-) -> None:
-    await authorize_regen_offer_quote(request, actor, session)
