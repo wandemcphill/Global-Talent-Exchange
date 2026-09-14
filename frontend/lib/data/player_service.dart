@@ -131,7 +131,14 @@ class PlayerService {
   }
 
   Future<void> scout(String id) async {
-    _throwBlockedPlayerAction('scout', id);
+    final String playerId = id.trim();
+    if (playerId.isEmpty) {
+      throw GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Player id is required to scout.',
+      );
+    }
+    await _client.post('/scout/report/$playerId');
   }
 
   /// Adds a player to the first active authenticated shortlist owned by the
