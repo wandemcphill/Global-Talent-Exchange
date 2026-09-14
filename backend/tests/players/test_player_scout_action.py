@@ -5,11 +5,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.auth.dependencies import get_current_user, get_session
-from app.models.regen_ecosystem import Scout
 from app.models.regen import RegenScoutReport
+from app.models.regen_ecosystem import Scout
 from app.models.user import KycStatus, User, UserRole
 from app.routes.player_lifecycle import router as player_lifecycle_router
-from backend.tests.regen_universe_support import build_regen_universe_session, seed_two_season_universe
+from tests.regen_universe_support import build_regen_universe_session, seed_two_season_universe
 
 
 def test_authenticated_player_scout_uses_owned_scout_and_rejects_other_user() -> None:
