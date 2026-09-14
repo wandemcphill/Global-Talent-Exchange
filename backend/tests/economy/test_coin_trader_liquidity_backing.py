@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.coin_traders.schemas import CoinTraderAdminLiquidityRequest
-from app.coin_traders.service import CoinTraderService
+from app.coin_traders.service import CoinTraderService, CoinTraderValidationError
 from app.models.base import Base
 from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus, CoinTraderTier
 from app.models.user import User, UserRole
@@ -155,7 +155,7 @@ def test_admin_issue_liquidity_is_idempotent_and_cannot_rebind_the_key(session) 
         idempotency_key="liquidity-replay-01",
         reference="admin-liquidity-replay",
     )
-    with pytest.raises(Exception, match="already been used for a different transfer"):
+    with pytest.raises(CoinTraderValidationError, match="already been used for a different transfer"):
         service.admin_issue_liquidity(profile.id, mismatched, admin=admin)
 
     assert WalletService().get_balance(session, pool) == Decimal("75.0000")
