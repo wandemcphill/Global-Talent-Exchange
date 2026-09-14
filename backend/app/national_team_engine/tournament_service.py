@@ -2350,13 +2350,11 @@ class NationalTeamTournamentService:
         self._validate_entry_window(competition)
         settings = self._competition_settings(competition)
         current_members = self._entry_rental_members(entry.id)
+        if any(member.player_id == player_id for member in current_members):
+            return self._entry_detail_payload(entry)
         if len(current_members) + len(entry.squad_members) >= int(settings["maximum_squad_size"]):
             raise NationalTeamTournamentError(
                 "Tournament squad has reached the maximum size.", reason="squad_limit_reached"
-            )
-        if any(member.player_id == player_id for member in current_members):
-            raise NationalTeamTournamentError(
-                "This player is already part of the rental squad.", reason="duplicate_player"
             )
 
         player_catalog = {
