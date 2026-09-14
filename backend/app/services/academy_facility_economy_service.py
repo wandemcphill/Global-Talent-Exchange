@@ -84,20 +84,24 @@ class AcademyFacilityEconomyService:
 
     def ensure_academy_profile(self, club_id: str) -> AcademyProfile:
         profile = self.session.scalar(select(AcademyProfile).where(AcademyProfile.club_id == club_id))
-        if profile is None:
-            club = self.session.get(ClubProfile, club_id)
-            if club is None:
-                raise FacilityEconomyError(f"Club {club_id} was not found.")
-            profile = AcademyProfile(
-                club_id=club_id,
-                level=1,
-                investment_minor=0,
-                capacity_limit=18,
-                metadata_json={},
-            )
-            self.session.add(profile)
-            self.session.flush()
+        if profile is not None:
+            return profile
+        self._ensure_club(club_id)
+        profile = AcademyProfile(
+            club_id=club_id,
+            level=1,
+            investment_minor=0,
+            metadata_json={"created_by": "club_growth_batch_26"},
+        )
+        self.session.add(profile)
+        self.session.flush()
         return profile
+
+    def _ensure_club(self, club_id: str) -> ClubProfile:
+        club = self.session.get(ClubProfile, club_id)
+        if club is None:
+            raise FacilityEconomyError(f"Club {club_id} was not found.")
+        return club
 
     def start_facility_upgrade(
         self,
@@ -189,11 +193,7 @@ class AcademyFacilityEconomyService:
             "in_progress": normalized_key in (facility.in_progress_upgrades_json or {}),
         }
 
-    def advance_all_facility_upgrades(
-        self,
-        *,
-        current_season_number: int,
-    ) -> list[str]:
+    def advance_all_facility_upgrades(self, *, current_season_number: int) -> list[str]:
         facilities = list(self.session.scalars(select(ClubFacility)).all())
         completed: list[str] = []
         for facility in facilities:
