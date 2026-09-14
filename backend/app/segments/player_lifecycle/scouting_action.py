@@ -36,6 +36,7 @@ def scout_player(
     current_user: User = Depends(get_current_user),
     service: RegenEcosystemService = Depends(_service),
 ) -> ScoutReportView:
+    """Generate a live scout report using the authenticated user's own active scout."""
     scout = service.session.scalar(
         select(Scout)
         .where(
