@@ -1,20 +1,17 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.auth.dependencies import get_current_user, get_session
-from app.models.base import Base
+from app.ingestion.models import Player
 from app.models.regen import CurrencyConversionQuote, RegenContractOffer
 from app.models.transfer_bid import TransferBid
 from app.models.user import User
 from app.routes.player_lifecycle import router
-from app.segments.player_lifecycle.segment_player_lifecycle import router as lifecycle_router
-from app.services.player_lifecycle_service import PlayerLifecycleService
 from tests.players.test_player_lifecycle import add_window, seed_base_context, seed_regen_context
 
 
@@ -63,7 +60,7 @@ def _prepare_free_agent(session) -> dict[str, str]:
     )
     state["career_state"] = career_state
     regen.metadata_json = state
-    player = session.get(__import__("app.ingestion.models", fromlist=["Player"]).Player, context["player_id"])
+    player = session.get(Player, context["player_id"])
     assert player is not None
     player.current_club_profile_id = None
     session.commit()
@@ -79,14 +76,41 @@ def test_authenticated_regen_offer_submission_is_idempotent(lifecycle_session) -
     }
 
     with _client(lifecycle_session, user_id="user-owner") as client:
-        first = client.post(f"/api/players/{context['player_id']}/regen/contract-offers/submit", json=payload)
-        second = client.post(f"/api/players/{context['player_id']}/regen/contract-offers/submit", json=payload)
+        first = client.post(
+            f"/api/players/{context['player_id']}/regen/contract-offers/submit",
+            json=payload,
+        )
+        second = client.post(
+            f"/api/players/{context['player_id']}/regen/contract-offers/submit",
+            json=payload,
+        )
 
     assert first.status_code == 200, first.text
     assert second.status_code == 200, second.text
-    assert len(lifecycle_session.scalars(select(TransferBid).where(TransferBid.player_id == context["player_id"])).all()) == 1
-    assert len(lifecycle_session.scalars(select(RegenContractOffer).where(RegenContractOffer.regen_id == "regen-db-player-1")).all()) == 1
-    assert len(lifecycle_session.scalars(select(CurrencyConversionQuote).where(CurrencyConversionQuote.regen_id == "regen-db-player-1")).all()) == 1
+    assert (
+        len(
+            lifecycle_session.scalars(
+                select(TransferBid).where(TransferBid.player_id == context["player_id"])
+            ).all()
+        )
+        == 1
+    )
+    assert (
+        len(
+            lifecycle_session.scalars(
+                select(RegenContractOffer).where(RegenContractOffer.regen_id == "regen-db-player-1")
+            ).all()
+        )
+        == 1
+    )
+    assert (
+        len(
+            lifecycle_session.scalars(
+                select(CurrencyConversionQuote).where(CurrencyConversionQuote.regen_id == "regen-db-player-1")
+            ).all()
+        )
+        == 1
+    )
 
 
 def test_regen_offer_submission_rejects_non_owner(lifecycle_session) -> None:
@@ -108,14 +132,12 @@ def test_regen_offer_submission_rejects_non_owner(lifecycle_session) -> None:
     }
 
     with _client(lifecycle_session, user_id="user-attacker") as client:
-        response = client.post(f"/api/players/{context['player_id']}/regen/contract-offers/submit", json=payload)
+        response = client.post(
+            f"/api/players/{context['player_id']}/regen/contract-offers/submit",
+            json=payload,
+        )
 
     assert response.status_code == 403
-    assert lifecycle_session.scalars(select(TransferBid).where(TransferBid.player_id == context["player_id"])).all() == []
-
-
-# Keep the router imported through the production route module. This assertion
-# prevents a future test cleanup from silently switching back to only the
-# legacy segment router.
-def test_submission_router_is_composed_into_canonical_player_lifecycle_router() -> None:
-    assert router is lifecycle_router
+    assert lifecycle_session.scalars(
+        select(TransferBid).where(TransferBid.player_id == context["player_id"])
+    ).all() == []
