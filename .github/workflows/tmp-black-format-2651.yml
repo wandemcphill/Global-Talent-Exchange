@@ -1,0 +1,27 @@
+name: tmp-black-format-2651
+
+on:
+  push:
+    branches:
+      - acceptance/gtex-full-user-journey-20260915
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install exact Black
+        run: python -m pip install black==26.5.1
+      - name: Show Black formatter diff
+        run: |
+          black --diff \
+            backend/migrations/env.py \
+            backend/migrations/versions/20260914_0123_jackpot_database_guards.py
