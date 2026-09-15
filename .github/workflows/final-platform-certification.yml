@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: final-platform-${{ github.ref }}
@@ -34,25 +34,6 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r backend/requirements.txt pytest
 
-      - name: Temporary acceptance repair: normalize national rental timestamps
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path("backend/app/national_team_engine/tournament_service.py")
-          text = p.read_text(encoding="utf-8")
-          old_import = "from datetime import date, datetime, timedelta\n"
-          new_import = "from datetime import date, datetime, timedelta, timezone\n"
-          if old_import not in text:
-              raise SystemExit("expected datetime import not found")
-          text = text.replace(old_import, new_import, 1)
-          old = '''    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:\n        now = utcnow()\n        if competition.entry_opens_at is not None and competition.entry_opens_at > now:\n            return "competition_entry_not_open"\n        if competition.entry_closes_at is not None and competition.entry_closes_at < now:\n            return "competition_entry_closed"\n        if str(competition.status).strip().lower() == "live":\n            return "competition_already_live"\n        if competition.kickoff_at is not None and competition.kickoff_at <= now:\n            return "competition_already_live"\n        if competition.linked_competition_id:\n            try:\n                CompetitionLockService(self.session).ensure_rentals_allowed(\n                    competition_id=competition.linked_competition_id\n                )\n            except CompetitionLockError:\n                return "competition_already_live"\n        if competition.completed_at is not None:\n            return "competition_completed"\n        return None\n'''
-          new = '''    @staticmethod\n    def _as_utc_datetime(value: datetime | None) -> datetime | None:\n        if value is None:\n            return None\n        if value.tzinfo is None:\n            return value.replace(tzinfo=timezone.utc)\n        return value.astimezone(timezone.utc)\n\n    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:\n        now = utcnow()\n        entry_opens_at = self._as_utc_datetime(competition.entry_opens_at)\n        entry_closes_at = self._as_utc_datetime(competition.entry_closes_at)\n        kickoff_at = self._as_utc_datetime(competition.kickoff_at)\n        if entry_opens_at is not None and entry_opens_at > now:\n            return "competition_entry_not_open"\n        if entry_closes_at is not None and entry_closes_at < now:\n            return "competition_entry_closed"\n        if str(competition.status).strip().lower() == "live":\n            return "competition_already_live"\n        if kickoff_at is not None and kickoff_at <= now:\n            return "competition_already_live"\n        if competition.linked_competition_id:\n            try:\n                CompetitionLockService(self.session).ensure_rentals_allowed(\n                    competition_id=competition.linked_competition_id\n                )\n            except CompetitionLockError:\n                return "competition_already_live"\n        if competition.completed_at is not None:\n            return "competition_completed"\n        return None\n'''
-          if old not in text:
-              raise SystemExit("expected rental lock function not found")
-          text = text.replace(old, new, 1)
-          p.write_text(text, encoding="utf-8")
-          PY
-
       - name: Final read-only platform truth audit
         run: python backend/scripts/audit_final_platform_release.py
 
@@ -70,25 +51,6 @@ jobs:
 
       - name: Full GTEX user journey acceptance
         run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
-
-      - name: Commit accepted timestamp fix and restore certification workflow
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path(".github/workflows/final-platform-certification.yml")
-          text = p.read_text(encoding="utf-8")
-          start = text.index("      - name: Temporary acceptance repair: normalize national rental timestamps\n")
-          end = text.index("      - name: Final read-only platform truth audit\n", start)
-          text = text[:start] + text[end:]
-          text = text.replace("permissions:\n  contents: write\n", "permissions:\n  contents: read\n", 1)
-          p.write_text(text, encoding="utf-8")
-          Path(".github/workflows/repair-rental-datetime.yml").unlink(missing_ok=True)
-          PY
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend/app/national_team_engine/tournament_service.py .github/workflows/final-platform-certification.yml .github/workflows/repair-rental-datetime.yml
-          git commit -m 'fix(national-team): normalize rental competition timestamps'
-          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
 
       - name: Frontend dependencies
         working-directory: frontend
