@@ -1,0 +1,42 @@
+name: Repair acceptance competition formats
+
+on:
+  push:
+    branches:
+      - acceptance/gtex-full-user-journey-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: acceptance/gtex-full-user-journey-20260915
+
+      - name: Replace invalid two-player cup fixtures
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend/tests/acceptance/test_gtex_full_user_journey.py')
+          text = path.read_text()
+          old = '"format": "cup",'
+          new = '"format": "league",'
+          count = text.count(old)
+          if count != 2:
+              raise SystemExit(f'expected exactly 2 competition format entries, found {count}')
+          path.write_text(text.replace(old, new, 2))
+          PY
+          grep -n '"format":' backend/tests/acceptance/test_gtex_full_user_journey.py
+
+      - name: Commit repair and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/fix-acceptance-format.yml
+          git add backend/tests/acceptance/test_gtex_full_user_journey.py
+          git commit -m 'fix(acceptance): use league format for two-player competitions'
+          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
