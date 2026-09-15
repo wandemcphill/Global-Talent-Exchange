@@ -18,7 +18,21 @@ depends_on = None
 OPEN_STATUS = "open"
 
 
-def _assert_no_duplicates(connection) -> None:
+def _ledger_transactions_present(connection) -> bool:
+    if sa.inspect(connection).has_table("ledger_transactions"):
+        return True
+    if connection.dialect.name == "sqlite":
+        # Some repository SQLite migration fixtures intentionally omit the legacy
+        # wallet transaction table. The Jackpot guards that target the live ledger
+        # must still protect the rest of the SQLite schema so those fixtures can
+        # reach the application tests. Production/PostgreSQL remains fail-closed.
+        return False
+    raise RuntimeError(
+        "Cannot install Jackpot database guards: ledger_transactions is missing from a non-SQLite database."
+    )
+
+
+def _assert_no_duplicates(connection, *, ledger_transactions_present: bool) -> None:
     duplicate_checks = (
         (
             "open jackpot rounds",
@@ -58,20 +72,24 @@ def _assert_no_duplicates(connection) -> None:
             ),
             {},
         ),
-        (
-            "jackpot payout ledger references",
-            sa.text(
-                """
-                SELECT reference, COUNT(*)
-                FROM ledger_transactions
-                WHERE reference LIKE 'gtex-jackpot-payout:%'
-                GROUP BY reference
-                HAVING COUNT(*) > 1
-                """
-            ),
-            {},
-        ),
     )
+    if ledger_transactions_present:
+        duplicate_checks += (
+            (
+                "jackpot payout ledger references",
+                sa.text(
+                    """
+                    SELECT reference, COUNT(*)
+                    FROM ledger_transactions
+                    WHERE reference LIKE 'gtex-jackpot-payout:%'
+                    GROUP BY reference
+                    HAVING COUNT(*) > 1
+                    """
+                ),
+                {},
+            ),
+        )
+
     for label, query, params in duplicate_checks:
         rows = connection.execute(query, params).fetchall()
         if rows:
@@ -80,7 +98,8 @@ def _assert_no_duplicates(connection) -> None:
 
 def upgrade() -> None:
     connection = op.get_bind()
-    _assert_no_duplicates(connection)
+    ledger_transactions_present = _ledger_transactions_present(connection)
+    _assert_no_duplicates(connection, ledger_transactions_present=ledger_transactions_present)
 
     op.create_index(
         "uq_gtex_jackpot_open_pool",
@@ -104,18 +123,21 @@ def upgrade() -> None:
         postgresql_where=sa.text("source_id IS NOT NULL"),
         sqlite_where=sa.text("source_id IS NOT NULL"),
     )
-    op.create_index(
-        "uq_gtex_jackpot_payout_ledger_reference",
-        "ledger_transactions",
-        ["reference"],
-        unique=True,
-        postgresql_where=sa.text("reference LIKE 'gtex-jackpot-payout:%'"),
-        sqlite_where=sa.text("reference LIKE 'gtex-jackpot-payout:%'"),
-    )
+    if ledger_transactions_present:
+        op.create_index(
+            "uq_gtex_jackpot_payout_ledger_reference",
+            "ledger_transactions",
+            ["reference"],
+            unique=True,
+            postgresql_where=sa.text("reference LIKE 'gtex-jackpot-payout:%'"),
+            sqlite_where=sa.text("reference LIKE 'gtex-jackpot-payout:%'"),
+        )
 
 
 def downgrade() -> None:
-    op.drop_index("uq_gtex_jackpot_payout_ledger_reference", table_name="ledger_transactions")
+    connection = op.get_bind()
+    if sa.inspect(connection).has_table("ledger_transactions"):
+        op.drop_index("uq_gtex_jackpot_payout_ledger_reference", table_name="ledger_transactions")
     op.drop_index("uq_gtex_jackpot_contribution_source", table_name="gtex_jackpot_contributions")
     op.drop_index("uq_gtex_jackpot_payout_round_rank", table_name="gtex_jackpot_payouts")
     op.drop_index("uq_gtex_jackpot_open_pool", table_name="gtex_jackpot_rounds")
