@@ -42,3 +42,5 @@ The test directly seeds only platform-owned prerequisites that have no appropria
 ## Certification rule
 
 This document and the test are a **journey definition**, not a claim of runtime certification. A green certification requires the repository test runner to execute `backend/tests/acceptance/test_gtex_full_user_journey.py` successfully. Prior runner-side GitHub Actions failures with zero executed steps are not application test evidence.
+
+The certification workflow now invokes the full journey directly, so a passing certification run is the authoritative runtime result.
