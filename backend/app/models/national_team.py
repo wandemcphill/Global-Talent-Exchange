@@ -1,15 +1,30 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
+
+
+class UTCAwareDateTime(TypeDecorator[datetime]):
+    """Preserve timezone-aware UTC datetimes across SQLite and PostgreSQL."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_result_value(self, value: datetime | None, dialect: Any) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
 
 class NationalTeamCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -31,10 +46,10 @@ class NationalTeamCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
-    entry_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    entry_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    kickoff_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    entry_opens_at: Mapped[datetime | None] = mapped_column(UTCAwareDateTime(), nullable=True)
+    entry_closes_at: Mapped[datetime | None] = mapped_column(UTCAwareDateTime(), nullable=True)
+    kickoff_at: Mapped[datetime | None] = mapped_column(UTCAwareDateTime(), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCAwareDateTime(), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
@@ -129,7 +144,7 @@ class NationalTeamManagerHistory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "national_team_manager_history"
 
     entry_id: Mapped[str] = mapped_column(String(36), ForeignKey("national_team_entries.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     action_type: Mapped[str] = mapped_column(String(32), nullable=False, default="appointed", server_default="appointed")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
