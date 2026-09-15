@@ -8,7 +8,17 @@ import sys
 from alembic import context
 from alembic import op
 from alembic.ddl.sqlite import SQLiteImpl
-from sqlalchemy import Column, ForeignKeyConstraint, MetaData, String, Table, create_engine, inspect, pool, text
+from sqlalchemy import (
+    Column,
+    ForeignKeyConstraint,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    inspect,
+    pool,
+    text,
+)
 
 _orig_sqlite_add_constraint = SQLiteImpl.add_constraint
 _orig_sqlite_drop_constraint = SQLiteImpl.drop_constraint
@@ -134,7 +144,12 @@ def _ensure_alembic_version_capacity(connection) -> None:
         Table(
             ALEMBIC_VERSION_TABLE,
             MetaData(),
-            Column(ALEMBIC_VERSION_COLUMN, String(ALEMBIC_VERSION_LENGTH), nullable=False, primary_key=True),
+            Column(
+                ALEMBIC_VERSION_COLUMN,
+                String(ALEMBIC_VERSION_LENGTH),
+                nullable=False,
+                primary_key=True,
+            ),
         ).create(bind=connection)
         return
 
@@ -155,7 +170,10 @@ def _ensure_alembic_version_capacity(connection) -> None:
         return
 
     connection.execute(
-        text(f"ALTER TABLE {ALEMBIC_VERSION_TABLE} ALTER COLUMN {ALEMBIC_VERSION_COLUMN} TYPE VARCHAR(255)")
+        text(
+            f"ALTER TABLE {ALEMBIC_VERSION_TABLE} ALTER COLUMN "
+            f"{ALEMBIC_VERSION_COLUMN} TYPE VARCHAR(255)"
+        )
     )
 
 
