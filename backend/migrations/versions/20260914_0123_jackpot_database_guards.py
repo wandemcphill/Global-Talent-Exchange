@@ -94,17 +94,13 @@ def _assert_no_duplicates(connection, *, ledger_transactions_present: bool) -> N
     for label, query, params in duplicate_checks:
         rows = connection.execute(query, params).fetchall()
         if rows:
-            raise RuntimeError(
-                f"Cannot install Jackpot database guards: duplicate {label} exist: {rows}"
-            )
+            raise RuntimeError(f"Cannot install Jackpot database guards: duplicate {label} exist: {rows}")
 
 
 def upgrade() -> None:
     connection = op.get_bind()
     ledger_transactions_present = _ledger_transactions_present(connection)
-    _assert_no_duplicates(
-        connection, ledger_transactions_present=ledger_transactions_present
-    )
+    _assert_no_duplicates(connection, ledger_transactions_present=ledger_transactions_present)
 
     op.create_index(
         "uq_gtex_jackpot_open_pool",
@@ -142,14 +138,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     connection = op.get_bind()
     if sa.inspect(connection).has_table("ledger_transactions"):
-        op.drop_index(
-            "uq_gtex_jackpot_payout_ledger_reference", table_name="ledger_transactions"
-        )
-    op.drop_index(
-        "uq_gtex_jackpot_contribution_source",
-        table_name="gtex_jackpot_contributions",
-    )
-    op.drop_index(
-        "uq_gtex_jackpot_payout_round_rank", table_name="gtex_jackpot_payouts"
-    )
+        op.drop_index("uq_gtex_jackpot_payout_ledger_reference", table_name="ledger_transactions")
+    op.drop_index("uq_gtex_jackpot_contribution_source", table_name="gtex_jackpot_contributions")
+    op.drop_index("uq_gtex_jackpot_payout_round_rank", table_name="gtex_jackpot_payouts")
     op.drop_index("uq_gtex_jackpot_open_pool", table_name="gtex_jackpot_rounds")
