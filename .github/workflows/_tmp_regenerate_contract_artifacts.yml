@@ -1,0 +1,57 @@
+name: one-shot contract artifact regeneration
+
+on:
+  push:
+    branches:
+      - acceptance/gtex-full-user-journey-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Generate sanctioned contract artifacts
+        run: |
+          python tools/audit/generate_contract_audit.py
+          python tools/audit/generate_api_contract_bindings.py
+
+      - name: Keep only sanctioned contract artifact outputs
+        run: |
+          git restore --worktree -- \
+            docs/ROUTE_CLASSIFICATION.md \
+            docs/FRONTEND_API_MAP.json \
+            docs/WEB_MOBILE_DIFF.md \
+            docs/MISMATCH_REPORT.md \
+            docs/CRITICAL_ISSUES.md \
+            docs/PRE_DELETION_VALIDATION.md \
+            docs/ENV_AUDIT.md
+
+      - name: Verify contract artifacts are internally consistent
+        run: |
+          python -m pytest backend/tests/app/test_api_contract_route_declarations.py -q
+
+      - name: Commit generated contract artifacts and remove one-shot workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            docs/ROUTE_MAP.json \
+            docs/FINAL_API_SCHEMA.json \
+            docs/DEPRECATION_MAP.json \
+            shared/api_contract.json \
+            frontend/lib/data/generated/gte_api_contract.g.dart \
+            .github/workflows/_tmp_regenerate_contract_artifacts.yml
+          git status --short
+          git commit -m 'fix(api-contract): regenerate route inventory and bindings'
+          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
