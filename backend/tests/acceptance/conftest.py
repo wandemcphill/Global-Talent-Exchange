@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 
+from app.ingestion.models import Country
 from app.models.user import User, UserRole
 from app.models.wallet import LedgerEntryReason, LedgerTransactionType, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
+from backend.tests.players.test_player_share_market_routes import _seed_imported_real_player
 
 
 @pytest.fixture(autouse=True)
@@ -44,4 +47,17 @@ def fund_bootstrap_admin_for_hosted_prize(app_session_factory, bootstrap_admin_h
             description="Dedicated acceptance funding for GTEX host-funded prize tests",
             external_reference="test:funding:coin:bootstrap-admin:acceptance-host-prize",
         )
+        session.commit()
+
+
+@pytest.fixture(autouse=True)
+def seed_national_rental_pool_player(app_session_factory):
+    """Provision one canonical NG player before the journey asks for its rental pool."""
+    with app_session_factory() as session:
+        country = session.scalar(select(Country).where(Country.alpha2_code == "NG"))
+        assert country is not None, "Acceptance fixture requires the canonical NG ingestion country"
+
+        player = _seed_imported_real_player(session, player_id="full-journey-20260915-national-real")
+        player.country_id = country.id
+        player.date_of_birth = date(2010, 1, 1)
         session.commit()
