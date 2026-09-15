@@ -58,10 +58,7 @@ def main() -> int:
     if violations:
         print(f"[api-contract] Found {len(violations)} contract violation(s).")
         for violation in violations:
-            print(
-                f"[api-contract] {violation['file']} -> {violation['endpoint']}: "
-                f"{violation['issue']}"
-            )
+            print(f"[api-contract] {violation['file']} -> {violation['endpoint']}: " f"{violation['issue']}")
         return 1
     print("[api-contract] No contract violations detected.")
     return 0

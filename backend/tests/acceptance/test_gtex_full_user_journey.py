@@ -153,7 +153,9 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
         201,
     )
     user_comp_id = user_comp["id"]
-    _ok(client.post(f"/api/competitions/{user_comp_id}/publish", headers=owner["headers"], json={"open_for_join": True}))
+    _ok(
+        client.post(f"/api/competitions/{user_comp_id}/publish", headers=owner["headers"], json={"open_for_join": True})
+    )
     _ok(
         client.post(
             f"/api/competitions/{user_comp_id}/join",
@@ -308,7 +310,9 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
         201,
     )
     _ok(client.post(f"/api/regens/creation-orders/{son['id']}/pay-with-wallet", headers=owner["headers"]))
-    generated = _ok(client.post(f"/api/regens/creation-orders/{son['id']}/generate-after-payment", headers=owner["headers"]))
+    generated = _ok(
+        client.post(f"/api/regens/creation-orders/{son['id']}/generate-after-payment", headers=owner["headers"])
+    )
     regen_id = generated["generated_player_id"]
     assert generated["generated_player"]["club_id"] == club_ids[owner["user_id"]]
 
