@@ -45,5 +45,10 @@ jobs:
       - run: python frontend/tool/audit_dependency_graph.py
       - run: python backend/scripts/audit_final_platform_release.py
       - run: python backend/scripts/audit_group6_production_readiness.py
+      - name: Debug exact Black 26.5.1 diff
+        run: |
+          python -m black --diff \
+            backend/migrations/env.py \
+            backend/migrations/versions/20260914_0123_jackpot_database_guards.py || true
       - run: python tools/quality/run_changed_quality.py --base "$QUALITY_BASE_SHA" --head "$QUALITY_HEAD_SHA"
         shell: bash
