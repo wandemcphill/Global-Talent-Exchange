@@ -234,8 +234,8 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
                 "format_type": "cup",
                 "status": "published",
                 "entry_opens_at": "2026-01-01T00:00:00Z",
-                "entry_closes_at": "2026-12-31T00:00:00Z",
-                "kickoff_at": "2026-06-15T12:00:00Z",
+                "entry_closes_at": "2026-12-31T23:59:00Z",
+                "kickoff_at": "2026-12-15T12:00:00Z",
             },
         )
     )
