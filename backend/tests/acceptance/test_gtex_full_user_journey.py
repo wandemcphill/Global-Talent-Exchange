@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from app.ingestion.models import Player
 from app.models.club_profile import ClubProfile
 from app.models.player_contract import PlayerContract
 from app.models.transfer_window import TransferWindow
@@ -381,12 +380,6 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
     _ok(client.post(f"/api/transfer-market/listings/{regen_listing['id']}/close", headers=owner["headers"]))
 
     # First contract -> extension -> transfer acceptance, which canonically terminates the selling contract.
-    with app_session_factory() as session:
-        player = session.get(Player, regen_id)
-        assert player is not None
-        player.current_club_profile_id = club_ids[club_buyer["user_id"]]
-        session.commit()
-
     first_contract = _ok(
         client.post(
             f"/api/players/{regen_id}/contracts",
