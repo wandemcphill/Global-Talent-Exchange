@@ -52,10 +52,23 @@ def fund_bootstrap_admin_for_hosted_prize(app_session_factory, bootstrap_admin_h
 
 @pytest.fixture(autouse=True)
 def seed_national_rental_pool_player(app_session_factory):
-    """Provision one canonical NG player before the journey asks for its rental pool."""
+    """Provision one NG reference country and one eligible player for the rental pool."""
     with app_session_factory() as session:
         country = session.scalar(select(Country).where(Country.alpha2_code == "NG"))
-        assert country is not None, "Acceptance fixture requires the canonical NG ingestion country"
+        if country is None:
+            country = Country(
+                id="full-journey-20260915-country-ng",
+                source_provider="gtex-acceptance-fixture",
+                provider_external_id="NG",
+                name="Nigeria",
+                alpha2_code="NG",
+                alpha3_code="NGA",
+                fifa_code="NGA",
+                confederation_code="CAF",
+                market_region="africa",
+            )
+            session.add(country)
+            session.flush()
 
         player = _seed_imported_real_player(session, player_id="full-journey-20260915-national-real")
         player.country_id = country.id
