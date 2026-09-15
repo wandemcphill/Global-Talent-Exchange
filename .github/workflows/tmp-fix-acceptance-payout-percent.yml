@@ -1,0 +1,35 @@
+name: tmp-fix-acceptance-payout-percent
+
+on:
+  push:
+    branches:
+      - acceptance/gtex-full-user-journey-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: acceptance/gtex-full-user-journey-20260915
+          fetch-depth: 0
+
+      - name: Fix acceptance payout fraction and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=backend/tests/acceptance/test_gtex_full_user_journey.py
+          sed -i 's/"percent": "100"/"percent": "1.00"/g' "$file"
+          rm -f .github/workflows/tmp-fix-acceptance-payout-percent.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$file" .github/workflows/tmp-fix-acceptance-payout-percent.yml
+          if git diff --cached --quiet; then
+            echo "No changes required"
+            exit 0
+          fi
+          git commit -m "fix(acceptance): use payout fractions"
+          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
