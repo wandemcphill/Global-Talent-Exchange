@@ -41,9 +41,7 @@ def _sqlite_add_constraint(self, constraint):
                 )
             referred_table, _ = target
             local_cols = [element.parent.name for element in elements]
-            remote_cols = [
-                element.target_fullname.rsplit(".", 1)[-1] for element in elements
-            ]
+            remote_cols = [element.target_fullname.rsplit(".", 1)[-1] for element in elements]
             with op.batch_alter_table(table_name) as batch_op:
                 batch_op.create_foreign_key(
                     constraint.name,
@@ -173,10 +171,7 @@ def _ensure_alembic_version_capacity(connection) -> None:
         return
 
     connection.execute(
-        text(
-            f"ALTER TABLE {ALEMBIC_VERSION_TABLE} ALTER COLUMN "
-            f"{ALEMBIC_VERSION_COLUMN} TYPE VARCHAR(255)"
-        )
+        text(f"ALTER TABLE {ALEMBIC_VERSION_TABLE} ALTER COLUMN {ALEMBIC_VERSION_COLUMN} TYPE VARCHAR(255)")
     )
 
 
