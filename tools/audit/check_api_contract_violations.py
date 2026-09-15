@@ -57,6 +57,10 @@ def main() -> int:
     REPORT_PATH.write_text(_render_report(violations), encoding="utf-8")
     if violations:
         print(f"[api-contract] Found {len(violations)} contract violation(s).")
+        for violation in violations:
+            print(
+                f"[api-contract] {violation['file']} -> {violation['endpoint']}: {violation['issue']}"
+            )
         return 1
     print("[api-contract] No contract violations detected.")
     return 0
