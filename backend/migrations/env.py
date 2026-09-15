@@ -8,7 +8,7 @@ import sys
 from alembic import context
 from alembic import op
 from alembic.ddl.sqlite import SQLiteImpl
-from sqlalchemy import Column, MetaData, String, Table, create_engine, inspect, pool, text
+from sqlalchemy import Column, ForeignKeyConstraint, MetaData, String, Table, create_engine, inspect, pool, text
 
 _orig_sqlite_add_constraint = SQLiteImpl.add_constraint
 _orig_sqlite_drop_constraint = SQLiteImpl.drop_constraint
@@ -19,6 +19,29 @@ def _sqlite_add_constraint(self, constraint):
         _orig_sqlite_add_constraint(self, constraint)
     except NotImplementedError:
         table_name = constraint.table.name
+        if isinstance(constraint, ForeignKeyConstraint):
+            elements = list(constraint.elements)
+            if not elements:
+                raise
+            target = elements[0].target_fullname.rsplit(".", 1)
+            if len(target) != 2:
+                raise RuntimeError(
+                    f"Cannot derive SQLite foreign-key target from {elements[0].target_fullname!r}."
+                )
+            referred_table, _ = target
+            local_cols = [element.parent.name for element in elements]
+            remote_cols = [element.target_fullname.rsplit(".", 1)[-1] for element in elements]
+            with op.batch_alter_table(table_name) as batch_op:
+                batch_op.create_foreign_key(
+                    constraint.name,
+                    referred_table,
+                    local_cols,
+                    remote_cols,
+                    ondelete=constraint.ondelete,
+                    onupdate=constraint.onupdate,
+                )
+            return
+
         with op.batch_alter_table(table_name) as batch_op:
             batch_op.create_check_constraint(constraint.name, constraint.sqltext)
 
@@ -28,8 +51,9 @@ def _sqlite_drop_constraint(self, constraint):
         _orig_sqlite_drop_constraint(self, constraint)
     except NotImplementedError:
         table_name = constraint.table.name
+        constraint_type = "foreignkey" if isinstance(constraint, ForeignKeyConstraint) else "check"
         with op.batch_alter_table(table_name) as batch_op:
-            batch_op.drop_constraint(constraint.name, type_="check")
+            batch_op.drop_constraint(constraint.name, type_=constraint_type)
 
 
 SQLiteImpl.add_constraint = _sqlite_add_constraint
