@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - acceptance/gtex-full-user-journey-20260915
 
 permissions:
   contents: write
@@ -81,15 +82,13 @@ jobs:
                   ("/api/players/{player_id}/regen/contract-offers/quote", canonical),
                   ("/api/v1/players/{player_id}/regen/contract-offers/quote", canonical),
               ):
-                  if source in d:
-                      if source.endswith("/quote") and d[source] == target:
-                          suffix = source[:-len("/quote")]
-                          if source.startswith("/api/v2/"):
-                              d[canonical] = new_key
-                          elif source.startswith("/api/v1/"):
-                              d[v1] = canonical
-                          else:
-                              d[unversioned] = canonical
+                  if source in d and d[source] == target:
+                      if source.startswith("/api/v2/"):
+                          d[canonical] = new_key
+                      elif source.startswith("/api/v1/"):
+                          d[v1] = canonical
+                      else:
+                          d[unversioned] = canonical
 
           path.write_text(json.dumps(contract, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
           PY
@@ -103,6 +102,7 @@ jobs:
           start = text.index("      - name: One-shot repair of canonical regen contract drift\n")
           end = text.index("      - run: python tools/check_python_runtime_alignment.py\n", start)
           text = text[:start] + text[end:]
+          text = text.replace("      - acceptance/gtex-full-user-journey-20260915\n", "")
           text = text.replace("permissions:\n  contents: write\n", "permissions:\n  contents: read\n", 1)
           p.write_text(text, encoding="utf-8")
           PY
