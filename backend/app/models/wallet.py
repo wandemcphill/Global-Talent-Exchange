@@ -281,7 +281,7 @@ class LedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     transaction: Mapped["LedgerTransaction"] = relationship(back_populates="entries")
-    account: Mapped["LedgerAccount"] = relationship(back_populates="account")
+    account: Mapped["LedgerAccount"] = relationship(back_populates="entries")
     created_by: Mapped["User | None"] = relationship(
         back_populates="ledger_entries_created", foreign_keys=[created_by_user_id]
     )
