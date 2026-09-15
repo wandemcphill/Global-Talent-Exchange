@@ -11,7 +11,7 @@ from app.models.player_contract import PlayerContract
 from app.models.transfer_window import TransferWindow
 from backend.tests.players.test_player_share_market_routes import _seed_imported_real_player
 
-PREFIX = "gtex-full-journey-20260915"
+PREFIX = "full-journey-20260915"
 
 
 def _ok(response, code=200):
@@ -205,6 +205,13 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
             },
         ),
         201,
+    )
+    _ok(
+        client.post(
+            f"/api/competitions/{gtex_comp['id']}/publish",
+            headers=bootstrap_admin_headers,
+            json={"open_for_join": True},
+        )
     )
     _ok(
         client.post(
