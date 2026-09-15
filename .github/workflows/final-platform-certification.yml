@@ -49,6 +49,9 @@ jobs:
           backend/tests/matches/test_competition_match_settlement_guard.py
           -q
 
+      - name: Full GTEX user journey acceptance
+        run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
+
       - name: Frontend dependencies
         working-directory: frontend
         run: flutter pub get
