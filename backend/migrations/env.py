@@ -36,11 +36,14 @@ def _sqlite_add_constraint(self, constraint):
             target = elements[0].target_fullname.rsplit(".", 1)
             if len(target) != 2:
                 raise RuntimeError(
-                    f"Cannot derive SQLite foreign-key target from {elements[0].target_fullname!r}."
+                    "Cannot derive SQLite foreign-key target from "
+                    f"{elements[0].target_fullname!r}."
                 )
             referred_table, _ = target
             local_cols = [element.parent.name for element in elements]
-            remote_cols = [element.target_fullname.rsplit(".", 1)[-1] for element in elements]
+            remote_cols = [
+                element.target_fullname.rsplit(".", 1)[-1] for element in elements
+            ]
             with op.batch_alter_table(table_name) as batch_op:
                 batch_op.create_foreign_key(
                     constraint.name,
