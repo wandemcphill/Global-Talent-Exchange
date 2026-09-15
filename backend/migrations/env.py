@@ -51,7 +51,10 @@ def _sqlite_drop_constraint(self, constraint):
         _orig_sqlite_drop_constraint(self, constraint)
     except NotImplementedError:
         table_name = constraint.table.name
-        constraint_type = "foreignkey" if isinstance(constraint, ForeignKeyConstraint) else "check"
+        if isinstance(constraint, ForeignKeyConstraint):
+            constraint_type = "foreignkey"
+        else:
+            constraint_type = "check"
         with op.batch_alter_table(table_name) as batch_op:
             batch_op.drop_constraint(constraint.name, type_=constraint_type)
 
