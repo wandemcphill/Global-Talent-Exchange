@@ -18,8 +18,8 @@ from app.models.coin_trader import (
 )
 from app.models.treasury import TreasurySettings
 from app.models.user import User, UserRole
-from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerPosting, LedgerUnit
-from app.wallets.service import WalletService
+from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerUnit
+from app.wallets.service import LedgerPosting, WalletService
 
 
 def _make_session():
