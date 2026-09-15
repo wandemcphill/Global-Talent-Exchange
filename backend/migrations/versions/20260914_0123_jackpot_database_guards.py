@@ -28,8 +28,7 @@ def _ledger_transactions_present(connection) -> bool:
         # reach the application tests. Production/PostgreSQL remains fail-closed.
         return False
     raise RuntimeError(
-        "Cannot install Jackpot database guards: ledger_transactions is missing "
-        "from a non-SQLite database."
+        "Cannot install Jackpot database guards: ledger_transactions is missing " "from a non-SQLite database."
     )
 
 
@@ -37,40 +36,34 @@ def _assert_no_duplicates(connection, *, ledger_transactions_present: bool) -> N
     duplicate_checks = (
         (
             "open jackpot rounds",
-            sa.text(
-                """
+            sa.text("""
                 SELECT pool_key, COUNT(*)
                 FROM gtex_jackpot_rounds
                 WHERE status = :status
                 GROUP BY pool_key
                 HAVING COUNT(*) > 1
-                """
-            ),
+                """),
             {"status": OPEN_STATUS},
         ),
         (
             "jackpot payout ranks",
-            sa.text(
-                """
+            sa.text("""
                 SELECT round_id, rank, COUNT(*)
                 FROM gtex_jackpot_payouts
                 GROUP BY round_id, rank
                 HAVING COUNT(*) > 1
-                """
-            ),
+                """),
             {},
         ),
         (
             "jackpot contribution source identities",
-            sa.text(
-                """
+            sa.text("""
                 SELECT source_type, source_id, participant_user_id, COUNT(*)
                 FROM gtex_jackpot_contributions
                 WHERE source_id IS NOT NULL
                 GROUP BY source_type, source_id, participant_user_id
                 HAVING COUNT(*) > 1
-                """
-            ),
+                """),
             {},
         ),
     )
@@ -78,15 +71,13 @@ def _assert_no_duplicates(connection, *, ledger_transactions_present: bool) -> N
         duplicate_checks += (
             (
                 "jackpot payout ledger references",
-                sa.text(
-                    """
+                sa.text("""
                     SELECT reference, COUNT(*)
                     FROM ledger_transactions
                     WHERE reference LIKE 'gtex-jackpot-payout:%'
                     GROUP BY reference
                     HAVING COUNT(*) > 1
-                    """
-                ),
+                    """),
                 {},
             ),
         )
