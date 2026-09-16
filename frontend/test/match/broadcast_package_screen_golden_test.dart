@@ -9,7 +9,7 @@ import '../support/gtex_match_broadcast_fixture.dart';
 import '../support/tolerant_golden_comparator.dart';
 
 void main() {
-  testWidgets('broadcast package premium surface matches golden', (
+  testWidgets('broadcast package premium surface matches golden', tags: <String>['golden'], (
     WidgetTester tester,
   ) async {
     // Minor blur and antialiasing differences across local Windows runs and
