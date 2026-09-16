@@ -326,7 +326,8 @@ class NationalTeamTournamentService:
         except ValueError:
             return None
 
-    def _parse_date(self, value: Any) -> date | None:
+    @staticmethod
+    def _parse_date(value: Any) -> date | None:
         if isinstance(value, datetime):
             return value.date()
         if isinstance(value, date):
