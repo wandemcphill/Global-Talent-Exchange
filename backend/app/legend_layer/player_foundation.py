@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Iterable
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -50,6 +51,48 @@ class LegendaryPlayerFoundationService:
         admin-attributed helper used by real-player ingestion, and failure is
         surfaced so a newly seeded legend cannot silently launch unbuyable.
         """
+        player, _ = self._upsert(seed=seed)
+        issuance = issue_markets_for_ingested_players(self.session, player_ids=[player.id], actor_user_id=actor.id)
+        if self.session.scalar(select(PlayerShareMarket.id).where(PlayerShareMarket.player_id == player.id)) is None:
+            raise LegendaryPlayerFoundationError(
+                "Legendary player market issuance failed "
+                f"(issued={issuance['issued']}, failed={issuance['failed']})."
+            )
+        return player
+
+    def seed_many(self, *, seeds: Iterable[LegendaryPlayerSeed], actor: User) -> dict[str, int]:
+        """Seed a registry deterministically, resumably, and through normal issuance."""
+        ordered = sorted(seeds, key=lambda item: self._required(item.key, "key"))
+        keys = [item.key.strip() for item in ordered]
+        if len(keys) != len(set(keys)):
+            raise LegendaryPlayerFoundationError("Legendary registry contains duplicate keys.")
+
+        players: list[Player] = []
+        created = 0
+        for seed in ordered:
+            player, was_created = self._upsert(seed=seed)
+            players.append(player)
+            created += int(was_created)
+        player_ids = [player.id for player in players]
+        issuance = issue_markets_for_ingested_players(self.session, player_ids=player_ids, actor_user_id=actor.id)
+        issued_player_ids = set(
+            self.session.scalars(select(PlayerShareMarket.player_id).where(PlayerShareMarket.player_id.in_(player_ids)))
+        )
+        missing_market_count = len(set(player_ids) - issued_player_ids)
+        if missing_market_count:
+            raise LegendaryPlayerFoundationError(
+                "Legendary registry market issuance incomplete "
+                f"(missing={missing_market_count}, issued={issuance['issued']}, failed={issuance['failed']})."
+            )
+        return {
+            "total": len(players),
+            "created": created,
+            "updated": len(players) - created,
+            "markets_issued": issuance["issued"],
+            "markets_existing": issuance["skipped_existing"],
+        }
+
+    def _upsert(self, *, seed: LegendaryPlayerSeed) -> tuple[Player, bool]:
         key = self._required(seed.key, "key")
         full_name = self._required(seed.full_name, "full_name")
         nationality_name = self._required(seed.nationality_name, "nationality_name")
@@ -71,6 +114,9 @@ class LegendaryPlayerFoundationService:
                 provider_external_id=key,
             )
             self.session.add(player)
+            was_created = True
+        else:
+            was_created = False
 
         first_name, last_name = self._split_name(full_name)
         player.full_name = full_name
@@ -97,18 +143,7 @@ class LegendaryPlayerFoundationService:
         }
         self.session.flush()
 
-        issuance = issue_markets_for_ingested_players(
-            self.session,
-            player_ids=[player.id],
-            actor_user_id=actor.id,
-        )
-        market = self.session.scalar(select(PlayerShareMarket.id).where(PlayerShareMarket.player_id == player.id))
-        if market is None:
-            raise LegendaryPlayerFoundationError(
-                "Legendary player market issuance failed "
-                f"(issued={issuance['issued']}, failed={issuance['failed']})."
-            )
-        return player
+        return player, was_created
 
     def _resolve_country(self, *, name: str, code: str) -> Country:
         normalized_name = name.casefold()
@@ -129,8 +164,9 @@ class LegendaryPlayerFoundationService:
             source_provider=LEGENDARY_PLAYER_SOURCE,
             provider_external_id=f"country:{code}",
             name=name,
-            alpha2_code=code,
-            fifa_code=code,
+            alpha2_code=code if len(code) == 2 else None,
+            alpha3_code=code if len(code) == 3 else None,
+            fifa_code=code if len(code) == 3 else None,
         )
         self.session.add(country)
         self.session.flush()
