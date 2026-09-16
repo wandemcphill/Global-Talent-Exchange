@@ -19,42 +19,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Skip if runtime fix is already committed
-        if: github.event.head_commit.message == 'fix(national-team): normalize rental window datetimes'
-        run: echo 'Runtime fix commit already exists; no mutation required.'
-
       - uses: actions/setup-python@v5
-        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
         with:
           python-version: "3.14"
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
       - name: Install backend test dependencies
-        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt pytest
 
-      - name: Apply canonical runtime fix
-        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
+      - name: Apply canonical runtime fix and acceptance correction
         run: |
           python - <<'PY'
           import re
+          import subprocess
           from pathlib import Path
 
           service = Path("backend/app/national_team_engine/tournament_service.py")
           text = service.read_text(encoding="utf-8")
+          changed = False
 
-          future_pattern = re.compile(
-              r"(?ms)^    @staticmethod\n"
-              r"    def _is_future_datetime\(.*?\n"
-              r"    def _parse_datetime\(",
-          )
-          future_match = future_pattern.search(text)
-          if future_match is None:
-              raise SystemExit("expected _is_future_datetime block not found")
-          future_replacement = '''    @staticmethod
+          if "def _coerce_datetime_pair(" not in text:
+              future_pattern = re.compile(
+                  r"(?ms)^    @staticmethod\n"
+                  r"    def _is_future_datetime\(.*?\n"
+                  r"    def _parse_datetime\(",
+              )
+              future_match = future_pattern.search(text)
+              if future_match is None:
+                  raise SystemExit("expected _is_future_datetime block not found")
+              future_replacement = '''    @staticmethod
     def _coerce_datetime_pair(
         value: datetime, *, now: datetime
     ) -> tuple[datetime, datetime]:
@@ -81,7 +77,8 @@ jobs:
         return value < reference
 
     def _parse_datetime('''
-          text = text[:future_match.start()] + future_replacement + text[future_match.end():]
+              text = text[:future_match.start()] + future_replacement + text[future_match.end():]
+              changed = True
 
           lock_pattern = re.compile(
               r"(?ms)^    def _rental_tournament_lock_reason\(self, competition: NationalTeamCompetition\) -> str \| None:\n"
@@ -90,7 +87,9 @@ jobs:
           lock_match = lock_pattern.search(text)
           if lock_match is None:
               raise SystemExit("expected rental lock block not found")
-          lock_replacement = '''    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:
+          current_lock = lock_match.group(0)
+          if "> now:" in current_lock:
+              lock_replacement = '''    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:
         now = utcnow()
         if competition.entry_opens_at is not None and self._is_future_datetime(competition.entry_opens_at, now=now):
             return "competition_entry_not_open"
@@ -112,12 +111,15 @@ jobs:
         return None
 
 '''
-          text = text[:lock_match.start()] + lock_replacement + text[lock_match.end():]
+              text = text[:lock_match.start()] + lock_replacement + text[lock_match.end():]
+              changed = True
+
           service.write_text(text, encoding="utf-8")
 
           acceptance = Path("backend/tests/acceptance/test_gtex_full_user_journey.py")
           source = acceptance.read_text(encoding="utf-8")
-          old = '''    entry = _ok(
+          if "/rental-entry" not in source:
+              old = '''    entry = _ok(
         client.post(
             f"/api/national-team-engine/competitions/{national['id']}/entries",
             headers=owner["headers"],
@@ -125,7 +127,7 @@ jobs:
         )
     )
 '''
-          new = '''    entry = _ok(
+              new = '''    entry = _ok(
         client.post(
             f"/api/national-team-engine/competitions/{national['id']}/rental-entry",
             headers=owner["headers"],
@@ -137,13 +139,17 @@ jobs:
         )
     )
 '''
-          if old not in source:
-              raise SystemExit("expected legacy national entry block not found")
-          acceptance.write_text(source.replace(old, new, 1), encoding="utf-8")
+              if old not in source:
+                  raise SystemExit("expected legacy national entry block not found")
+              acceptance.write_text(source.replace(old, new, 1), encoding="utf-8")
+              changed = True
+
+          if not changed:
+              print("Runtime fix already present; no source mutation required.")
+              raise SystemExit(0)
           PY
 
       - name: Commit runtime fix
-        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -153,5 +159,4 @@ jobs:
           git push origin HEAD:acceptance/gtex-full-user-journey-20260915
 
       - name: Exact acceptance on committed fix
-        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
         run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
