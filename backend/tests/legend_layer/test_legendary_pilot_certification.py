@@ -64,7 +64,7 @@ def test_buyer_user(db_session):
         email="buyer_legend_cert@gtex.io",
         username="buyer_legend_cert",
         display_name="Legend Buyer",
-        password_hash="test_hash_buyer",
+        password_hash="test_hash_buyer",  # pragma: allowlist secret
         role=UserRole.USER,
         is_active=True,
     )
@@ -80,7 +80,7 @@ def test_seller_user(db_session):
         email="seller_legend_cert@gtex.io",
         username="seller_legend_cert",
         display_name="Legend Seller",
-        password_hash="test_hash_seller",
+        password_hash="test_hash_seller",  # pragma: allowlist secret
         role=UserRole.USER,
         is_active=True,
     )

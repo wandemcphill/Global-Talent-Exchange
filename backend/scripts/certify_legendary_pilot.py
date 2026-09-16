@@ -71,7 +71,7 @@ def run_certification() -> dict:
         email="buyer_cert@gtex.io",
         username="buyer_cert",
         display_name="Cert Buyer",
-        password_hash="test_hash_buyer",
+        password_hash="test_hash_buyer",  # pragma: allowlist secret
         role=UserRole.USER,
         is_active=True,
     )
@@ -79,7 +79,7 @@ def run_certification() -> dict:
         email="seller_cert@gtex.io",
         username="seller_cert",
         display_name="Cert Seller",
-        password_hash="test_hash_seller",
+        password_hash="test_hash_seller",  # pragma: allowlist secret
         role=UserRole.USER,
         is_active=True,
     )
