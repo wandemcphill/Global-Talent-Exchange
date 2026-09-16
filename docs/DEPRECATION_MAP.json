@@ -1373,6 +1373,12 @@
       "from": "/api/v2/admin/operations-readiness",
       "to": "/api/admin/operations-readiness",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "from": "/api/players/{player_id}/regen/contract-offers/submit",
+      "to": "/api/players/{player_id}/regen/contract-offers/quote",
+      "reason": "Free-agent regen contract offer submit path alias."
     }
   ]
 }

@@ -8146,6 +8146,7 @@ const Map<String, String> gteApiDeprecatedAliases = <String, String>{
   '/api/players/{player_id}/regen': '/api/v2/players/{player_id}/regen',
   '/api/players/{player_id}/regen/big-club-approaches': '/api/v2/players/{player_id}/regen/big-club-approaches',
   '/api/players/{player_id}/regen/contract-offers/quote': '/api/v2/players/{player_id}/regen/contract-offers/quote',
+  '/api/players/{player_id}/regen/contract-offers/submit': '/api/v2/players/{player_id}/regen/contract-offers/quote',
   '/api/players/{player_id}/regen/offer-market': '/api/v2/players/{player_id}/regen/offer-market',
   '/api/players/{player_id}/regen/pressure-resolution': '/api/v2/players/{player_id}/regen/pressure-resolution',
   '/api/players/{player_id}/regen/special-training': '/api/v2/players/{player_id}/regen/special-training',

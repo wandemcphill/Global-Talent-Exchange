@@ -10,6 +10,8 @@ from alembic import op
 from alembic.ddl.sqlite import SQLiteImpl
 from sqlalchemy import Column, MetaData, String, Table, create_engine, inspect, pool, text
 
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint
+
 _orig_sqlite_add_constraint = SQLiteImpl.add_constraint
 _orig_sqlite_drop_constraint = SQLiteImpl.drop_constraint
 
@@ -20,7 +22,23 @@ def _sqlite_add_constraint(self, constraint):
     except NotImplementedError:
         table_name = constraint.table.name
         with op.batch_alter_table(table_name) as batch_op:
-            batch_op.create_check_constraint(constraint.name, constraint.sqltext)
+            if isinstance(constraint, CheckConstraint):
+                batch_op.create_check_constraint(constraint.name, constraint.sqltext)
+            elif isinstance(constraint, ForeignKeyConstraint):
+                source_cols = [c.name for c in constraint.columns]
+                referent_cols = [elem.target_fullname.split(".")[-1] for elem in constraint.elements]
+                ref_table = constraint.referred_table.name
+                batch_op.create_foreign_key(
+                    constraint.name,
+                    ref_table,
+                    source_cols,
+                    referent_cols,
+                    ondelete=constraint.ondelete,
+                    onupdate=constraint.onupdate,
+                )
+            elif isinstance(constraint, UniqueConstraint):
+                source_cols = [c.name for c in constraint.columns]
+                batch_op.create_unique_constraint(constraint.name, source_cols)
 
 
 def _sqlite_drop_constraint(self, constraint):
@@ -29,7 +47,13 @@ def _sqlite_drop_constraint(self, constraint):
     except NotImplementedError:
         table_name = constraint.table.name
         with op.batch_alter_table(table_name) as batch_op:
-            batch_op.drop_constraint(constraint.name, type_="check")
+            if isinstance(constraint, ForeignKeyConstraint):
+                type_ = "foreignkey"
+            elif isinstance(constraint, UniqueConstraint):
+                type_ = "unique"
+            else:
+                type_ = "check"
+            batch_op.drop_constraint(constraint.name, type_=type_)
 
 
 SQLiteImpl.add_constraint = _sqlite_add_constraint
