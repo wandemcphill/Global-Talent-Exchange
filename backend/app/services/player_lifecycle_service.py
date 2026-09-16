@@ -51,8 +51,6 @@ from app.models.transfer_window import TransferWindow
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 from app.club_identity.models.reputation import ClubReputationProfile
-from app.club_finance.service import ClubFinanceError, ClubFinanceService
-from app.ownership_groups.service import OwnershipGroupService
 from app.schemas.player_lifecycle import (
     AvailabilityBadgeView,
     BigClubApproachRequest,
@@ -1567,6 +1565,8 @@ class PlayerLifecycleService:
         if payload.buying_club_id is None:
             raise PlayerLifecycleValidationError("Transfer bids require a buying club")
         self._require_club_profile(payload.buying_club_id)
+        from app.club_finance.service import ClubFinanceError, ClubFinanceService
+
         try:
             ClubFinanceService(self.session).assert_transfer_allowed_for_club(club_id=payload.buying_club_id)
         except ClubFinanceError as exc:
@@ -1682,6 +1682,8 @@ class PlayerLifecycleService:
                 }
 
         proposed_bid_amount = offer_market.training_fee_gtex_coin if offer_market is not None else payload.bid_amount
+        from app.ownership_groups.service import OwnershipGroupService
+
         ownership_validation = OwnershipGroupService(self.session).validate_transfer(
             player_id=player.id,
             selling_club_id=selling_club_id,
@@ -1830,6 +1832,8 @@ class PlayerLifecycleService:
         current_contract = self._select_primary_contract(
             self.get_contracts(bid.player_id), reference_on=contract_starts_on
         )
+        from app.ownership_groups.service import OwnershipGroupService
+
         ownership_validation = OwnershipGroupService(self.session).validate_transfer(
             player_id=player.id,
             selling_club_id=bid.selling_club_id,
@@ -2021,6 +2025,8 @@ class PlayerLifecycleService:
                 offer=offer,
                 contract=new_contract,
             )
+        from app.club_finance.service import ClubFinanceService
+
         ClubFinanceService(self.session).record_transfer_movement(
             buying_club_id=bid.buying_club_id,
             selling_club_id=bid.selling_club_id,
