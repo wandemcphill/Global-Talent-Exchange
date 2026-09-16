@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: quality-gates-${{ github.ref }}
@@ -25,61 +25,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: One-shot acceptance payload repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin "${GITHUB_HEAD_REF}:${GITHUB_HEAD_REF}" || true
-          git checkout "${GITHUB_HEAD_REF}"
-          python - <<'PY'
-          from pathlib import Path
-          path = Path("backend/tests/acceptance/test_gtex_full_user_journey.py")
-          text = path.read_text(encoding="utf-8")
-          old = '            json={"country_code": "NG", "country_name": "Nigeria", "manager_user_id": owner["user_id"]},\n'
-          new = '''            json={
-                "country_code": "NG",
-                "country_name": "Nigeria",
-                "manager_user_id": owner["user_id"],
-                "squad": [
-                    {
-                        "player_name": f"Nigeria U17 Player {index}",
-                        "age": 16 + (index % 2),
-                        "overall_rating": 70,
-                        "position": ("gk", "cb", "cm", "fw")[index % 4],
-                    }
-                    for index in range(18)
-                ],
-            },
-'''
-          if old in text:
-              text = text.replace(old, new, 1)
-              path.write_text(text, encoding="utf-8")
-          elif '"squad": [' not in text:
-              raise SystemExit("target national entry payload not found")
-          PY
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend/tests/acceptance/test_gtex_full_user_journey.py
-          if ! git diff --cached --quiet; then
-            git commit -m 'test(acceptance): submit canonical national squad'
-            git push origin HEAD:"${GITHUB_HEAD_REF}"
-            exit 0
-          fi
-
-          python - <<'PY'
-          from pathlib import Path
-          p = Path(".github/workflows/quality-gates.yml")
-          t = p.read_text(encoding="utf-8")
-          start = t.index("      - name: One-shot acceptance payload repair\n")
-          end = t.index("      - uses: actions/setup-node@v4\n", start)
-          t = t[:start] + t[end:]
-          t = t.replace("permissions:\n  contents: write\n", "permissions:\n  contents: read\n", 1)
-          p.write_text(t, encoding="utf-8")
-          Path(".github/workflows/_fix_acceptance_national_squad.yml").unlink(missing_ok=True)
-          PY
-          git add .github/workflows/quality-gates.yml .github/workflows/_fix_acceptance_national_squad.yml
-          git commit -m 'chore(ci): restore read-only quality gates'
-          git push origin HEAD:"${GITHUB_HEAD_REF}"
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
