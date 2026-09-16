@@ -58,10 +58,7 @@ def main() -> int:
     if violations:
         print(f"[api-contract] Found {len(violations)} contract violation(s).")
         for violation in violations:
-            print(
-                f"[api-contract] {violation['file']} -> {violation['endpoint']}: "
-                f"{violation['issue']}"
-            )
+            print(f"[api-contract] {violation['file']} -> {violation['endpoint']}: " f"{violation['issue']}")
         return 1
     print("[api-contract] No contract violations detected.")
     return 0
@@ -78,9 +75,7 @@ def _render_report(violations: list[dict[str, str]]) -> str:
         lines.append("- None")
         return "\n".join(lines) + "\n"
     for violation in violations[:500]:
-        lines.append(
-            f"- `{violation['file']}` -> `{violation['endpoint']}`: {violation['issue']}"
-        )
+        lines.append(f"- `{violation['file']}` -> `{violation['endpoint']}`: {violation['issue']}")
     if len(violations) > 500:
         lines.append(f"- ... and {len(violations) - 500} more")
     return "\n".join(lines) + "\n"
