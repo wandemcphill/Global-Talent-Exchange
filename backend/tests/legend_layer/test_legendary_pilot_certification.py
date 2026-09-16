@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import load_model_modules
 from app.ingestion.models import Player
-from app.legend_layer.pilot_dataset import LEGENDARY_PILOT_DATASET, load_and_validate_pilot_dataset
+from app.legend_layer.pilot_dataset import load_and_validate_pilot_dataset
 from app.legend_layer.registry_service import (
     LEGEND_SOURCE_PROVIDER,
     LegendaryInvalidRecordError,
@@ -302,7 +302,9 @@ def test_negative_tests(db_session, test_buyer_user):
         limit=1000,
     )
     nigeria_player_ids = {item["player_id"] for item in nigeria_pool}
-    assert maradona.id not in nigeria_player_ids, "Argentinian legend Maradona incorrectly appeared in Nigeria national pool!"
+    assert (
+        maradona.id not in nigeria_player_ids
+    ), "Argentinian legend Maradona incorrectly appeared in Nigeria national pool!"
 
     # 3. Ordinary players still behave normally
     ordinary_player = Player(

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -232,21 +231,14 @@ class LegendaryPlayerRegistryService:
         player = self.session.scalar(
             select(Player).where(
                 (Player.id == identifier)
-                | (
-                    (Player.source_provider == LEGEND_SOURCE_PROVIDER)
-                    & (Player.provider_external_id == identifier)
-                )
+                | ((Player.source_provider == LEGEND_SOURCE_PROVIDER) & (Player.provider_external_id == identifier))
             )
         )
         if player is None:
             raise LegendaryNotFoundError(f"Legendary player not found for identifier: {identifier}")
 
-        profile = self.session.scalar(
-            select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id == player.id)
-        )
-        market = self.session.scalar(
-            select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id)
-        )
+        profile = self.session.scalar(select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id == player.id))
+        market = self.session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id))
         country = player.country
 
         meta = (profile.metadata_json if profile else {}) or {}
@@ -373,7 +365,9 @@ class LegendaryPlayerRegistryService:
         certification_steps["market_acquisition"] = {
             "status": "PASSED",
             "shares_bought": 10,
-            "total_cost": float(acquisition_res.get("total_cost_coin") or acquisition_res.get("gross_amount_coin") or 0.0),
+            "total_cost": float(
+                acquisition_res.get("total_cost_coin") or acquisition_res.get("gross_amount_coin") or 0.0
+            ),
         }
         certification_steps["ownership"] = {
             "status": "PASSED",
@@ -391,7 +385,9 @@ class LegendaryPlayerRegistryService:
             certification_steps["transfer_resale"] = {
                 "status": "PASSED",
                 "shares_sold": 5,
-                "proceeds_coin": float(resale_res.get("net_proceeds_coin") or resale_res.get("gross_amount_coin") or 0.0),
+                "proceeds_coin": float(
+                    resale_res.get("net_proceeds_coin") or resale_res.get("gross_amount_coin") or 0.0
+                ),
             }
         else:
             certification_steps["transfer_resale"] = {

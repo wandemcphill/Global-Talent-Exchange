@@ -62,7 +62,9 @@ def run_certification() -> dict:
     registry = LegendaryPlayerRegistryService(session)
     seed_res = registry.seed_pilot_dataset()
     session.commit()
-    print(f"[2] Pilot Dataset Seeding: PASSED (Created: {seed_res['created']}, Total Seeded: {seed_res['total_seeded']})")
+    print(
+        f"[2] Pilot Dataset Seeding: PASSED (Created: {seed_res['created']}, Total Seeded: {seed_res['total_seeded']})"
+    )
 
     # 3. Create test buyer and seller users
     buyer = User(
@@ -116,16 +118,22 @@ def run_certification() -> dict:
     print("=" * 80)
     print("PLAYERS CREATED (25):")
     for idx, r in enumerate(records, 1):
-        print(f"  {idx:02d}. {r.canonical_display_name:25s} | {r.nationality:15s} | {r.primary_position:4s} | {r.preferred_foot:5s} | {r.height_cm}cm | {r.era:18s} | {r.fame_level}")
+        print(
+            f"  {idx:02d}. {r.canonical_display_name:25s} | {r.nationality:15s} | {r.primary_position:4s} | {r.preferred_foot:5s} | {r.height_cm}cm | {r.era:18s} | {r.fame_level}"
+        )
 
     print("\nLIFECYCLE PATHS TESTED:")
-    print("  registry → player creation → active → searchable → profile → market acquisition → ownership → transfer/resale → national-team eligibility → national-team rental → competition selection → normal player lifecycle")
+    print(
+        "  registry → player creation → active → searchable → profile → market acquisition → ownership → transfer/resale → national-team eligibility → national-team rental → competition selection → normal player lifecycle"
+    )
 
     print("\nTESTS EXECUTED:")
     print("  1. test_pilot_dataset_requirements_coverage")
     print("  2. test_identity_acceptance_for_representative_profiles")
     print("  3. test_complete_lifecycle_acceptance")
-    print("  4. test_negative_tests (duplicate seeding, wrong nationality rental rejection, ordinary player behavior, invalid record rejection)")
+    print(
+        "  4. test_negative_tests (duplicate seeding, wrong nationality rental rejection, ordinary player behavior, invalid record rejection)"
+    )
 
     print("\nFAILURES: 0")
     print("UNRESOLVED INTEGRATION ISSUES: None")
