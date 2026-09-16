@@ -14,7 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, reconstructor, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -75,6 +75,17 @@ class NationalTeamCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="competition",
         cascade="all, delete-orphan",
     )
+
+    @reconstructor
+    def _normalize_lifecycle_datetimes(self) -> None:
+        for field_name in ("entry_opens_at", "entry_closes_at", "kickoff_at", "completed_at"):
+            value = getattr(self, field_name, None)
+            if value is None:
+                continue
+            if value.tzinfo is None:
+                setattr(self, field_name, value.replace(tzinfo=timezone.utc))
+            else:
+                setattr(self, field_name, value.astimezone(timezone.utc))
 
 
 class NationalTeamEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
