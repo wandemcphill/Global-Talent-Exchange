@@ -136,7 +136,7 @@ jobs:
             json={
                 "country_code": "NG",
                 "country_name": "Nigeria",
-                "metadata_json": {"created_from": "gtex_full_journey"},
+                "manager_user_id": owner["user_id"],
             },
         )
     )
@@ -145,9 +145,6 @@ jobs:
               raise SystemExit("expected legacy national entry block not found")
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
           PY
-
-      - name: Print exact Black diff before format
-        run: python -m black --diff backend/app/models/national_team.py tools/audit/check_api_contract_violations.py
 
       - name: Format changed Python files with Black
         run: python -m black backend/app/national_team_engine/tournament_service.py backend/app/models/national_team.py tools/audit/check_api_contract_violations.py backend/tests/acceptance/test_gtex_full_user_journey.py
