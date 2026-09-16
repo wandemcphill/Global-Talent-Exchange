@@ -9,6 +9,7 @@ from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Index, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+import app.models.legendary_player  # noqa: F401
 
 if TYPE_CHECKING:
 
@@ -18,6 +19,12 @@ if TYPE_CHECKING:
 
 def _match_model() -> type["Match"]:
     return Match
+
+
+def _legendary_profile_model():
+    from app.models.legendary_player import LegendaryPlayerProfile
+
+    return LegendaryPlayerProfile
 
 
 MAJOR_COMPETITIONS = {
@@ -487,7 +494,7 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
     )
     legendary_profile: Mapped["LegendaryPlayerProfile | None"] = relationship(
-        "LegendaryPlayerProfile",
+        _legendary_profile_model,
         back_populates="instantiated_players",
     )
     share_events: Mapped[list["PlayerShareEvent"]] = relationship(
