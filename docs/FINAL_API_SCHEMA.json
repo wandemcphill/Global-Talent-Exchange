@@ -1748,6 +1748,18 @@
         "response_model": "list[ClubLifecycleView]"
       },
       {
+        "method": "POST",
+        "path": "/api/clubs/personal-manager",
+        "handler": "create_personal_manager",
+        "response_model": "PersonalManagerView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/clubs/personal-manager/me",
+        "handler": "get_personal_manager_me",
+        "response_model": "PersonalManagerView"
+      },
+      {
         "method": "GET",
         "path": "/api/clubs/sale-market/listings",
         "handler": "list_public_club_sale_market_listings",
@@ -1818,6 +1830,12 @@
         "path": "/api/clubs/{club_id}/growth/academy/upgrade",
         "handler": "upgrade_academy",
         "response_model": "AcademyProfileView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/{club_id}/growth/personal-manager/appoint",
+        "handler": "appoint_personal_manager",
+        "response_model": "StaffContractView"
       },
       {
         "method": "POST",
@@ -7415,7 +7433,7 @@
         "method": "POST",
         "path": "/api/orders",
         "handler": "place_order",
-        "response_model": "OrderAcceptedView"
+        "response_model": null
       },
       {
         "method": "GET",
@@ -7432,14 +7450,14 @@
       {
         "method": "POST",
         "path": "/api/orders/{order_id}/admin-buyback",
-        "handler": "execute_admin_buyback",
-        "response_model": "AdminBuybackExecutionView"
+        "handler": "execute_admin_buyback_retired",
+        "response_model": null
       },
       {
         "method": "GET",
         "path": "/api/orders/{order_id}/admin-buyback-preview",
-        "handler": "preview_admin_buyback",
-        "response_model": "AdminBuybackPreviewView"
+        "handler": "preview_admin_buyback_retired",
+        "response_model": null
       },
       {
         "method": "POST",
@@ -7457,7 +7475,7 @@
         "method": "POST",
         "path": "/orders",
         "handler": "place_order",
-        "response_model": "OrderAcceptedView"
+        "response_model": null
       },
       {
         "method": "GET",
@@ -7474,14 +7492,14 @@
       {
         "method": "POST",
         "path": "/orders/{order_id}/admin-buyback",
-        "handler": "execute_admin_buyback",
-        "response_model": "AdminBuybackExecutionView"
+        "handler": "execute_admin_buyback_retired",
+        "response_model": null
       },
       {
         "method": "GET",
         "path": "/orders/{order_id}/admin-buyback-preview",
-        "handler": "preview_admin_buyback",
-        "response_model": "AdminBuybackPreviewView"
+        "handler": "preview_admin_buyback_retired",
+        "response_model": null
       },
       {
         "method": "POST",
@@ -8441,6 +8459,12 @@
     "portfolio": [
       {
         "method": "GET",
+        "path": "/portfolio/realized-pl",
+        "handler": "get_realized_pl",
+        "response_model": "RealizedPLView"
+      },
+      {
+        "method": "GET",
         "path": "/portfolio/snapshot",
         "handler": "get_portfolio_snapshot",
         "response_model": "PortfolioSnapshotView"
@@ -8810,6 +8834,12 @@
         "response_model": "CareerEventView"
       },
       {
+        "method": "POST",
+        "path": "/api/players/{player_id}/regen/contract-offers/submit",
+        "handler": "submit_regen_contract_offer",
+        "response_model": "RegenLifecycleView"
+      },
+      {
         "method": "GET",
         "path": "/api/regen-universe/achievements",
         "handler": "list_regen_achievements",
@@ -9148,14 +9178,14 @@
       {
         "method": "GET",
         "path": "/api/scout/report/{player_id}",
-        "handler": "get_scout_report",
-        "response_model": "ScoutReportView"
+        "handler": "legacy_get_scout_report",
+        "response_model": null
       },
       {
         "method": "GET",
         "path": "/api/scout/report/{player_id}",
-        "handler": "get_scout_report",
-        "response_model": "ScoutReportView"
+        "handler": "legacy_get_scout_report",
+        "response_model": null
       },
       {
         "method": "POST",
@@ -9424,6 +9454,14 @@
         "path": "/config/update",
         "handler": "update_runtime_config",
         "response_model": "RuntimeConfigSnapshot"
+      }
+    ],
+    "scouting": [
+      {
+        "method": "POST",
+        "path": "/scout/report/{player_id}",
+        "handler": "scout_player",
+        "response_model": "ScoutReportView"
       }
     ],
     "segment": [

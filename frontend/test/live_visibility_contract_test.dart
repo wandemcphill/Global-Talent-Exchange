@@ -615,6 +615,15 @@ void main() {
               },
             ],
           ),
+          '/api/v2/players': const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'players': <Object?>[],
+              'limit': 24,
+              'has_more': false,
+              'total': 0,
+            },
+          ),
         }),
       );
       addTearDown(container.dispose);

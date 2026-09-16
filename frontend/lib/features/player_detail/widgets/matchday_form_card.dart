@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../domain/value/gtex_value_models.dart';
 import '../../../ui_gtex/models/gtex_freshness.dart';
@@ -21,11 +22,13 @@ class MatchdayFormCard extends StatelessWidget {
     required this.form,
     this.freshness,
     this.formFreshness,
+    this.onOpenMatchday,
   });
 
   final GtexPlayerForm form;
   final GtexValuationFreshnessReport? freshness;
   final GtexFreshnessInfo? formFreshness;
+  final VoidCallback? onOpenMatchday;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +39,9 @@ class MatchdayFormCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _border),
       ),
-      child: form.hasSample ? _buildForm(context) : const _MatchdayFormEmpty(),
+      child: form.hasSample
+          ? _buildForm(context)
+          : _MatchdayFormEmpty(onOpenMatchday: onOpenMatchday),
     );
   }
 
@@ -105,6 +110,16 @@ class MatchdayFormCard extends StatelessWidget {
             'outside this window: no single competition may fill it.',
           ),
         ],
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const Key('gtex-form-open-matchday-btn'),
+            onPressed: onOpenMatchday ?? () => context.go('/app/matches'),
+            icon: const Icon(Icons.sports_soccer_outlined, size: 16),
+            label: const Text('View Matchday Hub'),
+          ),
+        ),
       ],
     );
   }
@@ -183,7 +198,9 @@ class _FreshnessBadge extends StatelessWidget {
 }
 
 class _MatchdayFormEmpty extends StatelessWidget {
-  const _MatchdayFormEmpty();
+  const _MatchdayFormEmpty({this.onOpenMatchday});
+
+  final VoidCallback? onOpenMatchday;
 
   @override
   Widget build(BuildContext context) {
@@ -204,6 +221,16 @@ class _MatchdayFormEmpty extends StatelessWidget {
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: _textMuted, height: 1.4),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const Key('gtex-form-open-matchday-btn'),
+            onPressed: onOpenMatchday ?? () => context.go('/app/matches'),
+            icon: const Icon(Icons.sports_soccer_outlined, size: 16),
+            label: const Text('View Matchday Hub'),
+          ),
         ),
       ],
     );

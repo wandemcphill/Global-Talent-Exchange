@@ -3251,6 +3251,19 @@
         "source_file": "backend/app/club_sale_market/router.py",
         "response_model": "ClubSaleListingCollectionView"
       },
+      "get_api_v2_clubs_personal_manager_me": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/personal-manager/me",
+        "aliases": [
+          "/api/clubs/personal-manager/me",
+          "/api/v1/clubs/personal-manager/me",
+          "/api/v2/clubs/personal-manager/me",
+          "/clubs/personal-manager/me"
+        ],
+        "handler": "get_personal_manager_me",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "PersonalManagerView"
+      },
       "get_api_v2_clubs_sale_market_listings": {
         "method": "GET",
         "canonical_path": "/api/v2/clubs/sale-market/listings",
@@ -3612,6 +3625,19 @@
         "source_file": "backend/app/club_growth/router.py",
         "response_model": "AcademyProfileView"
       },
+      "post_api_v2_clubs_club_id_growth_personal_manager_appoint": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/{club_id}/growth/personal-manager/appoint",
+        "aliases": [
+          "/api/clubs/{club_id}/growth/personal-manager/appoint",
+          "/api/v1/clubs/{club_id}/growth/personal-manager/appoint",
+          "/api/v2/clubs/{club_id}/growth/personal-manager/appoint",
+          "/clubs/{club_id}/growth/personal-manager/appoint"
+        ],
+        "handler": "appoint_personal_manager",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "StaffContractView"
+      },
       "post_api_v2_clubs_club_id_growth_staff_contracts_contract_id_accept": {
         "method": "POST",
         "canonical_path": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
@@ -3860,6 +3886,19 @@
         "handler": "vote_on_club_proposal",
         "source_file": "backend/app/club_ownership/router.py",
         "response_model": "ClubGovernanceActionView"
+      },
+      "post_api_v2_clubs_personal_manager": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/personal-manager",
+        "aliases": [
+          "/api/clubs/personal-manager",
+          "/api/v1/clubs/personal-manager",
+          "/api/v2/clubs/personal-manager",
+          "/clubs/personal-manager"
+        ],
+        "handler": "create_personal_manager",
+        "source_file": "backend/app/club_growth/router.py",
+        "response_model": "PersonalManagerView"
       },
       "post_api_v2_match_share_links_share_code_events": {
         "method": "POST",
@@ -12247,9 +12286,9 @@
           "/api/v2/orders/{order_id}/admin-buyback-preview",
           "/orders/{order_id}/admin-buyback-preview"
         ],
-        "handler": "preview_admin_buyback",
+        "handler": "preview_admin_buyback_retired",
         "source_file": "backend/app/orders/router.py",
-        "response_model": "AdminBuybackPreviewView"
+        "response_model": null
       },
       "post_api_v2_orders": {
         "method": "POST",
@@ -12262,7 +12301,7 @@
         ],
         "handler": "place_order",
         "source_file": "backend/app/orders/router.py",
-        "response_model": "OrderAcceptedView"
+        "response_model": null
       },
       "post_api_v2_orders_order_id_admin_buyback": {
         "method": "POST",
@@ -12273,9 +12312,9 @@
           "/api/v2/orders/{order_id}/admin-buyback",
           "/orders/{order_id}/admin-buyback"
         ],
-        "handler": "execute_admin_buyback",
+        "handler": "execute_admin_buyback_retired",
         "source_file": "backend/app/orders/router.py",
-        "response_model": "AdminBuybackExecutionView"
+        "response_model": null
       },
       "post_api_v2_orders_order_id_cancel": {
         "method": "POST",
@@ -13705,6 +13744,19 @@
         "source_file": "backend/app/portfolio/router.py",
         "response_model": "PortfolioView"
       },
+      "get_api_v2_portfolio_realized_pl": {
+        "method": "GET",
+        "canonical_path": "/api/v2/portfolio/realized-pl",
+        "aliases": [
+          "/api/portfolio/realized-pl",
+          "/api/v1/portfolio/realized-pl",
+          "/api/v2/portfolio/realized-pl",
+          "/portfolio/realized-pl"
+        ],
+        "handler": "get_realized_pl",
+        "source_file": "backend/app/portfolio/router.py",
+        "response_model": "RealizedPLView"
+      },
       "get_api_v2_portfolio_snapshot": {
         "method": "GET",
         "canonical_path": "/api/v2/portfolio/snapshot",
@@ -14402,9 +14454,9 @@
           "/api/v2/scout/report/{player_id}",
           "/scout/report/{player_id}"
         ],
-        "handler": "get_scout_report",
+        "handler": "legacy_get_scout_report",
         "source_file": "backend/app/regen_ecosystem/router.py",
-        "response_model": "ScoutReportView"
+        "response_model": null
       },
       "post_api_v2_academy": {
         "method": "POST",
@@ -14626,6 +14678,18 @@
         "handler": "trigger_career_event",
         "source_file": "backend/app/regen_ecosystem/router.py",
         "response_model": "CareerEventView"
+      },
+      "post_api_v2_players_player_id_regen_contract_offers_submit": {
+        "method": "POST",
+        "canonical_path": "/api/v2/players/{player_id}/regen/contract-offers/submit",
+        "aliases": [
+          "/api/players/{player_id}/regen/contract-offers/submit",
+          "/api/v1/players/{player_id}/regen/contract-offers/submit",
+          "/api/v2/players/{player_id}/regen/contract-offers/submit"
+        ],
+        "handler": "submit_regen_contract_offer",
+        "source_file": "backend/app/segments/player_lifecycle/regen_contract_submission.py",
+        "response_model": "RegenLifecycleView"
       },
       "post_api_v2_regens_awards_award_id_vote": {
         "method": "POST",
@@ -15182,6 +15246,21 @@
         "handler": "update_runtime_config",
         "source_file": "backend/app/runtime_config/router.py",
         "response_model": "RuntimeConfigSnapshot"
+      }
+    },
+    "scouting": {
+      "post_api_v2_scout_report_player_id": {
+        "method": "POST",
+        "canonical_path": "/api/v2/scout/report/{player_id}",
+        "aliases": [
+          "/api/scout/report/{player_id}",
+          "/api/v1/scout/report/{player_id}",
+          "/api/v2/scout/report/{player_id}",
+          "/scout/report/{player_id}"
+        ],
+        "handler": "scout_player",
+        "source_file": "backend/app/segments/player_lifecycle/scouting_action.py",
+        "response_model": "ScoutReportView"
       }
     },
     "segment": {
@@ -20958,6 +21037,8 @@
     "/api/v2/clubs/list": "post_api_v2_clubs_list",
     "/api/v2/clubs/marketplace": "get_api_v2_clubs_marketplace",
     "/api/v2/clubs/offer": "post_api_v2_clubs_offer",
+    "/api/v2/clubs/personal-manager": "post_api_v2_clubs_personal_manager",
+    "/api/v2/clubs/personal-manager/me": "get_api_v2_clubs_personal_manager_me",
     "/api/v2/clubs/sale-market/listings": "get_api_v2_clubs_sale_market_listings",
     "/api/v2/clubs/{club_id}": "patch_api_v2_clubs_club_id",
     "/api/v2/clubs/{club_id}/academy": "get_api_v2_clubs_club_id_academy",
@@ -20987,6 +21068,7 @@
     "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract": "post_api_v2_clubs_club_id_growth_academy_prospects_prospect_id_offer_contract",
     "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote": "post_api_v2_clubs_club_id_growth_academy_prospects_prospect_id_promote",
     "/api/v2/clubs/{club_id}/growth/academy/upgrade": "post_api_v2_clubs_club_id_growth_academy_upgrade",
+    "/api/v2/clubs/{club_id}/growth/personal-manager/appoint": "post_api_v2_clubs_club_id_growth_personal_manager_appoint",
     "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept": "post_api_v2_clubs_club_id_growth_staff_contracts_contract_id_accept",
     "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate": "post_api_v2_clubs_club_id_growth_staff_contracts_contract_id_terminate",
     "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer": "post_api_v2_clubs_club_id_growth_staff_staff_id_offer",
@@ -21633,6 +21715,7 @@
     "/api/v2/players/{player_id}/regen": "get_api_v2_players_player_id_regen",
     "/api/v2/players/{player_id}/regen/big-club-approaches": "post_api_v2_players_player_id_regen_big_club_approaches",
     "/api/v2/players/{player_id}/regen/contract-offers/quote": "post_api_v2_players_player_id_regen_contract_offers_quote",
+    "/api/v2/players/{player_id}/regen/contract-offers/submit": "post_api_v2_players_player_id_regen_contract_offers_submit",
     "/api/v2/players/{player_id}/regen/offer-market": "get_api_v2_players_player_id_regen_offer_market",
     "/api/v2/players/{player_id}/regen/pressure-resolution": "post_api_v2_players_player_id_regen_pressure_resolution",
     "/api/v2/players/{player_id}/regen/special-training": "post_api_v2_players_player_id_regen_special_training",
@@ -21657,6 +21740,7 @@
     "/api/v2/policies/me/requirements": "get_api_v2_policies_me_requirements",
     "/api/v2/portfolio": "get_api_v2_portfolio",
     "/api/v2/portfolio/clubs": "get_api_v2_portfolio_clubs",
+    "/api/v2/portfolio/realized-pl": "get_api_v2_portfolio_realized_pl",
     "/api/v2/portfolio/snapshot": "get_api_v2_portfolio_snapshot",
     "/api/v2/portfolio/summary": "get_api_v2_portfolio_summary",
     "/api/v2/portfolios/me": "get_api_v2_portfolios_me",
@@ -21733,7 +21817,7 @@
     "/api/v2/risk-ops/me/restrictions": "get_api_v2_risk_ops_me_restrictions",
     "/api/v2/risk-ops/me/signals": "post_api_v2_risk_ops_me_signals",
     "/api/v2/rivalries/matches": "post_api_v2_rivalries_matches",
-    "/api/v2/scout/report/{player_id}": "get_api_v2_scout_report_player_id",
+    "/api/v2/scout/report/{player_id}": "post_api_v2_scout_report_player_id",
     "/api/v2/scouts": "post_api_v2_scouts",
     "/api/v2/scouts/{scout_id}/discover": "post_api_v2_scouts_scout_id_discover",
     "/api/v2/search": "get_api_v2_search",
@@ -22616,6 +22700,8 @@
     "/api/clubs/catalog": "/api/v2/clubs/catalog",
     "/api/clubs/catalog/purchase": "/api/v2/clubs/catalog/purchase",
     "/api/clubs/marketplace": "/api/v2/clubs/marketplace",
+    "/api/clubs/personal-manager": "/api/v2/clubs/personal-manager",
+    "/api/clubs/personal-manager/me": "/api/v2/clubs/personal-manager/me",
     "/api/clubs/sale-market/listings": "/api/v2/clubs/sale-market/listings",
     "/api/clubs/{club_id}": "/api/v2/clubs/{club_id}",
     "/api/clubs/{club_id}/academy": "/api/v2/clubs/{club_id}/academy",
@@ -22644,6 +22730,7 @@
     "/api/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
     "/api/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
     "/api/clubs/{club_id}/growth/academy/upgrade": "/api/v2/clubs/{club_id}/growth/academy/upgrade",
+    "/api/clubs/{club_id}/growth/personal-manager/appoint": "/api/v2/clubs/{club_id}/growth/personal-manager/appoint",
     "/api/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
     "/api/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
     "/api/clubs/{club_id}/growth/staff/{staff_id}/offer": "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer",
@@ -23297,6 +23384,7 @@
     "/api/players/{player_id}/regen": "/api/v2/players/{player_id}/regen",
     "/api/players/{player_id}/regen/big-club-approaches": "/api/v2/players/{player_id}/regen/big-club-approaches",
     "/api/players/{player_id}/regen/contract-offers/quote": "/api/v2/players/{player_id}/regen/contract-offers/quote",
+    "/api/players/{player_id}/regen/contract-offers/submit": "/api/v2/players/{player_id}/regen/contract-offers/submit",
     "/api/players/{player_id}/regen/offer-market": "/api/v2/players/{player_id}/regen/offer-market",
     "/api/players/{player_id}/regen/pressure-resolution": "/api/v2/players/{player_id}/regen/pressure-resolution",
     "/api/players/{player_id}/regen/special-training": "/api/v2/players/{player_id}/regen/special-training",
@@ -23321,6 +23409,7 @@
     "/api/policies/me/requirements": "/api/v2/policies/me/requirements",
     "/api/portfolio": "/api/v2/portfolio",
     "/api/portfolio/clubs": "/api/v2/portfolio/clubs",
+    "/api/portfolio/realized-pl": "/api/v2/portfolio/realized-pl",
     "/api/portfolio/snapshot": "/api/v2/portfolio/snapshot",
     "/api/portfolio/summary": "/api/v2/portfolio/summary",
     "/api/portfolios/me": "/api/v2/portfolios/me",
@@ -23959,6 +24048,8 @@
     "/api/v1/clubs/catalog": "/api/v2/clubs/catalog",
     "/api/v1/clubs/catalog/purchase": "/api/v2/clubs/catalog/purchase",
     "/api/v1/clubs/marketplace": "/api/v2/clubs/marketplace",
+    "/api/v1/clubs/personal-manager": "/api/v2/clubs/personal-manager",
+    "/api/v1/clubs/personal-manager/me": "/api/v2/clubs/personal-manager/me",
     "/api/v1/clubs/sale-market/listings": "/api/v2/clubs/sale-market/listings",
     "/api/v1/clubs/{club_id}": "/api/v2/clubs/{club_id}",
     "/api/v1/clubs/{club_id}/academy": "/api/v2/clubs/{club_id}/academy",
@@ -23987,6 +24078,7 @@
     "/api/v1/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
     "/api/v1/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
     "/api/v1/clubs/{club_id}/growth/academy/upgrade": "/api/v2/clubs/{club_id}/growth/academy/upgrade",
+    "/api/v1/clubs/{club_id}/growth/personal-manager/appoint": "/api/v2/clubs/{club_id}/growth/personal-manager/appoint",
     "/api/v1/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
     "/api/v1/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
     "/api/v1/clubs/{club_id}/growth/staff/{staff_id}/offer": "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer",
@@ -24640,6 +24732,7 @@
     "/api/v1/players/{player_id}/regen": "/api/v2/players/{player_id}/regen",
     "/api/v1/players/{player_id}/regen/big-club-approaches": "/api/v2/players/{player_id}/regen/big-club-approaches",
     "/api/v1/players/{player_id}/regen/contract-offers/quote": "/api/v2/players/{player_id}/regen/contract-offers/quote",
+    "/api/v1/players/{player_id}/regen/contract-offers/submit": "/api/v2/players/{player_id}/regen/contract-offers/submit",
     "/api/v1/players/{player_id}/regen/offer-market": "/api/v2/players/{player_id}/regen/offer-market",
     "/api/v1/players/{player_id}/regen/pressure-resolution": "/api/v2/players/{player_id}/regen/pressure-resolution",
     "/api/v1/players/{player_id}/regen/special-training": "/api/v2/players/{player_id}/regen/special-training",
@@ -24664,6 +24757,7 @@
     "/api/v1/policies/me/requirements": "/api/v2/policies/me/requirements",
     "/api/v1/portfolio": "/api/v2/portfolio",
     "/api/v1/portfolio/clubs": "/api/v2/portfolio/clubs",
+    "/api/v1/portfolio/realized-pl": "/api/v2/portfolio/realized-pl",
     "/api/v1/portfolio/snapshot": "/api/v2/portfolio/snapshot",
     "/api/v1/portfolio/summary": "/api/v2/portfolio/summary",
     "/api/v1/portfolios/me": "/api/v2/portfolios/me",
@@ -25199,11 +25293,13 @@
     "/api/v2/managers/team": "/api/v2/managers/team",
     "/api/v2/managers/trade-listings": "/api/v2/managers/trade-listings",
     "/api/v2/market/browse/catalog": "/api/v2/market/browse/catalog",
+    "/api/v2/market/buy": "/api/v2/market/buy",
     "/api/v2/market/leagues": "/api/v2/market/leagues",
     "/api/v2/market/movers": "/api/v2/market/movers",
     "/api/v2/market/national-teams": "/api/v2/market/national-teams",
     "/api/v2/market/nationalities": "/api/v2/market/nationalities",
     "/api/v2/market/players": "/api/v2/market/players",
+    "/api/v2/market/sell": "/api/v2/market/sell",
     "/api/v2/matchday-economy/overview": "/api/v2/matchday-economy/overview",
     "/api/v2/matches/{match_id}/state": "/api/v2/matches/{match_id}/state",
     "/api/v2/me/clubs/sale-market/listings": "/api/v2/me/clubs/sale-market/listings",
@@ -25235,6 +25331,8 @@
     "/api/v2/session/bootstrap": "/api/v2/session/bootstrap",
     "/api/v2/simulation-matchmaking/fast-match/entitlement": "/api/v2/simulation-matchmaking/fast-match/entitlement",
     "/api/v2/simulation-matchmaking/quick-game": "/api/v2/simulation-matchmaking/quick-game",
+    "/api/v2/social/follows": "/api/v2/social/follows",
+    "/api/v2/social/follows/me": "/api/v2/social/follows/me",
     "/api/v2/story-feed": "/api/v2/story-feed",
     "/api/v2/story-feed/digest": "/api/v2/story-feed/digest",
     "/api/v2/streamer-tournaments": "/api/v2/streamer-tournaments",
@@ -25378,6 +25476,8 @@
     "/club/identity": "/api/v2/club/identity",
     "/clubs/admin/club-lifecycle": "/api/v2/clubs/admin/club-lifecycle",
     "/clubs/marketplace": "/api/v2/clubs/marketplace",
+    "/clubs/personal-manager": "/api/v2/clubs/personal-manager",
+    "/clubs/personal-manager/me": "/api/v2/clubs/personal-manager/me",
     "/clubs/{club_id}": "/api/v2/clubs/{club_id}",
     "/clubs/{club_id}/academy/intake": "/api/v2/clubs/{club_id}/academy/intake",
     "/clubs/{club_id}/academy/intake/{player_id}/sign-up": "/api/v2/clubs/{club_id}/academy/intake/{player_id}/sign-up",
@@ -25389,6 +25489,7 @@
     "/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/offer-contract",
     "/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote": "/api/v2/clubs/{club_id}/growth/academy/prospects/{prospect_id}/promote",
     "/clubs/{club_id}/growth/academy/upgrade": "/api/v2/clubs/{club_id}/growth/academy/upgrade",
+    "/clubs/{club_id}/growth/personal-manager/appoint": "/api/v2/clubs/{club_id}/growth/personal-manager/appoint",
     "/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/accept",
     "/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate": "/api/v2/clubs/{club_id}/growth/staff-contracts/{contract_id}/terminate",
     "/clubs/{club_id}/growth/staff/{staff_id}/offer": "/api/v2/clubs/{club_id}/growth/staff/{staff_id}/offer",
@@ -25889,6 +25990,7 @@
     "/policies/me/region": "/api/v2/policies/me/region",
     "/policies/me/requirements": "/api/v2/policies/me/requirements",
     "/portfolio": "/api/v2/portfolio",
+    "/portfolio/realized-pl": "/api/v2/portfolio/realized-pl",
     "/portfolio/snapshot": "/api/v2/portfolio/snapshot",
     "/portfolio/summary": "/api/v2/portfolio/summary",
     "/portfolios/me": "/api/v2/portfolios/me",
