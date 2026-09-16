@@ -1,4 +1,5 @@
 name: Final Platform Certification
+run-name: Final Platform Certification • ${{ github.event.pull_request.title || github.ref_name }}
 
 on:
   pull_request:
@@ -7,7 +8,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: final-platform-${{ github.ref }}
@@ -49,135 +50,8 @@ jobs:
           backend/tests/matches/test_competition_match_settlement_guard.py
           -q
 
-      - name: Repair canonical rental datetime comparison
-        run: |
-          python - <<'PY'
-          import re
-          from pathlib import Path
-
-          path = Path("backend/app/national_team_engine/tournament_service.py")
-          text = path.read_text(encoding="utf-8")
-
-          future_pattern = re.compile(
-              r"(?ms)^    @staticmethod\n"
-              r"    def _is_future_datetime\(.*?\n"
-              r"    def _parse_datetime\(",
-          )
-          future_match = future_pattern.search(text)
-          if future_match is None:
-              raise SystemExit("expected _is_future_datetime block not found")
-
-          future_replacement = '''    @staticmethod
-    def _coerce_datetime_pair(
-        value: datetime, *, now: datetime
-    ) -> tuple[datetime, datetime]:
-        if value.tzinfo is None and now.tzinfo is not None:
-            now = now.replace(tzinfo=None)
-        if value.tzinfo is not None and now.tzinfo is None:
-            value = value.replace(tzinfo=None)
-        return value, now
-
-    @staticmethod
-    def _is_future_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
-        if value is None:
-            return False
-        reference = now or utcnow()
-        value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)
-        return value > reference
-
-    @staticmethod
-    def _is_past_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
-        if value is None:
-            return False
-        reference = now or utcnow()
-        value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)
-        return value < reference
-
-    def _parse_datetime('''
-          text = text[:future_match.start()] + future_replacement + text[future_match.end():]
-
-          lock_pattern = re.compile(
-              r"(?ms)^    def _rental_tournament_lock_reason\(self, competition: NationalTeamCompetition\) -> str \| None:\n"
-              r".*?(?=^    @staticmethod\n    def _pool_metadata\()",
-          )
-          lock_match = lock_pattern.search(text)
-          if lock_match is None:
-              raise SystemExit("expected rental lock block not found")
-
-          lock_replacement = '''    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:
-        now = utcnow()
-        if competition.entry_opens_at is not None and self._is_future_datetime(competition.entry_opens_at, now=now):
-            return "competition_entry_not_open"
-        if competition.entry_closes_at is not None and self._is_past_datetime(competition.entry_closes_at, now=now):
-            return "competition_entry_closed"
-        if str(competition.status).strip().lower() == "live":
-            return "competition_already_live"
-        if competition.kickoff_at is not None and not self._is_future_datetime(competition.kickoff_at, now=now):
-            return "competition_already_live"
-        if competition.linked_competition_id:
-            try:
-                CompetitionLockService(self.session).ensure_rentals_allowed(
-                    competition_id=competition.linked_competition_id
-                )
-            except CompetitionLockError:
-                return "competition_already_live"
-        if competition.completed_at is not None:
-            return "competition_completed"
-        return None
-
-'''
-          text = text[:lock_match.start()] + lock_replacement + text[lock_match.end():]
-          path.write_text(text, encoding="utf-8")
-
-          acceptance = Path("backend/tests/acceptance/test_gtex_full_user_journey.py")
-          source = acceptance.read_text(encoding="utf-8")
-          old = '''    entry = _ok(
-        client.post(
-            f"/api/national-team-engine/competitions/{national['id']}/entries",
-            headers=owner["headers"],
-            json={"country_code": "NG", "country_name": "Nigeria", "manager_user_id": owner["user_id"]},
-        )
-    )
-'''
-          new = '''    entry = _ok(
-        client.post(
-            f"/api/national-team-engine/competitions/{national['id']}/rental-entry",
-            headers=owner["headers"],
-            json={
-                "country_code": "NG",
-                "country_name": "Nigeria",
-                "manager_user_id": owner["user_id"],
-            },
-        )
-    )
-'''
-          if old not in source:
-              raise SystemExit("expected legacy national entry block not found")
-          acceptance.write_text(source.replace(old, new, 1), encoding="utf-8")
-          PY
-
       - name: Full GTEX user journey acceptance
         run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
-
-      - name: Commit rental datetime repair and restore workflow
-        if: success()
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path(".github/workflows/final-platform-certification.yml")
-          text = p.read_text(encoding="utf-8")
-          start = text.index("      - name: Repair canonical rental datetime comparison\n")
-          end = text.index("      - name: Full GTEX user journey acceptance\n", start)
-          text = text[:start] + text[end:]
-          text = text.replace("permissions:\n  contents: write\n", "permissions:\n  contents: read\n", 1)
-          p.write_text(text, encoding="utf-8")
-          Path(".github/workflows/_repair_rental_datetime.yml").unlink(missing_ok=True)
-          PY
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend/app/national_team_engine/tournament_service.py backend/tests/acceptance/test_gtex_full_user_journey.py .github/workflows/final-platform-certification.yml .github/workflows/_repair_rental_datetime.yml
-          git commit -m 'fix(national-team): normalize rental window datetimes'
-          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
 
       - name: Frontend dependencies
         working-directory: frontend
