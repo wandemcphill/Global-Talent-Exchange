@@ -112,16 +112,12 @@ def changed_files(base: str, head: str | None) -> list[str]:
                 )
             )
         else:
-            files.update(
-                git_stdout("diff", "--name-only", "--diff-filter=ACMRT", f"{base}..{head}")
-            )
+            files.update(git_stdout("diff", "--name-only", "--diff-filter=ACMRT", f"{base}..{head}"))
         return sorted(files)
 
     files.update(git_stdout("diff", "--name-only", "--diff-filter=ACMRT", base, "--"))
     files.update(
-        path
-        for path in git_stdout("ls-files", "--others", "--exclude-standard")
-        if include_untracked_file(path)
+        path for path in git_stdout("ls-files", "--others", "--exclude-standard") if include_untracked_file(path)
     )
     return sorted(files)
 
@@ -162,6 +158,21 @@ def _normalized_secret_baseline(path: Path) -> object:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, dict):
         payload.pop("generated_at", None)
+        if "results" in payload and isinstance(payload["results"], dict):
+            normalized_results = {}
+            for filename, secrets in payload["results"].items():
+                norm_filename = filename.replace("\\", "/")
+                norm_secrets = []
+                for secret in secrets:
+                    if isinstance(secret, dict):
+                        item = dict(secret)
+                        if "filename" in item and isinstance(item["filename"], str):
+                            item["filename"] = item["filename"].replace("\\", "/")
+                        norm_secrets.append(item)
+                    else:
+                        norm_secrets.append(secret)
+                normalized_results[norm_filename] = norm_secrets
+            payload["results"] = normalized_results
     return payload
 
 
@@ -250,9 +261,7 @@ def main() -> int:
         "--no-verify",
     ]
     if SECRET_BASELINE_PATH.is_file():
-        secret_scan_command.extend(
-            ["--baseline", str(SECRET_BASELINE_PATH.relative_to(REPO_ROOT))]
-        )
+        secret_scan_command.extend(["--baseline", str(SECRET_BASELINE_PATH.relative_to(REPO_ROOT))])
     run_secret_check(secret_scan_command, secret_scan_files)
 
     print("[quality] All configured quality gates passed.")

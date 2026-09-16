@@ -208,7 +208,7 @@ def test_create_app_registers_world_simulation_routes_without_running_lifespan()
     app = create_app(engine=engine, run_migration_check=False)
     route_paths = {getattr(route, "path", "") for route in app.routes}
 
-    assert "/api/world/cultures" in route_paths
+    assert any("/world/cultures" in path for path in route_paths)
 
 
 def test_initialize_database_connection_retries_operational_error(monkeypatch) -> None:

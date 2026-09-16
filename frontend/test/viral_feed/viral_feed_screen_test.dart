@@ -51,7 +51,7 @@ void main() {
     );
   });
 
-  testWidgets('viral feed premium surface matches golden', (
+  testWidgets('viral feed premium surface matches golden', tags: <String>['golden'], (
     WidgetTester tester,
   ) async {
     // Minor blur and antialiasing differences across local Windows runs and
