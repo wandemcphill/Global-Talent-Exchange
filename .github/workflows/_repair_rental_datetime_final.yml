@@ -1,0 +1,144 @@
+name: Final one-shot rental datetime repair
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: acceptance/gtex-full-user-journey-20260915
+          fetch-depth: 1
+
+      - name: Repair production datetime block and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          path = Path("backend/app/national_team_engine/tournament_service.py")
+          lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+          def find_line(predicate, start=0):
+              for i in range(start, len(lines)):
+                  if predicate(lines[i]):
+                      return i
+              raise SystemExit("required source marker not found")
+
+          coerce = find_line(lambda line: line.strip().startswith("def _coerce_datetime_pair("))
+          block_start = find_line(lambda line: line.strip() == "@staticmethod", max(0, coerce - 2))
+          parse = find_line(lambda line: line.strip().startswith("def _parse_datetime("), coerce)
+          parse_start = find_line(lambda line: line.strip() == "@staticmethod", coerce)
+          parse_date = find_line(lambda line: line.strip().startswith("def _parse_date("), parse)
+          replacement = [
+              "    @staticmethod\n",
+              "    def _coerce_datetime_pair(\n",
+              "        value: datetime, *, now: datetime\n",
+              "    ) -> tuple[datetime, datetime]:\n",
+              "        if value.tzinfo is None and now.tzinfo is not None:\n",
+              "            now = now.replace(tzinfo=None)\n",
+              "        if value.tzinfo is not None and now.tzinfo is None:\n",
+              "            value = value.replace(tzinfo=None)\n",
+              "        return value, now\n",
+              "\n",
+              "    @staticmethod\n",
+              "    def _is_future_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:\n",
+              "        if value is None:\n",
+              "            return False\n",
+              "        reference = now or utcnow()\n",
+              "        value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)\n",
+              "        return value > reference\n",
+              "\n",
+              "    @staticmethod\n",
+              "    def _is_past_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:\n",
+              "        if value is None:\n",
+              "            return False\n",
+              "        reference = now or utcnow()\n",
+              "        value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)\n",
+              "        return value < reference\n",
+              "\n",
+              "    @staticmethod\n",
+              "    def _parse_datetime(value: Any) -> datetime | None:\n",
+              "        if isinstance(value, datetime):\n",
+              "            return value\n",
+              "        if isinstance(value, date):\n",
+              "            return datetime.combine(value, datetime.min.time())\n",
+              "        if not isinstance(value, str):\n",
+              "            return None\n",
+              "        text = value.strip()\n",
+              "        if not text:\n",
+              "            return None\n",
+              "        try:\n",
+              "            return datetime.fromisoformat(text.replace(\"Z\", \"+00:00\"))\n",
+              "        except ValueError:\n",
+              "            return None\n",
+              "\n",
+          ]
+          lines[block_start:parse_date] = replacement
+
+          lock = find_line(lambda line: line.strip().startswith("def _rental_tournament_lock_reason("))
+          pool = find_line(lambda line: line.strip().startswith("def _pool_metadata("), lock)
+          pool_start = find_line(lambda line: line.strip() == "@staticmethod", lock)
+          lock_replacement = [
+              "    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:\n",
+              "        now = utcnow()\n",
+              "        if competition.entry_opens_at is not None and self._is_future_datetime(competition.entry_opens_at, now=now):\n",
+              "            return \"competition_entry_not_open\"\n",
+              "        if competition.entry_closes_at is not None and self._is_past_datetime(competition.entry_closes_at, now=now):\n",
+              "            return \"competition_entry_closed\"\n",
+              "        if str(competition.status).strip().lower() == \"live\":\n",
+              "            return \"competition_already_live\"\n",
+              "        if competition.kickoff_at is not None and not self._is_future_datetime(competition.kickoff_at, now=now):\n",
+              "            return \"competition_already_live\"\n",
+              "        if competition.linked_competition_id:\n",
+              "            try:\n",
+              "                CompetitionLockService(self.session).ensure_rentals_allowed(\n",
+              "                    competition_id=competition.linked_competition_id\n",
+              "                )\n",
+              "            except CompetitionLockError:\n",
+              "                return \"competition_already_live\"\n",
+              "        if competition.completed_at is not None:\n",
+              "            return \"competition_completed\"\n",
+              "        return None\n",
+              "\n",
+          ]
+          lines[lock:pool_start] = lock_replacement
+
+          path.write_text("".join(lines), encoding="utf-8")
+          result = subprocess.run(["python", "-m", "py_compile", str(path)], capture_output=True, text=True)
+          if result.returncode:
+              raise SystemExit(result.stderr or result.stdout)
+
+          text = path.read_text(encoding="utf-8")
+          required = (
+              "    def _coerce_datetime_pair(\n",
+              "    def _is_future_datetime(",
+              "    def _is_past_datetime(",
+              "    def _parse_datetime(",
+              "    def _rental_tournament_lock_reason(",
+              "self._is_past_datetime(competition.entry_closes_at, now=now)",
+              "not self._is_future_datetime(competition.kickoff_at, now=now)",
+          )
+          for marker in required:
+              if marker not in text:
+                  raise SystemExit(f"missing production marker: {marker}")
+
+          Path(".github/workflows/_repair_rental_datetime_final.yml").unlink()
+          Path(".github/workflows/_repair_rental_datetime_indent.yml").unlink(missing_ok=True)
+          git = subprocess.run(["git", "status", "--short"], capture_output=True, text=True, check=True)
+          print(git.stdout)
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/national_team_engine/tournament_service.py .github/workflows/_repair_rental_datetime_final.yml .github/workflows/_repair_rental_datetime_indent.yml
+          git commit -m 'fix(national-team): repair rental datetime normalization'
+          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
