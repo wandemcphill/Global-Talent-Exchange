@@ -14,22 +14,30 @@ concurrency:
 
 jobs:
   apply-fix:
-    if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
+      - name: Skip if runtime fix is already committed
+        if: github.event.head_commit.message == 'fix(national-team): normalize rental window datetimes'
+        run: echo 'Runtime fix commit already exists; no mutation required.'
+
       - uses: actions/setup-python@v5
+        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
         with:
           python-version: "3.14"
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      - run: python -m pip install --upgrade pip
-      - run: python -m pip install -r backend/requirements.txt pytest
+      - name: Install backend test dependencies
+        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt pytest
 
       - name: Apply canonical runtime fix
+        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
         run: |
           python - <<'PY'
           import re
@@ -135,6 +143,7 @@ jobs:
           PY
 
       - name: Commit runtime fix
+        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -144,4 +153,5 @@ jobs:
           git push origin HEAD:acceptance/gtex-full-user-journey-20260915
 
       - name: Exact acceptance on committed fix
+        if: github.event.head_commit.message != 'fix(national-team): normalize rental window datetimes'
         run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
