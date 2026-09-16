@@ -38,6 +38,7 @@ jobs:
           future_pattern = re.compile(
               r"(?ms)^    @staticmethod\n"
               r"    def _is_future_datetime\(.*?\n"
+              r"    @staticmethod\n"
               r"    def _parse_datetime\(",
           )
           future_match = future_pattern.search(text)
@@ -71,6 +72,7 @@ jobs:
                   "        value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)",
                   "        return value < reference",
                   "",
+                  "    @staticmethod",
                   "    def _parse_datetime(",
               ]
           )
@@ -121,11 +123,23 @@ jobs:
       - name: Run exact acceptance journey
         run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
 
-      - name: Commit repair and remove temporary workflow
+      - name: Commit repair, restore certification workflow, and remove temporary workflow
+        if: success()
         run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path(".github/workflows/final-platform-certification.yml")
+          text = p.read_text(encoding="utf-8")
+          start = text.index("      - name: Repair canonical rental datetime comparison\n")
+          end = text.index("      - name: Full GTEX user journey acceptance\n", start)
+          text = text[:start] + text[end:]
+          text = text.replace("permissions:\n  contents: write\n", "permissions:\n  contents: read\n", 1)
+          p.write_text(text, encoding="utf-8")
+          Path(".github/workflows/_repair_rental_datetime.yml").unlink(missing_ok=True)
+          PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          rm -f .github/workflows/_repair_rental_datetime.yml
-          git add backend/app/national_team_engine/tournament_service.py backend/app/models/national_team.py tools/audit/check_api_contract_violations.py .github/workflows/_repair_rental_datetime.yml
+          git add backend/app/national_team_engine/tournament_service.py backend/app/models/national_team.py tools/audit/check_api_contract_violations.py .github/workflows/final-platform-certification.yml .github/workflows/_repair_rental_datetime.yml
           git commit -m 'fix(national-team): normalize rental window datetimes'
           git push origin HEAD:acceptance/gtex-full-user-journey-20260915
