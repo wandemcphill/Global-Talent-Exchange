@@ -287,18 +287,33 @@ class NationalTeamTournamentService:
             )
 
     @staticmethod
-    def _is_future_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
-        if value is None:
-            return False
-        reference = now or utcnow()
-        if value.tzinfo is None and reference.tzinfo is not None:
-            reference = reference.replace(tzinfo=None)
-        if value.tzinfo is not None and reference.tzinfo is None:
-            value = value.replace(tzinfo=None)
-        return value > reference
+def _coerce_datetime_pair(
+    value: datetime, *, now: datetime
+) -> tuple[datetime, datetime]:
+    if value.tzinfo is None and now.tzinfo is not None:
+        now = now.replace(tzinfo=None)
+    if value.tzinfo is not None and now.tzinfo is None:
+        value = value.replace(tzinfo=None)
+    return value, now
 
-    @staticmethod
-    def _parse_datetime(value: Any) -> datetime | None:
+@staticmethod
+def _is_future_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
+    if value is None:
+        return False
+    reference = now or utcnow()
+    value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)
+    return value > reference
+
+@staticmethod
+def _is_past_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
+    if value is None:
+        return False
+    reference = now or utcnow()
+    value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)
+    return value < reference
+
+@staticmethod
+def _parse_datetime(value: Any) -> datetime | None:
         if isinstance(value, datetime):
             return value
         if isinstance(value, date):
@@ -333,25 +348,25 @@ class NationalTeamTournamentService:
                 return None
 
     def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:
-        now = utcnow()
-        if competition.entry_opens_at is not None and competition.entry_opens_at > now:
-            return "competition_entry_not_open"
-        if competition.entry_closes_at is not None and competition.entry_closes_at < now:
-            return "competition_entry_closed"
-        if str(competition.status).strip().lower() == "live":
+    now = utcnow()
+    if competition.entry_opens_at is not None and self._is_future_datetime(competition.entry_opens_at, now=now):
+        return "competition_entry_not_open"
+    if competition.entry_closes_at is not None and self._is_past_datetime(competition.entry_closes_at, now=now):
+        return "competition_entry_closed"
+    if str(competition.status).strip().lower() == "live":
+        return "competition_already_live"
+    if competition.kickoff_at is not None and not self._is_future_datetime(competition.kickoff_at, now=now):
+        return "competition_already_live"
+    if competition.linked_competition_id:
+        try:
+            CompetitionLockService(self.session).ensure_rentals_allowed(
+                competition_id=competition.linked_competition_id
+            )
+        except CompetitionLockError:
             return "competition_already_live"
-        if competition.kickoff_at is not None and competition.kickoff_at <= now:
-            return "competition_already_live"
-        if competition.linked_competition_id:
-            try:
-                CompetitionLockService(self.session).ensure_rentals_allowed(
-                    competition_id=competition.linked_competition_id
-                )
-            except CompetitionLockError:
-                return "competition_already_live"
-        if competition.completed_at is not None:
-            return "competition_completed"
-        return None
+    if competition.completed_at is not None:
+        return "competition_completed"
+    return None
 
     @staticmethod
     def _pool_metadata(item: dict[str, Any], player: Player | None, seed: NationalRegenSeed | None) -> dict[str, Any]:
