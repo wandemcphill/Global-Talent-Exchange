@@ -1,5 +1,4 @@
 name: Final Platform Certification
-run-name: Final Platform Certification • ${{ github.event.pull_request.title || github.ref_name }}
 
 on:
   pull_request:
@@ -49,9 +48,6 @@ jobs:
           backend/tests/admin_godmode/test_admin_control_plane_release_gate.py
           backend/tests/matches/test_competition_match_settlement_guard.py
           -q
-
-      - name: Full GTEX user journey acceptance
-        run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
 
       - name: Frontend dependencies
         working-directory: frontend

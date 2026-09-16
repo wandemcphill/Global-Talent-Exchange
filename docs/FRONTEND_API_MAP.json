@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 642,
+  "call_count": 649,
   "calls": [
     {
       "file": "frontend/lib/core/runtime/gtex_realtime_client.dart",
@@ -2033,6 +2033,18 @@
     {
       "file": "frontend/lib/data/gte_api_repository.dart",
       "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/market/buy",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
       "method": "GET",
       "endpoint": "/api/market/players",
       "expected_shape": "map/envelope",
@@ -2060,6 +2072,18 @@
       "method": "GET",
       "endpoint": "/api/market/players/$playerId/candles",
       "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/gte_api_repository.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/market/sell",
+      "expected_shape": "map/envelope",
       "base_url_source": "injected",
       "platforms": [
         "web",
@@ -2118,18 +2142,6 @@
       "file": "frontend/lib/data/gte_api_repository.dart",
       "transport_call": "string_reference",
       "method": "GET",
-      "endpoint": "/api/orders",
-      "expected_shape": null,
-      "base_url_source": "injected",
-      "platforms": [
-        "web",
-        "mobile"
-      ]
-    },
-    {
-      "file": "frontend/lib/data/gte_api_repository.dart",
-      "transport_call": "string_reference",
-      "method": "POST",
       "endpoint": "/api/orders",
       "expected_shape": null,
       "base_url_source": "injected",
@@ -6391,6 +6403,18 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/players/${playerId.trim()}/regen/contract-offers/quote",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/${playerId.trim()}/regen/contract-offers/submit",
       "expected_shape": "list",
       "base_url_source": "injected",
       "platforms": [
@@ -6403,6 +6427,54 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/players/${playerId.trim()}/regen/transfer-listing",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/social/data/gtex_community_social_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/$clubId/challenges",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/social/data/gtex_community_social_api.dart",
+      "transport_call": "string_reference",
+      "method": "DELETE",
+      "endpoint": "/api/social/follows",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/social/data/gtex_community_social_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/social/follows",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/social/data/gtex_community_social_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/social/follows/me",
       "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [
@@ -6668,6 +6740,18 @@
       "method": "INFERRED",
       "endpoint": "/api/daily-challenges",
       "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/tasks/live_tasks_provider.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/daily-challenges/$challengeKey/claim",
+      "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [
         "web",
