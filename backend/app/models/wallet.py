@@ -147,7 +147,12 @@ class LedgerAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     kind: Mapped[LedgerAccountKind] = mapped_column(
-        Enum(LedgerAccountKind, name="ledger_account_kind", native_enum=False),
+        Enum(
+            LedgerAccountKind,
+            name="ledger_account_kind",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=LedgerAccountKind.USER,
     )
@@ -163,17 +168,32 @@ class LedgerTransaction(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "transactions"
 
     status: Mapped[LedgerTransactionStatus] = mapped_column(
-        Enum(LedgerTransactionStatus, name="ledger_transaction_status", native_enum=False),
+        Enum(
+            LedgerTransactionStatus,
+            name="ledger_transaction_status",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=LedgerTransactionStatus.PENDING,
         server_default=LedgerTransactionStatus.PENDING.value,
     )
     reason: Mapped[LedgerEntryReason] = mapped_column(
-        Enum(LedgerEntryReason, name="ledger_entry_reason", native_enum=False),
+        Enum(
+            LedgerEntryReason,
+            name="ledger_entry_reason",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
     )
     source_tag: Mapped[LedgerSourceTag] = mapped_column(
-        Enum(LedgerSourceTag, name="ledger_source_tag", native_enum=False),
+        Enum(
+            LedgerSourceTag,
+            name="ledger_source_tag",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=LedgerSourceTag.ADMIN_ADJUSTMENT,
         server_default=LedgerSourceTag.ADMIN_ADJUSTMENT.value,
@@ -212,17 +232,32 @@ class LedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
     )
     source_tag: Mapped[LedgerSourceTag] = mapped_column(
-        Enum(LedgerSourceTag, name="ledger_source_tag", native_enum=False),
+        Enum(
+            LedgerSourceTag,
+            name="ledger_source_tag",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=LedgerSourceTag.ADMIN_ADJUSTMENT,
         server_default=LedgerSourceTag.ADMIN_ADJUSTMENT.value,
     )
     reason: Mapped[LedgerEntryReason] = mapped_column(
-        Enum(LedgerEntryReason, name="ledger_entry_reason", native_enum=False),
+        Enum(
+            LedgerEntryReason,
+            name="ledger_entry_reason",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
     )
     transaction_type: Mapped[LedgerTransactionType] = mapped_column(
-        Enum(LedgerTransactionType, name="ledger_transaction_type", native_enum=False),
+        Enum(
+            LedgerTransactionType,
+            name="ledger_transaction_type",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=LedgerTransactionType.ADJUSTMENT,
         server_default=LedgerTransactionType.ADJUSTMENT.value,
@@ -267,7 +302,12 @@ class PaymentEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     provider: Mapped[PaymentProvider] = mapped_column(
-        Enum(PaymentProvider, name="payment_provider", native_enum=False),
+        Enum(
+            PaymentProvider,
+            name="payment_provider",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
     )
     provider_reference: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
@@ -280,7 +320,12 @@ class PaymentEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=LedgerUnit.COIN,
     )
     status: Mapped[PaymentStatus] = mapped_column(
-        Enum(PaymentStatus, name="payment_status", native_enum=False),
+        Enum(
+            PaymentStatus,
+            name="payment_status",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=PaymentStatus.PENDING,
     )
@@ -309,7 +354,12 @@ class PayoutRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     status: Mapped[PayoutStatus] = mapped_column(
-        Enum(PayoutStatus, name="payout_status", native_enum=False),
+        Enum(
+            PayoutStatus,
+            name="payout_status",
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=PayoutStatus.REQUESTED,
     )
