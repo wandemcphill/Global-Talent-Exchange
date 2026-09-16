@@ -1,0 +1,51 @@
+name: One-shot national date parser repair
+
+on:
+  push:
+    branches:
+      - acceptance/gtex-full-user-journey-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: acceptance/gtex-full-user-journey-20260915
+          fetch-depth: 1
+      - name: Restore instance method signature and self-remove
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          path = Path("backend/app/national_team_engine/tournament_service.py")
+          text = path.read_text(encoding="utf-8")
+          old = "    def _parse_date(value: Any) -> date | None:\n"
+          new = "    def _parse_date(self, value: Any) -> date | None:\n"
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one malformed _parse_date signature, found {text.count(old)}")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          result = subprocess.run(
+              ["python", "-m", "py_compile", str(path)],
+              capture_output=True,
+              text=True,
+          )
+          if result.returncode:
+              raise SystemExit(result.stderr or result.stdout)
+
+          verified = path.read_text(encoding="utf-8")
+          if new not in verified:
+              raise SystemExit("corrected _parse_date signature not present")
+
+          Path(".github/workflows/_repair_parse_date_signature.yml").unlink()
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/national_team_engine/tournament_service.py .github/workflows/_repair_parse_date_signature.yml
+          git commit -m 'fix(national-team): restore rental date parser signature'
+          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
