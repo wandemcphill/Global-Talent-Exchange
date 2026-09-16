@@ -20,7 +20,10 @@ from app.ingestion.models import (
     Player,
     Season,
 )
-from app.match_engine.schemas import MatchReplayPayloadView
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.match_engine.schemas import MatchReplayPayloadView
 from app.models.notification_center import PlatformAnnouncement
 from app.models.notification_record import NotificationRecord
 from app.models.base import utcnow
