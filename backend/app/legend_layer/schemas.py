@@ -33,6 +33,32 @@ class NewsArticleView(CommonSchema):
     updated_at: datetime
 
 
+class LegendaryPlayerRegistryRecord(CommonSchema):
+    registry_id: str
+    full_name: str
+    first_name: str | None = None
+    last_name: str | None = None
+    short_name: str | None = None
+    nationality: str
+    nationality_code: str | None = None
+    preferred_foot: str = "right"
+    primary_position: str
+    secondary_positions: list[str] = Field(default_factory=list)
+    historical_height_cm: int
+    historical_weight_kg: int | None = None
+    date_of_birth: Any | None = None
+    birth_year: int | None = None
+    signature_traits: dict[str, Any] = Field(default_factory=dict)
+    base_attributes: dict[str, Any] = Field(default_factory=dict)
+    overall_rating: int = Field(default=82, ge=1, le=99)
+    potential: int = Field(default=85, ge=1, le=99)
+    market_reference_value: float = 15000000.0
+    market_reference_currency: str = "EUR"
+    historical_club_name: str | None = None
+    historical_league_name: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
 class PrestigeRankingEntryView(CommonSchema):
     id: str
     entity_type: str
