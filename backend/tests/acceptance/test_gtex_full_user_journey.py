@@ -251,7 +251,20 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
         client.post(
             f"/api/national-team-engine/competitions/{national['id']}/entries",
             headers=owner["headers"],
-            json={"country_code": "NG", "country_name": "Nigeria", "manager_user_id": owner["user_id"]},
+            json={
+                "country_code": "NG",
+                "country_name": "Nigeria",
+                "manager_user_id": owner["user_id"],
+                "squad": [
+                    {
+                        "player_name": f"Nigeria U17 Player {index}",
+                        "age": 16 + (index % 2),
+                        "overall_rating": 70,
+                        "position": ("gk", "cb", "cm", "fw")[index % 4],
+                    }
+                    for index in range(18)
+                ],
+            },
         )
     )
     rental = _ok(
