@@ -214,7 +214,8 @@ def _weighted_name_profile(
     profile_weights = country_profile.region_profile_weights.get(
         region_key
     ) or country_profile.region_profile_weights.get("default")
-    assert profile_weights is not None
+    if not profile_weights:
+        return next(iter(country_profile.profiles.values()))
     total = sum(max(weight, 0.0) for _, weight in profile_weights)
     if total <= 0:
         return next(iter(country_profile.profiles.values()))
@@ -285,6 +286,13 @@ _NAMING_PROFILES: dict[str, CountryNamingProfile] = {
         default_city="Lagos",
         urbanicity="urban",
         region_profile_weights={
+            "default": (
+                ("yoruba_christian", 0.35),
+                ("yoruba_muslim", 0.15),
+                ("igbo_christian", 0.25),
+                ("hausa_muslim", 0.20),
+                ("hausa_christian", 0.05),
+            ),
             "lagos": (("yoruba_christian", 0.72), ("yoruba_muslim", 0.28)),
             "ogun": (("yoruba_christian", 0.78), ("yoruba_muslim", 0.22)),
             "oyo": (("yoruba_christian", 0.75), ("yoruba_muslim", 0.25)),

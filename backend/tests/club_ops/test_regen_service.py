@@ -334,3 +334,21 @@ def test_generated_academy_candidates_have_control_windows_and_can_expire_to_fre
     assert all(candidate.status == "free_agent" for candidate in released)
     assert all(candidate.free_agency_status == "open_market" for candidate in released)
     assert len(regen.list_free_agents()) == len(batch.candidates)
+
+
+def test_regen_naming_handles_unlisted_regions_safely() -> None:
+    engine = RegenGenerationEngine(get_settings())
+
+    unlisted_region_bundle = engine.generate_starter_regens(
+        club_id="club-test-state",
+        season_label="2025/2026",
+        club_context=RegenClubContext(country_code="NG", region_name="Test State", city_name="Test City"),
+        count=4,
+        used_names=set(),
+        rng=random.Random(101),
+    )
+
+    assert len(unlisted_region_bundle.regens) == 4
+    assert all(profile.origin.country_code == "NG" for profile in unlisted_region_bundle.regens)
+    assert all(profile.origin.region_name == "Test State" for profile in unlisted_region_bundle.regens)
+    assert all(len(profile.display_name.split(" ")) >= 2 for profile in unlisted_region_bundle.regens)
