@@ -29,84 +29,89 @@ jobs:
       - name: Patch canonical rental datetime comparisons
         run: |
           python - <<'PY'
+          import re
           from pathlib import Path
 
           path = Path("backend/app/national_team_engine/tournament_service.py")
           text = path.read_text(encoding="utf-8")
 
-          old = '''    @staticmethod
-    def _is_future_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
-        if value is None:
-            return False
-        reference = now or utcnow()
-        if value.tzinfo is None and reference.tzinfo is not None:
-            reference = reference.replace(tzinfo=None)
-        if value.tzinfo is not None and reference.tzinfo is None:
-            value = value.replace(tzinfo=None)
-        return value > reference
-'''
-
-          new = '''    @staticmethod
-    def _coerce_datetime_pair(
-        value: datetime, *, now: datetime
-    ) -> tuple[datetime, datetime]:
-        if value.tzinfo is None and now.tzinfo is not None:
-            now = now.replace(tzinfo=None)
-        if value.tzinfo is not None and now.tzinfo is None:
-            value = value.replace(tzinfo=None)
-        return value, now
-
-    @staticmethod
-    def _is_future_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
-        if value is None:
-            return False
-        reference = now or utcnow()
-        value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)
-        return value > reference
-
-    @staticmethod
-    def _is_past_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
-        if value is None:
-            return False
-        reference = now or utcnow()
-        value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)
-        return value < reference
-'''
-
-          if old not in text:
+          future_pattern = re.compile(
+              r"(?ms)^    @staticmethod\n"
+              r"    def _is_future_datetime\(.*?\n"
+              r"    def _parse_datetime\(",
+          )
+          future_match = future_pattern.search(text)
+          if future_match is None:
               raise SystemExit("expected _is_future_datetime block not found")
-          text = text.replace(old, new, 1)
+          future_replacement = '''    @staticmethod
+          def _coerce_datetime_pair(
+              value: datetime, *, now: datetime
+          ) -> tuple[datetime, datetime]:
+              if value.tzinfo is None and now.tzinfo is not None:
+                  now = now.replace(tzinfo=None)
+              if value.tzinfo is not None and now.tzinfo is None:
+                  value = value.replace(tzinfo=None)
+              return value, now
 
-          old_lock = '''    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:
-        now = utcnow()
-        if competition.entry_opens_at is not None and competition.entry_opens_at > now:
-            return "competition_entry_not_open"
-        if competition.entry_closes_at is not None and competition.entry_closes_at < now:
-            return "competition_entry_closed"
-        if str(competition.status).strip().lower() == "live":
-            return "competition_already_live"
-        if competition.kickoff_at is not None and competition.kickoff_at <= now:
-            return "competition_already_live"
-'''
+          @staticmethod
+          def _is_future_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
+              if value is None:
+                  return False
+              reference = now or utcnow()
+              value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)
+              return value > reference
 
-          new_lock = '''    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:
-        now = utcnow()
-        if competition.entry_opens_at is not None and self._is_future_datetime(competition.entry_opens_at, now=now):
-            return "competition_entry_not_open"
-        if competition.entry_closes_at is not None and self._is_past_datetime(competition.entry_closes_at, now=now):
-            return "competition_entry_closed"
-        if str(competition.status).strip().lower() == "live":
-            return "competition_already_live"
-        if competition.kickoff_at is not None and not self._is_future_datetime(competition.kickoff_at, now=now):
-            return "competition_already_live"
-'''
+          @staticmethod
+          def _is_past_datetime(value: datetime | None, *, now: datetime | None = None) -> bool:
+              if value is None:
+                  return False
+              reference = now or utcnow()
+              value, reference = NationalTeamTournamentService._coerce_datetime_pair(value, now=reference)
+              return value < reference
 
-          if old_lock not in text:
+          def _parse_datetime('''
+          future_replacement = future_replacement.replace("          ", "    ")
+          text = text[:future_match.start()] + future_replacement + text[future_match.end():]
+
+          lock_pattern = re.compile(
+              r"(?ms)^    def _rental_tournament_lock_reason\(self, competition: NationalTeamCompetition\) -> str \| None:\n"
+              r".*?(?=^    @staticmethod\n    def _pool_metadata\()",
+          )
+          lock_match = lock_pattern.search(text)
+          if lock_match is None:
               raise SystemExit("expected rental lock block not found")
-          text = text.replace(old_lock, new_lock, 1)
+          lock_replacement = '''    def _rental_tournament_lock_reason(self, competition: NationalTeamCompetition) -> str | None:
+              now = utcnow()
+              if competition.entry_opens_at is not None and self._is_future_datetime(competition.entry_opens_at, now=now):
+                  return "competition_entry_not_open"
+              if competition.entry_closes_at is not None and self._is_past_datetime(competition.entry_closes_at, now=now):
+                  return "competition_entry_closed"
+              if str(competition.status).strip().lower() == "live":
+                  return "competition_already_live"
+              if competition.kickoff_at is not None and not self._is_future_datetime(competition.kickoff_at, now=now):
+                  return "competition_already_live"
+              if competition.linked_competition_id:
+                  try:
+                      CompetitionLockService(self.session).ensure_rentals_allowed(
+                          competition_id=competition.linked_competition_id
+                      )
+                  except CompetitionLockError:
+                      return "competition_already_live"
+              if competition.completed_at is not None:
+                  return "competition_completed"
+              return None
 
+          '''
+          lock_replacement = lock_replacement.replace("          ", "    ")
+          text = text[:lock_match.start()] + lock_replacement + text[lock_match.end():]
           path.write_text(text, encoding="utf-8")
           PY
+
+      - name: Format changed Python files with Black
+        run: python -m black backend/app/models/national_team.py tools/audit/check_api_contract_violations.py
+
+      - name: Verify formatted files
+        run: python -m black --check backend/app/models/national_team.py tools/audit/check_api_contract_violations.py
 
       - name: Run exact acceptance journey
         run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
@@ -116,6 +121,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           rm -f .github/workflows/_repair_rental_datetime.yml
-          git add backend/app/national_team_engine/tournament_service.py .github/workflows/_repair_rental_datetime.yml
+          git add backend/app/national_team_engine/tournament_service.py backend/app/models/national_team.py tools/audit/check_api_contract_violations.py .github/workflows/_repair_rental_datetime.yml
           git commit -m 'fix(national-team): normalize rental window datetimes'
           git push origin HEAD:acceptance/gtex-full-user-journey-20260915
