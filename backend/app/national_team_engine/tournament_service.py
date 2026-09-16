@@ -287,9 +287,7 @@ class NationalTeamTournamentService:
             )
 
     @staticmethod
-    def _coerce_datetime_pair(
-        value: datetime, *, now: datetime
-    ) -> tuple[datetime, datetime]:
+    def _coerce_datetime_pair(value: datetime, *, now: datetime) -> tuple[datetime, datetime]:
         if value.tzinfo is None and now.tzinfo is not None:
             now = now.replace(tzinfo=None)
         if value.tzinfo is not None and now.tzinfo is None:
