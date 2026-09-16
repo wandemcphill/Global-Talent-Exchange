@@ -128,6 +128,32 @@ jobs:
 '''
           text = text[:lock_match.start()] + lock_replacement + text[lock_match.end():]
           path.write_text(text, encoding="utf-8")
+
+          acceptance = Path("backend/tests/acceptance/test_gtex_full_user_journey.py")
+          source = acceptance.read_text(encoding="utf-8")
+          old = '''    entry = _ok(
+        client.post(
+            f"/api/national-team-engine/competitions/{national['id']}/entries",
+            headers=owner["headers"],
+            json={"country_code": "NG", "country_name": "Nigeria", "manager_user_id": owner["user_id"]},
+        )
+    )
+'''
+          new = '''    entry = _ok(
+        client.post(
+            f"/api/national-team-engine/competitions/{national['id']}/rental-entry",
+            headers=owner["headers"],
+            json={
+                "country_code": "NG",
+                "country_name": "Nigeria",
+                "manager_user_id": owner["user_id"],
+            },
+        )
+    )
+'''
+          if old not in source:
+              raise SystemExit("expected legacy national entry block not found")
+          acceptance.write_text(source.replace(old, new, 1), encoding="utf-8")
           PY
 
       - name: Full GTEX user journey acceptance
@@ -149,7 +175,7 @@ jobs:
           PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend/app/national_team_engine/tournament_service.py .github/workflows/final-platform-certification.yml .github/workflows/_repair_rental_datetime.yml
+          git add backend/app/national_team_engine/tournament_service.py backend/tests/acceptance/test_gtex_full_user_journey.py .github/workflows/final-platform-certification.yml .github/workflows/_repair_rental_datetime.yml
           git commit -m 'fix(national-team): normalize rental window datetimes'
           git push origin HEAD:acceptance/gtex-full-user-journey-20260915
 
