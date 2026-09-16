@@ -1,0 +1,32 @@
+name: One-shot rental datetime formatter
+
+on:
+  push:
+    branches:
+      - acceptance/gtex-full-user-journey-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: acceptance/gtex-full-user-journey-20260915
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: python -m pip install black
+      - name: Format and self-remove
+        run: |
+          black backend/app/national_team_engine/tournament_service.py
+          python -m py_compile backend/app/national_team_engine/tournament_service.py
+          rm .github/workflows/_format_rental_datetime.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/national_team_engine/tournament_service.py .github/workflows/_format_rental_datetime.yml
+          git commit -m 'style(national-team): format tournament service'
+          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
