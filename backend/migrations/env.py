@@ -20,7 +20,26 @@ def _sqlite_add_constraint(self, constraint):
     except NotImplementedError:
         table_name = constraint.table.name
         with op.batch_alter_table(table_name) as batch_op:
-            batch_op.create_check_constraint(constraint.name, constraint.sqltext)
+            if hasattr(constraint, "sqltext"):
+                batch_op.create_check_constraint(constraint.name, constraint.sqltext)
+            elif constraint.__class__.__name__ == "ForeignKeyConstraint":
+                local_cols = [c.name for c in constraint.columns]
+                remote_table = None
+                remote_cols = []
+                for elem in constraint.elements:
+                    parts = elem._get_colspec().split(".")
+                    if len(parts) >= 2:
+                        remote_table = parts[-2]
+                        remote_cols.append(parts[-1])
+                if remote_table:
+                    batch_op.create_foreign_key(
+                        constraint.name,
+                        remote_table,
+                        local_cols,
+                        remote_cols,
+                        ondelete=constraint.ondelete,
+                        onupdate=constraint.onupdate,
+                    )
 
 
 def _sqlite_drop_constraint(self, constraint):
@@ -29,7 +48,10 @@ def _sqlite_drop_constraint(self, constraint):
     except NotImplementedError:
         table_name = constraint.table.name
         with op.batch_alter_table(table_name) as batch_op:
-            batch_op.drop_constraint(constraint.name, type_="check")
+            if constraint.__class__.__name__ == "ForeignKeyConstraint":
+                batch_op.drop_constraint(constraint.name, type_="foreignkey")
+            else:
+                batch_op.drop_constraint(constraint.name, type_="check")
 
 
 SQLiteImpl.add_constraint = _sqlite_add_constraint

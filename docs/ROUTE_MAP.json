@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1696,
+  "route_count": 1702,
   "routes": [
     {
       "method": "POST",
@@ -7851,6 +7851,32 @@
     },
     {
       "method": "GET",
+      "path": "/clubs/personal-manager/me",
+      "effective_paths": [
+        "/api/clubs/personal-manager/me"
+      ],
+      "file": "backend/app/club_growth/router.py",
+      "handler": "get_personal_manager_me",
+      "router_variable": "router",
+      "module_path": "app.club_growth.router",
+      "module_mounts": [
+        "club_growth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PersonalManagerView",
+        "returns": "PersonalManagerView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "GET",
       "path": "/clubs/{club_id}/growth",
       "effective_paths": [
         "/api/clubs/{club_id}/growth"
@@ -9010,6 +9036,33 @@
     },
     {
       "method": "POST",
+      "path": "/clubs/personal-manager",
+      "effective_paths": [
+        "/api/clubs/personal-manager"
+      ],
+      "file": "backend/app/club_growth/router.py",
+      "handler": "create_personal_manager",
+      "router_variable": "router",
+      "module_path": "app.club_growth.router",
+      "module_mounts": [
+        "club_growth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PersonalManagerView",
+        "returns": "PersonalManagerView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
       "path": "/clubs/{club_id}/advance-lifecycle",
       "effective_paths": [
         "/api/clubs/{club_id}/advance-lifecycle"
@@ -9201,6 +9254,33 @@
       "response_shape": {
         "response_model": "AcademyProfileView",
         "returns": "AcademyProfileView"
+      },
+      "version": "canonical",
+      "domain": "club"
+    },
+    {
+      "method": "POST",
+      "path": "/clubs/{club_id}/growth/personal-manager/appoint",
+      "effective_paths": [
+        "/api/clubs/{club_id}/growth/personal-manager/appoint"
+      ],
+      "file": "backend/app/club_growth/router.py",
+      "handler": "appoint_personal_manager",
+      "router_variable": "router",
+      "module_path": "app.club_growth.router",
+      "module_mounts": [
+        "club_growth"
+      ],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "StaffContractView",
+        "returns": "StaffContractView"
       },
       "version": "canonical",
       "domain": "club"
@@ -28286,21 +28366,18 @@
         "/api/orders/{order_id}/admin-buyback-preview"
       ],
       "file": "backend/app/orders/router.py",
-      "handler": "preview_admin_buyback",
+      "handler": "preview_admin_buyback_retired",
       "router_variable": "api_router",
       "module_path": "app.orders.router",
       "module_mounts": [],
       "request_shape": {
         "parameters": [
-          "order_id",
-          "session",
-          "current_user",
-          "request"
+          "order_id"
         ]
       },
       "response_shape": {
-        "response_model": "AdminBuybackPreviewView",
-        "returns": "AdminBuybackPreviewView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "orders"
@@ -28394,21 +28471,18 @@
         "/orders/{order_id}/admin-buyback-preview"
       ],
       "file": "backend/app/orders/router.py",
-      "handler": "preview_admin_buyback",
+      "handler": "preview_admin_buyback_retired",
       "router_variable": "legacy_router",
       "module_path": "app.orders.router",
       "module_mounts": [],
       "request_shape": {
         "parameters": [
-          "order_id",
-          "session",
-          "current_user",
-          "request"
+          "order_id"
         ]
       },
       "response_shape": {
-        "response_model": "AdminBuybackPreviewView",
-        "returns": "AdminBuybackPreviewView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "orders"
@@ -28428,13 +28502,12 @@
         "parameters": [
           "payload",
           "session",
-          "current_user",
           "request"
         ]
       },
       "response_shape": {
-        "response_model": "OrderAcceptedView",
-        "returns": "OrderAcceptedView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "orders"
@@ -28446,21 +28519,18 @@
         "/api/orders/{order_id}/admin-buyback"
       ],
       "file": "backend/app/orders/router.py",
-      "handler": "execute_admin_buyback",
+      "handler": "execute_admin_buyback_retired",
       "router_variable": "api_router",
       "module_path": "app.orders.router",
       "module_mounts": [],
       "request_shape": {
         "parameters": [
-          "order_id",
-          "session",
-          "current_user",
-          "request"
+          "order_id"
         ]
       },
       "response_shape": {
-        "response_model": "AdminBuybackExecutionView",
-        "returns": "AdminBuybackExecutionView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "orders"
@@ -28506,13 +28576,12 @@
         "parameters": [
           "payload",
           "session",
-          "current_user",
           "request"
         ]
       },
       "response_shape": {
-        "response_model": "OrderAcceptedView",
-        "returns": "OrderAcceptedView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "orders"
@@ -28524,21 +28593,18 @@
         "/orders/{order_id}/admin-buyback"
       ],
       "file": "backend/app/orders/router.py",
-      "handler": "execute_admin_buyback",
+      "handler": "execute_admin_buyback_retired",
       "router_variable": "legacy_router",
       "module_path": "app.orders.router",
       "module_mounts": [],
       "request_shape": {
         "parameters": [
-          "order_id",
-          "session",
-          "current_user",
-          "request"
+          "order_id"
         ]
       },
       "response_shape": {
-        "response_model": "AdminBuybackExecutionView",
-        "returns": "AdminBuybackExecutionView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "orders"
@@ -31778,6 +31844,30 @@
     },
     {
       "method": "GET",
+      "path": "/portfolio/realized-pl",
+      "effective_paths": [
+        "/portfolio/realized-pl"
+      ],
+      "file": "backend/app/portfolio/router.py",
+      "handler": "get_realized_pl",
+      "router_variable": "router",
+      "module_path": "app.portfolio.router",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RealizedPLView",
+        "returns": "RealizedPLView"
+      },
+      "version": "canonical",
+      "domain": "portfolio"
+    },
+    {
+      "method": "GET",
       "path": "/portfolio/snapshot",
       "effective_paths": [
         "/portfolio/snapshot"
@@ -33470,7 +33560,7 @@
         "/scout/report/{player_id}"
       ],
       "file": "backend/app/regen_ecosystem/router.py",
-      "handler": "get_scout_report",
+      "handler": "legacy_get_scout_report",
       "router_variable": "router",
       "module_path": "app.regen_ecosystem.router",
       "module_mounts": [
@@ -33478,14 +33568,12 @@
       ],
       "request_shape": {
         "parameters": [
-          "player_id",
-          "scout_id",
-          "service"
+          "player_id"
         ]
       },
       "response_shape": {
-        "response_model": "ScoutReportView",
-        "returns": "ScoutReportView"
+        "response_model": null,
+        "returns": "None"
       },
       "version": "canonical",
       "domain": "regen"
@@ -33939,6 +34027,32 @@
       "response_shape": {
         "response_model": "AgentView",
         "returns": "AgentView"
+      },
+      "version": "canonical",
+      "domain": "regen"
+    },
+    {
+      "method": "POST",
+      "path": "/api/players/{player_id}/regen/contract-offers/submit",
+      "effective_paths": [
+        "/api/players/{player_id}/regen/contract-offers/submit"
+      ],
+      "file": "backend/app/segments/player_lifecycle/regen_contract_submission.py",
+      "handler": "submit_regen_contract_offer",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.regen_contract_submission",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "payload",
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RegenLifecycleView",
+        "returns": "RegenLifecycleView"
       },
       "version": "canonical",
       "domain": "regen"
@@ -35120,6 +35234,31 @@
       },
       "version": "canonical",
       "domain": "runtime"
+    },
+    {
+      "method": "POST",
+      "path": "/scout/report/{player_id}",
+      "effective_paths": [
+        "/scout/report/{player_id}"
+      ],
+      "file": "backend/app/segments/player_lifecycle/scouting_action.py",
+      "handler": "scout_player",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.scouting_action",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ScoutReportView",
+        "returns": "ScoutReportView"
+      },
+      "version": "canonical",
+      "domain": "scouting"
     },
     {
       "method": "GET",
