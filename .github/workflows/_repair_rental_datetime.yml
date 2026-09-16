@@ -24,7 +24,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install backend and quality dependencies
-        run: python -m pip install -r backend/requirements.txt black ruff detect-secrets
+        run: python -m pip install -r backend/requirements.txt black ruff detect-secrets pytest
 
       - name: Patch canonical rental datetime comparisons
         run: |
@@ -113,10 +113,10 @@ jobs:
           PY
 
       - name: Format changed Python files with Black
-        run: python -m black backend/app/models/national_team.py tools/audit/check_api_contract_violations.py
+        run: python -m black backend/app/national_team_engine/tournament_service.py backend/app/models/national_team.py tools/audit/check_api_contract_violations.py
 
       - name: Verify formatted files
-        run: python -m black --check backend/app/models/national_team.py tools/audit/check_api_contract_violations.py
+        run: python -m black --check backend/app/national_team_engine/tournament_service.py backend/app/models/national_team.py tools/audit/check_api_contract_violations.py
 
       - name: Run exact acceptance journey
         run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
