@@ -1,0 +1,25 @@
+name: Temporary GTEX acceptance certification
+
+on:
+  push:
+    branches:
+      - acceptance/gtex-full-user-journey-20260915
+
+permissions:
+  contents: read
+
+jobs:
+  gtex-full-user-journey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.txt pytest
+      - name: Exact GTEX user journey acceptance
+        run: python -m pytest backend/tests/acceptance/test_gtex_full_user_journey.py -q
