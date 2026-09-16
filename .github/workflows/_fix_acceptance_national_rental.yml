@@ -1,0 +1,72 @@
+name: One-shot acceptance rental repair
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: acceptance/gtex-full-user-journey-20260915
+          fetch-depth: 1
+
+      - name: Patch acceptance and restore CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          test_path = Path("backend/tests/acceptance/test_gtex_full_user_journey.py")
+          text = test_path.read_text(encoding="utf-8")
+
+          marker = "    # National-team competition + rental player.\n"
+          start = text.index(marker)
+          entry_start = text.index("    entry = _ok(\n", start)
+          end = text.index('    assert rental["rental_contracts"]\n', entry_start) + len('    assert rental["rental_contracts"]\n')
+          replacement = '''    entry = _ok(
+        client.post(
+            f"/api/national-team-engine/competitions/{national['id']}/rental-entry",
+            headers=owner["headers"],
+            json={
+                "country_code": "NG",
+                "country_name": "Nigeria",
+                "manager_user_id": owner["user_id"],
+            },
+        )
+    )
+    rental = _ok(
+        client.post(
+            f"/api/national-team-engine/entries/{entry['id']}/rentals",
+            headers=owner["headers"],
+            json={"player_id": rental_player["player_id"], "shirt_number": 9},
+        )
+    )
+    assert rental["rental_contracts"]
+'''
+          text = text[:entry_start] + replacement + text[end:]
+          test_path.write_text(text, encoding="utf-8")
+
+          workflow_path = Path(".github/workflows/quality-gates.yml")
+          workflow = workflow_path.read_text(encoding="utf-8")
+          if "One-shot acceptance national rental route repair" in workflow:
+              step_start = workflow.index("      - name: One-shot acceptance national rental route repair\n")
+              step_end = workflow.index("      - uses: actions/setup-node@v4\n", step_start)
+              workflow = workflow[:step_start] + workflow[step_end:]
+          workflow = workflow.replace("permissions:\n  contents: write\n", "permissions:\n  contents: read\n", 1)
+          workflow_path.write_text(workflow, encoding="utf-8")
+          PY
+
+          rm -f .github/workflows/_fix_acceptance_national_squad.yml
+          rm -f .github/workflows/_fix_acceptance_national_rental.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/tests/acceptance/test_gtex_full_user_journey.py .github/workflows/quality-gates.yml .github/workflows/_fix_acceptance_national_squad.yml .github/workflows/_fix_acceptance_national_rental.yml
+          git commit -m 'test(acceptance): use canonical national rental entry'
+          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
