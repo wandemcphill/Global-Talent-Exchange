@@ -236,32 +236,57 @@ def auth_user_factory(client, app_session_factory):
 
         if funded_credit is not None or funded_coin is not None:
             from app.models.user import User
-            from app.models.wallet import LedgerUnit
-            from app.wallets.service import WalletService
+            from app.models.wallet import LedgerEntryReason, LedgerTransactionType, LedgerUnit
+            from app.wallets.service import LedgerPosting, WalletService
 
             wallet_service = WalletService()
             with app_session_factory() as session:
                 user = session.get(User, user_id)
                 assert user is not None
-                if funded_credit is not None:
-                    wallet_service.credit_trade_proceeds(
+                funding_accounts = {
+                    LedgerUnit.CREDIT: wallet_service.ensure_named_system_account(
                         session,
-                        user=user,
-                        amount=Decimal(str(funded_credit)),
-                        reference=f"seed:credit:{user_id}",
-                        description="Competition test credit funding",
-                        external_reference=f"seed:credit:{user_id}",
+                        code="test:credit:funding_pool",
+                        label="Test Credit Funding Pool",
                         unit=LedgerUnit.CREDIT,
-                    )
-                if funded_coin is not None:
-                    wallet_service.credit_trade_proceeds(
+                        allow_negative=True,
+                    ),
+                    LedgerUnit.COIN: wallet_service.ensure_named_system_account(
                         session,
-                        user=user,
-                        amount=Decimal(str(funded_coin)),
-                        reference=f"seed:coin:{user_id}",
-                        description="Competition test coin funding",
-                        external_reference=f"seed:coin:{user_id}",
+                        code="test:coin:funding_pool",
+                        label="Test Coin Funding Pool",
                         unit=LedgerUnit.COIN,
+                        allow_negative=True,
+                    ),
+                }
+                amounts = {
+                    LedgerUnit.CREDIT: funded_credit,
+                    LedgerUnit.COIN: funded_coin,
+                }
+                for unit, amount in amounts.items():
+                    if amount is None:
+                        continue
+                    normalized_amount = Decimal(str(amount))
+                    if normalized_amount <= Decimal("0.0000"):
+                        continue
+                    user_account = wallet_service.get_user_account(session, user, unit)
+                    wallet_service.append_transaction(
+                        session,
+                        postings=[
+                            LedgerPosting(
+                                account=user_account,
+                                amount=normalized_amount,
+                            ),
+                            LedgerPosting(
+                                account=funding_accounts[unit],
+                                amount=-normalized_amount,
+                            ),
+                        ],
+                        reason=LedgerEntryReason.ADJUSTMENT,
+                        transaction_type=LedgerTransactionType.ADJUSTMENT,
+                        reference=f"test:funding:{unit.value}:{user_id}",
+                        description="Dedicated test wallet funding",
+                        external_reference=f"test:funding:{unit.value}:{user_id}",
                     )
                 session.commit()
 

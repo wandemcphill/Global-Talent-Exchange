@@ -1,15 +1,40 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, reconstructor, relationship
+from sqlalchemy.types import TypeDecorator
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
+
+
+class UTCAwareDateTime(TypeDecorator[datetime]):
+    """Preserve timezone-aware UTC datetimes across SQLite and PostgreSQL."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_result_value(self, value: datetime | None, dialect: Any) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
 
 class NationalTeamCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -31,19 +56,36 @@ class NationalTeamCompetition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=True,
         index=True,
     )
-    entry_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    entry_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    kickoff_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    entry_opens_at: Mapped[datetime | None] = mapped_column(UTCAwareDateTime(), nullable=True)
+    entry_closes_at: Mapped[datetime | None] = mapped_column(UTCAwareDateTime(), nullable=True)
+    kickoff_at: Mapped[datetime | None] = mapped_column(UTCAwareDateTime(), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCAwareDateTime(), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    created_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     created_by_user: Mapped["User | None"] = relationship()
-    entries: Mapped[list["NationalTeamEntry"]] = relationship(back_populates="competition", cascade="all, delete-orphan")
+    entries: Mapped[list["NationalTeamEntry"]] = relationship(
+        back_populates="competition", cascade="all, delete-orphan"
+    )
     submitted_entries: Mapped[list["NationalTeamCompetitionEntry"]] = relationship(
         back_populates="competition",
         cascade="all, delete-orphan",
     )
+
+    @reconstructor
+    def _normalize_lifecycle_datetimes(self) -> None:
+        for field_name in ("entry_opens_at", "entry_closes_at", "kickoff_at", "completed_at"):
+            value = getattr(self, field_name, None)
+            if value is None:
+                continue
+            if value.tzinfo is None:
+                setattr(self, field_name, value.replace(tzinfo=timezone.utc))
+            else:
+                setattr(self, field_name, value.astimezone(timezone.utc))
 
 
 class NationalTeamEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -58,19 +100,35 @@ class NationalTeamEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_national_team_entries_entry_owner_user_id", "entry_owner_user_id"),
     )
 
-    competition_id: Mapped[str] = mapped_column(String(36), ForeignKey("national_team_competitions.id", ondelete="CASCADE"), nullable=False, index=True)
+    competition_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("national_team_competitions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     country_code: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
     country_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    entry_owner_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
-    manager_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    entry_owner_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    manager_user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     squad_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     competition: Mapped["NationalTeamCompetition"] = relationship(back_populates="entries")
     entry_owner_user: Mapped["User | None"] = relationship(foreign_keys=[entry_owner_user_id])
     manager_user: Mapped["User | None"] = relationship(foreign_keys=[manager_user_id])
-    squad_members: Mapped[list["NationalTeamSquadMember"]] = relationship(back_populates="entry", cascade="all, delete-orphan")
-    manager_history: Mapped[list["NationalTeamManagerHistory"]] = relationship(back_populates="entry", cascade="all, delete-orphan")
+    squad_members: Mapped[list["NationalTeamSquadMember"]] = relationship(
+        back_populates="entry", cascade="all, delete-orphan"
+    )
+    manager_history: Mapped[list["NationalTeamManagerHistory"]] = relationship(
+        back_populates="entry", cascade="all, delete-orphan"
+    )
 
 
 class NationalTeamCompetitionEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -114,8 +172,18 @@ class NationalTeamSquadMember(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "national_team_squad_members"
     __table_args__ = (UniqueConstraint("entry_id", "user_id", name="uq_national_team_squad_members_entry_user"),)
 
-    entry_id: Mapped[str] = mapped_column(String(36), ForeignKey("national_team_entries.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    entry_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("national_team_entries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     player_name: Mapped[str] = mapped_column(String(160), nullable=False)
     shirt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     role_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -128,9 +196,21 @@ class NationalTeamSquadMember(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class NationalTeamManagerHistory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "national_team_manager_history"
 
-    entry_id: Mapped[str] = mapped_column(String(36), ForeignKey("national_team_entries.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    action_type: Mapped[str] = mapped_column(String(32), nullable=False, default="appointed", server_default="appointed")
+    entry_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("national_team_entries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    action_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="appointed", server_default="appointed"
+    )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     entry: Mapped["NationalTeamEntry"] = relationship(back_populates="manager_history")
