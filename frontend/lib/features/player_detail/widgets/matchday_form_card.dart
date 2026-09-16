@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../domain/value/gtex_value_models.dart';
 import '../../../ui_gtex/models/gtex_freshness.dart';
@@ -36,7 +37,30 @@ class MatchdayFormCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _border),
       ),
-      child: form.hasSample ? _buildForm(context) : const _MatchdayFormEmpty(),
+      child: form.hasSample ? _buildForm(context) : _buildEmpty(context),
+    );
+  }
+
+  Widget _buildEmpty(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const _MatchdayFormEmpty(),
+        const SizedBox(height: 12),
+        _openMatchdayButton(context),
+      ],
+    );
+  }
+
+  Widget _openMatchdayButton(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: OutlinedButton.icon(
+        key: const Key('gtex-form-open-matchday-btn'),
+        onPressed: () => context.go('/app/matches'),
+        icon: const Icon(Icons.sports_soccer_outlined, size: 16),
+        label: const Text('Open Matchday'),
+      ),
     );
   }
 
@@ -88,7 +112,10 @@ class MatchdayFormCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: <Widget>[
-              const Text('Form freshness: ', style: TextStyle(color: _textMuted, fontSize: 12)),
+              const Text(
+                'Form freshness: ',
+                style: TextStyle(color: _textMuted, fontSize: 12),
+              ),
               GtexFreshnessChip(freshness: formFreshness!, compact: true),
             ],
           ),
@@ -105,6 +132,8 @@ class MatchdayFormCard extends StatelessWidget {
             'outside this window: no single competition may fill it.',
           ),
         ],
+        const SizedBox(height: 12),
+        _openMatchdayButton(context),
       ],
     );
   }
