@@ -1,0 +1,63 @@
+name: Apply acceptance national squad fix
+
+on:
+  push:
+    branches:
+      - acceptance/gtex-full-user-journey-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: acceptance/gtex-full-user-journey-20260915
+
+      - name: Patch acceptance journey
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("backend/tests/acceptance/test_gtex_full_user_journey.py")
+          text = path.read_text(encoding="utf-8")
+          old = '            json={"country_code": "NG", "country_name": "Nigeria", "manager_user_id": owner["user_id"]},\n'
+          new = '''            json={
+                "country_code": "NG",
+                "country_name": "Nigeria",
+                "manager_user_id": owner["user_id"],
+                "squad": [
+                    {
+                        "player_name": f"Nigeria U17 Player {index}",
+                        "age": 16 + (index % 2),
+                        "overall_rating": 70,
+                        "position": ("gk", "cb", "cm", "fw")[index % 4],
+                    }
+                    for index in range(18)
+                ],
+            },
+'''
+          if old in text:
+              text = text.replace(old, new, 1)
+              path.write_text(text, encoding="utf-8")
+          elif '"squad": [' not in text:
+              raise SystemExit("target national entry payload not found")
+          PY
+
+      - name: Commit acceptance fix or remove helper
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/tests/acceptance/test_gtex_full_user_journey.py
+          if git diff --cached --quiet; then
+            git rm .github/workflows/_fix_acceptance_national_squad.yml
+            git commit -m 'chore(ci): remove acceptance squad repair helper'
+          else
+            git commit -m 'test(acceptance): submit canonical national squad'
+          fi
+          git push origin HEAD:acceptance/gtex-full-user-journey-20260915
