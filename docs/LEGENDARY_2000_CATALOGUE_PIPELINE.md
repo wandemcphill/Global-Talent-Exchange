@@ -19,6 +19,49 @@ Candidate selection is deterministic and country-diverse. The default selection 
 
 The source command refuses to pretend there are 2,000 records when fewer diverse candidates are available. The target is a release gate, not a license to invent names or football facts.
 
+## Batch enrichment
+
+`backend/scripts/apply_legendary_catalogue_enrichment.py` applies an explicit enrichment overlay to a staging bundle. The overlay is keyed by `source_id` and may only change fields explicitly supplied by the editorial/research pass.
+
+This keeps the source harvester factual and reproducible while allowing separate batches to establish GTEX football attributes, nationality decisions, traits, role, and approval state. An enrichment patch referencing an unknown source ID fails instead of creating an orphan record.
+
+Example shape:
+
+```json
+{
+  "schema_version": "legendary-enrichment-v1",
+  "generated_at": "2026-09-17T00:00:00Z",
+  "patches": [
+    {
+      "source_id": "wikidata:Q123",
+      "country_code": "NGA",
+      "primary_position": "ST",
+      "preferred_foot": "right",
+      "signature_traits": ["composure", "link-up play"],
+      "signature_role": "Complete Forward",
+      "technical_profile": {"finishing": 91, "first_touch": 93},
+      "physical_profile": {"strength": 82, "stamina": 72},
+      "mental_profile": {"composure": 96, "vision": 90},
+      "football_evidence": [
+        {
+          "provider": "editorial_review",
+          "uri": "https://example.invalid/research-record",
+          "claim_types": ["position", "footedness", "traits"]
+        }
+      ],
+      "editorial_status": "approved",
+      "rights_status": "approved",
+      "portrait_metadata": {
+        "avatar_system": "gtex_fictional_avatar_v1",
+        "is_fictional_non_replicative": true
+      }
+    }
+  ]
+}
+```
+
+The example is a schema illustration only. It is not a production factual record.
+
 ## Release gate
 
 `backend/scripts/validate_legendary_catalogue.py` is the release gate. Exactly 2,000 records are required for the launch bundle unless a smaller target is explicitly being used for test work.
@@ -50,7 +93,7 @@ Activation uses `LegendaryPlayerLaunchService` and therefore follows the canonic
 
 `approved catalogue record -> LegendaryPlayerProfile -> ordinary GTEX Player -> active PlayerShareMarket`
 
-The importer does not create a separate legendary economy and does not use the disabled ingestion compatibility issuer. Activation is transactional: any import error causes the surrounding transaction to roll back rather than leaving a partially launched catalogue.
+The importer does not create a separate legendary economy and does not use the disabled ingestion compatibility issuer. Activation is transactional: any import error causes the surrounding transaction to roll back rather than leaving a partially launched catalogue. Production activation also requires every referenced country to already exist in the canonical GTEX country table.
 
 ## Important boundary
 
