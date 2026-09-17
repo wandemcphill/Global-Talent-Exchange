@@ -1,0 +1,62 @@
+from datetime import date
+
+from app.legend_catalogue.schema import CatalogueBundle, CatalogueRecord, Evidence
+from app.legend_catalogue.validation import evaluate_release, record_blockers
+
+
+def _record(**overrides) -> CatalogueRecord:
+    payload = {
+        "source_id": "wikidata:Q123",
+        "full_name": "Example Player",
+        "country_code": "NGA",
+        "date_of_birth": date(1975, 1, 1),
+        "historical_height_cm": 180,
+        "position_candidates": ["forward"],
+        "primary_position": "ST",
+        "preferred_foot": "right",
+        "era": "1990s",
+        "legendary_classification": "icon",
+        "signature_traits": ["composure"],
+        "technical_profile": {"finishing": 90},
+        "physical_profile": {"stamina": 80},
+        "mental_profile": {"composure": 90},
+        "source_evidence": [Evidence(provider="wikidata", uri="https://www.wikidata.org/wiki/Q123")],
+        "football_evidence": [Evidence(provider="wikidata", uri="https://www.wikidata.org/wiki/Q123")],
+        "portrait_metadata": {"is_fictional_non_replicative": True},
+        "editorial_status": "approved",
+        "rights_status": "approved",
+        "catalogue_status": "approved",
+    }
+    payload.update(overrides)
+    return CatalogueRecord.model_validate(payload)
+
+
+def test_release_gate_requires_exact_target_and_complete_records() -> None:
+    bundle = CatalogueBundle(
+        generated_at="2026-09-17T00:00:00Z",
+        source="test",
+        target_count=1,
+        records=[_record()],
+    )
+    result = evaluate_release(bundle)
+    assert result.ready is True
+    assert result.eligible_count == 1
+
+
+def test_missing_editorial_data_blocks_release() -> None:
+    record = _record(editorial_status="editorial_review", rights_status="pending")
+    blockers = record_blockers(record)
+    assert "editorial_not_approved" in blockers
+    assert "rights_not_approved" in blockers
+
+
+def test_duplicate_source_ids_are_blocked() -> None:
+    bundle = CatalogueBundle(
+        generated_at="2026-09-17T00:00:00Z",
+        source="test",
+        target_count=2,
+        records=[_record(), _record()],
+    )
+    result = evaluate_release(bundle)
+    assert result.ready is False
+    assert result.duplicate_count == 1
