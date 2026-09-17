@@ -1,43 +1,41 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LegendaryPlayerProfileBase(BaseModel):
     slug: str = Field(..., min_length=2, max_length=128, description="Stable unique legendary profile identifier")
-    full_name: str = Field(..., min_length=2, max_length=160, description="Full historical player name")
+    full_name: str = Field(..., min_length=1, max_length=160, description="Full historical player name")
     country_code: str = Field(..., min_length=2, max_length=8, description="GTEX country alpha code")
-    primary_position: str = Field(
-        ..., min_length=1, max_length=40, description="Primary football position (e.g., ST, CAM, CB)"
-    )
-    secondary_positions: list[str] = Field(default_factory=list, description="List of secondary positions")
-    preferred_foot: Literal["left", "right", "both"] = Field(default="right", description="Preferred foot")
-    historical_height_cm: int = Field(..., ge=120, le=230, description="Historical height in centimeters")
-    gtex_height_cm: int | None = Field(
-        default=None, ge=119, le=231, description="Generated GTEX height (-1, 0, or +1 cm from historical height)"
-    )
-    signature_traits: list[str] = Field(default_factory=list, description="Signature football traits")
-    signature_role: str | None = Field(default=None, max_length=80, description="Signature tendency / tactical role")
-    technical_profile: dict[str, Any] = Field(default_factory=dict, description="Technical attribute profile")
-    physical_profile: dict[str, Any] = Field(default_factory=dict, description="Physical attribute profile")
-    mental_profile: dict[str, Any] = Field(default_factory=dict, description="Mental / decision tendency profile")
-    era: str = Field(..., min_length=2, max_length=64, description="Historical era or period (e.g., 1970s, 1990-1998)")
-    legendary_classification: str = Field(
-        default="icon", min_length=2, max_length=40, description="Legendary classification (e.g., icon, immortal, hero)"
-    )
-    is_active: bool = Field(default=True)
-    is_searchable: bool = Field(default=True)
-    is_tradable: bool = Field(default=True)
-    is_rentable: bool = Field(default=True)
-    is_national_team_eligible: bool = Field(default=True)
-    portrait_metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Non-replicative portrait rendering configuration metadata"
-    )
-    source_notes: str | None = Field(default=None, description="Source / reference research notes")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Arbitrary extension metadata")
+    date_of_birth: date | None = None
+    primary_position: str = Field(..., min_length=1, max_length=40)
+    secondary_positions: list[str] = Field(default_factory=list)
+    preferred_foot: Literal["left", "right", "both"] = "right"
+    historical_height_cm: int = Field(..., ge=120, le=230)
+    gtex_height_cm: int | None = Field(default=None, ge=119, le=231)
+    signature_traits: list[str] = Field(default_factory=list)
+    signature_role: str | None = Field(default=None, max_length=80)
+    technical_profile: dict[str, Any] = Field(default_factory=dict)
+    physical_profile: dict[str, Any] = Field(default_factory=dict)
+    mental_profile: dict[str, Any] = Field(default_factory=dict)
+    era: str = Field(..., min_length=2, max_length=64)
+    legendary_classification: str = Field(default="icon", min_length=2, max_length=40)
+    is_active: bool = True
+    is_searchable: bool = True
+    is_tradable: bool = True
+    is_rentable: bool = True
+    is_national_team_eligible: bool = True
+    portrait_metadata: dict[str, Any] = Field(default_factory=dict)
+    source_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    football_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    editorial_status: Literal["sourced", "enriched", "editorial_review", "approved", "blocked"] = "sourced"
+    rights_status: Literal["unknown", "pending", "approved", "rejected"] = "unknown"
+    catalogue_status: Literal["staged", "approved", "imported", "blocked"] = "staged"
+    source_notes: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("slug")
     @classmethod
@@ -59,9 +57,7 @@ class LegendaryPlayerProfileBase(BaseModel):
             return None
         hist = info.data.get("historical_height_cm")
         if hist is not None and v not in (hist - 1, hist, hist + 1):
-            raise ValueError(
-                f"gtex_height_cm ({v}) must be within exactly -1, 0, or +1 cm of historical_height_cm ({hist})"
-            )
+            raise ValueError("gtex_height_cm must be historical height +/- 1 cm")
         return v
 
 
@@ -70,8 +66,9 @@ class LegendaryPlayerProfileCreate(LegendaryPlayerProfileBase):
 
 
 class LegendaryPlayerProfileUpdate(BaseModel):
-    full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    full_name: str | None = Field(default=None, min_length=1, max_length=160)
     country_code: str | None = Field(default=None, min_length=2, max_length=8)
+    date_of_birth: date | None = None
     primary_position: str | None = Field(default=None, min_length=1, max_length=40)
     secondary_positions: list[str] | None = None
     preferred_foot: Literal["left", "right", "both"] | None = None
@@ -82,19 +79,21 @@ class LegendaryPlayerProfileUpdate(BaseModel):
     technical_profile: dict[str, Any] | None = None
     physical_profile: dict[str, Any] | None = None
     mental_profile: dict[str, Any] | None = None
-    era: str | None = Field(default=None, min_length=2, max_length=64)
-    legendary_classification: str | None = Field(default=None, min_length=2, max_length=40)
+    era: str | None = None
+    legendary_classification: str | None = None
     is_active: bool | None = None
     is_searchable: bool | None = None
     is_tradable: bool | None = None
     is_rentable: bool | None = None
     is_national_team_eligible: bool | None = None
     portrait_metadata: dict[str, Any] | None = None
+    source_evidence: list[dict[str, Any]] | None = None
+    football_evidence: list[dict[str, Any]] | None = None
+    editorial_status: Literal["sourced", "enriched", "editorial_review", "approved", "blocked"] | None = None
+    rights_status: Literal["unknown", "pending", "approved", "rejected"] | None = None
+    catalogue_status: Literal["staged", "approved", "imported", "blocked"] | None = None
     source_notes: str | None = None
     metadata: dict[str, Any] | None = None
-
-
-from pydantic import ConfigDict
 
 
 class LegendaryPlayerProfileView(LegendaryPlayerProfileBase):
@@ -103,18 +102,16 @@ class LegendaryPlayerProfileView(LegendaryPlayerProfileBase):
     id: str
     created_at: datetime
     updated_at: datetime
-    height_offset_cm: int = Field(..., description="Delta between GTEX height and historical height (-1, 0, +1)")
+    height_offset_cm: int
 
 
 class LegendarySeedImportItem(LegendaryPlayerProfileBase):
-    instantiate_gtex_player: bool = Field(
-        default=True, description="Whether to instantiate an ordinary GTEX Player row immediately upon seed"
-    )
+    instantiate_gtex_player: bool = True
 
 
 class LegendarySeedImportRequest(BaseModel):
     profiles: list[LegendarySeedImportItem] = Field(..., min_length=1)
-    instantiate_all: bool = Field(default=True)
+    instantiate_all: bool = True
 
 
 class LegendarySeedImportResult(BaseModel):

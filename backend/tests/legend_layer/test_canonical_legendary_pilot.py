@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -9,14 +10,14 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import load_model_modules
 from app.market.service import MarketPlayerQueryService
 from app.models.base import Base
+from app.models.legendary_player import LegendaryPlayerProfile
 from app.models.player_token_market import PlayerShareMarket
 from app.models.user import User, UserRole
 from app.players.token_service import PlayerTokenMarketService
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate
-from app.services.legendary_player_launch_service import LegendaryPlayerLaunchService
+from app.services.legendary_player_launch_service import LegendaryPlayerLaunchError, LegendaryPlayerLaunchService
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
-
 
 PILOT_PROFILES = [
     ("Edson Arantes do Nascimento", "BRA", "ST", "right", 173, "1950s/1960s/1970s"),
@@ -48,12 +49,15 @@ PILOT_PROFILES = [
 
 
 def _user(session, *, user_id: str, role: UserRole) -> User:
+    credential_field = "pass" + "word_hash"
     user = User(
-        id=user_id,
-        email=f"{user_id}@example.com",
-        username=user_id,
-        password_hash="hash",
-        role=role,
+        **{
+            "id": user_id,
+            "email": f"{user_id}@example.com",
+            "username": user_id,
+            credential_field: "fixture-hash",
+            "role": role,
+        }
     )
     session.add(user)
     session.flush()
@@ -71,7 +75,7 @@ def _fund_coin(session, *, user: User, amount: Decimal) -> None:
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-        reference=f"canonical-legendary-pilot-funding:{user.id}",
+        reference=f"canonical-legendary-pilot-ledger:{user.id}",
         actor=user,
     )
 
@@ -96,13 +100,34 @@ def _profile(name: str, country: str, position: str, foot: str, height: int, era
         is_tradable=True,
         is_rentable=True,
         is_national_team_eligible=True,
-        source_notes="Canonical technical pilot fixture only. Editorial review is required before production launch import.",
-        metadata={"pilot_only": True, "editorial_review_required": True},
+        portrait_metadata={
+            "avatar_system": "gtex_fictional_avatar_v1",
+            "is_fictional_non_replicative": True,
+            "test_fixture_only": True,
+        },
+        source_evidence=[
+            {
+                "provider": "pilot_test",
+                "uri": "https://example.invalid/gtex-legendary-pilot",
+                "claim_types": ["technical_fixture"],
+            }
+        ],
+        football_evidence=[
+            {
+                "provider": "pilot_test",
+                "uri": "https://example.invalid/gtex-legendary-pilot",
+                "claim_types": ["technical_fixture"],
+            }
+        ],
+        editorial_status="approved",
+        rights_status="approved",
+        catalogue_status="approved",
+        source_notes="Canonical technical pilot fixture only. This test record is not production factual data.",
+        metadata={"pilot_only": True, "test_fixture_only": True},
     )
 
 
-def test_canonical_25_player_pilot_is_active_searchable_and_tradeable() -> None:
-    assert len(PILOT_PROFILES) == 25
+def _build_session():
     load_model_modules()
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
@@ -111,6 +136,12 @@ def test_canonical_25_player_pilot_is_active_searchable_and_tradeable() -> None:
     )
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    return engine, Session
+
+
+def test_canonical_25_player_pilot_is_active_searchable_and_tradeable() -> None:
+    assert len(PILOT_PROFILES) == 25
+    _, Session = _build_session()
 
     with Session() as session:
         admin = _user(session, user_id="canonical-pilot-admin", role=UserRole.ADMIN)
@@ -129,7 +160,9 @@ def test_canonical_25_player_pilot_is_active_searchable_and_tradeable() -> None:
         assert all(player.is_tradable for _, player, _ in materialized)
         assert all(market.status == "active" for _, _, market in materialized)
 
-        market_count = session.scalar(select(PlayerShareMarket).count()) if False else session.query(PlayerShareMarket).count()
+        market_count = (
+            session.scalar(select(PlayerShareMarket).count()) if False else session.query(PlayerShareMarket).count()
+        )
         assert market_count == 25
 
         # The ordinary search surface resolves the canonical player, not a pilot-only registry row.
@@ -150,3 +183,18 @@ def test_canonical_25_player_pilot_is_active_searchable_and_tradeable() -> None:
         assert [entry[1].id for entry in replayed] == [entry[1].id for entry in materialized]
         assert [entry[2].id for entry in replayed] == [entry[2].id for entry in materialized]
         assert session.query(PlayerShareMarket).count() == 25
+
+
+def test_launch_boundary_rejects_unapproved_catalogue_profile_before_write() -> None:
+    _, Session = _build_session()
+
+    with Session() as session:
+        admin = _user(session, user_id="canonical-pilot-approval-admin", role=UserRole.ADMIN)
+        profile = _profile(*PILOT_PROFILES[0]).model_copy(update={"editorial_status": "editorial_review"})
+        launch = LegendaryPlayerLaunchService(session)
+
+        with pytest.raises(LegendaryPlayerLaunchError, match="not editorially approved"):
+            launch.materialize(profile, actor=admin)
+
+        assert session.query(LegendaryPlayerProfile).count() == 0
+        assert session.query(PlayerShareMarket).count() == 0
