@@ -98,3 +98,7 @@ The importer does not create a separate legendary economy and does not use the d
 ## Important boundary
 
 The generated staging bundle is not a production seed. Every candidate remains blocked until the required football attributes, editorial approval, rights approval, and fictional portrait configuration exist. The 2,000 target is a release gate, not a license to invent facts.
+
+## Quality
+
+The catalogue pipeline is formatted and checked by the repository quality gates before merge.
