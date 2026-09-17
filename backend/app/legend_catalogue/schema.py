@@ -26,8 +26,10 @@ class CatalogueRecord(BaseModel):
     historical_height_cm: int | None = Field(default=None, ge=120, le=230)
     position_candidates: list[str] = Field(default_factory=list)
     primary_position: str | None = None
+    secondary_positions: list[str] = Field(default_factory=list)
     preferred_foot: Literal["left", "right", "both"] | None = None
     era: str | None = None
+    legendary_classification: str | None = None
     signature_traits: list[str] = Field(default_factory=list)
     signature_role: str | None = None
     technical_profile: dict[str, Any] = Field(default_factory=dict)
@@ -40,6 +42,7 @@ class CatalogueRecord(BaseModel):
     rights_status: RightsStatus = "unknown"
     catalogue_status: CatalogueStatus = "staged"
     blocking_reasons: list[str] = Field(default_factory=list)
+    source_notes: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("country_code")
