@@ -14,9 +14,12 @@ if str(BACKEND_ROOT) not in sys.path:
 from app.core.database import create_database_engine, create_session_factory
 from app.legend_catalogue.schema import CatalogueBundle
 from app.legend_catalogue.validation import evaluate_release
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate
 from app.services.legendary_player_launch_service import LegendaryPlayerLaunchService
+
+
+ADMIN_ROLES = frozenset({UserRole.ADMIN, UserRole.SUPER_ADMIN})
 
 
 def main() -> int:
@@ -46,6 +49,10 @@ def main() -> int:
             actor = session.scalar(select(User).where(User.id == args.actor_user_id))
             if actor is None:
                 raise SystemExit(f"Admin actor {args.actor_user_id!r} was not found")
+            if actor.role not in ADMIN_ROLES:
+                raise SystemExit(
+                    f"Actor {args.actor_user_id!r} has role {actor.role!r}; activation requires ADMIN or SUPER_ADMIN."
+                )
 
         service = LegendaryPlayerLaunchService(session)
         for record in bundle.records:
@@ -82,11 +89,6 @@ def main() -> int:
                 )
                 if args.activate:
                     stored, player, market = service.materialize(profile, actor=actor)
-                    stored.date_of_birth = record.date_of_birth
-                    stored.source_evidence_json = [item.model_dump() for item in record.source_evidence]
-                    stored.football_evidence_json = [item.model_dump() for item in record.football_evidence]
-                    stored.editorial_status = record.editorial_status
-                    stored.rights_status = record.rights_status
                     stored.catalogue_status = "imported"
                     player.date_of_birth = record.date_of_birth
                     report.setdefault("imported", []).append(
