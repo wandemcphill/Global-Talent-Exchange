@@ -19,7 +19,6 @@ from app.services.legendary_player_launch_service import LegendaryPlayerLaunchEr
 from app.wallets.service import LedgerPosting, WalletService
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
 
-
 PILOT_PROFILES = [
     ("Edson Arantes do Nascimento", "BRA", "ST", "right", 173, "1950s/1960s/1970s"),
     ("Diego Armando Maradona", "ARG", "AM", "left", 165, "1980s/1990s"),
@@ -158,7 +157,9 @@ def test_canonical_25_player_pilot_is_active_searchable_and_tradeable() -> None:
         assert all(player.is_tradable for _, player, _ in materialized)
         assert all(market.status == "active" for _, _, market in materialized)
 
-        market_count = session.scalar(select(PlayerShareMarket).count()) if False else session.query(PlayerShareMarket).count()
+        market_count = (
+            session.scalar(select(PlayerShareMarket).count()) if False else session.query(PlayerShareMarket).count()
+        )
         assert market_count == 25
 
         # The ordinary search surface resolves the canonical player, not a pilot-only registry row.

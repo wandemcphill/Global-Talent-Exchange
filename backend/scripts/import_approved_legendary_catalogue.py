@@ -19,19 +19,21 @@ from app.models.user import User, UserRole
 from app.schemas.legendary_player import LegendaryPlayerProfileCreate
 from app.services.legendary_player_launch_service import LegendaryPlayerLaunchService
 
-
 ADMIN_ROLES = frozenset({UserRole.ADMIN, UserRole.SUPER_ADMIN})
 
 
 def _canonical_country_exists(session, code: str) -> bool:
     normalized = code.strip().upper()
-    return session.scalar(
-        select(Country.id).where(
-            (Country.alpha2_code == normalized)
-            | (Country.alpha3_code == normalized)
-            | (Country.fifa_code == normalized)
+    return (
+        session.scalar(
+            select(Country.id).where(
+                (Country.alpha2_code == normalized)
+                | (Country.alpha3_code == normalized)
+                | (Country.fifa_code == normalized)
+            )
         )
-    ) is not None
+        is not None
+    )
 
 
 def main() -> int:
@@ -110,7 +112,9 @@ def main() -> int:
                         {"source_id": record.source_id, "player_id": player.id, "market_id": market.id}
                     )
                 else:
-                    report.setdefault("planned", []).append({"source_id": record.source_id, "full_name": record.full_name})
+                    report.setdefault("planned", []).append(
+                        {"source_id": record.source_id, "full_name": record.full_name}
+                    )
                 report["processed"] += 1
             except Exception as exc:  # noqa: BLE001
                 report["errors"].append({"source_id": record.source_id, "error": str(exc)})

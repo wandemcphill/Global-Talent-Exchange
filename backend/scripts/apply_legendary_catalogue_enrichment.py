@@ -8,7 +8,9 @@ from app.legend_catalogue.schema import CatalogueBundle
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Apply explicit editorial/football enrichment to a GTEX legendary staging bundle.")
+    parser = argparse.ArgumentParser(
+        description="Apply explicit editorial/football enrichment to a GTEX legendary staging bundle."
+    )
     parser.add_argument("bundle")
     parser.add_argument("patches")
     parser.add_argument("--output", required=True)

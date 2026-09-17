@@ -13,11 +13,26 @@ depends_on = None
 
 def upgrade() -> None:
     op.add_column("legendary_player_profiles", sa.Column("date_of_birth", sa.Date(), nullable=True))
-    op.add_column("legendary_player_profiles", sa.Column("source_evidence_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'")))
-    op.add_column("legendary_player_profiles", sa.Column("football_evidence_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'")))
-    op.add_column("legendary_player_profiles", sa.Column("editorial_status", sa.String(length=32), nullable=False, server_default="sourced"))
-    op.add_column("legendary_player_profiles", sa.Column("rights_status", sa.String(length=32), nullable=False, server_default="unknown"))
-    op.add_column("legendary_player_profiles", sa.Column("catalogue_status", sa.String(length=32), nullable=False, server_default="staged"))
+    op.add_column(
+        "legendary_player_profiles",
+        sa.Column("source_evidence_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
+    )
+    op.add_column(
+        "legendary_player_profiles",
+        sa.Column("football_evidence_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
+    )
+    op.add_column(
+        "legendary_player_profiles",
+        sa.Column("editorial_status", sa.String(length=32), nullable=False, server_default="sourced"),
+    )
+    op.add_column(
+        "legendary_player_profiles",
+        sa.Column("rights_status", sa.String(length=32), nullable=False, server_default="unknown"),
+    )
+    op.add_column(
+        "legendary_player_profiles",
+        sa.Column("catalogue_status", sa.String(length=32), nullable=False, server_default="staged"),
+    )
     op.create_index("ix_legendary_player_profiles_editorial_status", "legendary_player_profiles", ["editorial_status"])
     op.create_index("ix_legendary_player_profiles_rights_status", "legendary_player_profiles", ["rights_status"])
     op.create_index("ix_legendary_player_profiles_catalogue_status", "legendary_player_profiles", ["catalogue_status"])

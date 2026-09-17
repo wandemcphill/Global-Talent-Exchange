@@ -39,13 +39,9 @@ class LegendaryPlayerLaunchService:
     @staticmethod
     def _assert_launch_approved(profile: LegendaryPlayerProfileCreate) -> None:
         if profile.editorial_status != "approved":
-            raise LegendaryPlayerLaunchError(
-                f"Legendary profile {profile.slug!r} is not editorially approved."
-            )
+            raise LegendaryPlayerLaunchError(f"Legendary profile {profile.slug!r} is not editorially approved.")
         if profile.rights_status != "approved":
-            raise LegendaryPlayerLaunchError(
-                f"Legendary profile {profile.slug!r} does not have rights approval."
-            )
+            raise LegendaryPlayerLaunchError(f"Legendary profile {profile.slug!r} does not have rights approval.")
         if profile.catalogue_status not in {"approved", "imported"}:
             raise LegendaryPlayerLaunchError(
                 f"Legendary profile {profile.slug!r} is not release-approved ({profile.catalogue_status!r})."
@@ -92,9 +88,7 @@ class LegendaryPlayerLaunchService:
         return results
 
     def issue_active_market(self, *, player: Player, actor: User) -> PlayerShareMarket:
-        existing = self.session.scalar(
-            select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id)
-        )
+        existing = self.session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id))
         if existing is not None:
             if existing.status != "active":
                 raise LegendaryPlayerLaunchError(
@@ -118,9 +112,7 @@ class LegendaryPlayerLaunchService:
                 status="active",
             )
         except PlayerTokenMarketError as exc:
-            raise LegendaryPlayerLaunchError(
-                f"Legendary player market issuance failed: {exc.detail}"
-            ) from exc
+            raise LegendaryPlayerLaunchError(f"Legendary player market issuance failed: {exc.detail}") from exc
 
         if market.status != "active":
             raise LegendaryPlayerLaunchError(

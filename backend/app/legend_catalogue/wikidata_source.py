@@ -64,6 +64,7 @@ def fetch_rows(*, page_size: int = 500, max_pages: int = 20, pause_seconds: floa
         if not bindings:
             break
         for binding in bindings:
+
             def value(key: str) -> str | None:
                 item = binding.get(key)
                 return item.get("value") if item else None

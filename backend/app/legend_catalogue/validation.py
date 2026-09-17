@@ -4,7 +4,6 @@ from collections import Counter
 
 from .schema import CatalogueBundle, CatalogueRecord, ReleaseGateResult
 
-
 REQUIRED_FOR_RELEASE = (
     "country_code",
     "date_of_birth",

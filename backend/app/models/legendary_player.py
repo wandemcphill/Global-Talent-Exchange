@@ -53,7 +53,9 @@ class LegendaryPlayerProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     portrait_metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     source_evidence_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     football_evidence_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
-    editorial_status: Mapped[str] = mapped_column(String(32), nullable=False, default="sourced", server_default="sourced")
+    editorial_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="sourced", server_default="sourced"
+    )
     rights_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown", server_default="unknown")
     catalogue_status: Mapped[str] = mapped_column(String(32), nullable=False, default="staged", server_default="staged")
     source_notes: Mapped[str | None] = mapped_column(Text, nullable=True)

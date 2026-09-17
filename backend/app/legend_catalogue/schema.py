@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 EditorialStatus = Literal["sourced", "enriched", "editorial_review", "approved", "blocked"]
 RightsStatus = Literal["unknown", "pending", "approved", "rejected"]
 CatalogueStatus = Literal["staged", "approved", "imported", "blocked"]
