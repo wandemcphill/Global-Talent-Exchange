@@ -1,5 +1,8 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
+import pytest
+
+from app.legend_catalogue.enrichment import EnrichmentBundle, EnrichmentPatch, apply_enrichment
 from app.legend_catalogue.schema import CatalogueBundle, CatalogueRecord, Evidence
 from app.legend_catalogue.selection import select_candidates
 from app.legend_catalogue.validation import evaluate_release, record_blockers
@@ -100,3 +103,49 @@ def test_selection_deduplicates_source_ids_deterministically() -> None:
 
     assert len(selected) == 1
     assert selected[0].source_id == "wikidata:Q1"
+
+
+def test_enrichment_overlay_updates_only_explicit_fields() -> None:
+    bundle = CatalogueBundle(
+        generated_at=datetime.now(timezone.utc),
+        source="test",
+        target_count=1,
+        records=[_record(editorial_status="sourced", rights_status="pending")],
+    )
+    patches = EnrichmentBundle(
+        generated_at=datetime.now(timezone.utc),
+        patches=[
+            EnrichmentPatch(
+                source_id="wikidata:Q123",
+                country_code="GHA",
+                primary_position="AM",
+                signature_traits=["vision", "dribbling"],
+                editorial_status="editorial_review",
+            )
+        ],
+    )
+
+    enriched = apply_enrichment(bundle, patches)
+    record = enriched.records[0]
+    assert record.country_code == "GHA"
+    assert record.primary_position == "AM"
+    assert record.signature_traits == ["vision", "dribbling"]
+    assert record.editorial_status == "editorial_review"
+    assert record.rights_status == "pending"
+    assert record.full_name == "Example Player"
+
+
+def test_enrichment_rejects_unknown_source_ids() -> None:
+    bundle = CatalogueBundle(
+        generated_at=datetime.now(timezone.utc),
+        source="test",
+        target_count=1,
+        records=[_record()],
+    )
+    patches = EnrichmentBundle(
+        generated_at=datetime.now(timezone.utc),
+        patches=[EnrichmentPatch(source_id="wikidata:Q999")],
+    )
+
+    with pytest.raises(ValueError, match="unknown source IDs"):
+        apply_enrichment(bundle, patches)
