@@ -33,6 +33,16 @@ def test_core_legends_batch_is_factual_only_and_approval_gated() -> None:
         "wikidata:Q482931",
     }
 
+    preferred_foot_by_source = {
+        "wikidata:Q12897": "both",
+        "wikidata:Q4457": "right",
+        "wikidata:Q1835": "right",
+        "wikidata:Q483027": "both",
+        "wikidata:Q1255625": "right",
+        "wikidata:Q605817": "right",
+        "wikidata:Q482931": "left",
+    }
+
     for patch in bundle.patches:
         dumped = json.loads(patch.model_dump_json())
         assert dumped["editorial_status"] == "enriched"
@@ -42,8 +52,12 @@ def test_core_legends_batch_is_factual_only_and_approval_gated() -> None:
         assert patch.technical_profile is None
         assert patch.physical_profile is None
         assert patch.mental_profile is None
-        assert patch.preferred_foot is None
         assert patch.era is None
         assert patch.signature_traits is None
         assert patch.signature_role is None
         assert "deferred" in (patch.source_notes or "")
+
+        expected_foot = preferred_foot_by_source.get(patch.source_id)
+        assert patch.preferred_foot == expected_foot
+        if expected_foot is not None:
+            assert any("preferred_foot" in evidence.claim_types for evidence in patch.football_evidence or [])
