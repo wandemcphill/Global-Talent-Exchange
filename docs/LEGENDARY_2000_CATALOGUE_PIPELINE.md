@@ -15,7 +15,9 @@ The pipeline is deliberately split into four stages:
 
 `backend/scripts/build_legendary_catalogue_staging.py` queries the Wikidata SPARQL service and writes a JSON staging bundle. Wikidata exposes association-football player properties including occupation, country for sport, date of birth, height, position, image and footedness. The GTEX harvester records the source item and evidence URL, but it does not convert incomplete source data into fictional certainty.
 
-The source command refuses to pretend there are 2,000 records when fewer unique candidates are available.
+Candidate selection is deterministic and country-diverse. The default selection cap is 35 records per country bucket, with known-country records preferred over unknown-country records and more complete source coverage preferred within the same bucket. Duplicate source IDs are removed before the target-count decision.
+
+The source command refuses to pretend there are 2,000 records when fewer diverse candidates are available. The target is a release gate, not a license to invent names or football facts.
 
 ## Release gate
 
@@ -38,18 +40,18 @@ Every launch record must have:
 - rights approval
 - approved fictional non-replicative portrait metadata
 
-Duplicate source IDs and incomplete records block release.
+Duplicate source IDs, incomplete records, unapproved records, and source-photo references in portrait metadata block release.
 
 ## Production import
 
-`backend/scripts/import_approved_legendary_catalogue.py` is dry-run by default. Activation requires an explicit admin actor ID. It refuses to import a bundle that fails the release gate.
+`backend/scripts/import_approved_legendary_catalogue.py` is dry-run by default. Activation requires an explicit `ADMIN` or `SUPER_ADMIN` actor ID. It refuses to import a bundle that fails the release gate.
 
 Activation uses `LegendaryPlayerLaunchService` and therefore follows the canonical lifecycle:
 
 `approved catalogue record -> LegendaryPlayerProfile -> ordinary GTEX Player -> active PlayerShareMarket`
 
-The importer does not create a separate legendary economy and does not use the disabled ingestion compatibility issuer.
+The importer does not create a separate legendary economy and does not use the disabled ingestion compatibility issuer. Activation is transactional: any import error causes the surrounding transaction to roll back rather than leaving a partially launched catalogue.
 
 ## Important boundary
 
-The generated staging bundle is not a production seed. The 2,000 target is a release gate, not a license to invent facts. A candidate stays blocked until editorial enrichment and approvals are complete.
+The generated staging bundle is not a production seed. Every candidate remains blocked until the required football attributes, editorial approval, rights approval, and fictional portrait configuration exist. The 2,000 target is a release gate, not a license to invent facts.
