@@ -75,6 +75,15 @@ class LegendaryPlayerRegistryService:
             "configured_nationality": country_code,
         }
 
+    def _governance_payload(self, data: LegendaryPlayerProfileCreate) -> dict[str, object]:
+        return {
+            "source_evidence_json": [dict(item) for item in data.source_evidence],
+            "football_evidence_json": [dict(item) for item in data.football_evidence],
+            "editorial_status": data.editorial_status,
+            "rights_status": data.rights_status,
+            "catalogue_status": data.catalogue_status,
+        }
+
     def upsert_legendary_profile(self, data: LegendaryPlayerProfileCreate) -> tuple[LegendaryPlayerProfile, bool]:
         """Idempotently create or update a LegendaryPlayerProfile by slug."""
         slug = data.slug.strip().lower()
@@ -95,12 +104,14 @@ class LegendaryPlayerRegistryService:
             else:
                 portrait_meta = self.generate_fictional_portrait_metadata(slug, data.country_code)
 
+        governance = self._governance_payload(data)
         created = False
         if existing is None:
             profile = LegendaryPlayerProfile(
                 slug=slug,
                 full_name=data.full_name,
                 country_code=data.country_code,
+                date_of_birth=data.date_of_birth,
                 primary_position=data.primary_position,
                 secondary_positions_json=list(data.secondary_positions),
                 preferred_foot=data.preferred_foot,
@@ -119,6 +130,11 @@ class LegendaryPlayerRegistryService:
                 is_rentable=data.is_rentable,
                 is_national_team_eligible=data.is_national_team_eligible,
                 portrait_metadata_json=portrait_meta,
+                source_evidence_json=governance["source_evidence_json"],
+                football_evidence_json=governance["football_evidence_json"],
+                editorial_status=str(governance["editorial_status"]),
+                rights_status=str(governance["rights_status"]),
+                catalogue_status=str(governance["catalogue_status"]),
                 source_notes=data.source_notes,
                 metadata_json=dict(data.metadata),
             )
@@ -128,6 +144,7 @@ class LegendaryPlayerRegistryService:
             profile = existing
             profile.full_name = data.full_name
             profile.country_code = data.country_code
+            profile.date_of_birth = data.date_of_birth
             profile.primary_position = data.primary_position
             profile.secondary_positions_json = list(data.secondary_positions)
             profile.preferred_foot = data.preferred_foot
@@ -146,6 +163,11 @@ class LegendaryPlayerRegistryService:
             profile.is_rentable = data.is_rentable
             profile.is_national_team_eligible = data.is_national_team_eligible
             profile.portrait_metadata_json = portrait_meta
+            profile.source_evidence_json = governance["source_evidence_json"]
+            profile.football_evidence_json = governance["football_evidence_json"]
+            profile.editorial_status = str(governance["editorial_status"])
+            profile.rights_status = str(governance["rights_status"])
+            profile.catalogue_status = str(governance["catalogue_status"])
             profile.source_notes = data.source_notes
             profile.metadata_json = dict(data.metadata)
 
@@ -167,6 +189,24 @@ class LegendaryPlayerRegistryService:
         first_name = names[0]
         last_name = names[1] if len(names) > 1 else None
 
+        dna_payload = {
+            "era": profile.era,
+            "legendary_classification": profile.legendary_classification,
+            "signature_traits": list(profile.signature_traits_json or []),
+            "signature_role": profile.signature_role,
+            "technical_profile": dict(profile.technical_profile_json or {}),
+            "physical_profile": dict(profile.physical_profile_json or {}),
+            "mental_profile": dict(profile.mental_profile_json or {}),
+            "is_national_team_eligible": profile.is_national_team_eligible,
+            "is_rentable": profile.is_rentable,
+            "portrait_metadata": dict(profile.portrait_metadata_json or {}),
+            "source_evidence": list(profile.source_evidence_json or []),
+            "football_evidence": list(profile.football_evidence_json or []),
+            "editorial_status": profile.editorial_status,
+            "rights_status": profile.rights_status,
+            "catalogue_status": profile.catalogue_status,
+        }
+
         if existing_player is None:
             player = Player(
                 legendary_profile_id=profile.id,
@@ -180,24 +220,14 @@ class LegendaryPlayerRegistryService:
                 position=profile.primary_position,
                 normalized_position=profile.primary_position,
                 secondary_positions_json=list(profile.secondary_positions_json or []),
+                date_of_birth=profile.date_of_birth,
                 height_cm=profile.gtex_height_cm,
                 preferred_foot=profile.preferred_foot,
                 is_tradable=profile.is_tradable,
                 is_real_player=True,
                 real_player_tier=profile.legendary_classification,
                 canonical_display_name=profile.full_name,
-                dna_profile={
-                    "era": profile.era,
-                    "legendary_classification": profile.legendary_classification,
-                    "signature_traits": list(profile.signature_traits_json or []),
-                    "signature_role": profile.signature_role,
-                    "technical_profile": dict(profile.technical_profile_json or {}),
-                    "physical_profile": dict(profile.physical_profile_json or {}),
-                    "mental_profile": dict(profile.mental_profile_json or {}),
-                    "is_national_team_eligible": profile.is_national_team_eligible,
-                    "is_rentable": profile.is_rentable,
-                    "portrait_metadata": dict(profile.portrait_metadata_json or {}),
-                },
+                dna_profile=dna_payload,
             )
             self.session.add(player)
         else:
@@ -211,29 +241,14 @@ class LegendaryPlayerRegistryService:
             player.position = profile.primary_position
             player.normalized_position = profile.primary_position
             player.secondary_positions_json = list(profile.secondary_positions_json or [])
+            player.date_of_birth = profile.date_of_birth
             player.height_cm = profile.gtex_height_cm
             player.preferred_foot = profile.preferred_foot
             player.is_tradable = profile.is_tradable
             player.is_real_player = True
             player.real_player_tier = profile.legendary_classification
             player.canonical_display_name = profile.full_name
-
-            dna = dict(player.dna_profile or {})
-            dna.update(
-                {
-                    "era": profile.era,
-                    "legendary_classification": profile.legendary_classification,
-                    "signature_traits": list(profile.signature_traits_json or []),
-                    "signature_role": profile.signature_role,
-                    "technical_profile": dict(profile.technical_profile_json or {}),
-                    "physical_profile": dict(profile.physical_profile_json or {}),
-                    "mental_profile": dict(profile.mental_profile_json or {}),
-                    "is_national_team_eligible": profile.is_national_team_eligible,
-                    "is_rentable": profile.is_rentable,
-                    "portrait_metadata": dict(profile.portrait_metadata_json or {}),
-                }
-            )
-            player.dna_profile = dna
+            player.dna_profile = {**dict(player.dna_profile or {}), **dna_payload}
 
         self.session.flush()
         return player
@@ -312,6 +327,7 @@ class LegendaryPlayerRegistryService:
             slug=profile.slug,
             full_name=profile.full_name,
             country_code=profile.country_code,
+            date_of_birth=profile.date_of_birth,
             primary_position=profile.primary_position,
             secondary_positions=list(profile.secondary_positions_json or []),
             preferred_foot=profile.preferred_foot,  # type: ignore[arg-type]
@@ -330,6 +346,11 @@ class LegendaryPlayerRegistryService:
             is_rentable=profile.is_rentable,
             is_national_team_eligible=profile.is_national_team_eligible,
             portrait_metadata=dict(profile.portrait_metadata_json or {}),
+            source_evidence=list(profile.source_evidence_json or []),
+            football_evidence=list(profile.football_evidence_json or []),
+            editorial_status=profile.editorial_status,  # type: ignore[arg-type]
+            rights_status=profile.rights_status,  # type: ignore[arg-type]
+            catalogue_status=profile.catalogue_status,  # type: ignore[arg-type]
             source_notes=profile.source_notes,
             metadata=dict(profile.metadata_json or {}),
             created_at=profile.created_at,
