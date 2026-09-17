@@ -25,14 +25,16 @@
       "date_of_birth": "1960-10-30",
       "historical_height_cm": 165,
       "position_candidates": ["midfielder", "forward"],
+      "preferred_foot": "left",
       "football_evidence": [
-        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q17515", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]}
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q17515", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FIFA", "uri": "https://www.fifa.com/en/articles/dribbles-diego-maradona-1982-1986-1990-1994", "claim_types": ["preferred_foot"]}
       ],
       "editorial_status": "enriched",
       "rights_status": "unknown",
       "catalogue_status": "staged",
-      "source_notes": "Source-native football facts only. Preferred foot remains unset because the current source pass did not establish a preferred-foot field to the batch standard. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
-      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred", "preferred_foot": "evidence_gap"}
+      "source_notes": "Source-native football facts only. Preferred foot is supported by FIFA's description of Maradona as a left-footed player. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
     },
     {
       "source_id": "wikidata:Q17163",
@@ -40,14 +42,16 @@
       "date_of_birth": "1947-04-25",
       "historical_height_cm": 178,
       "position_candidates": ["midfielder", "forward"],
+      "preferred_foot": "right",
       "football_evidence": [
-        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q17163", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]}
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q17163", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FIFA", "uri": "https://collect.fifa.com/marketplace/ac-sp-ch", "claim_types": ["preferred_foot"]}
       ],
       "editorial_status": "enriched",
       "rights_status": "unknown",
       "catalogue_status": "staged",
-      "source_notes": "Source-native football facts only. Preferred foot remains unset because the current source pass did not establish a preferred-foot field to the batch standard. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
-      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred", "preferred_foot": "evidence_gap"}
+      "source_notes": "Source-native football facts only. Preferred foot is supported by FIFA's account of Cruyff scoring the 1974 Brazil goal with a right-footed strike. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
     },
     {
       "source_id": "wikidata:Q4457",
