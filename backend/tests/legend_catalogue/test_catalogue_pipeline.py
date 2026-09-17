@@ -1,6 +1,7 @@
 from datetime import date, datetime, timezone
 
 import pytest
+from pydantic import ValidationError
 
 from app.legend_catalogue.enrichment import EnrichmentBundle, EnrichmentPatch, apply_enrichment
 from app.legend_catalogue.schema import CatalogueBundle, CatalogueRecord, Evidence
@@ -149,3 +150,8 @@ def test_enrichment_rejects_unknown_source_ids() -> None:
 
     with pytest.raises(ValueError, match="unknown source IDs"):
         apply_enrichment(bundle, patches)
+
+
+def test_enrichment_patch_rejects_invalid_date_types() -> None:
+    with pytest.raises(ValidationError):
+        EnrichmentPatch(source_id="wikidata:Q123", date_of_birth="not-a-date")
