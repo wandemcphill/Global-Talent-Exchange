@@ -1,6 +1,9 @@
 name: Temporary Private Negotiation Fix
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - fix/private-negotiation-hub-persistence-20260917
@@ -46,4 +49,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add backend/app/transfer_market/service.py backend/tests/players/test_transfer_offer_concurrency.py
           git commit -m "fix(transfer): persist private negotiation after hub offer acceptance"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
