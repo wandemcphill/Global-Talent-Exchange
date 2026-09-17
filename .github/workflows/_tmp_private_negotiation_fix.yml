@@ -52,3 +52,4 @@ jobs:
           git push origin "HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
 
 # Triggered after the helper was installed on the default branch.
+# Force a fresh PR synchronization event after the helper deployment.
