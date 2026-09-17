@@ -35,6 +35,8 @@ def test_core_legends_batch_is_factual_only_and_approval_gated() -> None:
 
     preferred_foot_by_source = {
         "wikidata:Q12897": "both",
+        "wikidata:Q17515": "left",
+        "wikidata:Q17163": "right",
         "wikidata:Q4457": "right",
         "wikidata:Q1835": "right",
         "wikidata:Q483027": "both",
@@ -57,7 +59,6 @@ def test_core_legends_batch_is_factual_only_and_approval_gated() -> None:
         assert patch.signature_role is None
         assert "deferred" in (patch.source_notes or "")
 
-        expected_foot = preferred_foot_by_source.get(patch.source_id)
+        expected_foot = preferred_foot_by_source[patch.source_id]
         assert patch.preferred_foot == expected_foot
-        if expected_foot is not None:
-            assert any("preferred_foot" in evidence.claim_types for evidence in patch.football_evidence or [])
+        assert any("preferred_foot" in evidence.claim_types for evidence in patch.football_evidence or [])
