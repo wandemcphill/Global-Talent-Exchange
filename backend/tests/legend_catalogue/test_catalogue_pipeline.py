@@ -63,6 +63,18 @@ def test_duplicate_source_ids_are_blocked() -> None:
     assert result.duplicate_count == 1
 
 
+def test_source_portrait_reference_blocks_release() -> None:
+    blockers = record_blockers(
+        _record(
+            portrait_metadata={
+                "is_fictional_non_replicative": True,
+                "source_image_ref": "https://commons.wikimedia.org/example.jpg",
+            }
+        )
+    )
+    assert "portrait_contains_source_image_reference" in blockers
+
+
 def test_selection_caps_country_and_prefers_known_complete_records() -> None:
     records = [
         _record(source_id="wikidata:Q2", full_name="Unknown Player", country_code=None, date_of_birth=None),
