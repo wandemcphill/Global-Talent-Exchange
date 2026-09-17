@@ -20,9 +20,9 @@ class WikidataRow:
     label: str
     dob: str | None
     sport_country: str | None
-    sport_country_fifa: str | None
+    sport_country_iso3: str | None
     citizenship: str | None
-    citizenship_fifa: str | None
+    citizenship_iso3: str | None
     height: str | None
     position: str | None
     position_label: str | None
@@ -31,15 +31,15 @@ class WikidataRow:
 
 
 QUERY = """
-SELECT ?item ?itemLabel ?dob ?sportCountry ?sportCountryFifa ?citizenship ?citizenshipFifa
+SELECT ?item ?itemLabel ?dob ?sportCountry ?sportCountryIso3 ?citizenship ?citizenshipIso3
        ?height ?position ?positionLabel ?footLabel ?image WHERE {
   ?item wdt:P106/wdt:P279* wd:Q937857;
         wdt:P569 ?dob.
   FILTER(YEAR(?dob) <= 2000)
   OPTIONAL { ?item wdt:P1532 ?sportCountry. }
-  OPTIONAL { ?sportCountry wdt:P3441 ?sportCountryFifa. }
+  OPTIONAL { ?sportCountry wdt:P298 ?sportCountryIso3. }
   OPTIONAL { ?item wdt:P27 ?citizenship. }
-  OPTIONAL { ?citizenship wdt:P3441 ?citizenshipFifa. }
+  OPTIONAL { ?citizenship wdt:P298 ?citizenshipIso3. }
   OPTIONAL { ?item wdt:P2048 ?height. }
   OPTIONAL { ?item wdt:P413 ?position. }
   OPTIONAL { ?item wdt:P8006 ?foot. }
@@ -74,9 +74,9 @@ def fetch_rows(*, page_size: int = 500, max_pages: int = 20, pause_seconds: floa
                     label=value("itemLabel") or "",
                     dob=value("dob"),
                     sport_country=value("sportCountry"),
-                    sport_country_fifa=value("sportCountryFifa"),
+                    sport_country_iso3=value("sportCountryIso3"),
                     citizenship=value("citizenship"),
-                    citizenship_fifa=value("citizenshipFifa"),
+                    citizenship_iso3=value("citizenshipIso3"),
                     height=value("height"),
                     position=value("position"),
                     position_label=value("positionLabel"),
@@ -106,8 +106,8 @@ def rows_to_candidates(rows: list[WikidataRow]) -> list[CatalogueRecord]:
         foot_values: set[str] = set()
         image = None
         for row in group:
-            for code in (row.sport_country_fifa, row.citizenship_fifa):
-                if code and code not in countries:
+            for code in (row.sport_country_iso3, row.citizenship_iso3):
+                if code and code.upper() not in countries:
                     countries.append(code.upper())
             if row.position_label and row.position_label not in positions:
                 positions.append(row.position_label)
