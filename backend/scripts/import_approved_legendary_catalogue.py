@@ -12,6 +12,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.core.database import create_database_engine, create_session_factory
+from app.ingestion.models import Country
 from app.legend_catalogue.schema import CatalogueBundle
 from app.legend_catalogue.validation import evaluate_release
 from app.models.user import User, UserRole
@@ -20,6 +21,17 @@ from app.services.legendary_player_launch_service import LegendaryPlayerLaunchSe
 
 
 ADMIN_ROLES = frozenset({UserRole.ADMIN, UserRole.SUPER_ADMIN})
+
+
+def _canonical_country_exists(session, code: str) -> bool:
+    normalized = code.strip().upper()
+    return session.scalar(
+        select(Country.id).where(
+            (Country.alpha2_code == normalized)
+            | (Country.alpha3_code == normalized)
+            | (Country.fifa_code == normalized)
+        )
+    ) is not None
 
 
 def main() -> int:
@@ -57,10 +69,14 @@ def main() -> int:
         service = LegendaryPlayerLaunchService(session)
         for record in bundle.records:
             try:
+                country_code = record.country_code or ""
+                if args.activate and not _canonical_country_exists(session, country_code):
+                    raise ValueError(f"Canonical country {country_code!r} is not seeded; refusing to fabricate it.")
+
                 profile = LegendaryPlayerProfileCreate(
                     slug=record.source_id.replace("wikidata:", "legend-").lower(),
                     full_name=record.full_name,
-                    country_code=record.country_code or "",
+                    country_code=country_code,
                     date_of_birth=record.date_of_birth,
                     primary_position=record.primary_position or "",
                     secondary_positions=record.secondary_positions,
@@ -90,7 +106,6 @@ def main() -> int:
                 if args.activate:
                     stored, player, market = service.materialize(profile, actor=actor)
                     stored.catalogue_status = "imported"
-                    player.date_of_birth = record.date_of_birth
                     report.setdefault("imported", []).append(
                         {"source_id": record.source_id, "player_id": player.id, "market_id": market.id}
                     )
