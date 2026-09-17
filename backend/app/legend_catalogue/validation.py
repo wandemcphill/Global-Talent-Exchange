@@ -12,6 +12,7 @@ REQUIRED_FOR_RELEASE = (
     "primary_position",
     "preferred_foot",
     "era",
+    "legendary_classification",
 )
 
 
@@ -36,6 +37,8 @@ def record_blockers(record: CatalogueRecord) -> list[str]:
         errors.append("editorial_not_approved")
     if record.rights_status != "approved":
         errors.append("rights_not_approved")
+    if record.catalogue_status != "approved":
+        errors.append("catalogue_not_approved")
     portrait = record.portrait_metadata
     if portrait.get("is_fictional_non_replicative") is not True:
         errors.append("portrait_not_approved_non_replicative")
