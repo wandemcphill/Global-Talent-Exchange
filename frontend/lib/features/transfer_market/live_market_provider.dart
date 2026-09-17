@@ -167,8 +167,7 @@ class MarketDashboardData {
       .where((PlayerShareSummary item) => !item.isTradable)
       .toList(growable: false);
 
-  List<PlayerShareSummary> get discoveryOnlyPlayerShares =>
-      upcomingPlayerShares;
+  List<PlayerShareSummary> get discoveryOnlyPlayerShares => upcomingPlayerShares;
 }
 
 class PlayerShareDetailData {
@@ -204,6 +203,7 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
   bool authenticated = ref.watch(isAuthenticatedProvider);
   final String query = ref.watch(marketSearchQueryProvider).trim();
   final int resultWindow = ref.watch(marketResultWindowProvider);
+
   final List<dynamic> marketPayloads = await Future.wait<dynamic>(
     <Future<dynamic>>[
       api.getMap(
@@ -216,13 +216,10 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
         },
       ),
       api.getList('/api/transfer-market/listings', auth: false),
-      playerService.getPlayers(
-        search: query.isEmpty ? null : query,
-        limit: resultWindow,
-      ),
     ],
     eagerError: true,
   );
+
   final JsonMap playerMarketPayload = jsonMap(
     marketPayloads[0],
     label: 'player share markets',
@@ -233,8 +230,15 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
   ).map(_playerShareSummaryFromMarketListItem).toList(growable: false);
   final Set<String> tradablePlayerIds =
       tradablePlayers.map((PlayerShareSummary item) => item.playerId).toSet();
-  final PaginatedPlayers? discoveryPage =
-      marketPayloads[2] as PaginatedPlayers?;
+
+  PaginatedPlayers? discoveryPage;
+  if (query.isNotEmpty) {
+    discoveryPage = await playerService.getPlayers(
+      search: query,
+      limit: resultWindow,
+    );
+  }
+
   final List<PlayerShareSummary> discoveryOnlyPlayers =
       (discoveryPage?.players ?? const <Player>[])
           .where((Player player) => !tradablePlayerIds.contains(player.id))
@@ -325,11 +329,11 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
     }
   }
 
-  final List<TransferListingSummary> transferListings = (marketPayloads[1]
-          as List<dynamic>)
-      .map((dynamic item) => jsonMap(item, label: 'transfer listing'))
-      .map(_transferListingFromJson)
-      .toList(growable: false);
+  final List<TransferListingSummary> transferListings =
+      (marketPayloads[1] as List<dynamic>)
+          .map((dynamic item) => jsonMap(item, label: 'transfer listing'))
+          .map(_transferListingFromJson)
+          .toList(growable: false);
 
   return MarketDashboardData(
     playerShares: <PlayerShareSummary>[
