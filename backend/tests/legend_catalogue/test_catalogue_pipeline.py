@@ -1,6 +1,7 @@
 from datetime import date
 
 from app.legend_catalogue.schema import CatalogueBundle, CatalogueRecord, Evidence
+from app.legend_catalogue.selection import select_candidates
 from app.legend_catalogue.validation import evaluate_release, record_blockers
 
 
@@ -60,3 +61,30 @@ def test_duplicate_source_ids_are_blocked() -> None:
     result = evaluate_release(bundle)
     assert result.ready is False
     assert result.duplicate_count == 1
+
+
+def test_selection_caps_country_and_prefers_known_complete_records() -> None:
+    records = [
+        _record(source_id="wikidata:Q2", full_name="Unknown Player", country_code=None, date_of_birth=None),
+        _record(source_id="wikidata:Q3", full_name="Nigeria B", country_code="NGA"),
+        _record(source_id="wikidata:Q4", full_name="Nigeria C", country_code="NGA"),
+        _record(source_id="wikidata:Q5", full_name="Ghana A", country_code="GHA"),
+    ]
+
+    selected = select_candidates(records, target_count=3, max_per_country=1)
+
+    assert len(selected) == 3
+    assert {record.country_code for record in selected} == {"NGA", "GHA", None}
+    assert selected[0].country_code == "GHA"
+
+
+def test_selection_deduplicates_source_ids_deterministically() -> None:
+    records = [
+        _record(source_id="wikidata:Q1", full_name="Same", technical_profile={}),
+        _record(source_id="wikidata:Q1", full_name="Same Better"),
+    ]
+
+    selected = select_candidates(records, target_count=1)
+
+    assert len(selected) == 1
+    assert selected[0].source_id == "wikidata:Q1"
