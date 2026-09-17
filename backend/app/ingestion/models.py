@@ -9,15 +9,22 @@ from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Index, 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+import app.models.legendary_player  # noqa: F401
 
 if TYPE_CHECKING:
-    from typing import Sequence
 
+    from app.models.legendary_player import LegendaryPlayerProfile
     from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
 
 
 def _match_model() -> type["Match"]:
     return Match
+
+
+def _legendary_profile_model():
+    from app.models.legendary_player import LegendaryPlayerProfile
+
+    return LegendaryPlayerProfile
 
 
 MAJOR_COMPETITIONS = {
@@ -239,7 +246,9 @@ class Country(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class Competition(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ingestion_competitions"
     __table_args__ = (
-        UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_competitions_provider_external_id"),
+        UniqueConstraint(
+            "source_provider", "provider_external_id", name="uq_ingestion_competitions_provider_external_id"
+        ),
         Index("ix_ingestion_competitions_slug", "slug"),
         Index("ix_ingestion_competitions_code", "code"),
         Index("ix_ingestion_competitions_internal_league_id", "internal_league_id"),
@@ -303,7 +312,9 @@ class Season(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
     current_matchday: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    season_status: Mapped[str] = mapped_column(String(32), nullable=False, default="upcoming", server_default="upcoming")
+    season_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="upcoming", server_default="upcoming"
+    )
     trading_window_opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     trading_window_closes_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     data_completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -385,8 +396,14 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_ingestion_players_liquidity_band_id", "liquidity_band_id"),
         Index("ix_ingestion_players_is_real_player", "is_real_player"),
         Index("ix_ingestion_players_canonical_display_name", "canonical_display_name"),
+        Index("ix_ingestion_players_legendary_profile_id", "legendary_profile_id"),
     )
 
+    legendary_profile_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("legendary_player_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     source_provider: Mapped[str] = mapped_column(String(64), nullable=False)
     provider_external_id: Mapped[str] = mapped_column(String(128), nullable=False)
     country_id: Mapped[str | None] = mapped_column(
@@ -430,9 +447,7 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     short_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
     position: Mapped[str | None] = mapped_column(String(64), nullable=True)
     normalized_position: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    secondary_positions_json: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list, server_default="[]"
-    )
+    secondary_positions_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     height_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     weight_kg: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -477,6 +492,10 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         "PlayerShareHolding",
         back_populates="player",
         cascade="all, delete-orphan",
+    )
+    legendary_profile: Mapped["LegendaryPlayerProfile | None"] = relationship(
+        _legendary_profile_model,
+        back_populates="instantiated_players",
     )
     share_events: Mapped[list["PlayerShareEvent"]] = relationship(
         "PlayerShareEvent",
@@ -525,7 +544,9 @@ class PlayerVerification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class PlayerImageMetadata(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ingestion_player_image_metadata"
     __table_args__ = (
-        UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_player_images_provider_external_id"),
+        UniqueConstraint(
+            "source_provider", "provider_external_id", name="uq_ingestion_player_images_provider_external_id"
+        ),
         UniqueConstraint("player_id", "image_role", name="uq_ingestion_player_images_player_role"),
         Index("ix_ingestion_player_images_player_id", "player_id"),
         Index("ix_ingestion_player_images_moderation_status", "moderation_status"),
@@ -696,7 +717,9 @@ class TeamStanding(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class PlayerMatchStat(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ingestion_player_match_stats"
     __table_args__ = (
-        UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_player_match_stats_provider_external_id"),
+        UniqueConstraint(
+            "source_provider", "provider_external_id", name="uq_ingestion_player_match_stats_provider_external_id"
+        ),
         UniqueConstraint("player_id", "match_id", name="uq_ingestion_player_match_stats_player_match"),
         Index("ix_ingestion_player_match_stats_match_id", "match_id"),
     )
@@ -745,8 +768,12 @@ class PlayerMatchStat(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class PlayerSeasonStat(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ingestion_player_season_stats"
     __table_args__ = (
-        UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_player_season_stats_provider_external_id"),
-        UniqueConstraint("player_id", "season_id", "competition_id", name="uq_ingestion_player_season_stats_player_scope"),
+        UniqueConstraint(
+            "source_provider", "provider_external_id", name="uq_ingestion_player_season_stats_provider_external_id"
+        ),
+        UniqueConstraint(
+            "player_id", "season_id", "competition_id", name="uq_ingestion_player_season_stats_player_scope"
+        ),
         Index("ix_ingestion_player_season_stats_season_id", "season_id"),
     )
 
@@ -814,7 +841,9 @@ class InjuryStatus(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class MarketSignal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ingestion_market_signals"
     __table_args__ = (
-        UniqueConstraint("source_provider", "provider_external_id", name="uq_ingestion_market_signals_provider_external_id"),
+        UniqueConstraint(
+            "source_provider", "provider_external_id", name="uq_ingestion_market_signals_provider_external_id"
+        ),
         Index("ix_ingestion_market_signals_signal_type", "signal_type"),
     )
 
@@ -863,7 +892,9 @@ class ProviderSyncRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class ProviderSyncCursor(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "ingestion_provider_sync_cursors"
     __table_args__ = (
-        UniqueConstraint("provider_name", "entity_type", "cursor_key", name="uq_ingestion_sync_cursors_provider_entity_key"),
+        UniqueConstraint(
+            "provider_name", "entity_type", "cursor_key", name="uq_ingestion_sync_cursors_provider_entity_key"
+        ),
     )
 
     provider_name: Mapped[str] = mapped_column(String(64), nullable=False)

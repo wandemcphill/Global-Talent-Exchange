@@ -194,13 +194,26 @@ from app.models.club_ranking_integrity import ClubRankingAbuseFlag, ClubRankingE
 from app.models.highlight_event import HighlightEvent
 from app.models.commentary_event import CommentaryEvent
 from app.models.commentator_profile import CommentaryProfileSelection, CommentatorProfile
-from app.leaderboards.models import (
-    LeaderboardMatchResult,
-    LeaderboardPlayerRating,
-    LeaderboardSeason,
-    LeaderboardSeasonReward,
-    LeaderboardSeasonSnapshot,
-)
+
+
+def _leaderboard_models():
+    from app.leaderboards.models import (
+        LeaderboardMatchResult,
+        LeaderboardPlayerRating,
+        LeaderboardSeason,
+        LeaderboardSeasonReward,
+        LeaderboardSeasonSnapshot,
+    )
+
+    return (
+        LeaderboardMatchResult,
+        LeaderboardPlayerRating,
+        LeaderboardSeason,
+        LeaderboardSeasonReward,
+        LeaderboardSeasonSnapshot,
+    )
+
+
 from app.models.gtex_universe import (
     CareerDecision,
     CareerDecisionType,
@@ -1362,4 +1375,20 @@ def __getattr__(name: str):
         from app.ingestion.models import Player
 
         return Player
+    if name in (
+        "LeaderboardMatchResult",
+        "LeaderboardPlayerRating",
+        "LeaderboardSeason",
+        "LeaderboardSeasonReward",
+        "LeaderboardSeasonSnapshot",
+    ):
+        from app.leaderboards.models import (
+            LeaderboardMatchResult,
+            LeaderboardPlayerRating,
+            LeaderboardSeason,
+            LeaderboardSeasonReward,
+            LeaderboardSeasonSnapshot,
+        )
+
+        return locals()[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
