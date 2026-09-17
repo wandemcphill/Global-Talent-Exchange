@@ -72,7 +72,7 @@ def _fund_coin(session, *, user: User, amount: Decimal) -> None:
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-        reference=f"canonical-legendary-pilot-funding:{user.id}",
+        reference=f"canonical-legendary-pilot-ledger:{user.id}",
         actor=user,
     )
 
