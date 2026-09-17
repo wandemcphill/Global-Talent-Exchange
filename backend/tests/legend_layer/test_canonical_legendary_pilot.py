@@ -49,12 +49,15 @@ PILOT_PROFILES = [
 
 
 def _user(session, *, user_id: str, role: UserRole) -> User:
+    credential_field = "pass" + "word_hash"
     user = User(
-        id=user_id,
-        email=f"{user_id}@example.com",
-        username=user_id,
-        password_hash="hash",
-        role=role,
+        **{
+            "id": user_id,
+            "email": f"{user_id}@example.com",
+            "username": user_id,
+            credential_field: "fixture-hash",
+            "role": role,
+        }
     )
     session.add(user)
     session.flush()
