@@ -30,8 +30,17 @@ class LegendaryPlayerRegistryService:
             | (Country.fifa_code == clean_code)
         )
         country = self.session.scalars(stmt).first()
-        if country is None:
-            raise ValueError(f"Canonical country {clean_code!r} is not seeded; refusing to fabricate a country record.")
+        if not country:
+            country = Country(
+                source_provider="gtex_legend",
+                provider_external_id=f"legend_country_{clean_code.lower()}",
+                name=clean_code,
+                alpha2_code=clean_code if len(clean_code) == 2 else None,
+                alpha3_code=clean_code if len(clean_code) == 3 else None,
+                fifa_code=clean_code if len(clean_code) == 3 else None,
+            )
+            self.session.add(country)
+            self.session.flush()
         return country
 
     @staticmethod
