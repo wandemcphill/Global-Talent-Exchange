@@ -502,6 +502,23 @@ class NationalCompetitionLifecycleService:
                     )
                 seen_player_ids.add(player_id)
                 if player is not None:
+                    if player.country_id:
+                        player_country = (
+                            player.country
+                            if getattr(player, "country", None) is not None
+                            else self.session.get(Country, player.country_id)
+                        )
+                        if player_country is not None:
+                            player_tokens = self._country_identity_tokens(
+                                player_country.alpha2_code or player_country.fifa_code or ""
+                            )
+                            if str(player_country.name or "").strip():
+                                player_tokens.add(str(player_country.name).strip().upper())
+                            if not (player_tokens & country_tokens):
+                                raise NationalCompetitionLifecycleError(
+                                    f"Player '{player_id}' is not eligible for {country_code}.",
+                                    reason="player_not_eligible",
+                                )
                     if not player_name:
                         player_name = (
                             player.canonical_display_name
