@@ -50,3 +50,5 @@ jobs:
           git add backend/app/transfer_market/service.py backend/tests/players/test_transfer_offer_concurrency.py
           git commit -m "fix(transfer): persist private negotiation after hub offer acceptance"
           git push origin "HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+
+# Triggered after the helper was installed on the default branch.
