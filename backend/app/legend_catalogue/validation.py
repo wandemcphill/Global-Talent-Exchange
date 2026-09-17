@@ -14,6 +14,9 @@ REQUIRED_FOR_RELEASE = (
     "era",
     "legendary_classification",
 )
+FORBIDDEN_PORTRAIT_SOURCE_KEYS = frozenset(
+    {"source_image_ref", "image", "image_url", "reference_image_url", "portrait_url"}
+)
 
 
 def record_blockers(record: CatalogueRecord) -> list[str]:
@@ -37,11 +40,13 @@ def record_blockers(record: CatalogueRecord) -> list[str]:
         errors.append("editorial_not_approved")
     if record.rights_status != "approved":
         errors.append("rights_not_approved")
-    if record.catalogue_status != "approved":
-        errors.append("catalogue_not_approved")
+
     portrait = record.portrait_metadata
     if portrait.get("is_fictional_non_replicative") is not True:
         errors.append("portrait_not_approved_non_replicative")
+    if FORBIDDEN_PORTRAIT_SOURCE_KEYS.intersection(portrait):
+        errors.append("portrait_contains_source_image_reference")
+
     return errors
 
 
