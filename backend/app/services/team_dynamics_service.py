@@ -7,9 +7,13 @@ from statistics import mean
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from typing import TYPE_CHECKING
+
 from app.ingestion.models import Player
-from app.match_engine.schemas import MatchReplayPayloadView
 from app.models.player_agency_state import PlayerAgencyState
+
+if TYPE_CHECKING:
+    from app.match_engine.schemas import MatchReplayPayloadView
 from app.models.regen import RegenProfile, RegenTeamDynamicsEffect
 from app.team_dynamics.models import PlayerRelationship
 
@@ -39,7 +43,11 @@ class TeamDynamicsService:
             for teammate, teammate_role in squad[index + 1 :]:
                 relationship = relationships.get(self._pair_key(player.id, teammate.id))
                 relationship_score = relationship.relationship_score if relationship is not None else 50.0
-                tactical_fit = relationship.tactical_fit if relationship is not None else self._default_tactical_fit(role, teammate_role)
+                tactical_fit = (
+                    relationship.tactical_fit
+                    if relationship is not None
+                    else self._default_tactical_fit(role, teammate_role)
+                )
                 pair_scores.append((relationship_score + tactical_fit) / 2)
         average_morale = mean(morale_by_player.values())
         chemistry_score = mean(pair_scores) if pair_scores else 55.0
@@ -80,8 +88,7 @@ class TeamDynamicsService:
     ) -> None:
         player_ids = [item.player_id for item in replay_payload.summary.player_stats]
         players = {
-            player.id: player
-            for player in self.session.scalars(select(Player).where(Player.id.in_(player_ids))).all()
+            player.id: player for player in self.session.scalars(select(Player).where(Player.id.in_(player_ids))).all()
         }
         for stat in replay_payload.summary.player_stats:
             player = players.get(stat.player_id)
@@ -89,7 +96,9 @@ class TeamDynamicsService:
                 continue
             delta = self._morale_delta_for_stat(stat=stat, replay_payload=replay_payload)
             player.morale = max(0.0, min(100.0, float(player.morale) + delta))
-            agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id))
+            agency_state = self.session.scalar(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
+            )
             if agency_state is not None:
                 agency_state.morale = max(0.0, min(100.0, float(agency_state.morale) + delta))
                 agency_state.happiness = max(0.0, min(100.0, float(agency_state.happiness) + (delta * 0.6)))
@@ -103,8 +112,12 @@ class TeamDynamicsService:
             for index, player_id in enumerate(team_player_ids):
                 for teammate_id in team_player_ids[index + 1 :]:
                     relationship = self._get_or_create_relationship(player_id, teammate_id)
-                    relationship.relationship_score = max(0.0, min(100.0, relationship.relationship_score + relationship_delta))
-                    relationship.tactical_fit = max(0.0, min(100.0, relationship.tactical_fit + (relationship_delta * 0.75)))
+                    relationship.relationship_score = max(
+                        0.0, min(100.0, relationship.relationship_score + relationship_delta)
+                    )
+                    relationship.tactical_fit = max(
+                        0.0, min(100.0, relationship.tactical_fit + (relationship_delta * 0.75))
+                    )
                     relationship.matches_together += 1
                     relationship.last_match_together_at = datetime.combine(match_date, datetime.min.time(), tzinfo=UTC)
                     relationship.metadata_json = {
