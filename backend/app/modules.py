@@ -623,7 +623,7 @@ DOMAIN_MODULES = (
     _module("media_engine_admin", router_path="app.media_engine.router:admin_router"),
     _module("broadcast_rights", router_path="app.broadcast_rights.router:router", with_api_alias=True),
     _module("broadcast_rights_admin", router_path="app.broadcast_rights.router:admin_router"),
-    _module("club_infra", router_path="app.club_infra_engine.router:router"),
+    _module("club_infra", router_path="app.club_infra_engine.router:router", with_api_alias=True),
     _module("club_infra_admin", router_path="app.club_infra_engine.router:admin_router"),
     _module("club_ownership", router_path="app.club_ownership.router:router"),
     _module("player_import", router_path="app.player_import_engine.router:router"),
