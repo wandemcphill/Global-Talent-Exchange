@@ -236,7 +236,7 @@ def main() -> int:
 
     run_check(
         "Python format check",
-        [sys.executable, "-m", "black", "--diff"],
+        [sys.executable, "-m", "black", "--check"],
         python_files,
     )
     run_check(
