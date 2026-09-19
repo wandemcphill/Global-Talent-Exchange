@@ -306,7 +306,9 @@ def send_gift(
         )
     except GiftEngineError as exc:
         status_code = (
-            status.HTTP_409_CONFLICT if exc.reason in {"spending_controls_blocked", "match_gift_rate_limited"} else status.HTTP_400_BAD_REQUEST
+            status.HTTP_409_CONFLICT
+            if exc.reason in {"spending_controls_blocked", "match_gift_rate_limited"}
+            else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
     except InsufficientBalanceError as exc:
@@ -572,8 +574,12 @@ def admin_refund_gift_event(
             wallet_service.append_transaction(
                 session,
                 postings=[
-                    LedgerPosting(account=recipient_account, amount=-transaction.recipient_net_amount, source_tag=source_tag),
-                    LedgerPosting(account=platform_account, amount=-transaction.platform_rake_amount, source_tag=source_tag),
+                    LedgerPosting(
+                        account=recipient_account, amount=-transaction.recipient_net_amount, source_tag=source_tag
+                    ),
+                    LedgerPosting(
+                        account=platform_account, amount=-transaction.platform_rake_amount, source_tag=source_tag
+                    ),
                     LedgerPosting(account=sender_account, amount=transaction.gross_amount, source_tag=source_tag),
                 ],
                 reason=LedgerEntryReason.ADJUSTMENT,
