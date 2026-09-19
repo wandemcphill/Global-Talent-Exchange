@@ -1607,6 +1607,7 @@ class RealPlayerIngestionService:
             "real_player_tier": normalized.real_player_tier,
             "source_name": payload.source_name,
             "source_player_key": payload.source_player_key,
+            "source_metadata": dict(payload.source_metadata),
             "display_name": normalized.display_name,
             "identity_keys": {
                 "exact_identity_key": normalized.identity.exact_identity_key,
