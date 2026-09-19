@@ -407,7 +407,9 @@ def send_public_gift(
         )
     except GiftEngineError as exc:
         status_code = (
-            status.HTTP_409_CONFLICT if exc.reason in {"spending_controls_blocked", "match_gift_rate_limited"} else status.HTTP_400_BAD_REQUEST
+            status.HTTP_409_CONFLICT
+            if exc.reason in {"spending_controls_blocked", "match_gift_rate_limited"}
+            else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
     except InsufficientBalanceError as exc:
