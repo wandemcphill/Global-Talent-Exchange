@@ -105,7 +105,7 @@ A thorough reconciliation of all 16 major GTEX domain families was conducted aga
 7. **Matches & Gameplay Engine:**
    - *Backend Capability:* `LiveMatchesService`, `GtexMatchRuntime` (Unity 3D / 2D fallback), `MatchSimulationEngine`, `BroadcastRightsService`.
    - *Parity Status:* **PARTIAL (GATED)**.
-   - *Evidence:* 2D Match Viewer (`/match_viewer`) renders field telemetry when active. However, when no live match session is provisioned, the route stalls on the `Verifying shipped capability` loading screen without offering a mock/replay playback fallback.
+   - *Evidence:* 2D Match Viewer (`/match_viewer`) renders field telemetry when active. However, when no live match session is provisioned, the route stalls on the `Verifying shipped capability` loading screen without offering a graceful timeout or authoritative replay playback fallback.
 
 8. **Rewards & Daily Tasks:**
    - *Backend Capability:* `DailyChallengeService`, `RewardEngineService` (`seed_economic_policy`).
@@ -219,9 +219,9 @@ GTEX incorporates a robust design foundation built upon `frontend/lib/ui_gtex/` 
 
 ### Concise Statement: "What is actually wrong with GTEX today?"
 
-> **GTEX is not functionally broken; it is an engineered powerhouse with an discoverability and presentation gap.**
+> **GTEX has a sound backend and core architectural foundation, but contains verified critical runtime defects alongside a major discoverability and presentation gap.**
 >
-> The backend architecture, financial ledgers, match engines, and contract systems are robust, secure, and highly capable. However, the user experience currently presents as a **dense administrative dashboard** rather than a **thrilling, immersive Living Football Exchange**. High-value capabilities are buried behind strict route gates or dense text tables, mobile layouts suffer from minor edge clipping, and celebratory/game-like feedback loop states (trophies, pack openings, live match momentum) are visually understated.
+> The backend architecture, financial ledgers, match engines, and contract systems are robust, secure, and highly capable. However, the user experience currently suffers from reproduced P0 runtime stalling, mobile layout clipping, and presents as a **dense administrative dashboard** rather than a **thrilling, immersive Living Football Exchange**. High-value capabilities are buried behind strict route gates or dense text tables, mobile layouts suffer from edge clipping, and celebratory/game-like feedback loop states (trophies, pack openings, live match momentum) are visually understated.
 
 ---
 
@@ -263,7 +263,7 @@ The reconciled priority register classifies all verified defects and deficiencie
 
 | ID | Severity | Domain | Location | Evidence | Current Behavior | Expected Behavior | Root Cause | Affected Capability | Recommended Phase | Confidence |
 | :---: | :---: | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **P0-01** | **P0** | Matches | `/match_viewer` | PR #211 Audit | Screen stalls indefinitely on "Verifying shipped capability" when no match session is active. | Graceful fallback to recent replay playback or mock simulation view. | Route gate loader lacks timeout or fallback session provider. | 2D/3D Match Viewing | Codex Phase 5 | High |
+| **P0-01** | **P0** | Matches | `/match_viewer` | PR #211 Audit | Screen stalls indefinitely on "Verifying shipped capability" when no match session is active. | Graceful timeout/exit path or authoritative backend replay playback (client must never invent fake/mock gameplay outcomes). | Route gate loader lacks timeout handling or explicit backend replay session provider. | 2D/3D Match Viewing | Codex Phase 5 | High |
 | **P1-01** | **P1** | Club | `/lineup` | PR #211 Screenshots | Substitute bench cards overflow horizontally past 390px mobile viewport without scrollbar. | Smooth horizontal scrollbar / wrapped grid for substitute players. | Unconstrained row layout inside mobile pitch container. | Squad & Lineup Selection | Codex Phase 5 | High |
 | **P1-02** | **P1** | Governance | `/notifications` | PR #211 Audit | Tapping notification items marks read but does not navigate to target entity. | Tapping notification deep-links to player card, bid offer, or match result. | Notification schema payload lacks `target_route` parsing. | User Notifications | Codex Phase 5 | High |
 | **P2-01** | **P2** | Navigation | `/fallback/*` | PR #210 / #211 | Technical gate overlays ("LIVE GATE ACTIVE") block feature routes. | Contextual onboarding modal explaining unlock criteria and primary CTA. | Generic route gate fallback scaffold. | Feature Discovery | Codex Phase 5 | High |
@@ -313,7 +313,7 @@ All facts, counts, and code references in this report were verified directly aga
 
 ## 16. RECOMMENDED NEXT PHASES
 
-1. **Phase 5 (Codex Design & Implementation Lab):** Implement P0/P1 fixes (Match Viewer timeout fallback, mobile lineup bench scroll, notification deep-linking) and construct the Design Lab prototype environment.
+1. **Phase 5 (Codex Design & Implementation Lab):** Implement P0/P1 fixes (Match Viewer timeout/replay exit path, mobile lineup bench scroll, notification deep-linking) and construct the Design Lab prototype environment.
 2. **Phase 6 (Visual & Polish Overhaul):** Refine financial table styling, award trophy presentations, and collectible player card visual feedback loops.
 
 ---
