@@ -277,7 +277,6 @@ jobs:
           -q
 
   unity-windows-build:
-    if: vars.GTEX_ENABLE_WINDOWS_UNITY_CI == 'true'
     runs-on:
       - self-hosted
       - windows
