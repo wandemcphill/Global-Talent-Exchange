@@ -292,6 +292,7 @@ def send_gift(
         item = service.send_gift(
             sender=current_user,
             recipient_user_id=recipient_user_id,
+            recipient_club_id=recipient_club_id,
             gift_key=payload.gift_key,
             quantity=payload.quantity,
             note=payload.note,
@@ -390,6 +391,7 @@ def send_public_gift(
         item = service.send_gift(
             sender=current_user,
             recipient_user_id=recipient_user_id,
+            recipient_club_id=recipient_club_id,
             gift_key=payload.gift_key,
             quantity=payload.quantity,
             note=payload.note,
