@@ -277,6 +277,7 @@ jobs:
           -q
 
   unity-windows-build:
+    if: vars.GTEX_ENABLE_WINDOWS_UNITY_CI == 'true'
     runs-on:
       - self-hosted
       - windows
@@ -425,7 +426,7 @@ jobs:
         with:
           name: gtex-test-migration-windows-build-log
           path: tmp/gtex_test_migration_windows_build.log
-          if-no-files-found: warn
+          if-no-files-found: ignore
 
   unity-android-build:
     if: vars.GTEX_ENABLE_ANDROID_UNITY_CI == 'true'
