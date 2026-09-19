@@ -16,6 +16,9 @@ Rules:
 - `P6V` supersedes the old P6/P7/P8 current-engine-only restriction for this isolated visual-runtime pivot only
 - The pivot is not a rewrite: GTEX remains the match authority and the original simulator owns football visuals in a separate scene
 - Batchmode build stability and the current `Gtex_MainScene` path remain required acceptance gates
+- `P7-FE` is `READY` for the independent Flutter frontend product-parity and design-system initiative
+- `P7-FEV` is `BLOCKED` until the P7-FE verification gate can be satisfied
+- P7-FE/P7-FEV do not change the Unity P6/P6V sequence, scope, or completion status
 
 ## Phases
 
@@ -153,6 +156,49 @@ Exit gate:
 - `DrivePlayers` and `DriveBall` transform playback are inactive in `OriginalVisualRuntime`
 - Current GTEX scenes remain intact and build-stable
 - Windows batch build remains stable
+
+### P7-FE GTEX Frontend Product Parity & Design System
+Status: `READY`
+
+Independence:
+- This is independent Flutter frontend work and may proceed without changing Unity P6/P6V status, scope, or sequencing.
+- GTEX remains a Flutter product. Visual experimentation must use the real Flutter component system and a Flutter-compatible Design Lab; do not introduce a separate React or Next frontend solely for prototyping.
+
+Source of truth:
+- `docs/audits/gtex-product-parity-ux-baseline.md`
+- Current frontend, backend API contracts, and verified product behavior take precedence over stale audits or assumptions.
+
+Scope:
+- Establish a GTEX Flutter Design Lab that reuses and extends canonical production tokens and components.
+- Deliver frontend/backend product parity, route and surface completeness, navigation discoverability, state completeness, responsive quality, a coherent GTEX visual language, reusable design-system primitives, browser-driven visual validation, Playwright/e2e coverage, visual regression coverage, and premium product presentation.
+- Prioritize verified issues from the canonical baseline: the Match Viewer indefinite verification/loading stall (P0), mobile lineup/substitute overflow (P1), notification deep-linking (P1), technical route-gate presentation (P2), and competition discoverability/parity where a complete backend workflow genuinely exists (P2).
+- For Match Viewer, use an authoritative replay only when it exists; otherwise show a truthful, recoverable unavailable state with a useful next action. Never fabricate gameplay.
+
+Rules:
+- Do not create fake or demo production workflows, fabricated gameplay, financial results, user balances, or backend capabilities.
+- Do not weaken authorization, perform destructive frontend rewrites, make unnecessary backend rewrites, create a duplicate design system, or copy external football-game products.
+- Preserve real backend business rules and expose capabilities only through complete, authorized workflows.
+- Every completed surface must handle relevant loading, empty, error, success, disabled, locked, permission, pending, expired, and unavailable states without raw technical messaging or indefinite loaders.
+
+Exit gate:
+- P7-FE has implemented and documented the selected vertical slices with real backend integration, canonical Flutter components/tokens, responsive behavior, and no fabricated production functionality.
+- Critical completed-scope P0/P1 workflows are traceable end-to-end and have no known dead controls.
+
+### P7-FEV GTEX Frontend Visual & Browser Verification
+Status: `BLOCKED`
+
+Gate:
+- P7-FE exit gate is satisfied for the surfaces under verification.
+
+Scope:
+- Exercise important routes, actions, and API interactions in a real browser.
+- Verify loading, empty, error, success, locked, and permission states at desktop and mobile breakpoints.
+- Maintain Playwright/e2e coverage, captured visual screenshots, and reviewed visual regressions for critical flows.
+
+Exit gate:
+- Important completed-scope routes and actions have been browser-verified on desktop and mobile.
+- Playwright coverage and visual evidence exist for critical flows.
+- No known critical dead buttons, unintentionally hidden major backend capabilities, or fake/demo production functionality remain within completed scope.
 
 ### P7 Evidence For Engine Replacement
 Status: `BLOCKED`
