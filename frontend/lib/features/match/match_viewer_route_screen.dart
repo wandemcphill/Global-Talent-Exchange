@@ -61,30 +61,106 @@ class MatchViewerRouteScreen extends ConsumerWidget {
       loading:
           () => const MatchRouteLoadingScreen(
             title: '2D Match Viewer',
-            subtitle:
-                'Verifying the live match-viewer session before opening the tactical 2D lane.',
+            subtitle: 'Checking for a live match or an official replay.',
             capability: MatchViewerCapability.twoD,
           ),
-      error:
-          (Object _, StackTrace __) =>
-              allowFixtureFallback
-                  ? MatchRouteCapabilityOverlay(
-                    capability: MatchViewerCapability.twoD,
-                    status: DataSourceStatus.demo,
-                    child: _FallbackMatchViewerRouteView(
-                      matchKey: resolvedMatchKey,
-                    ),
+      error: (Object error, StackTrace __) {
+        if (allowFixtureFallback) {
+          return MatchRouteCapabilityOverlay(
+            capability: MatchViewerCapability.twoD,
+            status: DataSourceStatus.demo,
+            child: _FallbackMatchViewerRouteView(matchKey: resolvedMatchKey),
+          );
+        }
+        final _MatchViewerRouteFailure failure = _MatchViewerRouteFailure.from(
+          error,
+        );
+        return MatchRouteBlockedScreen(
+          title: '2D Match Viewer',
+          subtitle: failure.subtitle,
+          reason: failure.reason,
+          detailTitle: failure.title,
+          detailSubtitle: failure.detail,
+          actionLabel: failure.actionLabel,
+          onAction:
+              failure.isRetryable
+                  ? () => ref.invalidate(
+                    liveMatchViewerQualifiedRouteProvider(resolvedMatchKey),
                   )
-                  : MatchRouteBlockedScreen(
-                    title: '2D Match Viewer',
-                    subtitle:
-                        'This 2D route opens only after the live match-viewer session confirms the selected match.',
-                    reason:
-                        'The live match-viewer endpoint did not return a usable session for "$resolvedMatchKey". Demo fallback is available only in explicit fixture mode.',
-                    detailTitle: 'Live match unavailable',
-                    detailSubtitle:
-                        'Production keeps the 2D route blocked until a real match-viewer payload is available.',
-                  ),
+                  : null,
+        );
+      },
+    );
+  }
+}
+
+class _MatchViewerRouteFailure {
+  const _MatchViewerRouteFailure({
+    required this.title,
+    required this.subtitle,
+    required this.reason,
+    required this.detail,
+    required this.actionLabel,
+    required this.isRetryable,
+  });
+
+  final String title;
+  final String subtitle;
+  final String reason;
+  final String detail;
+  final String actionLabel;
+  final bool isRetryable;
+
+  factory _MatchViewerRouteFailure.from(Object error) {
+    if (error is GteApiException) {
+      switch (error.type) {
+        case GteApiErrorType.notFound:
+          return const _MatchViewerRouteFailure(
+            title: 'No match available',
+            subtitle: 'There is no live match or official replay available.',
+            reason:
+                'This match does not have a playable live session or saved replay yet.',
+            detail:
+                'When official match coverage is available, it will appear in Match Center.',
+            actionLabel: 'Open Match Center',
+            isRetryable: false,
+          );
+        case GteApiErrorType.unauthorized:
+          return const _MatchViewerRouteFailure(
+            title: 'Match access restricted',
+            subtitle: 'You do not have access to this match viewer.',
+            reason:
+                'Sign in with an account that can access this match, then try again.',
+            detail: 'Match access follows the competition and broadcast rules.',
+            actionLabel: 'Open Match Center',
+            isRetryable: false,
+          );
+        case GteApiErrorType.parsing:
+          return const _MatchViewerRouteFailure(
+            title: 'Match data unavailable',
+            subtitle:
+                'This match cannot be shown because its official data is incomplete.',
+            reason:
+                'GTEX will not display an incomplete or unverified match timeline.',
+            detail: 'Check Match Center later for official match coverage.',
+            actionLabel: 'Open Match Center',
+            isRetryable: false,
+          );
+        case GteApiErrorType.network:
+        case GteApiErrorType.unavailable:
+        case GteApiErrorType.validation:
+        case GteApiErrorType.unknown:
+          break;
+      }
+    }
+    return const _MatchViewerRouteFailure(
+      title: 'Match viewer unavailable',
+      subtitle: 'We could not load this match right now.',
+      reason:
+          'The match service did not respond in time or is temporarily unavailable.',
+      detail: 'No match data has been shown. You can safely try again.',
+      actionLabel: 'Try again',
+      isRetryable: true,
     );
   }
 }
