@@ -141,7 +141,7 @@ The target architecture introduces a centralized **GTEX Audio OS** engine residi
 
 ## Part 4: State Model & Soundtrack Context Model
 
-### 1. State Model (`GtexAudioState`)
+### 1. State Model (`GtexAudioState`) — *[Proposed Target Architecture]*
 The global audio state is modeled as an immutable data class exposed via `NotifierProvider`:
 
 ```dart
@@ -162,7 +162,7 @@ class GtexAudioState {
 }
 ```
 
-### 2. Soundtrack Context Model
+### 2. Soundtrack Context Model — *[Proposed Target Architecture]*
 The GTEX UI is mapped to distinct audio contexts. As users navigate routes, the `SoundtrackEngine` evaluates the current `GtePrimaryDestination` or route path and transitions soundtrack themes seamlessly with a 1.5-second crossfade:
 
 | Route / Context | Primary Destination | Default Soundtrack Theme | Tempo / Mood |
@@ -183,13 +183,15 @@ The GTEX UI is mapped to distinct audio contexts. As users navigate routes, the 
 - **Strict Prohibition:** GTEX does **NOT** support user-uploaded music, Spotify/Apple Music integrations, or third-party web scrapers. All tracks must be explicitly curated.
 - **Catalogue Scale:** Architecture designed to support dozens to hundreds of tracks streamed via CDN with local asset fallback for boot tracks.
 
-### 2. Data Model (`TrackMetadata`)
+### 2. Data Model (`TrackMetadata`) — *[Proposed Target Specification]*
+
+> **Note:** The JSON schema below, CDN endpoints (`https://cdn.gtex.io/...`), proposed API routes (`GET /api/v2/audio/catalog`), and example metadata fields (e.g. `"artist": "GTEX Audio Team"`) represent **proposed target architecture specifications** for future implementation and are **not** existing production features.
 
 ```json
 {
   "track_id": "gtex-trk-001",
   "title": "Neon Pitch",
-  "artist": "GTEX Audio Team",
+  "artist": "GTEX Audio Team (Proposed)",
   "album": "OS Vol. 1",
   "genre": "Synthwave / Cyber-Football",
   "bpm": 120,
@@ -199,7 +201,7 @@ The GTEX UI is mapped to distinct audio contexts. As users navigate routes, the 
   "asset_fallback": "assets/media/soundtrack/gtex-trk-001.mp3",
   "provenance": "GTEX First-Party Commission",
   "licence_type": "Royalty-Free Commercial Game Licence",
-  "licence_source": "Internal Composition / Pixabay Game License",
+  "licence_source": "Internal Composition / Pixabay Content License",
   "licence_url": "https://gtex.io/legal/audio-licensing",
   "attribution_required": false,
   "commercial_use_suitable": true
@@ -209,13 +211,13 @@ The GTEX UI is mapped to distinct audio contexts. As users navigate routes, the 
 ### 3. Distribution Strategy Recommendation: **Hybrid Architecture**
 - **First-Party Bundled Assets:** Pre-pack 3-4 lightweight core boot tracks (e.g., Home, Matchday Ambient, Victory Sting) directly in the Flutter asset bundle (`assets/media/soundtrack/`) to guarantee immediate offline/instant-play availability.
 - **CDN / Object Storage:** Host the broader catalogue (dozens/hundreds of tracks) on a high-availability CDN (e.g., Cloudflare R2 / AWS CloudFront) with local disk caching using `just_audio` cache handlers.
-- **Rationale:** Hybrid distribution keeps app download size under 50 MB while allowing infinite soundtrack expansion via remote manifest updates (`GET /api/v2/audio/catalog`).
+- **Rationale:** Hybrid distribution keeps app download size under 50 MB while allowing infinite soundtrack expansion via remote manifest updates (`GET /api/v2/audio/catalog` — *proposed endpoint*).
 
 ---
 
 ## Part 6: Mixer Model & Matchday Handoff Contract
 
-### 1. Audio Mixer Architecture (`GtexAudioMixer`)
+### 1. Audio Mixer Architecture (`GtexAudioMixer`) — *[Proposed Target Architecture]*
 The mixer controls 5 hierarchical channels. Final output gain for any channel $C$ is defined as:
 $$\text{Gain}_C = \text{MasterVolume} \times \text{ChannelVolume}_C \times \text{DuckingFactor}_C$$
 
@@ -230,7 +232,7 @@ $$\text{Gain}_C = \text{MasterVolume} \times \text{ChannelVolume}_C \times \text
   (Ducking -18dB)     (Priority 1)      (Stems/Ambience)      (UI/Stings)
 ```
 
-### 2. Matchday Handoff Contract & Ducking Matrix
+### 2. Matchday Handoff Contract & Ducking Matrix — *[Proposed Target Architecture]*
 When a user enters a live Matchday Viewer surface (`/matches/viewer/:matchKey`), `GtexAudioController` executes the **Matchday Handoff Protocol**:
 
 1. **Music Ducking:** Soundtrack channel volume is ducked by `-18 dB` (factor $0.125$) over $600\text{ ms}$.
@@ -245,11 +247,15 @@ When a user enters a live Matchday Viewer surface (`/matches/viewer/:matchKey`),
 
 ## Part 7: External Licence / Source Research
 
-### 1. Vetted Commercial Royalty-Free Sources
-For curated soundtrack production and asset sourcing, GTEX can source suitable tracks from:
-- **Pixabay Audio (Content License):** Royalty-free for commercial use, including monetization in games, provided audio is not resold as standalone files.
-- **Incompetech (CC-BY 4.0 / Paid Commercial License):** Provides explicit attribution terms or royalty-free commercial licenses.
-- **Sundance / Epidemic Sound (Enterprise Game License):** Direct commercial game integration licensing with explicit platform clearance.
+### 1. Primary Free/Game-Compatible Sourcing Strategy
+For GTEX's initial launch catalogue, music sourcing focuses strictly on free, game-compatible commercial licenses:
+- **Pixabay Audio (Content License):** Free for commercial game use and video game monetization without royalties, provided raw audio files are not redistributed standalone.
+- **Incompetech (CC-BY 4.0 / Free Attribution License):** Provides free commercial game usage under Creative Commons Attribution 4.0, or optional low-cost zero-attribution licenses.
+
+### 2. Future Paid Licensing Alternatives (Enterprise Options)
+For future expanded soundtrack releases beyond the initial free-source catalogue:
+- **Epidemic Sound (Enterprise Game License):** Offers paid commercial subscription and game synchronization licensing. *Note: Epidemic Sound operates on a paid licensing model and is explicitly categorized as a future commercial upgrade path, not part of the initial free-source launch strategy.*
+- **Custom Game Commissions:** Direct work-for-hire agreements with indie game composers providing exclusive royalty-free ownership.
 
 ---
 
