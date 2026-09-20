@@ -111,7 +111,7 @@ class UniverseValidationError(UniverseError):
     pass
 
 
-@dataclass(slots=True)
+@dataclass
 class GtexUniverseService(GtexBaseService):
     creator_market_service: "CreatorMarketService"
     economy_service: "UnifiedEconomyService"
