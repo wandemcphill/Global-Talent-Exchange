@@ -32,4 +32,13 @@ module.exports = [
       ],
     },
   },
+  // Playwright's browser suites are native ES modules. Keeping this narrow
+  // prevents their `import` syntax from being parsed as CommonJS while the
+  // repository's older JavaScript configuration remains unchanged.
+  {
+    files: ["qa/playwright/**/*.{js,mjs}"],
+    languageOptions: {
+      sourceType: "module",
+    },
+  },
 ];
