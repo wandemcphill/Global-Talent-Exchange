@@ -19,6 +19,14 @@ import '../../widgets/gte_surface_panel.dart';
 import '../shared/data/gte_feature_support.dart';
 import 'match_viewer_capability.dart';
 
+/// A route must always leave its preparation state. The transport can expose
+/// a timeout, but repository overrides and web transports are not required to
+/// do so, therefore the viewer owns this product-level recovery boundary.
+const Duration liveMatchViewerBootstrapTimeout = Duration(seconds: 12);
+
+final Provider<Duration> matchViewerBootstrapTimeoutProvider =
+    Provider<Duration>((Ref ref) => liveMatchViewerBootstrapTimeout);
+
 class LiveMatchViewerBootstrap {
   const LiveMatchViewerBootstrap({
     required this.matchKey,
@@ -126,9 +134,21 @@ final liveMatchViewerQualifiedRouteProvider = FutureProvider.autoDispose.family<
   final LiveMatchViewerRepository repository = ref.watch(
     liveMatchViewerRepositoryProvider,
   );
-  final LiveMatchViewerBootstrap bootstrap = await repository.resolveBootstrap(
-    matchKey,
+  final Duration bootstrapTimeout = ref.watch(
+    matchViewerBootstrapTimeoutProvider,
   );
+  final LiveMatchViewerBootstrap bootstrap = await repository
+      .resolveBootstrap(matchKey)
+      .timeout(
+        bootstrapTimeout,
+        onTimeout:
+            () =>
+                throw const GteApiException(
+                  type: GteApiErrorType.unavailable,
+                  message:
+                      'The match viewer took too long to respond. Please try again.',
+                ),
+      );
   final MatchViewState initialViewState =
       bootstrap.initialViewState ?? await repository.loadViewState(matchKey);
   return LiveMatchViewerQualifiedRoute(
@@ -138,7 +158,7 @@ final liveMatchViewerQualifiedRouteProvider = FutureProvider.autoDispose.family<
       state: initialViewState,
     ),
   );
-});
+}, retry: (int _, Object __) => null);
 
 Future<LiveMatchViewerBootstrap> resolveLiveMatchViewerBootstrap(
   WidgetRef ref,
@@ -270,7 +290,7 @@ class MatchRouteLoadingScreen extends StatelessWidget {
       ),
       children: <Widget>[
         GtexHeroPanel(
-          eyebrow: 'MATCH ROUTE VERIFY',
+          eyebrow: 'MATCH CENTER',
           title: title,
           description: subtitle,
           metrics: <Widget>[
@@ -285,13 +305,13 @@ class MatchRouteLoadingScreen extends StatelessWidget {
           ],
         ),
         GtexSectionPanel(
-          eyebrow: 'RUNTIME GATE',
-          title: 'Verifying shipped capability',
+          eyebrow: 'MATCHDAY',
+          title: 'Preparing match viewer',
           subtitle:
-              'The active shell only opens this match route after the live match-viewer session confirms the mounted capability.',
+              'Checking whether live match coverage or an available replay can be opened.',
           child: const GteStatePanel(
-            title: 'Loading route',
-            message: 'Verifying the live route capability before entry.',
+            title: 'Loading match data',
+            message: 'This will let you know if a match is not available.',
             isLoading: true,
           ),
         ),
@@ -306,9 +326,9 @@ class MatchRouteBlockedScreen extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.reason,
-    this.detailTitle = 'Viewer contract unavailable',
+    this.detailTitle = 'Match unavailable',
     this.detailSubtitle =
-        'This route stays visibly blocked until the mounted runtime can answer with real match-viewer data.',
+        'A live match or its official replay is not available right now.',
     this.supplementalPanels = const <Widget>[],
     this.actionLabel = 'Open matchday',
     this.onAction,
@@ -340,18 +360,16 @@ class MatchRouteBlockedScreen extends StatelessWidget {
       ),
       children: <Widget>[
         GtexHeroPanel(
-          eyebrow: 'MATCH ROUTE GATE',
+          eyebrow: 'MATCH CENTER',
           title: title,
           description: subtitle,
           metrics: const <Widget>[
-            GtexPill(label: 'Route blocked', tone: GtexSurfaceTone.danger),
-            GtexPill(label: 'BLOCKED', tone: GtexSurfaceTone.danger),
-            GtexPill(label: 'TRUTH PRESERVED', tone: GtexSurfaceTone.warning),
+            GtexPill(label: 'Match unavailable', tone: GtexSurfaceTone.warning),
           ],
         ),
         GtexSectionPanel(
-          eyebrow: 'BLOCKED DETAIL',
-          title: 'Blocked detail',
+          eyebrow: 'AVAILABILITY',
+          title: detailTitle,
           subtitle: detailSubtitle,
           child: GteStatePanel(
             title: detailTitle,

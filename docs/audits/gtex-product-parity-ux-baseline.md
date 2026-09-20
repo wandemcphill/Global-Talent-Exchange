@@ -105,7 +105,7 @@ A thorough reconciliation of all 16 major GTEX domain families was conducted aga
 7. **Matches & Gameplay Engine:**
    - *Backend Capability:* `LiveMatchesService`, `GtexMatchRuntime` (Unity 3D / 2D fallback), `MatchSimulationEngine`, `BroadcastRightsService`.
    - *Parity Status:* **PARTIAL (GATED)**.
-   - *Evidence:* 2D Match Viewer (`/match_viewer`) renders field telemetry when active. However, when no live match session is provisioned, the route stalls on the `Verifying shipped capability` loading screen without offering a graceful timeout or authoritative replay playback fallback.
+   - *Evidence:* 2D Match Viewer (`/match-viewer/:matchKey`) renders field telemetry from authoritative stored timelines, replay-archive records, fast-match viewer payloads, or a live hub when available. **P0-01 resolved in P7-FE Slice 1:** a missing session/replay now renders a truthful unavailable state, and a stalled bootstrap times out into an explicit retry state; no synthetic match data is used.
 
 8. **Rewards & Daily Tasks:**
    - *Backend Capability:* `DailyChallengeService`, `RewardEngineService` (`seed_economic_policy`).
@@ -160,7 +160,7 @@ Reviewing the live runtime findings from Playwright automated visual inspection 
 
 | Inspection Area | Observed Behavior | Verification Status | Severity |
 | :--- | :--- | :---: | :---: |
-| **2D Match Viewer Stall** | Navigating to `/match_viewer` without an active match session halts on `Verifying shipped capability` loading screen indefinitely. | **REPRODUCED** | **P0** |
+| **2D Match Viewer Stall** | Navigating to the historical `/match_viewer` surface without an active match session halted on `Verifying shipped capability` indefinitely. | **RESOLVED — P7-FE Slice 1** | **P0** |
 | **Mobile Lineup Pitch Clipping** | On 390px viewports, the 11-v-11 formation pitch scales down correctly, but substitute bench cards overflow off-screen horizontally without a scrollbar. | **REPRODUCED** | **P1** |
 | **Route Gating Overlay** | Feature-gated routes display technical-looking text overlays (`LIVE GATE ACTIVE`) rather than contextual onboarding or unlock paths. | **REPRODUCED** | **P2** |
 | **Notification Deep-Links** | Tapping a notification (e.g. "Bid Accepted") marks it as read but does not navigate the user to the relevant transfer/player surface. | **REPRODUCED** | **P1** |
@@ -245,7 +245,7 @@ The table below provides the authoritative 16-column matrix across all major GTE
 | **Player** | Share Trading | `MarketService` | `/api/v2/market/buy` | `MarketClient` | `/market` | `GtexPlayerCard` | Buy/Sell Shares | Live, Stale | Authenticated | Verified | High | Primary Tab | **COMPLETE** | PR #209 | High |
 | **Club** | Lineup Setup | `LineupService` | `/api/v2/lineups` | `ClubClient` | `/lineup` | `TacticalPitchWidget` | Save Formation | Draft, Saved | Club Owner | Verified | High | Primary Tab | **COMPLETE** | PR #210 | High |
 | **Club** | Facility Upgrades | `AcademyFacilityEconomyService` | `/api/v2/academy/upgrades` | `AcademyClient` | `/club` | `FacilityUpgradeCard` | Upgrade Facility | Active, Maxed | Club Owner | Verified | Medium | Club Sub-tab | **COMPLETE** | PR #209 | High |
-| **Matches** | 2D Match Viewer | `LiveMatchesService` | `/api/v2/live-matches` | `MatchClient` | `/match_viewer` | `LiveMatchViewerScreen` | Watch Playback | Live, Gate Load | Authenticated | Partial | Medium | Match Tab | **PARTIAL** | PR #211 | High |
+| **Matches** | 2D Match Viewer | `LiveMatchesService` | `/api/v2/match-viewer/:matchKey` | `ApiLiveMatchViewerRepository` | `/match-viewer/:matchKey` | `MatchViewerRouteScreen` | Watch authoritative playback | Live, replay, unavailable, timeout/retry | Authenticated where required | Partial | Medium | Match Tab | **PARTIAL** | P7-FE Slice 1 | High |
 | **Economy** | Wallet Ledger | `WalletService` | `/api/v2/wallets/me` | `WalletClient` | `/wallet` | `WalletLedgerTable` | Deposit/Withdraw | Loaded, Empty | Authenticated | Verified | Low (SaaS) | Primary Tab | **COMPLETE** | PR #211 | High |
 | **Economy** | P2P Coin Trading | `CoinTradersService` | `/api/v2/coin-traders` | `TraderClient` | `/trader_dashboard` | `OrderBookWidget` | Place Order | Open, Filled | Authenticated | Verified | Low (SaaS) | Finance Menu | **COMPLETE** | PR #209 | High |
 | **Competitions** | Hosted Cups | `HostedCompetitionService` | `/api/v2/competitions` | `CompetitionClient` | `/competitions/create` | `CreateCompetitionForm` | Host Tournament | Active, Closed | Authenticated | Verified | Medium | Comp Hub | **COMPLETE** | PR #210 | High |
@@ -263,7 +263,7 @@ The reconciled priority register classifies all verified defects and deficiencie
 
 | ID | Severity | Domain | Location | Evidence | Current Behavior | Expected Behavior | Root Cause | Affected Capability | Recommended Phase | Confidence |
 | :---: | :---: | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **P0-01** | **P0** | Matches | `/match_viewer` | PR #211 Audit | Screen stalls indefinitely on "Verifying shipped capability" when no match session is active. | Graceful timeout/exit path or authoritative backend replay playback (client must never invent fake/mock gameplay outcomes). | Route gate loader lacks timeout handling or explicit backend replay session provider. | 2D/3D Match Viewing | Codex Phase 5 | High |
+| **P0-01** | **P0** | Matches | `/match-viewer/:matchKey` | P7-FE Slice 1 targeted Flutter and backend regression tests | **RESOLVED:** no-session/replay receives a truthful unavailable state; a pending bootstrap has a 12-second recovery timeout and user-driven retry. | Open authoritative live/replay coverage when present; otherwise provide a recoverable unavailable state without fabricated gameplay. | The route bootstrap had no timeout and Riverpod automatic retries could re-enter loading. | 2D Match Viewing | P7-FE Slice 1 | High |
 | **P1-01** | **P1** | Club | `/lineup` | PR #211 Screenshots | Substitute bench cards overflow horizontally past 390px mobile viewport without scrollbar. | Smooth horizontal scrollbar / wrapped grid for substitute players. | Unconstrained row layout inside mobile pitch container. | Squad & Lineup Selection | Codex Phase 5 | High |
 | **P1-02** | **P1** | Governance | `/notifications` | PR #211 Audit | Tapping notification items marks read but does not navigate to target entity. | Tapping notification deep-links to player card, bid offer, or match result. | Notification schema payload lacks `target_route` parsing. | User Notifications | Codex Phase 5 | High |
 | **P2-01** | **P2** | Navigation | `/fallback/*` | PR #210 / #211 | Technical gate overlays ("LIVE GATE ACTIVE") block feature routes. | Contextual onboarding modal explaining unlock criteria and primary CTA. | Generic route gate fallback scaffold. | Feature Discovery | Codex Phase 5 | High |
