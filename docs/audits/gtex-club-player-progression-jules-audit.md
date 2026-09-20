@@ -4,7 +4,7 @@
 **Branch:** `main`
 **Audit Context:** Session P7-FE — Club / Player Identity / Progression Vertical Verification & Implementation Brief
 **Author:** Jules (Software Engineer)
-**Date:** March 2025
+**Date:** September 2026
 
 ---
 
@@ -33,7 +33,7 @@ This audit provides a precise, verified analysis of the current state of the **C
 | **Club HQ (Owner Dashboard)** | Top-level tab: `GtePrimaryDestination.club` (`/app`) | `GtexClubOwnerDashboardV2` in `gtex_club_owner_dashboard_v2.dart` | `GtexClubWorkspaceController`, `GteExchangeController` | GET `/api/clubs/{club_id}/v2-snapshot`<br/>Models: `ClubV2SnapshotResponse`, `ClubProfile` | **Live & Primary**. Replaces legacy `ClubOpsScreenHost`. |
 | **Public Club Profile** | `/app/world` or feature route `GtexPublicClubProfileV2` | `GtexPublicClubProfileV2` in `gtex_public_club_profile_v2.dart` | `GtexClubWorkspaceController` | GET `/api/clubs/{club_id}`, GET `/api/clubs/{club_id}/trophy-cabinet/summary`<br/>Models: `ClubProfileResponse` | **Live**. Hydrated public view of any club. |
 | **Club Identity & Jersey Editor** | `ClubIdentityJerseysRouteData` (`/club/identity`) | `ClubIdentityScreen` in `club_identity_screen.dart` | `ClubIdentityController` | GET/POST/PATCH `/{club_id}/branding`, GET/POST/PATCH `/{club_id}/jerseys`<br/>Models: `ClubIdentityDto`, `JerseySetDto` | **Live**. Full kit & badge designer with clash detection. |
-| **Lineup & Tactics** | Tab inside `GtexClubOwnerDashboardV2` / `/lineup` | Built-in workspace subview / `GtexTacticsPanel` | `GtexClubWorkspaceController` / `MatchEngine` | GET/POST `/lineups/{club_id}`, GET `/squad-tiers/{club_id}`<br/>Models: `LineupResponse`, `SquadTier` | **Live**. Interactive pitch drag-and-drop for first_team & reserve. |
+| **Lineup & Tactics** | Tab inside `GtexClubOwnerDashboardV2` / `/lineup` | `GtexLineupEditorScreen` in `gtex_lineup_editor_screen.dart` | `GtexClubWorkspaceController` / `MatchEngine` | GET/POST `/lineups/{club_id}`, GET `/squad-tiers/{club_id}`<br/>Models: `LineupResponse`, `SquadTier` | **Live**. Tap-to-assign and substitute selection interface for first_team & reserve slots. |
 | **Academy & Youth Pipeline** | Tab inside `GtexClubOwnerDashboardV2` / `AcademyOverviewScreen` | `AcademyOverviewScreen` in `academy_overview_screen.dart` | `AcademyService` / API direct | GET/POST `/academy`, GET `/scouting/prospects`<br/>Models: `AcademyProgram`, `YouthProspect` | **Fragmented**. Legacy `AcademyOverviewScreen` exists alongside V2 dashboard tabs. |
 | **Club Dynasty Overview** | `ClubDynastyOverviewRouteData` (`/dynasty`) | `DynastyScreen` in `dynasty_screen.dart` | `DynastyController` | GET `/dynasty`, GET `/dynasty/leaderboard`<br/>Models: `DynastyProfileDto` | **Live**. Tracks streaks, eras, and dynasty milestones. |
 
@@ -93,7 +93,7 @@ This audit provides a precise, verified analysis of the current state of the **C
 | :--- | :--- | :--- | :--- | :--- |
 | **Club HQ (`/app` -> Club tab)** | Displays `_GtexCommandHomeEntry` with CTA to Sign In / Create Club. | Shows Create Club CTA if no club owned. | Opens `GtexClubOwnerDashboardV2` for owned club. | Opens `GtexClubOwnerDashboardV2` with Admin override controls. |
 | **Player Profile (`/players/:id/profile`)** | Full read-only access to attributes & radar. CTAs trigger Login sheet. | Can trade player shares & view contract details. | Same as User + highlight transfer bid option if seller. | Full access + Admin force-edit capabilities. |
-| **Lineup & Squad Management** | Read-only squad viewing in public club profile. | View-only unless managing own squad. | Full interactive pitch drag-and-drop & tactic edits. | Full editing capabilities. |
+| **Lineup & Squad Management** | Read-only squad viewing in public club profile. | View-only unless managing own squad. | Full interactive tap-to-assign pitch editor & tactic adjustments. | Full editing capabilities. |
 | **Kit & Jersey Designer** | Preview mode with mock saving disabled. | Prompts to create/claim club. | Full edit, save, and publish kit changes to backend. | Moderation & direct edit rights. |
 | **Regen Creation (Build-a-Son)** | View public regens. CTA prompts Login. | Opens Build-a-Son modal (requires wallet coins). | Opens Build-a-Son modal (auto-assigns son to club reserve). | Free test minting enabled via admin command panel. |
 
