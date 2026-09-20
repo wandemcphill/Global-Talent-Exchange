@@ -163,16 +163,20 @@ keeps GTEX football-first while preserving real market and collection signals.
 - Rebuilt the live Home masthead around the shared Command Center primitive.
   Its identity, wallet, player-market count, competition count, and task rhythm
   still come from the existing live profile, market, competition, and task
-  providers. It does not fabricate a current fixture, club, reward, or market
-  position.
+  providers. Provider failures render an explicit unavailable state rather than
+  loading or a fabricated zero; it does not fabricate a current fixture, club,
+  reward, or market position.
+- Command Center status presentation is controlled by explicit semantic state,
+  so guest preview cannot inherit the live-session indicator.
 - Added Playwright Design Lab coverage that captures all three directions at
   mobile, tablet, and desktop when the isolated fixture run is configured.
 
 ## Verification
 
-- `flutter test test/design_lab/gtex_design_lab_screen_test.dart` — passed (3
-  tests), including desktop exploration, 390px mobile readability, and
-  requested-direction opening.
+- `flutter test test/design_lab/gtex_design_lab_screen_test.dart
+  test/navigation_surface_truth_test.dart` — passed (14 tests), including
+  semantic status state, provider error truthfulness, desktop exploration, and
+  390px mobile readability.
 - `flutter build web --release --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000
   --dart-define=GTE_BACKEND_MODE=live` — passed.
 - `npx playwright test --grep "design lab"` — passed in mobile, tablet, and

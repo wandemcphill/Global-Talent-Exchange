@@ -6,6 +6,24 @@ import '../theme/gtex_spacing.dart';
 import '../theme/gtex_typography.dart';
 import 'gtex_action_button.dart';
 
+/// Semantic state for the Command Center identity indicator.
+///
+/// The display label remains caller-owned, while this state controls its
+/// visual treatment. That prevents a preview or unavailable surface from
+/// accidentally inheriting live-football styling.
+enum GtexCommandStatus {
+  live(GtexCommandTokens.live),
+  active(GtexCommandTokens.ownership),
+  open(GtexCommandTokens.coin),
+  preview(GtexCommandTokens.fan),
+  unavailable(GtexCommandTokens.risk),
+  offline(GtexCommandTokens.settled);
+
+  const GtexCommandStatus(this.color);
+
+  final Color color;
+}
+
 class GtexCommandMetric {
   const GtexCommandMetric({
     required this.label,
@@ -32,6 +50,7 @@ class GtexCommandCenterMasthead extends StatelessWidget {
     required this.title,
     required this.summary,
     required this.statusLabel,
+    required this.status,
     required this.metrics,
     this.identityDetail,
     this.primaryAction,
@@ -44,6 +63,7 @@ class GtexCommandCenterMasthead extends StatelessWidget {
   final String title;
   final String summary;
   final String statusLabel;
+  final GtexCommandStatus status;
   final List<GtexCommandMetric> metrics;
   final Widget? primaryAction;
   final Widget? secondaryAction;
@@ -73,6 +93,7 @@ class GtexCommandCenterMasthead extends StatelessWidget {
               identity: identity,
               detail: identityDetail,
               statusLabel: statusLabel,
+              status: status,
             );
             final Widget copy = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -264,10 +285,12 @@ class _IdentityBlock extends StatelessWidget {
     required this.identity,
     required this.detail,
     required this.statusLabel,
+    required this.status,
   });
   final String identity;
   final String? detail;
   final String statusLabel;
+  final GtexCommandStatus status;
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(GtexSpacing.md),
@@ -284,15 +307,15 @@ class _IdentityBlock extends StatelessWidget {
             Container(
               width: 10,
               height: 10,
-              decoration: const BoxDecoration(
-                color: GtexCommandTokens.live,
+              decoration: BoxDecoration(
+                color: status.color,
                 shape: BoxShape.circle,
               ),
             ),
             const SizedBox(width: GtexSpacing.xs),
             Text(
               statusLabel.toUpperCase(),
-              style: GtexText.labelSM.copyWith(color: GtexCommandTokens.live),
+              style: GtexText.labelSM.copyWith(color: status.color),
             ),
           ],
         ),

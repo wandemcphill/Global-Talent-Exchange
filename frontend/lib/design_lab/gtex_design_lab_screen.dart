@@ -123,6 +123,7 @@ class _DesignLabDirection extends StatelessWidget {
           title: data.title,
           summary: data.summary,
           statusLabel: data.status,
+          status: data.statusState,
           metrics: data.metrics,
           primaryAction: GtexCommandAction(
             label: data.primaryAction,
@@ -762,6 +763,7 @@ class _LabDirectionData {
     required this.title,
     required this.summary,
     required this.status,
+    required this.statusState,
     required this.primaryAction,
     required this.primaryIcon,
     required this.metrics,
@@ -780,6 +782,7 @@ class _LabDirectionData {
   final String title;
   final String summary;
   final String status;
+  final GtexCommandStatus statusState;
   final String primaryAction;
   final IconData primaryIcon;
   final List<GtexCommandMetric> metrics;
@@ -802,6 +805,7 @@ class _LabDirectionData {
       summary:
           'Event-led hierarchy puts the most immediate competition decision above everything else.',
       status: 'Matchday live',
+      statusState: GtexCommandStatus.live,
       primaryAction: 'Open matchday',
       primaryIcon: Icons.sports_soccer_rounded,
       metrics: const <GtexCommandMetric>[
@@ -874,6 +878,7 @@ class _LabDirectionData {
       summary:
           'Identity and long-term progression lead, with the current football decision kept present but secondary.',
       status: 'Club active',
+      statusState: GtexCommandStatus.active,
       primaryAction: 'Open club HQ',
       primaryIcon: Icons.shield_outlined,
       metrics: const <GtexCommandMetric>[
@@ -946,6 +951,7 @@ class _LabDirectionData {
       summary:
           'Value, player positions, and market movement become the primary navigation model for returning collectors.',
       status: 'Market open',
+      statusState: GtexCommandStatus.open,
       primaryAction: 'Review positions',
       primaryIcon: Icons.pie_chart_outline_rounded,
       metrics: const <GtexCommandMetric>[

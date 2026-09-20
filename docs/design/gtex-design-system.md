@@ -36,6 +36,9 @@ identity → decision → signal hierarchy; use existing `GtexPanel` and
 
 ## State rules
 
+- `GtexCommandCenterMasthead` requires a `GtexCommandStatus`; labels never
+  infer status styling. Live, active, open, preview, unavailable, and offline
+  use their own semantic treatment.
 - A live metric uses a backend-backed value only.
 - `Loading`, `Locked`, and `Quiet` are explicit states, not invented zeros.
 - Rewards and trophies are shown only where the underlying product has them.

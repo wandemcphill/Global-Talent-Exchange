@@ -2,8 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gte_frontend/design_lab/gtex_design_lab_screen.dart';
+import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 void main() {
+  test(
+    'command center status colors are semantic, not display-label driven',
+    () {
+      expect(GtexCommandStatus.live.color, GtexCommandTokens.live);
+      expect(GtexCommandStatus.active.color, GtexCommandTokens.ownership);
+      expect(GtexCommandStatus.open.color, GtexCommandTokens.coin);
+      expect(GtexCommandStatus.preview.color, GtexCommandTokens.fan);
+      expect(GtexCommandStatus.preview.color, isNot(GtexCommandTokens.live));
+    },
+  );
+
   testWidgets(
     'design lab exposes all three distinct command-center directions',
     (WidgetTester tester) async {

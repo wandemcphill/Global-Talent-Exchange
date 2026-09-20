@@ -54,9 +54,6 @@ class HomeScreen extends ConsumerWidget {
     ].any((AsyncValue<Object?> item) => item.hasError);
 
     final ProfileData? profile = profileValue.asData?.value;
-    final MarketDashboardData? market = marketValue.asData?.value;
-    final CompetitionHubData? competitions = competitionsValue.asData?.value;
-    final LiveTasksData? tasks = tasksValue.asData?.value;
     final String managerName = _managerName(profile, authenticated);
     final _HomePersona persona = _resolvePersona(profile, authenticated);
     final _PersonaCopy personaCopy = _copyForPersona(
@@ -82,9 +79,9 @@ class HomeScreen extends ConsumerWidget {
           managerName: managerName,
           runtimeMode: _runtimeModeLabel(appConfig.backendMode),
           profile: profile,
-          market: market,
-          competitions: competitions,
-          tasks: tasks,
+          marketValue: marketValue,
+          competitionsValue: competitionsValue,
+          tasksValue: tasksValue,
           personaCopy: personaCopy,
           onSignIn: () => context.push(AppRoutes.profileLogin),
           onOpenCompetitions:
@@ -577,9 +574,9 @@ class _HomeHero extends StatelessWidget {
     required this.managerName,
     required this.runtimeMode,
     required this.profile,
-    required this.market,
-    required this.competitions,
-    required this.tasks,
+    required this.marketValue,
+    required this.competitionsValue,
+    required this.tasksValue,
     required this.personaCopy,
     required this.onSignIn,
     required this.onOpenCompetitions,
@@ -590,9 +587,9 @@ class _HomeHero extends StatelessWidget {
   final String managerName;
   final String runtimeMode;
   final ProfileData? profile;
-  final MarketDashboardData? market;
-  final CompetitionHubData? competitions;
-  final LiveTasksData? tasks;
+  final AsyncValue<MarketDashboardData> marketValue;
+  final AsyncValue<CompetitionHubData> competitionsValue;
+  final AsyncValue<LiveTasksData> tasksValue;
   final _PersonaCopy personaCopy;
   final VoidCallback onSignIn;
   final VoidCallback onOpenCompetitions;
@@ -600,6 +597,9 @@ class _HomeHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final MarketDashboardData? market = marketValue.asData?.value;
+    final CompetitionHubData? competitions = competitionsValue.asData?.value;
+    final LiveTasksData? tasks = tasksValue.asData?.value;
     return GtexCommandCenterMasthead(
       eyebrow: personaCopy.badge,
       identity:
@@ -612,40 +612,80 @@ class _HomeHero extends StatelessWidget {
       title: personaCopy.headline,
       summary: personaCopy.body,
       statusLabel: authenticated ? 'Live session' : 'Preview session',
+      status:
+          authenticated ? GtexCommandStatus.live : GtexCommandStatus.preview,
       metrics: <GtexCommandMetric>[
         GtexCommandMetric(
           label: 'Capital',
           value:
-              market == null
+              marketValue.hasError
+                  ? 'Unavailable'
+                  : market == null
                   ? 'Loading'
-                  : market!.wallet == null
+                  : market.wallet == null
                   ? 'Locked'
-                  : _formatGtc(market!.wallet!.totalEquity),
-          detail: market?.wallet?.complianceMessage ?? 'Wallet authority',
+                  : _formatGtc(market.wallet!.totalEquity),
+          detail:
+              marketValue.hasError
+                  ? 'Market data unavailable'
+                  : market == null
+                  ? 'Loading market data'
+                  : market.wallet?.complianceMessage ?? 'Wallet authority',
           accent: GtexCommandTokens.coin,
           icon: Icons.account_balance_wallet_outlined,
         ),
         GtexCommandMetric(
           label: 'Players',
-          value: market == null ? 'Loading' : '${market!.playerShares.length}',
-          detail: 'Market discovery',
+          value:
+              marketValue.hasError
+                  ? 'Unavailable'
+                  : market == null
+                  ? 'Loading'
+                  : '${market.playerShares.length}',
+          detail:
+              marketValue.hasError
+                  ? 'Market data unavailable'
+                  : market == null
+                  ? 'Loading market data'
+                  : market.playerShares.isEmpty
+                  ? 'Quiet collection'
+                  : 'Market discovery',
           accent: GtexCommandTokens.ownership,
           icon: Icons.person_search_outlined,
         ),
         GtexCommandMetric(
           label: 'Competition',
           value:
-              competitions == null
+              competitionsValue.hasError
+                  ? 'Unavailable'
+                  : competitions == null
                   ? 'Loading'
-                  : '${competitions!.gtexCompetitions.length + competitions!.hostedCompetitions.length + competitions!.streamerTournaments.length}',
-          detail: 'Official and hosted lanes',
+                  : '${competitions.gtexCompetitions.length + competitions.hostedCompetitions.length + competitions.streamerTournaments.length}',
+          detail:
+              competitionsValue.hasError
+                  ? 'Competition data unavailable'
+                  : competitions == null
+                  ? 'Loading competition data'
+                  : _competitionDetail(competitions),
           accent: GtexCommandTokens.competition,
           icon: Icons.emoji_events_outlined,
         ),
         GtexCommandMetric(
           label: 'Rhythm',
-          value: tasks == null ? 'Loading' : '${tasks!.currentStreak}',
-          detail: 'Daily task streak',
+          value:
+              tasksValue.hasError
+                  ? 'Unavailable'
+                  : tasks == null
+                  ? 'Loading'
+                  : '${tasks.currentStreak}',
+          detail:
+              tasksValue.hasError
+                  ? 'Task data unavailable'
+                  : tasks == null
+                  ? 'Loading task data'
+                  : tasks.currentStreak == 0
+                  ? 'No active streak'
+                  : 'Daily task streak',
           accent: GtexCommandTokens.reward,
           icon: Icons.local_fire_department_outlined,
         ),
@@ -663,6 +703,16 @@ class _HomeHero extends StatelessWidget {
         secondary: true,
       ),
     );
+  }
+
+  String _competitionDetail(CompetitionHubData competitions) {
+    final int count =
+        competitions.gtexCompetitions.length +
+        competitions.hostedCompetitions.length +
+        competitions.streamerTournaments.length;
+    return count == 0
+        ? 'No active competition lanes'
+        : 'Official and hosted lanes';
   }
 }
 
