@@ -11,8 +11,7 @@ class MatchSimulateRouteScreen extends StatelessWidget {
       title: 'Coming soon',
       subtitle:
           'Local match tools are coming soon. The launch route is the 2D tactical viewer.',
-      reason:
-          'This route is blocked for launch while managers use the 2D match viewer.',
+      reason: 'Route blocked',
       detailTitle: 'Coming soon',
       detailSubtitle:
           'Open fixtures and use the 2D match viewer for launch matchday.',
