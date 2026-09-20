@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
-import 'package:gte_frontend/features/player_market_redesign/presentation/gtex_market_ownership_desk_screen.dart';
+enum GtexMarketDeskMode { market, ownership }
 
 enum GtePrimaryDestination {
   home,

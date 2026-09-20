@@ -6,13 +6,12 @@ import '../../../controllers/gtex_watchlist_controller.dart';
 import '../../../data/gte_exchange_models.dart';
 import '../../../data/player_card_watchlist_api.dart';
 import '../../../domain/ownership/gtex_ownership_models.dart';
+import '../../navigation/routing/gte_navigation_route.dart';
 import '../../../providers/gte_exchange_controller.dart';
 import '../../../screens/wallet/gtex_ownership_experience.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 import '../models/gtex_market_browse_models.dart';
 import 'gtex_player_market_redesign_screen.dart';
-
-enum GtexMarketDeskMode { market, ownership }
 
 class GtexMarketOwnershipDeskScreen extends StatefulWidget {
   const GtexMarketOwnershipDeskScreen({

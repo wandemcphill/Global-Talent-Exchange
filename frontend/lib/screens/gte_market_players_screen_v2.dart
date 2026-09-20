@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../data/player_match_service.dart';
 import '../features/app_routes/gte_navigation_helpers.dart';
 import '../features/app_routes/gte_route_data.dart';
+import '../features/navigation/routing/gte_navigation_route.dart';
 import '../features/navigation_guards/gte_navigation_guards.dart';
 import '../features/player_market_redesign/presentation/gtex_market_ownership_desk_screen.dart';
 import '../providers/gte_exchange_controller.dart';

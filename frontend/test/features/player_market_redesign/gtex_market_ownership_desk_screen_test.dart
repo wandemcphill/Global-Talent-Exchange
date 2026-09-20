@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/controllers/gtex_watchlist_controller.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/player_card_watchlist_api.dart';
+import 'package:gte_frontend/features/navigation/routing/gte_navigation_route.dart';
 import 'package:gte_frontend/features/player_market_redesign/presentation/gtex_market_ownership_desk_screen.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 
