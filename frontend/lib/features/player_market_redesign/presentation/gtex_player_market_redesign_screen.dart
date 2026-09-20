@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../controllers/gtex_watchlist_controller.dart';
 import '../../../data/gte_exchange_models.dart';
 import '../../../domain/ownership/gtex_ownership_models.dart';
+import '../../navigation/routing/gte_navigation_route.dart';
 import '../../../providers/gte_exchange_controller.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 import '../models/gtex_market_browse_models.dart';
 import '../widgets/gtex_market_context_panel.dart';
+import '../widgets/gtex_market_mode_chip.dart';
 import '../widgets/gtex_market_movers_rail.dart';
 import '../widgets/gtex_market_player_grid.dart';
 import '../widgets/gtex_market_selected_player_panel.dart';
@@ -25,6 +27,10 @@ class GtexPlayerMarketRedesignScreen extends StatefulWidget {
     required this.onOpenPlayer,
     required this.onOpenLogin,
     this.watchlistController,
+    this.activeMode = GtexMarketDeskMode.market,
+    this.squadCount = 0,
+    this.watchlistCount = 0,
+    this.onSelectMode,
     this.onOpenTransferCalendar,
   });
 
@@ -32,6 +38,10 @@ class GtexPlayerMarketRedesignScreen extends StatefulWidget {
   final ValueChanged<String> onOpenPlayer;
   final VoidCallback onOpenLogin;
   final GtexWatchlistController? watchlistController;
+  final GtexMarketDeskMode activeMode;
+  final int squadCount;
+  final int watchlistCount;
+  final ValueChanged<GtexMarketDeskMode>? onSelectMode;
   final VoidCallback? onOpenTransferCalendar;
 
   @override
@@ -190,6 +200,22 @@ class _GtexPlayerMarketRedesignScreenState
           leftPanelWidth: 330,
           rightPanelWidth: 370,
           actions: <Widget>[
+            ModeChipButton(
+              label: 'MARKET',
+              icon: Icons.radar_rounded,
+              badge: watchlistedPlayerIds.isNotEmpty ? '${watchlistedPlayerIds.length}' : null,
+              accent: GtexColors.cyan,
+              isActive: widget.activeMode == GtexMarketDeskMode.market,
+              onPressed: widget.onSelectMode != null ? () => widget.onSelectMode!(GtexMarketDeskMode.market) : () {},
+            ),
+            ModeChipButton(
+              label: 'OWNERSHIP',
+              icon: Icons.groups_2_outlined,
+              badge: widget.squadCount > 0 ? '${widget.squadCount}' : '0',
+              accent: GtexColors.pitch,
+              isActive: widget.activeMode == GtexMarketDeskMode.ownership,
+              onPressed: widget.onSelectMode != null ? () => widget.onSelectMode!(GtexMarketDeskMode.ownership) : () {},
+            ),
             IconButton.filledTonal(
               tooltip: 'Refresh market',
               onPressed: widget.controller.isLoadingMarket ? null : _refresh,

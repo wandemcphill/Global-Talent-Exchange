@@ -369,7 +369,7 @@ class MatchRouteBlockedScreen extends StatelessWidget {
         ),
         GtexSectionPanel(
           eyebrow: 'AVAILABILITY',
-          title: detailTitle,
+          title: 'Match Availability',
           subtitle: detailSubtitle,
           child: GteStatePanel(
             title: detailTitle,

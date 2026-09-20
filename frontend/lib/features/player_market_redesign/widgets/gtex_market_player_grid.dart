@@ -214,56 +214,82 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
               sliver: SliverToBoxAdapter(child: widget.header),
             ),
           SliverPadding(
-            padding: const EdgeInsets.all(GtexSpacing.md),
+            padding: const EdgeInsets.fromLTRB(
+              GtexSpacing.md,
+              GtexSpacing.sm,
+              GtexSpacing.md,
+              GtexSpacing.sm,
+            ),
             sliver: SliverToBoxAdapter(
-              child: Wrap(
-                spacing: GtexSpacing.sm,
-                runSpacing: GtexSpacing.xs,
-                children: <Widget>[
-                  GtexStatusChip(
-                    label: _loadedCountLabel(players.length, totalPlayers),
-                    icon: Icons.groups_outlined,
-                  ),
-                  if (totalPlayers > players.length)
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final bool compact = constraints.maxWidth < 640;
+                  final List<Widget> chips = <Widget>[
                     GtexStatusChip(
-                      label: '${_formatCount(totalPlayers)} matching listings',
-                      icon: Icons.public_outlined,
-                      color: GtexColors.pitch,
+                      label: _loadedCountLabel(players.length, totalPlayers),
+                      icon: Icons.groups_outlined,
                     ),
-                  if (basketState.items.isNotEmpty)
-                    GtexStatusChip(
-                      label: '${basketState.items.length} shortlisted',
-                      icon: Icons.shopping_basket_outlined,
-                      color: GtexColors.gold,
+                    if (totalPlayers > players.length)
+                      GtexStatusChip(
+                        label: '${_formatCount(totalPlayers)} matching listings',
+                        icon: Icons.public_outlined,
+                        color: GtexColors.pitch,
+                      ),
+                    if (basketState.items.isNotEmpty)
+                      GtexStatusChip(
+                        label: '${basketState.items.length} shortlisted',
+                        icon: Icons.shopping_basket_outlined,
+                        color: GtexColors.gold,
+                      ),
+                    for (final GtexMarketDiscoveryLane lane
+                        in GtexMarketDiscoveryLane.values)
+                      _DiscoveryLaneChip(
+                        lane: lane,
+                        count:
+                            lane == GtexMarketDiscoveryLane.all
+                                ? players.length
+                                : players
+                                    .where(
+                                      (GtexMarketPlayerView player) =>
+                                          lane.matches(player),
+                                    )
+                                    .length,
+                        isSelected: _lane == lane,
+                        onSelected: () => setState(() => _lane = lane),
+                      ),
+                    _SortMenu(
+                      sort: _sort,
+                      onSelected: (GtexMarketSort value) =>
+                          setState(() => _sort = value),
                     ),
-                  for (final GtexMarketDiscoveryLane lane
-                      in GtexMarketDiscoveryLane.values)
-                    _DiscoveryLaneChip(
-                      lane: lane,
-                      count:
-                          lane == GtexMarketDiscoveryLane.all
-                              ? players.length
-                              : players
-                                  .where(
-                                    (GtexMarketPlayerView player) =>
-                                        lane.matches(player),
-                                  )
-                                  .length,
-                      isSelected: _lane == lane,
-                      onSelected: () => setState(() => _lane = lane),
-                    ),
-                  _SortMenu(
-                    sort: _sort,
-                    onSelected: (GtexMarketSort value) =>
-                        setState(() => _sort = value),
-                  ),
-                  if (error != null)
-                    GtexStatusChip(
-                      label: 'Last good snapshot',
-                      icon: Icons.sync_problem_outlined,
-                      color: GtexColors.red,
-                    ),
-                ],
+                    if (error != null)
+                      GtexStatusChip(
+                        label: 'Last good snapshot',
+                        icon: Icons.sync_problem_outlined,
+                        color: GtexColors.red,
+                      ),
+                  ];
+
+                  if (compact) {
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: <Widget>[
+                          for (int i = 0; i < chips.length; i++) ...<Widget>[
+                            if (i > 0) const SizedBox(width: GtexSpacing.xs),
+                            chips[i],
+                          ],
+                        ],
+                      ),
+                    );
+                  }
+
+                  return Wrap(
+                    spacing: GtexSpacing.sm,
+                    runSpacing: GtexSpacing.xs,
+                    children: chips,
+                  );
+                },
               ),
             ),
           ),

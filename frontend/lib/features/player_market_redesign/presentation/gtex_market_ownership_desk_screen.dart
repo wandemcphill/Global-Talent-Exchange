@@ -11,6 +11,7 @@ import '../../../providers/gte_exchange_controller.dart';
 import '../../../screens/wallet/gtex_ownership_experience.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 import '../models/gtex_market_browse_models.dart';
+import '../widgets/gtex_market_mode_chip.dart';
 import 'gtex_player_market_redesign_screen.dart';
 
 class GtexMarketOwnershipDeskScreen extends StatefulWidget {
@@ -122,54 +123,72 @@ class _GtexMarketOwnershipDeskScreenState
         final int watchlistCount =
             _watchlistController.watchlistedPlayerIds.length;
 
+        if (_mode == GtexMarketDeskMode.market) {
+          return GtexPlayerMarketRedesignScreen(
+            controller: widget.controller,
+            watchlistController: _watchlistController,
+            activeMode: _mode,
+            squadCount: squadCount,
+            watchlistCount: watchlistCount,
+            onSelectMode: _switchMode,
+            onOpenPlayer: widget.onOpenPlayer,
+            onOpenLogin: widget.onOpenLogin,
+            onOpenTransferCalendar: widget.onOpenTransferCalendar,
+          );
+        }
+
         return Scaffold(
           backgroundColor: GtexColors.surfaceBase,
-          body: Column(
-            children: <Widget>[
-              _DeskMastheadHeader(
-                activeMode: _mode,
-                squadCount: squadCount,
-                watchlistCount: watchlistCount,
-                isAuthenticated: widget.controller.isAuthenticated,
-                onSelectMode: _switchMode,
-                onOpenLogin: widget.onOpenLogin,
-              ),
-              Expanded(
-                child: KeyedSubtree(
-                  key: ValueKey<GtexMarketDeskMode>(_mode),
-                  child: _mode == GtexMarketDeskMode.market
-                      ? GtexPlayerMarketRedesignScreen(
-                          controller: widget.controller,
-                          watchlistController: _watchlistController,
-                          onOpenPlayer: widget.onOpenPlayer,
-                          onOpenLogin: widget.onOpenLogin,
-                          onOpenTransferCalendar: widget.onOpenTransferCalendar,
-                        )
-                      : Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: GtexOwnershipExperience(
-                            book: book,
-                            summary: widget.controller.portfolioSummary,
-                            walletSummary: widget.controller.walletSummary,
-                            ownerName: widget.controller.session?.user.username,
-                            identityLookup: (String playerId) {
-                              for (final GteMarketPlayerListItem p
-                                  in widget.controller.players) {
-                                if (p.playerId == playerId) {
-                                  return p;
-                                }
-                              }
-                              return null;
-                            },
-                            onOpenPlayer: widget.onOpenPlayer,
-                            onRetry: () => widget.controller.refreshAccount(),
-                            onBrowseMarket: () =>
-                                _switchMode(GtexMarketDeskMode.market),
-                          ),
-                        ),
+          body: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 12, 0, 8),
+                  child: Row(
+                    children: <Widget>[
+                      ModeChipButton(
+                        label: 'TRANSFER INTELLIGENCE',
+                        icon: Icons.radar_rounded,
+                        badge: watchlistCount > 0 ? '$watchlistCount watched' : null,
+                        accent: GtexColors.cyan,
+                        isActive: _mode == GtexMarketDeskMode.market,
+                        onPressed: () => _switchMode(GtexMarketDeskMode.market),
+                      ),
+                      const SizedBox(width: 8),
+                      ModeChipButton(
+                        label: 'MY OWNERSHIP',
+                        icon: Icons.groups_2_outlined,
+                        badge: squadCount > 0 ? '$squadCount owned' : '0 owned',
+                        accent: GtexColors.pitch,
+                        isActive: _mode == GtexMarketDeskMode.ownership,
+                        onPressed: () => _switchMode(GtexMarketDeskMode.ownership),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                Expanded(
+                  child: GtexOwnershipExperience(
+                    book: book,
+                    summary: widget.controller.portfolioSummary,
+                    walletSummary: widget.controller.walletSummary,
+                    ownerName: widget.controller.session?.user.username,
+                    identityLookup: (String playerId) {
+                      for (final GteMarketPlayerListItem p
+                          in widget.controller.players) {
+                        if (p.playerId == playerId) {
+                          return p;
+                        }
+                      }
+                      return null;
+                    },
+                    onOpenPlayer: widget.onOpenPlayer,
+                    onRetry: () => widget.controller.refreshAccount(),
+                    onBrowseMarket: () => _switchMode(GtexMarketDeskMode.market),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -177,68 +196,9 @@ class _GtexMarketOwnershipDeskScreenState
   }
 }
 
-class _DeskMastheadHeader extends StatelessWidget {
-  const _DeskMastheadHeader({
-    required this.activeMode,
-    required this.squadCount,
-    required this.watchlistCount,
-    required this.isAuthenticated,
-    required this.onSelectMode,
-    required this.onOpenLogin,
-  });
-
-  final GtexMarketDeskMode activeMode;
-  final int squadCount;
-  final int watchlistCount;
-  final bool isAuthenticated;
-  final ValueChanged<GtexMarketDeskMode> onSelectMode;
-  final VoidCallback onOpenLogin;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      decoration: BoxDecoration(
-        color: GtexColors.surfaceRaised,
-        border: const Border(
-          bottom: BorderSide(color: GtexColors.surfaceBorder),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[
-              _ModeChipButton(
-                label: 'TRANSFER INTELLIGENCE',
-                icon: Icons.radar_rounded,
-                badge: watchlistCount > 0 ? '$watchlistCount watched' : null,
-                accent: GtexColors.cyan,
-                isActive: activeMode == GtexMarketDeskMode.market,
-                onPressed: () => onSelectMode(GtexMarketDeskMode.market),
-              ),
-              _ModeChipButton(
-                label: 'MY OWNERSHIP',
-                icon: Icons.groups_2_outlined,
-                badge: squadCount > 0 ? '$squadCount owned' : '0 owned',
-                accent: GtexColors.pitch,
-                isActive: activeMode == GtexMarketDeskMode.ownership,
-                onPressed: () => onSelectMode(GtexMarketDeskMode.ownership),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeChipButton extends StatelessWidget {
-  const _ModeChipButton({
+class ModeChipButton extends StatelessWidget {
+  const ModeChipButton({
+    super.key,
     required this.label,
     required this.icon,
     required this.accent,
@@ -263,7 +223,7 @@ class _ModeChipButton extends StatelessWidget {
         onTap: onPressed,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: isActive
                 ? accent.withValues(alpha: 0.16)
@@ -279,23 +239,24 @@ class _ModeChipButton extends StatelessWidget {
             children: <Widget>[
               Icon(
                 icon,
-                size: 16,
+                size: 15,
                 color: isActive ? accent : GtexColors.textMuted,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: isActive ? GtexColors.textPrimary : GtexColors.textMuted,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 0.6,
+                      letterSpacing: 0.5,
+                      fontSize: 11,
                     ),
               ),
               if (badge != null) ...<Widget>[
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                   decoration: BoxDecoration(
                     color: isActive
                         ? accent.withValues(alpha: 0.28)
@@ -307,7 +268,7 @@ class _ModeChipButton extends StatelessWidget {
                     badge!,
                     style: TextStyle(
                       color: isActive ? accent : GtexColors.textMuted,
-                      fontSize: 10,
+                      fontSize: 9,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
