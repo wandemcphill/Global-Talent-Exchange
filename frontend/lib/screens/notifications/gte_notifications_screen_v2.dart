@@ -6,16 +6,10 @@ import '../../data/gte_models.dart';
 import '../../features/engagement_redesign/engagement_controller.dart';
 import '../../features/engagement_redesign/engagement_models.dart';
 import '../../features/engagement_redesign/engagement_widgets.dart';
-import '../../features/global_search_redesign/global_search_models.dart';
 import '../../features/launch_control_redesign/launch_control_feature_gate.dart';
+import '../../features/notifications/gtex_notification_navigation.dart';
 import '../../providers/gte_exchange_controller.dart';
 import '../../ui_gtex/ui_gtex.dart';
-import '../support/gte_support_dispute_screens.dart';
-import '../wallet/gte_deposit_history_screen.dart';
-import '../wallet/gte_funding_flow_screen.dart';
-import '../wallet/gte_kyc_screen.dart';
-import '../wallet/gte_withdrawal_flow_screen.dart';
-import '../wallet/gtex_wallet_overview_screen_v2.dart';
 
 class GteNotificationsScreenV2 extends StatefulWidget {
   const GteNotificationsScreenV2({
@@ -191,6 +185,14 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
     if (notification == null) {
       return;
     }
+    final GtexNotificationNavigationTarget? target =
+        GtexNotificationNavigation.resolve(
+          notification,
+          isAdmin: exchangeController.isAdmin,
+        );
+    if (target == null) {
+      return;
+    }
     if (!notification.isRead) {
       await exchangeController.api.markNotificationRead(
         notification.notificationId,
@@ -200,117 +202,25 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
     if (!mounted) {
       return;
     }
-    final String? deepLinkRoute = gtexNotificationDeepLinkRoute(
-      notification,
-      isAdmin: exchangeController.isAdmin,
-    );
-    if (deepLinkRoute != null) {
-      final GtexFeatureGateDecision gate =
-          await GtexLaunchControlFeatureGate.resolveRoutePath(
-            route: deepLinkRoute,
-            baseUrl: exchangeController.api.config.baseUrl,
-            backendMode: exchangeController.api.config.mode,
-            accessToken: exchangeController.accessToken,
-            isAdmin: exchangeController.isAdmin,
-          );
-      if (!mounted) {
-        return;
-      }
-      if (gate.blocked) {
-        AppFeedback.showError(
-          context,
-          gate.message ??
-              'This notification target is not available right now.',
+    final GtexFeatureGateDecision gate =
+        await GtexLaunchControlFeatureGate.resolveRoutePath(
+          route: target.route,
+          baseUrl: exchangeController.api.config.baseUrl,
+          backendMode: exchangeController.api.config.mode,
+          accessToken: exchangeController.accessToken,
+          isAdmin: exchangeController.isAdmin,
         );
-        return;
-      }
-      context.go(deepLinkRoute);
+    if (!mounted) {
       return;
     }
-    final String topic = (notification.topic ?? '').toLowerCase();
-    final String resource = (notification.resourceId ?? '').toLowerCase();
-    if (topic.contains('deposit') || resource.startsWith('deposit')) {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder:
-              (BuildContext context) =>
-                  GteDepositHistoryScreen(controller: exchangeController),
-        ),
+    if (gate.blocked) {
+      AppFeedback.showError(
+        context,
+        gate.message ?? 'This notification target is not available right now.',
       );
       return;
     }
-    if (topic.contains('withdrawal') ||
-        topic.contains('payout') ||
-        resource.startsWith('withdrawal') ||
-        resource.startsWith('payout')) {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder:
-              (BuildContext context) => GteWithdrawalEligibilityScreen(
-                controller: exchangeController,
-              ),
-        ),
-      );
-      return;
-    }
-    if (topic.contains('kyc')) {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder:
-              (BuildContext context) =>
-                  GteKycScreen(controller: exchangeController),
-        ),
-      );
-      return;
-    }
-    if (topic.contains('dispute')) {
-      if (notification.resourceId != null) {
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder:
-                (BuildContext context) => GteDisputeThreadScreen(
-                  api: exchangeController.api,
-                  disputeId: notification.resourceId!,
-                ),
-          ),
-        );
-        return;
-      }
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder:
-              (BuildContext context) =>
-                  GteDisputeHubScreen(controller: exchangeController),
-        ),
-      );
-      return;
-    }
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder:
-            (BuildContext context) => GtexWalletOverviewScreenV2(
-              controller: exchangeController,
-              onWithdraw:
-                  () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder:
-                          (BuildContext context) => GteWithdrawalEligibilityScreen(
-                            controller: exchangeController,
-                          ),
-                    ),
-                  ),
-              onTopUp:
-                  () => Navigator.of(context).push<void>(
-                    MaterialPageRoute<void>(
-                      builder:
-                          (BuildContext context) => GteFundWalletScreen(
-                            controller: exchangeController,
-                          ),
-                    ),
-                  ),
-            ),
-      ),
-    );
+    context.go(target.route);
   }
 
   @override
@@ -398,10 +308,25 @@ class _GteNotificationsScreenV2State extends State<GteNotificationsScreenV2> {
               ? null
               : _NotificationActions(
                 item: selected,
-                onOpen: _usesLiveNotifications ? _openSelected : null,
+                onOpen:
+                    _canOpenSelectedNotification(selected)
+                        ? _openSelected
+                        : null,
                 onMarkRead: _markSelectedRead,
               ),
     );
+  }
+
+  bool _canOpenSelectedNotification(GtexNotificationItem item) {
+    final GteExchangeController? exchangeController = widget.exchangeController;
+    final GteNotification? notification = _liveNotifications[item.id];
+    return exchangeController != null &&
+        notification != null &&
+        GtexNotificationNavigation.resolve(
+              notification,
+              isAdmin: exchangeController.isAdmin,
+            ) !=
+            null;
   }
 }
 
@@ -409,175 +334,10 @@ String? gtexNotificationDeepLinkRoute(
   GteNotification notification, {
   required bool isAdmin,
 }) {
-  final String? rawRoute =
-      _firstMetadataString(notification.metadata, const <String>[
-        'deep_link_route',
-        'deepLinkRoute',
-        'deep_link',
-        'deepLink',
-        'action_route',
-        'actionRoute',
-        'route',
-      ]);
-  final String? candidate =
-      rawRoute?.trim().isNotEmpty == true
-          ? rawRoute!.trim()
-          : _fallbackDeepLinkRoute(notification, isAdmin: isAdmin);
-  final String trimmed = candidate?.trim() ?? '';
-  if (trimmed.isEmpty) {
-    return null;
-  }
-  final Uri? parsed = Uri.tryParse(trimmed);
-  if (parsed != null && (parsed.hasScheme || parsed.hasAuthority)) {
-    return null;
-  }
-  final String canonical = gtexCanonicalGlobalSearchRoute(
-    trimmed,
+  return GtexNotificationNavigation.resolve(
+    notification,
     isAdmin: isAdmin,
-  );
-  if (canonical == '/app/home' && trimmed.toLowerCase().startsWith('/admin')) {
-    return null;
-  }
-  return canonical;
-}
-
-String? _fallbackDeepLinkRoute(
-  GteNotification notification, {
-  required bool isAdmin,
-}) {
-  final String signal = _notificationSignal(notification);
-  if (signal.isEmpty) {
-    return null;
-  }
-  if (signal.contains('feature.flag') ||
-      signal.contains('feature flag') ||
-      signal.contains('kill_switch') ||
-      signal.contains('kill switch') ||
-      signal.contains('beta_access') ||
-      signal.contains('beta access') ||
-      signal.contains('launch control')) {
-    return isAdmin ? '/admin/launch-control' : null;
-  }
-  if (signal.contains('operations.readiness') ||
-      signal.contains('operations readiness') ||
-      signal.contains('admin ops') ||
-      signal.contains('risk ops') ||
-      signal.contains('moderation')) {
-    return isAdmin ? '/admin/trust-ops' : null;
-  }
-  if (signal.contains('coin_trader') ||
-      signal.contains('coin trader') ||
-      signal.contains('liquidity')) {
-    return '/app/coin-traders';
-  }
-  if (signal.contains('card.') ||
-      signal.contains('player card') ||
-      signal.contains('pack opened') ||
-      signal.contains('collectible')) {
-    return '/player-cards';
-  }
-  if (signal.contains('transfer') ||
-      signal.contains('offer') ||
-      signal.contains('loan') ||
-      signal.contains('swap') ||
-      signal.contains('market listing')) {
-    return '/app/market';
-  }
-  if (signal.contains('kyc') || signal.contains('verification')) {
-    return '/kyc';
-  }
-  if (signal.contains('dispute') || signal.contains('evidence')) {
-    return '/disputes';
-  }
-  if (signal.contains('wallet') ||
-      signal.contains('escrow') ||
-      signal.contains('payment') ||
-      signal.contains('deposit') ||
-      signal.contains('withdraw') ||
-      signal.contains('payout') ||
-      signal.contains('coins released')) {
-    return '/app/wallet';
-  }
-  if (signal.contains('national.rental') ||
-      signal.contains('national rental') ||
-      signal.contains('national-team') ||
-      signal.contains('national team')) {
-    return '/national-team';
-  }
-  if (signal.contains('federation') ||
-      signal.contains('sanction') ||
-      signal.contains('governance vote')) {
-    return '/world/federations';
-  }
-  if (signal.contains('award')) {
-    return '/world/awards';
-  }
-  if (signal.contains('regen') ||
-      signal.contains('newgen') ||
-      signal.contains('academy prospect')) {
-    return '/world/regens';
-  }
-  if (signal.contains('club') ||
-      signal.contains('academy') ||
-      signal.contains('staff') ||
-      signal.contains('sponsor')) {
-    return '/app/club';
-  }
-  if (signal.contains('prediction') ||
-      signal.contains('fan war') ||
-      signal.contains('fan_war') ||
-      signal.contains('gift') ||
-      signal.contains('social')) {
-    return '/app/community';
-  }
-  if (signal.contains('broadcast.package') ||
-      signal.contains('broadcast package')) {
-    return '/broadcast/live';
-  }
-  if (signal.contains('clip') ||
-      signal.contains('highlight') ||
-      signal.contains('broadcast')) {
-    return '/news';
-  }
-  if (signal.contains('ticket')) {
-    return '/app/play';
-  }
-  if (signal.contains('competition') ||
-      signal.contains('tournament') ||
-      signal.contains('fixture') ||
-      signal.contains('match')) {
-    return '/app/play';
-  }
-  if (signal.contains('admin')) {
-    return isAdmin ? '/admin/trust-ops' : null;
-  }
-  return null;
-}
-
-String _notificationSignal(GteNotification notification) {
-  return <String?>[
-    notification.topic,
-    notification.templateKey,
-    notification.resourceId,
-    notification.fixtureId,
-    notification.competitionId,
-    notification.message,
-    notification.metadata['event_key']?.toString(),
-    notification.metadata['eventKey']?.toString(),
-    notification.metadata['resource_type']?.toString(),
-    notification.metadata['resourceType']?.toString(),
-    notification.metadata['title']?.toString(),
-  ].whereType<String>().join(' ').toLowerCase();
-}
-
-String? _firstMetadataString(Map<String, Object?> metadata, List<String> keys) {
-  for (final String key in keys) {
-    final Object? value = metadata[key];
-    if (value is String && value.trim().isNotEmpty) {
-      return value;
-    }
-  }
-  return null;
+  )?.route;
 }
 
 class _NotificationsLeftPanel extends StatelessWidget {

@@ -36,7 +36,7 @@ void main() {
   });
 
   test(
-    'notification deep links canonicalize and block unsafe admin routes',
+    'notification deep links use payload targets and reject invented routes',
     () {
       GteNotification notificationWith({
         String? route,
@@ -92,7 +92,7 @@ void main() {
           ),
           isAdmin: false,
         ),
-        '/player-cards',
+        isNull,
       );
       expect(
         gtexNotificationDeepLinkRoute(
@@ -103,7 +103,7 @@ void main() {
           ),
           isAdmin: true,
         ),
-        '/admin/launch-control',
+        isNull,
       );
       expect(
         gtexNotificationDeepLinkRoute(
@@ -115,6 +115,25 @@ void main() {
           isAdmin: false,
         ),
         isNull,
+      );
+
+      final GteNotification fixtureNotification = GteNotification(
+        notificationId: 'notification-fixture',
+        userId: 'user-1',
+        topic: 'competition',
+        templateKey: 'match_live_now',
+        resourceId: null,
+        fixtureId: 'fixture-42',
+        competitionId: null,
+        message: 'Match is live.',
+        metadata: const <String, Object?>{},
+        createdAt: null,
+        readAt: null,
+        isRead: false,
+      );
+      expect(
+        gtexNotificationDeepLinkRoute(fixtureNotification, isAdmin: false),
+        '/matches/viewer/fixture-42',
       );
     },
   );
