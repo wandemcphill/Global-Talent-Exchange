@@ -44,7 +44,7 @@ class GtexMatch3dScreen extends StatelessWidget {
           'Advanced match viewing is coming soon. The launch matchday experience is the 2D tactical viewer.',
       reason:
           'This route is blocked for launch while managers use the 2D match viewer.',
-      detailTitle: 'Coming soon',
+      detailTitle: 'Route blocked',
       detailSubtitle:
           'Open fixtures and use the 2D match viewer for launch matchday.',
     );

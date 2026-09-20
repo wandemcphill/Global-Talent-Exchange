@@ -326,7 +326,7 @@ class MatchRouteBlockedScreen extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.reason,
-    this.detailTitle = 'Match unavailable',
+    this.detailTitle = 'Route blocked',
     this.detailSubtitle =
         'A live match or its official replay is not available right now.',
     this.supplementalPanels = const <Widget>[],
@@ -369,7 +369,7 @@ class MatchRouteBlockedScreen extends StatelessWidget {
         ),
         GtexSectionPanel(
           eyebrow: 'AVAILABILITY',
-          title: detailTitle,
+          title: 'Matchday status',
           subtitle: detailSubtitle,
           child: GteStatePanel(
             title: detailTitle,
