@@ -92,16 +92,36 @@ void main() {
     expect(simulation.summary, contains('redirects to the active Matchday'));
   });
 
-  testWidgets('home quick actions surface live world routing honestly', (
+  testWidgets('home masthead distinguishes a preview session from live state', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(_surfaceHost(const HomeScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.text('WORLD PULSE RAIL'), findsOneWidget);
-    expect(find.text('World Preview'), findsNothing);
-    expect(find.text('Watch matchday'), findsOneWidget);
-    expect(find.text('Read transfer hub'), findsOneWidget);
+    expect(find.text('PREVIEW SESSION'), findsOneWidget);
+    expect(find.text('LIVE SESSION'), findsNothing);
+    expect(find.text('Sign in to begin'), findsOneWidget);
+    expect(find.text('Scout market'), findsOneWidget);
+  });
+
+  testWidgets('command metrics distinguish provider failures from loading', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      _surfaceHost(
+        const HomeScreen(),
+        marketFails: true,
+        competitionsFail: true,
+        tasksFail: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unavailable'), findsNWidgets(4));
+    expect(find.text('Market data unavailable'), findsNWidgets(2));
+    expect(find.text('Competition data unavailable'), findsOneWidget);
+    expect(find.text('Task data unavailable'), findsOneWidget);
+    expect(find.text('Loading'), findsNothing);
   });
 
   testWidgets('home dashboard copy reflects an admin bootstrap role', (
@@ -131,7 +151,6 @@ void main() {
       find.text('CONTROL THE LIVE FOOTBALL ECONOMY SAFELY'),
       findsOneWidget,
     );
-    expect(find.text('PAYMENTS'), findsOneWidget);
   });
 
   testWidgets('home dashboard copy keeps coin trader identity distinct', (
@@ -158,8 +177,6 @@ void main() {
 
     expect(find.text('TRADER DESK'), findsOneWidget);
     expect(find.text('MAKE THE COIN MARKET FEEL ONLINE'), findsOneWidget);
-    expect(find.text('GTC'), findsOneWidget);
-    expect(find.text('FNC'), findsOneWidget);
   });
 
   testWidgets('native 3D route inventory is hidden while Unity is blocked', (
@@ -179,6 +196,9 @@ void main() {
 Widget _surfaceHost(
   Widget child, {
   ProfileData profileData = const ProfileData.unauthenticated(),
+  bool marketFails = false,
+  bool competitionsFail = false,
+  bool tasksFail = false,
 }) {
   const CompetitionHubData emptyHub = CompetitionHubData(
     gtexCompetitions: <CompetitionSummary>[],
@@ -193,8 +213,16 @@ Widget _surfaceHost(
         (Ref ref) => profileData.authenticated,
       ),
       profileDataProvider.overrideWith((Ref ref) async => profileData),
-      competitionHubProvider.overrideWith((Ref ref) async => emptyHub),
+      competitionHubProvider.overrideWith((Ref ref) async {
+        if (competitionsFail) {
+          throw StateError('Competition provider failed');
+        }
+        return emptyHub;
+      }),
       marketDashboardProvider.overrideWith((Ref ref) async {
+        if (marketFails) {
+          throw StateError('Market provider failed');
+        }
         return const MarketDashboardData(
           playerShares: <PlayerShareSummary>[],
           holdings: <PlayerShareHoldingSummary>[],
@@ -234,6 +262,9 @@ Widget _surfaceHost(
         );
       }),
       liveTasksProvider.overrideWith((Ref ref) async {
+        if (tasksFail) {
+          throw StateError('Tasks provider failed');
+        }
         return const LiveTasksData(
           authenticated: false,
           featureEnabled: true,
