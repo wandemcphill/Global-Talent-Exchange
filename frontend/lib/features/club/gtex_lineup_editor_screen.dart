@@ -58,6 +58,7 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
   String _formation = '4-3-3';
   List<LineupSquadPlayer> _squad = const <LineupSquadPlayer>[];
   List<String?> _slots = List<String?>.filled(11, null);
+  String? _selectedSubstituteId;
 
   @override
   void initState() {
@@ -71,7 +72,9 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
       _error = null;
     });
     try {
-      final List<LineupSquadPlayer> squad = await _repo.fetchSquad(widget.clubId);
+      final List<LineupSquadPlayer> squad = await _repo.fetchSquad(
+        widget.clubId,
+      );
       final ClubLineupPlan plan = await _repo.fetchLineup(widget.clubId);
       final List<String?> slots = List<String?>.filled(11, null);
       for (int i = 0; i < plan.starterPlayerIds.length && i < 11; i += 1) {
@@ -79,7 +82,8 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
       }
       setState(() {
         _squad = squad;
-        _formation = _formations.contains(plan.formation) ? plan.formation : '4-3-3';
+        _formation =
+            _formations.contains(plan.formation) ? plan.formation : '4-3-3';
         _slots = slots;
         _loading = false;
       });
@@ -97,7 +101,14 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
     for (int d = 0; d < lines.first; d += 1) {
       roles.add('DEF');
     }
-    for (int m = 0; m < lines.sublist(1, lines.length - 1).fold<int>(0, (int a, int b) => a + b); m += 1) {
+    for (
+      int m = 0;
+      m <
+          lines
+              .sublist(1, lines.length - 1)
+              .fold<int>(0, (int a, int b) => a + b);
+      m += 1
+    ) {
       roles.add('MID');
     }
     for (int f = 0; f < lines.last; f += 1) {
@@ -117,9 +128,12 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
   }
 
   Future<void> _assignSlot(int index) async {
-    final Set<String> taken = _slots.whereType<String>().toSet()..remove(_slots[index]);
+    final Set<String> taken =
+        _slots.whereType<String>().toSet()..remove(_slots[index]);
     final List<LineupSquadPlayer> available =
-        _squad.where((LineupSquadPlayer p) => !taken.contains(p.playerId)).toList();
+        _squad
+            .where((LineupSquadPlayer p) => !taken.contains(p.playerId))
+            .toList();
     final String? chosen = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: _panel,
@@ -133,21 +147,32 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
                 padding: EdgeInsets.all(14),
                 child: Text(
                   'Assign player',
-                  style: TextStyle(color: _text, fontSize: 16, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    color: _text,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               if (_slots[index] != null)
                 ListTile(
                   leading: const Icon(Icons.close, color: _textMuted),
-                  title: const Text('Clear slot', style: TextStyle(color: _textSecondary)),
+                  title: const Text(
+                    'Clear slot',
+                    style: TextStyle(color: _textSecondary),
+                  ),
                   onTap: () => Navigator.of(context).pop('__clear__'),
                 ),
               ...available.map(
                 (LineupSquadPlayer p) => ListTile(
                   title: Text(p.name, style: const TextStyle(color: _text)),
-                  subtitle: p.position == null
-                      ? null
-                      : Text(p.position!, style: const TextStyle(color: _textMuted)),
+                  subtitle:
+                      p.position == null
+                          ? null
+                          : Text(
+                            p.position!,
+                            style: const TextStyle(color: _textMuted),
+                          ),
                   onTap: () => Navigator.of(context).pop(p.playerId),
                 ),
               ),
@@ -165,7 +190,9 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
   void _autoFill() {
     final Set<String> taken = _slots.whereType<String>().toSet();
     final List<LineupSquadPlayer> pool =
-        _squad.where((LineupSquadPlayer p) => !taken.contains(p.playerId)).toList();
+        _squad
+            .where((LineupSquadPlayer p) => !taken.contains(p.playerId))
+            .toList();
     int poolIndex = 0;
     setState(() {
       for (int i = 0; i < 11; i += 1) {
@@ -176,14 +203,43 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
     });
   }
 
+  List<LineupSquadPlayer> get _substitutes {
+    final Set<String> starterIds = _slots.whereType<String>().toSet();
+    return _squad
+        .where(
+          (LineupSquadPlayer player) => !starterIds.contains(player.playerId),
+        )
+        .toList(growable: false);
+  }
+
+  void _selectSubstitute(String playerId) {
+    setState(() {
+      _selectedSubstituteId =
+          _selectedSubstituteId == playerId ? null : playerId;
+    });
+  }
+
+  void _assignSelectedSubstitute(int index) {
+    final String? playerId = _selectedSubstituteId;
+    if (playerId == null) {
+      _assignSlot(index);
+      return;
+    }
+    setState(() {
+      _slots[index] = playerId;
+      _selectedSubstituteId = null;
+    });
+  }
+
   Future<void> _save() async {
     final List<String> starters = _slots.whereType<String>().toList();
     final Set<String> startSet = starters.toSet();
-    final List<String> bench = _squad
-        .where((LineupSquadPlayer p) => !startSet.contains(p.playerId))
-        .map((LineupSquadPlayer p) => p.playerId)
-        .take(7)
-        .toList();
+    final List<String> bench =
+        _squad
+            .where((LineupSquadPlayer p) => !startSet.contains(p.playerId))
+            .map((LineupSquadPlayer p) => p.playerId)
+            .take(7)
+            .toList();
     setState(() => _saving = true);
     try {
       await _repo.saveLineup(
@@ -193,9 +249,9 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
         benchPlayerIds: bench,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lineup saved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Lineup saved')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -218,82 +274,134 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
         actions: <Widget>[
           TextButton(
             onPressed: _loading || _saving ? null : _autoFill,
-            child: const Text('Auto-fill', style: TextStyle(color: _textSecondary)),
+            child: const Text(
+              'Auto-fill',
+              style: TextStyle(color: _textSecondary),
+            ),
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? _ErrorState(message: _error!, onRetry: _load)
-          : _buildEditor(),
-      bottomNavigationBar: _loading || _error != null
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _green,
-                    foregroundColor: const Color(0xFF06140C),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: Text(
-                    _saving ? 'Saving…' : 'Save lineup',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+      body:
+          _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+              ? _ErrorState(message: _error!, onRetry: _load)
+              : _buildEditor(),
+      bottomNavigationBar:
+          _loading || _error != null
+              ? null
+              : SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _green,
+                      foregroundColor: const Color(0xFF06140C),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text(
+                      _saving ? 'Saving…' : 'Save lineup',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
     );
   }
 
   Widget _buildEditor() {
     final List<String> roles = _slotRoles;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+    final Widget formationSelector = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Text('FORMATION', style: TextStyle(color: _textMuted, fontSize: 11, letterSpacing: 1)),
+        const Text(
+          'FORMATION',
+          style: TextStyle(color: _textMuted, fontSize: 11, letterSpacing: 1),
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _formations.map((String f) {
-            final bool selected = f == _formation;
-            return GestureDetector(
-              onTap: () => setState(() => _formation = f),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: selected ? _green.withValues(alpha: 0.16) : _panel,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: selected ? _green : _border, width: selected ? 1.5 : 0.5),
-                ),
-                child: Text(
-                  f,
-                  style: TextStyle(
-                    fontFamily: _condensed,
-                    color: selected ? _green : _textSecondary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+          children: _formations
+              .map((String f) {
+                final bool selected = f == _formation;
+                return GestureDetector(
+                  onTap: () => setState(() => _formation = f),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: selected ? _green.withValues(alpha: 0.16) : _panel,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selected ? _green : _border,
+                        width: selected ? 1.5 : 0.5,
+                      ),
+                    ),
+                    child: Text(
+                      f,
+                      style: TextStyle(
+                        fontFamily: _condensed,
+                        color: selected ? _green : _textSecondary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            );
-          }).toList(growable: false),
+                );
+              })
+              .toList(growable: false),
         ),
+      ],
+    );
+    final Widget starters = Container(
+      decoration: BoxDecoration(
+        color: _pitch.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        children: List<Widget>.generate(11, (int i) => _slotTile(i, roles[i])),
+      ),
+    );
+    final Widget substitutes = GtexLineupSubstitutes(
+      players: _substitutes,
+      selectedPlayerId: _selectedSubstituteId,
+      onSelect: _selectSubstitute,
+    );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+      children: <Widget>[
+        formationSelector,
         const SizedBox(height: 18),
-        Container(
-          decoration: BoxDecoration(
-            color: _pitch.withValues(alpha: 0.35),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _border),
-          ),
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            children: List<Widget>.generate(11, (int i) => _slotTile(i, roles[i])),
-          ),
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            if (constraints.maxWidth >= 900) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(flex: 3, child: starters),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 2, child: substitutes),
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                starters,
+                const SizedBox(height: 16),
+                substitutes,
+              ],
+            );
+          },
         ),
       ],
     );
@@ -306,7 +414,7 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => _assignSlot(index),
+        onTap: () => _assignSelectedSubstitute(index),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
           child: Row(
@@ -342,12 +450,141 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
                 ),
               ),
               Icon(
-                filled ? Icons.swap_horiz_rounded : Icons.add_circle_outline_rounded,
+                filled
+                    ? Icons.swap_horiz_rounded
+                    : Icons.add_circle_outline_rounded,
                 color: filled ? _textMuted : _green,
                 size: 20,
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Responsive substitute pattern for the active lineup editor. On narrow
+/// screens it uses a two-column grid, so every player remains visible and
+/// touchable without relying on an off-screen horizontal row.
+class GtexLineupSubstitutes extends StatelessWidget {
+  const GtexLineupSubstitutes({
+    super.key,
+    required this.players,
+    required this.selectedPlayerId,
+    required this.onSelect,
+  });
+
+  final List<LineupSquadPlayer> players;
+  final String? selectedPlayerId;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: 'Substitutes',
+      child: Container(
+        decoration: BoxDecoration(
+          color: _panel,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _border),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              'SUBSTITUTES',
+              style: TextStyle(
+                color: _textMuted,
+                fontSize: 11,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Select a substitute, then tap a starter position to assign them.',
+              style: TextStyle(color: _textSecondary, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            if (players.isEmpty)
+              const Text(
+                'No substitutes available.',
+                style: TextStyle(color: _textMuted),
+              )
+            else
+              LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final int columns = constraints.maxWidth >= 560 ? 3 : 2;
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: players.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: columns == 2 ? 2.15 : 2.35,
+                    ),
+                    itemBuilder: (BuildContext context, int index) {
+                      final LineupSquadPlayer player = players[index];
+                      final bool selected = player.playerId == selectedPlayerId;
+                      return Semantics(
+                        button: true,
+                        selected: selected,
+                        label: 'Substitute ${player.name}',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => onSelect(player.playerId),
+                          child: Ink(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  selected
+                                      ? _green.withValues(alpha: 0.16)
+                                      : _bg,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: selected ? _green : _border,
+                              ),
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    player.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: _text,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if (player.position != null) ...<Widget>[
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    player.position!,
+                                    style: const TextStyle(
+                                      color: _textMuted,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+          ],
         ),
       ),
     );

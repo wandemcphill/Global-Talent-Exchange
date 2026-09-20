@@ -58,3 +58,76 @@ The 2D viewer can open a replay only where the backend has already materialized
 an authoritative match-viewer timeline or replay-archive record. There is no
 new replay-discovery endpoint in this slice, and no replay content was
 fabricated.
+
+---
+
+# GTEX P7-FE Slice 2 — Mobile Lineup, Notification Navigation, and Browser Harness
+
+**Status:** IMPLEMENTED; Flutter and Chromium runner verified. Authenticated
+browser route verification remains environment-dependent.
+
+## P1-01 — mobile lineup/substitute access
+
+**Resolved in the active `/lineup` route.** The historical audit referenced an
+older tactical-pitch/drag layout. Current main mounts `GtexLineupEditorScreen`,
+which saves up to seven bench player IDs but rendered no substitute bench at
+all. On a narrow screen, that made substitutes inaccessible from the active
+editor rather than merely clipped.
+
+The editor now has a reusable `GtexLineupSubstitutes` surface. It uses a
+two-column, touch-safe grid below the starter list on mobile/tablet and a
+side-by-side starter/bench composition at 900px and above. All substitutes are
+present in the scrollable page, and a player can be selected then assigned by
+tapping a starter position. This preserves the existing tap-to-assign editing
+model; no coordinate-based drag behaviour exists in the active route to remove
+or emulate.
+
+## P1-02 — notification navigation
+
+**Resolved for authoritative targets.** `NotificationEventMatrixService`
+already writes canonical `metadata.deep_link_route` values into notification
+records. The frontend had a second, broad keyword-routing layer and eventually
+opened the wallet when it had no target. That could mark a notification read
+while navigating to an unrelated fabricated surface.
+
+`GtexNotificationNavigation` is now the single resolver. It accepts a local,
+validated canonical route from backend metadata, or the exact legacy
+`fixture_id` → `/matches/viewer/:fixtureId` convention. It does not infer a
+route from copy, topic, resource labels, or generic IDs. The Open action is
+disabled when no safe target exists; users can still explicitly mark that
+notification read. Existing feature-gate and permission checks run before
+navigation.
+
+## Browser-validation harness
+
+- Location: `qa/playwright/`
+- Runner: Playwright with Chromium, Flutter Web web-server integration, mobile
+  (`390x844`/Pixel 5), tablet (`768x1024`), and desktop (`1440x900`) projects.
+- Evidence: Chromium was installed and the runner health test passed in all
+  three projects. Console errors and failed requests are attached to configured
+  browser tests; screenshots are written as Playwright result artifacts.
+- Command: `cd qa/playwright; npm test`
+- Local authenticated run: set `GTEX_E2E_API_BASE_URL`,
+  `GTEX_E2E_EMAIL`, and `GTEX_E2E_PASSWORD` as documented in
+  `qa/playwright/README.md`. Optional notification variables select existing,
+  real seeded alerts for target and no-target checks.
+
+## Verification
+
+- `flutter test test/engagement_redesign/notifications_screen_v2_test.dart test/club/gtex_lineup_substitutes_test.dart` — passed (5 tests).
+- `python -m pytest backend/tests/notifications/test_notification_event_matrix_service.py` — passed (3 tests).
+- `flutter build web --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000 --dart-define=GTE_BACKEND_MODE=live` — passed.
+- `npx playwright test` — Chromium health passed for mobile, tablet, and desktop;
+  route checks skipped honestly because this checkout had no running local API
+  or approved authenticated account supplied to the environment.
+
+## Remaining browser limitation
+
+No authenticated browser screenshots were captured in this execution: no local
+GTEX API was listening on `127.0.0.1:8000`, and no approved credentials were
+provided. The harness does not substitute fixture or fabricated app data for
+those screenshots. P7-FEV can move from **BLOCKED** to **READY for
+authenticated browser verification**, but is not complete until the configured
+route checks and visual review run against a real seeded environment.
+
+Unity P6/P6V and unrelated ingestion work were untouched.
