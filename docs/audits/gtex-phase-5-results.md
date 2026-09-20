@@ -131,3 +131,60 @@ authenticated browser verification**, but is not complete until the configured
 route checks and visual review run against a real seeded environment.
 
 Unity P6/P6V and unrelated ingestion work were untouched.
+
+---
+
+# GTEX P7-FE Slice 3 — Design Lab and Command Center
+
+**Status:** IMPLEMENTED; isolated Design Lab and production Home foundation
+verified through focused Flutter tests. Authenticated Home browser review
+remains environment-dependent.
+
+## Design directions explored
+
+1. **Matchday Pulse** — event-first: the immediate fixture, readiness, and
+competition pressure lead.
+2. **Club Atlas** — identity-first: club crest, legacy, academy, and prestige
+lead.
+3. **Ownership Ledger** — market-first: owned positions, value movement, bids,
+and rank lead.
+
+The selected production direction combines the hierarchy of Matchday Pulse
+with the identity clarity of Club Atlas and selected ownership metrics. This
+keeps GTEX football-first while preserving real market and collection signals.
+
+## Implementation
+
+- Added the isolated, unlinked Flutter route `/design-lab`, backed only by
+  clearly labelled local fixture data in `frontend/lib/design_lab/`.
+- Added `GtexCommandTokens`, `GtexCommandCenterMasthead`,
+  `GtexCommandAction`, and `GtexCommandFocusTile` as exported `ui_gtex`
+  primitives.
+- Rebuilt the live Home masthead around the shared Command Center primitive.
+  Its identity, wallet, player-market count, competition count, and task rhythm
+  still come from the existing live profile, market, competition, and task
+  providers. It does not fabricate a current fixture, club, reward, or market
+  position.
+- Added Playwright Design Lab coverage that captures all three directions at
+  mobile, tablet, and desktop when the isolated fixture run is configured.
+
+## Verification
+
+- `flutter test test/design_lab/gtex_design_lab_screen_test.dart` — passed (3
+  tests), including desktop exploration, 390px mobile readability, and
+  requested-direction opening.
+- `flutter build web --release --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000
+  --dart-define=GTE_BACKEND_MODE=live` — passed.
+- `npx playwright test --grep "design lab"` — passed in mobile, tablet, and
+  desktop projects against the built release bundle. It captured each of the
+  three directions at all three breakpoints (nine screenshots). The route uses
+  no backend fixture injection; its visual fixture data is isolated in the
+  Design Lab only.
+
+## Remaining limitation
+
+The Design Lab can be browser-validated without account data, but the live Home
+continues to require an approved authenticated account and running GTEX API for
+browser screenshots. P7-FEV remains **READY for authenticated browser
+verification**, not complete. Unity P6/P6V and unrelated ingestion work were
+untouched.

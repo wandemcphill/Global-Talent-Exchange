@@ -52,8 +52,34 @@ test('Chromium browser runner is available', async ({ page }) => {
 test.beforeEach(async ({ page }, testInfo) => {
   if (testInfo.title === 'Chromium browser runner is available') return;
   test.skip(!configured, 'Set GTEX_E2E_BASE_URL or GTEX_E2E_API_BASE_URL.');
+  if (testInfo.title === 'design lab captures three Flutter-native directions') {
+    test.skip(!process.env.GTEX_E2E_DESIGN_LAB, 'Set GTEX_E2E_DESIGN_LAB=1 to render isolated Design Lab fixtures.');
+    await collectBrowserDiagnostics(page, testInfo);
+    return;
+  }
   test.skip(!credentialsConfigured, 'Set an approved GTEX_E2E_EMAIL and GTEX_E2E_PASSWORD.');
   await collectBrowserDiagnostics(page, testInfo);
+});
+
+test('design lab captures three Flutter-native directions', async ({ page }, testInfo) => {
+  // Flutter Web paints application text to a canvas. The component-level
+  // widget test asserts semantic content; this browser check captures pixels
+  // from a rendered Flutter surface instead of querying browser DOM text.
+  test.setTimeout(180_000);
+  for (const direction of [
+    ['matchday', 'matchday-pulse'],
+    ['club', 'club-atlas'],
+    ['ownership', 'ownership-ledger'],
+  ]) {
+    const route = process.env.GTEX_E2E_HASH_ROUTING
+      ? `/?validation=${direction[0]}#/design-lab?direction=${direction[0]}`
+      : `/design-lab?direction=${direction[0]}`;
+    await page.goto(route, { waitUntil: 'domcontentloaded' });
+    const surface = page.locator('flt-glass-pane, flutter-view, canvas').first();
+    await expect(surface).toBeVisible({ timeout: 120_000 });
+    await page.waitForTimeout(3_000);
+    await capture(page, testInfo, `design-lab-${direction[1]}`);
+  }
 });
 
 test.afterEach(async ({}, testInfo) => {

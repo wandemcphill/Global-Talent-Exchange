@@ -80,7 +80,6 @@ class HomeScreen extends ConsumerWidget {
         _HomeHero(
           authenticated: authenticated,
           managerName: managerName,
-          runtimeHost: _runtimeHostLabel(appConfig.apiBaseUrl),
           runtimeMode: _runtimeModeLabel(appConfig.backendMode),
           profile: profile,
           market: market,
@@ -88,6 +87,10 @@ class HomeScreen extends ConsumerWidget {
           tasks: tasks,
           personaCopy: personaCopy,
           onSignIn: () => context.push(AppRoutes.profileLogin),
+          onOpenCompetitions:
+              () => context.go(const GteNavigationRoute.competitions().path),
+          onOpenMarket:
+              () => context.go(const GteNavigationRoute.market().path),
         ),
         const SizedBox(height: 16),
         _RoleBriefPanel(personaCopy: personaCopy),
@@ -572,7 +575,6 @@ class _HomeHero extends StatelessWidget {
   const _HomeHero({
     required this.authenticated,
     required this.managerName,
-    required this.runtimeHost,
     required this.runtimeMode,
     required this.profile,
     required this.market,
@@ -580,11 +582,12 @@ class _HomeHero extends StatelessWidget {
     required this.tasks,
     required this.personaCopy,
     required this.onSignIn,
+    required this.onOpenCompetitions,
+    required this.onOpenMarket,
   });
 
   final bool authenticated;
   final String managerName;
-  final String runtimeHost;
   final String runtimeMode;
   final ProfileData? profile;
   final MarketDashboardData? market;
@@ -592,140 +595,72 @@ class _HomeHero extends StatelessWidget {
   final LiveTasksData? tasks;
   final _PersonaCopy personaCopy;
   final VoidCallback onSignIn;
+  final VoidCallback onOpenCompetitions;
+  final VoidCallback onOpenMarket;
 
   @override
   Widget build(BuildContext context) {
-    return _CommandPanel(
-      title: personaCopy.badge,
-      subtitle:
+    return GtexCommandCenterMasthead(
+      eyebrow: personaCopy.badge,
+      identity:
+          profile?.club?['name']?.toString() ??
+          (authenticated ? managerName : 'GTEX Visitor'),
+      identityDetail:
           authenticated
-              ? 'Good session, $managerName. ${personaCopy.subtitle}'
-              : personaCopy.subtitle,
-      trailing: _StatusBadge(
-        label: runtimeMode.toUpperCase(),
-        color: personaCopy.accent,
+              ? 'Manager $managerName · $runtimeMode runtime'
+              : 'Explore the football universe before you enter it.',
+      title: personaCopy.headline,
+      summary: personaCopy.body,
+      statusLabel: authenticated ? 'Live session' : 'Preview session',
+      metrics: <GtexCommandMetric>[
+        GtexCommandMetric(
+          label: 'Capital',
+          value:
+              market == null
+                  ? 'Loading'
+                  : market!.wallet == null
+                  ? 'Locked'
+                  : _formatGtc(market!.wallet!.totalEquity),
+          detail: market?.wallet?.complianceMessage ?? 'Wallet authority',
+          accent: GtexCommandTokens.coin,
+          icon: Icons.account_balance_wallet_outlined,
+        ),
+        GtexCommandMetric(
+          label: 'Players',
+          value: market == null ? 'Loading' : '${market!.playerShares.length}',
+          detail: 'Market discovery',
+          accent: GtexCommandTokens.ownership,
+          icon: Icons.person_search_outlined,
+        ),
+        GtexCommandMetric(
+          label: 'Competition',
+          value:
+              competitions == null
+                  ? 'Loading'
+                  : '${competitions!.gtexCompetitions.length + competitions!.hostedCompetitions.length + competitions!.streamerTournaments.length}',
+          detail: 'Official and hosted lanes',
+          accent: GtexCommandTokens.competition,
+          icon: Icons.emoji_events_outlined,
+        ),
+        GtexCommandMetric(
+          label: 'Rhythm',
+          value: tasks == null ? 'Loading' : '${tasks!.currentStreak}',
+          detail: 'Daily task streak',
+          accent: GtexCommandTokens.reward,
+          icon: Icons.local_fire_department_outlined,
+        ),
+      ],
+      primaryAction: GtexCommandAction(
+        label: authenticated ? 'Open competitions' : 'Sign in to begin',
+        icon: authenticated ? Icons.emoji_events_outlined : Icons.login_rounded,
+        onPressed: authenticated ? onOpenCompetitions : onSignIn,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            personaCopy.headline,
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-              fontFamily: 'BarlowCondensed',
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
-              color: _GtexCommandColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            personaCopy.body,
-            style: _bodyStyle(context, color: _GtexCommandColors.textPrimary),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              _StatusBadge(
-                label: 'WORLD PULSE RAIL',
-                color: _GtexCommandColors.accentPrimary,
-              ),
-              _StatusBadge(
-                label: 'Watch matchday',
-                color: _GtexCommandColors.accentBlue,
-              ),
-              _StatusBadge(
-                label: 'Read transfer hub',
-                color: _GtexCommandColors.accentAmber,
-              ),
-              ...personaCopy.capabilities.map(
-                (String capability) => _StatusBadge(
-                  label: capability.toUpperCase(),
-                  color: personaCopy.accent,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: <Widget>[
-              _MetricCard(
-                label: 'WALLET',
-                value:
-                    market == null
-                        ? 'LOADING'
-                        : market!.wallet == null
-                        ? 'LOCKED'
-                        : _formatGtc(market!.wallet!.totalEquity),
-                support:
-                    market?.wallet == null
-                        ? 'Sign in or wait for wallet authority'
-                        : market!.wallet!.complianceMessage,
-                tone:
-                    market?.wallet == null
-                        ? _GtexCommandColors.accentAmber
-                        : _GtexCommandColors.accentPrimary,
-              ),
-              _MetricCard(
-                label: 'PLAYERS',
-                value:
-                    market == null
-                        ? 'LOADING'
-                        : '${market!.playerShares.length}',
-                support: 'Market discovery universe',
-                tone: _GtexCommandColors.accentBlue,
-              ),
-              _MetricCard(
-                label: 'COMPETITIONS',
-                value:
-                    competitions == null
-                        ? 'LOADING'
-                        : '${competitions!.gtexCompetitions.length + competitions!.hostedCompetitions.length + competitions!.streamerTournaments.length}',
-                support: 'Official, hosted, creator',
-                tone: _GtexCommandColors.accentPrimary,
-              ),
-              _MetricCard(
-                label: 'TASK STREAK',
-                value: tasks == null ? 'LOADING' : '${tasks!.currentStreak}',
-                support: 'Daily command rhythm',
-                tone: _GtexCommandColors.accentAmber,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              _StatusBadge(
-                label: 'HOST $runtimeHost',
-                color: _GtexCommandColors.textSecondary,
-              ),
-              _StatusBadge(
-                label: authenticated ? 'SIGNED IN' : 'GUEST',
-                color:
-                    authenticated
-                        ? _GtexCommandColors.accentPrimary
-                        : _GtexCommandColors.accentAmber,
-              ),
-              if (profile?.club != null)
-                _StatusBadge(
-                  label:
-                      'CLUB ${profile!.club!['name'] ?? profile!.club!['id']}',
-                  color: _GtexCommandColors.accentPrimary,
-                ),
-              if (!authenticated)
-                FilledButton.icon(
-                  onPressed: onSignIn,
-                  icon: const Icon(Icons.login_rounded),
-                  label: const Text('Sign in'),
-                ),
-            ],
-          ),
-        ],
+      secondaryAction: GtexCommandAction(
+        label: 'Scout market',
+        icon: Icons.radar_rounded,
+        onPressed: onOpenMarket,
+        accent: GtexCommandTokens.coin,
+        secondary: true,
       ),
     );
   }
@@ -1984,19 +1919,6 @@ String _managerName(ProfileData? profile, bool authenticated) {
       fallback: stringValue(user?['email'], fallback: 'Manager'),
     ),
   );
-}
-
-String _runtimeHostLabel(String apiBaseUrl) {
-  final Uri? uri = Uri.tryParse(apiBaseUrl.trim());
-  final String? host = uri?.host.trim();
-  if (host != null && host.isNotEmpty) {
-    return host;
-  }
-  final String raw = apiBaseUrl.trim();
-  if (raw.isEmpty) {
-    return 'not configured';
-  }
-  return raw.replaceFirst(RegExp(r'^https?://'), '');
 }
 
 String _runtimeModeLabel(GteBackendMode backendMode) {
