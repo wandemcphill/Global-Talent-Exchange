@@ -313,9 +313,13 @@ class _IdentityBlock extends StatelessWidget {
               ),
             ),
             const SizedBox(width: GtexSpacing.xs),
-            Text(
-              statusLabel.toUpperCase(),
-              style: GtexText.labelSM.copyWith(color: status.color),
+            Expanded(
+              child: Text(
+                statusLabel.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GtexText.labelSM.copyWith(color: status.color),
+              ),
             ),
           ],
         ),

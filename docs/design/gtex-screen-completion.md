@@ -24,3 +24,16 @@
 Active match and competition details continue to be supplied by their existing
 authoritative routes; Home does not fabricate a fixture to populate the
 masthead.
+
+## Competition command surface (Slice 4)
+
+| Area | Authoritative source | Treatment |
+| --- | --- | --- |
+| Hub families | `competitionHubProvider` | GTEX, hosted, and creator lists stay visibly distinct. |
+| GTEX detail | `gtexCompetitionDetailProvider(id)` | metadata, financial contract, standings, and fixtures are fetched together; any live-provider failure is unavailable, not a fabricated empty detail. |
+| Participation | `CompetitionJoinEligibility` and `CompetitionApi.joinCompetition` | sign-in, locked, invite/passcode, eligible, and join-in-flight states are explicit. |
+| Matchday path | fixture `match_key` | the existing `/matches/viewer/:matchKey` route is offered only when supplied by the fixture. |
+
+The canonical shell now mounts the provider-backed Competition Command surface.
+It does not use the prior V2 adapter's synthetic empty fixtures, standings, or
+derived lifecycle content.

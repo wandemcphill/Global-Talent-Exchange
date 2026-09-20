@@ -51,3 +51,18 @@ deeper world, market, rewards, and ownership detail.
 
 The Design Lab's three directions are deliberately distinct compositions, not
 colour variations. Its fixtures are isolated under `frontend/lib/design_lab/`.
+
+## Competition command exploration
+
+| Direction | Hierarchy | Decision |
+| --- | --- | --- |
+| A — Matchday Board | next fixture, then table, then participation | what match context matters now? |
+| B — Competition Atlas (selected) | identity and lifecycle, then fixtures/table, then participation | what competition is this and where is it progressing? |
+| C — Participation Desk | eligibility, then fixture/table context | can and should this club enter? |
+
+Slice 4 selects **Competition Atlas** for the canonical hub. GTEX needs the
+competition identity and progression to explain a matchday; a fixture-first
+board can make quiet or not-yet-scheduled competitions feel empty, while an
+eligibility-first desk over-weights a decision that is unavailable to many
+viewers. The isolated `/design-lab/competitions` route labels every specimen
+as local fixture data.

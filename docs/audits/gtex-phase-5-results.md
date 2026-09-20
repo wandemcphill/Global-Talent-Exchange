@@ -134,6 +134,54 @@ Unity P6/P6V and unrelated ingestion work were untouched.
 
 ---
 
+# GTEX P7-FE Slice 4 — Competition and Matchday Command Surfaces
+
+**Status:** IMPLEMENTED; the canonical competition shell, its GTEX detail,
+and the isolated competition Design Lab have focused verification. Authenticated
+live-route browser review remains environment-dependent.
+
+## Implementation
+
+- The canonical shell mounts `GtexLiveCompetitionsCommandScreen`, backed by
+  `competitionHubProvider`, rather than the previous V2 adapter that derived
+  synthetic empty fixtures, standings, and lifecycle content.
+- GTEX, hosted, and creator tournaments remain separate families. Each keeps
+  its own detail provider and participation contract; hosted join is offered
+  only when `joinOpen` is reported and no passcode is required.
+- GTEX detail consumes `gtexCompetitionDetailProvider(id)` for real metadata,
+  financial contract, standings, and fixtures. It distinguishes loading,
+  unavailable, no fixtures, no standings, sign-in, locked, invite/passcode,
+  eligible, and join-in-flight states without inventing values.
+- A fixture exposes the existing Match Viewer only when it supplies a
+  `match_key`; no new viewer or match authority was introduced.
+- `/design-lab/competitions` contains the fixture-labelled Matchday Board,
+  Competition Atlas (selected), and Participation Desk compositions. It is
+  unlinked from production data.
+
+## Verification
+
+- `flutter analyze` on all changed Flutter source and focused tests — passed,
+  no issues.
+- `flutter test test/design_lab/gtex_competition_design_lab_screen_test.dart
+  test/competitions/gtex_live_competitions_command_screen_test.dart
+  test/design_lab/gtex_design_lab_screen_test.dart` — passed (10 tests).
+- `flutter build web --release --dart-define=GTE_API_BASE_URL=http://127.0.0.1:8000
+  --dart-define=GTE_BACKEND_MODE=live` — passed.
+- `npx playwright test tests/p7_fe_slice_4.spec.mjs --project=mobile
+  --project=tablet --project=desktop --workers=1` — passed (3 tests) against
+  the locally served release bundle. It captured all three isolated
+  compositions at 390px/mobile, 768px/tablet, and 1440px/desktop (nine
+  screenshots). No account, authenticated route, or live API claim was used.
+
+## Remaining limitation
+
+The Design Lab browser capture verifies the isolated visual specimens only.
+No authenticated Competition Hub browser claim is made because no approved
+credentials or live API environment was supplied. P7-FEV remains incomplete.
+Unity P6/P6V and ingestion were untouched.
+
+---
+
 # GTEX P7-FE Slice 3 — Design Lab and Command Center
 
 **Status:** IMPLEMENTED; isolated Design Lab and production Home foundation

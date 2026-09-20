@@ -29,6 +29,12 @@ from `GtexSpacing` and `GtexText`.
 - `GtexCommandAction`: command-surface action sizing wrapped around the
   existing `GtexActionButton` behaviour.
 - `GtexCommandFocusTile`: a touch-safe, semantic next-decision tile.
+- `GtexCompetitionFamilySelector`: a horizontally-scrollable family switcher
+  that keeps GTEX, hosted, and creator tournament contracts distinct.
+- `GtexMatchdayFixtureTile`: fact-only fixture identity, state, optional score,
+  and an optional established Match Viewer path.
+- `GtexCompetitionStandingRow`: a responsive table-row treatment for records
+  supplied by the competition standings contract.
 
 All are exported from `ui_gtex.dart`. Use them when a surface needs a clear
 identity → decision → signal hierarchy; use existing `GtexPanel` and
@@ -44,3 +50,8 @@ identity → decision → signal hierarchy; use existing `GtexPanel` and
 - Rewards and trophies are shown only where the underlying product has them.
 - Design Lab fixture values must remain within `frontend/lib/design_lab/` and
 must visibly carry the isolated-fixture label.
+
+Competition fixture tiles omit a date, score, or Match Viewer action when the
+provider does not supply that fact. Family selection is visual navigation, not
+permission equivalence: no hosted or creator control should inherit GTEX join
+eligibility.
