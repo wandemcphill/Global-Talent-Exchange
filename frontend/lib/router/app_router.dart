@@ -9,6 +9,7 @@ import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/coin_trader_redesign/coin_trader_redesign.dart';
 import 'package:gte_frontend/design_lab/gtex_design_lab_screen.dart';
+import 'package:gte_frontend/design_lab/gtex_competition_design_lab_screen.dart';
 import 'package:gte_frontend/features/launch_control_redesign/gtex_feature_flags_launch_control_screen_v2.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
@@ -65,6 +66,18 @@ GoRouter buildGtexAppRouter({
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
                   child: GtexDesignLabScreen(
+                    initialDirection: state.uri.queryParameters['direction'],
+                  ),
+                ),
+      ),
+      // A separate fixture-only exploration for Competition Slice 4. It is
+      // deliberately unlinked and cannot supply data to production routes.
+      GoRoute(
+        path: '/design-lab/competitions',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                NoTransitionPage<void>(
+                  child: GtexCompetitionDesignLabScreen(
                     initialDirection: state.uri.queryParameters['direction'],
                   ),
                 ),
@@ -899,15 +912,18 @@ List<RouteBase> _buildLegacyAliasRoutes({
     ),
     GoRoute(
       path: AppRoutes.matchesNativeThreeD,
-      redirect: (BuildContext context, GoRouterState state) => AppRoutes.matches,
+      redirect:
+          (BuildContext context, GoRouterState state) => AppRoutes.matches,
     ),
     GoRoute(
       path: AppRoutes.matchesSpectate,
-      redirect: (BuildContext context, GoRouterState state) => AppRoutes.matches,
+      redirect:
+          (BuildContext context, GoRouterState state) => AppRoutes.matches,
     ),
     GoRoute(
       path: AppRoutes.matchesSimulate,
-      redirect: (BuildContext context, GoRouterState state) => AppRoutes.matches,
+      redirect:
+          (BuildContext context, GoRouterState state) => AppRoutes.matches,
     ),
     GoRoute(
       path: '/match-viewer/:matchKey',

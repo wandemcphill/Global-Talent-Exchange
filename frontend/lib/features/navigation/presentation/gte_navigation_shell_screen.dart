@@ -21,7 +21,7 @@ import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/referral_api.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
-import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen_v2.dart';
+import 'package:gte_frontend/features/competitions/presentation/gtex_live_competitions_command_screen.dart';
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
 import 'package:gte_frontend/features/global_search_redesign/global_search_redesign.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
@@ -1015,10 +1015,8 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
       // market or regen item routes into the canonical surface instead of
       // rendering a dead control. No new route or destination is introduced.
       onOpenClub: () => _openPrimaryDestination(GtePrimaryDestination.club),
-      onOpenMarket:
-          () => _openPrimaryDestination(GtePrimaryDestination.market),
-      onOpenRegens:
-          () => _openPrimaryDestination(GtePrimaryDestination.regens),
+      onOpenMarket: () => _openPrimaryDestination(GtePrimaryDestination.market),
+      onOpenRegens: () => _openPrimaryDestination(GtePrimaryDestination.regens),
     );
   }
 
@@ -1044,22 +1042,15 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
   }
 
   Widget _buildCompetitionsDestination() {
-    return GteCompetitionsHubScreenV2(
-      key: const PageStorageKey<String>('competitions-hub-v2'),
-      controller: _competitionController,
-      currentDestination: _route.effectiveCompetitionDestination,
-      onDestinationChanged: _openCompetitionDestination,
+    return GtexLiveCompetitionsCommandScreen(
+      key: const PageStorageKey<String>('competitions-command'),
       isAuthenticated: widget.controller.isAuthenticated,
-      isCheckingCreatorAccess: _isCheckingCreatorAccess,
-      canHostCompetitions: _canHostCompetitions,
       onOpenLogin:
           () => _openLogin(
             targetRoute: GteNavigationRoute.competitions(
               destination: _route.effectiveCompetitionDestination,
             ),
           ),
-      onOpenCreatorAccessRequest: () => _pushCreatorAccessRequest(context),
-      navigationDependencies: _navigationDependencies(),
     );
   }
 
