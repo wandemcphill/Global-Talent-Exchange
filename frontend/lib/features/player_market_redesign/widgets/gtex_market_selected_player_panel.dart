@@ -15,16 +15,20 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
     required this.onRemoveFromBasket,
     required this.onCheckout,
     this.selectedPlayerOwned = false,
+    this.selectedPlayerWatchlisted = false,
+    this.onToggleWatchlist,
   });
 
   /// True when the signed-in user already holds the selected player.
   final bool selectedPlayerOwned;
+  final bool selectedPlayerWatchlisted;
   final GtexMarketPlayerView? selectedPlayer;
   final GtexMarketBasketState basketState;
   final bool isAuthenticated;
   final VoidCallback onOpenLogin;
   final ValueChanged<GtexMarketPlayerView> onOpenPlayer;
   final ValueChanged<GtexMarketPlayerView> onToggleBasket;
+  final VoidCallback? onToggleWatchlist;
   final ValueChanged<String> onRemoveFromBasket;
   final VoidCallback onCheckout;
 
@@ -41,10 +45,12 @@ class GtexMarketSelectedPlayerPanel extends StatelessWidget {
                     player: selectedPlayer!,
                     inBasket: basketState.contains(selectedPlayer!.playerId),
                     isOwned: selectedPlayerOwned,
+                    isWatchlisted: selectedPlayerWatchlisted,
                     isAuthenticated: isAuthenticated,
                     onOpenLogin: onOpenLogin,
                     onOpenPlayer: () => onOpenPlayer(selectedPlayer!),
                     onToggleBasket: () => onToggleBasket(selectedPlayer!),
+                    onToggleWatchlist: onToggleWatchlist,
                   ),
         ),
         const Divider(height: 1, color: GtexColors.line),
@@ -106,19 +112,23 @@ class _SelectedPlayerDetail extends StatelessWidget {
     required this.player,
     required this.inBasket,
     required this.isOwned,
+    required this.isWatchlisted,
     required this.isAuthenticated,
     required this.onOpenLogin,
     required this.onOpenPlayer,
     required this.onToggleBasket,
+    this.onToggleWatchlist,
   });
 
   final GtexMarketPlayerView player;
   final bool inBasket;
   final bool isOwned;
+  final bool isWatchlisted;
   final bool isAuthenticated;
   final VoidCallback onOpenLogin;
   final VoidCallback onOpenPlayer;
   final VoidCallback onToggleBasket;
+  final VoidCallback? onToggleWatchlist;
 
   /// The pane is short: the preview sits above the shortlist basket, so it
   /// gets roughly a third of the workspace height. Below the height the
@@ -225,6 +235,16 @@ class _SelectedPlayerDetail extends StatelessWidget {
         const SizedBox(height: GtexSpacing.sm),
         Row(
           children: <Widget>[
+            Expanded(
+              child: GtexActionButton(
+                label: isWatchlisted ? 'Remove watchlist' : 'Add to watchlist',
+                icon: isWatchlisted ? Icons.star_rounded : Icons.star_border_rounded,
+                onPressed: onToggleWatchlist ?? onToggleBasket,
+                accent: isWatchlisted ? GtexColors.gold : GtexColors.cyan,
+                secondary: true,
+              ),
+            ),
+            const SizedBox(width: GtexSpacing.xs),
             Expanded(
               child: GtexActionButton(
                 label: inBasket ? 'Remove shortlist' : 'Add shortlist',

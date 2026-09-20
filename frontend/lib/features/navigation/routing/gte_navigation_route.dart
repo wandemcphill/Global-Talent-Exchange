@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/features/competitions_hub/routing/competition_hub_destination.dart';
+import 'package:gte_frontend/features/player_market_redesign/presentation/gtex_market_ownership_desk_screen.dart';
 
 enum GtePrimaryDestination {
   home,
@@ -153,14 +154,19 @@ class GteNavigationRoute {
   const GteNavigationRoute._({
     required this.primaryDestination,
     this.competitionDestination,
+    this.marketDeskMode = GtexMarketDeskMode.market,
     this.capitalDestination = GteCapitalDestination.wallet,
   });
 
   const GteNavigationRoute.home()
     : this._(primaryDestination: GtePrimaryDestination.home);
 
-  const GteNavigationRoute.market()
-    : this._(primaryDestination: GtePrimaryDestination.market);
+  const GteNavigationRoute.market({
+    GtexMarketDeskMode mode = GtexMarketDeskMode.market,
+  }) : this._(
+         primaryDestination: GtePrimaryDestination.market,
+         marketDeskMode: mode,
+       );
 
   const GteNavigationRoute.competitions({
     CompetitionHubDestination destination = CompetitionHubDestination.overview,
@@ -190,6 +196,7 @@ class GteNavigationRoute {
 
   final GtePrimaryDestination primaryDestination;
   final CompetitionHubDestination? competitionDestination;
+  final GtexMarketDeskMode marketDeskMode;
   final GteCapitalDestination capitalDestination;
 
   CompetitionHubDestination get effectiveCompetitionDestination =>
@@ -201,6 +208,12 @@ class GteNavigationRoute {
   String get path {
     if (isCompetitions) {
       return '/app/play/${effectiveCompetitionDestination.pathSegment}';
+    }
+    if (primaryDestination == GtePrimaryDestination.market) {
+      if (marketDeskMode == GtexMarketDeskMode.ownership) {
+        return '/app/market?mode=ownership';
+      }
+      return GtePrimaryDestination.market.routePath;
     }
     if (primaryDestination == GtePrimaryDestination.wallet) {
       switch (capitalDestination) {
@@ -282,7 +295,23 @@ class GteNavigationRoute {
         );
       case 'market':
       case 'transfer-hub':
-        return const GteNavigationRoute.market();
+      case 'player-market':
+      case 'player-cards':
+      case 'transfers':
+      case 'football':
+        final String? modeParam =
+            uri.queryParameters['mode'] ?? uri.queryParameters['tab'];
+        if (modeParam == 'ownership' ||
+            modeParam == 'holdings' ||
+            (normalizedSegments.length > 1 &&
+                normalizedSegments[1].toLowerCase() == 'holdings')) {
+          return const GteNavigationRoute.market(
+            mode: GtexMarketDeskMode.ownership,
+          );
+        }
+        return const GteNavigationRoute.market(
+          mode: GtexMarketDeskMode.market,
+        );
       case 'regens':
       case 'regen-universe':
         return const GteNavigationRoute.regens();
@@ -349,6 +378,7 @@ class GteNavigationRoute {
     return other is GteNavigationRoute &&
         other.primaryDestination == primaryDestination &&
         other.competitionDestination == competitionDestination &&
+        other.marketDeskMode == marketDeskMode &&
         other.capitalDestination == capitalDestination;
   }
 
@@ -356,6 +386,7 @@ class GteNavigationRoute {
   int get hashCode => Object.hash(
     primaryDestination,
     competitionDestination,
+    marketDeskMode,
     capitalDestination,
   );
 }

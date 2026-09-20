@@ -1056,11 +1056,12 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   Widget _buildMarketDestination() {
     return GteMarketPlayersScreenV2(
-      key: const PageStorageKey<String>('market-screen'),
+      key: ValueKey<String>('market-screen-${_route.marketDeskMode.name}'),
       controller: widget.controller,
+      initialMode: _route.marketDeskMode,
       onOpenPlayer: _openPlayer,
       onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.market()),
+          () => _openLogin(targetRoute: _route),
       navigationDependencies: _navigationDependencies(),
     );
   }

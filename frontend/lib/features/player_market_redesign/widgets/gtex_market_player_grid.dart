@@ -116,7 +116,9 @@ class GtexMarketPlayerGrid extends StatefulWidget {
     required this.onSelectPlayer,
     required this.onToggleBasket,
     required this.onBuyNow,
+    this.onToggleWatchlist,
     this.ownedPlayerIds = const <String>{},
+    this.watchlistedPlayerIds = const <String>{},
     this.header,
   });
 
@@ -135,11 +137,15 @@ class GtexMarketPlayerGrid extends StatefulWidget {
   final bool hasMore;
   final ValueChanged<GtexMarketPlayerView> onSelectPlayer;
   final ValueChanged<GtexMarketPlayerView> onToggleBasket;
+  final ValueChanged<GtexMarketPlayerView>? onToggleWatchlist;
   final ValueChanged<GtexMarketPlayerView> onBuyNow;
 
   /// Players the signed-in user already holds. Empty when signed out or
   /// before the portfolio has loaded - never guessed.
   final Set<String> ownedPlayerIds;
+
+  /// Players in the user's active watchlist.
+  final Set<String> watchlistedPlayerIds;
 
   @override
   State<GtexMarketPlayerGrid> createState() => _GtexMarketPlayerGridState();
@@ -309,15 +315,13 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                     int index,
                   ) {
                     final GtexMarketPlayerView player = laneMatches[index];
+                    final bool isWatchlisted =
+                        widget.watchlistedPlayerIds.contains(player.playerId);
                     return GtexPlayerCard(
                       name: player.name,
                       position: player.position,
                       clubName: player.clubName,
                       nationality: player.nationality,
-                      // The card's headline figure is the tradable share
-                      // price and nothing else. It used to be the ingested
-                      // EUR valuation, so the number the user browsed on was
-                      // never the number they were charged.
                       priceLabel: player.sharePriceLabel,
                       imageUrl: player.imageUrl,
                       gsiLabel: player.gsiLabel,
@@ -328,16 +332,19 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                       heightLabel: player.heightLabel,
                       footLabel: player.footLabel,
                       secondaryPositions: player.secondaryPositions,
-                      // The backend's movement is a movement of the
-                      // *valuation*. It cannot sit unlabelled beside a share
-                      // price, so it travels with the valuation instead, in
-                      // the value chip below.
                       valueDeltaLabel: null,
                       valuationLabel: player.valueBadgeLabel,
                       availabilityLabel: player.availabilityTypeLabel,
                       interestLabel: player.interestLabel,
                       isOwned: widget.ownedPlayerIds.contains(player.playerId),
                       badges: <Widget>[
+                        if (isWatchlisted)
+                          const GtexStatusChip(
+                            label: 'Watchlisted',
+                            icon: Icons.star_rounded,
+                            color: GtexColors.gold,
+                            compact: true,
+                          ),
                         if (player.isOpportunity)
                           const GtexStatusChip(
                             label: 'Opportunity',
@@ -374,7 +381,10 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                       ],
                       isSelected: selectedPlayerId == player.playerId,
                       onTap: () => widget.onSelectPlayer(player),
-                      onAddToShortlist: () => widget.onToggleBasket(player),
+                      onAddToShortlist:
+                          widget.onToggleWatchlist != null
+                              ? () => widget.onToggleWatchlist!(player)
+                              : () => widget.onToggleBasket(player),
                       buyNowLabel:
                           player.hasOpenTransferListing ? 'Negotiate' : 'Open',
                       onBuyNow: () => widget.onBuyNow(player),
