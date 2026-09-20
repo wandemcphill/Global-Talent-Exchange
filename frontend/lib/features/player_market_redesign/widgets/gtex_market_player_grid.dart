@@ -116,9 +116,7 @@ class GtexMarketPlayerGrid extends StatefulWidget {
     required this.onSelectPlayer,
     required this.onToggleBasket,
     required this.onBuyNow,
-    this.onToggleWatchlist,
     this.ownedPlayerIds = const <String>{},
-    this.watchlistedPlayerIds = const <String>{},
     this.header,
   });
 
@@ -137,15 +135,11 @@ class GtexMarketPlayerGrid extends StatefulWidget {
   final bool hasMore;
   final ValueChanged<GtexMarketPlayerView> onSelectPlayer;
   final ValueChanged<GtexMarketPlayerView> onToggleBasket;
-  final ValueChanged<GtexMarketPlayerView>? onToggleWatchlist;
   final ValueChanged<GtexMarketPlayerView> onBuyNow;
 
   /// Players the signed-in user already holds. Empty when signed out or
   /// before the portfolio has loaded - never guessed.
   final Set<String> ownedPlayerIds;
-
-  /// Players in the user's active watchlist.
-  final Set<String> watchlistedPlayerIds;
 
   @override
   State<GtexMarketPlayerGrid> createState() => _GtexMarketPlayerGridState();
@@ -214,82 +208,56 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
               sliver: SliverToBoxAdapter(child: widget.header),
             ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              GtexSpacing.md,
-              GtexSpacing.sm,
-              GtexSpacing.md,
-              GtexSpacing.sm,
-            ),
+            padding: const EdgeInsets.all(GtexSpacing.md),
             sliver: SliverToBoxAdapter(
-              child: LayoutBuilder(
-                builder: (BuildContext context, BoxConstraints constraints) {
-                  final bool compact = constraints.maxWidth < 640;
-                  final List<Widget> chips = <Widget>[
+              child: Wrap(
+                spacing: GtexSpacing.sm,
+                runSpacing: GtexSpacing.xs,
+                children: <Widget>[
+                  GtexStatusChip(
+                    label: _loadedCountLabel(players.length, totalPlayers),
+                    icon: Icons.groups_outlined,
+                  ),
+                  if (totalPlayers > players.length)
                     GtexStatusChip(
-                      label: _loadedCountLabel(players.length, totalPlayers),
-                      icon: Icons.groups_outlined,
+                      label: '${_formatCount(totalPlayers)} matching listings',
+                      icon: Icons.public_outlined,
+                      color: GtexColors.pitch,
                     ),
-                    if (totalPlayers > players.length)
-                      GtexStatusChip(
-                        label: '${_formatCount(totalPlayers)} matching listings',
-                        icon: Icons.public_outlined,
-                        color: GtexColors.pitch,
-                      ),
-                    if (basketState.items.isNotEmpty)
-                      GtexStatusChip(
-                        label: '${basketState.items.length} shortlisted',
-                        icon: Icons.shopping_basket_outlined,
-                        color: GtexColors.gold,
-                      ),
-                    for (final GtexMarketDiscoveryLane lane
-                        in GtexMarketDiscoveryLane.values)
-                      _DiscoveryLaneChip(
-                        lane: lane,
-                        count:
-                            lane == GtexMarketDiscoveryLane.all
-                                ? players.length
-                                : players
-                                    .where(
-                                      (GtexMarketPlayerView player) =>
-                                          lane.matches(player),
-                                    )
-                                    .length,
-                        isSelected: _lane == lane,
-                        onSelected: () => setState(() => _lane = lane),
-                      ),
-                    _SortMenu(
-                      sort: _sort,
-                      onSelected: (GtexMarketSort value) =>
-                          setState(() => _sort = value),
+                  if (basketState.items.isNotEmpty)
+                    GtexStatusChip(
+                      label: '${basketState.items.length} shortlisted',
+                      icon: Icons.shopping_basket_outlined,
+                      color: GtexColors.gold,
                     ),
-                    if (error != null)
-                      GtexStatusChip(
-                        label: 'Last good snapshot',
-                        icon: Icons.sync_problem_outlined,
-                        color: GtexColors.red,
-                      ),
-                  ];
-
-                  if (compact) {
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: <Widget>[
-                          for (int i = 0; i < chips.length; i++) ...<Widget>[
-                            if (i > 0) const SizedBox(width: GtexSpacing.xs),
-                            chips[i],
-                          ],
-                        ],
-                      ),
-                    );
-                  }
-
-                  return Wrap(
-                    spacing: GtexSpacing.sm,
-                    runSpacing: GtexSpacing.xs,
-                    children: chips,
-                  );
-                },
+                  for (final GtexMarketDiscoveryLane lane
+                      in GtexMarketDiscoveryLane.values)
+                    _DiscoveryLaneChip(
+                      lane: lane,
+                      count:
+                          lane == GtexMarketDiscoveryLane.all
+                              ? players.length
+                              : players
+                                  .where(
+                                    (GtexMarketPlayerView player) =>
+                                        lane.matches(player),
+                                  )
+                                  .length,
+                      isSelected: _lane == lane,
+                      onSelected: () => setState(() => _lane = lane),
+                    ),
+                  _SortMenu(
+                    sort: _sort,
+                    onSelected: (GtexMarketSort value) =>
+                        setState(() => _sort = value),
+                  ),
+                  if (error != null)
+                    GtexStatusChip(
+                      label: 'Last good snapshot',
+                      icon: Icons.sync_problem_outlined,
+                      color: GtexColors.red,
+                    ),
+                ],
               ),
             ),
           ),
@@ -341,13 +309,15 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                     int index,
                   ) {
                     final GtexMarketPlayerView player = laneMatches[index];
-                    final bool isWatchlisted =
-                        widget.watchlistedPlayerIds.contains(player.playerId);
                     return GtexPlayerCard(
                       name: player.name,
                       position: player.position,
                       clubName: player.clubName,
                       nationality: player.nationality,
+                      // The card's headline figure is the tradable share
+                      // price and nothing else. It used to be the ingested
+                      // EUR valuation, so the number the user browsed on was
+                      // never the number they were charged.
                       priceLabel: player.sharePriceLabel,
                       imageUrl: player.imageUrl,
                       gsiLabel: player.gsiLabel,
@@ -358,19 +328,16 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                       heightLabel: player.heightLabel,
                       footLabel: player.footLabel,
                       secondaryPositions: player.secondaryPositions,
+                      // The backend's movement is a movement of the
+                      // *valuation*. It cannot sit unlabelled beside a share
+                      // price, so it travels with the valuation instead, in
+                      // the value chip below.
                       valueDeltaLabel: null,
                       valuationLabel: player.valueBadgeLabel,
                       availabilityLabel: player.availabilityTypeLabel,
                       interestLabel: player.interestLabel,
                       isOwned: widget.ownedPlayerIds.contains(player.playerId),
                       badges: <Widget>[
-                        if (isWatchlisted)
-                          const GtexStatusChip(
-                            label: 'Watchlisted',
-                            icon: Icons.star_rounded,
-                            color: GtexColors.gold,
-                            compact: true,
-                          ),
                         if (player.isOpportunity)
                           const GtexStatusChip(
                             label: 'Opportunity',
@@ -407,10 +374,7 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                       ],
                       isSelected: selectedPlayerId == player.playerId,
                       onTap: () => widget.onSelectPlayer(player),
-                      onAddToShortlist:
-                          widget.onToggleWatchlist != null
-                              ? () => widget.onToggleWatchlist!(player)
-                              : () => widget.onToggleBasket(player),
+                      onAddToShortlist: () => widget.onToggleBasket(player),
                       buyNowLabel:
                           player.hasOpenTransferListing ? 'Negotiate' : 'Open',
                       onBuyNow: () => widget.onBuyNow(player),

@@ -10,8 +10,6 @@ import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/coin_trader_redesign/coin_trader_redesign.dart';
 import 'package:gte_frontend/design_lab/gtex_design_lab_screen.dart';
 import 'package:gte_frontend/design_lab/gtex_competition_design_lab_screen.dart';
-import 'package:gte_frontend/design_lab/gtex_market_ownership_design_lab_screen.dart';
-import 'package:gte_frontend/features/player_market_redesign/presentation/gtex_market_ownership_desk_screen.dart';
 import 'package:gte_frontend/features/launch_control_redesign/gtex_feature_flags_launch_control_screen_v2.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
@@ -68,16 +66,6 @@ GoRouter buildGtexAppRouter({
             (BuildContext context, GoRouterState state) =>
                 NoTransitionPage<void>(
                   child: GtexDesignLabScreen(
-                    initialDirection: state.uri.queryParameters['direction'],
-                  ),
-                ),
-      ),
-      GoRoute(
-        path: '/design-lab/market-ownership',
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                NoTransitionPage<void>(
-                  child: GtexMarketOwnershipDesignLabScreen(
                     initialDirection: state.uri.queryParameters['direction'],
                   ),
                 ),
@@ -443,31 +431,15 @@ List<RouteBase> _buildLegacyAliasRoutes({
     ),
     GoRoute(
       path: '/market',
-      redirect: (BuildContext context, GoRouterState state) {
-        final String? mode =
-            state.uri.queryParameters['mode'] ??
-            state.uri.queryParameters['tab'];
-        if (mode == 'ownership' || mode == 'holdings') {
-          return const GteNavigationRoute.market(
-            mode: GtexMarketDeskMode.ownership,
-          ).path;
-        }
-        return const GteNavigationRoute.market().path;
-      },
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              const GteNavigationRoute.market().path,
     ),
     GoRoute(
       path: '/player-market',
-      redirect: (BuildContext context, GoRouterState state) {
-        final String? mode =
-            state.uri.queryParameters['mode'] ??
-            state.uri.queryParameters['tab'];
-        if (mode == 'ownership' || mode == 'holdings') {
-          return const GteNavigationRoute.market(
-            mode: GtexMarketDeskMode.ownership,
-          ).path;
-        }
-        return const GteNavigationRoute.market().path;
-      },
+      redirect:
+          (BuildContext context, GoRouterState state) =>
+              const GteNavigationRoute.market().path,
     ),
     GoRoute(
       path: '/market/transfers',

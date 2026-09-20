@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 
-import '../../../controllers/gtex_watchlist_controller.dart';
 import '../../../data/gte_exchange_models.dart';
 import '../../../domain/ownership/gtex_ownership_models.dart';
-import '../../navigation/routing/gte_navigation_route.dart';
 import '../../../providers/gte_exchange_controller.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 import '../models/gtex_market_browse_models.dart';
 import '../widgets/gtex_market_context_panel.dart';
-import '../widgets/gtex_market_mode_chip.dart';
 import '../widgets/gtex_market_movers_rail.dart';
 import '../widgets/gtex_market_player_grid.dart';
 import '../widgets/gtex_market_selected_player_panel.dart';
 
 /// Narrowest board pane that can carry the market-movers rail as a row of
-/// lanes rather than three stacked full-width blocks.
+/// lanes rather than three stacked full-width blocks. Matches the rail's own
+/// internal row/stack threshold, so the rail is only admitted at a width
+/// where it reads as a rail.
 const double _moversRailMinPaneWidth = 640;
 
-/// Shortest board pane that can carry the rail and still show a listing under it.
+/// Shortest board pane that can carry the rail and still show a listing under
+/// it. The rail is a header inside the board's scroll view, so it is paid for
+/// out of the listing's vertical budget: measured at ~132px, plus room for a
+/// player card beneath it.
 const double _moversRailMinPaneHeight = 380;
 
 class GtexPlayerMarketRedesignScreen extends StatefulWidget {
@@ -26,22 +28,12 @@ class GtexPlayerMarketRedesignScreen extends StatefulWidget {
     required this.controller,
     required this.onOpenPlayer,
     required this.onOpenLogin,
-    this.watchlistController,
-    this.activeMode = GtexMarketDeskMode.market,
-    this.squadCount = 0,
-    this.watchlistCount = 0,
-    this.onSelectMode,
     this.onOpenTransferCalendar,
   });
 
   final GteExchangeController controller;
   final ValueChanged<String> onOpenPlayer;
   final VoidCallback onOpenLogin;
-  final GtexWatchlistController? watchlistController;
-  final GtexMarketDeskMode activeMode;
-  final int squadCount;
-  final int watchlistCount;
-  final ValueChanged<GtexMarketDeskMode>? onSelectMode;
   final VoidCallback? onOpenTransferCalendar;
 
   @override
@@ -102,11 +94,6 @@ class _GtexPlayerMarketRedesignScreenState
           !widget.controller.isLoadingMarket) {
         widget.controller.bootstrap();
       }
-      if (mounted &&
-          widget.controller.isAuthenticated &&
-          widget.watchlistController != null) {
-        widget.watchlistController!.load();
-      }
       _loadMovers();
     });
   }
@@ -149,24 +136,10 @@ class _GtexPlayerMarketRedesignScreenState
     super.dispose();
   }
 
-  Future<void> _toggleWatchlist(GtexMarketPlayerView player) async {
-    if (!widget.controller.isAuthenticated) {
-      widget.onOpenLogin();
-      return;
-    }
-    if (widget.watchlistController == null) {
-      return;
-    }
-    await widget.watchlistController!.toggleWatchlist(player.playerId);
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable?>[
-        widget.controller,
-        widget.watchlistController,
-      ].whereType<Listenable>()),
+      animation: widget.controller,
       builder: (BuildContext context, Widget? child) {
         final List<GtexMarketPlayerView> players = widget.controller.players
             .map(GtexMarketPlayerView.fromListItem)
@@ -183,14 +156,12 @@ class _GtexPlayerMarketRedesignScreenState
                 )
                 : GtexMarketBrowseSummary.fromCatalog(catalog);
         final GtexMarketPlayerView? selectedPlayer = _selectedPlayer(players);
-
+        // Ownership comes from PHASE4-B's published contract (§4.3); before it
+        // loads, or when signed out, the market simply does not claim
+        // ownership.
         final Set<String> ownedPlayerIds = GtexOwnershipBook.fromPortfolio(
           widget.controller.portfolio,
         ).stakes.map((GtexOwnershipStake s) => s.playerId).toSet();
-
-        final Set<String> watchlistedPlayerIds =
-            widget.watchlistController?.watchlistedPlayerIds ??
-            const <String>{};
 
         return GtexMasterDetailScaffold(
           title: 'Transfer Hub',
@@ -200,22 +171,6 @@ class _GtexPlayerMarketRedesignScreenState
           leftPanelWidth: 330,
           rightPanelWidth: 370,
           actions: <Widget>[
-            ModeChipButton(
-              label: 'MARKET',
-              icon: Icons.radar_rounded,
-              badge: watchlistedPlayerIds.isNotEmpty ? '${watchlistedPlayerIds.length}' : null,
-              accent: GtexColors.cyan,
-              isActive: widget.activeMode == GtexMarketDeskMode.market,
-              onPressed: widget.onSelectMode != null ? () => widget.onSelectMode!(GtexMarketDeskMode.market) : () {},
-            ),
-            ModeChipButton(
-              label: 'OWNERSHIP',
-              icon: Icons.groups_2_outlined,
-              badge: widget.squadCount > 0 ? '${widget.squadCount}' : '0',
-              accent: GtexColors.pitch,
-              isActive: widget.activeMode == GtexMarketDeskMode.ownership,
-              onPressed: widget.onSelectMode != null ? () => widget.onSelectMode!(GtexMarketDeskMode.ownership) : () {},
-            ),
             IconButton.filledTonal(
               tooltip: 'Refresh market',
               onPressed: widget.controller.isLoadingMarket ? null : _refresh,
@@ -252,7 +207,6 @@ class _GtexPlayerMarketRedesignScreenState
             selectedClub: _selectedClub,
             selectedAvailability: _selectedAvailability,
             basketCount: _basketState.items.length,
-            watchlistedCount: watchlistedPlayerIds.length,
             onSearchSubmitted: (_) => _applyServerFilters(resetSelection: true),
             onAdvancedSubmitted:
                 () => _applyServerFilters(resetSelection: true),
@@ -265,6 +219,20 @@ class _GtexPlayerMarketRedesignScreenState
           ),
           detail: LayoutBuilder(
             builder: (BuildContext context, BoxConstraints paneConstraints) {
+              // The movers rail is secondary chrome and is decided from the
+              // board's own pane, not the window: inside the shell the two
+              // differ by the nav rail plus whichever master-detail panels
+              // are inline, so a 1024px window hands this board about 544px
+              // of width and a 1440px window about 574px. Reading the window
+              // showed the rail in both, where it can only stack into three
+              // full-width lanes. The rail is also a header inside the
+              // board's scroll view, so it is paid for out of the listing's
+              // vertical budget - at a 719px window the board pane is 247px
+              // tall and a 132px rail left no room for a single player card.
+              // It therefore appears only when the pane can lay it out as a
+              // row *and* still show the listing beneath it. Below that, the
+              // market's movement stays legible through the per-row deltas
+              // and the discovery lanes.
               final Size viewport = MediaQuery.sizeOf(context);
               final double paneWidth =
                   paneConstraints.hasBoundedWidth
@@ -288,21 +256,19 @@ class _GtexPlayerMarketRedesignScreenState
                     : null,
                 players: players,
                 ownedPlayerIds: ownedPlayerIds,
-                watchlistedPlayerIds: watchlistedPlayerIds,
                 totalPlayers: widget.controller.marketTotalPlayerCount,
                 selectedPlayerId: _selectedPlayerId,
                 basketState: _basketState,
                 isLoading:
                     widget.controller.isLoadingMarket ||
                     widget.controller.isLoadingMoreMarket,
-                error: widget.controller.marketError ?? widget.watchlistController?.error,
+                error: widget.controller.marketError,
                 hasMore: widget.controller.hasMorePlayers,
                 onRefresh: _refresh,
                 onLoadMore:
                     widget.controller.hasMorePlayers ? _loadMore : null,
                 onSelectPlayer: _selectPlayer,
                 onToggleBasket: _toggleBasket,
-                onToggleWatchlist: _toggleWatchlist,
                 onBuyNow:
                     (GtexMarketPlayerView player) =>
                         widget.onOpenPlayer(player.playerId),
@@ -314,9 +280,6 @@ class _GtexPlayerMarketRedesignScreenState
             selectedPlayerOwned:
                 selectedPlayer != null &&
                 ownedPlayerIds.contains(selectedPlayer.playerId),
-            selectedPlayerWatchlisted:
-                selectedPlayer != null &&
-                watchlistedPlayerIds.contains(selectedPlayer.playerId),
             basketState: _basketState,
             isAuthenticated: widget.controller.isAuthenticated,
             onOpenLogin: widget.onOpenLogin,
@@ -324,10 +287,6 @@ class _GtexPlayerMarketRedesignScreenState
                 (GtexMarketPlayerView player) =>
                     widget.onOpenPlayer(player.playerId),
             onToggleBasket: _toggleBasket,
-            onToggleWatchlist:
-                selectedPlayer == null
-                    ? null
-                    : () => _toggleWatchlist(selectedPlayer),
             onRemoveFromBasket: _removeFromBasket,
             onCheckout: _reviewBasket,
           ),
@@ -440,10 +399,6 @@ class _GtexPlayerMarketRedesignScreenState
 
   void _refresh() {
     _applyServerFilters(resetSelection: false);
-    if (widget.controller.isAuthenticated &&
-        widget.watchlistController != null) {
-      widget.watchlistController!.load(force: true);
-    }
     _loadMovers();
   }
 
@@ -562,23 +517,20 @@ class _BasketReviewSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<GtexMarketPlayerView> items = basketState.items;
-    final double bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottomInset),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+        ),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            GtexSpacing.lg,
+            0,
+            GtexSpacing.lg,
+            GtexSpacing.lg,
           ),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(
-              GtexSpacing.lg,
-              0,
-              GtexSpacing.lg,
-              GtexSpacing.lg,
-            ),
-            shrinkWrap: true,
-            children: <Widget>[
+          shrinkWrap: true,
+          children: <Widget>[
             Text(
               'Review Negotiation Shortlist',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -651,8 +603,7 @@ class _BasketReviewSheet extends StatelessWidget {
                 ),
               ),
             ),
-            ],
-          ),
+          ],
         ),
       ),
     );

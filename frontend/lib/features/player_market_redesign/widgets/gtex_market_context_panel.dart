@@ -19,7 +19,6 @@ class GtexMarketContextPanel extends StatelessWidget {
     required this.selectedClub,
     required this.selectedAvailability,
     required this.basketCount,
-    this.watchlistedCount = 0,
     required this.onSearchSubmitted,
     required this.onAdvancedSubmitted,
     required this.onClearFilters,
@@ -43,7 +42,6 @@ class GtexMarketContextPanel extends StatelessWidget {
   final String? selectedClub;
   final String selectedAvailability;
   final int basketCount;
-  final int watchlistedCount;
   final ValueChanged<String> onSearchSubmitted;
   final VoidCallback onAdvancedSubmitted;
   final VoidCallback onClearFilters;
