@@ -158,9 +158,10 @@ Based on documented GTEX system behavior and backend capabilities, the recommend
    - **Tab 2: Club Ownership & Holdings (Identity First - Option B):**
      Presents the user's backed players as a **Football Squad Holding Desk**, with performance yield, contract status, and club equity stakes.
 
-2. **Resolution of Duplicate Routes:**
-   - Consolidate `/market`, `/player-market`, `/market/transfers`, `/football/transfer-center`, and `/player-cards` into this single tabbed shell.
-   - Maintain route parameter deep-linking: `/market?tab=transfers`, `/market?tab=holdings`, `/market?tab=cards`.
+2. **Resolution of Duplicate Routes & Product Boundaries:**
+   - Propose consolidating `/market`, `/player-market`, `/market/transfers`, and `/football/transfer-center` under the unified market desk shell.
+   - **Product Boundary Note (`/player-cards`):** `/player-cards` represents a distinct collectible/card product surface with its own underlying backend contracts (`app/player_cards`). Any future navigation unification involving `/player-cards` is a **hypothesis requiring product/route verification**, not an automatic consolidation rule. The market/ownership slice must preserve distinct business semantics and backend contracts even if navigation eventually unifies shell views.
+   - Maintain route parameter deep-linking: `/market?tab=transfers`, `/market?tab=holdings`.
 
 ---
 
@@ -200,7 +201,7 @@ Implement the P7-FE Market + Ownership Unified Desk slice in Flutter according t
    - Support tab selection via route query parameter (`?tab=market` or `?tab=holdings`).
 
 2. **Update Routing (`app_router.dart` & `gte_navigation_shell_screen.dart`):**
-   - Bind `/market`, `/player-market`, `/market/transfers`, `/football/transfer-center`, and `/wallet/holdings` to `GtexMarketOwnershipDeskScreen`.
+   - Bind `/market`, `/player-market`, `/market/transfers`, `/football/transfer-center`, and `/wallet/holdings` to `GtexMarketOwnershipDeskScreen` while preserving `/player-cards` as a distinct route surface backed by `app/player_cards`.
    - Ensure shell navigation rail updates route tab parameters cleanly without page reloads.
 
 3. **Watchlist Capability Integration:**
