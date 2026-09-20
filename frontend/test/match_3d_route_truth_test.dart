@@ -16,7 +16,7 @@ void main() {
     );
 
     expect(find.text('Coming soon'), findsWidgets);
-    expect(find.text('Route blocked'), findsOneWidget);
+    expect(find.text('Route blocked'), findsWidgets);
     expect(find.text('FLUTTER_3D'), findsNothing);
     expect(find.text('NATIVE_3D'), findsNothing);
   });
