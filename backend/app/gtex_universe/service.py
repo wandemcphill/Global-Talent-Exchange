@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
@@ -111,7 +111,7 @@ class UniverseValidationError(UniverseError):
     pass
 
 
-@dataclass
+@dataclass(slots=True)
 class GtexUniverseService(GtexBaseService):
     creator_market_service: "CreatorMarketService"
     economy_service: "UnifiedEconomyService"

@@ -33,28 +33,6 @@ def _seed_player_assets(app_session_factory, owner_id, seller_id):
         real.current_club_profile_id = seller_club.id
         parent = _seed_imported_real_player(session, player_id=f"{PREFIX}-parent")
         parent.current_club_profile_id = owner_club.id
-        real_contract = PlayerContract(
-            id=f"{PREFIX}-real-contract",
-            player_id=real.id,
-            club_id=seller_club.id,
-            status="active",
-            signed_on=date(2026, 1, 1),
-            starts_on=date(2026, 1, 1),
-            ends_on=date(2027, 12, 31),
-            wage_amount=Decimal("100.00"),
-        )
-        session.add(real_contract)
-        parent_contract = PlayerContract(
-            id=f"{PREFIX}-parent-contract",
-            player_id=parent.id,
-            club_id=owner_club.id,
-            status="active",
-            signed_on=date(2026, 1, 1),
-            starts_on=date(2026, 1, 1),
-            ends_on=date(2027, 12, 31),
-            wage_amount=Decimal("100.00"),
-        )
-        session.add(parent_contract)
         window = TransferWindow(
             id=f"{PREFIX}-window",
             territory_code="NG",

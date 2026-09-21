@@ -210,64 +210,54 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
           SliverPadding(
             padding: const EdgeInsets.all(GtexSpacing.md),
             sliver: SliverToBoxAdapter(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: <Widget>[
+              child: Wrap(
+                spacing: GtexSpacing.sm,
+                runSpacing: GtexSpacing.xs,
+                children: <Widget>[
+                  GtexStatusChip(
+                    label: _loadedCountLabel(players.length, totalPlayers),
+                    icon: Icons.groups_outlined,
+                  ),
+                  if (totalPlayers > players.length)
                     GtexStatusChip(
-                      label: _loadedCountLabel(players.length, totalPlayers),
-                      icon: Icons.groups_outlined,
+                      label: '${_formatCount(totalPlayers)} matching listings',
+                      icon: Icons.public_outlined,
+                      color: GtexColors.pitch,
                     ),
-                    const SizedBox(width: GtexSpacing.sm),
-                    if (totalPlayers > players.length) ...<Widget>[
-                      GtexStatusChip(
-                        label: '${_formatCount(totalPlayers)} matching listings',
-                        icon: Icons.public_outlined,
-                        color: GtexColors.pitch,
-                      ),
-                      const SizedBox(width: GtexSpacing.sm),
-                    ],
-                    if (basketState.items.isNotEmpty) ...<Widget>[
-                      GtexStatusChip(
-                        label: '${basketState.items.length} shortlisted',
-                        icon: Icons.shopping_basket_outlined,
-                        color: GtexColors.gold,
-                      ),
-                      const SizedBox(width: GtexSpacing.sm),
-                    ],
-                    for (final GtexMarketDiscoveryLane lane
-                        in GtexMarketDiscoveryLane.values) ...<Widget>[
-                      _DiscoveryLaneChip(
-                        lane: lane,
-                        count:
-                            lane == GtexMarketDiscoveryLane.all
-                                ? players.length
-                                : players
-                                    .where(
-                                      (GtexMarketPlayerView player) =>
-                                          lane.matches(player),
-                                    )
-                                    .length,
-                        isSelected: _lane == lane,
-                        onSelected: () => setState(() => _lane = lane),
-                      ),
-                      const SizedBox(width: GtexSpacing.sm),
-                    ],
-                    _SortMenu(
-                      sort: _sort,
-                      onSelected: (GtexMarketSort value) =>
-                          setState(() => _sort = value),
+                  if (basketState.items.isNotEmpty)
+                    GtexStatusChip(
+                      label: '${basketState.items.length} shortlisted',
+                      icon: Icons.shopping_basket_outlined,
+                      color: GtexColors.gold,
                     ),
-                    if (error != null) ...<Widget>[
-                      const SizedBox(width: GtexSpacing.sm),
-                      GtexStatusChip(
-                        label: 'Last good snapshot',
-                        icon: Icons.sync_problem_outlined,
-                        color: GtexColors.red,
-                      ),
-                    ],
-                  ],
-                ),
+                  for (final GtexMarketDiscoveryLane lane
+                      in GtexMarketDiscoveryLane.values)
+                    _DiscoveryLaneChip(
+                      lane: lane,
+                      count:
+                          lane == GtexMarketDiscoveryLane.all
+                              ? players.length
+                              : players
+                                  .where(
+                                    (GtexMarketPlayerView player) =>
+                                        lane.matches(player),
+                                  )
+                                  .length,
+                      isSelected: _lane == lane,
+                      onSelected: () => setState(() => _lane = lane),
+                    ),
+                  _SortMenu(
+                    sort: _sort,
+                    onSelected: (GtexMarketSort value) =>
+                        setState(() => _sort = value),
+                  ),
+                  if (error != null)
+                    GtexStatusChip(
+                      label: 'Last good snapshot',
+                      icon: Icons.sync_problem_outlined,
+                      color: GtexColors.red,
+                    ),
+                ],
               ),
             ),
           ),

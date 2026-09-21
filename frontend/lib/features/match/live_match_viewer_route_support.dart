@@ -364,7 +364,7 @@ class MatchRouteBlockedScreen extends StatelessWidget {
           title: title,
           description: subtitle,
           metrics: const <Widget>[
-            GtexPill(label: 'Route blocked', tone: GtexSurfaceTone.warning),
+            GtexPill(label: 'Match unavailable', tone: GtexSurfaceTone.warning),
           ],
         ),
         GtexSectionPanel(
