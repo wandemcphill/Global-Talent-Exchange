@@ -25,7 +25,6 @@ from app.auth.schemas import (
     SessionBootstrapCreatorState,
     SessionBootstrapOnboardingState,
     SessionBootstrapPaymentsRuntimeState,
-    PublicSignupRequest,
     RegisterRequest,
     SessionBootstrapRuntimeState,
     SessionBootstrapSecurityState,
@@ -554,7 +553,7 @@ def _submit_signup_compliance(
 
 def _signup_normal_account(
     *,
-    payload: PublicSignupRequest,
+    payload: RegisterRequest,
     session: Session,
     request: Request | None,
     flow: str,
