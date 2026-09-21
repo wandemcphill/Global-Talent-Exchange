@@ -92,21 +92,15 @@ class RegisterRequest(BaseModel):
         return candidate
 
 
-class PublicSignupRequest(BaseModel):
+class PublicSignupRequest(RegisterRequest):
     """Canonical public registration contract for every GTEX account.
 
-    Legacy creator/trader/user signup endpoints remain available as aliases, but
-    they all create the same normal GTEX user account. Older clients may still
-    send role-specific fields; unknown fields are intentionally ignored.
+    Legacy creator/trader signup fields are accepted and ignored so existing
+    entry points remain backward-compatible while all new registrations create
+    one normal GTEX user account.
     """
 
     model_config = ConfigDict(extra="ignore")
-
-    email: str = Field(min_length=5, max_length=320)
-    username: str | None = Field(default=None, min_length=3, max_length=64)
-    full_name: str | None = Field(default=None, min_length=2, max_length=160)
-    password: str = Field(min_length=8, max_length=128)
-    phone_number: str | None = Field(default=None, min_length=6, max_length=32)
 
     @model_validator(mode="before")
     @classmethod
@@ -123,24 +117,6 @@ class PublicSignupRequest(BaseModel):
         if not payload.get("username"):
             payload["username"] = payload.get("trading_alias")
         return payload
-
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, value: str) -> str:
-        return RegisterRequest.validate_email(value)
-
-    @field_validator("username")
-    @classmethod
-    def normalize_username(cls, value: str | None) -> str | None:
-        return RegisterRequest.normalize_username(value)
-
-    @field_validator("full_name", "phone_number")
-    @classmethod
-    def normalize_optional_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        candidate = value.strip()
-        return candidate or None
 
 
 class ComplianceSubmissionRequest(BaseModel):
