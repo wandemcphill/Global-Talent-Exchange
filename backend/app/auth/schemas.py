@@ -45,22 +45,6 @@ class RegisterRequest(BaseModel):
     username: str | None = Field(default=None, min_length=3, max_length=64)
     password: str = Field(min_length=8, max_length=128)
 
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_legacy_signup_fields(cls, value: object) -> object:
-        if not isinstance(value, dict):
-            return value
-        payload = dict(value)
-        if not payload.get("full_name"):
-            payload["full_name"] = (
-                payload.get("creator_name")
-                or payload.get("trading_alias")
-                or payload.get("username")
-            )
-        if not payload.get("username"):
-            payload["username"] = payload.get("trading_alias")
-        return payload
-
     @field_validator("email")
     @classmethod
     def validate_email(cls, value: str) -> str:
