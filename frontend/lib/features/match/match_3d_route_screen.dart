@@ -13,7 +13,8 @@ class Match3dRouteScreen extends StatelessWidget {
       title: 'Coming soon',
       subtitle:
           'Advanced match viewing is coming soon. The launch matchday experience is the 2D tactical viewer.',
-      reason: 'Route blocked',
+      reason:
+          'This route is blocked for launch while managers use the 2D match viewer.',
       detailTitle: 'Coming soon',
       detailSubtitle:
           'Open fixtures and use the 2D match viewer for launch matchday.',
