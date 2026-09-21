@@ -565,20 +565,20 @@ def test_all_public_signup_aliases_create_normal_user_accounts(app_client) -> No
         assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user.id)) is None
 
 
-def test_public_signup_rejects_external_admin_account_type(app_client) -> None:
+def test_public_signup_ignores_client_selected_account_type(app_client) -> None:
     _app, client = app_client
     payload = user_signup_payload(
-        email="external-admin@example.com",
-        username="external_admin",
-        full_name="External Admin",
+        email="external-role@example.com",
+        username="external_role",
+        full_name="External Role",
         password=TEST_PASSWORD,
     )
     payload["account_type"] = "admin"
 
     response = client.post("/auth/signup/user", json=payload)
 
-    assert response.status_code == 422, response.text
-    assert "account_type" in response.text
+    assert response.status_code == 201, response.text
+    assert response.json()["user"]["account_type"] == "user"
 
 
 def test_legacy_trader_signup_fields_are_ignored_at_public_registration(app_client) -> None:
