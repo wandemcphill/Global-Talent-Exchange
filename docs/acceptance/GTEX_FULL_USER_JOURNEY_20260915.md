@@ -15,7 +15,7 @@ This acceptance journey provisions six authenticated test users and follows one 
 | Journey Buyer | Coin Trader buyer and later player buyer | 5,000 Fan Coin + 100,000 GTEX Coin |
 | Journey Club Buyer | Regen buyer and club seller | 5,000 Fan Coin + 200,000 GTEX Coin |
 
-The implementation uses the existing `auth_user_factory`, whose fixture calls the real `/auth/signup/user` endpoint and therefore exercises registration, user-id issuance, and the normal signup-created club profile.
+The implementation uses the existing `auth_user_factory`, whose fixture calls the real `/auth/signup/user` endpoint for normal account registration and user-id issuance, then creates a club explicitly as the separate post-signup step used by club-dependent journey tests.
 
 ## Journey sequence
 
