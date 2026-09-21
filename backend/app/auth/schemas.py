@@ -35,7 +35,7 @@ PROTECTED_PROFILE_FIELDS = frozenset(
 
 
 class RegisterRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     email: str = Field(min_length=5, max_length=320)
     full_name: str | None = Field(default=None, min_length=2, max_length=160)
@@ -44,6 +44,22 @@ class RegisterRequest(BaseModel):
     region_code: str | None = Field(default=None, min_length=2, max_length=8)
     username: str | None = Field(default=None, min_length=3, max_length=64)
     password: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_signup_fields(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        payload = dict(value)
+        if not payload.get("full_name"):
+            payload["full_name"] = (
+                payload.get("creator_name")
+                or payload.get("trading_alias")
+                or payload.get("username")
+            )
+        if not payload.get("username"):
+            payload["username"] = payload.get("trading_alias")
+        return payload
 
     @field_validator("email")
     @classmethod
@@ -90,34 +106,6 @@ class RegisterRequest(BaseModel):
         if not candidate:
             return None
         return candidate
-
-
-# fmt: skip
-class PublicSignupRequest(RegisterRequest):
-    """Canonical public registration contract for every GTEX account.
-
-    Legacy creator/trader signup fields are accepted and ignored so existing
-    entry points remain backward-compatible while all new registrations create
-    one normal GTEX user account.
-    """
-
-    model_config = ConfigDict(extra="ignore")
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_legacy_signup_fields(cls, value: object) -> object:
-        if not isinstance(value, dict):
-            return value
-        payload = dict(value)
-        if not payload.get("full_name"):
-            payload["full_name"] = (
-                payload.get("creator_name")
-                or payload.get("trading_alias")
-                or payload.get("username")
-            )
-        if not payload.get("username"):
-            payload["username"] = payload.get("trading_alias")
-        return payload
 
 
 class ComplianceSubmissionRequest(BaseModel):
