@@ -17,7 +17,7 @@ Rules:
 - The pivot is not a rewrite: GTEX remains the match authority and the original simulator owns football visuals in a separate scene
 - Batchmode build stability and the current `Gtex_MainScene` path remain required acceptance gates
 - `P7-FE` is `COMPLETE`
-- `P7-FEV` is `READY` for GTEX Frontend Visual & Browser Verification
+- `P7-FEV` is `READY`
 - P7-FE/P7-FEV do not change the Unity P6/P6V sequence, scope, or completion status
 
 ## Phases

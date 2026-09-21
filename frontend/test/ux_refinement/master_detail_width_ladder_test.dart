@@ -64,15 +64,6 @@ void main() {
     return controller;
   }
 
-  Future<GteExchangeController> buildController(WidgetTester tester) async {
-    late GteExchangeController controller;
-    await tester.runAsync(() async {
-      controller = GteExchangeController(api: GteExchangeApiClient.fixture());
-      await controller.bootstrap();
-    });
-    return controller;
-  }
-
   Future<void> pumpShell(
     WidgetTester tester,
     double width,
@@ -87,9 +78,6 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
-    final GteExchangeController activeController =
-        controller ?? await buildController(tester);
-
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
@@ -98,7 +86,9 @@ void main() {
         home: KeyedSubtree(
           key: ValueKey<String>('ladder-$path-$width'),
           child: GteExchangeShellScreen.fromPath(
-            controller: activeController,
+            controller:
+                controller ??
+                GteExchangeController(api: GteExchangeApiClient.fixture()),
             apiBaseUrl: 'http://127.0.0.1:8000',
             backendMode: GteBackendMode.fixture,
             initialPath: path,

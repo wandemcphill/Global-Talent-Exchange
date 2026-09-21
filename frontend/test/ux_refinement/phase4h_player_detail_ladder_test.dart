@@ -74,13 +74,7 @@ void main() {
         reason: 'the market had no player to open at ${width.toInt()}px',
       );
 
-      final Finder openText = find.text('Open');
-      final Finder negotiateText = find.text('Negotiate');
-      final Finder targetText = openText.evaluate().isNotEmpty ? openText.first : negotiateText.first;
-
-      await tester.ensureVisible(targetText);
-      await tester.pumpAndSettle();
-      await tester.tap(targetText);
+      await tester.tap(find.text('Open').first);
       await pumpUntil(tester, find.byType(GtexFmPlayerProfileScreen));
 
       // One canonical detail, reached the same way at every width.

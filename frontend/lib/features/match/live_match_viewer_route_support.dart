@@ -372,7 +372,6 @@ class MatchRouteBlockedScreen extends StatelessWidget {
           title: detailTitle,
           subtitle: detailSubtitle,
           child: GteStatePanel(
-            eyebrow: 'Route blocked',
             title: detailTitle,
             message: reason,
             icon: Icons.error_outline_rounded,
