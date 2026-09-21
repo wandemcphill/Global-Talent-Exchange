@@ -660,7 +660,7 @@ def signup_user(
 @api_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @api_v2_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def signup_creator(
-    payload: PublicSignupRequest,
+    payload: _PublicSignupRequest,
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
@@ -676,7 +676,7 @@ def signup_creator(
 @api_router.post("/signup/trader", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @api_v2_router.post("/signup/trader", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def signup_trader(
-    payload: PublicSignupRequest,
+    payload: _PublicSignupRequest,
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
