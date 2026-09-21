@@ -260,6 +260,35 @@ void main() {
       await controller.resolveWebAutoplay();
       expect(controller.isWebAutoplayBlocked, isFalse);
     });
+
+    test('Remote stream URL tracks set active track with streamUrl metadata', () async {
+      final GtexSoundtrackCatalogue catalogue = GtexSoundtrackCatalogue();
+      const GtexTrackMetadata streamTrack = GtexTrackMetadata(
+        id: 'gtex-remote-stream-001',
+        title: 'Global Scouting Pulse (CDN Stream)',
+        artist: 'GTEX Sound Design',
+        album: 'GTEX OS Vol. 2',
+        genre: 'Deep House',
+        bpm: 120,
+        durationSeconds: 180,
+        contexts: <GtexAudioContext>[GtexAudioContext.world],
+        assetPath: 'assets/media/gtex_stadium_ambient.mp3',
+        streamUrl: 'https://cdn.gtex.io/audio/scouting_pulse.mp3',
+        source: 'GTEX CDN Stream',
+        licence: 'GTEX First-Party Commercial Licence',
+        licenceUrl: 'https://gtex.io/legal/audio-licensing',
+        attributionRequired: false,
+        provenance: 'Remote CDN Stream',
+      );
+      catalogue.registerTrack(streamTrack);
+
+      final AmbientAudioController controller = AmbientAudioController(catalogue: catalogue);
+      await controller.bootstrap();
+
+      await controller.setTrack(streamTrack);
+      expect(controller.currentTrack.streamUrl, 'https://cdn.gtex.io/audio/scouting_pulse.mp3');
+      expect(controller.currentTrack.id, 'gtex-remote-stream-001');
+    });
   });
 
   group('GTEX Audio UI Widget Tests', () {

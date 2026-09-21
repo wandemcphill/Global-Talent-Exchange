@@ -180,7 +180,12 @@ class AmbientAudioController extends ChangeNotifier
     _lastError = null;
     notifyListeners();
     try {
-      await _player.setAsset(_currentTrack.assetPath);
+      final String? streamUrl = _currentTrack.streamUrl;
+      if (streamUrl != null && streamUrl.isNotEmpty) {
+        await _player.setUrl(streamUrl);
+      } else {
+        await _player.setAsset(_currentTrack.assetPath);
+      }
       await _player.setLoopMode(LoopMode.one);
       await _applyMixerVolume();
       _isReady = true;

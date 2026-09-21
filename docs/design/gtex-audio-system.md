@@ -64,7 +64,7 @@ Every soundtrack track bundled or referenced in GTEX enforces strict metadata tr
 ### Starter Catalogue & Scalable Distribution
 To guarantee complete asset truthfulness:
 - **Bundled Starter Catalogue:** Features the single verified bundled asset `frontend/assets/media/gtex_stadium_ambient.mp3` (*GTEX Stadium Atmosphere (Official Theme)*) with first-party GTEX licensing and provenance metadata.
-- **Dynamic Catalogue Expansion:** `GtexSoundtrackCatalogue` exposes `registerTrack` and `registerAll` interfaces to register distinct CDN stream URLs and asset tracks without creating fake metadata aliases.
+- **Dynamic Stream Playback & Catalogue Expansion:** `AmbientAudioController.preload()` inspects `_currentTrack.streamUrl` first; if present, it invokes `AudioPlayer.setUrl(streamUrl)` for CDN streams, or falls back to `AudioPlayer.setAsset(assetPath)` for bundled assets. `GtexSoundtrackCatalogue` exposes `registerTrack` and `registerAll` interfaces to dynamically add verified CDN stream URLs across contexts without creating fake local metadata aliases.
 
 ### Context Model (`GtexAudioContext`)
 1. **Home (`home`):** Atmospheric GTEX OS theme.
