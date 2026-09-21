@@ -188,26 +188,14 @@ The sweep identified **2 concrete issues** that affect routing integrity or deep
 
 ---
 
-### Finding 2: `GtexMarketOwnershipDesignLabScreen` Unregistered in App Router
+### Finding 2: `GtexMarketOwnershipDesignLabScreen` Unregistered in App Router (RESOLVED)
 - **Location / File:** `frontend/lib/router/app_router.dart` (Symbol: `buildGtexAppRouter`)
 - **Referenced In:**
   - `frontend/lib/design_lab/gtex_market_ownership_design_lab_screen.dart`
 - **Issue Description:**
-  The isolated GTEX Design Lab screen for Market and Ownership visual compositions (`GtexMarketOwnershipDesignLabScreen`) was created in `frontend/lib/design_lab/gtex_market_ownership_design_lab_screen.dart`, but no corresponding `GoRoute` for `/design-lab/market-ownership` was registered in `app_router.dart`.
-  Navigating to `/design-lab/market-ownership` lands on the router's `errorBuilder` ("Route unavailable").
-- **Severity:** Low
-- **Blocks P7-FE Exit Gate:** **NO** (Design lab routes are isolated development testbeds and do not supply fixture data to production routes).
-- **Recommended Minimal Fix (Without Implementation):**
-  In `frontend/lib/router/app_router.dart`, import `GtexMarketOwnershipDesignLabScreen` and register the route:
-  ```dart
-  GoRoute(
-    path: '/design-lab/market-ownership',
-    pageBuilder: (BuildContext context, GoRouterState state) =>
-        const NoTransitionPage<void>(
-          child: GtexMarketOwnershipDesignLabScreen(),
-        ),
-  ),
-  ```
+  The isolated GTEX Design Lab screen for Market and Ownership visual compositions (`GtexMarketOwnershipDesignLabScreen`) was created in `frontend/lib/design_lab/gtex_market_ownership_design_lab_screen.dart`, and is now registered under `/design-lab/market-ownership` in `app_router.dart`.
+- **Severity:** Low (Resolved)
+- **Blocks P7-FE Exit Gate:** **NO**
 
 ---
 
