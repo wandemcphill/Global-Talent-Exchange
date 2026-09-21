@@ -8,6 +8,8 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/services/ambient_audio_controller.dart';
+import 'package:gte_frontend/services/audio/gtex_soundtrack_catalogue.dart';
+import 'package:gte_frontend/services/audio/gtex_track_metadata.dart';
 import 'package:gte_frontend/widgets/ambient_audio_toggle_button.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
@@ -109,6 +111,12 @@ class _FakeAmbientAudioController extends ChangeNotifier
   bool get isReady => true;
 
   @override
+  bool get isWebAutoplayBlocked => false;
+
+  @override
+  GtexTrackMetadata get currentTrack => GtexSoundtrackCatalogue.fallbackTrack;
+
+  @override
   Object? get lastError => null;
 
   @override
@@ -128,6 +136,9 @@ class _FakeAmbientAudioController extends ChangeNotifier
     toggleCount += 1;
     notifyListeners();
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 GteAuthSession _authenticatedSession({

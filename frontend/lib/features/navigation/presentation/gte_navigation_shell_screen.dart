@@ -48,6 +48,7 @@ import 'package:gte_frontend/screens/wallet/gte_funding_flow_screen.dart';
 import 'package:gte_frontend/screens/wallet/gte_withdrawal_flow_screen.dart';
 import 'package:gte_frontend/screens/wallet/gtex_wallet_overview_screen_v2.dart';
 import 'package:gte_frontend/services/ambient_audio_controller.dart';
+import 'package:gte_frontend/services/audio/gtex_audio_context.dart';
 import 'package:gte_frontend/shared/providers/auth_provider.dart';
 import 'package:gte_frontend/theme/gte_theme_picker_sheet.dart';
 import 'package:gte_frontend/ui_gtex/components/gtex_button.dart';
@@ -1297,6 +1298,38 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
 
   void _openPrimaryDestination(GtePrimaryDestination destination) {
     _setRoute(_route.withPrimaryDestination(destination));
+    _syncAudioContextForDestination(destination);
+  }
+
+  void _syncAudioContextForDestination(GtePrimaryDestination destination) {
+    final AmbientAudioState? audioController = widget.ambientAudioController;
+    if (audioController == null) {
+      return;
+    }
+    switch (destination) {
+      case GtePrimaryDestination.home:
+        audioController.setAudioContext(GtexAudioContext.home);
+        break;
+      case GtePrimaryDestination.club:
+        audioController.setAudioContext(GtexAudioContext.club);
+        break;
+      case GtePrimaryDestination.market:
+        audioController.setAudioContext(GtexAudioContext.market);
+        break;
+      case GtePrimaryDestination.competitions:
+        audioController.setAudioContext(GtexAudioContext.competition);
+        break;
+      case GtePrimaryDestination.regens:
+        audioController.setAudioContext(GtexAudioContext.world);
+        break;
+      case GtePrimaryDestination.hub:
+      case GtePrimaryDestination.community:
+        audioController.setAudioContext(GtexAudioContext.home);
+        break;
+      case GtePrimaryDestination.wallet:
+        audioController.setAudioContext(GtexAudioContext.market);
+        break;
+    }
   }
 
   Future<void> _openFeatureRoute(GteAppRouteData route) {

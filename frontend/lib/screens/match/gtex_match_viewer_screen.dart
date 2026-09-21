@@ -14,6 +14,8 @@ import 'package:gte_frontend/services/match_3d_live_bootstrap_service.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_commentary_engine.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
+import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
+import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_gifting_sheet.dart';
@@ -71,10 +73,28 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   late Future<MatchViewState> _viewStateFuture;
   MatchPlaybackController? _controller;
 
+  AmbientAudioState? _ambientAudio;
+
   @override
   void initState() {
     super.initState();
     _viewStateFuture = _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Safely check if AmbientAudioState is available in ancestry or provider context
+    try {
+      final AmbientAudioState? audio = _findAmbientAudioState(context);
+      if (_ambientAudio != audio) {
+        _ambientAudio = audio;
+        audio?.matchdayHandoff.enterMatchContext(
+          widget.matchKey,
+          currentContext: audio.currentContext,
+        );
+      }
+    } catch (_) {}
   }
 
   @override
@@ -91,7 +111,17 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
   @override
   void dispose() {
     _controller?.dispose();
+    _ambientAudio?.matchdayHandoff.leaveMatchContext();
     super.dispose();
+  }
+
+  AmbientAudioState? _findAmbientAudioState(BuildContext context) {
+    final GteNavigationShellScreen? shell =
+        context.findAncestorWidgetOfExactType<GteNavigationShellScreen>();
+    if (shell?.ambientAudioController != null) {
+      return shell!.ambientAudioController;
+    }
+    return null;
   }
 
   Future<MatchViewState> _load() {
