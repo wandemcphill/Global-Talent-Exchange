@@ -330,6 +330,7 @@ class GteNavigationRoute {
         return const GteNavigationRoute.wallet(
           capitalDestination: GteCapitalDestination.orders,
         );
+      case 'portfolio':
       case 'holdings':
         return const GteNavigationRoute.wallet(
           capitalDestination: GteCapitalDestination.holdings,

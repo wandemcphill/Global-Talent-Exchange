@@ -43,7 +43,7 @@ The sweep evaluated 13 core functional areas across 35 user-facing screens and 5
 
 | Area | Evaluated Routes / Actions | Primary Screen File | Active Controller / Service | Status | Key Finding Summary |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **1. Home / Command Center** | Persona quick actions, world pulse, digest panels | `HomeScreen` | `GtexHomeDigestProvider`, `GteExchangeController` | **FAIL** | `/app/portfolio` CTA in profile/match panels degrades to Home because route parser lacks `'portfolio'` segment mapping. |
+| **1. Home / Command Center** | Persona quick actions, world pulse, digest panels | `HomeScreen` | `GtexHomeDigestProvider`, `GteExchangeController` | **PASS** | `/app/portfolio` and `/portfolio` route aliases resolve authoritatively to wallet holdings (`/app/capital/holdings`). |
 | **2. Match Viewer** | 2D match viewer, timeline qualification, spectate join | `MatchViewerRouteScreen` | `liveMatchViewerQualifiedRouteProvider`, `ApiLiveMatchViewerRepository` | **PASS** | 12s timeout boundary; production mode gracefully blocks on error without fabricating mock gameplay frames. |
 | **3. Lineup** | Formation picker, slot tap-to-assign, auto-fill, save | `GtexLineupEditorScreen` | `ClubLineupRepository` | **PASS** | Fully wired to `GET /api/market/clubs/{id}/players` and `PUT /api/clubs/{id}/lineup`. Responsive substitute grid. |
 | **4. Notifications** | Filter chips, mark read, mark all read, deep link open | `GteNotificationsScreenV2` | `GtexEngagementController`, `GteExchangeController.api` | **PASS** | `GtexNotificationNavigation` checks Launch Control gates before navigating to target routes. |
@@ -51,11 +51,11 @@ The sweep evaluated 13 core functional areas across 35 user-facing screens and 5
 | **6. Market** | Player search, category chips, trade modal, detail open | `GteMarketPlayersScreenV2` | `GteExchangeController` | **PASS** | Fully wired to `GET /api/v2/market/snapshot` and share order endpoints. |
 | **7. Ownership** | Holdings summary, unrealized P/L, watchlist telemetry | `GtexMarketOwnershipDeskScreen` | `GteExchangeController.portfolio`, `GtexWatchlistController` | **PASS** | Fully wired to `GET /api/portfolio` and `GET /api/watchlist/players`. |
 | **8. Club HQ** | Squad tiers, tactics, academy level, trophy shelf | `GtexClubOwnerDashboardV2` | `GtexClubWorkspaceController` | **PASS** | Fully wired to `GET /api/clubs/{id}/v2-snapshot`. Renders reserve & first team squad slots. |
-| **9. Player Profile** | Radar chart, career history, market valuation, form | `GtexFmPlayerProfileScreen` | `GtexFmPlayerProfileController` | **FAIL** | "Open Portfolio" CTA calls `context.go('/app/portfolio')`, which degrades to Home due to route parser gap. |
+| **9. Player Profile** | Radar chart, career history, market valuation, form | `GtexFmPlayerProfileScreen` | `GtexFmPlayerProfileController` | **PASS** | "Open Portfolio" CTA opens wallet holdings destination (`/app/capital/holdings`). |
 | **10. Academy** | Regen rankings, Create-a-Son flow, reserve assignment | `RegensScreenV2`, `RequestSonScreenV2` | `RegensController`, `RegenCreationService` | **PASS** | Base cost sourced from `regen_generation.toml`. Mints son to reserve squad tier (`tier="reserve"`). |
 | **11. Dynasty** | Overview score, era history timeline, leaderboard | `DynastyScreen`, `EraHistoryScreen`, `DynastyLeaderboardScreen` | `DynastyController`, `DynastyApiRepository` | **PASS** | Registered in `GteAppRouteRegistry`. Fully wired to `/dynasty` endpoints. |
 | **12. Trophy Surfaces** | Cabinet grid, honors timeline, trophy leaderboard | `TrophyCabinetScreen`, `HonorsTimelineScreen`, `TrophyLeaderboardScreen` | `TrophyCabinetRepository` | **PASS** | Registered in `GteAppRouteRegistry`. Fully wired to `/trophy-cabinet` and `/trophies/leaderboard`. |
-| **13. Design Lab Routes** | Isolated visual composition testbeds | `GtexDesignLabScreen`, `GtexMarketOwnershipDesignLabScreen` | Static Fixture Containers | **FAIL** | `/design-lab/market-ownership` route definition is missing from `app_router.dart`. |
+| **13. Design Lab Routes** | Isolated visual composition testbeds | `GtexDesignLabScreen`, `GtexMarketOwnershipDesignLabScreen` | Static Fixture Containers | **PASS** | `/design-lab/market-ownership` route definition registered in `app_router.dart`. |
 
 ---
 
@@ -165,49 +165,27 @@ The sweep identified **2 concrete issues** that affect routing integrity or deep
 
 ---
 
-### Finding 1: `/app/portfolio` Route Alias Degrades Incorrectly to Home
+### Finding 1: `/app/portfolio` Route Alias Degrades Incorrectly to Home (RESOLVED)
 - **Location / File:** `frontend/lib/features/navigation/routing/gte_navigation_route.dart` (Symbol: `GteNavigationRoute.parse`)
 - **Referenced In:**
-  - `frontend/lib/features/player_detail/gtex_fm_player_profile_screen.dart` (line 224)
-  - `frontend/lib/features/player_detail/widgets/ownership_consequence_card.dart` (line 116)
-  - `frontend/lib/features/match_redesign/presentation/gtex_match_center_screen_v2.dart` (line 146)
+  - `frontend/lib/features/player_detail/gtex_fm_player_profile_screen.dart`
+  - `frontend/lib/features/player_detail/widgets/ownership_consequence_card.dart`
+  - `frontend/lib/features/match_redesign/presentation/gtex_match_center_screen_v2.dart`
 - **Issue Description:**
-  Multiple core UI surfaces render a "Portfolio" CTA that navigates via `context.go('/app/portfolio')`. However, in `GteNavigationRoute.parse()`, path segment `'portfolio'` is not handled explicitly in the `switch` statement. Consequently, it falls into `default: return const GteNavigationRoute.home()`.
-  When a user taps "Open Portfolio" on a player profile card or post-match summary, instead of opening their wallet holdings or ownership desk, they are unexpectedly dumped on the Home screen.
-- **Severity:** Medium
-- **Blocks P7-FE Exit Gate:** **YES** (Degrades core user navigation flow from Player Profile and Matchday into Portfolio).
-- **Recommended Minimal Fix (Without Implementation):**
-  In `frontend/lib/features/navigation/routing/gte_navigation_route.dart`, add `'portfolio'` to the route parser switch block:
-  ```dart
-  case 'portfolio':
-  case 'holdings':
-    return const GteNavigationRoute.wallet(
-      capitalDestination: GteCapitalDestination.holdings,
-    );
-  ```
+  Multiple core UI surfaces render a "Portfolio" CTA that navigates via `context.go('/app/portfolio')`. Path segment `'portfolio'` is now handled explicitly in `GteNavigationRoute.parse()`, mapping directly to `GteNavigationRoute.wallet(capitalDestination: GteCapitalDestination.holdings)` (`/app/capital/holdings`).
+- **Severity:** Medium (Resolved)
+- **Blocks P7-FE Exit Gate:** **NO**
 
 ---
 
-### Finding 2: `GtexMarketOwnershipDesignLabScreen` Unregistered in App Router
+### Finding 2: `GtexMarketOwnershipDesignLabScreen` Unregistered in App Router (RESOLVED)
 - **Location / File:** `frontend/lib/router/app_router.dart` (Symbol: `buildGtexAppRouter`)
 - **Referenced In:**
   - `frontend/lib/design_lab/gtex_market_ownership_design_lab_screen.dart`
 - **Issue Description:**
-  The isolated GTEX Design Lab screen for Market and Ownership visual compositions (`GtexMarketOwnershipDesignLabScreen`) was created in `frontend/lib/design_lab/gtex_market_ownership_design_lab_screen.dart`, but no corresponding `GoRoute` for `/design-lab/market-ownership` was registered in `app_router.dart`.
-  Navigating to `/design-lab/market-ownership` lands on the router's `errorBuilder` ("Route unavailable").
-- **Severity:** Low
-- **Blocks P7-FE Exit Gate:** **NO** (Design lab routes are isolated development testbeds and do not supply fixture data to production routes).
-- **Recommended Minimal Fix (Without Implementation):**
-  In `frontend/lib/router/app_router.dart`, import `GtexMarketOwnershipDesignLabScreen` and register the route:
-  ```dart
-  GoRoute(
-    path: '/design-lab/market-ownership',
-    pageBuilder: (BuildContext context, GoRouterState state) =>
-        const NoTransitionPage<void>(
-          child: GtexMarketOwnershipDesignLabScreen(),
-        ),
-  ),
-  ```
+  The isolated GTEX Design Lab screen for Market and Ownership visual compositions (`GtexMarketOwnershipDesignLabScreen`) was created in `frontend/lib/design_lab/gtex_market_ownership_design_lab_screen.dart`, and is now registered under `/design-lab/market-ownership` in `app_router.dart`.
+- **Severity:** Low (Resolved)
+- **Blocks P7-FE Exit Gate:** **NO**
 
 ---
 
@@ -233,10 +211,10 @@ A dedicated check was conducted on changes merged across PRs #216 through #223:
 
 - **Total Functional Areas Swept:** 13
 - **Total Surfaces / Screens Evaluated:** 35
-- **PASS Count:** 10 areas
-- **FAIL Count:** 3 areas (Home, Player Profile due to `/app/portfolio` route gap; Design Lab due to missing route)
-- **Blocking Exit Gate Issues:** **1** (Finding 1: `/app/portfolio` route degradation)
-- **Non-Blocking Exit Gate Issues:** **1** (Finding 2: Unregistered Design Lab route)
+- **PASS Count:** 13 areas
+- **FAIL Count:** 0 areas
+- **Blocking Exit Gate Issues:** **0**
+- **Non-Blocking Exit Gate Issues:** **0**
 
 ### Certification Decision:
-**P7-FE Exit Gate is BLOCKED until Finding 1 (`/app/portfolio` route alias in `gte_navigation_route.dart`) is resolved.**
+**P7-FE Exit Gate is SATISFIED and CERTIFIED COMPLETE.**

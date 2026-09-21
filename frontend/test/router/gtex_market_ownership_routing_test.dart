@@ -28,5 +28,17 @@ void main() {
       expect(GteNavigationRoute.parse('/player-cards').primaryDestination, GtePrimaryDestination.market);
       expect(GteNavigationRoute.parse('/football/transfer-center').primaryDestination, GtePrimaryDestination.market);
     });
+
+    test('parses /app/portfolio and /portfolio into wallet holdings destination', () {
+      final routeApp = GteNavigationRoute.parse('/app/portfolio');
+      expect(routeApp.primaryDestination, GtePrimaryDestination.wallet);
+      expect(routeApp.capitalDestination, GteCapitalDestination.holdings);
+      expect(routeApp.path, '/app/capital/holdings');
+
+      final routeBare = GteNavigationRoute.parse('/portfolio');
+      expect(routeBare.primaryDestination, GtePrimaryDestination.wallet);
+      expect(routeBare.capitalDestination, GteCapitalDestination.holdings);
+      expect(routeBare.path, '/app/capital/holdings');
+    });
   });
 }
