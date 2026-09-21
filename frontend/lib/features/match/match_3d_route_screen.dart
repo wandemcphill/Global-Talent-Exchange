@@ -10,7 +10,7 @@ class Match3dRouteScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MatchRouteBlockedScreen(
-      title: 'Route blocked',
+      title: 'Coming soon',
       subtitle:
           'Advanced match viewing is coming soon. The launch matchday experience is the 2D tactical viewer.',
       reason:
