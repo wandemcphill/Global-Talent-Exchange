@@ -35,7 +35,7 @@ PROTECTED_PROFILE_FIELDS = frozenset(
 
 
 class RegisterRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     email: str = Field(min_length=5, max_length=320)
     full_name: str | None = Field(default=None, min_length=2, max_length=160)
