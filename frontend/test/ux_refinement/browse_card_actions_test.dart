@@ -339,10 +339,9 @@ void main() {
       420,
     );
 
-    await tester.tap(
-      find.byKey(const Key('gtex-market-lane-watched')),
-      warnIfMissed: false,
-    );
+    final Finder watchedChip = find.byKey(const Key('gtex-market-lane-watched'));
+    await tester.ensureVisible(watchedChip);
+    await tester.tap(watchedChip);
     await tester.pump();
 
     expect(find.text('Unwatched Player'), findsNothing);
