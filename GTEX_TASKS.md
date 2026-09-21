@@ -16,8 +16,8 @@ Rules:
 - `P6V` supersedes the old P6/P7/P8 current-engine-only restriction for this isolated visual-runtime pivot only
 - The pivot is not a rewrite: GTEX remains the match authority and the original simulator owns football visuals in a separate scene
 - Batchmode build stability and the current `Gtex_MainScene` path remain required acceptance gates
-- `P7-FE` is `READY` for the independent Flutter frontend product-parity and design-system initiative
-- `P7-FEV` is `BLOCKED` until the P7-FE verification gate can be satisfied
+- `P7-FE` is `COMPLETE`
+- `P7-FEV` is `READY`
 - P7-FE/P7-FEV do not change the Unity P6/P6V sequence, scope, or completion status
 
 ## Phases
@@ -158,7 +158,7 @@ Exit gate:
 - Windows batch build remains stable
 
 ### P7-FE GTEX Frontend Product Parity & Design System
-Status: `READY`
+Status: `COMPLETE`
 
 Independence:
 - This is independent Flutter frontend work and may proceed without changing Unity P6/P6V status, scope, or sequencing.
@@ -185,7 +185,7 @@ Exit gate:
 - Critical completed-scope P0/P1 workflows are traceable end-to-end and have no known dead controls.
 
 ### P7-FEV GTEX Frontend Visual & Browser Verification
-Status: `BLOCKED`
+Status: `READY`
 
 Gate:
 - P7-FE exit gate is satisfied for the surfaces under verification.
