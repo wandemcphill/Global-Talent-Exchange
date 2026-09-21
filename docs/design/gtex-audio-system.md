@@ -61,14 +61,19 @@ Every soundtrack track bundled or referenced in GTEX enforces strict metadata tr
   - `attributionRequired`: Boolean flag indicating if attribution UI display is legally required.
   - `provenance`: Asset origin and bundling location (e.g., `assets/media/gtex_stadium_ambient.mp3`).
 
+### Starter Catalogue & Scalable Distribution
+To guarantee complete asset truthfulness:
+- **Bundled Starter Catalogue:** Features the single verified bundled asset `frontend/assets/media/gtex_stadium_ambient.mp3` (*GTEX Stadium Atmosphere (Official Theme)*) with first-party GTEX licensing and provenance metadata.
+- **Dynamic Catalogue Expansion:** `GtexSoundtrackCatalogue` exposes `registerTrack` and `registerAll` interfaces to register distinct CDN stream URLs and asset tracks without creating fake metadata aliases.
+
 ### Context Model (`GtexAudioContext`)
-1. **Home (`home`):** Atmospheric GTEX OS theme (90-110 BPM).
+1. **Home (`home`):** Atmospheric GTEX OS theme.
 2. **Club (`club`):** Tactical HQ ambient synth.
-3. **Market (`market`):** Trading floor rhythm & cyber synth (124 BPM).
-4. **Competition (`competition`):** Arena hype & orchestral hybrid (128 BPM).
+3. **Market (`market`):** Trading floor rhythm & cyber synth.
+4. **Competition (`competition`):** Arena hype & orchestral hybrid.
 5. **Matchday (`matchday`):** Stadium crowd & match broadcast stems.
-6. **World (`world`):** Global scouting pulse & ethnic deep house (118 BPM).
-7. **Celebration (`celebration`):** Triumphant brass fanfare (132 BPM).
+6. **World (`world`):** Global scouting pulse & ethnic deep house.
+7. **Celebration (`celebration`):** Triumphant brass fanfare.
 
 ---
 
@@ -89,10 +94,11 @@ Where:
 
 When the user enters a live match surface (`/matches/viewer/:matchKey` or `GtexMatchViewerScreen`):
 
-1. `enterMatchContext(matchKey)` switches `GtexAudioContext` to `matchday` and sets ducking factor to $0.125$.
+1. `enterMatchContext(matchKey, {currentContext})` stores the user's prior context (e.g. `club` or `market`), switches `GtexAudioContext` to `matchday`, and sets ducking factor to $0.125$.
 2. The soundtrack remains playing in ducked state underneath stadium ambience.
-3. Audio stem WebSocket payloads (`BroadcastAudioStemFrame`) update commentary and crowd metadata without pretending fake commentary audio streams are active.
-4. Exiting the match viewer calls `leaveMatchContext()`, restoring soundtrack volume ($1.0$) and returning to `home` context over a smooth transition.
+3. High priority commentary frames or event stings (e.g., goal whistle) execute deep ducking with a deterministic auto-restore timer (e.g. 3.5s - 4s) returning music volume to standard matchday duck level.
+4. Audio stem WebSocket payloads (`BroadcastAudioStemFrame`) update commentary and crowd metadata without pretending fake commentary audio streams are active.
+5. Exiting the match viewer calls `leaveMatchContext()`, restoring soundtrack volume ($1.0$) and returning cleanly to the user's prior context (or `home` if none) over a smooth transition.
 
 ---
 

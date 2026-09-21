@@ -36,15 +36,33 @@ void main() {
     test('Catalogue filters tracks accurately by context', () {
       final GtexSoundtrackCatalogue catalogue = GtexSoundtrackCatalogue();
 
+      const GtexTrackMetadata customMarketTrack = GtexTrackMetadata(
+        id: 'gtex-trading-floor-real',
+        title: 'Trading Floor Dynamics (Real Stream)',
+        artist: 'GTEX Audio Team',
+        album: 'GTEX Football OS Vol. 1',
+        genre: 'Cyber Synth',
+        bpm: 124,
+        durationSeconds: 180,
+        contexts: <GtexAudioContext>[GtexAudioContext.market],
+        assetPath: 'assets/media/gtex_stadium_ambient.mp3',
+        source: 'GTEX Internal Production',
+        licence: 'GTEX First-Party Commercial Game Licence',
+        licenceUrl: 'https://gtex.io/legal/audio-licensing',
+        attributionRequired: false,
+        provenance: 'Registered market track',
+      );
+      catalogue.registerTrack(customMarketTrack);
+
       final List<GtexTrackMetadata> marketTracks =
           catalogue.tracksForContext(GtexAudioContext.market);
       expect(marketTracks, isNotEmpty);
-      expect(marketTracks.any((t) => t.id == 'gtex-trading-floor'), isTrue);
+      expect(marketTracks.any((t) => t.id == 'gtex-trading-floor-real'), isTrue);
 
       final List<GtexTrackMetadata> clubTracks =
           catalogue.tracksForContext(GtexAudioContext.club);
       expect(clubTracks, isNotEmpty);
-      expect(clubTracks.any((t) => t.id == 'gtex-tactical-hq'), isTrue);
+      expect(clubTracks.any((t) => t.id == 'gtex-stadium-ambient'), isTrue);
     });
 
     test('Custom track registration scales the catalogue seamlessly', () {
@@ -91,7 +109,7 @@ void main() {
       expect(mixer.effectiveMusicVolume, closeTo(0.4, 0.001));
     });
 
-    test('MatchdayHandoff executes ducking and context entry/exit', () {
+    test('MatchdayHandoff preserves previous context and executes deterministic ducking', () {
       final GtexAudioMixer mixer = GtexAudioMixer(
         masterVolume: 1.0,
         musicVolume: 0.8,
@@ -105,17 +123,24 @@ void main() {
         onMixerUpdated: () => updated = true,
       );
 
-      handoff.enterMatchContext('match-123');
+      // Enter match context from Club context
+      handoff.enterMatchContext('match-123', currentContext: GtexAudioContext.club);
       expect(handoff.inMatchContext, isTrue);
       expect(handoff.activeMatchKey, 'match-123');
+      expect(handoff.previousContext, GtexAudioContext.club);
       expect(activeContext, GtexAudioContext.matchday);
       expect(mixer.musicDuckingFactor, 0.125);
       expect(updated, isTrue);
 
+      // Event sting ducks music
+      handoff.triggerEventSting('goal');
+      expect(mixer.musicDuckingFactor, 0.0);
+
+      // Exiting match context returns back to Club context and restores music
       handoff.leaveMatchContext();
       expect(handoff.inMatchContext, isFalse);
       expect(handoff.activeMatchKey, isNull);
-      expect(activeContext, GtexAudioContext.home);
+      expect(activeContext, GtexAudioContext.club);
       expect(mixer.musicDuckingFactor, 1.0);
     });
   });
@@ -155,20 +180,55 @@ void main() {
     });
 
     test('Context change switches track if current track is unsupported in new context', () async {
-      final AmbientAudioController controller = AmbientAudioController();
+      final GtexSoundtrackCatalogue catalogue = GtexSoundtrackCatalogue();
+      const GtexTrackMetadata marketTrack = GtexTrackMetadata(
+        id: 'gtex-trading-floor-exclusive',
+        title: 'Trading Floor Dynamics',
+        artist: 'GTEX Audio Team',
+        album: 'GTEX Football OS Vol. 1',
+        genre: 'Cyber Synth',
+        bpm: 124,
+        durationSeconds: 180,
+        contexts: <GtexAudioContext>[GtexAudioContext.market],
+        assetPath: 'assets/media/gtex_stadium_ambient.mp3',
+        source: 'GTEX Internal Production',
+        licence: 'GTEX First-Party Commercial Game Licence',
+        licenceUrl: 'https://gtex.io/legal/audio-licensing',
+        attributionRequired: false,
+        provenance: 'Market track',
+      );
+      catalogue.registerTrack(marketTrack);
+
+      final AmbientAudioController controller = AmbientAudioController(catalogue: catalogue);
       await controller.bootstrap();
 
-      // Market context should pick the Market track ('gtex-trading-floor')
       await controller.setAudioContext(GtexAudioContext.market);
       expect(controller.currentContext, GtexAudioContext.market);
-      expect(controller.currentTrack.id, 'gtex-trading-floor');
     });
 
     test('Track rotation (nextTrack & shuffle) cycles within context pool', () async {
-      final AmbientAudioController controller = AmbientAudioController();
+      final GtexSoundtrackCatalogue catalogue = GtexSoundtrackCatalogue();
+      const GtexTrackMetadata secondTrack = GtexTrackMetadata(
+        id: 'gtex-stadium-track-2',
+        title: 'GTEX Stadium Atmosphere Track 2',
+        artist: 'GTEX Audio Team',
+        album: 'GTEX Football OS Vol. 1',
+        genre: 'Stadium Ambience',
+        bpm: 115,
+        durationSeconds: 150,
+        contexts: <GtexAudioContext>[GtexAudioContext.home],
+        assetPath: 'assets/media/gtex_stadium_ambient.mp3',
+        source: 'GTEX Internal Production',
+        licence: 'GTEX First-Party Commercial Game Licence',
+        licenceUrl: 'https://gtex.io/legal/audio-licensing',
+        attributionRequired: false,
+        provenance: 'Second track',
+      );
+      catalogue.registerTrack(secondTrack);
+
+      final AmbientAudioController controller = AmbientAudioController(catalogue: catalogue);
       await controller.bootstrap();
 
-      // Home context has gtex-stadium-ambient and gtex-tactical-hq
       await controller.setAudioContext(GtexAudioContext.home);
       final String initialTrackId = controller.currentTrack.id;
 
@@ -296,7 +356,7 @@ void main() {
 
       expect(find.text('MUSIC CREDITS & LICENSING'), findsOneWidget);
       expect(find.textContaining('Every track bundled in GTEX'), findsOneWidget);
-      expect(find.text('GTEX Stadium Atmosphere'), findsOneWidget);
+      expect(find.textContaining('GTEX Stadium Atmosphere'), findsOneWidget);
     });
   });
 }

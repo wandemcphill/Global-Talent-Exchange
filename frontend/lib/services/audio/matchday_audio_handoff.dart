@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'gtex_audio_context.dart';
 import 'gtex_audio_mixer.dart';
 
@@ -64,34 +66,60 @@ class MatchdayAudioHandoff {
   bool _inMatchContext = false;
   String? _activeMatchKey;
   BroadcastAudioStemFrame? _lastStemFrame;
+  GtexAudioContext? _previousContext;
+  Timer? _duckRestoreTimer;
 
   bool get inMatchContext => _inMatchContext;
   String? get activeMatchKey => _activeMatchKey;
   BroadcastAudioStemFrame? get lastStemFrame => _lastStemFrame;
+  GtexAudioContext? get previousContext => _previousContext;
 
-  void duckMusic({double factor = 0.125}) {
+  void duckMusic({
+    double factor = 0.125,
+    Duration? autoRestoreDuration,
+  }) {
+    _duckRestoreTimer?.cancel();
     _mixer.duckMusic(factor: factor);
     _onMixerUpdated();
+
+    if (autoRestoreDuration != null) {
+      _duckRestoreTimer = Timer(autoRestoreDuration, () {
+        restoreMusic();
+      });
+    }
   }
 
   void restoreMusic() {
+    _duckRestoreTimer?.cancel();
     _mixer.restoreMusic();
     _onMixerUpdated();
   }
 
-  void enterMatchContext(String matchKey) {
+  void enterMatchContext(
+    String matchKey, {
+    GtexAudioContext? currentContext,
+  }) {
     _inMatchContext = true;
     _activeMatchKey = matchKey;
-    _mixer.duckMusic();
+    if (currentContext != null && currentContext != GtexAudioContext.matchday) {
+      _previousContext = currentContext;
+    }
+    duckMusic(factor: 0.125);
     _onContextChanged(GtexAudioContext.matchday);
     _onMixerUpdated();
   }
 
   void leaveMatchContext() {
+    _duckRestoreTimer?.cancel();
     _inMatchContext = false;
     _activeMatchKey = null;
     _mixer.restoreMusic();
-    _onContextChanged(GtexAudioContext.home);
+
+    final GtexAudioContext targetContext =
+        _previousContext ?? GtexAudioContext.home;
+    _previousContext = null;
+
+    _onContextChanged(targetContext);
     _onMixerUpdated();
   }
 
@@ -100,16 +128,27 @@ class MatchdayAudioHandoff {
   void processStemFrame(BroadcastAudioStemFrame frame) {
     _lastStemFrame = frame;
     if (frame.stemType == 'commentary' && frame.interruptPriority >= 80) {
-      duckMusic(factor: 0.05); // High priority commentary deep duck
+      // High priority commentary deep duck with deterministic 3.5s auto-restore
+      duckMusic(
+        factor: 0.05,
+        autoRestoreDuration: const Duration(milliseconds: 3500),
+      );
     }
   }
 
   /// Event sting support (e.g. goal whistle, full time)
   void triggerEventSting(String stingType) {
     if (stingType == 'goal') {
-      duckMusic(factor: 0.0); // Complete silence music for goal cheer
+      // Complete silence music for goal cheer with deterministic 4s auto-restore
+      duckMusic(
+        factor: 0.0,
+        autoRestoreDuration: const Duration(seconds: 4),
+      );
     } else if (stingType == 'whistle' || stingType == 'foul') {
-      duckMusic(factor: 0.1);
+      duckMusic(
+        factor: 0.1,
+        autoRestoreDuration: const Duration(seconds: 2),
+      );
     }
   }
 }

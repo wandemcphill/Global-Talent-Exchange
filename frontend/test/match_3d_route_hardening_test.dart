@@ -16,7 +16,7 @@ void main() {
     );
 
     expect(find.text('Coming soon'), findsWidgets);
-    expect(find.text('Route blocked'), findsWidgets);
+    expect(find.text('Route blocked'), findsOneWidget);
     expect(find.textContaining('2D tactical viewer'), findsWidgets);
   });
 }

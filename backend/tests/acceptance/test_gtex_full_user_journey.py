@@ -9,7 +9,7 @@ from app.models.club_profile import ClubProfile
 from app.models.player_contract import PlayerContract
 from app.models.transfer_window import TransferWindow
 from app.regen_universe.models import RegenSeason
-from tests.players.test_player_share_market_routes import _seed_imported_real_player
+from backend.tests.players.test_player_share_market_routes import _seed_imported_real_player
 
 PREFIX = "full-journey-20260915"
 
@@ -31,28 +31,8 @@ def _seed_player_assets(app_session_factory, owner_id, seller_id):
         seller_club = _club(session, seller_id)
         real = _seed_imported_real_player(session, player_id=f"{PREFIX}-real")
         real.current_club_profile_id = seller_club.id
-        real_contract = PlayerContract(
-            player_id=real.id,
-            club_id=seller_club.id,
-            status="active",
-            wage_amount=Decimal("100.0000"),
-            signed_on=date(2026, 1, 1),
-            starts_on=date(2026, 1, 1),
-            ends_on=date(2028, 12, 31),
-        )
-        session.add(real_contract)
         parent = _seed_imported_real_player(session, player_id=f"{PREFIX}-parent")
         parent.current_club_profile_id = owner_club.id
-        parent_contract = PlayerContract(
-            player_id=parent.id,
-            club_id=owner_club.id,
-            status="active",
-            wage_amount=Decimal("100.0000"),
-            signed_on=date(2026, 1, 1),
-            starts_on=date(2026, 1, 1),
-            ends_on=date(2028, 12, 31),
-        )
-        session.add(parent_contract)
         window = TransferWindow(
             id=f"{PREFIX}-window",
             territory_code="NG",

@@ -89,7 +89,10 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
       final AmbientAudioState? audio = _findAmbientAudioState(context);
       if (_ambientAudio != audio) {
         _ambientAudio = audio;
-        audio?.matchdayHandoff.enterMatchContext(widget.matchKey);
+        audio?.matchdayHandoff.enterMatchContext(
+          widget.matchKey,
+          currentContext: audio.currentContext,
+        );
       }
     } catch (_) {}
   }
