@@ -64,6 +64,7 @@ legacy_router = APIRouter(prefix="/auth")
 api_router = APIRouter(prefix="/api/auth")
 api_v2_router = APIRouter(prefix="/api/v2/auth")
 
+
 class _PublicSignupRequest(RegisterRequest):
     model_config = ConfigDict(extra="ignore")
 
@@ -500,7 +501,7 @@ def _build_session_bootstrap_response(
 @api_router.post("/register", status_code=status.HTTP_410_GONE, include_in_schema=False)
 @api_v2_router.post("/register", status_code=status.HTTP_410_GONE, include_in_schema=False)
 def register_user(
-    payload: _PublicSignupRequest | None = None,
+    payload: RegisterRequest | None = None,
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> None:
@@ -644,7 +645,7 @@ def _signup_normal_account(
 @api_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @api_v2_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def signup_user(
-    payload: PublicSignupRequest,
+    payload: _PublicSignupRequest,
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
