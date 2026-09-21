@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../../data/gte_api_repository.dart';
 import '../../../../widgets/gte_shell_theme.dart';
 import '../../../../widgets/gte_state_panel.dart';
+import '../../../../ui_gtex/ui_gtex.dart';
 import '../../../../widgets/gte_surface_panel.dart';
 import '../data/dynasty_api_repository.dart';
 import '../data/dynasty_profile_dto.dart';
 import '../data/dynasty_repository.dart';
+import '../data/dynasty_types.dart';
 import '../widgets/dynasty_loading_panel.dart';
 import '../widgets/dynasty_reason_list.dart';
 import '../widgets/dynasty_score_card.dart';
@@ -213,6 +215,14 @@ class _LastFourSummaryCard extends StatelessWidget {
                 ? 'The stretch that built the current era label.'
                 : 'The run is promising, but it still sits below dynasty standard.',
             style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          GtexProgressionBar(
+            label: 'Dynasty Building Progress',
+            tierLabel: profile.currentEraLabel.label,
+            progressValue: (profile.dynastyScore / 1000).clamp(0.0, 1.0),
+            accentColor: GtexColors.gold,
+            helperText: 'Dynasty Score: ${profile.dynastyScore} / 1000',
           ),
           const SizedBox(height: 16),
           if (seasons.isEmpty)

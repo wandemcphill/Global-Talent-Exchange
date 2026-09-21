@@ -23,7 +23,7 @@ const double _moversRailMinPaneWidth = 640;
 /// it. The rail is a header inside the board's scroll view, so it is paid for
 /// out of the listing's vertical budget: measured at ~132px, plus room for a
 /// player card beneath it.
-const double _moversRailMinPaneHeight = 380;
+const double _moversRailMinPaneHeight = 330;
 
 class GtexPlayerMarketRedesignScreen extends StatefulWidget {
   const GtexPlayerMarketRedesignScreen({
@@ -315,26 +315,29 @@ class _GtexPlayerMarketRedesignScreenState
             children: <Widget>[
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Row(
-                  children: <Widget>[
-                    ModeChipButton(
-                      label: 'TRANSFER INTELLIGENCE',
-                      icon: Icons.radar_rounded,
-                      badge: widget.watchlistCount > 0 ? '${widget.watchlistCount} watched' : null,
-                      accent: GtexColors.cyan,
-                      isActive: widget.activeMode == GtexMarketDeskMode.market,
-                      onPressed: () => widget.onSelectMode!(GtexMarketDeskMode.market),
-                    ),
-                    const SizedBox(width: 8),
-                    ModeChipButton(
-                      label: 'MY OWNERSHIP',
-                      icon: Icons.groups_2_outlined,
-                      badge: widget.squadCount > 0 ? '${widget.squadCount} owned' : '0 owned',
-                      accent: GtexColors.pitch,
-                      isActive: widget.activeMode == GtexMarketDeskMode.ownership,
-                      onPressed: () => widget.onSelectMode!(GtexMarketDeskMode.ownership),
-                    ),
-                  ],
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: <Widget>[
+                      ModeChipButton(
+                        label: 'TRANSFER INTELLIGENCE',
+                        icon: Icons.radar_rounded,
+                        badge: widget.watchlistCount > 0 ? '${widget.watchlistCount} watched' : null,
+                        accent: GtexColors.cyan,
+                        isActive: widget.activeMode == GtexMarketDeskMode.market,
+                        onPressed: () => widget.onSelectMode!(GtexMarketDeskMode.market),
+                      ),
+                      const SizedBox(width: 8),
+                      ModeChipButton(
+                        label: 'MY OWNERSHIP',
+                        icon: Icons.groups_2_outlined,
+                        badge: widget.squadCount > 0 ? '${widget.squadCount} owned' : '0 owned',
+                        accent: GtexColors.pitch,
+                        isActive: widget.activeMode == GtexMarketDeskMode.ownership,
+                        onPressed: () => widget.onSelectMode!(GtexMarketDeskMode.ownership),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               Expanded(child: scaffold),

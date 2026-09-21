@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/club_lineup_repository.dart';
 import '../../data/gte_api_repository.dart';
+import '../player_detail/gtex_player_navigator.dart';
 
 const Color _bg = Color(0xFF0E1217);
 const Color _panel = Color(0xFF141A21);
@@ -442,6 +443,8 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
               Expanded(
                 child: Text(
                   _playerName(id),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: filled ? _text : _textMuted,
                     fontSize: 15,
@@ -449,6 +452,16 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
                   ),
                 ),
               ),
+              if (filled && GtexPlayerNavigator.tapToOpen(context, id) != null) ...<Widget>[
+                IconButton(
+                  icon: const Icon(Icons.badge_outlined, size: 18, color: _textSecondary),
+                  tooltip: 'Player Profile',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: GtexPlayerNavigator.tapToOpen(context, id),
+                ),
+                const SizedBox(width: 4),
+              ],
               Icon(
                 filled
                     ? Icons.swap_horiz_rounded
