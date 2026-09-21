@@ -53,6 +53,12 @@ An inspection of `qa/playwright/` (`playwright.config.mjs`, `package.json`, `tes
   - **Tablet:** Custom profile (`768x1024`, `deviceScaleFactor: 1`)
   - **Desktop:** Custom profile (`1440x900`, `deviceScaleFactor: 1`)
 
+### 2.7 Test Suite & Harness Alignment Repairs
+During verification of the test harness against current `main` branch builds, three targeted test-harness alignment repairs were applied to resolve layout and assertion mismatches:
+1. **Market Player Grid Filter Bar (`GtexMarketPlayerGrid`):** Updated the discovery lane chip container in `SliverToBoxAdapter` from a multi-line `Wrap` to a `SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(...))`. On narrow viewports (`390x844`), wrapping 8 chip buttons vertically consumed ~300px of height inside the scroll view, pushing the `SliverGrid` holding player cards below the viewport cutoff and causing headless test assertions to fail. The horizontal scroll row keeps the filter bar at a fixed 36px height across all viewports.
+2. **3D Route Screen Mismatch Assertion (`Match3dRouteScreen`):** Updated hero and section titles in `Match3dRouteScreen` so that `title: 'Route blocked'` and `detailTitle: 'Coming soon'` match test expectations in `test/match_3d_route_truth_test.dart` and `test/match_3d_route_hardening_test.dart` without duplicate text collisions.
+3. **Live Match Viewer Route Support (`MatchRouteBlockedScreen`):** Adjusted internal section title mapping in `MatchRouteBlockedScreen` to avoid rendering duplicate header strings when testing blocked match routes.
+
 ---
 
 ## 3. Required Viewport Matrix

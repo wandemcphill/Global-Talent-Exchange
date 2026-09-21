@@ -372,7 +372,7 @@ class MatchRouteBlockedScreen extends StatelessWidget {
           title: detailTitle,
           subtitle: detailSubtitle,
           child: GteStatePanel(
-            title: detailTitle,
+            title: 'Match unavailable',
             message: reason,
             icon: Icons.error_outline_rounded,
             accentColor: Theme.of(context).colorScheme.error,
