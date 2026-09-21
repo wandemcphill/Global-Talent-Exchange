@@ -6,6 +6,7 @@ from time import perf_counter
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from pydantic import ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -62,6 +63,10 @@ router = APIRouter(tags=["auth"])
 legacy_router = APIRouter(prefix="/auth")
 api_router = APIRouter(prefix="/api/auth")
 api_v2_router = APIRouter(prefix="/api/v2/auth")
+
+class _PublicSignupRequest(RegisterRequest):
+    model_config = ConfigDict(extra="ignore")
+
 
 
 class _AuthRouteTelemetry:
@@ -495,7 +500,7 @@ def _build_session_bootstrap_response(
 @api_router.post("/register", status_code=status.HTTP_410_GONE, include_in_schema=False)
 @api_v2_router.post("/register", status_code=status.HTTP_410_GONE, include_in_schema=False)
 def register_user(
-    payload: RegisterRequest | None = None,
+    payload: _PublicSignupRequest | None = None,
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> None:
