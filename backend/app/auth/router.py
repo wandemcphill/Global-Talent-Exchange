@@ -17,7 +17,6 @@ from app.auth.schemas import (
     ActionStatusResponse,
     ChangePasswordRequest,
     ConfirmEmailRequest,
-    CreatorSignupRequest,
     CurrentUserResponse,
     CurrentUserUpdateRequest,
     LoginRequest,
@@ -33,8 +32,6 @@ from app.auth.schemas import (
     SessionBootstrapResponse,
     SessionBootstrapSessionView,
     TokenResponse,
-    TraderSignupRequest,
-    UserClubSignupRequest,
 )
 from app.auth.service import (
     AuthError,
@@ -54,7 +51,6 @@ from app.models.user import PublicAccountType, User
 from app.policies.schemas import PolicyRequirementSummary, UserComplianceStatus
 from app.policies.service import PolicyService
 from app.schemas.club_identity_core import ClubProfileCore
-from app.trader.service import TraderAccessError, TraderService
 from app.treasury.service import TreasuryService
 from app.wallets.funding_service import WalletFundingService
 from app.wallets.providers.registry import provider_live_deposit_ready
