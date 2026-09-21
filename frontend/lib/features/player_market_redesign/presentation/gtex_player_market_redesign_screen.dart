@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../controllers/gtex_watchlist_controller.dart';
 import '../../../data/gte_exchange_models.dart';
 import '../../../domain/ownership/gtex_ownership_models.dart';
 import '../../../providers/gte_exchange_controller.dart';
 import '../../../ui_gtex/ui_gtex.dart';
+import '../../navigation/routing/gte_navigation_route.dart';
 import '../models/gtex_market_browse_models.dart';
 import '../widgets/gtex_market_context_panel.dart';
+import '../widgets/gtex_market_mode_chip.dart';
 import '../widgets/gtex_market_movers_rail.dart';
 import '../widgets/gtex_market_player_grid.dart';
 import '../widgets/gtex_market_selected_player_panel.dart';
@@ -29,12 +32,22 @@ class GtexPlayerMarketRedesignScreen extends StatefulWidget {
     required this.onOpenPlayer,
     required this.onOpenLogin,
     this.onOpenTransferCalendar,
+    this.watchlistController,
+    this.activeMode = GtexMarketDeskMode.market,
+    this.squadCount = 0,
+    this.watchlistCount = 0,
+    this.onSelectMode,
   });
 
   final GteExchangeController controller;
   final ValueChanged<String> onOpenPlayer;
   final VoidCallback onOpenLogin;
   final VoidCallback? onOpenTransferCalendar;
+  final GtexWatchlistController? watchlistController;
+  final GtexMarketDeskMode activeMode;
+  final int squadCount;
+  final int watchlistCount;
+  final ValueChanged<GtexMarketDeskMode>? onSelectMode;
 
   @override
   State<GtexPlayerMarketRedesignScreen> createState() =>
@@ -163,7 +176,7 @@ class _GtexPlayerMarketRedesignScreenState
           widget.controller.portfolio,
         ).stakes.map((GtexOwnershipStake s) => s.playerId).toSet();
 
-        return GtexMasterDetailScaffold(
+        final Widget scaffold = GtexMasterDetailScaffold(
           title: 'Transfer Hub',
           subtitle:
               'Browse listed football assets, shortlist targets, and open transfer, loan, swap, or loan-to-buy negotiations.',
@@ -289,6 +302,43 @@ class _GtexPlayerMarketRedesignScreenState
             onToggleBasket: _toggleBasket,
             onRemoveFromBasket: _removeFromBasket,
             onCheckout: _reviewBasket,
+          ),
+        );
+
+        if (widget.onSelectMode == null) {
+          return scaffold;
+        }
+
+        return Scaffold(
+          backgroundColor: GtexColors.surfaceBase,
+          body: Column(
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Row(
+                  children: <Widget>[
+                    ModeChipButton(
+                      label: 'TRANSFER INTELLIGENCE',
+                      icon: Icons.radar_rounded,
+                      badge: widget.watchlistCount > 0 ? '${widget.watchlistCount} watched' : null,
+                      accent: GtexColors.cyan,
+                      isActive: widget.activeMode == GtexMarketDeskMode.market,
+                      onPressed: () => widget.onSelectMode!(GtexMarketDeskMode.market),
+                    ),
+                    const SizedBox(width: 8),
+                    ModeChipButton(
+                      label: 'MY OWNERSHIP',
+                      icon: Icons.groups_2_outlined,
+                      badge: widget.squadCount > 0 ? '${widget.squadCount} owned' : '0 owned',
+                      accent: GtexColors.pitch,
+                      isActive: widget.activeMode == GtexMarketDeskMode.ownership,
+                      onPressed: () => widget.onSelectMode!(GtexMarketDeskMode.ownership),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(child: scaffold),
+            ],
           ),
         );
       },
