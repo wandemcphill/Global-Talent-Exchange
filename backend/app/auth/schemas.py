@@ -92,8 +92,7 @@ class RegisterRequest(BaseModel):
         return candidate
 
 
-# fmt: off
-
+# fmt: skip
 class PublicSignupRequest(RegisterRequest):
     """Canonical public registration contract for every GTEX account.
 
@@ -119,8 +118,6 @@ class PublicSignupRequest(RegisterRequest):
         if not payload.get("username"):
             payload["username"] = payload.get("trading_alias")
         return payload
-
-# fmt: on
 
 
 class ComplianceSubmissionRequest(BaseModel):
