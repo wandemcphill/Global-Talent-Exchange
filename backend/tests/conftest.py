@@ -221,18 +221,36 @@ def auth_user_factory(client, app_session_factory):
         email = f"{unique_suffix}@example.com"
         username = unique_suffix.replace("-", "_")
         password = TEST_PASSWORD
-        response = client.post(
-            "/auth/signup/user",
-            json=user_signup_payload(
-                email=email,
-                username=username,
-                password=password,
-                full_name=f"User {unique_suffix}",
-            ),
+        signup_payload = user_signup_payload(
+            email=email,
+            username=username,
+            password=password,
+            full_name=f"User {unique_suffix}",
         )
+        response = client.post("/auth/signup/user", json=signup_payload)
         assert response.status_code == 201, response.text
         payload = response.json()
         user_id = payload["user"]["id"]
+
+        # The product no longer creates a club during account registration.
+        # Domain tests that need a club explicitly create it as the next step.
+        club_response = client.post(
+            "/api/clubs",
+            headers=payload["user"] and {"Authorization": f"Bearer {payload['access_token']}"},
+            json={
+                "club_name": signup_payload["club_name"],
+                "short_name": signup_payload["club_short_tag"],
+                "slug": signup_payload["club_short_tag"].lower(),
+                "primary_color": "#0F766E",
+                "secondary_color": "#F8FAFC",
+                "accent_color": "#B9FF3D",
+                "country_code": signup_payload["club_country"],
+                "region_name": signup_payload["club_state"],
+                "city_name": signup_payload["club_locality"],
+                "visibility": "public",
+            },
+        )
+        assert club_response.status_code == 201, club_response.text
 
         if funded_credit is not None or funded_coin is not None:
             from app.models.user import User
