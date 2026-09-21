@@ -240,7 +240,7 @@ def auth_user_factory(client, app_session_factory):
             json={
                 "club_name": signup_payload["club_name"],
                 "short_name": signup_payload["club_short_tag"],
-                "slug": signup_payload["club_short_tag"].lower(),
+                "slug": username[:120],
                 "primary_color": "#0F766E",
                 "secondary_color": "#F8FAFC",
                 "accent_color": "#B9FF3D",
