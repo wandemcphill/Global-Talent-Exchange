@@ -77,8 +77,49 @@ void main() {
 
     expect(find.byType(GteMarketPlayersScreenV2), findsOneWidget);
     expect(find.text('Transfer Hub'), findsWidgets);
+    expect(find.text('TRANSFER INTELLIGENCE'), findsOneWidget);
+    expect(find.text('MY OWNERSHIP'), findsOneWidget);
     expect(find.text('My Shortlist'), findsOneWidget);
     expect(find.textContaining('Search player, club'), findsOneWidget);
+  });
+
+  testWidgets('opens shell directly to My Ownership via /app/market?mode=ownership', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final GteExchangeController controller = GteExchangeController(
+      api: GteExchangeApiClient.fixture(),
+    );
+    controller.session = _authenticatedSession(
+      userId: 'user-ibadan',
+      userName: 'Ibadan Owner',
+      clubId: 'ibadan-lions',
+      clubName: 'Ibadan Lions FC',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: GteShellTheme.build(),
+        home: GteExchangeShellScreen.fromPath(
+          controller: controller,
+          apiBaseUrl: 'http://127.0.0.1:8000',
+          backendMode: GteBackendMode.fixture,
+          initialPath: '/app/market?mode=ownership',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GteMarketPlayersScreenV2), findsOneWidget);
+    expect(find.text('TRANSFER INTELLIGENCE'), findsOneWidget);
+    expect(find.text('MY OWNERSHIP'), findsOneWidget);
+    expect(find.text('Your squad is empty'), findsOneWidget);
   });
 }
 
