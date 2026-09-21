@@ -10,6 +10,7 @@ import 'package:gte_frontend/screens/clubs/club_ops_screen_host.dart';
 import 'package:gte_frontend/widgets/clubs/academy_program_card.dart';
 import 'package:gte_frontend/widgets/clubs/club_ops_formatters.dart';
 import 'package:gte_frontend/widgets/clubs/club_ops_scaffold.dart';
+import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 
@@ -81,6 +82,15 @@ class AcademyOverviewScreen extends StatelessWidget {
                   Text(
                     summary.facilityLabel,
                     style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  GtexProgressionBar(
+                    label: 'Promotions Progress',
+                    currentStep: summary.promotionsThisSeason,
+                    totalSteps: 10,
+                    accentColor: GtexColors.cyan,
+                    helperText:
+                        '${summary.promotionsThisSeason} youth promotions recorded this season',
                   ),
                 ],
               ),

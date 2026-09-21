@@ -410,6 +410,17 @@ class _ProfileBody extends StatelessWidget {
         const SizedBox(height: 14),
         _SectionLabel('YOUR POSITION'),
         const SizedBox(height: 8),
+        GtexOwnershipIndicatorTile(
+          name: id.playerName,
+          quantity: holding?.quantity.round() ?? 0,
+          sharePriceCoin: detail.marketProfile.sharePriceCoin?.toInt() ?? 0,
+          contractDurationYears: listing?.contractYearsRemaining?.round() ??
+              (overview?.contractBadge?.endsOn != null
+                  ? (overview!.contractBadge!.endsOn!.difference(DateTime.now()).inDays / 365).ceil().clamp(0, 10)
+                  : null),
+          isTradable: detail.marketProfile.isTradable,
+        ),
+        const SizedBox(height: 8),
         OwnershipConsequenceCard(holding: holding, form: form),
       ],
       const SizedBox(height: 14),
@@ -859,75 +870,34 @@ class _IdentityCard extends StatelessWidget {
     final String club = identity.currentClubName ?? '\u2014';
     final String age = identity.age > 0 ? '${identity.age}y' : '\u2014';
     final int gsi = trend.globalScoutingIndex.round().clamp(0, 99);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _panel,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          GtexPlayerPortrait(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        GtexIdentityHeader(
+          title: identity.playerName,
+          subtitle: '$club • $age • $position',
+          avatarChild: GtexPlayerPortrait(
             name: identity.playerName,
             imageUrl: identity.imageUrl,
             position: identity.normalizedPosition ?? identity.position,
             nationalityCode: identity.nationalityCode,
-            size: 84,
+            size: 68,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  identity.playerName,
-                  style: const TextStyle(
-                    fontFamily: _condensed,
-                    color: _text,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    height: 1.05,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '$club \u00b7 $age \u00b7 $position',
-                  style: const TextStyle(color: _textSecondary, fontSize: 12.5),
-                ),
-                if ((identity.nationality ?? '').isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 2),
-                  Text(
-                    identity.nationality!,
-                    style: const TextStyle(color: _blue, fontSize: 12),
-                  ),
-                ],
-                if ((identity.currentCompetitionName ?? '')
-                    .isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 2),
-                  Text(
-                    identity.currentCompetitionName!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _textMuted, fontSize: 12),
-                  ),
-                ],
-              ],
+          countryToken: identity.nationalityCode ?? identity.nationality,
+          prestigeTier: 'GSI $gsi',
+          secondaryTag: position,
+          accentColor: GtexColors.pitch,
+          actions: <Widget>[
+            _RatingBox(label: 'GSI', value: gsi, color: _green),
+            const SizedBox(width: 6),
+            _RatingBox(
+              label: 'POT',
+              value: attr.potential > 0 ? attr.potential : null,
+              color: _blue,
             ),
-          ),
-          const SizedBox(width: 10),
-          _RatingBox(label: 'GSI', value: gsi, color: _green),
-          const SizedBox(width: 8),
-          // A potential of zero is the API's "not scouted", not a verdict on
-          // the player. It is rendered as unknown, never as a number.
-          _RatingBox(
-            label: 'POT',
-            value: attr.potential > 0 ? attr.potential : null,
-            color: _blue,
-          ),
-        ],
-      ),
+          ],
+        ),
+      ],
     );
   }
 }

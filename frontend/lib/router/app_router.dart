@@ -10,6 +10,7 @@ import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/coin_trader_redesign/coin_trader_redesign.dart';
 import 'package:gte_frontend/design_lab/gtex_design_lab_screen.dart';
 import 'package:gte_frontend/design_lab/gtex_competition_design_lab_screen.dart';
+import 'package:gte_frontend/design_lab/gtex_club_player_progression_design_lab_screen.dart';
 import 'package:gte_frontend/features/launch_control_redesign/gtex_feature_flags_launch_control_screen_v2.dart';
 import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
@@ -68,6 +69,14 @@ GoRouter buildGtexAppRouter({
                   child: GtexDesignLabScreen(
                     initialDirection: state.uri.queryParameters['direction'],
                   ),
+                ),
+      ),
+      GoRoute(
+        path: '/design-lab/club-player-progression',
+        pageBuilder:
+            (BuildContext context, GoRouterState state) =>
+                const NoTransitionPage<void>(
+                  child: GtexClubPlayerProgressionDesignLabScreen(),
                 ),
       ),
       // A separate fixture-only exploration for Competition Slice 4. It is

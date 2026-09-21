@@ -23,119 +23,71 @@ class GtexClubHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GtexPanel(
-      accent: GtexColors.pitch,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _ClubBadge(shortCode: snapshot.shortCode),
-                const SizedBox(width: GtexSpacing.md),
-                Flexible(
-                  fit: FlexFit.loose,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        snapshot.clubName,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.headlineSmall?.copyWith(
-                          color: GtexColors.text,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: GtexSpacing.xxs),
-                      Text(
-                        '${snapshot.country} - ${snapshot.division}',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: GtexColors.textMuted,
-                        ),
-                      ),
-                      const SizedBox(height: GtexSpacing.sm),
-                      Wrap(
-                        spacing: GtexSpacing.xs,
-                        runSpacing: GtexSpacing.xs,
-                        children: snapshot.identityTags
-                            .map(
-                              (String tag) => GtexStatusChip(
-                                label: tag,
-                                color: GtexColors.pitch,
-                              ),
-                            )
-                            .toList(growable: false),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: GtexSpacing.lg),
-          Wrap(
-            spacing: GtexSpacing.sm,
-            runSpacing: GtexSpacing.sm,
-            children: <Widget>[
-              SizedBox(
-                width: 210,
-                child: GtexMetricTile(
-                  label: 'Club value',
-                  value: gtexFormatCredits(snapshot.totalClubValueCredits),
-                  icon: Icons.account_balance_wallet_outlined,
-                  accent: GtexColors.pitch,
-                ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        GtexIdentityHeader(
+          title: snapshot.clubName,
+          subtitle: '${snapshot.division} • Owner: ${snapshot.ownerName}',
+          countryToken: snapshot.country,
+          secondaryTag: snapshot.shortCode,
+          accentColor: GtexColors.pitch,
+          actions: <Widget>[
+            if (!ownerFacing) ...<Widget>[
+              GtexActionButton(
+                label: isFollowing ? 'Following' : 'Follow club',
+                icon: isFollowing
+                    ? Icons.notifications_active
+                    : Icons.add_alert_outlined,
+                onPressed: onFollow,
+                compact: true,
+                accent: GtexColors.pitch,
               ),
-              SizedBox(
-                width: 190,
-                child: GtexMetricTile(
-                  label: 'Followers',
-                  value: '${snapshot.followers}',
-                  icon: Icons.groups_2_outlined,
-                  accent: GtexColors.pitch,
-                ),
-              ),
-              SizedBox(
-                width: 190,
-                child: GtexMetricTile(
-                  label: 'Shareholders',
-                  value: '${snapshot.shareholders}',
-                  icon: Icons.stacked_line_chart,
-                  accent: GtexColors.gold,
-                ),
+              GtexActionButton(
+                label: 'Buy shares',
+                icon: Icons.ssid_chart_outlined,
+                onPressed: onBuyShares,
+                compact: true,
+                accent: GtexColors.gold,
               ),
             ],
-          ),
-          if (!ownerFacing) ...<Widget>[
-            const SizedBox(height: GtexSpacing.lg),
-            Wrap(
-              spacing: GtexSpacing.sm,
-              runSpacing: GtexSpacing.sm,
-              children: <Widget>[
-                GtexActionButton(
-                  label: isFollowing ? 'Following' : 'Follow club',
-                  icon:
-                      isFollowing
-                          ? Icons.notifications_active
-                          : Icons.add_alert_outlined,
-                  onPressed: onFollow,
-                  accent: GtexColors.pitch,
-                ),
-                GtexActionButton(
-                  label: 'Buy shares',
-                  icon: Icons.ssid_chart_outlined,
-                  onPressed: onBuyShares,
-                  accent: GtexColors.gold,
-                ),
-              ],
+          ],
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        Wrap(
+          spacing: GtexSpacing.sm,
+          runSpacing: GtexSpacing.sm,
+          children: <Widget>[
+            SizedBox(
+              width: 210,
+              child: GtexMetricTile(
+                label: 'Club value',
+                value: gtexFormatCredits(snapshot.totalClubValueCredits),
+                icon: Icons.account_balance_wallet_outlined,
+                accent: GtexColors.pitch,
+              ),
+            ),
+            SizedBox(
+              width: 190,
+              child: GtexMetricTile(
+                label: 'Followers',
+                value: '${snapshot.followers}',
+                icon: Icons.groups_2_outlined,
+                accent: GtexColors.pitch,
+              ),
+            ),
+            SizedBox(
+              width: 190,
+              child: GtexMetricTile(
+                label: 'Shareholders',
+                value: '${snapshot.shareholders}',
+                icon: Icons.stacked_line_chart,
+                accent: GtexColors.gold,
+              ),
             ),
           ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -429,43 +381,63 @@ class GtexClubTrophyGrid extends StatelessWidget {
         icon: Icons.emoji_events_outlined,
       );
     }
-    return Wrap(
-      spacing: GtexSpacing.sm,
-      runSpacing: GtexSpacing.sm,
-      children: trophies
-          .map(
-            (GtexClubTrophy trophy) => SizedBox(
-              width: 220,
-              child: GtexPanel(
-                accent: GtexColors.gold,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const Icon(
-                      Icons.emoji_events_outlined,
-                      color: GtexColors.gold,
-                      size: 34,
+
+    final List<SilverwareItem> silverwareList = trophies
+        .map(
+          (GtexClubTrophy trophy) => SilverwareItem(
+            name: trophy.title,
+            category: trophy.tier,
+            count: 1,
+            latestSeason: trophy.season,
+            accentColor: GtexColors.gold,
+          ),
+        )
+        .toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        GtexSilverwareShelf(trophies: silverwareList),
+        const SizedBox(height: GtexSpacing.md),
+        Wrap(
+          spacing: GtexSpacing.sm,
+          runSpacing: GtexSpacing.sm,
+          children: trophies
+              .map(
+                (GtexClubTrophy trophy) => SizedBox(
+                  width: 220,
+                  child: GtexPanel(
+                    accent: GtexColors.gold,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const Icon(
+                          Icons.emoji_events_outlined,
+                          color: GtexColors.gold,
+                          size: 34,
+                        ),
+                        const SizedBox(height: GtexSpacing.sm),
+                        Text(
+                          trophy.title,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: GtexColors.text,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          '${trophy.season} - ${trophy.tier}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: GtexColors.textMuted,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: GtexSpacing.sm),
-                    Text(
-                      trophy.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: GtexColors.text,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      '${trophy.season} - ${trophy.tier}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: GtexColors.textMuted,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          )
-          .toList(growable: false),
+              )
+              .toList(growable: false),
+        ),
+      ],
     );
   }
 }

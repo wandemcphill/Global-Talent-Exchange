@@ -848,9 +848,9 @@ class _AcademyPipelinePanel extends StatelessWidget {
         ),
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
-          title: 'Academy profile',
+          title: 'Academy & Facility Levels',
           subtitle:
-              'Level ${current.academyProfile.level} - ${gtexFormatCredits(current.academyProfile.investmentMinor)} invested',
+              'Level ${current.academyProfile.level} Academy - ${gtexFormatCredits(current.academyProfile.investmentMinor)} invested',
           accent: GtexColors.cyan,
           trailing: GtexActionButton(
             label: 'Generate',
@@ -859,25 +859,40 @@ class _AcademyPipelinePanel extends StatelessWidget {
             accent: GtexColors.cyan,
             onPressed: loading ? null : onGenerateProspects,
           ),
-          child: Wrap(
-            spacing: GtexSpacing.sm,
-            runSpacing: GtexSpacing.sm,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              GtexStatusChip(
-                label: '${current.academyProspects.length} prospects',
-                icon: Icons.groups_2_outlined,
-                tone: GtexStatusTone.neutral,
+              Wrap(
+                spacing: GtexSpacing.sm,
+                runSpacing: GtexSpacing.sm,
+                children: <Widget>[
+                  GtexStatusChip(
+                    label: '${current.academyProspects.length} prospects',
+                    icon: Icons.groups_2_outlined,
+                    tone: GtexStatusTone.neutral,
+                  ),
+                  GtexStatusChip(
+                    label:
+                        '${current.academyProspects.where((GtexAcademyProspect item) => item.promotable).length} signed',
+                    icon: Icons.assignment_turned_in_outlined,
+                    tone: GtexStatusTone.success,
+                  ),
+                  GtexStatusChip(
+                    label: 'newgen bank only',
+                    icon: Icons.portrait_outlined,
+                    tone: GtexStatusTone.premium,
+                  ),
+                ],
               ),
-              GtexStatusChip(
-                label:
-                    '${current.academyProspects.where((GtexAcademyProspect item) => item.promotable).length} signed',
-                icon: Icons.assignment_turned_in_outlined,
-                tone: GtexStatusTone.success,
-              ),
-              GtexStatusChip(
-                label: 'newgen bank only',
-                icon: Icons.portrait_outlined,
-                tone: GtexStatusTone.premium,
+              const SizedBox(height: GtexSpacing.md),
+              GtexProgressionBar(
+                label: 'Academy Level',
+                tierLabel: 'Level ${current.academyProfile.level}',
+                currentStep: current.academyProfile.level,
+                totalSteps: 10,
+                accentColor: GtexColors.cyan,
+                helperText:
+                    '${gtexFormatCredits(current.academyProfile.investmentMinor)} invested in youth development',
               ),
             ],
           ),
