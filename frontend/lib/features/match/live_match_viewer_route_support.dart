@@ -361,7 +361,7 @@ class MatchRouteBlockedScreen extends StatelessWidget {
       children: <Widget>[
         GtexHeroPanel(
           eyebrow: 'MATCH CENTER',
-          title: title,
+          title: detailTitle,
           description: subtitle,
           metrics: const <Widget>[
             GtexPill(label: 'Match unavailable', tone: GtexSurfaceTone.warning),
