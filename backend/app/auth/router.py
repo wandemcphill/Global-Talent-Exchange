@@ -69,7 +69,6 @@ class _PublicSignupRequest(RegisterRequest):
     model_config = ConfigDict(extra="ignore")
 
 
-
 class _AuthRouteTelemetry:
     def __init__(self, flow: str) -> None:
         self.flow = flow
