@@ -142,6 +142,7 @@ class PublicSignupRequest(BaseModel):
         candidate = value.strip()
         return candidate or None
 
+
 class ComplianceSubmissionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
