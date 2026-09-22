@@ -8,6 +8,7 @@ import '../models/gtex_regen_dossier.dart';
 import '../models/gtex_regen_models.dart';
 import '../models/gtex_regen_wire_models.dart';
 import '../widgets/gtex_regen_discovery_boards.dart';
+import '../../../ui_gtex/components/gtex_football_command_pulse.dart';
 import '../widgets/gtex_regen_dossier_panel.dart';
 import '../widgets/gtex_regen_ownership_actions.dart';
 import 'gtex_admin_create_son_screen_v2.dart';
@@ -198,7 +199,50 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
                 (String value) => setState(() => _section = value),
             onOriginChanged: (String value) => setState(() => _origin = value),
           ),
-          detail: _buildDetail(data, filtered),
+          detail: Column(
+            children: <Widget>[
+              GtexFootballCommandPulse(
+                kicker: 'Football Command Centre',
+                title: 'Regen operations cockpit',
+                accent: GtexColors.purple,
+                metrics: <GtexCommandPulseMetric>[
+                  GtexCommandPulseMetric(
+                    label: 'World regens',
+                    value: '${data.stats.totalRegens}',
+                    icon: Icons.auto_awesome,
+                    accent: GtexColors.purple,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'National pool',
+                    value: '${data.stats.nationalPoolCount}',
+                    icon: Icons.flag_outlined,
+                    accent: GtexColors.cyan,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Create-a-Son',
+                    value: '${data.stats.createSonOrders}',
+                    icon: Icons.family_restroom_outlined,
+                    accent: GtexColors.gold,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Selected',
+                    value: _selected?.displayName ?? 'None',
+                    icon: Icons.person_search_outlined,
+                    accent: GtexColors.mint,
+                  ),
+                ],
+                trailing: Text(
+                  'LIVE WORLD',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: GtexColors.textMuted,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              Expanded(child: _buildDetail(data, filtered)),
+            ],
+          ),
           rightPanel: _RegenRightPanel(
             selected: _selected,
             repository: widget.repository,
@@ -372,35 +416,6 @@ class _RegenLeftPanel extends StatelessWidget {
         }.toList();
     return ListView(
       children: <Widget>[
-        GtexPanel(
-          title: 'World metrics',
-          subtitle: 'Live regen universe pulse',
-          accent: GtexColors.purple,
-          child: Column(
-            children: <Widget>[
-              GtexMetricTile(
-                label: 'Regens',
-                value: '${data.stats.totalRegens}',
-                icon: Icons.auto_awesome,
-                accent: GtexColors.purple,
-              ),
-              const SizedBox(height: GtexSpacing.sm),
-              GtexMetricTile(
-                label: 'National Pool',
-                value: '${data.stats.nationalPoolCount}',
-                icon: Icons.flag,
-                accent: GtexColors.cyan,
-              ),
-              const SizedBox(height: GtexSpacing.sm),
-              GtexMetricTile(
-                label: 'Create-a-Son',
-                value: '${data.stats.createSonOrders}',
-                icon: Icons.family_restroom,
-                accent: GtexColors.gold,
-              ),
-            ],
-          ),
-        ),
         const SizedBox(height: GtexSpacing.md),
         GtexSearchField(
           hintText: 'Search regens, countries, traits',
@@ -743,6 +758,86 @@ class _RegenRightPanel extends StatelessWidget {
   }
 }
 
+class _SelectedProspectHero extends StatelessWidget {
+  const _SelectedProspectHero({required this.prospect});
+
+  final GtexRegenProspect prospect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(GtexSpacing.sm),
+      decoration: BoxDecoration(
+        color: GtexColors.panelStrong.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        border: Border.all(color: GtexColors.line),
+      ),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 86,
+            child: GtexRegenPortrait(
+              portraitUrl: prospect.imageUrl,
+              seed: prospect.id,
+              position: prospect.position,
+              nationalityCode: prospect.countryCode,
+            ),
+          ),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  prospect.displayName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${prospect.countryName} • ${prospect.position} • ${prospect.archetype}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: GtexColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: GtexSpacing.xs),
+                Wrap(
+                  spacing: GtexSpacing.xs,
+                  runSpacing: GtexSpacing.xs,
+                  children: <Widget>[
+                    GtexStatusChip(
+                      label: 'OVR ${prospect.gsi}',
+                      color: GtexColors.cyan,
+                      compact: true,
+                    ),
+                    GtexStatusChip(
+                      label: 'POT ${prospect.potentialRating}',
+                      color: GtexColors.purple,
+                      compact: true,
+                    ),
+                    if (prospect.ageLabel != null)
+                      GtexStatusChip(
+                        label: prospect.ageLabel!,
+                        color: GtexColors.gold,
+                        compact: true,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 class _SelectedProspectPanel extends StatelessWidget {
   const _SelectedProspectPanel({required this.prospect});
 
@@ -759,6 +854,8 @@ class _SelectedProspectPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          _SelectedProspectHero(prospect: prospect),
+          const SizedBox(height: GtexSpacing.md),
           // A Row here overflowed the 370px summary panel by 131px once the
           // growth chip joined it. Chips wrap instead of being clipped.
           Wrap(
