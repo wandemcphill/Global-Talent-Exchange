@@ -5,6 +5,7 @@ import '../../../data/gte_exchange_models.dart';
 import '../../../domain/ownership/gtex_ownership_models.dart';
 import '../../../providers/gte_exchange_controller.dart';
 import '../../../ui_gtex/ui_gtex.dart';
+import '../../../ui_gtex/components/gtex_football_command_pulse.dart';
 import '../../navigation/routing/gte_navigation_route.dart';
 import '../models/gtex_market_browse_models.dart';
 import '../widgets/gtex_market_context_panel.dart';
@@ -258,33 +259,89 @@ class _GtexPlayerMarketRedesignScreenState
               final bool showMoversRail =
                   paneWidth >= _moversRailMinPaneWidth &&
                   paneHeight >= _moversRailMinPaneHeight;
-              return GtexMarketPlayerGrid(
-                header: showMoversRail
-                    ? GtexMarketMoversRail(
-                      movers: _movers,
-                      isLoading: _isLoadingMovers,
-                      error: _moversError,
-                      onOpenPlayer: widget.onOpenPlayer,
-                    )
-                    : null,
-                players: players,
-                ownedPlayerIds: ownedPlayerIds,
-                totalPlayers: widget.controller.marketTotalPlayerCount,
-                selectedPlayerId: _selectedPlayerId,
-                basketState: _basketState,
-                isLoading:
-                    widget.controller.isLoadingMarket ||
-                    widget.controller.isLoadingMoreMarket,
-                error: widget.controller.marketError,
-                hasMore: widget.controller.hasMorePlayers,
-                onRefresh: _refresh,
-                onLoadMore:
-                    widget.controller.hasMorePlayers ? _loadMore : null,
-                onSelectPlayer: _selectPlayer,
-                onToggleBasket: _toggleBasket,
-                onBuyNow:
-                    (GtexMarketPlayerView player) =>
-                        widget.onOpenPlayer(player.playerId),
+              return Column(
+                children: <Widget>[
+                  GtexFootballCommandPulse(
+                    kicker: 'Football Command Centre',
+                    title: 'Transfer market operations',
+                    accent: GtexColors.pitch,
+                    metrics: <GtexCommandPulseMetric>[
+                      GtexCommandPulseMetric(
+                        label: 'Listings loaded',
+                        value: '${players.length}/${widget.controller.marketTotalPlayerCount}',
+                        icon: Icons.groups_2_outlined,
+                        accent: GtexColors.pitch,
+                      ),
+                      GtexCommandPulseMetric(
+                        label: 'Watched',
+                        value: '${widget.watchlistCount}',
+                        icon: Icons.visibility_outlined,
+                        accent: GtexColors.cyan,
+                      ),
+                      GtexCommandPulseMetric(
+                        label: 'Shortlist',
+                        value: '${_basketState.items.length}',
+                        icon: Icons.playlist_add_check_outlined,
+                        accent: GtexColors.gold,
+                      ),
+                      GtexCommandPulseMetric(
+                        label: 'Market state',
+                        value:
+                            widget.controller.marketError == null
+                                ? 'Live snapshot'
+                                : 'Degraded',
+                        icon:
+                            widget.controller.marketError == null
+                                ? Icons.radio_button_checked
+                                : Icons.warning_amber_rounded,
+                        accent:
+                            widget.controller.marketError == null
+                                ? GtexColors.pitch
+                                : GtexColors.orange,
+                      ),
+                    ],
+                    trailing: Text(
+                      widget.activeMode == GtexMarketDeskMode.market
+                          ? 'TRANSFER INTELLIGENCE'
+                          : 'MY OWNERSHIP',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: GtexColors.textMuted,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: GtexSpacing.sm),
+                  Expanded(
+                    child: GtexMarketPlayerGrid(
+                      header: showMoversRail
+                          ? GtexMarketMoversRail(
+                            movers: _movers,
+                            isLoading: _isLoadingMovers,
+                            error: _moversError,
+                            onOpenPlayer: widget.onOpenPlayer,
+                          )
+                          : null,
+                      players: players,
+                      ownedPlayerIds: ownedPlayerIds,
+                      totalPlayers: widget.controller.marketTotalPlayerCount,
+                      selectedPlayerId: _selectedPlayerId,
+                      basketState: _basketState,
+                      isLoading:
+                          widget.controller.isLoadingMarket ||
+                          widget.controller.isLoadingMoreMarket,
+                      error: widget.controller.marketError,
+                      hasMore: widget.controller.hasMorePlayers,
+                      onRefresh: _refresh,
+                      onLoadMore:
+                          widget.controller.hasMorePlayers ? _loadMore : null,
+                      onSelectPlayer: _selectPlayer,
+                      onToggleBasket: _toggleBasket,
+                      onBuyNow:
+                          (GtexMarketPlayerView player) =>
+                              widget.onOpenPlayer(player.playerId),
+                    ),
+                  ),
+                ],
               );
             },
           ),

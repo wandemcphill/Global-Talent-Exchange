@@ -5,6 +5,7 @@ import '../../controllers/referral_controller.dart';
 import '../../models/creator_models.dart';
 import '../../models/referral_models.dart';
 import '../../ui_gtex/ui_gtex.dart';
+import '../../ui_gtex/components/gtex_football_command_pulse.dart';
 
 enum _StudioModule { overview, creator, referrals, competitions, earnings }
 
@@ -110,7 +111,54 @@ class _GtexStudioHubScreenV2State extends State<GtexStudioHubScreenV2> {
               ),
           ],
           leftPanel: _buildLeftPanel(context),
-          detail: _buildDetail(context),
+          detail: Column(
+            children: <Widget>[
+              GtexFootballCommandPulse(
+                kicker: 'Football Command Centre',
+                title: 'Creator operations cockpit',
+                accent: GtexColors.mint,
+                metrics: <GtexCommandPulseMetric>[
+                  GtexCommandPulseMetric(
+                    label: 'Creator access',
+                    value: widget.hasApprovedCreatorAccess ? 'Approved' : 'Pending',
+                    icon: Icons.verified_outlined,
+                    accent: GtexColors.gold,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Qualified referrals',
+                    value:
+                        '${widget.referralController.hub?.summary.qualifiedReferrals ?? widget.creatorController.profile?.stats.qualifiedReferrals ?? 0}',
+                    icon: Icons.group_add_outlined,
+                    accent: GtexColors.mint,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Competitions',
+                    value: '${widget.creatorController.profile?.stats.creatorCompetitions ?? 0}',
+                    icon: Icons.emoji_events_outlined,
+                    accent: GtexColors.cyan,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Creator wallet',
+                    value:
+                        widget.creatorController.financeSummary == null
+                            ? 'Syncing'
+                            : '${widget.creatorController.financeSummary!.walletAvailableBalance.toStringAsFixed(0)} ${widget.creatorController.financeSummary!.walletCurrency}',
+                    icon: Icons.account_balance_wallet_outlined,
+                    accent: GtexColors.gold,
+                  ),
+                ],
+                trailing: Text(
+                  widget.hasApprovedCreatorAccess ? 'CREATOR ACTIVE' : 'ACCESS PENDING',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: GtexColors.textMuted,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              Expanded(child: _buildDetail(context)),
+            ],
+          ),
           rightPanel: _buildRightPanel(context),
         );
       },

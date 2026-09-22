@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.dart';
 import 'package:gte_frontend/features/club_lifecycle_redesign/club_lifecycle_redesign.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
+import 'package:gte_frontend/ui_gtex/components/gtex_football_command_pulse.dart';
 
 import '../models/gtex_club_ownership_models.dart';
 import '../models/gtex_club_redesign_models.dart';
@@ -171,30 +172,75 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
                 (GtexClubOwnerSection section) => section.description,
             onSelected: _controller.selectOwnerSection,
           ),
-          detail: _OwnerDetail(
-            snapshot: snapshot,
-            section: _controller.ownerSection,
-            lifecycleDashboard: widget.lifecycleDashboard,
-            lifecycleLoading: widget.lifecycleLoading,
-            lifecycleError: widget.lifecycleError,
-            onRefreshLifecycle: widget.onRefreshLifecycle,
-            onSyncSquadRegistration: widget.onSyncSquadRegistration,
-            onSubmitSquadRegistration: widget.onSubmitSquadRegistration,
-            onLockSquadRegistration: widget.onLockSquadRegistration,
-            onAdvanceLifecycle: widget.onAdvanceLifecycle,
-            growthDashboard: widget.growthDashboard,
-            growthLoading: widget.growthLoading,
-            growthError: widget.growthError,
-            onRefreshGrowth: widget.onRefreshGrowth,
-            onHireStaff: widget.onHireStaff,
-            onGenerateAcademyProspects: widget.onGenerateAcademyProspects,
-            onOfferAcademyContract: widget.onOfferAcademyContract,
-            onPromoteAcademyProspect: widget.onPromoteAcademyProspect,
-            clubOwnership: widget.clubOwnership,
-            clubOwnershipLoading: widget.clubOwnershipLoading,
-            clubOwnershipError: widget.clubOwnershipError,
-            onRefreshClubOwnership: widget.onRefreshClubOwnership,
-            onOpenClubShareMarket: widget.onOpenClubShareMarket,
+          detail: Column(
+            children: <Widget>[
+              GtexFootballCommandPulse(
+                kicker: 'Football Command Centre',
+                title: 'Club owner operations cockpit',
+                accent: GtexColors.pitch,
+                metrics: <GtexCommandPulseMetric>[
+                  GtexCommandPulseMetric(
+                    label: 'Club wallet',
+                    value: gtexFormatCredits(snapshot.finances.walletCredits),
+                    icon: Icons.account_balance_wallet_outlined,
+                    accent: GtexColors.pitch,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Squad value',
+                    value: gtexFormatCredits(snapshot.finances.squadValueCredits),
+                    icon: Icons.groups_2_outlined,
+                    accent: GtexColors.cyan,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Open orders',
+                    value: gtexFormatCredits(snapshot.finances.openOrdersCredits),
+                    icon: Icons.receipt_long_outlined,
+                    accent: GtexColors.gold,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Monthly revenue',
+                    value: gtexFormatCredits(snapshot.finances.monthlyRevenueCredits),
+                    icon: Icons.trending_up_outlined,
+                    accent: GtexColors.mint,
+                  ),
+                ],
+                trailing: Text(
+                  'CLUB OWNER',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: GtexColors.textMuted,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              Expanded(
+                child: _OwnerDetail(
+                  snapshot: snapshot,
+                  section: _controller.ownerSection,
+                  lifecycleDashboard: widget.lifecycleDashboard,
+                  lifecycleLoading: widget.lifecycleLoading,
+                  lifecycleError: widget.lifecycleError,
+                  onRefreshLifecycle: widget.onRefreshLifecycle,
+                  onSyncSquadRegistration: widget.onSyncSquadRegistration,
+                  onSubmitSquadRegistration: widget.onSubmitSquadRegistration,
+                  onLockSquadRegistration: widget.onLockSquadRegistration,
+                  onAdvanceLifecycle: widget.onAdvanceLifecycle,
+                  growthDashboard: widget.growthDashboard,
+                  growthLoading: widget.growthLoading,
+                  growthError: widget.growthError,
+                  onRefreshGrowth: widget.onRefreshGrowth,
+                  onHireStaff: widget.onHireStaff,
+                  onGenerateAcademyProspects: widget.onGenerateAcademyProspects,
+                  onOfferAcademyContract: widget.onOfferAcademyContract,
+                  onPromoteAcademyProspect: widget.onPromoteAcademyProspect,
+                  clubOwnership: widget.clubOwnership,
+                  clubOwnershipLoading: widget.clubOwnershipLoading,
+                  clubOwnershipError: widget.clubOwnershipError,
+                  onRefreshClubOwnership: widget.onRefreshClubOwnership,
+                  onOpenClubShareMarket: widget.onOpenClubShareMarket,
+                ),
+              ),
+            ],
           ),
           rightPanel: GtexClubRightRail(snapshot: snapshot, ownerFacing: true),
           actions: <Widget>[

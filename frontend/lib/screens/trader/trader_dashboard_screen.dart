@@ -10,6 +10,8 @@ import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
+import 'package:gte_frontend/ui_gtex/components/gtex_football_command_pulse.dart';
+import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 
 class TraderDashboardScreen extends StatelessWidget {
   const TraderDashboardScreen({
@@ -318,6 +320,45 @@ class _TraderOverviewBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        GtexFootballCommandPulse(
+          kicker: 'Football Command Centre',
+          title: 'Coin trader operations cockpit',
+          accent: GtexColors.gold,
+          metrics: <GtexCommandPulseMetric>[
+            GtexCommandPulseMetric(
+              label: 'Portfolio value',
+              value: _compactNumber(overview.portfolioValue),
+              icon: Icons.account_balance_wallet_outlined,
+              accent: GtexColors.gold,
+            ),
+            GtexCommandPulseMetric(
+              label: 'GTEX Coin',
+              value: '${_fixedPrice(overview.gtexCoinPrice)} ${overview.profile.preferredCurrency}',
+              icon: Icons.currency_exchange_outlined,
+              accent: GtexColors.gold,
+            ),
+            GtexCommandPulseMetric(
+              label: 'Daily P/L',
+              value: _signedAmount(overview.dailyPl),
+              icon: Icons.trending_up_outlined,
+              accent: overview.dailyPl >= 0 ? GtexColors.pitch : GtexColors.red,
+            ),
+            GtexCommandPulseMetric(
+              label: 'Trading volume',
+              value: '${_compactCurrency(overview.tradingVolume)} ${overview.profile.preferredCurrency}',
+              icon: Icons.swap_vert_outlined,
+              accent: GtexColors.cyan,
+            ),
+          ],
+          trailing: Text(
+            'COIN TRADER',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: GtexColors.textMuted,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
         _TopStrip(overview: overview),
         const SizedBox(height: 18),
         _MarketGrid(overview: overview),
