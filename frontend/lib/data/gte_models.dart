@@ -561,66 +561,22 @@ class GteUserSignupRequest {
     required this.username,
     required this.email,
     required this.password,
-    required this.country,
-    required this.state,
-    required this.city,
-    required this.clubName,
-    required this.clubShortTag,
-    required this.clubCountry,
-    required this.clubState,
-    required this.clubLocality,
-    required this.clubType,
-    required this.footballIdentity,
-    this.compliance,
-    this.position,
-    this.dominantFoot,
-    this.heightCm,
-    this.jerseyNumber,
-    this.preferredRole,
+    this.phoneNumber,
   });
 
   final String fullName;
   final String username;
   final String email;
   final String password;
-  final String country;
-  final String state;
-  final String city;
-  final String clubName;
-  final String clubShortTag;
-  final String clubCountry;
-  final String clubState;
-  final String clubLocality;
-  final String clubType;
-  final String footballIdentity;
-  final GteComplianceSignupPayload? compliance;
-  final String? position;
-  final String? dominantFoot;
-  final int? heightCm;
-  final int? jerseyNumber;
-  final String? preferredRole;
+  final String? phoneNumber;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'full_name': fullName,
     'username': username,
     'email': email,
     'password': password,
-    'country': country,
-    'state': state,
-    'city': city,
-    'club_name': clubName,
-    'club_short_tag': clubShortTag,
-    'club_country': clubCountry,
-    'club_state': clubState,
-    'club_locality': clubLocality,
-    'club_type': clubType,
-    'football_identity': footballIdentity,
-    if (position != null) 'position': position,
-    if (dominantFoot != null) 'dominant_foot': dominantFoot,
-    if (heightCm != null) 'height_cm': heightCm,
-    if (jerseyNumber != null) 'jersey_number': jerseyNumber,
-    if (preferredRole != null) 'preferred_role': preferredRole,
-    if (compliance != null) 'compliance': compliance!.toJson(),
+    if (phoneNumber != null && phoneNumber!.trim().isNotEmpty)
+      'phone_number': phoneNumber!.trim(),
   };
 }
 

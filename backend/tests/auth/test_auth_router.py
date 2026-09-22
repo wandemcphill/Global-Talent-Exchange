@@ -427,9 +427,10 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     bootstrap = bootstrap_response.json()["data"]
     _assert_no_synthetic_markers(bootstrap)
     assert bootstrap["user"]["id"] == refreshed["user"]["id"]
-    assert bootstrap["club"]["owner_user_id"] == refreshed["user"]["id"]
+    assert bootstrap["onboarding"]["has_club"] is False
+    assert bootstrap["onboarding"]["requires_club"] is True
+    assert bootstrap["club"] is None
     assert bootstrap["wallet"]["currency"] == "coin"
-    assert bootstrap["compliance"]["country_code"] == "NG"
     assert "players.view" in bootstrap["permissions"]
     assert "user" in bootstrap["roles"]
     assert "club_owner" in bootstrap["roles"]
@@ -496,9 +497,8 @@ def test_refresh_logout_and_session_bootstrap_flow(app_client) -> None:
     assert revoked_bootstrap.status_code == 401
 
 
-def test_user_creator_and_trader_signup_sessions_include_public_account_type(app_client) -> None:
+def test_all_public_signup_aliases_create_normal_user_accounts(app_client) -> None:
     app, client = app_client
-    trader_secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
     signups = [
         (
             "/auth/signup/user",
@@ -508,7 +508,6 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(app
                 full_name="Account Type User",
                 password=TEST_PASSWORD,
             ),
-            "user",
         ),
         (
             "/auth/signup/creator",
@@ -518,7 +517,6 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(app
                 creator_name="Account Type Creator",
                 password=TEST_PASSWORD,
             ),
-            "creator",
         ),
         (
             "/auth/signup/trader",
@@ -527,20 +525,16 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(app
                 trading_alias="account_type_trader",
                 full_name="Account Type Trader",
                 password=TEST_PASSWORD,
-                totp_secret=trader_secret,
-                totp_code=_current_totp(trader_secret),
             ),
-            "coin_trader",
         ),
     ]
 
-    for path, payload_factory, expected_account_type in signups:
-        payload = payload_factory()
-        response = client.post(path, json=payload)
+    for path, payload_factory in signups:
+        response = client.post(path, json=payload_factory())
         assert response.status_code == 201, response.text
         issued = response.json()
-        assert issued["user"]["account_type"] == expected_account_type
-        assert decode_access_token(issued["access_token"])["account_type"] == expected_account_type
+        assert issued["user"]["account_type"] == "user"
+        assert decode_access_token(issued["access_token"])["account_type"] == "user"
         bootstrap_response = client.get(
             "/api/v2/session/bootstrap",
             headers={
@@ -553,70 +547,60 @@ def test_user_creator_and_trader_signup_sessions_include_public_account_type(app
         )
         assert bootstrap_response.status_code == 200, bootstrap_response.text
         bootstrap = bootstrap_response.json()["data"]
-        assert bootstrap["account_type"] == expected_account_type
-        assert bootstrap["effective_role"] in {
-            issued["user"]["role"],
-            "club",
-            "scout",
-            "agent",
-        }
-        assert bootstrap["onboarding"]["suggested_route"].startswith("/app/")
-        if expected_account_type == "creator":
-            assert bootstrap["creator"]["status"] == "active"
-            assert bootstrap["coin_trader"] is None
-            assert bootstrap["club"] is None
-            assert "club_owner" not in bootstrap["roles"]
-            assert bootstrap["onboarding"]["requires_club"] is False
-        elif expected_account_type == "coin_trader":
-            assert bootstrap["creator"] is None
-            assert bootstrap["club"] is None
-            assert "club_owner" not in bootstrap["roles"]
-            assert bootstrap["onboarding"]["requires_club"] is False
-            assert "coin_trader_marketplace" in bootstrap["onboarding"]["available_actions"]
-        else:
-            assert bootstrap["club"]["owner_user_id"] == issued["user"]["id"]
-            assert bootstrap["onboarding"]["has_club"] is True
+        assert bootstrap["account_type"] == "user"
+        assert bootstrap["onboarding"]["has_club"] is False
+        assert bootstrap["onboarding"]["requires_club"] is True
+        assert bootstrap["creator"] is None
+        assert bootstrap["coin_trader"] is None
+        assert bootstrap["club"] is None
 
     with app.state.session_factory() as session:
-        creator = session.scalar(select(User).where(User.email == "account-type-creator@example.com"))
-        assert creator is not None
-        assert session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == creator.id)) is not None
-        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == creator.id)) is None
+        user = session.scalar(select(User).where(User.email == "account-type-user@example.com"))
+        creator_alias_user = session.scalar(select(User).where(User.email == "account-type-creator@example.com"))
+        trader_alias_user = session.scalar(select(User).where(User.email == "account-type-trader@example.com"))
+        assert user is not None
+        assert creator_alias_user is not None
+        assert trader_alias_user is not None
+        assert session.scalar(select(CreatorProfile).where(CreatorProfile.user_id == creator_alias_user.id)) is None
+        assert session.scalar(select(ClubProfile).where(ClubProfile.owner_user_id == user.id)) is None
 
 
-def test_public_signup_rejects_external_admin_account_type(app_client) -> None:
+def test_public_signup_ignores_client_selected_account_type(app_client) -> None:
     _app, client = app_client
     payload = user_signup_payload(
-        email="external-admin@example.com",
-        username="external_admin",
-        full_name="External Admin",
+        email="external-role@example.com",
+        username="external_role",
+        full_name="External Role",
         password=TEST_PASSWORD,
     )
     payload["account_type"] = "admin"
 
     response = client.post("/auth/signup/user", json=payload)
 
-    assert response.status_code == 422, response.text
-    assert "account_type" in response.text
+    assert response.status_code == 201, response.text
+    assert response.json()["user"]["account_type"] == "user"
 
 
-def test_trader_signup_requires_proof_of_address(app_client) -> None:
+def test_legacy_trader_signup_fields_are_ignored_at_public_registration(app_client) -> None:
     _app, client = app_client
     secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
     payload = trader_signup_payload(
-        email="missing-address-trader@example.com",
-        trading_alias="missing_address_trader",
-        full_name="Missing Address Trader",
+        email="legacy-fields-trader@example.com",
+        trading_alias="legacy_fields_trader",
+        full_name="Legacy Fields Trader",
         password=TEST_PASSWORD,
         totp_secret=secret,
         totp_code=_current_totp(secret),
     )
-    payload["compliance"].pop("proof_of_address_attachment_id")
+    payload["preferred_currency"] = "USD"
+    payload["country"] = "NG"
+    payload["trading_experience"] = "professional"
 
     response = client.post("/auth/signup/trader", json=payload)
 
-    assert response.status_code == 422, response.text
-    assert "proof_of_address_attachment_id" in response.text
+    assert response.status_code == 201, response.text
+    issued = response.json()
+    assert issued["user"]["account_type"] == "user"
 
 
 def test_legacy_register_function_returns_gone(session) -> None:

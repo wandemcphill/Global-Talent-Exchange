@@ -6,6 +6,7 @@ from time import perf_counter
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from pydantic import ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -17,7 +18,6 @@ from app.auth.schemas import (
     ActionStatusResponse,
     ChangePasswordRequest,
     ConfirmEmailRequest,
-    CreatorSignupRequest,
     CurrentUserResponse,
     CurrentUserUpdateRequest,
     LoginRequest,
@@ -32,8 +32,6 @@ from app.auth.schemas import (
     SessionBootstrapResponse,
     SessionBootstrapSessionView,
     TokenResponse,
-    TraderSignupRequest,
-    UserClubSignupRequest,
 )
 from app.auth.service import (
     AuthError,
@@ -53,7 +51,6 @@ from app.models.user import PublicAccountType, User
 from app.policies.schemas import PolicyRequirementSummary, UserComplianceStatus
 from app.policies.service import PolicyService
 from app.schemas.club_identity_core import ClubProfileCore
-from app.trader.service import TraderAccessError, TraderService
 from app.treasury.service import TreasuryService
 from app.wallets.funding_service import WalletFundingService
 from app.wallets.providers.registry import provider_live_deposit_ready
@@ -66,6 +63,10 @@ router = APIRouter(tags=["auth"])
 legacy_router = APIRouter(prefix="/auth")
 api_router = APIRouter(prefix="/api/auth")
 api_v2_router = APIRouter(prefix="/api/v2/auth")
+
+
+class _PublicSignupRequest(RegisterRequest):
+    model_config = ConfigDict(extra="ignore")
 
 
 class _AuthRouteTelemetry:
@@ -555,54 +556,40 @@ def _submit_signup_compliance(
     )
 
 
-@legacy_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-@api_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-@api_v2_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def signup_user(
-    payload: UserClubSignupRequest,
-    session: Session = Depends(get_session),
-    request: Request = None,
+def _signup_normal_account(
+    *,
+    payload: RegisterRequest,
+    session: Session,
+    request: Request | None,
+    flow: str,
 ) -> TokenResponse:
     service = _build_auth_service(request)
+    telemetry = _AuthRouteTelemetry(flow)
     analytics = AnalyticsService()
+    user: User | None = None
     issued_session: IssuedAuthSession | None = None
     confirmation_code: str | None = None
-    telemetry = _AuthRouteTelemetry("signup_user")
-    user: User | None = None
+
     try:
         analytics.track_event(
-            session, name="signup_started", user_id=None, metadata={"email": payload.email, "account_type": "user"}
+            session,
+            name="signup_started",
+            user_id=None,
+            metadata={"email": payload.email, "account_type": "user", "flow": flow},
         )
         user = service.register_user(
             session,
             email=payload.email,
             full_name=payload.full_name,
-            phone_number=None,
+            phone_number=payload.phone_number,
             is_over_18=True,
-            region_code=payload.country[:8],
+            region_code=None,
             username=payload.username,
             password=payload.password,
             display_name=payload.full_name,
             account_type=PublicAccountType.USER,
             timing_recorder=telemetry.capture,
         )
-        service.create_explicit_club_profile(
-            session,
-            user,
-            club_name=payload.club_name,
-            short_name=payload.club_short_tag,
-            club_type=payload.club_type,
-            country_code=payload.club_country,
-            region_name=payload.club_state,
-            city_name=payload.club_locality,
-            crest_asset_ref=payload.crest_asset_ref,
-            primary_color=payload.primary_color,
-            secondary_color=payload.secondary_color,
-        )
-        user.preferred_position = payload.position
-        user.nationality = payload.country
-        # KYC is intentionally NOT submitted at signup. Users get instant access; KYC is
-        # required only when they initiate a withdrawal (enforced in the treasury flow).
         issued_session, confirmation_code = _issue_signup_session(
             service=service,
             session=session,
@@ -610,7 +597,12 @@ def signup_user(
             user=user,
             telemetry=telemetry,
         )
-        analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={"account_type": "user"})
+        analytics.track_event(
+            session,
+            name="signup_completed",
+            user_id=user.id,
+            metadata={"account_type": "user", "flow": flow},
+        )
         session.commit()
         session.refresh(user)
     except DuplicateUserError as exc:
@@ -623,13 +615,21 @@ def signup_user(
         _rollback_with_telemetry(session, telemetry)
         raise
     else:
-        if confirmation_code is not None:
+        if confirmation_code is not None and user is not None:
             try:
                 email_started_at = perf_counter()
-                service.send_signup_confirmation_email(user=user, confirmation_code=confirmation_code)
+                service.send_signup_confirmation_email(
+                    user=user,
+                    confirmation_code=confirmation_code,
+                )
                 telemetry.mark("email.signup_confirmation_ms", email_started_at)
             except Exception as exc:
-                _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
+                _log_email_dispatch_exception(
+                    flow="signup_confirmation",
+                    recipient=user.email,
+                    exc=exc,
+                )
+
     return _build_token_response(
         service=service,
         session=session,
@@ -637,6 +637,22 @@ def signup_user(
         telemetry=telemetry,
         user=user,
         issued_session=issued_session,
+    )
+
+
+@legacy_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@api_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@api_v2_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup_user(
+    payload: _PublicSignupRequest,
+    session: Session = Depends(get_session),
+    request: Request = None,
+) -> TokenResponse:
+    return _signup_normal_account(
+        payload=payload,
+        session=session,
+        request=request,
+        flow="signup_user",
     )
 
 
@@ -644,75 +660,15 @@ def signup_user(
 @api_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @api_v2_router.post("/signup/creator", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def signup_creator(
-    payload: CreatorSignupRequest,
+    payload: _PublicSignupRequest,
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
-    service = _build_auth_service(request)
-    telemetry = _AuthRouteTelemetry("signup_creator")
-    user: User | None = None
-    issued_session: IssuedAuthSession | None = None
-    confirmation_code: str | None = None
-    try:
-        user = service.register_user(
-            session,
-            email=payload.email,
-            full_name=payload.creator_name,
-            phone_number=None,
-            is_over_18=True,
-            region_code=payload.country[:8],
-            username=payload.username,
-            password=payload.password,
-            display_name=payload.creator_name,
-            account_type=PublicAccountType.CREATOR,
-            timing_recorder=telemetry.capture,
-        )
-        session.add(
-            CreatorProfile(
-                user_id=user.id,
-                handle=payload.username,
-                display_name=payload.creator_name,
-                tier="community",
-                status=CreatorProfileStatus.ACTIVE,
-                payout_config_json={
-                    "category": payload.category,
-                    "country": payload.country,
-                    "main_club_supported": payload.main_club_supported,
-                    "primary_language": payload.primary_language,
-                    "avatar_asset_ref": payload.avatar_asset_ref,
-                    "banner_asset_ref": payload.banner_asset_ref,
-                    "monetization": payload.monetization,
-                },
-            )
-        )
-        issued_session, confirmation_code = _issue_signup_session(
-            service=service,
-            session=session,
-            request=request,
-            user=user,
-            telemetry=telemetry,
-        )
-        session.commit()
-        session.refresh(user)
-    except DuplicateUserError as exc:
-        _rollback_with_telemetry(session, telemetry)
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except AuthError as exc:
-        _rollback_with_telemetry(session, telemetry)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    else:
-        if confirmation_code is not None:
-            try:
-                service.send_signup_confirmation_email(user=user, confirmation_code=confirmation_code)
-            except Exception as exc:
-                _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
-    return _build_token_response(
-        service=service,
+    return _signup_normal_account(
+        payload=payload,
         session=session,
         request=request,
-        telemetry=telemetry,
-        user=user,
-        issued_session=issued_session,
+        flow="signup_creator_alias",
     )
 
 
@@ -720,76 +676,15 @@ def signup_creator(
 @api_router.post("/signup/trader", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @api_v2_router.post("/signup/trader", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def signup_trader(
-    payload: TraderSignupRequest,
+    payload: _PublicSignupRequest,
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
-    service = _build_auth_service(request)
-    telemetry = _AuthRouteTelemetry("signup_trader")
-    user: User | None = None
-    issued_session: IssuedAuthSession | None = None
-    confirmation_code: str | None = None
-    try:
-        user = service.register_user(
-            session,
-            email=payload.email,
-            full_name=payload.full_name,
-            phone_number=payload.phone_number,
-            is_over_18=True,
-            region_code=payload.country[:8],
-            username=payload.trading_alias,
-            password=payload.password,
-            display_name=payload.trading_alias,
-            account_type=PublicAccountType.COIN_TRADER,
-            timing_recorder=telemetry.capture,
-        )
-        trader_service = TraderService(session)
-        trader_service.ensure_profile(
-            user,
-            trading_alias=payload.trading_alias,
-            preferred_currency=payload.preferred_currency,
-            trading_experience=payload.trading_experience,
-            interests=payload.interests,
-            wallet_label=payload.wallet_label,
-        )
-        trader_service.ensure_security(
-            user,
-            totp_secret=payload.totp_secret,
-            totp_code=payload.totp_code,
-            recovery_phrase_hash=payload.recovery_phrase_hash,
-            security_pin_hash=payload.security_pin_hash,
-        )
-        # KYC is intentionally NOT submitted at signup. Traders get instant access; KYC is
-        # required only when they initiate a withdrawal (enforced in the treasury flow).
-        issued_session, confirmation_code = _issue_signup_session(
-            service=service,
-            session=session,
-            request=request,
-            user=user,
-            telemetry=telemetry,
-        )
-        session.commit()
-        session.refresh(user)
-    except (DuplicateUserError, TraderAccessError) as exc:
-        _rollback_with_telemetry(session, telemetry)
-        status_code = status.HTTP_409_CONFLICT if isinstance(exc, DuplicateUserError) else status.HTTP_400_BAD_REQUEST
-        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
-    except AuthError as exc:
-        _rollback_with_telemetry(session, telemetry)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    else:
-        if confirmation_code is not None:
-            try:
-                service.send_signup_confirmation_email(user=user, confirmation_code=confirmation_code)
-            except Exception as exc:
-                _log_email_dispatch_exception(flow="signup_confirmation", recipient=user.email, exc=exc)
-    return _build_token_response(
-        service=service,
+    return _signup_normal_account(
+        payload=payload,
         session=session,
         request=request,
-        telemetry=telemetry,
-        user=user,
-        issued_session=issued_session,
+        flow="signup_trader_alias",
     )
 
 
