@@ -11,6 +11,7 @@ import 'package:gte_frontend/router/gtex_auth_routes.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/ui_gtex/components/gtex_football_command_pulse.dart';
+import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 
 class TraderDashboardScreen extends StatelessWidget {
   const TraderDashboardScreen({
