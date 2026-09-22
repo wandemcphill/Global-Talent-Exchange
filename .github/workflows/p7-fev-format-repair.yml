@@ -1,0 +1,35 @@
+name: P7-FEV format repair
+
+on:
+  push:
+    branches:
+      - p7-fev-current-main-verification
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply repository Prettier
+        run: |
+          npm exec -- prettier --write             qa/playwright/playwright.config.mjs             qa/playwright/tests/helpers.mjs             qa/playwright/tests/p7_fe_audio_shell.spec.mjs             qa/playwright/tests/p7_fe_authed_shell.spec.mjs             qa/playwright/tests/p7_fe_club_squad.spec.mjs             qa/playwright/tests/p7_fe_competition_match.spec.mjs             qa/playwright/tests/p7_fe_extended.spec.mjs             qa/playwright/tests/p7_fe_market_portfolio.spec.mjs
+      - name: Commit formatted files and remove repair workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/playwright/playwright.config.mjs qa/playwright/tests
+          git rm .github/workflows/p7-fev-format-repair.yml
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "style(p7-fev): apply repository Prettier output"
+          git push origin HEAD:p7-fev-current-main-verification
