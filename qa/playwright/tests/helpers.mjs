@@ -40,40 +40,20 @@ export async function signIn(page) {
 
   const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/" : "/";
   await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
-  await page.locator("flt-glass-pane, flutter-view, canvas").first().waitFor({
-    timeout: 120_000,
-  });
-  await page.waitForTimeout(1000);
 
-  const viewport = page.viewportSize();
-  if (viewport && viewport.width < 780) {
-    await page.locator("flutter-view, flt-glass-pane").first().click({ force: true });
-    for (let i = 0; i < 5; i++) {
-      await page.keyboard.press("PageDown");
-      await page.waitForTimeout(50);
-    }
-  }
-
-  await page.evaluate(() => {
-    document.querySelector("flt-semantics-placeholder")?.click();
-  });
-  await page.waitForTimeout(500);
-
-  const emailInput = page.locator("input").first();
-  await expect(emailInput).toBeVisible({ timeout: 30_000 });
-  await emailInput.focus();
+  const emailInput = page.locator("input").nth(0);
+  await expect(emailInput).toBeVisible({ timeout: 120_000 });
   await emailInput.fill(process.env.GTEX_E2E_EMAIL);
-  await emailInput.dispatchEvent("input");
 
   const passwordInput = page.locator("input").nth(1);
-  await passwordInput.focus();
+  await expect(passwordInput).toBeVisible({ timeout: 30_000 });
   await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
-  await passwordInput.dispatchEvent("input");
 
   const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
   await expect(enterBtn).toBeVisible({ timeout: 30_000 });
   await enterBtn.click({ force: true });
-  await expect(page).toHaveURL(/\/(?:#\/)?app\/home/, { timeout: 60_000 });
+
+  await expect(page).toHaveURL(/\\/(?:#\\/)?app\\/home/, { timeout: 60_000 });
 }
 
 export async function visitAuthedRoute(page, route) {
