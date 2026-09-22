@@ -38,7 +38,7 @@ export async function attachDiagnostics(testInfo) {
 export async function signIn(page) {
   if (!credentialsConfigured) return;
 
-  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/auth/login" : "/auth/login";
+  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/" : "/";
   await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
   await page.locator("flt-glass-pane, flutter-view, canvas").first().waitFor({
     timeout: 120_000,
@@ -73,7 +73,7 @@ export async function signIn(page) {
   const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
   await expect(enterBtn).toBeVisible({ timeout: 30_000 });
   await enterBtn.click({ force: true });
-  await page.waitForTimeout(2000);
+  await expect(page).toHaveURL(/\/(?:#\/)?app\/home/, { timeout: 60_000 });
 }
 
 export async function visitAuthedRoute(page, route) {
