@@ -38,16 +38,16 @@ jobs:
         env:
           DATABASE_URL: "sqlite+pysqlite:////tmp/gtex-p7-fev.db"
           GTE_DATABASE_URL: "sqlite+pysqlite:////tmp/gtex-p7-fev.db"
-          GTE_AUTH_SECRET: "gtex-p7-fev-test-auth-secret-20260922"
-          GTE_MEDIA_SIGNING_SECRET: "gtex-p7-fev-test-media-secret-20260922"
+          GTE_AUTH_SECRET: "p7-fev-auth-${{ github.run_id }}"
+          GTE_MEDIA_SIGNING_SECRET: "p7-fev-media-${{ github.run_id }}"
         run: python backend/scripts/bootstrap_demo.py
 
       - name: Start FastAPI backend
         env:
           DATABASE_URL: "sqlite+pysqlite:////tmp/gtex-p7-fev.db"
           GTE_DATABASE_URL: "sqlite+pysqlite:////tmp/gtex-p7-fev.db"
-          GTE_AUTH_SECRET: "gtex-p7-fev-test-auth-secret-20260922"
-          GTE_MEDIA_SIGNING_SECRET: "gtex-p7-fev-test-media-secret-20260922"
+          GTE_AUTH_SECRET: "p7-fev-auth-${{ github.run_id }}"
+          GTE_MEDIA_SIGNING_SECRET: "p7-fev-media-${{ github.run_id }}"
         run: |
           nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > /tmp/gtex-api.log 2>&1 &
           for i in $(seq 1 60); do
