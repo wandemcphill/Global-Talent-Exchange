@@ -35,9 +35,15 @@ jobs:
         run: python -m pip install -r backend/requirements.txt
 
       - name: Bootstrap deterministic GTEX browser data
+        env:
+          DATABASE_URL: "sqlite+pysqlite:////tmp/gtex-p7-fev.db"
+          GTE_DATABASE_URL: "sqlite+pysqlite:////tmp/gtex-p7-fev.db"
         run: python backend/scripts/bootstrap_demo.py
 
       - name: Start FastAPI backend
+        env:
+          DATABASE_URL: "sqlite+pysqlite:////tmp/gtex-p7-fev.db"
+          GTE_DATABASE_URL: "sqlite+pysqlite:////tmp/gtex-p7-fev.db"
         run: |
           nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > /tmp/gtex-api.log 2>&1 &
           for i in $(seq 1 60); do
