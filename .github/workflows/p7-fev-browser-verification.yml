@@ -1,0 +1,81 @@
+name: P7-FEV Browser Verification
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "backend/**"
+      - "qa/playwright/**"
+      - ".github/workflows/p7-fev-browser-verification.yml"
+  workflow_dispatch:
+
+jobs:
+  browser-verification:
+    name: Playwright browser verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.5"
+          channel: stable
+          cache: true
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+
+      - name: Bootstrap deterministic GTEX browser data
+        run: python backend/scripts/bootstrap_demo.py
+
+      - name: Start FastAPI backend
+        run: |
+          nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > /tmp/gtex-api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/gtex-api.log
+          exit 1
+
+      - name: Install Flutter dependencies
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Install Playwright dependencies
+        working-directory: qa/playwright
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: qa/playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Run P7-FEV browser matrix
+        working-directory: qa/playwright
+        env:
+          CI: "true"
+          GTEX_E2E_API_BASE_URL: "http://127.0.0.1:8000"
+          GTEX_E2E_EMAIL: "seed.scout@gte.local"
+          GTEX_E2E_PASSWORD: "DemoPass123"
+          GTEX_E2E_DESIGN_LAB: "1"
+        run: npm test
+
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtex-p7-fev-browser-evidence
+          path: qa/playwright/test-results/
+          if-no-files-found: warn
+          retention-days: 14
