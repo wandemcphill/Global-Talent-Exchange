@@ -1128,9 +1128,53 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ),
             ),
             const SizedBox(height: 18),
+            GtexFootballCommandPulse(
+              kicker: 'Football Command Centre',
+              title: isAuthenticated ? 'Your GTEX user cockpit' : 'GTEX discovery cockpit',
+              accent: GtexColors.pitch,
+              metrics: <GtexCommandPulseMetric>[
+                GtexCommandPulseMetric(
+                  label: 'Competitions',
+                  value:
+                      _competitionController.isLoadingDiscovery
+                          ? 'Syncing'
+                          : '${_competitionController.competitions.length}',
+                  icon: Icons.emoji_events_outlined,
+                  accent: GtexColors.gold,
+                ),
+                GtexCommandPulseMetric(
+                  label: 'Open orders',
+                  value:
+                      isAuthenticated
+                          ? '${widget.exchangeController.openOrders.length}'
+                          : 'Sign in',
+                  icon: Icons.receipt_long_outlined,
+                  accent: GtexColors.cyan,
+                ),
+                GtexCommandPulseMetric(
+                  label: 'Wallet',
+                  value: _capitalMetricLabel(),
+                  icon: Icons.account_balance_wallet_outlined,
+                  accent: GtexColors.gold,
+                ),
+                GtexCommandPulseMetric(
+                  label: 'Next lane',
+                  value: isAuthenticated ? 'Club setup' : 'Explore first',
+                  icon: Icons.route_outlined,
+                  accent: GtexColors.mint,
+                ),
+              ],
+              trailing: Text(
+                isAuthenticated ? 'USER' : 'GUEST',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: GtexColors.textMuted,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
             GtexLiveTickerBar(
-              accentColor: GteShellTheme.accent,
-              items: const <String>[
+              accentColor: GteShellTheme.accent,              items: const <String>[
                 'Transfer news, live matches, creators, clubs, and markets are separated from Club HQ.',
                 'Club operations now open only from explicit club context.',
                 'National-team regens and country pipelines are visible from discovery.',
