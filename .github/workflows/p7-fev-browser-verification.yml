@@ -80,7 +80,14 @@ jobs:
           GTEX_E2E_EMAIL: "seed.scout@gte.local"
           GTEX_E2E_PASSWORD: "DemoPass123" # pragma: allowlist secret
           GTEX_E2E_DESIGN_LAB: "1"
-        run: npm test
+        run: >-
+          npx playwright test
+          tests/p7_fe_audio_shell.spec.mjs
+          tests/p7_fe_authed_shell.spec.mjs
+          tests/p7_fe_club_squad.spec.mjs
+          tests/p7_fe_competition_match.spec.mjs
+          tests/p7_fe_extended.spec.mjs
+          tests/p7_fe_market_portfolio.spec.mjs
 
       - name: Upload Playwright evidence
         if: always()
