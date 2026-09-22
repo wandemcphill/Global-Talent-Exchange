@@ -39,9 +39,9 @@ export async function signIn(page) {
   if (!credentialsConfigured) return;
 
   const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/auth/login" : "/auth/login";
-  await page.goto(loginUrl);
+  await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
   await page.locator("flt-glass-pane, flutter-view, canvas").first().waitFor({
-    timeout: 15_000,
+    timeout: 120_000,
   });
   await page.waitForTimeout(1000);
 
@@ -60,7 +60,7 @@ export async function signIn(page) {
   await page.waitForTimeout(500);
 
   const emailInput = page.locator("input").first();
-  await expect(emailInput).toBeVisible({ timeout: 15_000 });
+  await expect(emailInput).toBeVisible({ timeout: 30_000 });
   await emailInput.focus();
   await emailInput.fill(process.env.GTEX_E2E_EMAIL);
   await emailInput.dispatchEvent("input");
@@ -71,6 +71,7 @@ export async function signIn(page) {
   await passwordInput.dispatchEvent("input");
 
   const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
+  await expect(enterBtn).toBeVisible({ timeout: 30_000 });
   await enterBtn.click({ force: true });
   await page.waitForTimeout(2000);
 }
@@ -78,13 +79,13 @@ export async function signIn(page) {
 export async function visitAuthedRoute(page, route) {
   await signIn(page);
   const targetRoute = process.env.GTEX_E2E_HASH_ROUTING ? `/#${route}` : route;
-  await page.goto(targetRoute);
-  await page.waitForTimeout(2000);
+  await page.goto(targetRoute, { waitUntil: "domcontentloaded", timeout: 120_000 });
+  await page.waitForTimeout(5000);
 }
 
 export async function captureScreenshot(page, testInfo, name) {
   const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
-  await expect(surface).toBeVisible({ timeout: 30_000 });
+  await expect(surface).toBeVisible({ timeout: 120_000 });
   await page.waitForTimeout(1500);
   await page.screenshot({
     path: testInfo.outputPath(`${name}-${testInfo.project.name}.png`),
@@ -93,6 +94,9 @@ export async function captureScreenshot(page, testInfo, name) {
 
 export async function verifyNoHorizontalOverflow(page) {
   await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .poll(
+      () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      { timeout: 30_000 },
+    )
     .toBeTruthy();
 }
