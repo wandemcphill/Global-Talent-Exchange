@@ -268,19 +268,19 @@ class _GtexPlayerMarketRedesignScreenState
                     metrics: <GtexCommandPulseMetric>[
                       GtexCommandPulseMetric(
                         label: 'Listings loaded',
-                        value: '\${players.length}/\${widget.controller.marketTotalPlayerCount}',
+                        value: '${players.length}/${widget.controller.marketTotalPlayerCount}',
                         icon: Icons.groups_2_outlined,
                         accent: GtexColors.pitch,
                       ),
                       GtexCommandPulseMetric(
                         label: 'Watched',
-                        value: '\${widget.watchlistCount}',
+                        value: '${widget.watchlistCount}',
                         icon: Icons.visibility_outlined,
                         accent: GtexColors.cyan,
                       ),
                       GtexCommandPulseMetric(
                         label: 'Shortlist',
-                        value: '\${_basketState.items.length}',
+                        value: '${_basketState.items.length}',
                         icon: Icons.playlist_add_check_outlined,
                         accent: GtexColors.gold,
                       ),
