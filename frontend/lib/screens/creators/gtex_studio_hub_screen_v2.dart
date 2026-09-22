@@ -158,7 +158,8 @@ class _GtexStudioHubScreenV2State extends State<GtexStudioHubScreenV2> {
               const SizedBox(height: GtexSpacing.sm),
               Expanded(child: _buildDetail(context)),
             ],
-          ),          rightPanel: _buildRightPanel(context),
+          ),
+          rightPanel: _buildRightPanel(context),
         );
       },
     );
