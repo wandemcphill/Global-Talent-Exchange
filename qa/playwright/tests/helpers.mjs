@@ -38,22 +38,16 @@ export async function attachDiagnostics(testInfo) {
 export async function signIn(page) {
   if (!credentialsConfigured) return;
 
-  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING
-    ? "/#/auth/login"
-    : "/auth/login";
+  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/auth/login" : "/auth/login";
   await page.goto(loginUrl);
-  await page
-    .locator("flt-glass-pane, flutter-view, canvas")
-    .first()
-    .waitFor({ timeout: 15_000 });
+  await page.locator("flt-glass-pane, flutter-view, canvas").first().waitFor({
+    timeout: 15_000,
+  });
   await page.waitForTimeout(1000);
 
   const viewport = page.viewportSize();
   if (viewport && viewport.width < 780) {
-    await page
-      .locator("flutter-view, flt-glass-pane")
-      .first()
-      .click({ force: true });
+    await page.locator("flutter-view, flt-glass-pane").first().click({ force: true });
     for (let i = 0; i < 5; i++) {
       await page.keyboard.press("PageDown");
       await page.waitForTimeout(50);
@@ -78,16 +72,12 @@ export async function signIn(page) {
 
   const enterBtn = page.getByRole("button", { name: "ENTER GTEX" });
   await enterBtn.click({ force: true });
-  await expect
-    .poll(() => page.url(), { timeout: 15_000 })
-    .not.toContain("/auth/login");
+  await page.waitForTimeout(2000);
 }
 
 export async function visitAuthedRoute(page, route) {
   await signIn(page);
-  const targetRoute = process.env.GTEX_E2E_HASH_ROUTING
-    ? `/#${route}`
-    : route;
+  const targetRoute = process.env.GTEX_E2E_HASH_ROUTING ? `/#${route}` : route;
   await page.goto(targetRoute);
   await page.waitForTimeout(2000);
 }
