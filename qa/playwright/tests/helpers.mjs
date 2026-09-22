@@ -46,7 +46,7 @@ export async function signIn(page) {
 
   const accessibilityButton = page.locator('[aria-label="Enable accessibility"]').first();
   await expect(accessibilityButton).toBeVisible({ timeout: 120_000 });
-  await accessibilityButton.click({ force: true });
+  await accessibilityButton.evaluate((element) => element.click());
   await page.waitForTimeout(750);
 
   const emailInput = page.locator('input[aria-label="Email"]').first();
