@@ -96,13 +96,29 @@ def _restore_database_url() -> None:
 
 
 def _effective_database_url() -> str:
+    explicit_migration_url = os.environ.get("GTE_MIGRATION_DATABASE_URL")
+    if explicit_migration_url and explicit_migration_url.strip():
+        return normalize_database_url(explicit_migration_url)
+
     for candidate in (
         _database_url_override,
         os.environ.get("DATABASE_URL"),
         os.environ.get("GTE_DATABASE_URL"),
     ):
         if candidate and candidate.strip():
-            return normalize_database_url(candidate)
+            normalized = normalize_database_url(candidate)
+            # Supabase's shared transaction pooler (6543) is intended for
+            # short-lived application traffic. Alembic needs a session-style
+            # connection so DDL executes against a dedicated backend session.
+            # Reuse the same pooler host and credentials on the session port.
+            if ".pooler.supabase.com:6543/" in normalized:
+                normalized = normalized.replace(
+                    ".pooler.supabase.com:6543/",
+                    ".pooler.supabase.com:5432/",
+                    1,
+                )
+            return normalized
+
     raise RuntimeError("Alembic requires sqlalchemy.url, DATABASE_URL, or GTE_DATABASE_URL.")
 
 
