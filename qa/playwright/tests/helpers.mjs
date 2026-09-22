@@ -53,7 +53,7 @@ export async function signIn(page) {
   await expect(enterBtn).toBeVisible({ timeout: 30_000 });
   await enterBtn.click({ force: true });
 
-  await expect(page).toHaveURL(/\\/(?:#\\/)?app\\/home/, { timeout: 60_000 });
+  await expect(page).toHaveURL(/\/(?:#\/)?app\/home/, { timeout: 60_000 });
 }
 
 export async function visitAuthedRoute(page, route) {
