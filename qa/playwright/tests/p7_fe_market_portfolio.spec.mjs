@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   await collectBrowserDiagnostics(page, testInfo);
 });
 
-test.afterEach(async (_fixtures, testInfo) => {
+test.afterEach(async ({ page: _page }, testInfo) => {
   await attachDiagnostics(testInfo);
 });
 
