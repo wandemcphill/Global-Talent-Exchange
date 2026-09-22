@@ -1,6 +1,8 @@
 import { expect } from "@playwright/test";
 
-export const configured = Boolean(process.env.GTEX_E2E_BASE_URL);
+export const configured = Boolean(
+  process.env.GTEX_E2E_BASE_URL || process.env.GTEX_E2E_API_BASE_URL,
+);
 
 export const credentialsConfigured = Boolean(
   process.env.GTEX_E2E_EMAIL && process.env.GTEX_E2E_PASSWORD,
@@ -36,14 +38,22 @@ export async function attachDiagnostics(testInfo) {
 export async function signIn(page) {
   if (!credentialsConfigured) return;
 
-  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/auth/login" : "/auth/login";
+  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING
+    ? "/#/auth/login"
+    : "/auth/login";
   await page.goto(loginUrl);
-  await page.locator("flt-glass-pane, flutter-view, canvas").first().waitFor({ timeout: 15_000 });
+  await page
+    .locator("flt-glass-pane, flutter-view, canvas")
+    .first()
+    .waitFor({ timeout: 15_000 });
   await page.waitForTimeout(1000);
 
   const viewport = page.viewportSize();
   if (viewport && viewport.width < 780) {
-    await page.locator("flutter-view, flt-glass-pane").first().click({ force: true });
+    await page
+      .locator("flutter-view, flt-glass-pane")
+      .first()
+      .click({ force: true });
     for (let i = 0; i < 5; i++) {
       await page.keyboard.press("PageDown");
       await page.waitForTimeout(50);
@@ -75,7 +85,9 @@ export async function signIn(page) {
 
 export async function visitAuthedRoute(page, route) {
   await signIn(page);
-  const targetRoute = process.env.GTEX_E2E_HASH_ROUTING ? `/#${route}` : route;
+  const targetRoute = process.env.GTEX_E2E_HASH_ROUTING
+    ? `/#${route}`
+    : route;
   await page.goto(targetRoute);
   await page.waitForTimeout(2000);
 }
@@ -91,6 +103,10 @@ export async function captureScreenshot(page, testInfo, name) {
 
 export async function verifyNoHorizontalOverflow(page) {
   await expect
-    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    )
     .toBeTruthy();
 }
