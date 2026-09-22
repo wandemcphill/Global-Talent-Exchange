@@ -31,6 +31,8 @@ import 'package:gte_frontend/widgets/gte_state_panel.dart';
 import 'package:gte_frontend/widgets/gte_surface_panel.dart';
 import 'package:gte_frontend/widgets/gte_sync_status_card.dart';
 import 'package:gte_frontend/shared/widgets/gtex_premium_panels.dart';
+import 'package:gte_frontend/ui_gtex/components/gtex_football_command_pulse.dart';
+import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 
 import 'widgets/home_featured_event_banner.dart';
 import 'widgets/home_section_card.dart';
