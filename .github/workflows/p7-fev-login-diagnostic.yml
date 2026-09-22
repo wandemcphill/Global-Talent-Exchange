@@ -80,7 +80,7 @@ jobs:
         working-directory: qa/playwright
         run: |
           cat > tests/p7_fe_login_probe.spec.mjs <<'EOF'
-          import { test } from "@playwright/test";
+          import { expect, test } from "@playwright/test";
 
           test("inspect Flutter login semantics after boot", async ({ page }) => {
             await page.goto("/auth/login", { waitUntil: "domcontentloaded", timeout: 60_000 });
