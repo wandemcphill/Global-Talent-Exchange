@@ -38,14 +38,22 @@ export async function attachDiagnostics(testInfo) {
 export async function signIn(page) {
   if (!credentialsConfigured) return;
 
-  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/" : "/";
+  const loginUrl = process.env.GTEX_E2E_HASH_ROUTING ? "/#/auth/login" : "/auth/login";
   await page.goto(loginUrl, { waitUntil: "domcontentloaded", timeout: 120_000 });
 
-  const emailInput = page.locator("input").nth(0);
-  await expect(emailInput).toBeVisible({ timeout: 120_000 });
+  const surface = page.locator("flt-glass-pane, flutter-view, canvas").first();
+  await expect(surface).toBeVisible({ timeout: 120_000 });
+
+  const accessibilityButton = page.locator('[aria-label="Enable accessibility"]').first();
+  await expect(accessibilityButton).toBeVisible({ timeout: 120_000 });
+  await accessibilityButton.click({ force: true });
+  await page.waitForTimeout(750);
+
+  const emailInput = page.locator('input[aria-label="Email"]').first();
+  await expect(emailInput).toBeVisible({ timeout: 60_000 });
   await emailInput.fill(process.env.GTEX_E2E_EMAIL);
 
-  const passwordInput = page.locator("input").nth(1);
+  const passwordInput = page.locator('input[aria-label="Password"]').first();
   await expect(passwordInput).toBeVisible({ timeout: 30_000 });
   await passwordInput.fill(process.env.GTEX_E2E_PASSWORD);
 
