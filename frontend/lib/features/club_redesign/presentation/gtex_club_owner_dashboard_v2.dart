@@ -241,7 +241,7 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
                 ),
               ),
             ],
-          ),,
+          ),
           rightPanel: GtexClubRightRail(snapshot: snapshot, ownerFacing: true),
           actions: <Widget>[
             _CommandAction(
