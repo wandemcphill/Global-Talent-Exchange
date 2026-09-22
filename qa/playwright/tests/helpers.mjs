@@ -93,10 +93,6 @@ export async function captureScreenshot(page, testInfo, name) {
 
 export async function verifyNoHorizontalOverflow(page) {
   await expect
-    .poll(() =>
-      page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    )
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
     .toBeTruthy();
 }
