@@ -191,37 +191,6 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        # A production migration must use a writable primary. Supabase can expose
-        # a connection that reports read-only state even when connectivity itself
-        # succeeds. Clear a session-level default before any inspector query, then
-        # log the authoritative Postgres state without exposing the database URL.
-        if connection.dialect.name == "postgresql":
-            connection.exec_driver_sql("SET default_transaction_read_only = off")
-            connection.exec_driver_sql(
-                "SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE"
-            )
-            transaction_read_only = str(
-                connection.exec_driver_sql("SHOW transaction_read_only").scalar()
-            ).strip().lower()
-            in_recovery = bool(
-                connection.exec_driver_sql("SELECT pg_is_in_recovery()").scalar()
-            )
-            print(
-                "GTEX migration database state: "
-                f"transaction_read_only={transaction_read_only} "
-                f"in_recovery={in_recovery}"
-            )
-            if in_recovery:
-                raise RuntimeError(
-                    "Alembic requires a writable primary database connection; "
-                    "the configured production database is a PostgreSQL recovery/replica node."
-                )
-            if transaction_read_only == "on":
-                raise RuntimeError(
-                    "Alembic requires a writable production database connection; "
-                    "PostgreSQL reports transaction_read_only=on."
-                )
-
         _ensure_alembic_version_capacity(connection)
         # Inspector queries above can autobegin a transaction on SQLAlchemy 2.x.
         # Commit that preflight work so Alembic controls the migration transaction.
