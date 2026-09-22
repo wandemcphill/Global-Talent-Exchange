@@ -197,11 +197,15 @@ def run_migrations_online() -> None:
         # log the authoritative Postgres state without exposing the database URL.
         if connection.dialect.name == "postgresql":
             connection.exec_driver_sql("SET default_transaction_read_only = off")
-            connection.exec_driver_sql("SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE")
+            connection.exec_driver_sql(
+                "SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE"
+            )
             transaction_read_only = str(
                 connection.exec_driver_sql("SHOW transaction_read_only").scalar()
             ).strip().lower()
-            in_recovery = bool(connection.exec_driver_sql("SELECT pg_is_in_recovery()").scalar())
+            in_recovery = bool(
+                connection.exec_driver_sql("SELECT pg_is_in_recovery()").scalar()
+            )
             print(
                 "GTEX migration database state: "
                 f"transaction_read_only={transaction_read_only} in_recovery={in_recovery}"
