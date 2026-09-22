@@ -117,6 +117,47 @@ jobs:
           });
           EOF
 
+      - name: Generate temporary Flutter login probe
+        working-directory: qa/playwright
+        run: |
+          cat > tests/p7_fe_login_probe.spec.mjs <<'EOF'
+          import { test } from "@playwright/test";
+
+          test("inspect Flutter login semantics", async ({ page }) => {
+            await page.goto("/auth/login", { waitUntil: "domcontentloaded", timeout: 60_000 });
+            await page.waitForTimeout(3_000);
+
+            const snapshot = await page.evaluate(() => ({
+              url: location.href,
+              inputs: document.querySelectorAll("input").length,
+              textareas: document.querySelectorAll("textarea").length,
+              buttons: document.querySelectorAll("button").length,
+              semantics: document.querySelectorAll("flt-semantics").length,
+              semanticsRoles: Array.from(document.querySelectorAll("flt-semantics"))
+                .map((node) => ({
+                  role: node.getAttribute("role"),
+                  label: node.getAttribute("aria-label"),
+                  text: node.textContent?.trim(),
+                }))
+                .filter((entry) => entry.role || entry.label || entry.text)
+                .slice(0, 80),
+              bodyText: document.body.innerText.slice(0, 4000),
+            }));
+
+            console.log("GTEX_LOGIN_PROBE", JSON.stringify(snapshot));
+
+            await page.keyboard.press("Tab");
+            await page.waitForTimeout(250);
+            const afterTab = await page.evaluate(() => ({
+              activeTag: document.activeElement?.tagName,
+              activeRole: document.activeElement?.getAttribute("role"),
+              activeLabel: document.activeElement?.getAttribute("aria-label"),
+              inputs: document.querySelectorAll("input").length,
+            }));
+            console.log("GTEX_LOGIN_PROBE_AFTER_TAB", JSON.stringify(afterTab));
+          });
+          EOF
+
       - name: Run temporary Flutter login probe
         working-directory: qa/playwright
         env:
@@ -125,12 +166,5 @@ jobs:
           npx playwright test
           tests/p7_fe_login_probe.spec.mjs
           --project=desktop
-          --retries=0
-          --reporter=line
-
-          npx playwright test
-          tests/p7_fe_authed_shell.spec.mjs
-          --project=desktop
-          --grep "authenticated shell loads home command center"
           --retries=0
           --reporter=line
