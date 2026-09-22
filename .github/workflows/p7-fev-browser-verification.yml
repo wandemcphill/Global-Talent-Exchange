@@ -71,6 +71,7 @@ jobs:
         working-directory: qa/playwright
         run: npx playwright install --with-deps chromium
 
+      # Flutter Web can be cold on CI; the Playwright harness waits for a rendered surface before interaction.
       - name: Run P7-FEV browser matrix
         working-directory: qa/playwright
         env:
