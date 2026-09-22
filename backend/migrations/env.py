@@ -208,7 +208,8 @@ def run_migrations_online() -> None:
             )
             print(
                 "GTEX migration database state: "
-                f"transaction_read_only={transaction_read_only} in_recovery={in_recovery}"
+                f"transaction_read_only={transaction_read_only} "
+                f"in_recovery={in_recovery}"
             )
             if in_recovery:
                 raise RuntimeError(
