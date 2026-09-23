@@ -447,12 +447,12 @@ class GteExchangeController extends ChangeNotifier {
         return;
       }
       session = nextSession;
-      await Future.wait<void>(<Future<void>>[
+      unawaited(
         _refreshTradingState(
           playerId: selectedPlayer?.detail.playerId,
           refreshPlayer: selectedPlayer != null,
         ),
-      ]);
+      );
       unawaited(refreshCompliance());
     } catch (error) {
       if (_authGate.isActive(requestId)) {
