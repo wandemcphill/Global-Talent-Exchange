@@ -1186,6 +1186,12 @@ class RealPlayerBulkImportOpsService:
             "birth_year": raw_row.get("birth_year"),
             "age": raw_row.get("age"),
             "dominant_foot": _first_value(raw_row, "dominant_foot"),
+            # These are GTEX-owned gameplay seeds.  They are optional for
+            # conventional real-player feeds, but founding-universe sources
+            # can supply them without introducing a second attribute model.
+            "overall_rating": _first_value(raw_row, "overall_rating", "overall"),
+            "potential": _first_value(raw_row, "potential", "potential_rating"),
+            "club_rating": _first_value(raw_row, "club_rating"),
             "primary_position": _first_value(raw_row, "primary_position", "display_position"),
             "secondary_positions": _list_value(raw_row.get("secondary_positions")),
             "current_real_world_club": _first_value(raw_row, "current_real_world_club", "current_club_name"),
@@ -1329,6 +1335,9 @@ class RealPlayerBulkImportOpsService:
             "birth_year": _first_value(raw_payload, "birth_year", "birthYear"),
             "age": source_item.age,
             "dominant_foot": _first_value(raw_payload, "dominant_foot", "dominantFoot"),
+            "overall_rating": _first_value(raw_payload, "overall_rating", "overall"),
+            "potential": _first_value(raw_payload, "potential", "potential_rating"),
+            "club_rating": _first_value(raw_payload, "club_rating", "clubRating"),
             "primary_position": source_item.display_position,
             "secondary_positions": _unique_text_values(
                 [

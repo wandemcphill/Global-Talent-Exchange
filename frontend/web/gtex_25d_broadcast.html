@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GTEX 2.5D Broadcast — Lagos United vs Accra City</title>
+  <style>
+    :root {
+      --ink: #050709;
+      --panel: #0a0f13;
+      --line: #1c2830;
+      --white: #f4f7f8;
+      --muted: #93a0aa;
+      --lime: #b9ff3d;
+      --home: #36e38a;
+      --away: #ffc857;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; background: var(--ink); color: var(--white);
+      font-family: "Segoe UI", Inter, system-ui, sans-serif; overflow: hidden;
+    }
+    .shell {
+      display: grid;
+      grid-template-rows: 64px 1fr 92px;
+      height: 100%;
+    }
+    header, footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 22px; border-color: var(--line); background: var(--panel);
+    }
+    header { border-bottom: 1px solid var(--line); gap: 16px; }
+    footer { border-top: 1px solid var(--line); gap: 16px; }
+    .eyebrow {
+      font-size: 11px; letter-spacing: 1.6px; font-weight: 800; color: var(--lime);
+    }
+    .scorebug {
+      display: flex; align-items: center; gap: 14px; font-weight: 800;
+    }
+    .scorebug .team { font-size: 14px; letter-spacing: .4px; }
+    .scorebug .nums {
+      font-variant-numeric: tabular-nums; font-size: 28px; min-width: 72px; text-align: center;
+    }
+    .clock {
+      color: var(--lime); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 800;
+    }
+    .live {
+      display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; letter-spacing: 1px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3d3d; box-shadow: 0 0 10px #ff3d3d; }
+    canvas { width: 100%; height: 100%; display: block; background: #071018; }
+    .event {
+      font-size: 15px; font-weight: 700; color: var(--white);
+    }
+    .hint { color: var(--muted); font-size: 12px; }
+    .btns { display: flex; gap: 8px; }
+    button {
+      background: #121a20; color: var(--white); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer;
+    }
+    button:hover { border-color: var(--lime); color: var(--lime); }
+    .cmd {
+      font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted);
+    }
+    .cmd b { color: var(--lime); font-weight: 800; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <div class="eyebrow">GTEX MATCHDAY · 2.5D BROADCAST</div>
+        <div class="hint">Command-driven watch surface · not per-frame puppet playback</div>
+      </div>
+      <div class="scorebug">
+        <span class="team" style="color:var(--home)">LAGOS UNITED</span>
+        <span class="nums" id="score">0 – 0</span>
+        <span class="team" style="color:var(--away)">ACCRA CITY</span>
+      </div>
+      <div>
+        <div class="live"><span class="dot"></span> LIVE</div>
+        <div class="clock" id="clock">00:00</div>
+      </div>
+    </header>
+    <canvas id="pitch"></canvas>
+    <footer>
+      <div>
+        <div class="event" id="event">Kickoff · Lagos United</div>
+        <div class="cmd">Next command: <b id="next">PASS  #10 → #7</b></div>
+      </div>
+      <div class="btns">
+        <button id="pause">Pause</button>
+        <button id="replay">Replay attack</button>
+        <button id="speed">Speed 1x</button>
+      </div>
+      <div class="hint">This is the default watch path. Unity 3D stays optional “Watch in 3D”.</div>
+    </footer>
+  </div>
+  <script>
+    const canvas = document.getElementById("pitch");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.getElementById("score");
+    const clockEl = document.getElementById("clock");
+    const eventEl = document.getElementById("event");
+    const nextEl = document.getElementById("next");
+    const pauseBtn = document.getElementById("pause");
+    const replayBtn = document.getElementById("replay");
+    const speedBtn = document.getElementById("speed");
+
+    const HOME = [
+      { id: "H1", n: 1, name: "OKAFOR", x: 0.06, y: 0.50, role: "GK" },
+      { id: "H2", n: 2, name: "BALOGUN", x: 0.18, y: 0.18, role: "FB" },
+      { id: "H3", n: 5, name: "NWANKWO", x: 0.16, y: 0.38, role: "CB" },
+      { id: "H4", n: 4, name: "IKE", x: 0.16, y: 0.62, role: "CB" },
+      { id: "H5", n: 3, name: "SANE", x: 0.18, y: 0.82, role: "FB" },
+      { id: "H6", n: 6, name: "DIALLO", x: 0.32, y: 0.32, role: "CM" },
+      { id: "H7", n: 8, name: "MENDES", x: 0.30, y: 0.50, role: "CM" },
+      { id: "H8", n: 10, name: "ADEBAYO", x: 0.34, y: 0.70, role: "AM" },
+      { id: "H9", n: 7, name: "KEITA", x: 0.48, y: 0.22, role: "W" },
+      { id: "H10", n: 9, name: "TRAORE", x: 0.52, y: 0.50, role: "ST" },
+      { id: "H11", n: 11, name: "YUSUF", x: 0.48, y: 0.78, role: "W" },
+    ];
+    const AWAY = [
+      { id: "A1", n: 1, name: "MENSAH", x: 0.94, y: 0.50, role: "GK" },
+      { id: "A2", n: 2, name: "BOATENG", x: 0.82, y: 0.82, role: "FB" },
+      { id: "A3", n: 5, name: "OWUSU", x: 0.84, y: 0.62, role: "CB" },
+      { id: "A4", n: 4, name: "ASANTE", x: 0.84, y: 0.38, role: "CB" },
+      { id: "A5", n: 3, name: "KOFFI", x: 0.82, y: 0.18, role: "FB" },
+      { id: "A6", n: 6, name: "ADJEI", x: 0.68, y: 0.68, role: "CM" },
+      { id: "A7", n: 8, name: "AMPONSAH", x: 0.70, y: 0.50, role: "CM" },
+      { id: "A8", n: 10, name: "QUAYE", x: 0.66, y: 0.30, role: "AM" },
+      { id: "A9", n: 7, name: "DARKO", x: 0.52, y: 0.78, role: "W" },
+      { id: "A10", n: 9, name: "APPIAH", x: 0.48, y: 0.50, role: "ST" },
+      { id: "A11", n: 11, name: "SEFA", x: 0.52, y: 0.22, role: "W" },
+    ];
+
+    const players = [...HOME, ...AWAY].map((p) => ({
+      ...p, home: p.id.startsWith("H"), px: p.x, py: p.y, tx: p.x, ty: p.y, facing: p.home ? 1 : -1,
+    }));
+    const byId = Object.fromEntries(players.map((p) => [p.id, p]));
+
+    const ball = { x: 0.5, y: 0.5, z: 0, tx: 0.5, ty: 0.5, tz: 0, holder: null, flight: 0, flightDur: 0, sx: 0.5, sy: 0.5, sz: 0 };
+    const cam = { x: 0.5, y: 0.5, z: 0, shake: 0 };
+    let scoreH = 0, scoreA = 0, paused = false, speed = 1, matchT = 0, cmdIndex = 0;
+    let eventLabel = "Kickoff · Lagos United";
+    let last = performance.now();
+
+    const SCRIPT = [
+      { t: 0.4, type: "KICKOFF", holder: "H10", text: "Kickoff · Traore", next: "PASS  #9 → #10" },
+      { t: 1.6, type: "PASS", from: "H10", to: "H8", text: "Pass · Traore to Adebayo", next: "CARRY  #10" },
+      { t: 3.2, type: "CARRY", who: "H8", x: 0.42, y: 0.62, text: "Adebayo carries into the half", next: "PASS  #10 → #7" },
+      { t: 5.0, type: "PASS", from: "H8", to: "H9", text: "Switch · Adebayo to Keita", next: "SUPPORT  #9" },
+      { t: 6.4, type: "SUPPORT", who: "H10", x: 0.62, y: 0.42, text: "Traore makes the channel run", next: "THROUGH  #7 → #9" },
+      { t: 7.6, type: "THROUGH", from: "H9", to: "H10", x: 0.78, y: 0.44, text: "Through ball · Keita to Traore", next: "SHOT  #9" },
+      { t: 9.2, type: "SHOT", from: "H10", gx: 0.97, gy: 0.48, text: "Shot · Traore, near post", next: "SAVE  #1" },
+      { t: 10.15, type: "SAVE", who: "A1", text: "Saved · Mensah", next: "CLAIM  #1" },
+      { t: 11.4, type: "PASS", from: "A1", to: "A4", text: "Clearance · Mensah to Asante", next: "PASS  #4 → #10" },
+      { t: 13.0, type: "PASS", from: "A4", to: "A8", text: "Build-up · Accra City", next: "CROSS  #10" },
+      { t: 14.6, type: "CARRY", who: "A8", x: 0.38, y: 0.28, text: "Quaye drives at the line", next: "CROSS  #10 → #9" },
+      { t: 16.1, type: "CROSS", from: "A8", to: "A10", x: 0.18, y: 0.48, text: "Cross · Quaye", next: "SHOT  #9" },
+      { t: 17.3, type: "SHOT", from: "A10", gx: 0.03, gy: 0.52, text: "Header · Appiah", next: "SAVE  #1" },
+      { t: 18.15, type: "SAVE", who: "H1", text: "Okafor claims", next: "PASS  #1 → #8" },
+      { t: 19.6, type: "PASS", from: "H1", to: "H7", text: "Restart · Lagos United", next: "PASS  #8 → #11" },
+      { t: 21.1, type: "PASS", from: "H7", to: "H11", text: "Wide · Mendes to Yusuf", next: "CARRY  #11" },
+      { t: 22.4, type: "CARRY", who: "H11", x: 0.72, y: 0.74, text: "Yusuf beats the full-back", next: "PASS  #11 → #9" },
+      { t: 23.8, type: "PASS", from: "H11", to: "H10", text: "Cut-back · Yusuf to Traore", next: "SHOT  #9" },
+      { t: 24.9, type: "SHOT", from: "H10", gx: 0.97, gy: 0.50, text: "Shot · Traore, open net", next: "GOAL" },
+      { t: 25.7, type: "GOAL", team: "H", scorer: "H10", text: "GOAL · Traore 26'", next: "RESET KICKOFF" },
+      { t: 28.4, type: "RESET", holder: "A10", text: "Kickoff · Accra City", next: "LOOP" },
+    ];
+
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = canvas.clientWidth * dpr;
+      canvas.height = canvas.clientHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function project(x, y, z) {
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const cx = w * 0.5 + (0.5 - cam.x) * w * 0.18;
+      const cy = h * 0.58 + (0.5 - cam.y) * h * 0.10;
+      const persp = 0.42 + y * 0.72;
+      const sx = cx + (x - 0.5) * w * 0.86 * persp + cam.shake * (Math.random() - 0.5) * 8;
+      const sy = cy - (y - 0.18) * h * 0.46 - z * h * 0.12 + cam.shake * (Math.random() - 0.5) * 4;
+      return { x: sx, y: sy, s: persp };
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function approach(p, t, dt, rate) {
+      const k = 1 - Math.exp(-rate * dt);
+      return lerp(p, t, k);
+    }
+
+    function hold(id) {
+      const p = byId[id];
+      ball.holder = id;
+      ball.x = p.px + (p.home ? 0.012 : -0.012);
+      ball.y = p.py;
+      ball.z = 0.02;
+      ball.flight = 0;
+    }
+
+    function fly(toX, toY, dur, peak) {
+      ball.holder = null;
+      ball.sx = ball.x; ball.sy = ball.y; ball.sz = ball.z;
+      ball.tx = toX; ball.ty = toY; ball.tz = 0.02;
+      ball.flight = 0.0001;
+      ball.flightDur = dur;
+      ball.peak = peak;
+    }
+
+    function apply(cmd) {
+      eventLabel = cmd.text;
+      eventEl.textContent = cmd.text;
+      nextEl.textContent = cmd.next;
+      cam.shake = cmd.type === "SHOT" || cmd.type === "GOAL" ? 1 : Math.max(cam.shake, 0.15);
+      if (cmd.type === "KICKOFF" || cmd.type === "RESET") {
+        if (cmd.type === "RESET") {
+          players.forEach((p) => { p.tx = p.x; p.ty = p.y; });
+        }
+        hold(cmd.holder);
+      }
+      if (cmd.type === "PASS" || cmd.type === "THROUGH" || cmd.type === "CROSS") {
+        const dest = byId[cmd.to];
+        const peak = cmd.type === "CROSS" ? 0.55 : cmd.type === "THROUGH" ? 0.18 : 0.28;
+        const dur = cmd.type === "CROSS" ? 0.95 : 0.62;
+        dest.tx = cmd.x ?? dest.x;
+        dest.ty = cmd.y ?? dest.y;
+        fly(dest.tx + (dest.home ? 0.01 : -0.01), dest.ty, dur, peak);
+        ball._catch = cmd.to;
+      }
+      if (cmd.type === "CARRY" || cmd.type === "SUPPORT") {
+        const p = byId[cmd.who];
+        p.tx = cmd.x; p.ty = cmd.y;
+        if (cmd.type === "CARRY") hold(cmd.who);
+      }
+      if (cmd.type === "SHOT") {
+        fly(cmd.gx, cmd.gy, 0.72, 0.32);
+        ball._catch = null;
+      }
+      if (cmd.type === "SAVE") {
+        const gk = byId[cmd.who];
+        gk.tx = ball.tx; gk.ty = ball.ty;
+        fly(gk.px, gk.py, 0.28, 0.12);
+        ball._catch = cmd.who;
+      }
+      if (cmd.type === "GOAL") {
+        if (cmd.team === "H") scoreH += 1; else scoreA += 1;
+        scoreEl.textContent = `${scoreH} – ${scoreA}`;
+        ball.z = 0.04;
+      }
+    }
+
+    function tick(dt) {
+      if (!paused) matchT += dt * speed;
+      const loopAt = 31;
+      if (matchT > loopAt) {
+        matchT = 0; cmdIndex = 0; scoreH = 0; scoreA = 0;
+        scoreEl.textContent = "0 – 0";
+        players.forEach((p) => { p.px = p.x; p.py = p.y; p.tx = p.x; p.ty = p.y; });
+      }
+      while (cmdIndex < SCRIPT.length && matchT >= SCRIPT[cmdIndex].t) {
+        apply(SCRIPT[cmdIndex]);
+        cmdIndex += 1;
+      }
+      const minute = Math.min(89, Math.floor(matchT * 3.1));
+      const sec = Math.floor((matchT * 3.1 - minute) * 60) % 60;
+      clockEl.textContent = `${String(minute).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+
+      players.forEach((p) => {
+        p.px = approach(p.px, p.tx, dt, 2.4);
+        p.py = approach(p.py, p.ty, dt, 2.4);
+        p.facing = p.tx >= p.px ? 1 : -1;
+        if (ball.holder === p.id) {
+          ball.x = p.px + (p.home ? 0.012 : -0.012);
+          ball.y = p.py;
+          ball.z = 0.03 + Math.sin(matchT * 10) * 0.008;
+        }
+      });
+      if (!ball.holder && ball.flight > 0) {
+        ball.flight += dt * speed;
+        const u = Math.min(1, ball.flight / ball.flightDur);
+        const arc = Math.sin(u * Math.PI) * (ball.peak || 0.25);
+        ball.x = lerp(ball.sx, ball.tx, u);
+        ball.y = lerp(ball.sy, ball.ty, u);
+        ball.z = lerp(ball.sz, ball.tz, u) + arc;
+        if (u >= 1) {
+          ball.flight = 0;
+          if (ball._catch) hold(ball._catch);
+        }
+      }
+      cam.x = approach(cam.x, ball.x, dt, 1.6);
+      cam.y = approach(cam.y, ball.y, dt, 1.6);
+      cam.shake = Math.max(0, cam.shake - dt * 2.4);
+    }
+
+    function drawPitch() {
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, "#0b1a24");
+      g.addColorStop(0.45, "#0a1410");
+      g.addColorStop(1, "#05080a");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+
+      const corners = [
+        project(0, 0, 0), project(1, 0, 0), project(1, 1, 0), project(0, 1, 0),
+      ];
+      ctx.beginPath();
+      ctx.moveTo(corners[0].x, corners[0].y);
+      corners.slice(1).forEach((c) => ctx.lineTo(c.x, c.y));
+      ctx.closePath();
+      ctx.fillStyle = "#14532d";
+      ctx.fill();
+
+      for (let i = 0; i < 10; i++) {
+        const a = project(i / 10, 0, 0), b = project((i + 1) / 10, 0, 0);
+        const c = project((i + 1) / 10, 1, 0), d = project(i / 10, 1, 0);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
+        ctx.closePath();
+        ctx.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.10)";
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = "rgba(244,247,248,0.55)";
+      ctx.lineWidth = 2;
+      function poly(pts) {
+        ctx.beginPath();
+        const p0 = project(pts[0][0], pts[0][1], 0);
+        ctx.moveTo(p0.x, p0.y);
+        pts.slice(1).forEach(([x, y]) => { const p = project(x, y, 0); ctx.lineTo(p.x, p.y); });
+        ctx.closePath(); ctx.stroke();
+      }
+      poly([[0,0],[1,0],[1,1],[0,1]]);
+      ctx.beginPath();
+      const midA = project(0.5, 0, 0), midB = project(0.5, 1, 0);
+      ctx.moveTo(midA.x, midA.y); ctx.lineTo(midB.x, midB.y); ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i <= 40; i++) {
+        const a = (i / 40) * Math.PI * 2;
+        const p = project(0.5 + Math.cos(a) * 0.09, 0.5 + Math.sin(a) * 0.14, 0);
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath(); ctx.stroke();
+      poly([[0, 0.21],[0.165, 0.21],[0.165, 0.79],[0, 0.79]]);
+      poly([[1, 0.21],[0.835, 0.21],[0.835, 0.79],[1, 0.79]]);
+      poly([[0, 0.36],[0.06, 0.36],[0.06, 0.64],[0, 0.64]]);
+      poly([[1, 0.36],[0.94, 0.36],[0.94, 0.64],[1, 0.64]]);
+    }
+
+    function drawPlayer(p) {
+      const pos = project(p.px, p.py, 0);
+      const s = 11 + pos.s * 10;
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.beginPath(); ctx.ellipse(pos.x, pos.y + 6, s * 0.55, s * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+      const color = p.home ? "#1ec97a" : "#e7b23a";
+      ctx.fillStyle = color;
+      roundRect(pos.x - s * 0.28, pos.y - s * 1.15, s * 0.56, s * 1.05, 4);
+      ctx.fill();
+      ctx.fillStyle = "#f2d2b0";
+      ctx.beginPath(); ctx.arc(pos.x, pos.y - s * 1.28, s * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#071018";
+      ctx.font = `800 ${Math.max(8, s * 0.42)}px Segoe UI`;
+      ctx.textAlign = "center";
+      ctx.fillText(String(p.n), pos.x, pos.y - s * 0.52);
+      if (ball.holder === p.id) {
+        ctx.strokeStyle = "rgba(255,255,255,0.85)";
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y - s * 0.55, s * 0.72, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function drawBall() {
+      const shadow = project(ball.x, ball.y, 0);
+      const pos = project(ball.x, ball.y, ball.z);
+      ctx.fillStyle = `rgba(0,0,0,${0.28 + ball.z * 0.2})`;
+      ctx.beginPath(); ctx.ellipse(shadow.x, shadow.y + 4, 7 + ball.z * 10, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#f4f7f8";
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, 5.2, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#111"; ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    function frame(now) {
+      const dt = Math.min(0.033, (now - last) / 1000);
+      last = now;
+      tick(dt);
+      drawPitch();
+      const ordered = [...players].sort((a, b) => a.py - b.py);
+      ordered.forEach(drawPlayer);
+      drawBall();
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    pauseBtn.onclick = () => {
+      paused = !paused;
+      pauseBtn.textContent = paused ? "Play" : "Pause";
+    };
+    replayBtn.onclick = () => {
+      matchT = 21.0; cmdIndex = SCRIPT.findIndex((c) => c.t >= 21);
+      eventEl.textContent = "Replay · Lagos attack";
+    };
+    const speeds = [1, 1.5, 2, 0.5];
+    let si = 0;
+    speedBtn.onclick = () => {
+      si = (si + 1) % speeds.length;
+      speed = speeds[si];
+      speedBtn.textContent = `Speed ${speed}x`;
+    };
+  </script>
+</body>
+</html>

@@ -6,6 +6,7 @@ import '../data/gtex_match_feed.dart';
 import '../data/gtex_match_models.dart';
 import '../data/gtex_match_repository.dart';
 import '../widgets/gtex_2d_pitch.dart';
+import '../widgets/gtex_25d_broadcast_pitch.dart';
 import '../widgets/gtex_highlights_panel.dart';
 import '../widgets/gtex_match_connection_banner.dart';
 import '../widgets/gtex_match_lineups.dart';
@@ -203,10 +204,10 @@ class _MainPitchWorkspace extends StatelessWidget {
         const SizedBox(height: 12),
         Expanded(
           child: _BroadcastPanel(
-            title: 'TACTICAL CAM',
+            title: 'MATCH CAM',
             trailing: '${match.home.formation} / ${match.away.formation}',
             child: Center(
-              child: Gtex2dPitch(
+              child: _PitchViewStack(
                 match: match,
                 onPlayerSelected: controller.selectPitchPlayer,
               ),
@@ -225,6 +226,55 @@ class _MainPitchWorkspace extends StatelessWidget {
           ),
           _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
         ],
+      ],
+    );
+  }
+}
+
+class _PitchViewStack extends StatefulWidget {
+  const _PitchViewStack({
+    required this.match,
+    required this.onPlayerSelected,
+  });
+
+  final GtexLiveMatchState match;
+  final ValueChanged<String> onPlayerSelected;
+
+  @override
+  State<_PitchViewStack> createState() => _PitchViewStackState();
+}
+
+class _PitchViewStackState extends State<_PitchViewStack> {
+  bool broadcast = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment<bool>(value: true, label: Text('2.5D')),
+                ButtonSegment<bool>(value: false, label: Text('Tactical')),
+              ],
+              selected: <bool>{broadcast},
+              onSelectionChanged: (Set<bool> next) {
+                setState(() => broadcast = next.first);
+              },
+            ),
+          ),
+        ),
+        Expanded(
+          child: broadcast
+              ? const Gtex25dBroadcastPitch()
+              : Gtex2dPitch(
+                match: widget.match,
+                onPlayerSelected: widget.onPlayerSelected,
+              ),
+        ),
       ],
     );
   }
@@ -394,9 +444,9 @@ class _MobileMatchView extends StatelessWidget {
         Expanded(
           flex: 5,
           child: _BroadcastPanel(
-            title: 'TACTICAL CAM',
+            title: 'MATCH CAM',
             child: Center(
-              child: Gtex2dPitch(
+              child: _PitchViewStack(
                 match: match,
                 onPlayerSelected: controller.selectPitchPlayer,
               ),

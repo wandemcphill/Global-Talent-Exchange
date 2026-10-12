@@ -4,6 +4,7 @@ export 'data/gtex_match_feed.dart';
 export 'presentation/gtex_match_center_controller.dart';
 export 'presentation/gtex_match_center_screen_v2.dart';
 export 'widgets/gtex_2d_pitch.dart';
+export 'widgets/gtex_25d_broadcast_pitch.dart';
 export 'widgets/gtex_match_connection_banner.dart';
 export 'widgets/gtex_match_lineups.dart';
 export 'widgets/gtex_match_scoreboard.dart';
