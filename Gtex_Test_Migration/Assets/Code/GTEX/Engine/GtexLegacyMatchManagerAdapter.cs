@@ -42,6 +42,14 @@ namespace FStudio.GTEX.Engine
                 return;
             }
 
+            if (value && !FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.AllowExternalPlayback)
+            {
+                Debug.LogWarning(
+                    "[GTEX] Legacy adapter refused SetExternalPlayback(true) in OriginalVisualRuntime.");
+                MatchManager.Current.SetExternalPlayback(false);
+                return;
+            }
+
             MatchManager.Current.SetExternalPlayback(value);
         }
 

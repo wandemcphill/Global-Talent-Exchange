@@ -64,7 +64,16 @@ namespace MatchEngine.MatchScenes.Implementations {
 
             if (GtexRuntimeFlags.UsesGtexScoreAuthority) {
                 GtexRuntimeTelemetry.RegisterLegacyScoreWriteBlocked();
-                Debug.Log("[MatchManager] Ignoring legacy score write during GTEX score-authority mode.");
+                // Native OVR AI owns the goal on the pitch. Promote into GTEX authority so
+                // MatchManager UI mirrors from one source. Command-driven scoring already
+                // writes absolute scores via VisualBridge — do not double-count those.
+                if (FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.NativeAutonomousPlay) {
+                    var authorityMinute = MM.Current != null ? MM.Current.minutes : 0f;
+                    GtexScoreAuthority.RegisterNativeGoal(callback.HomeOrAway, authorityMinute, "native-goal");
+                    Debug.Log("[GTEX] Native goal promoted into GtexScoreAuthority.");
+                } else {
+                    Debug.Log("[MatchManager] Ignoring legacy score write during GTEX score-authority mode.");
+                }
             } else if (!callback.HomeOrAway) {
                 MM.Current.homeTeamScore++;
             } else {

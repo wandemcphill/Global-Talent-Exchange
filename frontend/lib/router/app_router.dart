@@ -115,17 +115,6 @@ GoRouter buildGtexAppRouter({
             ),
       ),
       GoRoute(
-        path: '/demo/match-25d',
-        pageBuilder:
-            (BuildContext context, GoRouterState state) =>
-                NoTransitionPage<void>(
-                  key: state.pageKey,
-                  child: Gtex25dBroadcastDemoScreen(
-                    onExit: () => context.go('/'),
-                  ),
-                ),
-      ),
-      GoRoute(
         path: '/landing',
         pageBuilder:
             (BuildContext context, GoRouterState state) => _landingPage(

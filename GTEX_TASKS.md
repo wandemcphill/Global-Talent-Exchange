@@ -10,9 +10,11 @@ Rules:
 
 ## Current Target
 
+- Visual product bar is locked to Football Manager 23 class — see `Docs/GTEX_VISUAL_QUALITY_BAR.md`
+- Flutter 2.5D / canvas broadcast is **not** the product match visual and must not be reintroduced
 - `P5` is complete
 - `P6` remains `READY` for current-engine production hardening
-- `P6V` is `READY` for the controlled Original Visual Runtime Pivot
+- `P6V` is `READY` and is the active path to the FM23-class bar via `GTEX_OriginalVisualRuntime`
 - `P6V` supersedes the old P6/P7/P8 current-engine-only restriction for this isolated visual-runtime pivot only
 - The pivot is not a rewrite: GTEX remains the match authority and the original simulator owns football visuals in a separate scene
 - Batchmode build stability and the current `Gtex_MainScene` path remain required acceptance gates

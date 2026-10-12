@@ -51,6 +51,35 @@ namespace FStudio.GTEX
             Publish();
         }
 
+        /// <summary>
+        /// Promote a native original-simulator goal into GTEX score authority.
+        /// <paramref name="awayTeamScored"/> matches MatchEngine GoalEvent.HomeOrAway
+        /// (true = away scored, false = home scored).
+        /// </summary>
+        public static void RegisterNativeGoal(bool awayTeamScored, float minute, string lastEvent = null)
+        {
+            if (awayTeamScored)
+            {
+                state.awayScore += 1;
+            }
+            else
+            {
+                state.homeScore += 1;
+            }
+
+            state.minute = minute < 0f ? 0f : minute;
+            if (!string.IsNullOrWhiteSpace(lastEvent))
+            {
+                state.lastEvent = lastEvent.Trim();
+            }
+            else
+            {
+                state.lastEvent = awayTeamScored ? "away-goal" : "home-goal";
+            }
+
+            Publish();
+        }
+
         private static void Publish()
         {
             GtexRuntimeTelemetry.RegisterScoreAuthorityUpdate();

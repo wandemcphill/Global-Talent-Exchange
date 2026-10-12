@@ -6,7 +6,6 @@ import '../data/gtex_match_feed.dart';
 import '../data/gtex_match_models.dart';
 import '../data/gtex_match_repository.dart';
 import '../widgets/gtex_2d_pitch.dart';
-import '../widgets/gtex_25d_broadcast_pitch.dart';
 import '../widgets/gtex_highlights_panel.dart';
 import '../widgets/gtex_match_connection_banner.dart';
 import '../widgets/gtex_match_lineups.dart';
@@ -231,7 +230,7 @@ class _MainPitchWorkspace extends StatelessWidget {
   }
 }
 
-class _PitchViewStack extends StatefulWidget {
+class _PitchViewStack extends StatelessWidget {
   const _PitchViewStack({
     required this.match,
     required this.onPlayerSelected,
@@ -241,41 +240,12 @@ class _PitchViewStack extends StatefulWidget {
   final ValueChanged<String> onPlayerSelected;
 
   @override
-  State<_PitchViewStack> createState() => _PitchViewStackState();
-}
-
-class _PitchViewStackState extends State<_PitchViewStack> {
-  bool broadcast = true;
-
-  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment<bool>(value: true, label: Text('2.5D')),
-                ButtonSegment<bool>(value: false, label: Text('Tactical')),
-              ],
-              selected: <bool>{broadcast},
-              onSelectionChanged: (Set<bool> next) {
-                setState(() => broadcast = next.first);
-              },
-            ),
-          ),
-        ),
-        Expanded(
-          child: broadcast
-              ? const Gtex25dBroadcastPitch()
-              : Gtex2dPitch(
-                match: widget.match,
-                onPlayerSelected: widget.onPlayerSelected,
-              ),
-        ),
-      ],
+    // Flutter match center stays tactical/2D only.
+    // FM23-class broadcast 3D lives in Unity GTEX_OriginalVisualRuntime.
+    return Gtex2dPitch(
+      match: match,
+      onPlayerSelected: onPlayerSelected,
     );
   }
 }
