@@ -11,7 +11,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
+import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
+import 'package:gte_frontend/features/home/data/gtex_story_feed_ticker_provider.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
+import 'package:gte_frontend/models/story_feed_models.dart';
+import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
+import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
+import 'package:gte_frontend/features/transfer_market/live_market_provider.dart';
+import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/models/hosted_competition_models.dart';
 import 'package:gte_frontend/features/player_card_marketplace/data/player_card_marketplace_models.dart';
 import 'package:gte_frontend/features/player_card_marketplace/presentation/player_card_marketplace_controller.dart';
 import 'package:gte_frontend/features/player_card_marketplace/presentation/player_card_marketplace_screen.dart';
@@ -116,6 +124,106 @@ Widget _home() => ProviderScope(
         club: <String, Object?>{'id': 'c1', 'name': 'Ibadan Lions FC'},
         followers: 0,
         following: 0,
+      ),
+    ),
+    marketDashboardProvider.overrideWith(
+      (Ref ref) async => const MarketDashboardData(
+        playerShares: <PlayerShareSummary>[
+          PlayerShareSummary(
+            playerId: 'p1',
+            playerName: 'Victor Osimhen',
+            position: 'ST',
+            nationality: 'NGA',
+            currentClubName: 'Galatasaray',
+            age: 27,
+            currentValueCredits: 98000,
+            marketInterestScore: 91,
+            marketStatus: 'active',
+            marketMessage: 'Trading',
+            sharePriceCoin: 42.6,
+          ),
+          PlayerShareSummary(
+            playerId: 'p2',
+            playerName: 'Amina Okoro',
+            position: 'CM',
+            nationality: 'NGA',
+            currentClubName: 'Ibadan Lions FC',
+            age: 19,
+            currentValueCredits: 21000,
+            marketInterestScore: 84,
+            marketStatus: 'active',
+            marketMessage: 'Trading',
+            sharePriceCoin: 12.4,
+          ),
+          PlayerShareSummary(
+            playerId: 'p3',
+            playerName: 'Bukayo Saka',
+            position: 'RW',
+            nationality: 'ENG',
+            currentClubName: 'Arsenal',
+            age: 25,
+            currentValueCredits: 120000,
+            marketInterestScore: 88,
+            marketStatus: 'active',
+            marketMessage: 'Trading',
+            sharePriceCoin: 55.1,
+          ),
+        ],
+        holdings: <PlayerShareHoldingSummary>[
+          PlayerShareHoldingSummary(
+            playerId: 'p1',
+            shareCount: 120,
+            averageCostCoin: 38.2,
+            dividendsEarnedCoin: 310,
+          ),
+        ],
+        transferListings: <TransferListingSummary>[],
+        wallet: MarketWalletSnapshot(
+          coinBalance: 18450,
+          creditBalance: 6200,
+          totalEquity: 248320,
+          canTradeMarket: true,
+          canDeposit: true,
+          canWithdraw: true,
+          complianceMessage: '+4.8% this week',
+        ),
+        authenticated: true,
+        warnings: <String>[],
+      ),
+    ),
+    competitionHubProvider.overrideWith(
+      (Ref ref) async => const CompetitionHubData(
+        gtexCompetitions: <CompetitionSummary>[],
+        hostedCompetitions: <HostedCompetition>[],
+        streamerTournaments: <StreamerTournament>[],
+      ),
+    ),
+    storyFeedTickerProvider.overrideWith(
+      (Ref ref) async => <StoryFeedItem>[
+        StoryFeedItem(
+          id: 's1',
+          storyType: 'transfer',
+          title: 'Osimhen shares climb 6% after brace',
+          body: '',
+          audience: 'public',
+          subjectType: 'player',
+          subjectId: 'p1',
+          countryCode: 'NG',
+          featured: true,
+          createdAt: DateTime(2026, 10, 13),
+          metadata: const <String, Object?>{},
+        ),
+      ],
+    ),
+    liveTasksProvider.overrideWith(
+      (Ref ref) async => const LiveTasksData(
+        authenticated: true,
+        featureEnabled: true,
+        challenges: <DailyChallengeSummary>[],
+        claimsToday: <DailyChallengeClaimSummary>[],
+        currentStreak: 6,
+        longestStreak: 14,
+        nextBonusAmount: 250,
       ),
     ),
   ],
