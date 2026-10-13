@@ -10,6 +10,7 @@ import '../../features/admin_command_redesign/widgets/gtex_admin_visuals.dart';
 import '../../features/admin_command_redesign/widgets/gtex_coin_economy_panel.dart';
 import '../../features/admin_command_redesign/widgets/gtex_jackpot_admin_panel.dart';
 import '../../features/admin_command_redesign/widgets/gtex_system_health_panel.dart';
+import 'gtex_admin_newsroom_screen_v2.dart';
 
 class GtexAdminCommandCenterScreenV2 extends StatefulWidget {
   const GtexAdminCommandCenterScreenV2({super.key, this.controller});
@@ -208,6 +209,14 @@ class _MainWorkspace extends StatelessWidget {
           else if (controller.selectedModule ==
               GtexAdminModuleType.systemHealth)
             GtexSystemHealthPanel(signals: snapshot.healthSignals)
+          else if (controller.selectedModule == GtexAdminModuleType.newsroom)
+            SizedBox(
+              height: 720,
+              child: GtexAdminNewsroomScreenV2(
+                api: controller.storyFeedApi,
+                embedded: true,
+              ),
+            )
           else
             GtexAdminQueuePanel(
               items: controller.queueItems,

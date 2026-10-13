@@ -5,6 +5,8 @@ enum MatchAdPlacementType {
   preRoll,
   liveBanner,
   rewardedAd,
+  flash,
+  split,
 }
 
 MatchAdPlacementType matchAdPlacementTypeFromString(String? value) {
@@ -17,6 +19,10 @@ MatchAdPlacementType matchAdPlacementTypeFromString(String? value) {
       return MatchAdPlacementType.liveBanner;
     case 'rewarded_ad':
       return MatchAdPlacementType.rewardedAd;
+    case 'flash':
+      return MatchAdPlacementType.flash;
+    case 'split':
+      return MatchAdPlacementType.split;
     default:
       return MatchAdPlacementType.preRoll;
   }
