@@ -78,6 +78,20 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
 
+    late final GteExchangeController resolvedController;
+    if (controller != null) {
+      resolvedController = controller;
+    } else {
+      // Fixture market loads are real async work. Without runAsync the desk
+      // stays empty and GtexPlayerCard never mounts across the width ladder.
+      await tester.runAsync(() async {
+        resolvedController = GteExchangeController(
+          api: GteExchangeApiClient.fixture(),
+        );
+        await resolvedController.bootstrap();
+      });
+    }
+
     await tester.pumpWidget(
       MaterialApp(
         theme: GteShellTheme.build(),
@@ -86,9 +100,7 @@ void main() {
         home: KeyedSubtree(
           key: ValueKey<String>('ladder-$path-$width'),
           child: GteExchangeShellScreen.fromPath(
-            controller:
-                controller ??
-                GteExchangeController(api: GteExchangeApiClient.fixture()),
+            controller: resolvedController,
             apiBaseUrl: 'http://127.0.0.1:8000',
             backendMode: GteBackendMode.fixture,
             initialPath: path,

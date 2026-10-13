@@ -26,6 +26,11 @@ const double _moversRailMinPaneWidth = 640;
 /// player card beneath it.
 const double _moversRailMinPaneHeight = 330;
 
+/// Shortest board pane that can keep the command pulse and still show a
+/// browse card in the first viewport. Below this the pulse yields so the
+/// listing stays on-stage inside the shell (nav + mode chips + status).
+const double _commandPulseMinPaneHeight = 460;
+
 class GtexPlayerMarketRedesignScreen extends StatefulWidget {
   const GtexPlayerMarketRedesignScreen({
     super.key,
@@ -259,58 +264,70 @@ class _GtexPlayerMarketRedesignScreenState
               final bool showMoversRail =
                   paneWidth >= _moversRailMinPaneWidth &&
                   paneHeight >= _moversRailMinPaneHeight;
+              final bool showCommandPulse =
+                  paneHeight >= _commandPulseMinPaneHeight;
               return Column(
                 children: <Widget>[
-                  GtexFootballCommandPulse(
-                    kicker: 'Football Command Centre',
-                    title: 'Transfer market operations',
-                    accent: GtexColors.pitch,
-                    metrics: <GtexCommandPulseMetric>[
-                      GtexCommandPulseMetric(
-                        label: 'Listings loaded',
-                        value: '${players.length}/${widget.controller.marketTotalPlayerCount}',
-                        icon: Icons.groups_2_outlined,
-                        accent: GtexColors.pitch,
-                      ),
-                      GtexCommandPulseMetric(
-                        label: 'Watched',
-                        value: '${widget.watchlistCount}',
-                        icon: Icons.visibility_outlined,
-                        accent: GtexColors.cyan,
-                      ),
-                      GtexCommandPulseMetric(
-                        label: 'Shortlist',
-                        value: '${_basketState.items.length}',
-                        icon: Icons.playlist_add_check_outlined,
-                        accent: GtexColors.gold,
-                      ),
-                      GtexCommandPulseMetric(
-                        label: 'Market state',
-                        value:
-                            widget.controller.marketError == null
-                                ? 'Live snapshot'
-                                : 'Degraded',
-                        icon:
-                            widget.controller.marketError == null
-                                ? Icons.radio_button_checked
-                                : Icons.warning_amber_rounded,
-                        accent:
-                            widget.controller.marketError == null
-                                ? GtexColors.pitch
-                                : GtexColors.orange,
-                      ),
-                    ],
-                    trailing: Text(
-                      widget.activeMode == GtexMarketDeskMode.market
-                          ? 'TRANSFER INTELLIGENCE'
-                          : 'MY OWNERSHIP',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: GtexColors.textMuted,
-                        fontWeight: FontWeight.w900,
-                      ),
+                  if (showCommandPulse) ...<Widget>[
+                    GtexFootballCommandPulse(
+                      kicker: 'Football Command Centre',
+                      title: 'Transfer market operations',
+                      accent: GtexColors.pitch,
+                      metrics: <GtexCommandPulseMetric>[
+                        GtexCommandPulseMetric(
+                          label: 'Listings loaded',
+                          value:
+                              '${players.length}/${widget.controller.marketTotalPlayerCount}',
+                          icon: Icons.groups_2_outlined,
+                          accent: GtexColors.pitch,
+                        ),
+                        GtexCommandPulseMetric(
+                          label: 'Watched',
+                          value: '${widget.watchlistCount}',
+                          icon: Icons.visibility_outlined,
+                          accent: GtexColors.cyan,
+                        ),
+                        GtexCommandPulseMetric(
+                          label: 'Shortlist',
+                          value: '${_basketState.items.length}',
+                          icon: Icons.playlist_add_check_outlined,
+                          accent: GtexColors.gold,
+                        ),
+                        GtexCommandPulseMetric(
+                          label: 'Market state',
+                          value:
+                              widget.controller.marketError == null
+                                  ? 'Live snapshot'
+                                  : 'Degraded',
+                          icon:
+                              widget.controller.marketError == null
+                                  ? Icons.radio_button_checked
+                                  : Icons.warning_amber_rounded,
+                          accent:
+                              widget.controller.marketError == null
+                                  ? GtexColors.pitch
+                                  : GtexColors.orange,
+                        ),
+                      ],
+                      // When mode chips are mounted above the desk, echoing the
+                      // same labels here duplicates TRANSFER INTELLIGENCE /
+                      // MY OWNERSHIP in the tree and breaks shell truth tests.
+                      trailing:
+                          widget.onSelectMode == null
+                              ? Text(
+                                widget.activeMode == GtexMarketDeskMode.market
+                                    ? 'TRANSFER INTELLIGENCE'
+                                    : 'MY OWNERSHIP',
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: GtexColors.textMuted,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                              )
+                              : null,
                     ),
-                  ),
-                  const SizedBox(height: GtexSpacing.sm),
+                    const SizedBox(height: GtexSpacing.sm),
+                  ],
                   Expanded(
                     child: GtexMarketPlayerGrid(
                       header: showMoversRail
