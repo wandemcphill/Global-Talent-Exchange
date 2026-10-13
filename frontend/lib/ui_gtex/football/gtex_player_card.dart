@@ -7,6 +7,7 @@ import '../components/gtex_value_display.dart';
 import '../models/gtex_freshness.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_spacing.dart';
+import 'gtex_pitch_marks.dart';
 import 'gtex_player_portrait.dart';
 
 enum GtexPlayerCardVariant {
@@ -416,24 +417,38 @@ class _FullPlayerCard extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
               colors: <Color>[
-                GtexColors.surfaceRaised,
-                GtexColors.surfaceBase,
-                provenanceColor.withValues(
-                  alpha: isRegen ? (premiumRegen ? 0.16 : 0.1) : 0.07,
-                ),
+                GtexFloodlit.card,
+                GtexFloodlit.night,
+                if (premiumRegen || showOneOfOne)
+                  provenanceColor.withValues(alpha: 0.12),
                 if (cardVariant == GtexPlayerCardVariant.holographic)
-                  GtexColors.gold.withValues(alpha: 0.08),
+                  GtexFloodlit.gold.withValues(alpha: 0.1),
               ],
             ),
             borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
-            border: Border.all(color: borderColor, width: borderWidth),
+            border: Border.all(
+              color: isSelected || premiumRegen || showOneOfOne
+                  ? borderColor
+                  : GtexFloodlit.line,
+              width: borderWidth,
+            ),
             boxShadow: <BoxShadow>[
-              GtexColors.glow(Colors.black, opacity: 0.3),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 28,
+                spreadRadius: -12,
+                offset: const Offset(0, 18),
+              ),
               if (premiumRegen || showOneOfOne)
-                GtexColors.glow(provenanceColor, opacity: 0.18),
+                BoxShadow(
+                  color: provenanceColor.withValues(alpha: 0.28),
+                  blurRadius: 40,
+                  spreadRadius: -18,
+                  offset: const Offset(0, 22),
+                ),
             ],
           ),
           child: Column(
@@ -522,11 +537,13 @@ class _FullPlayerCard extends StatelessWidget {
                       name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: GtexColors.textPrimary,
-                        fontFamily: 'DM Sans',
-                        fontWeight: FontWeight.w800,
-                        height: 1.1,
+                      style: const TextStyle(
+                        color: GtexFloodlit.chalk,
+                        fontFamily: GtexFloodlit.display,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: GtexSpacing.xxs),
@@ -534,9 +551,11 @@ class _FullPlayerCard extends StatelessWidget {
                       '$clubName / $nationality',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: GtexColors.textSecondary,
-                        fontFamily: 'DM Sans',
+                      style: const TextStyle(
+                        color: GtexFloodlit.chalkMuted,
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        height: 1.4,
                       ),
                     ),
                     const SizedBox(height: GtexSpacing.xxs),
@@ -1477,22 +1496,32 @@ class _FacePortraitBand extends StatelessWidget {
               left: 0,
               right: 0,
               bottom: 0,
-              height: 72,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: <Color>[
-                      Colors.transparent,
-                      GtexColors.surfaceBase.withValues(alpha: 0.88),
-                    ],
+              height: 110,
+              child: const IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[Color(0x000E1F17), GtexFloodlit.card],
+                    ),
                   ),
                 ),
               ),
             ),
+            const Positioned(
+              left: -44,
+              top: -44,
+              width: 170,
+              height: 170,
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: GtexCentreCirclePainter(opacity: 0.22),
+                ),
+              ),
+            ),
             Positioned(
-              left: GtexSpacing.sm,
+              left: GtexSpacing.md,
               top: GtexSpacing.sm,
               child: _FaceRatingColumn(
                 overallLabel: overallLabel,
@@ -1538,77 +1567,96 @@ class _FaceRatingColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: GtexColors.surfaceBase.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
-        border: Border.all(color: GtexColors.surfaceBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Text(
-            'OVR',
-            style: TextStyle(
-              color: GtexColors.textTertiary,
-              fontFamily: 'JetBrains Mono',
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.6,
-              height: 1,
-            ),
+    const List<Shadow> legibility = <Shadow>[
+      Shadow(color: Color(0xAA000000), blurRadius: 12),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          overallLabel == null || overallLabel!.isEmpty ? '—' : overallLabel!,
+          style: const TextStyle(
+            color: GtexFloodlit.chalk,
+            fontFamily: GtexFloodlit.display,
+            fontSize: 60,
+            fontWeight: FontWeight.w700,
+            height: 0.9,
+            shadows: legibility,
           ),
-          const SizedBox(height: 2),
-          Text(
-            overallLabel == null || overallLabel!.isEmpty ? '—' : overallLabel!,
-            style: TextStyle(
-              color: positionAccent,
-              fontFamily: 'JetBrains Mono',
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              height: 1,
-            ),
+        ),
+        const Text(
+          'OVR',
+          style: TextStyle(
+            color: GtexFloodlit.chalkMuted,
+            fontFamily: 'Inter',
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.6,
+            height: 1.2,
+            shadows: legibility,
           ),
-          const SizedBox(height: 4),
-          Text(
-            position.trim().isEmpty ? '—' : position.trim().toUpperCase(),
-            style: const TextStyle(
-              color: GtexColors.textPrimary,
-              fontFamily: 'DM Sans',
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
-          if (gsiDigits != null) ...<Widget>[
-            const SizedBox(height: 8),
-            const Text(
-              'GSI',
-              style: TextStyle(
-                color: GtexColors.accentAmber,
-                fontFamily: 'JetBrains Mono',
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.6,
-                height: 1,
-              ),
-            ),
-            const SizedBox(height: 2),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(width: 3, height: 16, color: positionAccent),
+            const SizedBox(width: 6),
             Text(
-              gsiDigits!,
+              position.trim().isEmpty ? '—' : position.trim().toUpperCase(),
               style: const TextStyle(
-                color: GtexColors.accentAmber,
-                fontFamily: 'JetBrains Mono',
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
+                color: GtexFloodlit.chalk,
+                fontFamily: GtexFloodlit.display,
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
                 height: 1,
+                shadows: legibility,
               ),
             ),
           ],
+        ),
+        if (gsiDigits != null) ...<Widget>[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: GtexFloodlit.night.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: GtexFloodlit.gold.withValues(alpha: 0.55),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Text(
+                  'GSI',
+                  style: TextStyle(
+                    color: GtexFloodlit.gold,
+                    fontFamily: 'Inter',
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  gsiDigits!,
+                  style: const TextStyle(
+                    color: GtexFloodlit.gold,
+                    fontFamily: GtexFloodlit.display,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -1639,22 +1687,24 @@ class _AbilityPlate extends StatelessWidget {
     if (entries.isEmpty) {
       return const SizedBox.shrink();
     }
+    const int perRow = 6;
     return Container(
       key: const Key('gtex-player-ability-plate'),
-      padding: const EdgeInsets.all(GtexSpacing.sm),
+      padding: const EdgeInsets.symmetric(vertical: GtexSpacing.sm),
       decoration: BoxDecoration(
-        color: GtexColors.surfaceOverlay,
-        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
-        border: Border.all(color: GtexColors.surfaceBorder),
+        border: Border.symmetric(
+          horizontal: BorderSide(
+            color: GtexFloodlit.chalk.withValues(alpha: 0.1),
+          ),
+        ),
       ),
       child: Column(
         children: <Widget>[
-          for (int row = 0; row < entries.length; row += 3) ...<Widget>[
+          for (int row = 0; row < entries.length; row += perRow) ...<Widget>[
             if (row > 0) const SizedBox(height: GtexSpacing.xs),
             Row(
               children: <Widget>[
-                for (int col = 0; col < 3; col++) ...<Widget>[
-                  if (col > 0) const SizedBox(width: GtexSpacing.xs),
+                for (int col = 0; col < perRow; col++)
                   Expanded(
                     child: row + col < entries.length
                         ? _AbilityCell(
@@ -1663,7 +1713,6 @@ class _AbilityPlate extends StatelessWidget {
                         )
                         : const SizedBox.shrink(),
                   ),
-                ],
               ],
             ),
           ],
@@ -1681,34 +1730,32 @@ class _AbilityCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: GtexColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Semantics(
+      label: '$label $value',
+      excludeSemantics: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Text(
             label,
             style: const TextStyle(
-              color: GtexColors.textTertiary,
-              fontFamily: 'JetBrains Mono',
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.4,
+              color: GtexFloodlit.chalkMuted,
+              fontFamily: 'Inter',
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+              height: 1.2,
             ),
           ),
+          const SizedBox(height: 2),
           Text(
             '$value',
             style: TextStyle(
-              color: value >= 80
-                  ? GtexColors.accentPrimary
-                  : GtexColors.textPrimary,
-              fontFamily: 'JetBrains Mono',
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
+              color: value >= 80 ? GtexFloodlit.pitch : GtexFloodlit.chalk,
+              fontFamily: GtexFloodlit.display,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              height: 1,
             ),
           ),
         ],
