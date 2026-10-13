@@ -28,6 +28,9 @@ class GteOrderTicketSheet extends StatefulWidget {
   State<GteOrderTicketSheet> createState() => _GteOrderTicketSheetState();
 }
 
+/// Platform cut on System A player-share AMM trades (matches backend 2000 bps).
+const double kGtexPlayerShareTradingFeeRate = 0.20;
+
 class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
   late final TextEditingController _quantityController;
   GteOrderSide _side = GteOrderSide.buy;
@@ -70,10 +73,20 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
     final GtePortfolioHolding? holding = _holdingForPlayer();
     final int? shareCount = int.tryParse(_quantityController.text.trim());
     final double? price = _sharePriceCoin;
-    final double? estimatedTotal =
+    final double? estimatedGross =
         shareCount != null && shareCount > 0 && price != null
             ? shareCount * price
             : null;
+    final double? estimatedFee =
+        estimatedGross == null
+            ? null
+            : estimatedGross * kGtexPlayerShareTradingFeeRate;
+    final double? estimatedNet =
+        estimatedGross == null || estimatedFee == null
+            ? null
+            : _side == GteOrderSide.buy
+            ? estimatedGross + estimatedFee
+            : estimatedGross - estimatedFee;
 
     return SafeArea(
       child: Padding(
@@ -121,10 +134,24 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                               : gteFormatCredits(price),
                         ),
                         GteMetricChip(
-                          label: 'Est. total',
-                          value: estimatedTotal == null
+                          label: 'Gross',
+                          value: estimatedGross == null
                               ? '--'
-                              : gteFormatCredits(estimatedTotal),
+                              : gteFormatCredits(estimatedGross),
+                        ),
+                        GteMetricChip(
+                          label: 'Trading fee (20%)',
+                          value: estimatedFee == null
+                              ? '--'
+                              : gteFormatCredits(estimatedFee),
+                        ),
+                        GteMetricChip(
+                          label: _side == GteOrderSide.buy
+                              ? 'Est. debit'
+                              : 'Est. credit',
+                          value: estimatedNet == null
+                              ? '--'
+                              : gteFormatCredits(estimatedNet),
                         ),
                       ],
                     ),
@@ -154,10 +181,12 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
                   const SizedBox(height: 12),
                   Text(
                     _side == GteOrderSide.buy
-                        ? 'Buys settle immediately at the current share price. '
-                            'The final amount charged is set by the server.'
-                        : 'Sells settle immediately from the shares you own. '
-                            'The final amount credited is set by the server.',
+                        ? 'Buys settle immediately against share-market liquidity '
+                            '(not holder↔holder escrow). Platform takes 20% of gross '
+                            'as a trading fee; Est. debit is fee-inclusive. Server is final.'
+                        : 'Sells settle immediately against share-market liquidity. '
+                            'Platform takes 20% of gross; Est. credit is after the fee. '
+                            'Server is final.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 16),

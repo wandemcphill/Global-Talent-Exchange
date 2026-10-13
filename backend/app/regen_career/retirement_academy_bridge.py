@@ -81,6 +81,7 @@ class RegenRetirementAcademyBridge:
         if len(prospect_ids) != count:
             raise RuntimeError("Academy generator did not create the requested successor count")
 
+        personality_fragment = self._personality_fragment(str(plan.get("retirement_player_id") or ""))
         for prospect in self.session.scalars(select(AcademyProspect).where(AcademyProspect.id.in_(prospect_ids))).all():
             prospect.current_ability = max(int(prospect.current_ability), effective_quality_floor)
             prospect.potential = max(int(prospect.potential), effective_quality_floor, int(prospect.current_ability))
@@ -93,6 +94,8 @@ class RegenRetirementAcademyBridge:
                 "effective_quality_floor_gsi": effective_quality_floor,
                 "facility_quality_score": facility_quality_score,
                 "legacy_generation": True,
+                "heir_spark": True,
+                "inherited_personality_fragment": personality_fragment,
             }
 
         for run in self.session.scalars(
@@ -116,6 +119,32 @@ class RegenRetirementAcademyBridge:
             trigger_key=trigger_key,
             prospect_ids=prospect_ids,
         )
+
+    def _personality_fragment(self, retiring_player_id: str) -> dict[str, int]:
+        """Carry a tempered slice of the legend's decision personality into heirs."""
+        if not retiring_player_id:
+            return {}
+        from app.models.player_personality import PlayerPersonality
+
+        personality = self.session.scalar(
+            select(PlayerPersonality).where(PlayerPersonality.player_id == retiring_player_id)
+        )
+        if personality is None:
+            return {}
+        # Heirs inherit a softened echo — not a clone — so bloodlines rhyme.
+        def soften(value: int, pull: int = 50) -> int:
+            return max(1, min(99, int(round(value * 0.62 + pull * 0.38))))
+
+        return {
+            "ambition": soften(personality.ambition, 55),
+            "loyalty": soften(personality.loyalty, 60),
+            "temperament": soften(personality.temperament, 48),
+            "ego": soften(personality.ego, 45),
+            "clutch_factor": soften(personality.clutch_factor, 52),
+            "media_appetite": soften(personality.media_appetite, 40),
+            "greed": soften(personality.greed, 45),
+            "hometown_affinity": soften(personality.hometown_affinity, 58),
+        }
 
 
 __all__ = ["ENABLED_ENV", "RegenRetirementAcademyBridge", "RetirementAcademyBridgeResult"]

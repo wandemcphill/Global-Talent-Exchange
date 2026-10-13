@@ -23,7 +23,12 @@ class ClubBrandingService:
 
     def create_club_profile(self, *, owner_user_id: str, payload: ClubCreateRequest) -> ClubProfile:
         from app.access_control.service import AccessControlService
+        from app.clubs.ownership_cap import ClubOwnershipCapError, assert_can_acquire_club
 
+        try:
+            assert_can_acquire_club(self.session, owner_user_id)
+        except ClubOwnershipCapError as exc:
+            raise ValueError(exc.reason) from exc
         existing = self.session.scalar(select(ClubProfile).where(ClubProfile.slug == payload.slug))
         if existing is not None:
             raise ValueError("club_slug_taken")

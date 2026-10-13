@@ -19,6 +19,8 @@ class GtexPlayerPortrait extends StatelessWidget {
     this.nationalityCode,
     this.accent = GtexColors.accentBlue,
     this.size = 96,
+    this.width,
+    this.height,
     this.borderRadius = GtexSpacing.radiusLg,
   });
 
@@ -28,6 +30,10 @@ class GtexPlayerPortrait extends StatelessWidget {
   final String? nationalityCode;
   final Color accent;
   final double size;
+
+  /// Optional non-square plate. When null, [size] is used for both axes.
+  final double? width;
+  final double? height;
   final double borderRadius;
 
   String get _initials {
@@ -50,18 +56,21 @@ class GtexPlayerPortrait extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String? url = imageUrl?.trim();
+    final double plateWidth = width ?? size;
+    final double plateHeight = height ?? size;
+    final double typeScale = plateHeight < plateWidth ? plateHeight : plateWidth;
     final Widget plate = _IdentityPlate(
       initials: _initials,
       position: position,
       nationalityCode: nationalityCode,
       accent: accent,
-      size: size,
+      size: typeScale,
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: SizedBox(
-        width: size,
-        height: size,
+        width: plateWidth,
+        height: plateHeight,
         child:
             url == null || url.isEmpty
                 ? plate
@@ -69,6 +78,8 @@ class GtexPlayerPortrait extends StatelessWidget {
                   url,
                   key: const Key('gtex-player-portrait-image'),
                   fit: BoxFit.cover,
+                  width: plateWidth,
+                  height: plateHeight,
                   gaplessPlayback: true,
                   filterQuality: FilterQuality.medium,
                   // While the photograph is in flight the plate would flash

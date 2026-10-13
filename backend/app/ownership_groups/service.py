@@ -21,12 +21,14 @@ from app.models.ownership_group import (
     OwnershipGroupClub,
     OwnershipGroupEvent,
 )
+from app.clubs.ownership_cap import MAX_OWNED_CLUBS
 from app.models.user import User
 
 DECIMAL_QUANTUM = Decimal("0.0001")
 INTERNAL_TRANSFER_VALUE_TOLERANCE = Decimal("0.2000")
 INTERNAL_TRANSFER_LIMIT = 4
 INTERNAL_TRANSFER_LOOKBACK_DAYS = 30
+MAX_GROUP_CLUBS = MAX_OWNED_CLUBS
 
 
 class OwnershipGroupError(ValueError):
@@ -65,6 +67,10 @@ class OwnershipGroupService:
         selected_club_ids = payload.club_ids or [club.id for club in owned_clubs]
         if len(selected_club_ids) < 2:
             raise OwnershipGroupError("Ownership groups must start with at least two clubs.")
+        if len(selected_club_ids) > MAX_GROUP_CLUBS:
+            raise OwnershipGroupError(
+                f"Ownership groups are capped at {MAX_GROUP_CLUBS} clubs — the same as controlling ownership."
+            )
         group_name = payload.name.strip()
         existing = self.session.scalar(
             select(OwnershipGroup).where(
@@ -108,6 +114,10 @@ class OwnershipGroupService:
             raise OwnershipGroupError("Club already belongs to another ownership group.")
         if club.id in set(group.clubs_json or []):
             return group
+        if len(list(group.clubs_json or [])) >= MAX_GROUP_CLUBS:
+            raise OwnershipGroupError(
+                f"This empire already has {MAX_GROUP_CLUBS} clubs — GTEX conglomerate cap."
+            )
         self.session.add(OwnershipGroupClub(group_id=group.id, club_id=club.id, metadata_json={}))
         group.clubs_json = [*list(group.clubs_json or []), club.id]
         self._refresh_group_metrics(group)

@@ -365,6 +365,62 @@ class RegenUniverseService:
                 )
             )
         self.session.flush()
+        self.announce_rising_stars_to_story_feed(limit=5)
+
+    def announce_rising_stars_to_story_feed(self, *, limit: int = 5) -> dict[str, int]:
+        """Publish top rising-star / scouting beats into the durable news desk."""
+        from app.story_feed_engine.service import StoryFeedService
+
+        payload = self.list_rising_stars(limit=max(1, min(limit, 12)), offset=0)
+        entries = list(payload.get("entries") or [])
+        service = StoryFeedService(self.session)
+        created = 0
+        skipped = 0
+        for entry in entries:
+            player = dict(entry.get("player") or {})
+            player_id = str(entry.get("player_id") or player.get("player_id") or "").strip()
+            name = str(player.get("display_name") or player.get("name") or "A rising regen").strip()
+            if not player_id or player_id.startswith("seed:"):
+                # National seeds without durable player ids stay on the Regen World lane only.
+                skipped += 1
+                continue
+            position = str(player.get("primary_position") or player.get("position") or "prospect")
+            nationality = str(player.get("nationality") or "")
+            country_code = str(player.get("nationality_code") or player.get("country_code") or "").upper()
+            if len(country_code) < 2 or len(country_code) > 8:
+                country_code = ""
+            momentum = str(entry.get("momentum_label") or "rising")
+            title = f"Scouts flag {name} as a rising star"
+            body = (
+                f"{name} ({position}"
+                f"{f', {nationality or country_code}' if (nationality or country_code) else ''}) "
+                f"is trending in Regen Universe with {momentum} momentum. The GTEX world is watching."
+            )
+            _, was_created = service.publish_idempotent(
+                idempotency_key=f"regen_rising_star:{player_id}",
+                source="regen_universe",
+                story_type="regen_rising_star",
+                title=title[:200],
+                body=body,
+                audience="public",
+                subject_type="player",
+                subject_id=player_id[:64],
+                country_code=country_code or None,
+                featured=any(
+                    token in momentum.lower()
+                    for token in ("breakout", "wonderkid", "legacy", "elite")
+                ),
+                metadata_json={
+                    "momentum_label": momentum,
+                    "player_name": name,
+                    "position": position,
+                },
+            )
+            if was_created:
+                created += 1
+            else:
+                skipped += 1
+        return {"created": created, "skipped": skipped, "seen": len(entries)}
 
     def list_seasons(self, *, active_only: bool = False) -> list[RegenSeason]:
         stmt = select(RegenSeason)

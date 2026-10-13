@@ -32,11 +32,28 @@ namespace FStudio.GTEX.VisualBridge
 
         private readonly Dictionary<string, float> markCommitUntil = new Dictionary<string, float>();
         private readonly Dictionary<string, string> currentMarks = new Dictionary<string, string>();
+        private readonly Dictionary<string, GtexRegenBehaviorBrief> regenBriefs =
+            new Dictionary<string, GtexRegenBehaviorBrief>(System.StringComparer.OrdinalIgnoreCase);
         private float nextIntentTick;
         private float nextAllowedShotTime;
         private float nextAllowedPassTime;
         private string observedBallOwnerId = string.Empty;
         private float observedBallOwnerSince;
+
+        public void SetRegenBehaviorBrief(GtexRegenBehaviorBrief brief)
+        {
+            if (brief == null || string.IsNullOrWhiteSpace(brief.playerId))
+            {
+                return;
+            }
+
+            regenBriefs[brief.playerId] = brief;
+        }
+
+        public void ClearRegenBehaviorBriefs()
+        {
+            regenBriefs.Clear();
+        }
 
         public void Bind(GtexVisualMatchDirector director, GtexOriginalSimAdapter simAdapter)
         {
@@ -167,6 +184,13 @@ namespace FStudio.GTEX.VisualBridge
             }
 
             var shootBias = distance <= clearShotDistance ? 1f : 0.72f;
+            if (regenBriefs.TryGetValue(ballOwnerId, out var brief) && brief != null)
+            {
+                // Living-star shot greed / big-game nerves nudge intent only —
+                // GTEX remains match authority; this is visual temperament.
+                shootBias = Mathf.Clamp01(shootBias + brief.ShotDecisionBias - brief.bigGameNerves * 0.12f);
+            }
+
             if (Random.value > shootBias)
             {
                 return false;

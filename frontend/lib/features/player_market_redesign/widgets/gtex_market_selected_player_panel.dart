@@ -263,7 +263,14 @@ class _SelectedPlayerDetail extends StatelessWidget {
           gsiTierLabel: player.gsiTierLabel,
           gsiTrendLabel: player.gsiTrendLabel,
           ratingLabel: player.ratingLabel,
+          overallLabel: player.overallLabel,
+          potentialLabel: player.potentialLabel,
+          abilities: player.abilityStats,
           ageLabel: player.ageLabel,
+          heightLabel: player.heightLabel,
+          footLabel: player.footLabel,
+          secondaryPositions: player.secondaryPositions,
+          // Real-player exchange assets: permanent ownership, no wage/expiry.
           badges: <Widget>[
             GtexStatusChip(
               label: player.availabilityTypeLabel,

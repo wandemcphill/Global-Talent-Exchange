@@ -424,11 +424,13 @@ def _seed_regen_universe_defaults(app, context) -> None:
 def _seed_regen_universe_preseeded_national_pool(app, context) -> None:
     def _seed() -> None:
         with context.database.session_factory() as session:
+            from app.ingestion.canonical_countries import seed_canonical_countries
             from app.regen_universe.expansion_service import (
                 RegenUniverseExpansionService,
                 RegenUniverseExpansionValidationError,
             )
 
+            seed_canonical_countries(session)
             service = RegenUniverseExpansionService(session)
             try:
                 service.seed_preseeded_national_regens(age_band="senior", preseed_batch="system_start")
@@ -443,11 +445,13 @@ def _seed_regen_universe_preseeded_national_pool(app, context) -> None:
 def _seed_regen_universe_preseeded_national_u17_pool(app, context) -> None:
     def _seed() -> None:
         with context.database.session_factory() as session:
+            from app.ingestion.canonical_countries import seed_canonical_countries
             from app.regen_universe.expansion_service import (
                 RegenUniverseExpansionService,
                 RegenUniverseExpansionValidationError,
             )
 
+            seed_canonical_countries(session)
             service = RegenUniverseExpansionService(session)
             try:
                 service.seed_preseeded_national_regens(
@@ -465,11 +469,13 @@ def _seed_regen_universe_preseeded_national_u17_pool(app, context) -> None:
 def _seed_regen_universe_preseeded_national_u20_pool(app, context) -> None:
     def _seed() -> None:
         with context.database.session_factory() as session:
+            from app.ingestion.canonical_countries import seed_canonical_countries
             from app.regen_universe.expansion_service import (
                 RegenUniverseExpansionService,
                 RegenUniverseExpansionValidationError,
             )
 
+            seed_canonical_countries(session)
             service = RegenUniverseExpansionService(session)
             try:
                 service.seed_preseeded_national_regens(
@@ -772,6 +778,7 @@ DOMAIN_MODULES = (
     _module("regen_universe_admin", router_path="app.regen_universe.router:admin_router"),
     _module("player_lifecycle", router_path="app.routes.player_lifecycle:router"),
     _module("player_agency", router_path="app.routes.player_agency:router"),
+    _module("regen_living_star", router_path="app.routes.regen_living_star:router"),
     _module("transfer_market", router_path="app.transfer_market.router:router"),
     _module(
         "football_events",

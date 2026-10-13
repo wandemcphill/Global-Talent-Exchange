@@ -173,10 +173,12 @@ class GtexNewsArticle {
     required this.category,
     required this.publishedAt,
     this.heroLabel,
+    this.byline,
     this.relatedEntity,
     this.relatedRoute,
     this.shareUrl,
     this.isBreaking = false,
+    this.isFeatured = false,
     this.trustScore = 0.92,
     this.reactionCount = 0,
     this.commentCount = 0,
@@ -189,10 +191,12 @@ class GtexNewsArticle {
   final GtexNewsCategory category;
   final DateTime publishedAt;
   final String? heroLabel;
+  final String? byline;
   final String? relatedEntity;
   final String? relatedRoute;
   final String? shareUrl;
   final bool isBreaking;
+  final bool isFeatured;
   final double trustScore;
   final int reactionCount;
   final int commentCount;

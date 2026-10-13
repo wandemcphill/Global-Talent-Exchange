@@ -206,7 +206,7 @@ GoRouter buildGtexAppRouter({
         path: '/app/transfer-hub',
         redirect:
             (BuildContext context, GoRouterState state) =>
-                const GteNavigationRoute.market().path,
+                const FootballTransferCenterRouteData().toUri().toString(),
       ),
       GoRoute(
         path: '/app/coin-traders',
@@ -463,13 +463,30 @@ List<RouteBase> _buildLegacyAliasRoutes({
       path: '/market/transfers',
       redirect:
           (BuildContext context, GoRouterState state) =>
-              const GteNavigationRoute.market().path,
+              const FootballTransferCenterRouteData().toUri().toString(),
     ),
     GoRoute(
       path: '/football/transfer-center',
-      redirect:
-          (BuildContext context, GoRouterState state) =>
-              const GteNavigationRoute.market().path,
+      pageBuilder: (BuildContext context, GoRouterState state) {
+        final GteNavigationDependencies dependencies = dependenciesBuilder(
+          context,
+        );
+        final String? tabSlug = state.uri.queryParameters['tab'];
+        final GteTransferCenterTab tab = GteTransferCenterTab.values
+            .firstWhere(
+              (GteTransferCenterTab item) => item.slug == tabSlug,
+              orElse: () => GteTransferCenterTab.windows,
+            );
+        return NoTransitionPage<void>(
+          key: state.pageKey,
+          child: GteAppRouteRegistry(
+            dependencies: dependencies,
+          ).buildScreen(
+            context,
+            FootballTransferCenterRouteData(tab: tab),
+          ),
+        );
+      },
     ),
     GoRoute(
       path: '/player-cards',

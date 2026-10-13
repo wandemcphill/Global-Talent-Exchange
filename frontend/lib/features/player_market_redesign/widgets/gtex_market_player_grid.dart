@@ -324,10 +324,15 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
                       gsiTierLabel: player.gsiTierLabel,
                       gsiTrendLabel: player.gsiTrendLabel,
                       ratingLabel: player.ratingLabel,
+                      overallLabel: player.overallLabel,
+                      potentialLabel: player.potentialLabel,
+                      abilities: player.abilityStats,
                       ageLabel: player.ageValueLabel,
                       heightLabel: player.heightLabel,
                       footLabel: player.footLabel,
                       secondaryPositions: player.secondaryPositions,
+                      // Market listings are real-player share assets: no
+                      // wage / contract clock. Those belong on regen cards.
                       // The backend's movement is a movement of the
                       // *valuation*. It cannot sit unlabelled beside a share
                       // price, so it travels with the valuation instead, in

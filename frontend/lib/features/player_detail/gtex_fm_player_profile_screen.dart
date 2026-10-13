@@ -215,8 +215,10 @@ class _GtexFmPlayerProfileScreenState extends State<GtexFmPlayerProfileScreen> {
         content: Text(
           'Settled for ${snapshot.detail.identity.playerName}: '
           'you now own ${trade.holding.shareCount} '
-          '${trade.holding.shareCount == 1 ? 'share' : 'shares'} '
-          '(${gteFormatCredits(trade.netAmountCoin)} GTEX Coin).',
+          '${trade.holding.shareCount == 1 ? 'share' : 'shares'}. '
+          'Gross ${gteFormatCredits(trade.grossAmountCoin)} · '
+          'Fee ${gteFormatCredits(trade.feeAmountCoin)} · '
+          'Net ${gteFormatCredits(trade.netAmountCoin)} GTEX Coin.',
           style: const TextStyle(color: _text),
         ),
         action: SnackBarAction(
@@ -1010,7 +1012,27 @@ class _BioCard extends StatelessWidget {
     if (f == null || f.isEmpty) {
       return '—';
     }
-    return f[0].toUpperCase() + f.substring(1).toLowerCase();
+    final String token = f.toLowerCase().replaceAll('_', ' ');
+    switch (token) {
+      case 'l':
+      case 'left':
+      case 'left foot':
+      case 'left-footed':
+        return 'Left';
+      case 'r':
+      case 'right':
+      case 'right foot':
+      case 'right-footed':
+        return 'Right';
+      case 'either':
+      case 'both':
+      case 'two footed':
+      case 'two-footed':
+      case 'ambidextrous':
+        return 'Either';
+      default:
+        return f[0].toUpperCase() + f.substring(1).toLowerCase();
+    }
   }
 }
 

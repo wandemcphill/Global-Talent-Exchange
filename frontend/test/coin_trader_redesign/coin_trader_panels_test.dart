@@ -61,10 +61,22 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('Lagos OTC Desk'), findsWidgets);
+    expect(find.textContaining('Lagos OTC Desk'), findsWidgets);
+    expect(find.text('Rate board'), findsOneWidget);
+    expect(find.text('OPEN ESCROW'), findsOneWidget);
+    expect(find.textContaining('Buy from user'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.text('Rates and liquidity'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Rates and liquidity'), findsOneWidget);
-    expect(find.textContaining('Buy from user 820-890'), findsOneWidget);
-    expect(find.text('Trader orders', skipOffstage: false), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Blotter'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Blotter'), findsOneWidget);
   });
 
   testWidgets('coin trader admin screen renders approvals and escrow orders', (

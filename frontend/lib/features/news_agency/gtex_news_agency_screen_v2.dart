@@ -58,7 +58,18 @@ class _GtexNewsAgencyScreenV2State extends State<GtexNewsAgencyScreenV2> {
       throw StateError('Live story feed API is required for GTEX News Agency.');
     }
     final List<StoryFeedItem> stories = await api.listFeed(limit: 100);
-    return stories.map(_articleFromStory).toList(growable: false);
+    final List<GtexNewsArticle> articles =
+        stories.map(_articleFromStory).toList(growable: true);
+    articles.sort((GtexNewsArticle a, GtexNewsArticle b) {
+      final int featuredCmp =
+          (b.isFeatured || b.isBreaking ? 1 : 0) -
+          (a.isFeatured || a.isBreaking ? 1 : 0);
+      if (featuredCmp != 0) {
+        return featuredCmp;
+      }
+      return b.publishedAt.compareTo(a.publishedAt);
+    });
+    return List<GtexNewsArticle>.unmodifiable(articles);
   }
 
   void _refresh() {
@@ -178,6 +189,12 @@ GtexNewsArticle _articleFromStory(StoryFeedItem story) {
   final String summary =
       _metadataString(metadata, <String>['summary', 'dek', 'excerpt']) ??
       _summarize(story.body);
+  final String? journalist = _metadataString(metadata, <String>[
+    'journalist',
+    'byline',
+    'author',
+    'reporter',
+  ]);
   return GtexNewsArticle(
     id: story.id,
     title: story.title,
@@ -188,12 +205,15 @@ GtexNewsArticle _articleFromStory(StoryFeedItem story) {
     heroLabel:
         _metadataString(metadata, <String>['hero_label', 'heroLabel']) ??
         _humanize(story.storyType),
+    byline: journalist ?? 'GTEX Wire',
     relatedEntity:
         _metadataString(metadata, <String>[
           'related_entity',
           'relatedEntity',
           'subject_label',
           'subjectLabel',
+          'player_name',
+          'club',
         ]) ??
         story.subjectId ??
         story.countryCode,
@@ -213,6 +233,7 @@ GtexNewsArticle _articleFromStory(StoryFeedItem story) {
     ]),
     isBreaking:
         story.featured || story.storyType.toLowerCase().contains('break'),
+    isFeatured: story.featured,
     trustScore: _metadataDouble(metadata, <String>[
       'trust_score',
       'trustScore',
@@ -237,10 +258,19 @@ GtexNewsArticle _articleFromStory(StoryFeedItem story) {
 GtexNewsCategory _categoryFromStory(StoryFeedItem story) {
   final String raw =
       '${story.storyType} ${story.subjectType ?? ''}'.trim().toLowerCase();
-  if (raw.contains('break')) return GtexNewsCategory.breaking;
-  if (raw.contains('transfer')) return GtexNewsCategory.transfers;
+  if (raw.contains('break') || raw.contains('app_update')) {
+    return GtexNewsCategory.breaking;
+  }
+  if (raw.contains('exit_petition') ||
+      raw.contains('transfer') ||
+      raw.contains('here_we_go')) {
+    return GtexNewsCategory.transfers;
+  }
   if (raw.contains('club')) return GtexNewsCategory.clubs;
-  if (raw.contains('regen') || raw.contains('newgen')) {
+  if (raw.contains('regen') ||
+      raw.contains('newgen') ||
+      raw.contains('rising') ||
+      raw.contains('scouting')) {
     return GtexNewsCategory.regens;
   }
   if (raw.contains('award')) return GtexNewsCategory.awards;
@@ -251,7 +281,7 @@ GtexNewsCategory _categoryFromStory(StoryFeedItem story) {
   if (raw.contains('jackpot')) return GtexNewsCategory.jackpot;
   if (raw.contains('creator')) return GtexNewsCategory.creators;
   if (raw.contains('dispute')) return GtexNewsCategory.disputes;
-  if (raw.contains('market') || raw.contains('order')) {
+  if (raw.contains('market') || raw.contains('order') || raw.contains('leak')) {
     return GtexNewsCategory.market;
   }
   return story.featured ? GtexNewsCategory.breaking : GtexNewsCategory.market;
@@ -382,10 +412,15 @@ class _NewsLeftPanel extends StatelessWidget {
               for (final GtexNewsArticle article in articles)
                 GtexSectionListTile(
                   title: article.title,
-                  subtitle: article.summary,
+                  subtitle:
+                      article.byline == null
+                          ? article.summary
+                          : '${article.byline} · ${article.summary}',
                   icon:
                       article.isBreaking
                           ? Icons.bolt_outlined
+                          : article.isFeatured
+                          ? Icons.push_pin_outlined
                           : Icons.article_outlined,
                   accent: newsCategoryColor(article.category),
                   isSelected: article.id == selected.id,
@@ -395,6 +430,12 @@ class _NewsLeftPanel extends StatelessWidget {
                           ? const GtexStatusChip(
                             label: 'LIVE',
                             color: GtexColors.red,
+                            compact: true,
+                          )
+                          : article.isFeatured
+                          ? const GtexStatusChip(
+                            label: 'PIN',
+                            color: GtexColors.gold,
                             compact: true,
                           )
                           : null,

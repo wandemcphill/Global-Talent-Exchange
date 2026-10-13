@@ -3,6 +3,7 @@ import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../models/gtex_regen_dossier.dart';
+import '../models/gtex_regen_living_star.dart';
 import '../models/gtex_regen_wire_models.dart';
 
 /// The regen's record: lineage, potential, development, personality, value.
@@ -37,6 +38,8 @@ class GtexRegenDossierPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        _LivingStarSection(dossier: dossier),
+        const SizedBox(height: GtexSpacing.md),
         _LineageSection(dossier: dossier),
         const SizedBox(height: GtexSpacing.md),
         _PotentialSection(dossier: dossier),
@@ -72,6 +75,187 @@ class GtexRegenDossierPanel extends StatelessWidget {
       icon: transient ? Icons.cloud_off_rounded : Icons.hourglass_empty_rounded,
       ctaLabel: transient ? 'Retry' : null,
       ctaAction: transient ? onRetry : null,
+    );
+  }
+}
+
+/// Living star: voice, mood, archetype, exit ladder, match temperament.
+class _LivingStarSection extends StatelessWidget {
+  const _LivingStarSection({required this.dossier});
+
+  final GtexRegenDossier dossier;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexRegenLivingStar? star = dossier.livingStar;
+    if (star == null) {
+      return const GtexPanel(
+        title: 'Living star',
+        accent: GtexColors.accentViolet,
+        child: GtexBlockedState(
+          compact: true,
+          title: 'Voice not published yet',
+          reason:
+              'Archetype, monologue and exit pressure appear once this regen '
+              'has a living-star agency profile.',
+          severity: GtexBlockedSeverity.info,
+          icon: Icons.record_voice_over_outlined,
+        ),
+      );
+    }
+
+    final Color moodColor = star.moodSeverity >= 3
+        ? GtexColors.danger
+        : star.moodSeverity == 2
+        ? GtexColors.gold
+        : star.moodSeverity == 1
+        ? GtexColors.cyan
+        : GtexColors.mint;
+
+    return GtexPanel(
+      title: 'Living star',
+      subtitle: '${star.archetypeLabel} · 1 OF 1',
+      accent: GtexColors.accentViolet,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            star.archetypeSummary,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: GtexColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              GtexStatusChip(
+                label: star.moodLabel,
+                color: moodColor,
+                compact: true,
+              ),
+              GtexStatusChip(
+                label: star.exitLabel,
+                color:
+                    star.exitSeverity >= 2
+                        ? GtexColors.danger
+                        : GtexColors.gold,
+                compact: true,
+              ),
+              if (star.isUniqueCollectible)
+                const GtexStatusChip(
+                  label: '1 OF 1',
+                  color: GtexColors.gold,
+                  compact: true,
+                ),
+            ],
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(GtexSpacing.sm),
+            decoration: BoxDecoration(
+              color: GtexColors.surfaceOverlay,
+              borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+              border: Border.all(color: GtexColors.surfaceBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'INNER MONOLOGUE',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: GtexColors.textTertiary,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.7,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '"${star.voiceLine}"',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: GtexColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (star.promises.isNotEmpty) ...<Widget>[
+            const SizedBox(height: GtexSpacing.md),
+            Text(
+              'Promise memory',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: GtexColors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: GtexSpacing.xs),
+            ...star.promises.take(4).map((GtexRegenPromiseMemory promise) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(
+                      promise.broken
+                          ? Icons.warning_amber_rounded
+                          : Icons.handshake_outlined,
+                      size: 16,
+                      color:
+                          promise.broken
+                              ? GtexColors.danger
+                              : GtexColors.mint,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        promise.statement,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: GtexColors.textSecondary,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+          if (star.ownerActions.isNotEmpty) ...<Widget>[
+            const SizedBox(height: GtexSpacing.sm),
+            Text(
+              'Owner levers: ${star.ownerActions.join(' · ')}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: GtexColors.textTertiary,
+                height: 1.35,
+              ),
+            ),
+          ],
+          if (star.heirStatus != null &&
+              star.heirStatus != 'inactive') ...<Widget>[
+            const SizedBox(height: GtexSpacing.sm),
+            GtexStatusChip(
+              label: 'Heir spark: ${star.heirStatus}',
+              color: GtexColors.gold,
+              compact: true,
+            ),
+          ],
+          if (star.behaviorBrief.notes.isNotEmpty) ...<Widget>[
+            const SizedBox(height: GtexSpacing.sm),
+            Text(
+              'Match temperament: ${star.behaviorBrief.notes.join(' · ')}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: GtexColors.textSecondary,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

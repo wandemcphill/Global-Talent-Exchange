@@ -4,6 +4,7 @@ import 'package:gte_frontend/models/regen_creation_models.dart';
 import 'package:gte_frontend/models/regen_universe_models.dart';
 
 import '../models/gtex_regen_dossier.dart';
+import '../models/gtex_regen_living_star.dart';
 import '../models/gtex_regen_models.dart';
 import '../models/gtex_regen_wire_models.dart';
 import 'gtex_regen_demo_dossier.dart';
@@ -29,6 +30,11 @@ abstract class GtexRegenRepository {
     String playerId,
     GtexRegenOfferDraft draft,
   );
+  Future<GtexRegenLivingStar?> petitionExit(
+    String playerId, {
+    String? reason,
+  });
+  Future<void> resolveRegenBid(String playerId);
   bool get canActOnOwnership;
 }
 
@@ -149,6 +155,9 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
           .map(_prospectFromCreationOrder),
     ];
 
+    final List<GtexRegenContractOffer> contracts =
+        await _realContractOfferInbox(fallbackStars: liveStars);
+
     return GtexRegenWorldData(
       stats: GtexRegenWorldStats(
         totalRegens:
@@ -175,8 +184,109 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
       achievementFeed: liveFeed
           .map(_achievementFromFeed)
           .toList(growable: false),
-      contracts: const <GtexRegenContractOffer>[],
+      contracts: contracts,
     );
+  }
+
+  /// Prefer real RegenContractOffer inbox rows; fall back to exit-pressure cues.
+  Future<List<GtexRegenContractOffer>> _realContractOfferInbox({
+    required List<RegenRisingStar> fallbackStars,
+  }) async {
+    if (isAuthenticated) {
+      try {
+        final List<Map<String, Object?>> rows =
+            await _worldApi.listContractOfferInbox();
+        if (rows.isNotEmpty) {
+          return List<GtexRegenContractOffer>.unmodifiable(
+            rows.map(_contractOfferFromInboxRow),
+          );
+        }
+      } catch (_) {
+        // Fall through to living-star pressure cues.
+      }
+    }
+    return _livingStarPressureInbox(fallbackStars);
+  }
+
+  GtexRegenContractOffer _contractOfferFromInboxRow(Map<String, Object?> row) {
+    final double annual =
+        double.tryParse(
+          '${row['offered_salary_fancoin_per_year'] ?? row['offeredSalaryFancoinPerYear'] ?? 0}',
+        ) ??
+        0;
+    final int years =
+        int.tryParse(
+          '${row['contract_years'] ?? row['contractYears'] ?? 1}',
+        ) ??
+        1;
+    final String statusRaw =
+        (row['status'] ?? 'negotiating').toString().toLowerCase();
+    return GtexRegenContractOffer(
+      id: (row['offer_id'] ?? row['offerId'] ?? '').toString(),
+      regenId: (row['regen_id'] ?? row['regenId'] ?? '').toString(),
+      regenName: (row['player_name'] ?? row['playerName'] ?? 'Regen').toString(),
+      status:
+          statusRaw.contains('transfer')
+              ? GtexRegenContractStatus.transferRequested
+              : GtexRegenContractStatus.negotiating,
+      weeklyWageCoin: annual / 52.0,
+      signingBonusCoin: 0,
+      durationSeasons: years,
+      personalityNote:
+          (row['personality_note'] ??
+                  row['personalityNote'] ??
+                  row['offering_club_name'] ??
+                  row['offeringClubName'] ??
+                  '')
+              .toString(),
+    );
+  }
+
+  /// Living-star exit pressure cues when no open RegenContractOffer rows exist.
+  Future<List<GtexRegenContractOffer>> _livingStarPressureInbox(
+    List<RegenRisingStar> stars,
+  ) async {
+    final List<RegenRisingStar> sample = stars.take(8).toList(growable: false);
+    if (sample.isEmpty) {
+      return const <GtexRegenContractOffer>[];
+    }
+    final List<GtexRegenLivingStar?> results = await Future.wait(
+      sample.map((RegenRisingStar star) async {
+        try {
+          return await _worldApi.fetchLivingStar(star.playerId);
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+    final List<GtexRegenContractOffer> offers = <GtexRegenContractOffer>[];
+    for (int i = 0; i < sample.length; i++) {
+      final GtexRegenLivingStar? star = results[i];
+      if (star == null) {
+        continue;
+      }
+      if (star.exitSeverity <= 0 && star.moodSeverity <= 0) {
+        continue;
+      }
+      final RegenRisingStar rising = sample[i];
+      offers.add(
+        GtexRegenContractOffer(
+          id: 'living-star-${star.playerId}',
+          regenId: star.regenId ?? star.playerId,
+          regenName: rising.player.name,
+          status:
+              star.exitSeverity >= 2
+                  ? GtexRegenContractStatus.transferRequested
+                  : GtexRegenContractStatus.negotiating,
+          weeklyWageCoin: 0,
+          signingBonusCoin: 0,
+          durationSeasons: 0,
+          personalityNote:
+              '${star.archetypeLabel} · ${star.moodLabel} · ${star.voiceLine}',
+        ),
+      );
+    }
+    return List<GtexRegenContractOffer>.unmodifiable(offers);
   }
 
   @override
@@ -248,6 +358,13 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
       lifecycle = null;
     }
 
+    GtexRegenLivingStar? livingStar;
+    try {
+      livingStar = await _worldApi.fetchLivingStar(playerId);
+    } catch (_) {
+      livingStar = null;
+    }
+
     return GtexRegenDossierResult.loaded(
       GtexRegenDossier(
         playerId: playerId,
@@ -255,6 +372,7 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
         lineageChain: chain,
         lineageChainUnavailable: chainUnavailable,
         lifecycle: lifecycle,
+        livingStar: livingStar,
       ),
     );
   }
@@ -298,6 +416,25 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
       throw StateError('Sign in to price a contract offer.');
     }
     return _worldApi.quoteContractOffer(playerId, draft);
+  }
+
+  @override
+  Future<GtexRegenLivingStar?> petitionExit(
+    String playerId, {
+    String? reason,
+  }) {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to petition a regen exit.');
+    }
+    return _worldApi.petitionExit(playerId, reason: reason);
+  }
+
+  @override
+  Future<void> resolveRegenBid(String playerId) {
+    if (!isAuthenticated) {
+      throw StateError('Sign in to resolve a regen bid.');
+    }
+    return _worldApi.resolveRegenBid(playerId);
   }
 
   static Future<_LiveLoadResult<T>> _safe<T>(Future<T> future) async {
@@ -690,6 +827,20 @@ class DemoGtexRegenRepository implements GtexRegenRepository {
   ) async {
     await Future<void>.delayed(const Duration(milliseconds: 40));
     return demoRegenOfferQuote(draft);
+  }
+
+  @override
+  Future<GtexRegenLivingStar?> petitionExit(
+    String playerId, {
+    String? reason,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    return null;
+  }
+
+  @override
+  Future<void> resolveRegenBid(String playerId) async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
   }
 }
 

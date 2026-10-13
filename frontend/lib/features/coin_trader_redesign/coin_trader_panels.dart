@@ -418,21 +418,248 @@ class _GtexCoinTraderDashboardPanelState
 
     return ListView(
       children: <Widget>[
-        _TraderLiquidityTopUpPanel(onTopUp: widget.onTopUp),
+        _TraderDeskCommandStrip(
+          profile: _profile!,
+          orders: _orders,
+          onRefresh: _load,
+          onTopUp: widget.onTopUp,
+        ),
         const SizedBox(height: GtexSpacing.md),
-        _ProfileSummaryPanel(profile: _profile!),
+        _TraderRateBoard(profile: _profile!),
         const SizedBox(height: GtexSpacing.md),
         _RateEditorPanel(api: _api, profile: _profile!, onSaved: _load),
         const SizedBox(height: GtexSpacing.md),
         _OrdersPanel(
           orders: _orders,
-          title: 'Trader orders',
+          title: 'Blotter',
           api: _api,
           onChanged: _load,
           isTrader: true,
         ),
+        const SizedBox(height: GtexSpacing.md),
+        _TraderLiquidityTopUpPanel(onTopUp: widget.onTopUp),
       ],
     );
+  }
+}
+
+class _TraderDeskCommandStrip extends StatelessWidget {
+  const _TraderDeskCommandStrip({
+    required this.profile,
+    required this.orders,
+    required this.onRefresh,
+    this.onTopUp,
+  });
+
+  final GtexCoinTraderProfile profile;
+  final List<GtexCoinTradeOrder> orders;
+  final VoidCallback onRefresh;
+  final VoidCallback? onTopUp;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<GtexCoinTradeOrder> openEscrow =
+        orders.where((GtexCoinTradeOrder o) => o.isActiveEscrow).toList();
+    final List<GtexCoinTradeOrder> disputed =
+        orders
+            .where((GtexCoinTradeOrder o) => o.status.toLowerCase() == 'disputed')
+            .toList();
+    final List<GtexCoinTradeOrder> awaitingAccept =
+        orders.where((GtexCoinTradeOrder o) => o.canAccept).toList();
+    final double escrowCoins = openEscrow.fold<double>(
+      0,
+      (double sum, GtexCoinTradeOrder o) => sum + o.coinAmount,
+    );
+    final double escrowFiat = openEscrow.fold<double>(
+      0,
+      (double sum, GtexCoinTradeOrder o) => sum + o.fiatTotal,
+    );
+    final Color presence =
+        profile.isOnline == true ? GtexColors.pitch : GtexColors.gold;
+
+    return GtexPanel(
+      title: 'OTC desk · ${profile.displayName}',
+      subtitle:
+          '${profile.countryCode ?? 'Global'} · ${_titleCase(profile.tier)} · '
+          '${_titleCase(profile.status)} · governed P2P escrow',
+      accent: presence,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _OnlinePill(trader: profile),
+          const SizedBox(width: GtexSpacing.sm),
+          IconButton.filledTonal(
+            tooltip: 'Refresh desk',
+            onPressed: onRefresh,
+            icon: const Icon(Icons.sync),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Wrap(
+            spacing: GtexSpacing.md,
+            runSpacing: GtexSpacing.md,
+            children: <Widget>[
+              _deskMetric('Presence', profile.onlineLabel, Icons.sensors),
+              _deskMetric(
+                'Inventory',
+                _coin(profile.totalLiquidity),
+                Icons.inventory_2_outlined,
+              ),
+              _deskMetric(
+                'Open escrow',
+                '${openEscrow.length} · ${_coin(escrowCoins)}',
+                Icons.lock_clock_outlined,
+              ),
+              _deskMetric(
+                'Escrow fiat',
+                _money(escrowFiat),
+                Icons.account_balance_wallet_outlined,
+              ),
+              _deskMetric(
+                'Awaiting accept',
+                '${awaitingAccept.length}',
+                Icons.inbox_outlined,
+              ),
+              _deskMetric(
+                'Disputes',
+                '${disputed.length}',
+                Icons.gavel_outlined,
+              ),
+              _deskMetric(
+                'Volume 30d proxy',
+                _money(profile.completedVolumeFiat),
+                Icons.trending_up,
+              ),
+              _deskMetric(
+                'Completion',
+                '${profile.completionRate.toStringAsFixed(0)}%',
+                Icons.verified_outlined,
+              ),
+              _deskMetric(
+                'Release speed',
+                '${profile.averageReleaseMinutes.toStringAsFixed(0)}m',
+                Icons.timer_outlined,
+              ),
+              _deskMetric(
+                'Dispute score',
+                profile.disputeScore.toStringAsFixed(1),
+                Icons.health_and_safety_outlined,
+              ),
+            ],
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          Wrap(
+            spacing: GtexSpacing.sm,
+            runSpacing: GtexSpacing.sm,
+            children: <Widget>[
+              const GtexStatusChip(
+                label: 'No synthetic charts — escrow is the market',
+                icon: Icons.visibility_outlined,
+                color: GtexColors.pitch,
+              ),
+              GtexActionButton(
+                label: 'Fund inventory',
+                icon: Icons.receipt_long_outlined,
+                accent: GtexColors.gold,
+                onPressed: onTopUp,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _deskMetric(String label, String value, IconData icon) {
+    return SizedBox(
+      width: 168,
+      child: GtexMetricTile(
+        label: label,
+        value: value,
+        icon: icon,
+        accent: GtexColors.gold,
+      ),
+    );
+  }
+}
+
+class _TraderRateBoard extends StatelessWidget {
+  const _TraderRateBoard({required this.profile});
+
+  final GtexCoinTraderProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<GtexCoinTraderRate> active =
+        profile.rates.where((GtexCoinTraderRate r) => r.isActive).toList();
+    return GtexPanel(
+      title: 'Rate board',
+      subtitle: 'Published buy/sell cards · claimed depth · firm OTC quotes',
+      accent: GtexColors.gold,
+      child:
+          active.isEmpty
+              ? const Text(
+                'No active rates. Publish buy/sell cards below to appear on the marketplace.',
+              )
+              : Wrap(
+                spacing: GtexSpacing.md,
+                runSpacing: GtexSpacing.md,
+                children:
+                    active.map((GtexCoinTraderRate rate) {
+                      final double spread =
+                          rate.sellRateFiat > 0 && rate.buyRateFiat > 0
+                              ? (rate.sellRateFiat - rate.buyRateFiat).abs()
+                              : 0;
+                      return SizedBox(
+                        width: 280,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: GtexColors.gold.withValues(alpha: 0.35),
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(GtexSpacing.md),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '${rate.coinCode} / ${rate.fiatCurrency}',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                                const SizedBox(height: GtexSpacing.sm),
+                                Text(
+                                  'Buy from user  ${_fmtRate(rate.buyRateFiat)}',
+                                ),
+                                Text(
+                                  'Sell to user   ${_fmtRate(rate.sellRateFiat)}',
+                                ),
+                                Text('Depth ${_coin(rate.availableLiquidity)}'),
+                                Text(
+                                  'Ticket ${_coin(rate.minCoinAmount)} – ${_coin(rate.maxCoinAmount)}',
+                                ),
+                                if (spread > 0)
+                                  Text('Spread ${_fmtRate(spread)}'),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(growable: false),
+              ),
+    );
+  }
+
+  String _fmtRate(double value) {
+    if (value <= 0) {
+      return '--';
+    }
+    return value.toStringAsFixed(value >= 100 ? 0 : 2);
   }
 }
 
@@ -1778,6 +2005,7 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
     final List<String> guardrailLabels = _guardrailLabels(selectedRate);
     return GtexPanel(
       title: 'Rates and liquidity',
+      subtitle: 'Edit firm quotes · inventory claim feeds the rate board',
       accent: GtexColors.gold,
       child: Column(
         children: <Widget>[
@@ -2200,15 +2428,42 @@ class _OrdersPanelState extends State<_OrdersPanel> {
               const SizedBox(height: GtexSpacing.sm),
       itemBuilder: (BuildContext context, int index) {
         if (index == 0) {
-          return Text(
-            widget.title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: GtexColors.text,
-              fontWeight: FontWeight.w900,
-            ),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                widget.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: GtexColors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: GtexSpacing.xs),
+              const Wrap(
+                spacing: GtexSpacing.sm,
+                runSpacing: GtexSpacing.xs,
+                children: <Widget>[
+                  GtexStatusChip(
+                    label: 'Escrow timeline is the clock',
+                    icon: Icons.timer_outlined,
+                    color: GtexColors.pitch,
+                    compact: true,
+                  ),
+                  GtexStatusChip(
+                    label: 'OTC desk · no platform cut on settle yet',
+                    icon: Icons.account_balance_outlined,
+                    color: GtexColors.gold,
+                    compact: true,
+                  ),
+                ],
+              ),
+            ],
           );
         }
         final GtexCoinTradeOrder order = widget.orders[index - 1];
+        final String? countdown = _paymentWindowCountdown(
+          order.paymentWindowExpiresAt,
+        );
         return GtexPanel(
           accent: GtexColors.gold,
           padding: const EdgeInsets.all(GtexSpacing.sm),
@@ -2239,6 +2494,18 @@ class _OrdersPanelState extends State<_OrdersPanel> {
                 'Fiat total ${_money(order.fiatTotal)} ${order.fiatCurrency}${order.paymentMethod == null ? '' : ' - ${order.paymentMethod}'}',
                 style: const TextStyle(color: GtexColors.textMuted),
               ),
+              if (countdown != null) ...<Widget>[
+                const SizedBox(height: GtexSpacing.xs),
+                GtexStatusChip(
+                  label: countdown,
+                  icon: Icons.hourglass_bottom_outlined,
+                  color:
+                      countdown.startsWith('Expired')
+                          ? GtexColors.danger
+                          : GtexColors.cyan,
+                  compact: true,
+                ),
+              ],
               if (order.paymentWindowExpiresAt != null ||
                   order.acceptedAt != null ||
                   order.releasedAt != null ||
@@ -3253,6 +3520,26 @@ String _slug(String value) {
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
       .replaceAll(RegExp(r'^_+|_+$'), '');
+}
+
+String? _paymentWindowCountdown(DateTime? expiresAt) {
+  if (expiresAt == null) {
+    return null;
+  }
+  final Duration remaining = expiresAt.toUtc().difference(DateTime.now().toUtc());
+  if (remaining.isNegative) {
+    return 'Expired payment window';
+  }
+  final int totalMinutes = remaining.inMinutes;
+  if (totalMinutes >= 60) {
+    final int hours = totalMinutes ~/ 60;
+    final int minutes = totalMinutes % 60;
+    return 'Firm window ${hours}h ${minutes}m left';
+  }
+  if (totalMinutes > 0) {
+    return 'Firm window ${totalMinutes}m left';
+  }
+  return 'Firm window ${remaining.inSeconds}s left';
 }
 
 String _timestamp(DateTime value) {

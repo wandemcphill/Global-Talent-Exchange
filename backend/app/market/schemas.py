@@ -238,6 +238,7 @@ class MarketPlayerListItemView(BaseModel):
     is_tradable: bool
     image_url: str | None
     avatar: PlayerAvatarView
+    attributes: MarketPlayerAttributesView | None = None
 
 
 class MarketPlayerListView(BaseModel):

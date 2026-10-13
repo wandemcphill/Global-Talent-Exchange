@@ -28,8 +28,9 @@ const double _compactMinHeight = 76;
 /// The full poster card stacks a portrait, an identity block, a stat grid,
 /// a value row and a signal rail. It needs real space in both axes; asked
 /// to render in a browse cell it would simply clip.
-const double _fullCardMinHeight = 360;
+const double _fullCardMinHeight = 640;
 const double _fullCardMinWidth = 280;
+const double _fullPortraitHeight = 200;
 
 class GtexPlayerCard extends StatelessWidget {
   const GtexPlayerCard({
@@ -44,6 +45,8 @@ class GtexPlayerCard extends StatelessWidget {
     this.gsiTierLabel,
     this.gsiTrendLabel,
     this.ratingLabel,
+    this.overallLabel,
+    this.abilities,
     this.ageLabel,
     this.countryCode,
     this.rarityLabel,
@@ -89,6 +92,13 @@ class GtexPlayerCard extends StatelessWidget {
   final String? gsiTierLabel;
   final String? gsiTrendLabel;
   final String? ratingLabel;
+
+  /// Big OVR on the FIFA-style face (attributes.overall). Separate from
+  /// [ratingLabel], which remains match-form context on compact rows.
+  final String? overallLabel;
+
+  /// PAC / SHO / PAS / DRI / DEF / PHY. Empty or null hides the ability plate.
+  final Map<String, int>? abilities;
   final String? ageLabel;
   final String? heightLabel;
   final String? footLabel;
@@ -234,6 +244,8 @@ class GtexPlayerCard extends StatelessWidget {
           gsiTierLabel: gsiTierLabel,
           gsiTrendLabel: gsiTrendLabel,
           ratingLabel: ratingLabel,
+          overallLabel: overallLabel,
+          abilities: abilities,
           ageLabel: ageLabel,
           countryCode: countryCode,
           rarityLabel: rarityLabel,
@@ -290,6 +302,8 @@ class _FullPlayerCard extends StatelessWidget {
     this.gsiTierLabel,
     this.gsiTrendLabel,
     this.ratingLabel,
+    this.overallLabel,
+    this.abilities,
     this.ageLabel,
     this.countryCode,
     this.rarityLabel,
@@ -322,6 +336,8 @@ class _FullPlayerCard extends StatelessWidget {
   final String? gsiTierLabel;
   final String? gsiTrendLabel;
   final String? ratingLabel;
+  final String? overallLabel;
+  final Map<String, int>? abilities;
   final String? ageLabel;
   final String? heightLabel;
   final String? footLabel;
@@ -352,10 +368,17 @@ class _FullPlayerCard extends StatelessWidget {
   final VoidCallback? onBuyNow;
   final String buyNowLabel;
 
+  String? get _faceOvr {
+    final String? overall = overallLabel?.trim();
+    if (overall == null || overall.isEmpty) {
+      return null;
+    }
+    return overall;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final Color provenanceColor =
-        isRegen ? GtexColors.accentViolet : GtexColors.accentBlue;
+    final Color provenanceColor = _regenFrameColor(cardVariant, isRegen);
     final String identityLabel = isRegen ? 'REGEN DNA' : 'REAL PLAYER';
     final String identitySupport =
         isRegen ? 'lineage profile' : 'scouting profile';
@@ -363,6 +386,25 @@ class _FullPlayerCard extends StatelessWidget {
         rarityLabel == null || rarityLabel!.trim().isEmpty
             ? null
             : rarityLabel!.trim();
+    final bool premiumRegen = isRegen &&
+        cardVariant != GtexPlayerCardVariant.standard &&
+        cardVariant != GtexPlayerCardVariant.nationalSeed;
+    // Every tradable regen is a unique living asset. National seeds stay out
+    // of the collectible frame because they are pool depth, not 1-of-1 cards.
+    final bool showOneOfOne = isRegen &&
+        cardVariant != GtexPlayerCardVariant.nationalSeed;
+    final double borderWidth = isSelected
+        ? 1.6
+        : (premiumRegen || showOneOfOne ? 1.4 : 1.0);
+    final Color borderColor = isSelected
+        ? GtexColors.accentPrimary
+        : (premiumRegen || showOneOfOne
+            ? provenanceColor.withValues(alpha: 0.85)
+            : GtexColors.surfaceBorder);
+    final String? faceOvr = _faceOvr;
+    final bool hasAbilities =
+        abilities != null &&
+        abilities!.entries.any((MapEntry<String, int> e) => e.value > 0);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -379,145 +421,153 @@ class _FullPlayerCard extends StatelessWidget {
               colors: <Color>[
                 GtexColors.surfaceRaised,
                 GtexColors.surfaceBase,
-                provenanceColor.withValues(alpha: isRegen ? 0.1 : 0.07),
+                provenanceColor.withValues(
+                  alpha: isRegen ? (premiumRegen ? 0.16 : 0.1) : 0.07,
+                ),
+                if (cardVariant == GtexPlayerCardVariant.holographic)
+                  GtexColors.gold.withValues(alpha: 0.08),
               ],
             ),
             borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
-            border: Border.all(
-              color:
-                  isSelected
-                      ? GtexColors.accentPrimary
-                      : GtexColors.surfaceBorder,
-            ),
-            boxShadow: <BoxShadow>[GtexColors.glow(Colors.black, opacity: 0.3)],
+            border: Border.all(color: borderColor, width: borderWidth),
+            boxShadow: <BoxShadow>[
+              GtexColors.glow(Colors.black, opacity: 0.3),
+              if (premiumRegen || showOneOfOne)
+                GtexColors.glow(provenanceColor, opacity: 0.18),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Container(height: 4, color: positionAccent),
+              Container(
+                height: premiumRegen || showOneOfOne ? 5 : 4,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: <Color>[
+                      positionAccent,
+                      provenanceColor,
+                      if (cardVariant == GtexPlayerCardVariant.holographic)
+                        GtexColors.gold,
+                    ],
+                  ),
+                ),
+              ),
               _IdentityBanner(
                 label: identityLabel,
                 support: identitySupport,
                 icon: isRegen ? Icons.hub_rounded : Icons.badge_rounded,
                 color: provenanceColor,
               ),
+              // FIFA/PES face: full-bleed portrait with OVR + GSI overlay.
+              _FacePortraitBand(
+                imageUrl: imageUrl,
+                name: name,
+                position: position,
+                countryCode: countryCode ?? nationality,
+                accent: provenanceColor,
+                positionAccent: positionAccent,
+                portraitMissingReason: portraitMissingReason,
+                overallLabel: faceOvr,
+                gsiLabel: gsiLabel,
+              ),
               Padding(
                 padding: const EdgeInsets.all(GtexSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
                       children: <Widget>[
-                        _PlayerImage(
-                          imageUrl: imageUrl,
-                          name: name,
-                          position: position,
-                          countryCode: countryCode ?? nationality,
-                          accent: provenanceColor,
-                          portraitMissingReason: portraitMissingReason,
+                        GtexStatusChip(
+                          label: identityLabel,
+                          color: provenanceColor,
+                          compact: true,
                         ),
-                        const SizedBox(width: GtexSpacing.sm),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: <Widget>[
-                                  GtexStatusChip(
-                                    label: identityLabel,
-                                    color: provenanceColor,
-                                    compact: true,
-                                  ),
-                                  if (rarityChip != null)
-                                    GtexStatusChip(
-                                      label: rarityChip,
-                                      color: provenanceColor,
-                                      compact: true,
-                                    ),
-                                  if (marketHeatLabel != null)
-                                    GtexStatusChip(
-                                      label: marketHeatLabel!,
-                                      color: GtexColors.accentAmber,
-                                      compact: true,
-                                    ),
-                                  if (demandLabel != null)
-                                    GtexLiveStatusChip(
-                                      status: GtexLiveStatus.live,
-                                      label: demandLabel!,
-                                      compact: true,
-                                    ),
-                                  ...badges,
-                                ],
-                              ),
-                              const SizedBox(height: GtexSpacing.sm),
-                              _PositionRail(
-                                primary: position,
-                                secondary: secondaryPositions,
-                                accent: positionAccent,
-                              ),
-                              Text(
-                                name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.titleLarge?.copyWith(
-                                  color: GtexColors.textPrimary,
-                                  fontFamily: 'DM Sans',
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.1,
-                                ),
-                              ),
-                              const SizedBox(height: GtexSpacing.xxs),
-                              Text(
-                                '$clubName / $nationality',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: GtexColors.textSecondary,
-                                  fontFamily: 'DM Sans',
-                                ),
-                              ),
-                              const SizedBox(height: GtexSpacing.xxs),
-                              _BioRail(
-                                heightLabel: heightLabel,
-                                footLabel: footLabel,
-                              ),
-                            ],
+                        if (showOneOfOne)
+                          GtexStatusChip(
+                            label: '1 OF 1',
+                            color: GtexColors.gold,
+                            compact: true,
                           ),
-                        ),
+                        if (rarityChip != null)
+                          GtexStatusChip(
+                            label: rarityChip,
+                            color: provenanceColor,
+                            compact: true,
+                          ),
+                        if (marketHeatLabel != null)
+                          GtexStatusChip(
+                            label: marketHeatLabel!,
+                            color: GtexColors.accentAmber,
+                            compact: true,
+                          ),
+                        if (demandLabel != null)
+                          GtexLiveStatusChip(
+                            status: GtexLiveStatus.live,
+                            label: demandLabel!,
+                            compact: true,
+                          ),
+                        ...badges,
                       ],
                     ),
-                    const SizedBox(height: GtexSpacing.md),
-                    Row(
-                      children: <Widget>[
-                        if (gsiLabel != null) ...<Widget>[
-                          _GsiPlate(label: gsiLabel!),
-                          const SizedBox(width: GtexSpacing.xs),
+                    const SizedBox(height: GtexSpacing.sm),
+                    _PositionRail(
+                      primary: position,
+                      secondary: secondaryPositions,
+                      accent: positionAccent,
+                    ),
+                    Text(
+                      name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: GtexColors.textPrimary,
+                        fontFamily: 'DM Sans',
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: GtexSpacing.xxs),
+                    Text(
+                      '$clubName / $nationality',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: GtexColors.textSecondary,
+                        fontFamily: 'DM Sans',
+                      ),
+                    ),
+                    const SizedBox(height: GtexSpacing.xxs),
+                    _BioRail(
+                      heightLabel: heightLabel,
+                      footLabel: footLabel,
+                    ),
+                    if (hasAbilities) ...<Widget>[
+                      const SizedBox(height: GtexSpacing.md),
+                      _AbilityPlate(abilities: abilities!),
+                    ],
+                    if (potentialLabel != null ||
+                        ageLabel != null ||
+                        gsiTierLabel != null ||
+                        gsiTrendLabel != null ||
+                        ratingLabel != null) ...<Widget>[
+                      const SizedBox(height: GtexSpacing.sm),
+                      _StatGrid(
+                        stats: <_StatItem>[
+                          if (potentialLabel != null)
+                            _StatItem('POT', potentialLabel!),
+                          if (ageLabel != null) _StatItem('AGE', ageLabel!),
+                          if (gsiTierLabel != null)
+                            _StatItem('TIER', gsiTierLabel!),
+                          if (gsiTrendLabel != null)
+                            _StatItem('TREND', gsiTrendLabel!),
+                          if (ratingLabel != null)
+                            _StatItem('FORM', ratingLabel!),
                         ],
-                        Expanded(
-                          child: _StatGrid(
-                            stats: <_StatItem>[
-                              if (ratingLabel != null)
-                                _StatItem('OVR', ratingLabel!),
-                              if (potentialLabel != null)
-                                _StatItem('POT', potentialLabel!),
-                              if (ageLabel != null) _StatItem('AGE', ageLabel!),
-                              if (gsiTierLabel != null)
-                                _StatItem('TIER', gsiTierLabel!),
-                              if (gsiTrendLabel != null)
-                                _StatItem('TREND', gsiTrendLabel!),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                     if (formResults.isNotEmpty) ...<Widget>[
                       const SizedBox(height: GtexSpacing.sm),
                       _FormRail(results: formResults),
@@ -534,9 +584,6 @@ class _FullPlayerCard extends StatelessWidget {
                             deltaLabel: valueDeltaLabel,
                             state: valueState,
                             size: GtexValueDisplaySize.standard,
-                            // The caption under the headline figure names
-                            // the *other* economic number, so a valuation can
-                            // never be read as the price above it.
                             updatedLabel:
                                 valuationLabel ??
                                 (valueState == GtexValueState.live
@@ -579,15 +626,38 @@ class _FullPlayerCard extends StatelessWidget {
   }
 
   List<String> get _footerSignals {
+    // Real players on GTEX are permanent share assets: no wage bill, no
+    // contract clock, no expiry. Salary and remaining years belong only to
+    // unique regens (the living footballers clubs actually employ).
     return <String>[
       if (ownershipLabel != null && ownershipLabel!.trim().isNotEmpty)
         ownershipLabel!,
-      if (salaryLabel != null && salaryLabel!.trim().isNotEmpty) salaryLabel!,
+      if (isRegen &&
+          salaryLabel != null &&
+          salaryLabel!.trim().isNotEmpty)
+        salaryLabel!,
       if (ownerLabel != null && ownerLabel!.trim().isNotEmpty) ownerLabel!,
-      if (contractLabel != null && contractLabel!.trim().isNotEmpty)
+      if (isRegen &&
+          contractLabel != null &&
+          contractLabel!.trim().isNotEmpty)
         contractLabel!,
       ...chemistryLinks.where((String item) => item.trim().isNotEmpty).take(2),
     ];
+  }
+}
+
+Color _regenFrameColor(GtexPlayerCardVariant variant, bool isRegen) {
+  switch (variant) {
+    case GtexPlayerCardVariant.legendary:
+      return GtexColors.gold;
+    case GtexPlayerCardVariant.holographic:
+      return GtexColors.cyan;
+    case GtexPlayerCardVariant.elite:
+      return GtexColors.accentAmber;
+    case GtexPlayerCardVariant.nationalSeed:
+      return GtexColors.accentViolet;
+    case GtexPlayerCardVariant.standard:
+      return isRegen ? GtexColors.accentViolet : GtexColors.accentBlue;
   }
 }
 
@@ -1331,6 +1401,317 @@ class _MicroPlayerCard extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// Full-bleed FIFA/PES face band: photograph (or identity plate) with OVR
+/// and GSI stacked on the left like a ratings column.
+class _FacePortraitBand extends StatelessWidget {
+  const _FacePortraitBand({
+    required this.imageUrl,
+    required this.name,
+    required this.position,
+    required this.countryCode,
+    required this.accent,
+    required this.positionAccent,
+    this.portraitMissingReason,
+    this.overallLabel,
+    this.gsiLabel,
+  });
+
+  final String? imageUrl;
+  final String name;
+  final String position;
+  final String countryCode;
+  final Color accent;
+  final Color positionAccent;
+  final String? portraitMissingReason;
+  final String? overallLabel;
+  final String? gsiLabel;
+
+  String? get _shortCountryCode {
+    final String code = countryCode.trim().toUpperCase();
+    if (code.isEmpty) {
+      return null;
+    }
+    return code.length > 3 ? code.substring(0, 3) : code;
+  }
+
+  String? get _gsiDigits {
+    final String? label = gsiLabel?.trim();
+    if (label == null || label.isEmpty) {
+      return null;
+    }
+    final String digits =
+        label.replaceFirst(RegExp(r'^GSI\s*', caseSensitive: false), '').trim();
+    return digits.isEmpty ? null : digits;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String? trimmed = imageUrl?.trim();
+    final bool hasPhotograph = trimmed != null && trimmed.isNotEmpty;
+    final String? gsiDigits = _gsiDigits;
+    final Widget face = LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double width =
+            constraints.hasBoundedWidth && constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : 280;
+        return Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            GtexPlayerPortrait(
+              name: name,
+              imageUrl: trimmed,
+              position: position,
+              nationalityCode: _shortCountryCode,
+              accent: accent,
+              width: width,
+              height: _fullPortraitHeight,
+              borderRadius: 0,
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 72,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: <Color>[
+                      Colors.transparent,
+                      GtexColors.surfaceBase.withValues(alpha: 0.88),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: GtexSpacing.sm,
+              top: GtexSpacing.sm,
+              child: _FaceRatingColumn(
+                overallLabel: overallLabel,
+                position: position,
+                gsiDigits: gsiDigits,
+                positionAccent: positionAccent,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    final Widget band = SizedBox(
+      height: _fullPortraitHeight,
+      width: double.infinity,
+      child: face,
+    );
+    if (hasPhotograph) {
+      return band;
+    }
+    return Tooltip(
+      message:
+          portraitMissingReason == null
+              ? 'Portrait slot — photo loads from imageUrl when available'
+              : 'Portrait unavailable: $portraitMissingReason',
+      child: band,
+    );
+  }
+}
+
+class _FaceRatingColumn extends StatelessWidget {
+  const _FaceRatingColumn({
+    required this.overallLabel,
+    required this.position,
+    required this.gsiDigits,
+    required this.positionAccent,
+  });
+
+  final String? overallLabel;
+  final String position;
+  final String? gsiDigits;
+  final Color positionAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: GtexColors.surfaceBase.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        border: Border.all(color: GtexColors.surfaceBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Text(
+            'OVR',
+            style: TextStyle(
+              color: GtexColors.textTertiary,
+              fontFamily: 'JetBrains Mono',
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            overallLabel == null || overallLabel!.isEmpty ? '—' : overallLabel!,
+            style: TextStyle(
+              color: positionAccent,
+              fontFamily: 'JetBrains Mono',
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            position.trim().isEmpty ? '—' : position.trim().toUpperCase(),
+            style: const TextStyle(
+              color: GtexColors.textPrimary,
+              fontFamily: 'DM Sans',
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              height: 1,
+            ),
+          ),
+          if (gsiDigits != null) ...<Widget>[
+            const SizedBox(height: 8),
+            const Text(
+              'GSI',
+              style: TextStyle(
+                color: GtexColors.accentAmber,
+                fontFamily: 'JetBrains Mono',
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              gsiDigits!,
+              style: const TextStyle(
+                color: GtexColors.accentAmber,
+                fontFamily: 'JetBrains Mono',
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AbilityPlate extends StatelessWidget {
+  const _AbilityPlate({required this.abilities});
+
+  final Map<String, int> abilities;
+
+  static const List<String> _order = <String>[
+    'PAC',
+    'SHO',
+    'PAS',
+    'DRI',
+    'DEF',
+    'PHY',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final List<MapEntry<String, int>> entries = <MapEntry<String, int>>[
+      for (final String key in _order)
+        if (abilities.containsKey(key)) MapEntry<String, int>(key, abilities[key]!),
+      ...abilities.entries.where(
+        (MapEntry<String, int> e) => !_order.contains(e.key),
+      ),
+    ];
+    if (entries.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      key: const Key('gtex-player-ability-plate'),
+      padding: const EdgeInsets.all(GtexSpacing.sm),
+      decoration: BoxDecoration(
+        color: GtexColors.surfaceOverlay,
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        border: Border.all(color: GtexColors.surfaceBorder),
+      ),
+      child: Column(
+        children: <Widget>[
+          for (int row = 0; row < entries.length; row += 3) ...<Widget>[
+            if (row > 0) const SizedBox(height: GtexSpacing.xs),
+            Row(
+              children: <Widget>[
+                for (int col = 0; col < 3; col++) ...<Widget>[
+                  if (col > 0) const SizedBox(width: GtexSpacing.xs),
+                  Expanded(
+                    child: row + col < entries.length
+                        ? _AbilityCell(
+                          label: entries[row + col].key,
+                          value: entries[row + col].value,
+                        )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AbilityCell extends StatelessWidget {
+  const _AbilityCell({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: GtexColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusSm),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Text(
+            label,
+            style: const TextStyle(
+              color: GtexColors.textTertiary,
+              fontFamily: 'JetBrains Mono',
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.4,
+            ),
+          ),
+          Text(
+            '$value',
+            style: TextStyle(
+              color: value >= 80
+                  ? GtexColors.accentPrimary
+                  : GtexColors.textPrimary,
+              fontFamily: 'JetBrains Mono',
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }

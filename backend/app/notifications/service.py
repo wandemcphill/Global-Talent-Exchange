@@ -715,6 +715,19 @@ class NotificationSettingsService:
         item.deliver_as_notification = payload.deliver_as_notification
         item.metadata_json = payload.metadata_json
         self.session.flush()
+        if item.active:
+            try:
+                from app.story_feed_engine.bridges import publish_app_update_story
+
+                publish_app_update_story(
+                    self.session,
+                    announcement_key=item.announcement_key,
+                    title=item.title,
+                    body=item.body,
+                    metadata_json=dict(item.metadata_json or {}),
+                )
+            except Exception:
+                pass
         if item.deliver_as_notification and item.active:
             self._fan_out_announcement(item)
         return item

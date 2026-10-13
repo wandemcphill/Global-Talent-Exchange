@@ -327,7 +327,8 @@ class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
           accent: GtexColors.gold,
           emptyTitle: 'Hall of Fame is empty',
           emptyMessage:
-              'No regen has completed a career long enough to be inducted.',
+              'Hall of Fame inductees are published when a Regen Universe '
+              'season closes. None has closed yet.',
           onRetry: () => setState(() => _hallOfFameFuture = null),
           builder:
               (BuildContext context, List<RegenHallOfFameEntry> entries) =>
@@ -973,6 +974,19 @@ class _AwardsBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (awards.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(GtexSpacing.md),
+        child: GtexEmptyState(
+          title: 'No awards yet',
+          message:
+              'Award categories appear with an open season; winners land when '
+              'the season closes or scouts crown rising stars.',
+          icon: Icons.emoji_events_outlined,
+          accent: GtexColors.gold,
+        ),
+      );
+    }
     return ListView.separated(
       padding: const EdgeInsets.all(GtexSpacing.md),
       itemCount: awards.length,
@@ -1015,6 +1029,19 @@ class _ContractBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (contracts.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(GtexSpacing.md),
+        child: GtexEmptyState(
+          title: 'Contract watch is quiet',
+          message:
+              'Offers and agency pressure show up here once you approach '
+              'regens from Discover or Ownership.',
+          icon: Icons.handshake_outlined,
+          accent: GtexColors.cyan,
+        ),
+      );
+    }
     return ListView.separated(
       padding: const EdgeInsets.all(GtexSpacing.md),
       itemCount: contracts.length,
@@ -1063,6 +1090,19 @@ class _AchievementBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(GtexSpacing.md),
+        child: GtexEmptyState(
+          title: 'No scouting announcements yet',
+          message:
+              'Rising-star and discovery beats fill this lane from the national '
+              'regen pool. If it stays empty, the world bootstrap has not run.',
+          icon: Icons.campaign_outlined,
+          accent: GtexColors.purple,
+        ),
+      );
+    }
     return ListView.separated(
       padding: const EdgeInsets.all(GtexSpacing.md),
       itemCount: items.length,

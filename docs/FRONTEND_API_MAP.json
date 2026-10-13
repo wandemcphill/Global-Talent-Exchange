@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "call_count": 649,
+  "call_count": 662,
   "calls": [
     {
       "file": "frontend/lib/core/runtime/gtex_realtime_client.dart",
@@ -3639,6 +3639,42 @@
       ]
     },
     {
+      "file": "frontend/lib/data/player_card_watchlist_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/player-cards/watchlist",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/player_card_watchlist_api.dart",
+      "transport_call": "string_reference",
+      "method": "POST",
+      "endpoint": "/api/player-cards/watchlist",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/data/player_card_watchlist_api.dart",
+      "transport_call": "string_reference",
+      "method": "DELETE",
+      "endpoint": "/api/player-cards/watchlist/$watchlistId",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
       "file": "frontend/lib/data/policy_admin_api.dart",
       "transport_call": "hardcoded_url",
       "method": "N/A",
@@ -4701,6 +4737,42 @@
       "endpoint": "http://127.0.0.1:8000",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_redesign/presentation/gtex_empire_club_workspace.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/owned",
+      "expected_shape": "list",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_redesign/presentation/gtex_empire_club_workspace.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/clubs/owned/${club.id}/activate",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/club_redesign/presentation/gtex_empire_club_workspace.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/ownership-groups",
+      "expected_shape": null,
+      "base_url_source": "injected",
       "platforms": [
         "web",
         "mobile"
@@ -6390,8 +6462,32 @@
       "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
       "transport_call": "string_reference",
       "method": "INFERRED",
+      "endpoint": "/api/players/$id/living-star",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
       "endpoint": "/api/players/$id/regen",
       "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/players/${playerId.trim()}/agency/exit-petition",
+      "expected_shape": "map/envelope",
       "base_url_source": "injected",
       "platforms": [
         "web",
@@ -6415,7 +6511,7 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/players/${playerId.trim()}/regen/contract-offers/submit",
-      "expected_shape": "list",
+      "expected_shape": "map/envelope",
       "base_url_source": "injected",
       "platforms": [
         "web",
@@ -6427,6 +6523,42 @@
       "transport_call": "string_reference",
       "method": "INFERRED",
       "endpoint": "/api/players/${playerId.trim()}/regen/transfer-listing",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/regen/contract-offers/inbox",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfers/windows",
+      "expected_shape": "map/envelope",
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/features/regen_redesign/data/gtex_regen_world_api.dart",
+      "transport_call": "string_reference",
+      "method": "INFERRED",
+      "endpoint": "/api/transfers/windows/$windowId/players/${playerId.trim()}/resolve-regen-bid",
       "expected_shape": null,
       "base_url_source": "injected",
       "platforms": [
@@ -7713,6 +7845,30 @@
       "endpoint": "http://127.0.0.1:8000",
       "expected_shape": null,
       "base_url_source": "hardcoded_localhost",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/services/audio/gtex_soundtrack_catalogue.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://gtex.io/legal/audio-licensing",
+      "expected_shape": null,
+      "base_url_source": "injected",
+      "platforms": [
+        "web",
+        "mobile"
+      ]
+    },
+    {
+      "file": "frontend/lib/services/audio/gtex_track_metadata.dart",
+      "transport_call": "hardcoded_url",
+      "method": "N/A",
+      "endpoint": "https://gtex.io/legal/audio-licensing",
+      "expected_shape": null,
+      "base_url_source": "injected",
       "platforms": [
         "web",
         "mobile"

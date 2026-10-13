@@ -26,8 +26,8 @@ class GtexShortlistBasket extends StatelessWidget {
     super.key,
     required this.items,
     required this.totalLabel,
-    this.title = 'Shortlist Basket',
-    this.checkoutLabel = 'Continue to payment',
+    this.title = 'Negotiation shortlist',
+    this.checkoutLabel = 'Review shortlist',
     this.onCheckout,
     this.balanceLabel,
     this.remainingLabel,
@@ -35,7 +35,8 @@ class GtexShortlistBasket extends StatelessWidget {
     this.onTopUpWallet,
     this.emptyTitle = 'No players shortlisted yet',
     this.emptyMessage =
-        'Browse leagues, divisions, and clubs, then add players to your basket.',
+        'Browse leagues, divisions, and clubs, then add targets to negotiate — '
+        'shortlist is not checkout.',
   });
 
   final List<GtexBasketLineItem> items;
@@ -60,7 +61,7 @@ class GtexShortlistBasket extends StatelessWidget {
         child: GtexEmptyState(
           title: emptyTitle,
           message: emptyMessage,
-          icon: Icons.shopping_basket_outlined,
+          icon: Icons.playlist_add_check_outlined,
         ),
       );
     }
@@ -114,7 +115,7 @@ class GtexShortlistBasket extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            'PLAYER PURCHASE',
+                            'SHORTLIST TARGET',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(
@@ -185,7 +186,7 @@ class GtexShortlistBasket extends StatelessWidget {
                 children: <Widget>[
                   const Expanded(
                     child: Text(
-                      'TOTAL COST',
+                      'SHORTLIST VALUE',
                       style: TextStyle(
                         color: GtexColors.textMuted,
                         fontWeight: FontWeight.w900,
@@ -217,7 +218,7 @@ class GtexShortlistBasket extends StatelessWidget {
                       ),
                     if (remainingLabel != null)
                       _BasketMoneyChip(
-                        label: 'After purchase',
+                        label: 'After shortlist',
                         value: remainingLabel!,
                         color:
                             blockedByBalance
@@ -238,7 +239,7 @@ class GtexShortlistBasket extends StatelessWidget {
               GtexActionButton(
                 label: checkoutLabel,
                 onPressed: blockedByBalance ? null : onCheckout,
-                icon: Icons.lock_open_outlined,
+                icon: Icons.fact_check_outlined,
                 accent: GtexColors.gold,
               ),
             ],
@@ -266,12 +267,12 @@ class _BasketRailHeader extends StatelessWidget {
       ),
       child: const Row(
         children: <Widget>[
-          Icon(Icons.account_balance_wallet_outlined, size: 16),
+          Icon(Icons.info_outline, size: 16),
           SizedBox(width: GtexSpacing.xs),
           Expanded(
             child: Text(
-              'Wallet GTC only - KoraPay/manual top-up if balance is short',
-              maxLines: 1,
+              'Shortlist ≠ payment — negotiate from here; wallet shown for planning only',
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: GtexColors.gold,

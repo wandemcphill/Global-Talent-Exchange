@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/app/gte_app_config.dart';
@@ -120,7 +118,6 @@ class _TraderDashboardSurface extends StatefulWidget {
 
 class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
   String _selectedSection = 'Markets';
-  String _selectedTimeframe = '1D';
   String _tradeTab = 'Buy';
   late Future<TraderOverview> _overviewFuture;
   late Future<TraderSecurityStatus> _securityFuture;
@@ -242,10 +239,6 @@ class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
                                 () => _securityFuture = widget.api.security(),
                               );
                             },
-                            selectedTimeframe: _selectedTimeframe,
-                            onTimeframeChanged:
-                                (String value) =>
-                                    setState(() => _selectedTimeframe = value),
                             tradeTab: _tradeTab,
                             onTradeTabChanged:
                                 (String value) =>
@@ -271,8 +264,6 @@ class _TraderOverviewBody extends StatelessWidget {
     required this.selectedSection,
     required this.securityFuture,
     required this.onSecurityRetry,
-    required this.selectedTimeframe,
-    required this.onTimeframeChanged,
     required this.tradeTab,
     required this.onTradeTabChanged,
   });
@@ -281,8 +272,6 @@ class _TraderOverviewBody extends StatelessWidget {
   final String selectedSection;
   final Future<TraderSecurityStatus> securityFuture;
   final VoidCallback onSecurityRetry;
-  final String selectedTimeframe;
-  final ValueChanged<String> onTimeframeChanged;
   final String tradeTab;
   final ValueChanged<String> onTradeTabChanged;
 
@@ -366,11 +355,7 @@ class _TraderOverviewBody extends StatelessWidget {
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
             final bool split = constraints.maxWidth >= 980;
-            final Widget chart = _TradingPanel(
-              market: primaryMarket,
-              timeframe: selectedTimeframe,
-              onTimeframeChanged: onTimeframeChanged,
-            );
+            final Widget chart = _TradingPanel(market: primaryMarket);
             final Widget quickTrade = _QuickTradePanel(
               market: primaryMarket,
               selectedTab: tradeTab,
@@ -799,15 +784,9 @@ class _MarketBucketPanel extends StatelessWidget {
 }
 
 class _TradingPanel extends StatelessWidget {
-  const _TradingPanel({
-    required this.market,
-    required this.timeframe,
-    required this.onTimeframeChanged,
-  });
+  const _TradingPanel({required this.market});
 
   final TraderMarket? market;
-  final String timeframe;
-  final ValueChanged<String> onTimeframeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -822,58 +801,41 @@ class _TradingPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  '${market?.symbol ?? 'GTEX'}/USD professional chart',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-                ),
-              ),
-              SegmentedButton<String>(
-                segments: const <String>['15M', '1H', '1D', '1W']
-                    .map(
-                      (String value) => ButtonSegment<String>(
-                        value: value,
-                        label: Text(value),
-                      ),
-                    )
-                    .toList(growable: false),
-                selected: <String>{timeframe},
-                onSelectionChanged:
-                    (Set<String> next) => onTimeframeChanged(next.first),
-              ),
-            ],
+          Text(
+            'OTC desk — not a CLOB',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'GTEX coin traders operate a governed P2P escrow desk: rate cards, '
+            'accept, fiat proof, confirm. Candles and synthetic order books are '
+            'disabled until a real market data feed exists.',
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 260,
-            child: CustomPaint(
-              painter: _CandlestickPainter(),
-              child: const SizedBox.expand(),
-            ),
-          ),
-          const SizedBox(height: 14),
           LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
               final bool split = constraints.maxWidth >= 720;
               final Widget volume = _BookPanel(
-                title: 'Volume chart',
+                title: 'Escrow timeline',
                 rows: <String>[
-                  '24h ${_compactCurrency(market?.volume24h ?? 0)}',
-                  'Market cap ${_compactCurrency(market?.marketCap ?? 0)}',
-                  'Liquidity ${market?.liquidityScore ?? 0}/100',
+                  '1 · User opens ticket against your rate card',
+                  '2 · You accept → coins lock in escrow',
+                  '3 · Fiat payer submits proof',
+                  '4 · Counterparty confirms → release',
                 ],
               );
-              final double price = market?.price ?? 1.42;
               final Widget orderBook = _BookPanel(
-                title: 'Order book',
+                title: 'Live ops surface',
                 rows: <String>[
-                  'Buy wall ${_fixedPrice(price * 0.985)}',
-                  'Sell wall ${_fixedPrice(price * 1.015)}',
-                  'Spread ${_fixedPrice(price * 0.03)}',
+                  'Open Capital → Trader dashboard',
+                  'Rate board · Blotter · Inventory strip',
+                  market == null
+                      ? 'No live OTC quote attached here'
+                      : '${market!.symbol} reference ${_fixedPrice(market!.price)}',
+                  'Disputes resolve via admin ops desk',
                 ],
               );
               if (!split) {
@@ -1269,56 +1231,6 @@ class _SecurityEventRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _CandlestickPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint gridPaint =
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.08)
-          ..strokeWidth = 1;
-    for (int i = 1; i < 5; i++) {
-      final double y = size.height * i / 5;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final Paint upPaint = Paint()..color = const Color(0xFF5FE3A1);
-    final Paint downPaint = Paint()..color = const Color(0xFFFF6B7A);
-    final Paint wickPaint =
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.62)
-          ..strokeWidth = 1.4;
-    final int candles = 34;
-    final double slot = size.width / candles;
-    for (int i = 0; i < candles; i++) {
-      final double wave = math.sin(i * 0.72) * 28;
-      final double drift = (i - candles / 2) * -0.9;
-      final double centerY = (size.height * 0.48) + wave + drift;
-      final bool up = i % 3 != 0;
-      final double bodyHeight = 18 + ((i * 7) % 24).toDouble();
-      final double high = centerY - bodyHeight - 18 - (i % 5);
-      final double low = centerY + bodyHeight + 18 + (i % 4);
-      final double x = (slot * i) + (slot * 0.5);
-      canvas.drawLine(
-        Offset(x, high.clamp(8, size.height - 8).toDouble()),
-        Offset(x, low.clamp(8, size.height - 8).toDouble()),
-        wickPaint,
-      );
-      final Rect body = Rect.fromCenter(
-        center: Offset(x, centerY.clamp(20, size.height - 20).toDouble()),
-        width: math.max(5, slot * 0.42),
-        height: bodyHeight,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(body, const Radius.circular(2)),
-        up ? upPaint : downPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _Metric {

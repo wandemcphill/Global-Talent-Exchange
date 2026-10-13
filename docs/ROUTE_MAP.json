@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1702,
+  "route_count": 1709,
   "routes": [
     {
       "method": "POST",
@@ -7727,6 +7727,7 @@
       "method": "GET",
       "path": "/club-infra/clubs/{club_id}",
       "effective_paths": [
+        "/api/club-infra/clubs/{club_id}",
         "/club-infra/clubs/{club_id}"
       ],
       "file": "backend/app/club_infra_engine/router.py",
@@ -7754,6 +7755,7 @@
       "method": "GET",
       "path": "/club-infra/my",
       "effective_paths": [
+        "/api/club-infra/my",
         "/club-infra/my"
       ],
       "file": "backend/app/club_infra_engine/router.py",
@@ -8956,6 +8958,7 @@
       "method": "POST",
       "path": "/club-infra/clubs/{club_id}/support",
       "effective_paths": [
+        "/api/club-infra/clubs/{club_id}/support",
         "/club-infra/clubs/{club_id}/support"
       ],
       "file": "backend/app/club_infra_engine/router.py",
@@ -8984,6 +8987,7 @@
       "method": "POST",
       "path": "/club-infra/my/facilities/upgrade",
       "effective_paths": [
+        "/api/club-infra/my/facilities/upgrade",
         "/club-infra/my/facilities/upgrade"
       ],
       "file": "backend/app/club_infra_engine/router.py",
@@ -9011,6 +9015,7 @@
       "method": "POST",
       "path": "/club-infra/my/stadium/upgrade",
       "effective_paths": [
+        "/api/club-infra/my/stadium/upgrade",
         "/club-infra/my/stadium/upgrade"
       ],
       "file": "backend/app/club_infra_engine/router.py",
@@ -32111,6 +32116,32 @@
       "domain": "public"
     },
     {
+      "method": "GET",
+      "path": "/public/live-stats",
+      "effective_paths": [
+        "/api/public/live-stats",
+        "/public/live-stats"
+      ],
+      "file": "backend/app/public_pulse/router.py",
+      "handler": "get_live_world_pulse",
+      "router_variable": "router",
+      "module_path": "app.public_pulse.router",
+      "module_mounts": [
+        "public_pulse"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "LiveWorldPulseView",
+        "returns": "LiveWorldPulseView"
+      },
+      "version": "canonical",
+      "domain": "public"
+    },
+    {
       "method": "POST",
       "path": "/analytics/frontend",
       "effective_paths": [
@@ -32783,6 +32814,58 @@
       },
       "version": "canonical",
       "domain": "realtime"
+    },
+    {
+      "method": "GET",
+      "path": "/api/players/{player_id}/behavior-brief",
+      "effective_paths": [
+        "/api/players/{player_id}/behavior-brief"
+      ],
+      "file": "backend/app/routes/regen_living_star.py",
+      "handler": "get_regen_behavior_brief",
+      "router_variable": "router",
+      "module_path": "app.routes.regen_living_star",
+      "module_mounts": [
+        "regen_living_star"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RegenMatchBehaviorBriefView",
+        "returns": "RegenMatchBehaviorBriefView"
+      },
+      "version": "canonical",
+      "domain": "regen"
+    },
+    {
+      "method": "GET",
+      "path": "/api/players/{player_id}/living-star",
+      "effective_paths": [
+        "/api/players/{player_id}/living-star"
+      ],
+      "file": "backend/app/routes/regen_living_star.py",
+      "handler": "get_regen_living_star",
+      "router_variable": "router",
+      "module_path": "app.routes.regen_living_star",
+      "module_mounts": [
+        "regen_living_star"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RegenLivingStarView",
+        "returns": "RegenLivingStarView"
+      },
+      "version": "canonical",
+      "domain": "regen"
     },
     {
       "method": "GET",
@@ -34027,6 +34110,34 @@
       "response_shape": {
         "response_model": "AgentView",
         "returns": "AgentView"
+      },
+      "version": "canonical",
+      "domain": "regen"
+    },
+    {
+      "method": "POST",
+      "path": "/api/players/{player_id}/agency/exit-petition",
+      "effective_paths": [
+        "/api/players/{player_id}/agency/exit-petition"
+      ],
+      "file": "backend/app/routes/regen_living_star.py",
+      "handler": "petition_regen_exit",
+      "router_variable": "router",
+      "module_path": "app.routes.regen_living_star",
+      "module_mounts": [
+        "regen_living_star"
+      ],
+      "request_shape": {
+        "parameters": [
+          "player_id",
+          "payload",
+          "current_user",
+          "service"
+        ]
+      },
+      "response_shape": {
+        "response_model": "RegenExitPetitionView",
+        "returns": "RegenExitPetitionView"
       },
       "version": "canonical",
       "domain": "regen"
@@ -35717,6 +35828,30 @@
       "response_shape": {
         "response_model": "ClubCatalogView",
         "returns": "ClubCatalogView"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clubs/owned",
+      "effective_paths": [
+        "/api/clubs/owned"
+      ],
+      "file": "backend/app/segments/clubs/segment_clubs.py",
+      "handler": "list_owned_clubs",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_clubs",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[ClubProfileView]",
+        "returns": "list[ClubProfileView]"
       },
       "version": "canonical",
       "domain": "segment"
@@ -37441,6 +37576,30 @@
     },
     {
       "method": "GET",
+      "path": "/api/regen/contract-offers/inbox",
+      "effective_paths": [
+        "/api/regen/contract-offers/inbox"
+      ],
+      "file": "backend/app/segments/player_lifecycle/segment_player_lifecycle.py",
+      "handler": "list_regen_contract_offer_inbox",
+      "router_variable": "router",
+      "module_path": "app.segments.player_lifecycle.segment_player_lifecycle",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "service",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[RegenContractOfferInboxItemView]",
+        "returns": "list[RegenContractOfferInboxItemView]"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "GET",
       "path": "/api/transfers/windows",
       "effective_paths": [
         "/api/transfers/windows"
@@ -38002,6 +38161,31 @@
       "response_shape": {
         "response_model": "ClubCosmeticPurchaseCore",
         "returns": "ClubCosmeticPurchaseCore"
+      },
+      "version": "canonical",
+      "domain": "segment"
+    },
+    {
+      "method": "POST",
+      "path": "/api/clubs/owned/{club_id}/activate",
+      "effective_paths": [
+        "/api/clubs/owned/{club_id}/activate"
+      ],
+      "file": "backend/app/segments/clubs/segment_clubs.py",
+      "handler": "activate_owned_club",
+      "router_variable": "router",
+      "module_path": "app.segments.clubs.segment_clubs",
+      "module_mounts": [],
+      "request_shape": {
+        "parameters": [
+          "club_id",
+          "current_user",
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "ClubProfileView",
+        "returns": "ClubProfileView"
       },
       "version": "canonical",
       "domain": "segment"
@@ -39278,7 +39462,7 @@
           "player_id",
           "as_of",
           "service",
-          "_"
+          "current_user"
         ]
       },
       "response_shape": {

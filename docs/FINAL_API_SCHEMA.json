@@ -1743,6 +1743,66 @@
       },
       {
         "method": "GET",
+        "path": "/api/club-infra/clubs/{club_id}",
+        "handler": "get_club_infra",
+        "response_model": "ClubInfraDashboardResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/club-infra/clubs/{club_id}",
+        "handler": "get_club_infra",
+        "response_model": "ClubInfraDashboardResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/club-infra/clubs/{club_id}/support",
+        "handler": "support_club",
+        "response_model": "ClubInfraActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/club-infra/clubs/{club_id}/support",
+        "handler": "support_club",
+        "response_model": "ClubInfraActionResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/club-infra/my",
+        "handler": "get_my_club_infra",
+        "response_model": "ClubInfraDashboardResponse"
+      },
+      {
+        "method": "GET",
+        "path": "/api/club-infra/my",
+        "handler": "get_my_club_infra",
+        "response_model": "ClubInfraDashboardResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/club-infra/my/facilities/upgrade",
+        "handler": "upgrade_my_facility",
+        "response_model": "ClubInfraActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/club-infra/my/facilities/upgrade",
+        "handler": "upgrade_my_facility",
+        "response_model": "ClubInfraActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/club-infra/my/stadium/upgrade",
+        "handler": "upgrade_my_stadium",
+        "response_model": "ClubInfraActionResponse"
+      },
+      {
+        "method": "POST",
+        "path": "/api/club-infra/my/stadium/upgrade",
+        "handler": "upgrade_my_stadium",
+        "response_model": "ClubInfraActionResponse"
+      },
+      {
+        "method": "GET",
         "path": "/api/clubs/admin/club-lifecycle",
         "handler": "list_admin_club_lifecycle",
         "response_model": "list[ClubLifecycleView]"
@@ -2208,36 +2268,6 @@
         "path": "/api/sponsors",
         "handler": "get_sponsors",
         "response_model": "list[SponsorView]"
-      },
-      {
-        "method": "GET",
-        "path": "/club-infra/clubs/{club_id}",
-        "handler": "get_club_infra",
-        "response_model": "ClubInfraDashboardResponse"
-      },
-      {
-        "method": "POST",
-        "path": "/club-infra/clubs/{club_id}/support",
-        "handler": "support_club",
-        "response_model": "ClubInfraActionResponse"
-      },
-      {
-        "method": "GET",
-        "path": "/club-infra/my",
-        "handler": "get_my_club_infra",
-        "response_model": "ClubInfraDashboardResponse"
-      },
-      {
-        "method": "POST",
-        "path": "/club-infra/my/facilities/upgrade",
-        "handler": "upgrade_my_facility",
-        "response_model": "ClubInfraActionResponse"
-      },
-      {
-        "method": "POST",
-        "path": "/club-infra/my/stadium/upgrade",
-        "handler": "upgrade_my_stadium",
-        "response_model": "ClubInfraActionResponse"
       },
       {
         "method": "GET",
@@ -8546,6 +8576,18 @@
         "path": "/analytics/frontend",
         "handler": "create_frontend_event",
         "response_model": "AnalyticsEventView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/public/live-stats",
+        "handler": "get_live_world_pulse",
+        "response_model": "LiveWorldPulseView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/public/live-stats",
+        "handler": "get_live_world_pulse",
+        "response_model": "LiveWorldPulseView"
       }
     ],
     "pundits": [
@@ -8823,6 +8865,18 @@
       },
       {
         "method": "POST",
+        "path": "/api/players/{player_id}/agency/exit-petition",
+        "handler": "petition_regen_exit",
+        "response_model": "RegenExitPetitionView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/players/{player_id}/behavior-brief",
+        "handler": "get_regen_behavior_brief",
+        "response_model": "RegenMatchBehaviorBriefView"
+      },
+      {
+        "method": "POST",
         "path": "/api/players/{player_id}/career-events",
         "handler": "trigger_career_event",
         "response_model": "CareerEventView"
@@ -8832,6 +8886,12 @@
         "path": "/api/players/{player_id}/career-events",
         "handler": "trigger_career_event",
         "response_model": "CareerEventView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/players/{player_id}/living-star",
+        "handler": "get_regen_living_star",
+        "response_model": "RegenLivingStarView"
       },
       {
         "method": "POST",
@@ -9629,6 +9689,18 @@
       },
       {
         "method": "GET",
+        "path": "/api/clubs/owned",
+        "handler": "list_owned_clubs",
+        "response_model": "list[ClubProfileView]"
+      },
+      {
+        "method": "POST",
+        "path": "/api/clubs/owned/{club_id}/activate",
+        "handler": "activate_owned_club",
+        "response_model": "ClubProfileView"
+      },
+      {
+        "method": "GET",
         "path": "/api/clubs/{club_id}",
         "handler": "get_club",
         "response_model": "ClubProfileView"
@@ -10412,6 +10484,12 @@
         "path": "/api/referrals/share-codes/{share_code_id}",
         "handler": "update_share_code",
         "response_model": "ShareCodeView"
+      },
+      {
+        "method": "GET",
+        "path": "/api/regen/contract-offers/inbox",
+        "handler": "list_regen_contract_offer_inbox",
+        "response_model": "list[RegenContractOfferInboxItemView]"
       },
       {
         "method": "GET",

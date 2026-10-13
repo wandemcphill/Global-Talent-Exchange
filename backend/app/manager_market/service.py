@@ -989,6 +989,7 @@ class ManagerMarketService:
         active_copies = self._active_copy_count(session, row.manager_id)
         supply_total = 1 if int(row.supply_total or 0) > 0 else 0
         supply_available = max(0, supply_total - active_copies)
+        recruit_price = self.recruit_price_fancoin(row)
         return ManagerCatalogItem(
             manager_id=row.manager_id,
             display_name=row.display_name,
@@ -1001,6 +1002,9 @@ class ManagerMarketService:
             club_associations=list(row.club_associations or []),
             supply_total=supply_total,
             supply_available=supply_available,
+            recruit_price_fancoin=recruit_price,
+            annual_wage_fancoin=self._annual_wage_fancoin(row),
+            manager_impact=self._manager_impact_score(row),
         )
 
     def _listing_view(self, session: Session, listing: ManagerTradeListing) -> ManagerListingView:
@@ -1097,10 +1101,10 @@ class ManagerMarketService:
         if self._is_user_created_manager(manager):
             return Decimal("0.0000")
         salary = self._normalize_amount(
-            salary_fancoin if salary_fancoin is not None else self._default_manager_salary(manager)
+            salary_fancoin if salary_fancoin is not None else self.recruit_price_fancoin(manager)
         )
         if salary <= Decimal("0.0000"):
-            raise ManagerMarketError("Manager salary negotiation must be greater than zero Fan Coin.")
+            raise ManagerMarketError("Manager recruit price must be greater than zero Fan Coin.")
         user_account = self.wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
         platform_account = self.wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
         self.wallet_service.append_transaction(
@@ -1122,14 +1126,16 @@ class ManagerMarketService:
             reason=LedgerEntryReason.ADJUSTMENT,
             source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
             transaction_type=LedgerTransactionType.ADJUSTMENT,
-            reference=f"manager-salary:{manager.manager_id}:{user.id}:{generate_uuid()}",
-            description=f"Manager salary negotiation for {manager.display_name}",
+            reference=f"manager-recruit:{manager.manager_id}:{user.id}:{generate_uuid()}",
+            description=f"Manager recruit fee for {manager.display_name}",
             actor=user,
             metadata={
-                "manager_salary": {
+                "manager_recruit": {
                     "manager_id": manager.manager_id,
                     "display_name": manager.display_name,
-                    "salary_fancoin": str(salary),
+                    "recruit_price_fancoin": str(salary),
+                    "annual_wage_fancoin": str(self._annual_wage_fancoin(manager)),
+                    "manager_impact": self._manager_impact_score(manager),
                     "paid_once": True,
                 }
             },
@@ -1253,14 +1259,53 @@ class ManagerMarketService:
         return manager.rarity == "user_created" or "user_created_manager" in traits
 
     def _default_manager_salary(self, manager: ManagerCatalogEntry) -> Decimal:
+        """One-shot recruit price in Fan Coin. Coaches are scarce assets, not free."""
         if self._is_user_created_manager(manager):
             return Decimal("0.0000")
         return {
-            "legendary": Decimal("100.0000"),
-            "elite_active": Decimal("50.0000"),
-            "rare": Decimal("20.0000"),
-            "popular": Decimal("10.0000"),
-        }.get(str(manager.rarity or "").strip().lower(), Decimal("10.0000"))
+            "legendary": Decimal("250000.0000"),
+            "elite_active": Decimal("100000.0000"),
+            "rare": Decimal("40000.0000"),
+            "popular": Decimal("15000.0000"),
+        }.get(str(manager.rarity or "").strip().lower(), Decimal("15000.0000"))
+
+    def recruit_price_fancoin(self, manager: ManagerCatalogEntry) -> Decimal:
+        return self._default_manager_salary(manager)
+
+    def _annual_wage_fancoin(self, manager: ManagerCatalogEntry) -> Decimal:
+        """Ongoing Fan Coin wage so dugout assets have a burn rate."""
+        if self._is_user_created_manager(manager):
+            return Decimal("0.0000")
+        return {
+            "legendary": Decimal("50000.0000"),
+            "elite_active": Decimal("22000.0000"),
+            "rare": Decimal("9000.0000"),
+            "popular": Decimal("3500.0000"),
+        }.get(str(manager.rarity or "").strip().lower(), Decimal("3500.0000"))
+
+    def _manager_impact_score(self, manager: ManagerCatalogEntry) -> int:
+        """1–99 plate: why an owner pays for this dugout identity."""
+        rarity_base = {
+            "legendary": 88,
+            "elite_active": 78,
+            "rare": 68,
+            "popular": 58,
+            "user_created": 55,
+        }.get(str(manager.rarity or "").strip().lower(), 60)
+        traits = {str(item).strip().lower() for item in (manager.traits or [])}
+        tactics = {str(item).strip().lower() for item in (manager.tactics or [])}
+        bonus = 0
+        if "great_motivator" in traits or "man_management" in traits:
+            bonus += 4
+        if "tactical_flexibility" in traits or "tactical_genius" in traits:
+            bonus += 3
+        if "develops_young_players" in traits:
+            bonus += 2
+        if len(tactics) >= 4:
+            bonus += 2
+        if str(manager.mentality or "").strip().lower() in {"attacking", "high_press", "control"}:
+            bonus += 1
+        return max(1, min(99, rarity_base + bonus))
 
     def _assignment(self, session: Session, user_id: str) -> ManagerTeamAssignment | None:
         return session.scalar(select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == user_id))
