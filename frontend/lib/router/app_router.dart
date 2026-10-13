@@ -203,10 +203,21 @@ GoRouter buildGtexAppRouter({
                 ).path,
       ),
       GoRoute(
+        // Alias for the Transfer Hub market shell (GteMarketPlayersScreenV2),
+        // not the football transfer-center calendar feature route.
         path: '/app/transfer-hub',
-        redirect:
+        pageBuilder:
             (BuildContext context, GoRouterState state) =>
-                const FootballTransferCenterRouteData().toUri().toString(),
+                NoTransitionPage<void>(
+                  key: state.pageKey,
+                  child: _GtexLaunchControlledShellRoute(
+                    controller: controller,
+                    ambientAudioController: ambientAudioController,
+                    config: config,
+                    initialPath: state.uri.toString(),
+                    dependenciesBuilder: dependenciesBuilder,
+                  ),
+                ),
       ),
       GoRoute(
         path: '/app/coin-traders',

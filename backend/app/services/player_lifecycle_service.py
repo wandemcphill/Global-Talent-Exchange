@@ -1348,9 +1348,7 @@ class PlayerLifecycleService:
             try:
                 player = self._require_player(regen.player_id)
                 player_name = str(
-                    getattr(player, "display_name", None)
-                    or getattr(player, "name", None)
-                    or regen.player_id
+                    getattr(player, "display_name", None) or getattr(player, "name", None) or regen.player_id
                 )
             except PlayerLifecycleNotFoundError:
                 player_name = regen.player_id
@@ -1665,18 +1663,27 @@ class PlayerLifecycleService:
             exemption_reason=payload.exemption_reason,
         )
 
-        active_contract = self._select_current_contract(
-            self.get_contracts(payload.player_id), reference_on=reference_on
+        player_contracts = self.get_contracts(payload.player_id)
+        binding_contract = self._select_primary_contract(player_contracts, reference_on=reference_on)
+        binding_status = (
+            self._resolve_contract_status(binding_contract, reference_on=reference_on)
+            if binding_contract is not None
+            else None
+        )
+        club_bound_contract = (
+            binding_contract
+            if binding_status in {ContractStatus.ACTIVE, ContractStatus.EXPIRING, ContractStatus.AGREED}
+            else None
         )
         selling_club_id = payload.selling_club_id
         current_contract_summary = self.get_contract_summary(payload.player_id, on_date=reference_on)
-        is_regen_free_agent_offer = regen is not None and active_contract is None
+        is_regen_free_agent_offer = regen is not None and club_bound_contract is None
         offer_market: RegenOfferVisibilityState | None = None
         offered_salary: Decimal | None = payload.wage_offer_amount
-        if active_contract is not None:
-            if selling_club_id is not None and selling_club_id != active_contract.club_id:
-                raise PlayerLifecycleValidationError("Selling club must match the player's current active contract")
-            selling_club_id = active_contract.club_id
+        if club_bound_contract is not None:
+            if selling_club_id is not None and selling_club_id != club_bound_contract.club_id:
+                raise PlayerLifecycleValidationError("Selling club must match the player's current club contract")
+            selling_club_id = club_bound_contract.club_id
         elif selling_club_id is not None:
             raise PlayerLifecycleValidationError("Selling club cannot be set when the player has no active contract")
 

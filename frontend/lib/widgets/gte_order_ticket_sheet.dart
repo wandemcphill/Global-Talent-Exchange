@@ -70,6 +70,11 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
   @override
   Widget build(BuildContext context) {
     final EdgeInsets viewInsets = MediaQuery.of(context).viewInsets;
+    final Size viewport = MediaQuery.sizeOf(context);
+    // Cap height so the sticky confirm row stays on-stage in short viewports
+    // (widget tests default to 800x600) and in isScrollControlled sheets.
+    final double maxBodyHeight =
+        (viewport.height - viewInsets.bottom - 40).clamp(280.0, viewport.height);
     final GtePortfolioHolding? holding = _holdingForPlayer();
     final int? shareCount = int.tryParse(_quantityController.text.trim());
     final double? price = _sharePriceCoin;
@@ -94,160 +99,176 @@ class _GteOrderTicketSheetState extends State<GteOrderTicketSheet> {
         child: AnimatedBuilder(
           animation: widget.controller,
           builder: (BuildContext context, Widget? child) {
-            return SingleChildScrollView(
+            return ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxBodyHeight),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    'Trade shares',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.snapshot.detail.identity.playerName,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  GteSurfacePanel(
-                    padding: const EdgeInsets.all(16),
-                    emphasized: true,
-                    child: Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: <Widget>[
-                        GteMetricChip(
-                          label: 'Available GTEX Coin',
-                          value: widget.controller.walletSummary == null
-                              ? '--'
-                              : gteFormatCredits(widget
-                                  .controller.walletSummary!.availableBalance),
-                        ),
-                        GteMetricChip(
-                          label: 'Shares owned',
-                          value: _ownershipLabel(holding),
-                        ),
-                        GteMetricChip(
-                          label: 'Share price',
-                          value: price == null
-                              ? 'Unavailable'
-                              : gteFormatCredits(price),
-                        ),
-                        GteMetricChip(
-                          label: 'Gross',
-                          value: estimatedGross == null
-                              ? '--'
-                              : gteFormatCredits(estimatedGross),
-                        ),
-                        GteMetricChip(
-                          label: 'Trading fee (20%)',
-                          value: estimatedFee == null
-                              ? '--'
-                              : gteFormatCredits(estimatedFee),
-                        ),
-                        GteMetricChip(
-                          label: _side == GteOrderSide.buy
-                              ? 'Est. debit'
-                              : 'Est. credit',
-                          value: estimatedNet == null
-                              ? '--'
-                              : gteFormatCredits(estimatedNet),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SegmentedButton<GteOrderSide>(
-                    segments: const <ButtonSegment<GteOrderSide>>[
-                      ButtonSegment<GteOrderSide>(
-                        value: GteOrderSide.buy,
-                        label: Text('Buy'),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'Trade shares',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            widget.snapshot.detail.identity.playerName,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 16),
+                          // Side + quantity sit above the metric grid so they
+                          // stay on-stage in short viewports (widget tests and
+                          // compact sheets) without scrolling first.
+                          SegmentedButton<GteOrderSide>(
+                            segments: const <ButtonSegment<GteOrderSide>>[
+                              ButtonSegment<GteOrderSide>(
+                                value: GteOrderSide.buy,
+                                label: Text('Buy'),
+                              ),
+                              ButtonSegment<GteOrderSide>(
+                                value: GteOrderSide.sell,
+                                label: Text('Sell'),
+                              ),
+                            ],
+                            selected: <GteOrderSide>{_side},
+                            onSelectionChanged: (Set<GteOrderSide> selection) {
+                              setState(() {
+                                _side = selection.first;
+                                _validationMessage = null;
+                                // A different side is a different trade.
+                                _pendingIdempotencyKey = null;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _quantityController,
+                            enabled: !widget.controller.isSubmittingOrder,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: <TextInputFormatter>[
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            textInputAction: TextInputAction.done,
+                            decoration: const InputDecoration(
+                              labelText: 'Shares',
+                              hintText: '1',
+                              helperText: 'Whole shares only.',
+                            ),
+                            onSubmitted: (_) => _submit(),
+                            onChanged: (_) {
+                              setState(() {
+                                _validationMessage = null;
+                                // A different quantity is a different trade.
+                                _pendingIdempotencyKey = null;
+                              });
+                            },
+                          ),
+                          if (!_marketAvailable) ...<Widget>[
+                            const SizedBox(height: 12),
+                            Text(
+                              'This player has no share market yet, so there '
+                              'is no price to trade at.',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ],
+                          if (_validationMessage != null ||
+                              widget.controller.orderError != null) ...<Widget>[
+                            const SizedBox(height: 12),
+                            Text(
+                              _validationMessage ??
+                                  widget.controller.orderError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                            if (_validationMessage == null &&
+                                _pendingIdempotencyKey != null) ...<Widget>[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Retrying is safe: it will not place a second trade.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ],
+                          if (widget.controller.isSubmittingOrder) ...<Widget>[
+                            const SizedBox(height: 12),
+                            const LinearProgressIndicator(),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Settling with the server...',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          GteSurfacePanel(
+                            padding: const EdgeInsets.all(16),
+                            emphasized: true,
+                            child: Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: <Widget>[
+                                GteMetricChip(
+                                  label: 'Available GTEX Coin',
+                                  value: widget.controller.walletSummary == null
+                                      ? '--'
+                                      : gteFormatCredits(widget.controller
+                                          .walletSummary!.availableBalance),
+                                ),
+                                GteMetricChip(
+                                  label: 'Shares owned',
+                                  value: _ownershipLabel(holding),
+                                ),
+                                GteMetricChip(
+                                  label: 'Share price',
+                                  value: price == null
+                                      ? 'Unavailable'
+                                      : gteFormatCredits(price),
+                                ),
+                                GteMetricChip(
+                                  label: 'Gross',
+                                  value: estimatedGross == null
+                                      ? '--'
+                                      : gteFormatCredits(estimatedGross),
+                                ),
+                                GteMetricChip(
+                                  label: 'Trading fee (20%)',
+                                  value: estimatedFee == null
+                                      ? '--'
+                                      : gteFormatCredits(estimatedFee),
+                                ),
+                                GteMetricChip(
+                                  label: _side == GteOrderSide.buy
+                                      ? 'Est. debit'
+                                      : 'Est. credit',
+                                  value: estimatedNet == null
+                                      ? '--'
+                                      : gteFormatCredits(estimatedNet),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _side == GteOrderSide.buy
+                                ? 'Buys settle immediately against share-market '
+                                    'liquidity (not holder↔holder escrow). '
+                                    'Platform takes 20% of gross as a trading fee; '
+                                    'Est. debit is fee-inclusive. Server is final.'
+                                : 'Sells settle immediately against share-market '
+                                    'liquidity. Platform takes 20% of gross; '
+                                    'Est. credit is after the fee. Server is final.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
                       ),
-                      ButtonSegment<GteOrderSide>(
-                        value: GteOrderSide.sell,
-                        label: Text('Sell'),
-                      ),
-                    ],
-                    selected: <GteOrderSide>{_side},
-                    onSelectionChanged: (Set<GteOrderSide> selection) {
-                      setState(() {
-                        _side = selection.first;
-                        _validationMessage = null;
-                        // A different side is a different trade.
-                        _pendingIdempotencyKey = null;
-                      });
-                    },
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _side == GteOrderSide.buy
-                        ? 'Buys settle immediately against share-market liquidity '
-                            '(not holder↔holder escrow). Platform takes 20% of gross '
-                            'as a trading fee; Est. debit is fee-inclusive. Server is final.'
-                        : 'Sells settle immediately against share-market liquidity. '
-                            'Platform takes 20% of gross; Est. credit is after the fee. '
-                            'Server is final.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _quantityController,
-                    enabled: !widget.controller.isSubmittingOrder,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
-                    textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(
-                      labelText: 'Shares',
-                      hintText: '1',
-                      helperText: 'Whole shares only.',
-                    ),
-                    onSubmitted: (_) => _submit(),
-                    onChanged: (_) {
-                      setState(() {
-                        _validationMessage = null;
-                        // A different quantity is a different trade.
-                        _pendingIdempotencyKey = null;
-                      });
-                    },
-                  ),
-                  if (!_marketAvailable) ...<Widget>[
-                    const SizedBox(height: 12),
-                    Text(
-                      'This player has no share market yet, so there is no '
-                      'price to trade at.',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ],
-                  if (widget.controller.isSubmittingOrder) ...<Widget>[
-                    const SizedBox(height: 12),
-                    const LinearProgressIndicator(),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Settling with the server...',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  if (_validationMessage != null ||
-                      widget.controller.orderError != null) ...<Widget>[
-                    const SizedBox(height: 12),
-                    Text(
-                      _validationMessage ?? widget.controller.orderError!,
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
-                    if (_validationMessage == null &&
-                        _pendingIdempotencyKey != null) ...<Widget>[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Retrying is safe: it will not place a second trade.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ],
                   const SizedBox(height: 20),
                   Row(
                     children: <Widget>[

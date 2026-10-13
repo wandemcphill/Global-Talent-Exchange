@@ -431,7 +431,10 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
     # Renewal of club_buyer's active contract -> transfer bid acceptance, which canonically terminates the selling contract.
     contracts = _ok(client.get(f"/api/players/{regen_id}/contracts"))
     assert contracts, f"No contracts found for {regen_id}: {contracts}"
-    active_contract = next((c for c in contracts if c["status"] == "active"), contracts[0])
+    active_contract = next(
+        (c for c in contracts if c["status"] in {"active", "expiring", "agreed"}),
+        contracts[0],
+    )
     renewed = _ok(
         client.post(
             f"/api/players/{regen_id}/contracts/{active_contract['id']}/renew",
