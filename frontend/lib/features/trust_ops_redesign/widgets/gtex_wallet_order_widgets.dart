@@ -197,6 +197,9 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
     this.selectedDispute,
     this.selectedKycCase,
     this.adminMode = false,
+    this.kycReviewBusy = false,
+    this.onApproveKyc,
+    this.onRejectKyc,
   });
 
   final GtexTrustOpsState state;
@@ -206,6 +209,21 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
   final GtexDisputeRecord? selectedDispute;
   final GtexKycCaseRecord? selectedKycCase;
   final bool adminMode;
+  final bool kycReviewBusy;
+  final VoidCallback? onApproveKyc;
+  final VoidCallback? onRejectKyc;
+
+  bool get _canReviewSelectedKyc {
+    final GtexKycCaseRecord? item = selectedKycCase;
+    if (!adminMode || item == null) {
+      return false;
+    }
+    if (onApproveKyc == null || onRejectKyc == null) {
+      return false;
+    }
+    return item.status == GtexTrustStatus.pending ||
+        item.status == GtexTrustStatus.attention;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -216,7 +234,9 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
           title: adminMode ? 'Operator actions' : 'Wallet actions',
           subtitle:
               adminMode
-                  ? 'Review context is live; mutation controls unlock only after audited review endpoints are mounted.'
+                  ? (_canReviewSelectedKyc
+                      ? 'Live treasury KYC review is mounted for the selected case.'
+                      : 'KYC approve/reject is live; disputes and orders stay read-only until their adapters mount.')
                   : state.wallet.kycStatus,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -241,6 +261,7 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
                     order: selectedOrder,
                     dispute: selectedDispute,
                     kycCase: selectedKycCase,
+                    canReviewKyc: _canReviewSelectedKyc,
                   ),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: GtexColors.textSecondary,
@@ -248,21 +269,54 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: GtexSpacing.md),
-                const Wrap(
-                  spacing: GtexSpacing.xs,
-                  runSpacing: GtexSpacing.xs,
-                  children: <Widget>[
-                    GtexStatusChip(label: 'READ ONLY', color: GtexColors.cyan),
-                    GtexStatusChip(
-                      label: 'AUDIT REQUIRED',
-                      color: GtexColors.gold,
-                    ),
-                    GtexStatusChip(
-                      label: 'NO MUTATION ENDPOINT',
-                      color: GtexColors.red,
-                    ),
-                  ],
-                ),
+                if (_canReviewSelectedKyc) ...<Widget>[
+                  GtexActionButton(
+                    label: kycReviewBusy ? 'Submitting…' : 'Approve KYC',
+                    icon: Icons.verified_user_outlined,
+                    onPressed: kycReviewBusy ? null : onApproveKyc,
+                  ),
+                  const SizedBox(height: GtexSpacing.sm),
+                  GtexActionButton(
+                    label: kycReviewBusy ? 'Submitting…' : 'Reject KYC',
+                    icon: Icons.gpp_bad_outlined,
+                    onPressed: kycReviewBusy ? null : onRejectKyc,
+                    secondary: true,
+                    accent: GtexColors.red,
+                  ),
+                  const SizedBox(height: GtexSpacing.md),
+                  const Wrap(
+                    spacing: GtexSpacing.xs,
+                    runSpacing: GtexSpacing.xs,
+                    children: <Widget>[
+                      GtexStatusChip(
+                        label: 'KYC LIVE',
+                        color: GtexColors.cyan,
+                      ),
+                      GtexStatusChip(
+                        label: 'TREASURY REVIEW',
+                        color: GtexColors.gold,
+                      ),
+                    ],
+                  ),
+                ] else
+                  const Wrap(
+                    spacing: GtexSpacing.xs,
+                    runSpacing: GtexSpacing.xs,
+                    children: <Widget>[
+                      GtexStatusChip(
+                        label: 'READ ONLY',
+                        color: GtexColors.cyan,
+                      ),
+                      GtexStatusChip(
+                        label: 'AUDIT REQUIRED',
+                        color: GtexColors.gold,
+                      ),
+                      GtexStatusChip(
+                        label: 'NO MUTATION ENDPOINT',
+                        color: GtexColors.red,
+                      ),
+                    ],
+                  ),
               ],
             ],
           ),
@@ -306,6 +360,7 @@ String _selectedReviewSummary({
   required GtexOrderRecord? order,
   required GtexDisputeRecord? dispute,
   required GtexKycCaseRecord? kycCase,
+  required bool canReviewKyc,
 }) {
   if (order != null) {
     return 'Selected order ${order.id} is available for inspection. Approve, info-request, and escalation mutations remain locked until the live review adapter is mounted.';
@@ -314,9 +369,12 @@ String _selectedReviewSummary({
     return 'Selected dispute ${dispute.id} is available for inspection. Resolution mutations remain locked until the live review adapter is mounted.';
   }
   if (kycCase != null) {
-    return 'Selected KYC case ${kycCase.id} is available for inspection. Approval mutations remain locked until the live review adapter is mounted.';
+    if (canReviewKyc) {
+      return 'Selected KYC case ${kycCase.id} is ready for live treasury approve/reject.';
+    }
+    return 'Selected KYC case ${kycCase.id} is available for inspection. Approve/reject unlocks for pending or attention cases.';
   }
-  return 'Select an order, KYC case, or dispute to review its live context. This rail is intentionally read-only until audited admin mutation endpoints are mounted.';
+  return 'Select a KYC case to approve or reject, or inspect orders and disputes (still read-only).';
 }
 
 class _OperationsReadinessCard extends StatelessWidget {

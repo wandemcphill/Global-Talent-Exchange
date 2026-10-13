@@ -26,6 +26,9 @@ Live story-feed queue + `POST /api/admin/story-feed` publish; `GET /api/admin/st
 ### 5. Admin Jackpot — Live runtime controls — DONE
 `JackpotAdminApi` + `GtexJackpotAdminPanel` wired to runtime / balance / trigger / history; stub Create pool / Winner review CTAs replaced with real controls.
 
+### 6. Admin Trust Ops — Live KYC queue + review — DONE
+`GtexTrustOpsApiRepository` loads `GET /api/admin/treasury/kyc` into the KYC queue (operations-readiness stays the health rail); Approve/Reject call `POST .../kyc/{id}/review` with `verified` / `rejected`. Disputes / withdrawals / orders remain deferred.
+
 ## Explicitly deferred (not half-done product claims)
 - Match “Coming soon” 3D / spectate / broadcast routes (launch policy: 2D tactical / OriginalVisualRuntime path)
 - Unity runner / Vercel infra failures
