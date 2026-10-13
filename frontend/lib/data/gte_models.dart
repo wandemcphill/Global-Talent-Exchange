@@ -4569,9 +4569,11 @@ String _withdrawalStatusToString(GteWithdrawalStatus status) {
 GteKycStatus _kycStatusFromString(String value) {
   switch (value.toLowerCase()) {
     case 'pending':
+    case 'under_review':
       return GteKycStatus.pending;
     case 'partial_verified_no_id':
       return GteKycStatus.partialVerifiedNoId;
+    case 'verified':
     case 'fully_verified':
       return GteKycStatus.fullyVerified;
     case 'rejected':
@@ -4591,7 +4593,8 @@ String _kycStatusToString(GteKycStatus status) {
     case GteKycStatus.partialVerifiedNoId:
       return 'partial_verified_no_id';
     case GteKycStatus.fullyVerified:
-      return 'fully_verified';
+      // Treasury admin review accepts under_review | verified | rejected.
+      return 'verified';
     case GteKycStatus.rejected:
       return 'rejected';
   }

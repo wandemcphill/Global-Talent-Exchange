@@ -3128,7 +3128,7 @@ String _kycStatusToString(GteKycStatus status) {
     case GteKycStatus.partialVerifiedNoId:
       return 'partial_verified_no_id';
     case GteKycStatus.fullyVerified:
-      return 'fully_verified';
+      return 'verified';
     case GteKycStatus.rejected:
       return 'rejected';
   }

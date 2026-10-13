@@ -36,6 +36,7 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
   String? _selectedKycCaseId;
   String? _selectedDisputeId;
   String? _selectedOrderId;
+  bool _kycReviewBusy = false;
 
   @override
   void initState() {
@@ -131,6 +132,15 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
             selectedDispute: selectedDispute,
             selectedKycCase: selectedKyc,
             adminMode: true,
+            kycReviewBusy: _kycReviewBusy,
+            onApproveKyc:
+                selectedKyc == null
+                    ? null
+                    : () => _reviewSelectedKyc(approve: true),
+            onRejectKyc:
+                selectedKyc == null
+                    ? null
+                    : () => _reviewSelectedKyc(approve: false),
             onTopUp: _showAdminActionUnavailable,
             onWithdraw: _showAdminActionUnavailable,
           ),
@@ -179,6 +189,49 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _reviewSelectedKyc({required bool approve}) async {
+    final GtexTrustOpsState? state = await _future;
+    if (!mounted || state == null) {
+      return;
+    }
+    final GtexKycCaseRecord? selected = _selectedKycCase(state);
+    if (selected == null) {
+      return;
+    }
+    setState(() => _kycReviewBusy = true);
+    try {
+      await _repository.reviewKyc(
+        selected.id,
+        approve: approve,
+        rejectionReason: approve ? null : 'Rejected by trust ops',
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            approve
+                ? 'KYC ${selected.id} verified.'
+                : 'KYC ${selected.id} rejected.',
+          ),
+        ),
+      );
+      setState(() {
+        _kycReviewBusy = false;
+        _future = _repository.load();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _kycReviewBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('KYC review failed: $error')),
+      );
+    }
   }
 
   GtexKycCaseRecord? _selectedKycCase(GtexTrustOpsState state) {

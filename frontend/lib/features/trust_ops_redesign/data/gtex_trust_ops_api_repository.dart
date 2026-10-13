@@ -3,6 +3,7 @@ import 'package:gte_frontend/app/test_runtime_detector.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_http_transport.dart';
+import 'package:gte_frontend/data/gte_models.dart';
 
 import '../models/gtex_trust_ops_models.dart';
 import 'gtex_trust_ops_demo_repository.dart';
@@ -49,13 +50,57 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
   @override
   Future<GtexTrustOpsState> load() {
     return client.withFallback<GtexTrustOpsState>(() async {
-      final Map<String, dynamic> payload = await client.getMap(
-        '/api/admin/operations-readiness',
-      );
+      final List<Map<String, dynamic>> payloads = await Future.wait(<
+        Future<Map<String, dynamic>>
+      >[
+        client.getMap('/api/admin/operations-readiness'),
+        client.getMap(
+          '/api/admin/treasury/kyc',
+          query: const <String, Object?>{'limit': 50, 'offset': 0},
+        ),
+      ]);
+      final GtexOperationsReadinessSnapshot readiness =
+          GtexOperationsReadinessSnapshot.fromJson(
+            Map<String, Object?>.from(payloads[0]),
+          );
+      final GteAdminQueuePage<GteAdminKyc> kycPage =
+          GteAdminQueuePage<GteAdminKyc>.fromJson(
+            Map<String, Object?>.from(payloads[1]),
+            GteAdminKyc.fromJson,
+          );
       return _stateFromOperationsReadiness(
-        GtexOperationsReadinessSnapshot.fromJson(payload),
+        readiness,
+        kycCases:
+            kycPage.items
+                .map(_mapAdminKyc)
+                .toList(growable: false),
       );
     }, () => _requireFixtures().load());
+  }
+
+  @override
+  Future<void> reviewKyc(
+    String profileId, {
+    required bool approve,
+    String? rejectionReason,
+  }) {
+    return client.withFallback<void>(() async {
+      await client.post(
+        '/api/admin/treasury/kyc/$profileId/review',
+        body: <String, Object?>{
+          'status': approve ? 'verified' : 'rejected',
+          if (!approve)
+            'rejection_reason':
+                (rejectionReason != null && rejectionReason.trim().isNotEmpty)
+                    ? rejectionReason.trim()
+                    : 'Rejected by trust ops',
+        },
+      );
+    }, () => _requireFixtures().reviewKyc(
+      profileId,
+      approve: approve,
+      rejectionReason: rejectionReason,
+    ));
   }
 
   GtexTrustOpsDemoRepository _requireFixtures() {
@@ -69,8 +114,9 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
   }
 
   GtexTrustOpsState _stateFromOperationsReadiness(
-    GtexOperationsReadinessSnapshot snapshot,
-  ) {
+    GtexOperationsReadinessSnapshot snapshot, {
+    required List<GtexKycCaseRecord> kycCases,
+  }) {
     final GtexOperationsReadinessQueue risk = _queue(
       snapshot,
       'risk_compliance',
@@ -112,29 +158,7 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
         _orderFromQueue(policy),
         _orderFromQueue(diagnostics),
       ],
-      kycCases: <GtexKycCaseRecord>[
-        GtexKycCaseRecord(
-          id: 'risk-compliance',
-          userName: risk.title,
-          country: 'Global',
-          level: '${_metricDisplay(risk, 'pending_kyc')} pending KYC',
-          status: _trustStatus(risk.status),
-          submittedLabel: 'Live',
-          riskLabel: _statusLabel(risk.status),
-          notes: risk.description,
-        ),
-        GtexKycCaseRecord(
-          id: 'policy-launch',
-          userName: policy.title,
-          country: 'Regions',
-          level:
-              '${_metricDisplay(policy, 'active_policy_documents')} policies',
-          status: _trustStatus(policy.status),
-          submittedLabel: 'Live',
-          riskLabel: _statusLabel(policy.status),
-          notes: policy.description,
-        ),
-      ],
+      kycCases: kycCases,
       disputes: <GtexDisputeRecord>[
         GtexDisputeRecord(
           id: 'moderation-disputes',
@@ -151,6 +175,84 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
       ],
       operationsReadiness: snapshot,
     );
+  }
+
+  GtexKycCaseRecord _mapAdminKyc(GteAdminKyc item) {
+    final String? fullName = item.userFullName?.trim();
+    final String userName =
+        (fullName != null && fullName.isNotEmpty) ? fullName : item.userEmail;
+    final String? country = item.country?.trim();
+    return GtexKycCaseRecord(
+      id: item.id,
+      userName: userName,
+      country:
+          (country != null && country.isNotEmpty) ? country : 'Unknown',
+      level: _kycLevelLabel(item.status),
+      status: _kycTrustStatus(item.status),
+      submittedLabel:
+          item.submittedAt?.toUtc().toIso8601String() ?? 'Awaiting submit time',
+      riskLabel: _kycRiskLabel(item.status),
+      notes: _kycNotes(item),
+    );
+  }
+
+  GtexTrustStatus _kycTrustStatus(GteKycStatus status) {
+    switch (status) {
+      case GteKycStatus.fullyVerified:
+        return GtexTrustStatus.healthy;
+      case GteKycStatus.rejected:
+        return GtexTrustStatus.blocked;
+      case GteKycStatus.pending:
+      case GteKycStatus.partialVerifiedNoId:
+        return GtexTrustStatus.pending;
+      case GteKycStatus.unverified:
+        return GtexTrustStatus.attention;
+    }
+  }
+
+  String _kycLevelLabel(GteKycStatus status) {
+    switch (status) {
+      case GteKycStatus.fullyVerified:
+        return 'Verified';
+      case GteKycStatus.rejected:
+        return 'Rejected';
+      case GteKycStatus.partialVerifiedNoId:
+        return 'Partial';
+      case GteKycStatus.pending:
+        return 'Under review';
+      case GteKycStatus.unverified:
+        return 'Unverified';
+    }
+  }
+
+  String _kycRiskLabel(GteKycStatus status) {
+    switch (status) {
+      case GteKycStatus.fullyVerified:
+        return 'Cleared';
+      case GteKycStatus.rejected:
+        return 'Rejected';
+      case GteKycStatus.pending:
+      case GteKycStatus.partialVerifiedNoId:
+        return 'Manual review';
+      case GteKycStatus.unverified:
+        return 'Incomplete';
+    }
+  }
+
+  String _kycNotes(GteAdminKyc item) {
+    final String? reason = item.rejectionReason?.trim();
+    if (reason != null && reason.isNotEmpty) {
+      return reason;
+    }
+    final List<String> parts = <String>[
+      if (item.userEmail.isNotEmpty) item.userEmail,
+      if (item.city != null && item.city!.trim().isNotEmpty) item.city!.trim(),
+      if (item.state != null && item.state!.trim().isNotEmpty) item.state!.trim(),
+    ];
+    if (parts.isEmpty) {
+      return 'Treasury KYC profile ${item.id}';
+    }
+    return parts.join(' · ');
   }
 
   GtexOperationsReadinessQueue _queue(
@@ -248,9 +350,5 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
 
   double _metricValue(GtexOperationsReadinessQueue queue, String key) {
     return queue.metric(key)?.value ?? 0;
-  }
-
-  String _metricDisplay(GtexOperationsReadinessQueue queue, String key) {
-    return queue.metric(key)?.displayValue ?? '0';
   }
 }

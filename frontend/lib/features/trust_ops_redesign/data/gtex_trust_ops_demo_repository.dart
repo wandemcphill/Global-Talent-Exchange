@@ -4,6 +4,13 @@ abstract class GtexTrustOpsRepository {
   const GtexTrustOpsRepository();
 
   Future<GtexTrustOpsState> load();
+
+  /// Approve or reject a treasury KYC profile. Demo/fixture repos no-op.
+  Future<void> reviewKyc(
+    String profileId, {
+    required bool approve,
+    String? rejectionReason,
+  }) async {}
 }
 
 /// Fixture repository used by tests and offline preview mode.
@@ -72,6 +79,16 @@ class GtexTrustOpsDemoRepository extends GtexTrustOpsRepository {
       ],
       kycCases: <GtexKycCaseRecord>[
         GtexKycCaseRecord(
+          id: 'kyc-201',
+          userName: 'Ayo Clubhouse',
+          country: 'Nigeria',
+          level: 'Tier 1',
+          status: GtexTrustStatus.pending,
+          submittedLabel: '12 minutes ago',
+          riskLabel: 'Manual review',
+          notes: 'Address document needs operator confirmation.',
+        ),
+        GtexKycCaseRecord(
           id: 'kyc-user',
           userName: 'Current user',
           country: 'Nigeria',
@@ -81,16 +98,6 @@ class GtexTrustOpsDemoRepository extends GtexTrustOpsRepository {
           riskLabel: 'Low risk',
           notes:
               'User can top up, withdraw, buy players, and join paid tournaments.',
-        ),
-        GtexKycCaseRecord(
-          id: 'kyc-201',
-          userName: 'Ayo Clubhouse',
-          country: 'Nigeria',
-          level: 'Tier 1',
-          status: GtexTrustStatus.pending,
-          submittedLabel: '12 minutes ago',
-          riskLabel: 'Manual review',
-          notes: 'Address document needs operator confirmation.',
         ),
       ],
       disputes: <GtexDisputeRecord>[
