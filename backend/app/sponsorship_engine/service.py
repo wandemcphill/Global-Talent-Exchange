@@ -70,7 +70,9 @@ class SponsorshipEngineService:
             },
         )
         for item in defaults:
-            existing = self.session.scalar(select(ClubSponsorshipPackage).where(ClubSponsorshipPackage.code == item["code"]))
+            existing = self.session.scalar(
+                select(ClubSponsorshipPackage).where(ClubSponsorshipPackage.code == item["code"])
+            )
             if existing is None:
                 self.session.add(ClubSponsorshipPackage(**item))
         self.session.flush()
@@ -94,7 +96,9 @@ class SponsorshipEngineService:
     def list_my_leads(self, *, actor: User) -> list[SponsorshipLead]:
         return list(
             self.session.scalars(
-                select(SponsorshipLead).where(SponsorshipLead.requester_user_id == actor.id).order_by(SponsorshipLead.created_at.desc())
+                select(SponsorshipLead)
+                .where(SponsorshipLead.requester_user_id == actor.id)
+                .order_by(SponsorshipLead.created_at.desc())
             ).all()
         )
 
@@ -104,11 +108,15 @@ class SponsorshipEngineService:
             raise SponsorshipEngineError("Club was not found.")
         if club.owner_user_id != actor.id and actor.role.value != "admin":
             raise SponsorshipEngineError("Only the club owner can request sponsorship for this club.")
-        package = self.session.scalar(select(ClubSponsorshipPackage).where(ClubSponsorshipPackage.code == payload.package_code))
+        package = self.session.scalar(
+            select(ClubSponsorshipPackage).where(ClubSponsorshipPackage.code == payload.package_code)
+        )
         if package is None or not package.is_active:
             raise SponsorshipEngineError("Sponsorship package is unavailable.")
 
-        amount_minor = payload.custom_amount_minor if payload.custom_amount_minor is not None else package.base_amount_minor
+        amount_minor = (
+            payload.custom_amount_minor if payload.custom_amount_minor is not None else package.base_amount_minor
+        )
         duration_months = payload.duration_months or package.default_duration_months
         payout_schedule = payload.payout_schedule or package.payout_schedule
         start_at = utcnow()
@@ -164,7 +172,9 @@ class SponsorshipEngineService:
         self.session.flush()
         return lead, contract
 
-    def review_contract(self, *, actor: User, contract_id: str, action: str, resolution_note: str = "") -> ClubSponsorshipContract:
+    def review_contract(
+        self, *, actor: User, contract_id: str, action: str, resolution_note: str = ""
+    ) -> ClubSponsorshipContract:
         contract = self.session.get(ClubSponsorshipContract, contract_id)
         if contract is None:
             raise SponsorshipEngineError("Contract was not found.")
@@ -208,7 +218,9 @@ class SponsorshipEngineService:
         self.session.flush()
         return contract
 
-    def settle_next_payout(self, *, actor: User, contract_id: str) -> tuple[ClubSponsorshipContract, ClubSponsorshipPayout, Decimal, str]:
+    def settle_next_payout(
+        self, *, actor: User, contract_id: str
+    ) -> tuple[ClubSponsorshipContract, ClubSponsorshipPayout, Decimal, str]:
         contract = self.session.get(ClubSponsorshipContract, contract_id)
         if contract is None:
             raise SponsorshipEngineError("Contract was not found.")
@@ -227,7 +239,9 @@ class SponsorshipEngineService:
         owner_share = (credit_amount * Decimal("0.60")).quantize(Decimal("0.0001"))
         platform_fee = (credit_amount - owner_share).quantize(Decimal("0.0001"))
         platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
-        owner_account = self.wallet_service.get_user_account(self.session, self.session.get(User, club.owner_user_id), LedgerUnit.CREDIT)
+        owner_account = self.wallet_service.get_user_account(
+            self.session, self.session.get(User, club.owner_user_id), LedgerUnit.CREDIT
+        )
         self.wallet_service.append_transaction(
             self.session,
             postings=[
@@ -290,13 +304,36 @@ class SponsorshipEngineService:
 
     def dashboard(self, *, club_id: str) -> dict:
         contracts = self.list_club_contracts(club_id=club_id)
-        active_contracts = [item for item in contracts if (item.status.value if hasattr(item.status, "value") else item.status) == SponsorshipStatus.ACTIVE.value]
-        pending_contracts = [item for item in contracts if (item.status.value if hasattr(item.status, "value") else item.status) == SponsorshipStatus.PENDING_APPROVAL.value]
-        completed_contracts = [item for item in contracts if (item.status.value if hasattr(item.status, "value") else item.status) == SponsorshipStatus.COMPLETED.value]
-        monthly_run_rate_minor = sum(int(item.contract_amount_minor / max(item.duration_months, 1)) for item in active_contracts)
+        active_contracts = [
+            item
+            for item in contracts
+            if (item.status.value if hasattr(item.status, "value") else item.status) == SponsorshipStatus.ACTIVE.value
+        ]
+        pending_contracts = [
+            item
+            for item in contracts
+            if (item.status.value if hasattr(item.status, "value") else item.status)
+            == SponsorshipStatus.PENDING_APPROVAL.value
+        ]
+        completed_contracts = [
+            item
+            for item in contracts
+            if (item.status.value if hasattr(item.status, "value") else item.status)
+            == SponsorshipStatus.COMPLETED.value
+        ]
+        monthly_run_rate_minor = sum(
+            int(item.contract_amount_minor / max(item.duration_months, 1)) for item in active_contracts
+        )
         settled_total_minor = sum(item.settled_amount_minor for item in contracts)
         outstanding_total_minor = sum(item.outstanding_amount_minor for item in contracts)
-        open_leads = int(self.session.scalar(select(func.count(SponsorshipLead.id)).where(SponsorshipLead.club_id == club_id, SponsorshipLead.status.in_(["submitted", "approved"]))) or 0)
+        open_leads = int(
+            self.session.scalar(
+                select(func.count(SponsorshipLead.id)).where(
+                    SponsorshipLead.club_id == club_id, SponsorshipLead.status.in_(["submitted", "approved"])
+                )
+            )
+            or 0
+        )
         currencies = sorted({item.currency for item in contracts})
         insights = [
             f"{len(active_contracts)} active sponsorship contract(s) currently power the club's commercial lane.",
@@ -319,7 +356,12 @@ class SponsorshipEngineService:
 
     def _ensure_payout_schedule(self, contract: ClubSponsorshipContract) -> None:
         count = max(contract.duration_months, 1)
-        existing = int(self.session.scalar(select(func.count(ClubSponsorshipPayout.id)).where(ClubSponsorshipPayout.contract_id == contract.id)) or 0)
+        existing = int(
+            self.session.scalar(
+                select(func.count(ClubSponsorshipPayout.id)).where(ClubSponsorshipPayout.contract_id == contract.id)
+            )
+            or 0
+        )
         if existing >= count:
             return
         base_amount = int(contract.contract_amount_minor / count)

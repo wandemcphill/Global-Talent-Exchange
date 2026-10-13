@@ -70,7 +70,9 @@ def resolve_placements(
     request: Request,
     session: Session = Depends(get_session),
 ) -> SponsorshipPlacementResponse:
-    service = SponsorshipPlacementService(session=session, settings=request.app.state.settings, analytics=AnalyticsService())
+    service = SponsorshipPlacementService(
+        session=session, settings=request.app.state.settings, analytics=AnalyticsService()
+    )
     placements = service.resolve_placements(
         home_club_id=payload.home_club_id,
         away_club_id=payload.away_club_id,
@@ -97,7 +99,9 @@ def resolve_placements(
 
 
 @router.get("/clubs/{club_id}/contracts", response_model=list[SponsorshipContractView])
-def list_club_contracts(club_id: str, service: SponsorshipEngineService = Depends(get_service)) -> list[SponsorshipContractView]:
+def list_club_contracts(
+    club_id: str, service: SponsorshipEngineService = Depends(get_service)
+) -> list[SponsorshipContractView]:
     return [SponsorshipContractView.model_validate(item) for item in service.list_club_contracts(club_id=club_id)]
 
 
@@ -107,7 +111,9 @@ def get_dashboard(club_id: str, service: SponsorshipEngineService = Depends(get_
 
 
 @router.get("/clubs/{club_id}/offers", response_model=list[SponsorEligibilityView])
-def list_eligible_offers(club_id: str, service: ClubSponsorOfferService = Depends(get_offer_service)) -> list[SponsorEligibilityView]:
+def list_eligible_offers(
+    club_id: str, service: ClubSponsorOfferService = Depends(get_offer_service)
+) -> list[SponsorEligibilityView]:
     payloads = service.list_eligible_offers(club_id=club_id)
     return [
         SponsorEligibilityView(
@@ -121,17 +127,25 @@ def list_eligible_offers(club_id: str, service: ClubSponsorOfferService = Depend
 
 
 @router.get("/clubs/{club_id}/sponsors", response_model=list[ClubSponsorView])
-def list_club_sponsors(club_id: str, service: ClubSponsorOfferService = Depends(get_offer_service)) -> list[ClubSponsorView]:
+def list_club_sponsors(
+    club_id: str, service: ClubSponsorOfferService = Depends(get_offer_service)
+) -> list[ClubSponsorView]:
     return [ClubSponsorView.model_validate(item) for item in service.list_club_sponsors(club_id=club_id)]
 
 
 @router.get("/me/leads", response_model=list[SponsorshipLeadView])
-def list_my_leads(current_user: User = Depends(get_current_user), service: SponsorshipEngineService = Depends(get_service)) -> list[SponsorshipLeadView]:
+def list_my_leads(
+    current_user: User = Depends(get_current_user), service: SponsorshipEngineService = Depends(get_service)
+) -> list[SponsorshipLeadView]:
     return [SponsorshipLeadView.model_validate(item) for item in service.list_my_leads(actor=current_user)]
 
 
 @router.post("/contracts/request", response_model=SponsorshipLeadView, status_code=status.HTTP_201_CREATED)
-def request_contract(payload: SponsorshipLeadCreateRequest, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)) -> SponsorshipLeadView:
+def request_contract(
+    payload: SponsorshipLeadCreateRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> SponsorshipLeadView:
     service = SponsorshipEngineService(session)
     try:
         lead, _contract = service.request_contract(actor=current_user, payload=payload)
@@ -143,12 +157,16 @@ def request_contract(payload: SponsorshipLeadCreateRequest, current_user: User =
 
 
 @admin_router.get("/packages", response_model=list[SponsorshipPackageView])
-def admin_list_packages(_: User = Depends(get_current_admin), service: SponsorshipEngineService = Depends(get_service)) -> list[SponsorshipPackageView]:
+def admin_list_packages(
+    _: User = Depends(get_current_admin), service: SponsorshipEngineService = Depends(get_service)
+) -> list[SponsorshipPackageView]:
     return [SponsorshipPackageView.model_validate(item) for item in service.list_packages(active_only=False)]
 
 
 @admin_router.get("/offers", response_model=list[SponsorOfferView])
-def admin_list_offers(_: User = Depends(get_current_admin), service: ClubSponsorOfferService = Depends(get_offer_service)) -> list[SponsorOfferView]:
+def admin_list_offers(
+    _: User = Depends(get_current_admin), service: ClubSponsorOfferService = Depends(get_offer_service)
+) -> list[SponsorOfferView]:
     return [SponsorOfferView.model_validate(item) for item in service.list_offers(active_only=False)]
 
 
@@ -301,15 +319,24 @@ def admin_toggle_category(
 
 
 @admin_router.get("/analytics", response_model=SponsorshipOfferAnalyticsView)
-def admin_offer_analytics(_: User = Depends(get_current_admin), service: ClubSponsorOfferService = Depends(get_offer_service)) -> SponsorshipOfferAnalyticsView:
+def admin_offer_analytics(
+    _: User = Depends(get_current_admin), service: ClubSponsorOfferService = Depends(get_offer_service)
+) -> SponsorshipOfferAnalyticsView:
     return SponsorshipOfferAnalyticsView.model_validate(service.sponsorship_analytics())
 
 
 @admin_router.post("/contracts/{contract_id}/review", response_model=SponsorshipContractView)
-def review_contract(contract_id: str, payload: SponsorshipReviewRequest, actor: User = Depends(get_current_admin), session: Session = Depends(get_session)) -> SponsorshipContractView:
+def review_contract(
+    contract_id: str,
+    payload: SponsorshipReviewRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> SponsorshipContractView:
     service = SponsorshipEngineService(session)
     try:
-        contract = service.review_contract(actor=actor, contract_id=contract_id, action=payload.action, resolution_note=payload.resolution_note)
+        contract = service.review_contract(
+            actor=actor, contract_id=contract_id, action=payload.action, resolution_note=payload.resolution_note
+        )
     except SponsorshipEngineError as exc:
         _raise(exc)
     session.commit()
@@ -318,10 +345,14 @@ def review_contract(contract_id: str, payload: SponsorshipReviewRequest, actor: 
 
 
 @admin_router.post("/contracts/{contract_id}/settle-next", response_model=SponsorshipSettlementView)
-def settle_next_payout(contract_id: str, actor: User = Depends(get_current_admin), session: Session = Depends(get_session)) -> SponsorshipSettlementView:
+def settle_next_payout(
+    contract_id: str, actor: User = Depends(get_current_admin), session: Session = Depends(get_session)
+) -> SponsorshipSettlementView:
     service = SponsorshipEngineService(session)
     try:
-        contract, payout, credited_amount, destination_user_id = service.settle_next_payout(actor=actor, contract_id=contract_id)
+        contract, payout, credited_amount, destination_user_id = service.settle_next_payout(
+            actor=actor, contract_id=contract_id
+        )
     except SponsorshipEngineError as exc:
         _raise(exc)
     session.commit()

@@ -47,11 +47,7 @@ def inject_overlay(
 
 
 def _escape_drawtext(text: str) -> str:
-    return (
-        text.replace("\\", r"\\")
-        .replace(":", r"\:")
-        .replace("'", r"\'")
-    )
+    return text.replace("\\", r"\\").replace(":", r"\:").replace("'", r"\'")
 
 
 __all__ = ["build_overlay_command", "inject_overlay"]

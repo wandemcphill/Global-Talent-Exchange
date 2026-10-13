@@ -149,9 +149,14 @@ class GteMockApi implements GteApiRepository {
   @override
   Future<GteAuthSession> signupUser(GteUserSignupRequest request) async {
     await _delay();
+    final String username = request.username.startsWith('@')
+        ? request.username.substring(1)
+        : request.username;
     return _signupSession(
-      email: request.email,
-      username: request.username,
+      email: (request.email != null && request.email!.trim().isNotEmpty)
+          ? request.email!.trim()
+          : '$username@users.gtex.local',
+      username: username,
       fullName: request.fullName,
       accountType: 'user',
       landingRoute: '/app/home',

@@ -21,9 +21,7 @@ class ClubOwnershipCapError(ValueError):
         self.owned = owned
         self.limit = limit
         self.reason = "club_ownership_cap_reached"
-        super().__init__(
-            f"You already own {owned} clubs. GTEX caps controlling ownership at {limit}."
-        )
+        super().__init__(f"You already own {owned} clubs. GTEX caps controlling ownership at {limit}.")
 
 
 def count_owned_clubs(session: Session, owner_user_id: str) -> int:

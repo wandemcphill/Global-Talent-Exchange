@@ -66,7 +66,9 @@ class AdDecisionEngine:
         ad_profile: dict[str, Any] | None = None,
         match_context: dict[str, Any] | None = None,
     ) -> MatchViewerMonetizationView:
-        profile = self._effective_profile(profile_from_input(ad_profile), match_context or self._match_context_from_view_state(view_state))
+        profile = self._effective_profile(
+            profile_from_input(ad_profile), match_context or self._match_context_from_view_state(view_state)
+        )
         if profile.is_premium_user:
             return MatchViewerMonetizationView(
                 ads_enabled=False,
@@ -183,7 +185,9 @@ class AdDecisionEngine:
                 avoid={placement.brand for placement in placements},
             )
             live_start = max(12, int(round(view_state.duration_seconds * 0.18)))
-            live_end = min(view_state.duration_seconds, max(live_start + 8, int(round(view_state.duration_seconds * 0.78))))
+            live_end = min(
+                view_state.duration_seconds, max(live_start + 8, int(round(view_state.duration_seconds * 0.78)))
+            )
             placements.append(
                 self._placement(
                     match_id=match_id,
@@ -302,7 +306,8 @@ class AdDecisionEngine:
                     active_until_second=min(12, first_clip.duration_seconds or 12),
                     cta_label="Start Reel",
                     tags=tags,
-                    is_final=manifest.highlight_profile is not None and manifest.highlight_profile.value == "elite_final",
+                    is_final=manifest.highlight_profile is not None
+                    and manifest.highlight_profile.value == "elite_final",
                     is_major_match=any(item.importance >= 4 for item in manifest.highlights),
                 )
             )
@@ -323,7 +328,8 @@ class AdDecisionEngine:
                     reward_coins=self.rewarded_coin_grant,
                     cta_label=f"Watch Ad +{self.rewarded_coin_grant}",
                     tags=tags,
-                    is_final=manifest.highlight_profile is not None and manifest.highlight_profile.value == "elite_final",
+                    is_final=manifest.highlight_profile is not None
+                    and manifest.highlight_profile.value == "elite_final",
                     is_major_match=any(item.importance >= 4 for item in manifest.highlights),
                 )
             )

@@ -102,9 +102,7 @@ class StoryFeedService:
                 return item
         # Fallback: recent window scan (JSON path indexes vary by dialect).
         recent = list(
-            self.session.scalars(
-                select(StoryFeedItem).order_by(StoryFeedItem.created_at.desc()).limit(250)
-            ).all()
+            self.session.scalars(select(StoryFeedItem).order_by(StoryFeedItem.created_at.desc()).limit(250)).all()
         )
         for item in recent:
             if str((item.metadata_json or {}).get("idempotency_key") or "") == key:
@@ -141,7 +139,10 @@ class StoryFeedService:
             "country_spotlight": self.list_feed(limit=10, country_code=country_code) if country_code else [],
             "feature_stories": list(
                 self.session.scalars(
-                    select(StoryFeedItem).where(StoryFeedItem.featured.is_(True)).order_by(StoryFeedItem.created_at.desc()).limit(10)
+                    select(StoryFeedItem)
+                    .where(StoryFeedItem.featured.is_(True))
+                    .order_by(StoryFeedItem.created_at.desc())
+                    .limit(10)
                 ).all()
             ),
         }
