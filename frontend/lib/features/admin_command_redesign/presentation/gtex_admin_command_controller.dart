@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../data/admin_command_center_api.dart';
+import '../../../data/jackpot_admin_api.dart';
 import '../../../data/story_feed_api.dart';
 import '../models/gtex_admin_command_models.dart';
 
@@ -8,14 +9,17 @@ class GtexAdminCommandController extends ChangeNotifier {
   GtexAdminCommandController({
     AdminCommandCenterApi? api,
     StoryFeedApi? storyFeedApi,
+    JackpotAdminApi? jackpotAdminApi,
     GtexAdminCommandSnapshot? initialSnapshot,
   }) : _api = api,
        _storyFeedApi = storyFeedApi,
+       _jackpotAdminApi = jackpotAdminApi,
        _snapshot =
            initialSnapshot ?? GtexAdminCommandSnapshot.liveUnavailable();
 
   final AdminCommandCenterApi? _api;
   final StoryFeedApi? _storyFeedApi;
+  final JackpotAdminApi? _jackpotAdminApi;
   GtexAdminCommandSnapshot _snapshot;
   GtexAdminModuleType _selectedModule = GtexAdminModuleType.overview;
   String? _selectedQueueItemId;
@@ -39,6 +43,19 @@ class GtexAdminCommandController extends ChangeNotifier {
       return null;
     }
     return StoryFeedApi(client: api.client, fixtures: null);
+  }
+
+  /// Live admin jackpot client for pool runtime / trigger controls.
+  JackpotAdminApi? get jackpotAdminApi {
+    final JackpotAdminApi? explicit = _jackpotAdminApi;
+    if (explicit != null) {
+      return explicit;
+    }
+    final AdminCommandCenterApi? api = _api;
+    if (api == null) {
+      return null;
+    }
+    return JackpotAdminApi(client: api.client);
   }
   String? get selectedQueueItemId => _selectedQueueItemId;
   String get searchQuery => _searchQuery;
