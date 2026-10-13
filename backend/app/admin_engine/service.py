@@ -17,7 +17,9 @@ from app.competition_engine.scheduler import CompetitionScheduler
 from app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
 from app.models.user import User
 
-DEFAULT_FEATURE_FLAGS: tuple[dict[str, object], ...] = (
+# Stored shape is `DEFAULT_FEATURE_FLAGS`. Launch Control stays admin-only.
+# Every other module is opened to public by `_opened_flag_payload`.
+_FEATURE_FLAG_SEEDS: tuple[dict[str, object], ...] = (
     {
         "feature_key": "story-feed",
         "title": "Story Feed",
@@ -235,6 +237,24 @@ DEFAULT_FEATURE_FLAGS: tuple[dict[str, object], ...] = (
     },
 )
 
+_ADMIN_ONLY_FLAG_KEYS = frozenset({"launch_control"})
+
+
+def _opened_flag_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Product modules are public. Launch Control remains the admin switchboard."""
+    if payload["feature_key"] in _ADMIN_ONLY_FLAG_KEYS:
+        return dict(payload)
+    opened = dict(payload)
+    opened["enabled"] = True
+    opened["audience"] = "global"
+    opened["launch_state"] = "public"
+    opened["allowed_roles_json"] = []
+    opened["beta_only"] = False
+    return opened
+
+
+DEFAULT_FEATURE_FLAGS: tuple[dict[str, object], ...] = tuple(_opened_flag_payload(item) for item in _FEATURE_FLAG_SEEDS)
+
 DEFAULT_CALENDAR_RULES: tuple[dict[str, object], ...] = (
     {
         "rule_key": "world-cup-exclusive-senior-windows",
@@ -302,11 +322,23 @@ class AdminEngineService:
         self.session.flush()
 
     def _seed_feature_flags(self) -> None:
-        existing = {item.feature_key for item in self.session.scalars(select(AdminFeatureFlag)).all()}
+        existing = {item.feature_key: item for item in self.session.scalars(select(AdminFeatureFlag)).all()}
         for payload in DEFAULT_FEATURE_FLAGS:
-            if payload["feature_key"] in existing:
+            record = existing.get(payload["feature_key"])
+            if record is None:
+                self.session.add(AdminFeatureFlag(**payload))
                 continue
-            self.session.add(AdminFeatureFlag(**payload))
+            # An admin edit or an active kill switch wins over the seed.
+            if record.updated_by_user_id is not None or record.kill_switch_enabled:
+                continue
+            record.enabled = bool(payload["enabled"])
+            record.audience = str(payload.get("audience") or record.audience)
+            if "launch_state" in payload:
+                record.launch_state = str(payload["launch_state"])
+            roles = payload.get("allowed_roles_json")
+            if isinstance(roles, list):
+                record.allowed_roles_json = [str(item) for item in roles]
+            record.beta_only = bool(payload.get("beta_only", False))
 
     def _seed_calendar_rules(self) -> None:
         existing = {item.rule_key for item in self.session.scalars(select(AdminCalendarRule)).all()}
