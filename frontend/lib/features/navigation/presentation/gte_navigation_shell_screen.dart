@@ -37,6 +37,7 @@ import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/screens/admin/admin_command_center_screen.dart';
 import 'package:gte_frontend/shared/auth/gtex_admin_capabilities.dart';
 import 'package:gte_frontend/screens/clubs/create_club_screen.dart';
+import 'package:gte_frontend/features/club_redesign/presentation/gtex_empire_club_workspace.dart';
 import 'package:gte_frontend/screens/clubs/gtex_club_owner_dashboard_screen_v2.dart';
 import 'package:gte_frontend/screens/creators/creator_access_request_screen.dart';
 import 'package:gte_frontend/screens/creators/gtex_studio_hub_screen_v2.dart';
@@ -500,20 +501,28 @@ class _GteNavigationShellScreenState extends State<GteNavigationShellScreen> {
         },
       );
     }
-    return GtexClubOwnerDashboardScreenV2(
-      key: const PageStorageKey<String>('club-owner-dashboard-v2'),
-      clubId: canonicalClubId,
-      clubName: _canonicalClubName(),
-      baseUrl: widget.apiBaseUrl,
-      backendMode: widget.backendMode,
-      accessToken: widget.controller.accessToken,
-      authedApi: _createShellAuthedApi(),
-      ownerName: widget.controller.session?.user.username,
-      walletCredits:
-          widget.controller.walletSummary?.availableBalance.round() ?? 0,
-      isAuthenticated: widget.controller.isAuthenticated,
-      onOpenLogin:
-          () => _openLogin(targetRoute: const GteNavigationRoute.club()),
+    final GteAuthedApi shellApi = _createShellAuthedApi();
+    return GtexEmpireClubWorkspace(
+      key: PageStorageKey<String>('empire-club-$canonicalClubId'),
+      controller: widget.controller,
+      activeClubId: canonicalClubId,
+      activeClubName: _canonicalClubName(),
+      authedApi: shellApi,
+      child: GtexClubOwnerDashboardScreenV2(
+        key: const PageStorageKey<String>('club-owner-dashboard-v2'),
+        clubId: canonicalClubId,
+        clubName: _canonicalClubName(),
+        baseUrl: widget.apiBaseUrl,
+        backendMode: widget.backendMode,
+        accessToken: widget.controller.accessToken,
+        authedApi: shellApi,
+        ownerName: widget.controller.session?.user.username,
+        walletCredits:
+            widget.controller.walletSummary?.availableBalance.round() ?? 0,
+        isAuthenticated: widget.controller.isAuthenticated,
+        onOpenLogin:
+            () => _openLogin(targetRoute: const GteNavigationRoute.club()),
+      ),
     );
   }
 

@@ -75,6 +75,7 @@ from app.schemas.player_lifecycle import (
     PlayerLifecycleEventView,
     RegenBidEvaluationView,
     RegenBidResolutionView,
+    RegenContractOfferInboxItemView,
     RegenContractOfferMarketView,
     RegenContractOfferQuoteRequest,
     RegenLifecycleView,
@@ -1262,6 +1263,7 @@ class PlayerLifecycleService:
         player_id: str,
         *,
         reference_on: date | None = None,
+        actor: User | None = None,
     ) -> RegenBidResolutionView:
         effective_date = reference_on or date.today()
         evaluations = self.evaluate_regen_bids(window_id, player_id, reference_on=effective_date)
@@ -1271,6 +1273,15 @@ class PlayerLifecycleService:
         if preferred.score < 55.0:
             raise PlayerLifecycleValidationError("Player agency rejected the available transfer offers")
         bid = self._require_bid(window_id, preferred.bid_id)
+        if actor is not None:
+            from app.models.user import UserRole
+
+            buying_club = self._require_club_profile(bid.buying_club_id)
+            is_admin = actor.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}
+            if not is_admin and buying_club.owner_user_id != actor.id:
+                raise PlayerLifecycleValidationError(
+                    "Only the buying club owner (or an admin) can resolve this regen bid"
+                )
         regen = self._require_regen_profile(player_id)
         offer = self._get_contract_offer_by_bid_id(bid.id)
         duration_days = (
@@ -1299,6 +1310,74 @@ class PlayerLifecycleService:
             evaluations=evaluations,
             headline=self._to_transfer_headline_view(headline),
         )
+
+    def list_regen_contract_offer_inbox(
+        self,
+        *,
+        actor: User,
+    ) -> list[RegenContractOfferInboxItemView]:
+        """Real RegenContractOffer rows for clubs the actor controls."""
+        from app.clubs.ownership_cap import list_owned_club_ids
+        from app.models.regen import RegenProfile
+
+        owned_club_ids = list_owned_club_ids(self.session, actor.id)
+        if not owned_club_ids:
+            return []
+        closed = {
+            "rejected",
+            "withdrawn",
+            "expired",
+            "accepted",
+            TransferBidStatus.ACCEPTED.value,
+            TransferBidStatus.REJECTED.value,
+        }
+        offers = list(
+            self.session.scalars(
+                select(RegenContractOffer)
+                .where(RegenContractOffer.offering_club_id.in_(owned_club_ids))
+                .where(RegenContractOffer.status.not_in(list(closed)))
+                .order_by(RegenContractOffer.created_at.desc())
+                .limit(40)
+            ).all()
+        )
+        items: list[RegenContractOfferInboxItemView] = []
+        for offer in offers:
+            regen = self.session.get(RegenProfile, offer.regen_id)
+            if regen is None:
+                continue
+            try:
+                player = self._require_player(regen.player_id)
+                player_name = str(
+                    getattr(player, "display_name", None)
+                    or getattr(player, "name", None)
+                    or regen.player_id
+                )
+            except PlayerLifecycleNotFoundError:
+                player_name = regen.player_id
+            club = self._require_club_profile(offer.offering_club_id)
+            window_id: str | None = None
+            if offer.transfer_bid_id:
+                bid = self.session.get(TransferBid, offer.transfer_bid_id)
+                if bid is not None:
+                    window_id = bid.window_id
+            items.append(
+                RegenContractOfferInboxItemView(
+                    offer_id=offer.id,
+                    regen_id=offer.regen_id,
+                    player_id=regen.player_id,
+                    player_name=player_name,
+                    offering_club_id=offer.offering_club_id,
+                    offering_club_name=club.club_name,
+                    transfer_bid_id=offer.transfer_bid_id,
+                    transfer_window_id=window_id,
+                    offered_salary_fancoin_per_year=Decimal(offer.offered_salary_fancoin_per_year or 0),
+                    contract_years=int(offer.contract_years or 1),
+                    status=str(offer.status),
+                    decision_deadline=offer.decision_deadline,
+                    personality_note=None,
+                )
+            )
+        return items
 
     def create_injury_case(
         self,

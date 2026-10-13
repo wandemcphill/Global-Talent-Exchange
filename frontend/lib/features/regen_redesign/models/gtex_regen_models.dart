@@ -117,6 +117,25 @@ class GtexRegenProspect {
 
   String get ageLabel => '$age yrs';
 
+  /// Maps published rarity into the FIFA-style card frame enum name.
+  /// National rental pool depth stays on the seed frame (not 1 OF 1 trade).
+  String get playerCardVariantName {
+    if (isNationalRentalOnly || origin == GtexRegenOrigin.nationalPool) {
+      return 'nationalSeed';
+    }
+    final String tier = rarityTier.trim().toLowerCase();
+    if (tier.contains('holo') || tier.contains('mythic') || tier.contains('generational')) {
+      return 'holographic';
+    }
+    if (tier.contains('legend')) {
+      return 'legendary';
+    }
+    if (tier.contains('elite') || tier.contains('rare')) {
+      return 'elite';
+    }
+    return 'elite';
+  }
+
   String get potentialLabel => '$potentialRating POT';
 
   int get gsi => (globalScoutingIndex ?? currentRating).clamp(0, 100).toInt();

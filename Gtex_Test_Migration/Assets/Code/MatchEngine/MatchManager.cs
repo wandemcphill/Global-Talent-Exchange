@@ -700,6 +700,12 @@ namespace FStudio.MatchEngine {
         }
 
         public void SetExternalPlayback(bool value) {
+            if (value && !FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.AllowExternalPlayback) {
+                Debug.LogWarning(
+                    "[GTEX OriginalVisualRuntime] Refused SetExternalPlayback(true); original simulator owns movement.");
+                value = false;
+            }
+
             ExternalPlaybackEnabled = value;
 
             if (ball != null) {

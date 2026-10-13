@@ -44,6 +44,7 @@ class GteAppRouteNames {
   static const String footballTransferCenter = 'football.transfer-center';
   static const String broadcastDesk = 'broadcast.desk';
   static const String gtexJackpot = 'gtex.jackpot';
+  static const String gtexJackpotWin = 'gtex.jackpot.win';
   static const String clubAiAssistant = 'club.ai-assistant';
   static const String creatorStadiumClub = 'creator-stadium.club';
   static const String creatorStadiumMatch = 'creator-stadium.match';
@@ -205,6 +206,10 @@ class GteAppRouteCatalog {
         GteAppRouteRegistration(
           name: GteAppRouteNames.gtexJackpot,
           path: '/gtex/jackpot',
+        ),
+        GteAppRouteRegistration(
+          name: GteAppRouteNames.gtexJackpotWin,
+          path: '/gtex/jackpot/win',
         ),
         GteAppRouteRegistration(
           name: GteAppRouteNames.clubAiAssistant,
@@ -988,6 +993,31 @@ class GtexJackpotRouteData extends GteAppRouteData {
   Uri toUri() => _buildUri(path: '/gtex/jackpot');
 }
 
+class GtexJackpotWinRouteData extends GteAppRouteData {
+  const GtexJackpotWinRouteData({
+    this.amountLabel,
+    this.roundLabel,
+    this.clubName,
+  });
+
+  final String? amountLabel;
+  final String? roundLabel;
+  final String? clubName;
+
+  @override
+  String get name => GteAppRouteNames.gtexJackpotWin;
+
+  @override
+  Uri toUri() => _buildUri(
+    path: '/gtex/jackpot/win',
+    queryParameters: <String, String>{
+      if (amountLabel != null && amountLabel!.isNotEmpty) 'amount': amountLabel!,
+      if (roundLabel != null && roundLabel!.isNotEmpty) 'round': roundLabel!,
+      if (clubName != null && clubName!.isNotEmpty) 'club': clubName!,
+    },
+  );
+}
+
 class ClubAiAssistantRouteData extends GteClubScopedRouteData {
   const ClubAiAssistantRouteData({required super.clubId, super.clubName});
 
@@ -1288,6 +1318,12 @@ class GteAppRouteParser {
         return const BroadcastDeskRouteData();
       case GteAppRouteNames.gtexJackpot:
         return const GtexJackpotRouteData();
+      case GteAppRouteNames.gtexJackpotWin:
+        return GtexJackpotWinRouteData(
+          amountLabel: _nonEmpty(queryParameters['amount']),
+          roundLabel: _nonEmpty(queryParameters['round']),
+          clubName: _nonEmpty(queryParameters['club']),
+        );
       case GteAppRouteNames.clubAiAssistant:
         if (clubId == null) {
           return null;
@@ -1580,6 +1616,17 @@ class GteAppRouteParser {
         segments.first == 'gtex' &&
         segments[1] == 'jackpot') {
       return const GtexJackpotRouteData();
+    }
+
+    if (segments.length == 3 &&
+        segments.first == 'gtex' &&
+        segments[1] == 'jackpot' &&
+        segments[2] == 'win') {
+      return GtexJackpotWinRouteData(
+        amountLabel: _nonEmpty(uri.queryParameters['amount']),
+        roundLabel: _nonEmpty(uri.queryParameters['round']),
+        clubName: _nonEmpty(uri.queryParameters['club']),
+      );
     }
 
     if (segments.first == 'creator-stadium') {

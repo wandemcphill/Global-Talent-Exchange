@@ -22,15 +22,17 @@ used by Transfer Hub + rental/market redesigns. Retire `FootballPlayerCard`, cor
 - [x] **Always-on height + foot bio row** (`_BioRail`, degrades to "—" when absent).
 - [x] **Multi-position chips** (`_PositionRail`: natural + up to 3 secondaries) — new `secondaryPositions` param.
 - [x] Regen **salary** + contract surfaced in footer signals (new `salaryLabel` param).
-- [ ] **Plumb height + foot**: backend market payload → raw model (`gtex_market_browse_models.dart`)
-      → presentation labels → grid/panel call sites. (foot supports Either/Both)
+- [x] **Plumb height + foot**: backend market payload → raw model (`gtex_market_browse_models.dart`)
+      → presentation labels → grid + selected-panel call sites. Foot normalises Left/Right/Either/Both.
+      Salary/contract footer labels also wired. *Needs visual check when the app runs.*
 - [x] **FM-style profile screen BUILT + wired** — `gtex_fm_player_profile_screen.dart`: header (GSI + POT),
       bio (height/foot/positions incl. secondary chips), 6 colour-coded stat bars, market panel. Route
       `/players/:playerId/profile`; live nav-shell `_openPlayer` opens it (replacing the old detail screen).
       Backend: `derive_player_attributes` exposes the 6 FIFA stats on the `/players/{id}` detail API
       (archetype-derived from GSI+position, prefers `dna_profile`); `secondary_positions` added to identity.
       All analyzes/compiles clean. *Not run/visually verified.*
-- [ ] Regen premium card: rarity frame, 1-of-1 badge, lineage/dynasty, award, **salary per year**, retrainable tag.
+- [~] Regen premium card: rarity frame + **1 OF 1** badge for legendary/holographic variants shipped;
+      salary/yr footer wired from market. Remaining: lineage/dynasty deep copy, award badge, retrainable tag.
 - [~] Consolidate duplicate cards — **live screens only**:
   - [x] `PlayerCardMarketplaceScreen` (live, 2 sites) → migrated to `GtexPlayerCard` (compact + actions). Analyzes clean. *Needs a visual check when the app runs.*
   - `PlayerCardAvatar` = KEEP (shared primitive, 18 uses — not a duplicate card).

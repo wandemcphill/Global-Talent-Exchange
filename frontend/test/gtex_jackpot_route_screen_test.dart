@@ -6,7 +6,7 @@ import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.da
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 void main() {
-  testWidgets('guest jackpot route shows sign-in contribution gate', (
+  testWidgets('jackpot route fails closed without live API (no demo fallback)', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -14,57 +14,18 @@ void main() {
         theme: GteShellTheme.build(),
         home: GtexJackpotRouteScreen(
           dependencies: const GteNavigationDependencies(
-            apiBaseUrl: 'http://127.0.0.1:8000',
-            backendMode: GteBackendMode.fixture,
+            apiBaseUrl: 'http://127.0.0.1:9',
+            backendMode: GteBackendMode.live,
             isAuthenticated: false,
           ),
         ),
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
 
     expect(find.text('GTEX jackpot'), findsOneWidget);
-    expect(find.text('Join the pool', skipOffstage: false), findsOneWidget);
-    expect(
-      find.text('Sign in to contribute', skipOffstage: false),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('admin jackpot route shows contribution and runtime controls', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: GteShellTheme.build(),
-        home: GtexJackpotRouteScreen(
-          dependencies: const GteNavigationDependencies(
-            apiBaseUrl: 'http://127.0.0.1:8000',
-            backendMode: GteBackendMode.fixture,
-            isAuthenticated: true,
-            currentUserRole: 'admin',
-            accessToken: 'fixture-token',
-          ),
-        ),
-      ),
-    );
-
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('Contribute from wallet', skipOffstage: false),
-      findsOneWidget,
-    );
-    await tester.scrollUntilVisible(
-      find.text('Admin controls', skipOffstage: false),
-      300,
-      scrollable: find.byType(Scrollable),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Admin controls', skipOffstage: false), findsOneWidget);
-    expect(find.text('Manual trigger', skipOffstage: false), findsOneWidget);
-    expect(find.text('Recent rounds', skipOffstage: false), findsOneWidget);
+    expect(find.text('GTEX jackpot unavailable'), findsOneWidget);
   });
 }

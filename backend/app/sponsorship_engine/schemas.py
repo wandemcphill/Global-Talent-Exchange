@@ -212,6 +212,56 @@ class SponsorOfferRuleView(BaseModel):
     updated_at: datetime
 
 
+class SponsorOfferBroadcastRequest(BaseModel):
+    """Push an offer to the top N clubs by live platform signals."""
+
+    limit: int = Field(default=10, ge=1, le=50)
+    min_fan_count: int = Field(default=0, ge=0)
+    require_eligible: bool = True
+
+
+class SponsorOfferBroadcastResult(BaseModel):
+    offer_id: str
+    offered_club_ids: list[str]
+    skipped_club_ids: list[str]
+    count: int
+
+
+class RegenEndorsementCreateRequest(BaseModel):
+    player_id: str
+    sponsor_name: str = Field(min_length=2, max_length=120)
+    brand_label: str = Field(min_length=2, max_length=120)
+    deal_value_minor: int = Field(ge=0)
+    term_months: int = Field(default=3, ge=1, le=24)
+    badge_label: str = Field(default="Endorsed", max_length=80)
+    creative_url: str | None = None
+    notes: str | None = None
+    activate: bool = False
+
+
+class RegenEndorsementRespondRequest(BaseModel):
+    accept: bool
+
+
+class RegenEndorsementView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    player_id: str
+    owner_user_id: str | None
+    sponsor_name: str
+    brand_label: str
+    status: str
+    term_months: int
+    deal_value_minor: int
+    owner_share_ratio: Decimal
+    platform_share_ratio: Decimal
+    badge_label: str
+    creative_url: str | None
+    starts_at: datetime | None
+    ends_at: datetime | None
+
+
 class ClubSponsorAssignmentRequest(BaseModel):
     club_id: str
     start_at: datetime | None = None

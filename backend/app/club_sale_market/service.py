@@ -1887,6 +1887,12 @@ class ClubSaleMarketService:
             )
 
         buyer = self._require_user(offer.buyer_user_id)
+        from app.clubs.ownership_cap import ClubOwnershipCapError, assert_can_acquire_club
+
+        try:
+            assert_can_acquire_club(self.session, buyer.id)
+        except ClubOwnershipCapError as exc:
+            raise ClubSaleMarketError(str(exc), reason=exc.reason) from exc
         executed_sale_price = self._normalize_amount(executed_sale_price)
         if executed_sale_price <= Decimal("0.0000"):
             raise ClubSaleMarketError(

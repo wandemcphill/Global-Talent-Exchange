@@ -3,6 +3,7 @@ import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 
 import '../data/gtex_regen_repository.dart';
 import '../models/gtex_regen_dossier.dart';
+import '../models/gtex_regen_living_star.dart';
 import '../models/gtex_regen_wire_models.dart';
 
 /// The write half of OWN: list a regen, price an offer, then submit that same
@@ -86,6 +87,35 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
             secondary: lifecycle.transferListed,
             onPressed: _busy ? null : () => _toggleListing(!lifecycle.transferListed),
           ),
+          if (widget.dossier.livingStar != null) ...<Widget>[
+            const SizedBox(height: GtexSpacing.sm),
+            GtexActionButton(
+              label: 'Escalate exit pressure',
+              icon: Icons.campaign_outlined,
+              accent: GtexColors.danger,
+              secondary: true,
+              onPressed: _busy ? null : _petitionExit,
+            ),
+            const SizedBox(height: GtexSpacing.sm),
+            GtexActionButton(
+              label: 'Resolve preferred bid',
+              icon: Icons.gavel_outlined,
+              accent: GtexColors.gold,
+              secondary: true,
+              onPressed: _busy ? null : _resolveBid,
+            ),
+            if ((widget.dossier.livingStar?.voiceLine ?? '').isNotEmpty) ...<Widget>[
+              const SizedBox(height: GtexSpacing.xs),
+              Text(
+                '"${widget.dossier.livingStar!.voiceLine}"',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: GtexColors.textMuted,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
           const SizedBox(height: GtexSpacing.md),
           Text(
             'Offer a contract',
@@ -217,6 +247,53 @@ class _GtexRegenOwnershipActionsState extends State<GtexRegenOwnershipActions> {
       offeredSalaryFancoinPerYear: salary,
       contractYears: _contractYears,
     );
+  }
+
+  Future<void> _petitionExit() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final GtexRegenLivingStar? updated = await widget.repository.petitionExit(
+        widget.dossier.playerId,
+        reason: 'Owner escalated exit pressure from the living-star dossier.',
+      );
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        if (updated == null) {
+          _error = 'Exit pressure was not accepted for this regen.';
+        }
+      });
+      // Reload ownership/lifecycle via parent callback when available.
+      widget.onLifecycleChanged?.call(widget.dossier.lifecycle);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'Could not escalate exit pressure: $error';
+      });
+    }
+  }
+
+  Future<void> _resolveBid() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.repository.resolveRegenBid(widget.dossier.playerId);
+      if (!mounted) return;
+      widget.onLifecycleChanged?.call(widget.dossier.lifecycle);
+      setState(() => _busy = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'Could not resolve the preferred regen bid: $error';
+      });
+    }
   }
 
   Future<void> _toggleListing(bool listed) async {

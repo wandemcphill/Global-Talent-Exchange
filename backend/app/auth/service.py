@@ -540,8 +540,21 @@ class AuthService:
         return club
 
     def resolve_user_club(self, session: Session, user: User) -> ClubProfile | None:
+        """Active club for dashboards. Prefers the user's primary membership."""
         if user.account_type != PublicAccountType.USER:
             return None
+        primary_owned = session.scalar(
+            select(ClubProfile)
+            .join(Organization, Organization.club_profile_id == ClubProfile.id)
+            .join(OrganizationMembership, OrganizationMembership.organization_id == Organization.id)
+            .where(ClubProfile.owner_user_id == user.id)
+            .where(OrganizationMembership.user_id == user.id)
+            .where(OrganizationMembership.is_primary.is_(True))
+            .where(ClubProfile.lifecycle_status != ClubLifecycleStatus.ARCHIVED_GENERATED)
+            .order_by(ClubProfile.created_at.asc())
+        )
+        if primary_owned is not None:
+            return primary_owned
         owned_club = session.scalar(
             select(ClubProfile)
             .where(ClubProfile.owner_user_id == user.id)
@@ -563,6 +576,46 @@ class AuthService:
             )
         )
 
+    def list_owned_clubs(self, session: Session, user: User) -> list[ClubProfile]:
+        return list(
+            session.scalars(
+                select(ClubProfile)
+                .where(ClubProfile.owner_user_id == user.id)
+                .where(ClubProfile.lifecycle_status != ClubLifecycleStatus.ARCHIVED_GENERATED)
+                .order_by(ClubProfile.created_at.asc())
+            ).all()
+        )
+
+    def set_active_club(self, session: Session, user: User, club_id: str) -> ClubProfile:
+        """Mark one owned club as the primary active club (empire switcher)."""
+        club = session.get(ClubProfile, club_id)
+        if club is None or club.owner_user_id != user.id:
+            raise AuthError("You can only activate a club you own.")
+        if club.lifecycle_status == ClubLifecycleStatus.ARCHIVED_GENERATED:
+            raise AuthError("That club is archived.")
+        AccessControlService(session).ensure_club_organization(club, owner_user_id=user.id)
+        owned_ids = {c.id for c in self.list_owned_clubs(session, user)}
+        memberships = list(
+            session.scalars(
+                select(OrganizationMembership)
+                .join(Organization, Organization.id == OrganizationMembership.organization_id)
+                .where(OrganizationMembership.user_id == user.id)
+                .where(Organization.club_profile_id.in_(owned_ids))
+            ).all()
+        )
+        target = None
+        for membership in memberships:
+            org = session.get(Organization, membership.organization_id)
+            if org is not None and org.club_profile_id == club_id:
+                membership.is_primary = True
+                target = membership
+            else:
+                membership.is_primary = False
+        if target is None:
+            raise AuthError("Could not activate that club.")
+        session.flush()
+        return club
+
     def create_explicit_club_profile(
         self,
         session: Session,
@@ -578,8 +631,14 @@ class AuthService:
         primary_color: str,
         secondary_color: str,
     ) -> ClubProfile:
+        from app.clubs.ownership_cap import ClubOwnershipCapError, assert_can_acquire_club
+
         if user.account_type != PublicAccountType.USER:
             raise AuthError("Only football user accounts can create clubs.")
+        try:
+            assert_can_acquire_club(session, user.id)
+        except ClubOwnershipCapError as exc:
+            raise AuthError(str(exc)) from exc
         normalized_name = club_name.strip()
         if not normalized_name:
             raise AuthError("Club name is required.")
@@ -861,6 +920,8 @@ class AuthService:
     @staticmethod
     def _normalize_username(value: str) -> str:
         candidate = value.strip().lower()
+        if candidate.startswith("@"):
+            candidate = candidate[1:].strip()
         if not USERNAME_PATTERN.fullmatch(candidate):
             raise AuthError("Username may only contain letters, numbers, dots, hyphens, and underscores.")
         return candidate

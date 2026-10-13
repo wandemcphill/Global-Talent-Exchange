@@ -53,11 +53,15 @@ namespace FStudio.GTEX.VisualBridge
         [SerializeField] private bool subscribeToLiveState = true;
         [SerializeField] private bool preferBackendFeedWhenAvailable = true;
         [SerializeField] private bool logVisualCommands;
+        // VisualSmoke + native AI is the FM23-class quality path: original simulator
+        // owns movement, ball, keeper, and camera. CommandDriven is for scripted
+        // acceptance only (kickoff→goal command replay), not the default look.
         [SerializeField] private GtexOriginalVisualStartupMode startupMode = GtexOriginalVisualStartupMode.VisualSmoke;
         // When false, the local-sim feed does NOT script on-pitch pass/shoot choreography onto the
         // asset players; the asset's own native football AI plays the ball and GTEX only syncs
         // clock + score. Scripting the events caused looping balls, failed traps, and loose-ball
         // chasing because the scripted geometry drifts from the asset players' real positions.
+        // Keep false for FM23-class visual quality.
         [SerializeField] private bool scriptOnPitchEvents = false;
 
         private readonly HashSet<string> consumedEvents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

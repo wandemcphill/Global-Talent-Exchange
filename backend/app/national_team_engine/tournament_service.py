@@ -1119,6 +1119,18 @@ class NationalTeamTournamentService:
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
             .limit(limit)
         )
+        # Apply the nationality constraint in SQL before the catalogue cap.
+        # Without this, a country whose players sort after the first global
+        # ``limit`` rows could never be rented or selected.
+        if country_code:
+            normalized_country_code = country_code.strip().upper()
+            stmt = stmt.where(
+                or_(
+                    IngestionCountry.alpha2_code == normalized_country_code,
+                    IngestionCountry.alpha3_code == normalized_country_code,
+                    IngestionCountry.fifa_code == normalized_country_code,
+                )
+            )
         rows: list[dict[str, Any]] = []
         for (
             player,

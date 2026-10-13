@@ -21,6 +21,9 @@ class ManagerCatalogItem(BaseModel):
     club_associations: list[str] = Field(default_factory=list)
     supply_total: int
     supply_available: int
+    recruit_price_fancoin: Decimal = Field(default=Decimal("0"))
+    annual_wage_fancoin: Decimal = Field(default=Decimal("0"))
+    manager_impact: int = Field(default=50, ge=1, le=99)
 
 
 class ManagerCatalogPage(BaseModel):

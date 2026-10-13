@@ -23,6 +23,7 @@ from app.schemas.player_lifecycle import (
     PlayerLifecycleEventView,
     RegenBidEvaluationView,
     RegenBidResolutionView,
+    RegenContractOfferInboxItemView,
     RegenContractOfferMarketView,
     RegenContractOfferQuoteRequest,
     RegenLifecycleView,
@@ -323,6 +324,21 @@ def get_regen_offer_market(
         _raise_for_lifecycle_error(exc)
 
 
+@router.get(
+    "/api/regen/contract-offers/inbox",
+    response_model=list[RegenContractOfferInboxItemView],
+)
+def list_regen_contract_offer_inbox(
+    service: PlayerLifecycleService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> list[RegenContractOfferInboxItemView]:
+    """Open RegenContractOffer rows for clubs the signed-in owner controls."""
+    try:
+        return service.list_regen_contract_offer_inbox(actor=current_user)
+    except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
+        _raise_for_lifecycle_error(exc)
+
+
 @router.post("/api/players/{player_id}/regen/contract-offers/quote", response_model=CurrencyConversionQuoteView)
 def quote_regen_contract_offer(
     player_id: str,
@@ -412,9 +428,14 @@ def resolve_regen_bid(
     player_id: str,
     as_of: date | None = Query(default=None),
     service: PlayerLifecycleService = Depends(_service),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> RegenBidResolutionView:
     try:
-        return service.resolve_regen_bid(window_id, player_id, reference_on=as_of)
+        return service.resolve_regen_bid(
+            window_id,
+            player_id,
+            reference_on=as_of,
+            actor=current_user,
+        )
     except (PlayerLifecycleNotFoundError, PlayerLifecycleValidationError) as exc:
         _raise_for_lifecycle_error(exc)

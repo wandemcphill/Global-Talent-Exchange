@@ -386,7 +386,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
     await _runAction(() async {
       await _managerRepository.recruit(managerId);
       await _load();
-    }, successMessage: 'Coach recruited for free.');
+    }, successMessage: 'Coach recruited — Fan Coin paid.');
   }
 
   Future<void> _assign(String assetId, String slot) async {
@@ -445,10 +445,34 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
   }
 
   Future<void> _buy(String listingId) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (BuildContext context) => AlertDialog(
+            title: const Text('Confirm manager buy'),
+            content: const Text(
+              'Manager market trades settle immediately. '
+              'Platform takes a 20% trading fee on the gross ask. Continue?',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Buy with 20% fee'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) {
+      return;
+    }
     await _runAction(() async {
       await _managerRepository.buyListing(listingId);
       await _load();
-    }, successMessage: 'Trade completed.');
+    }, successMessage: 'Trade completed (20% fee applied on gross).');
   }
 
   Future<void> _cancelListing(String listingId) async {
@@ -801,7 +825,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
             _sectionHeader(
               'Coach catalog',
               subtitle:
-                  'Catalog coaches are free to acquire. Legendary coaches have 1 digital copy each, elite coaches have 2, and standard coaches stay open while supply lasts.',
+                  'Coaches are scarce dugout assets. Recruit price and annual wage are in Fan Coin. Every catalog identity is 1 OF 1 — buy, sell, and assign them like any other GTEX asset.',
               trailing: Text('${_catalog.length} loaded'),
             ),
             const SizedBox(height: 12),
@@ -830,12 +854,23 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                     (item['supply_available'] ?? 0) as int? ?? 0;
                 final int supplyTotal =
                     (item['supply_total'] ?? 0) as int? ?? 0;
+                final String recruitPrice =
+                    (item['recruit_price_fancoin'] ?? item['recruitPriceFancoin'] ?? '—')
+                        .toString();
+                final String annualWage =
+                    (item['annual_wage_fancoin'] ?? item['annualWageFancoin'] ?? '—')
+                        .toString();
+                final String impact =
+                    (item['manager_impact'] ?? item['managerImpact'] ?? '—')
+                        .toString();
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text((item['display_name'] ?? '').toString()),
-                  leading: Text('$supplyAvailable/$supplyTotal left'),
+                  leading: Text('$supplyAvailable/$supplyTotal'),
                   subtitle: Text(
-                    '${(item['rarity'] ?? '').toString()} • ${(item['mentality'] ?? '').toString()} • '
+                    '${(item['rarity'] ?? '').toString()} • Impact $impact • '
+                    'Recruit FC $recruitPrice • Wage FC $annualWage/yr\n'
+                    '${(item['mentality'] ?? '').toString()} • '
                     'tactics: ${(item['tactics'] as List<dynamic>? ?? <dynamic>[]).join(', ')}\n'
                     'traits: ${(item['traits'] as List<dynamic>? ?? <dynamic>[]).join(', ')}',
                   ),
@@ -847,7 +882,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                                 _recruit((item['manager_id'] ?? '').toString())
                             : null,
                     child: Text(
-                      supplyAvailable > 0 ? 'Claim free' : 'Sold out',
+                      supplyAvailable > 0 ? 'Buy FC $recruitPrice' : 'Sold out',
                     ),
                   ),
                 );
@@ -889,7 +924,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: Text((item['display_name'] ?? '').toString()),
                   subtitle: Text(
-                    'Seller: ${(item['seller_name'] ?? '').toString()} • Ask: ${(item['asking_price_credits'] ?? '').toString()} GTEX Coin',
+                    'Seller: ${(item['seller_name'] ?? '').toString()} • Ask: ${(item['asking_price_credits'] ?? '').toString()} GTEX Coin • Trading fee 20% on gross',
                   ),
                   trailing: Wrap(
                     spacing: 8,

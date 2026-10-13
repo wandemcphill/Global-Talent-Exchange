@@ -1,3 +1,4 @@
+import 'gtex_regen_living_star.dart';
 import 'gtex_regen_wire_models.dart';
 
 /// Why a regen has no dossier.
@@ -28,6 +29,7 @@ class GtexRegenDossier {
     this.lineageChain = const <RegenLineageChainNode>[],
     this.lineageChainUnavailable = false,
     this.lifecycle,
+    this.livingStar,
   });
 
   final String playerId;
@@ -46,6 +48,9 @@ class GtexRegenDossier {
   /// the backend publishes no lifecycle row for this player - which is a real
   /// answer, not a failure.
   final RegenLifecycleState? lifecycle;
+
+  /// Living-star closed loop: archetype, voice, mood, exit ladder, match brief.
+  final GtexRegenLivingStar? livingStar;
 
   RegenProfileDetail get profile => showcase.profile;
 

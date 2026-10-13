@@ -1364,6 +1364,16 @@ Widget _buildGtexJackpotScreen(
   );
 }
 
+Widget _buildGtexJackpotWinScreen(GtexJackpotWinRouteData route) {
+  return GtexJackpotWinNotificationScreenV2(
+    amountLabel: route.amountLabel ?? 'Jackpot credited',
+    roundLabel: route.roundLabel != null
+        ? 'Round ${route.roundLabel}'
+        : 'GTEX Jackpot',
+    clubName: route.clubName ?? 'Your club',
+  );
+}
+
 String _humanizeRouteValue(String raw) {
   final String candidate = raw.trim();
   if (candidate.isEmpty || candidate == '--') {

@@ -474,6 +474,24 @@ class SyntheticSquadFactory:
                 game_management = self._clamp(game_management + 5)
             if {"great motivator", "great_motivator"} & traits:
                 game_management = self._clamp(game_management + 4)
+            # Manager Impact plate (1–99): elite dugouts visibly change outcomes.
+            impact = manager_profile.get("manager_impact")
+            try:
+                impact_score = int(impact) if impact is not None else 0
+            except (TypeError, ValueError):
+                impact_score = 0
+            if impact_score >= 85:
+                tactical_quality = self._clamp(tactical_quality + 10)
+                adaptability = self._clamp(adaptability + 8)
+                game_management = self._clamp(game_management + 10)
+                pressing = self._clamp(pressing + 4)
+            elif impact_score >= 75:
+                tactical_quality = self._clamp(tactical_quality + 6)
+                adaptability = self._clamp(adaptability + 5)
+                game_management = self._clamp(game_management + 6)
+            elif impact_score >= 65:
+                tactical_quality = self._clamp(tactical_quality + 3)
+                game_management = self._clamp(game_management + 3)
         return TeamTacticalPlanInput(
             style=style,
             pressing=pressing,
@@ -514,6 +532,9 @@ class SyntheticSquadFactory:
         )
         if manager is None:
             return None
+        from app.manager_market.service import ManagerMarketService
+
+        impact = ManagerMarketService()._manager_impact_score(manager)
         return {
             "display_name": manager.display_name,
             "mentality": manager.mentality,
@@ -522,6 +543,7 @@ class SyntheticSquadFactory:
             "rarity": manager.rarity,
             "philosophy_summary": manager.philosophy_summary,
             "substitution_tendency": manager.substitution_tendency,
+            "manager_impact": impact,
         }
 
     @staticmethod

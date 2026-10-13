@@ -13,6 +13,8 @@ class MatchAdPlacementType(StrEnum):
     LIVE_BANNER = "live_banner"
     SPONSORED_HIGHLIGHT = "sponsored_highlight"
     REWARDED_AD = "rewarded_ad"
+    FLASH = "flash"
+    SPLIT = "split"
 
 
 class MatchAdPlacementView(CommonSchema):
@@ -30,6 +32,10 @@ class MatchAdPlacementView(CommonSchema):
     estimated_value_usd: float | None = Field(default=None, ge=0.0)
     targeting_tags: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # GTEX-only flash/split guardrails (seconds).
+    max_duration_seconds: int | None = Field(default=None, ge=1, le=15)
+    inventory_owner: str | None = None
+    viewport_game_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class MatchViewerMonetizationView(CommonSchema):

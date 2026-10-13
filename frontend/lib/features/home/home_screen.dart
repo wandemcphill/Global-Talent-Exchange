@@ -21,7 +21,9 @@ import '../../shared/widgets/data_source_badge.dart';
 import '../../ui_gtex/ui_gtex.dart';
 import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_state_panel.dart';
+import '../../models/story_feed_models.dart';
 import 'data/gtex_home_digest_provider.dart';
+import 'data/gtex_story_feed_ticker_provider.dart';
 import 'models/gtex_home_digest_models.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -43,6 +45,9 @@ class HomeScreen extends ConsumerWidget {
     final AsyncValue<LiveTasksData> tasksValue = ref.watch(liveTasksProvider);
     final AsyncValue<GtexHomeDigest> digestValue = ref.watch(
       homeDigestProvider,
+    );
+    final AsyncValue<List<StoryFeedItem>> storyTickerValue = ref.watch(
+      storyFeedTickerProvider,
     );
     final bool authenticated = ref.watch(isAuthenticatedProvider);
     final bool blocked = <AsyncValue<Object?>>[
@@ -73,6 +78,7 @@ class HomeScreen extends ConsumerWidget {
           marketValue: marketValue,
           competitionsValue: competitionsValue,
           worldValue: worldValue,
+          storyFeedValue: storyTickerValue,
         ),
         _HomeHero(
           authenticated: authenticated,
@@ -381,11 +387,13 @@ class _TransferTicker extends StatelessWidget {
     required this.marketValue,
     required this.competitionsValue,
     required this.worldValue,
+    required this.storyFeedValue,
   });
 
   final AsyncValue<MarketDashboardData> marketValue;
   final AsyncValue<CompetitionHubData> competitionsValue;
   final AsyncValue<WorldAggregateData> worldValue;
+  final AsyncValue<List<StoryFeedItem>> storyFeedValue;
 
   @override
   Widget build(BuildContext context) {
@@ -398,8 +406,21 @@ class _TransferTicker extends StatelessWidget {
         competitionsValue.hasError ||
         worldValue.hasError;
     final List<_TickerEntry> entries = <_TickerEntry>[
-      ...?marketValue.asData?.value.transferListings
+      ...?storyFeedValue.asData?.value
           .take(4)
+          .map(
+            (StoryFeedItem item) => _TickerEntry(
+              chip: item.featured ? 'WIRE' : 'NEWS',
+              text: item.title,
+              metric: item.storyType.replaceAll('_', ' ').toUpperCase(),
+              tone:
+                  item.featured
+                      ? _GtexCommandColors.accentAmber
+                      : _GtexCommandColors.accentPrimary,
+            ),
+          ),
+      ...?marketValue.asData?.value.transferListings
+          .take(3)
           .map(
             (TransferListingSummary item) => _TickerEntry(
               chip: 'LISTED',

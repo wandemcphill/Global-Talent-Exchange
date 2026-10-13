@@ -105,29 +105,78 @@ class AdDecisionEngine:
                 )
             )
 
-        pre_roll_end = max(6, min(14, max(6, view_state.duration_seconds // 18)))
-        preroll_brand = self._pick_brand(
+        # GTEX-only flash sting: ≤5s, lobby/pre-roll window only.
+        flash_brand = self._pick_brand(
             brands,
-            seed=f"{match_id}:pre_roll",
+            seed=f"{match_id}:flash",
             avoid={placements[0].brand} if placements else set(),
         )
+        flash_end = min(5, max(3, view_state.duration_seconds // 30 or 5))
+        placements.append(
+            self._placement(
+                match_id=match_id,
+                ad_type=MatchAdPlacementType.FLASH,
+                brand=flash_brand,
+                message=f"{flash_brand} — GTEX flash",
+                placement="flash_sting",
+                active_from_second=0,
+                active_until_second=flash_end,
+                cta_label="Continue",
+                tags=tags,
+                is_final=self._is_final(view_state),
+                is_major_match=self._is_major_match(view_state),
+                max_duration_seconds=5,
+                inventory_owner="gtex",
+            )
+        )
+
+        # Keep a short legacy pre-roll alias capped at flash duration for older clients.
         placements.append(
             self._placement(
                 match_id=match_id,
                 ad_type=MatchAdPlacementType.PRE_ROLL,
-                brand=preroll_brand,
-                message=self._preroll_message(preroll_brand),
+                brand=flash_brand,
+                message=self._preroll_message(flash_brand),
                 placement="video_preroll",
                 active_from_second=0,
-                active_until_second=pre_roll_end,
+                active_until_second=flash_end,
                 cta_label="Continue to Highlight",
                 tags=tags,
                 is_final=self._is_final(view_state),
                 is_major_match=self._is_major_match(view_state),
+                max_duration_seconds=5,
+                inventory_owner="gtex",
             )
         )
 
         if view_state.duration_seconds >= 45:
+            # Split-screen: game stays ≥60% viewport, ad ≤10s, mid-match low-stakes window.
+            split_brand = self._pick_brand(
+                brands,
+                seed=f"{match_id}:split",
+                avoid={placement.brand for placement in placements},
+            )
+            split_start = max(20, int(round(view_state.duration_seconds * 0.35)))
+            split_end = min(view_state.duration_seconds - 10, split_start + 10)
+            if split_end > split_start and split_end < view_state.duration_seconds - 5:
+                placements.append(
+                    self._placement(
+                        match_id=match_id,
+                        ad_type=MatchAdPlacementType.SPLIT,
+                        brand=split_brand,
+                        message=f"{split_brand} — split screen",
+                        placement="split_pane",
+                        active_from_second=split_start,
+                        active_until_second=split_end,
+                        cta_label="Dismiss",
+                        tags=tags,
+                        is_final=self._is_final(view_state),
+                        is_major_match=self._is_major_match(view_state),
+                        max_duration_seconds=10,
+                        inventory_owner="gtex",
+                        viewport_game_ratio=0.60,
+                    )
+                )
             banner_brand = self._pick_brand(
                 brands,
                 seed=f"{match_id}:banner",
@@ -327,6 +376,9 @@ class AdDecisionEngine:
         cta_label: str | None = None,
         is_final: bool = False,
         is_major_match: bool = False,
+        max_duration_seconds: int | None = None,
+        inventory_owner: str | None = None,
+        viewport_game_ratio: float | None = None,
     ) -> MatchAdPlacementView:
         ad_id = self._ad_id(match_id, ad_type=ad_type, brand=brand, event_id=event_id)
         return MatchAdPlacementView(
@@ -358,6 +410,9 @@ class AdDecisionEngine:
                 ad_id=ad_id,
                 placement=placement,
             ),
+            max_duration_seconds=max_duration_seconds,
+            inventory_owner=inventory_owner,
+            viewport_game_ratio=viewport_game_ratio,
         )
 
     def _effective_profile(self, profile, match: dict[str, Any] | None):

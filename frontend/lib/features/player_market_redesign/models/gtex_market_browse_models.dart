@@ -40,6 +40,7 @@ class GtexMarketPlayerView {
     this.loanTerms = const <String, Object?>{},
     this.swapTerms = const <String, Object?>{},
     this.availabilityTerms = const <String, Object?>{},
+    this.attributes,
   });
 
   final GteMarketPlayerListItem raw;
@@ -84,6 +85,7 @@ class GtexMarketPlayerView {
   final Map<String, Object?> loanTerms;
   final Map<String, Object?> swapTerms;
   final Map<String, Object?> availabilityTerms;
+  final GteMarketPlayerAttributes? attributes;
 
   factory GtexMarketPlayerView.fromListItem(GteMarketPlayerListItem player) {
     return GtexMarketPlayerView(
@@ -129,6 +131,7 @@ class GtexMarketPlayerView {
       loanTerms: player.loanTerms,
       swapTerms: player.swapTerms,
       availabilityTerms: player.availabilityTerms,
+      attributes: player.attributes,
     );
   }
 
@@ -183,15 +186,32 @@ class GtexMarketPlayerView {
   String get ageLabel => age == null || age! <= 0 ? 'Age TBC' : 'Age $age';
   String? get heightLabel =>
       raw.heightCm == null || raw.heightCm! <= 0 ? null : '${raw.heightCm} cm';
+
+  /// Preferred foot for the card bio rail.
+  ///
+  /// Accepts Left / Right / Either / Both (and common abbreviations) so market
+  /// payloads and FM-style dual-footed players render honestly.
   String? get footLabel {
     final String? foot = raw.preferredFoot?.trim();
     if (foot == null || foot.isEmpty) {
       return null;
     }
-    return foot[0].toUpperCase() + foot.substring(1).toLowerCase();
+    return GtexMarketFormatters.preferredFoot(foot);
   }
 
   List<String> get secondaryPositions => raw.secondaryPositions;
+
+  /// Wage chip — intentionally always null on the real-player market.
+  ///
+  /// GTEX real players are share assets, not employees: they do not draw a
+  /// club salary. FanCoin wages belong on unique regen contracts only.
+  String? get salaryLabel => null;
+
+  /// Contract-years chip — intentionally always null on the real-player market.
+  ///
+  /// Bought real-player shares do not expire. Contract clocks are a regen-
+  /// world concern (unique living footballers who can demand exits).
+  String? get contractLabel => null;
   int? get gsiScore => globalScoutingIndex?.round();
   String? get gsiLabel =>
       globalScoutingIndex == null
@@ -223,6 +243,48 @@ class GtexMarketPlayerView {
 
   String get ratingLabel =>
       rating == null ? 'Form TBC' : 'Form ${rating!.toStringAsFixed(1)}';
+
+  /// Big OVR on the FIFA-style face. Prefers derived attributes.overall.
+  String? get overallLabel {
+    final int? overall = attributes?.overall;
+    if (overall != null && overall > 0) {
+      return '$overall';
+    }
+    return null;
+  }
+
+  String? get potentialLabel {
+    final int? potential = attributes?.potential;
+    if (potential == null || potential <= 0) {
+      return null;
+    }
+    return '$potential';
+  }
+
+  /// PAC–PHY plate for the card face. Null when the API omitted abilities.
+  Map<String, int>? get abilityStats {
+    final GteMarketPlayerAttributes? attr = attributes;
+    if (attr == null) {
+      return null;
+    }
+    if (attr.pace <= 0 &&
+        attr.shooting <= 0 &&
+        attr.passing <= 0 &&
+        attr.dribbling <= 0 &&
+        attr.defending <= 0 &&
+        attr.physical <= 0) {
+      return null;
+    }
+    return <String, int>{
+      'PAC': attr.pace,
+      'SHO': attr.shooting,
+      'PAS': attr.passing,
+      'DRI': attr.dribbling,
+      'DEF': attr.defending,
+      'PHY': attr.physical,
+    };
+  }
+
   String get availabilityTypeLabel =>
       availabilityLabel.trim().isNotEmpty
           ? availabilityLabel.trim()
@@ -603,5 +665,30 @@ class GtexMarketFormatters {
               '${word[0].toUpperCase()}${word.length == 1 ? '' : word.substring(1)}',
         )
         .join(' ');
+  }
+
+  /// Normalise preferred-foot tokens for card/profile display.
+  static String preferredFoot(String value) {
+    final String token = value.trim().toLowerCase().replaceAll('_', ' ');
+    switch (token) {
+      case 'l':
+      case 'left':
+      case 'left foot':
+      case 'left-footed':
+        return 'Left';
+      case 'r':
+      case 'right':
+      case 'right foot':
+      case 'right-footed':
+        return 'Right';
+      case 'either':
+      case 'both':
+      case 'two footed':
+      case 'two-footed':
+      case 'ambidextrous':
+        return 'Either';
+      default:
+        return labelFromToken(value);
+    }
   }
 }

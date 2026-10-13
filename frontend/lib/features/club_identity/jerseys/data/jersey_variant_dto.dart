@@ -21,6 +21,9 @@ class JerseyVariantDto {
     required this.socksColor,
     this.themeTags = const <String>[],
     this.commemorativePatch,
+    this.frontSponsorLabel,
+    this.backSponsorLabel,
+    this.sleeveSponsorLabel,
   });
 
   final JerseyType jerseyType;
@@ -36,6 +39,10 @@ class JerseyVariantDto {
   final String socksColor;
   final List<String> themeTags;
   final String? commemorativePatch;
+  /// jersey_front / jersey_back / sleeve_slot sponsor marks (2D).
+  final String? frontSponsorLabel;
+  final String? backSponsorLabel;
+  final String? sleeveSponsorLabel;
 
   String get label {
     switch (jerseyType) {
@@ -63,6 +70,9 @@ class JerseyVariantDto {
     String? socksColor,
     List<String>? themeTags,
     String? commemorativePatch,
+    String? frontSponsorLabel,
+    String? backSponsorLabel,
+    String? sleeveSponsorLabel,
   }) {
     return JerseyVariantDto(
       jerseyType: jerseyType,
@@ -78,6 +88,9 @@ class JerseyVariantDto {
       socksColor: socksColor ?? this.socksColor,
       themeTags: themeTags ?? this.themeTags,
       commemorativePatch: commemorativePatch ?? this.commemorativePatch,
+      frontSponsorLabel: frontSponsorLabel ?? this.frontSponsorLabel,
+      backSponsorLabel: backSponsorLabel ?? this.backSponsorLabel,
+      sleeveSponsorLabel: sleeveSponsorLabel ?? this.sleeveSponsorLabel,
     );
   }
 
@@ -101,6 +114,12 @@ class JerseyVariantDto {
           .map((dynamic tag) => tag.toString())
           .toList(growable: false),
       commemorativePatch: json['commemorative_patch'] as String?,
+      frontSponsorLabel: json['front_sponsor_label'] as String? ??
+          json['jersey_front'] as String?,
+      backSponsorLabel: json['back_sponsor_label'] as String? ??
+          json['jersey_back'] as String?,
+      sleeveSponsorLabel: json['sleeve_sponsor_label'] as String? ??
+          json['sleeve_slot'] as String?,
     );
   }
 
@@ -119,6 +138,9 @@ class JerseyVariantDto {
       'socks_color': socksColor,
       'theme_tags': themeTags,
       'commemorative_patch': commemorativePatch,
+      if (frontSponsorLabel != null) 'front_sponsor_label': frontSponsorLabel,
+      if (backSponsorLabel != null) 'back_sponsor_label': backSponsorLabel,
+      if (sleeveSponsorLabel != null) 'sleeve_sponsor_label': sleeveSponsorLabel,
     };
   }
 }

@@ -256,6 +256,7 @@ class GteMarketPlayerListItem {
     this.availabilityTerms = const <String, Object?>{},
     this.imageUrl,
     this.avatar,
+    this.attributes,
   });
 
   final String playerId;
@@ -312,6 +313,9 @@ class GteMarketPlayerListItem {
   final String? imageUrl;
   final PlayerAvatar? avatar;
 
+  /// FIFA-style PAC–PHY plate. Null when the list payload omitted attributes.
+  final GteMarketPlayerAttributes? attributes;
+
   bool get isRising => (movementPct ?? 0) > 0;
 
   /// This listing with the tradable price replaced by the server's latest.
@@ -361,6 +365,7 @@ class GteMarketPlayerListItem {
       availabilityTerms: availabilityTerms,
       imageUrl: imageUrl,
       avatar: avatar,
+      attributes: attributes,
     );
   }
 
@@ -550,6 +555,13 @@ class GteMarketPlayerListItem {
       avatar: PlayerAvatar.fromJsonOrNull(
         GteJson.value(json, <String>['avatar']),
       ),
+      attributes: () {
+        final Object? raw = GteJson.value(json, <String>['attributes']);
+        if (raw == null) {
+          return null;
+        }
+        return GteMarketPlayerAttributes.fromJson(raw);
+      }(),
     );
   }
 }

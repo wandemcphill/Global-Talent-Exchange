@@ -782,6 +782,7 @@ class MarketPlayerListItem:
     is_tradable: bool
     image_url: str | None
     avatar: PlayerAvatarView
+    attributes: "MarketPlayerAttributes"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1698,6 +1699,10 @@ class MarketPlayerQueryService:
             is_tradable=record.player.is_tradable,
             image_url=self._image_url(record),
             avatar=self._avatar(record),
+            attributes=derive_player_attributes(
+                record.player,
+                self._coerce_int(self._global_scouting_index(record)),
+            ),
         )
 
     def _share_prices_by_player_id(self, records: list[MarketPlayerRecord]) -> dict[str, Decimal]:

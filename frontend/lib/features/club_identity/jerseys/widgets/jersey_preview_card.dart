@@ -137,7 +137,9 @@ class _ShirtPreview extends StatelessWidget {
                       Align(
                         alignment: Alignment.center,
                         child: Text(
-                          variant.frontText,
+                          (variant.frontSponsorLabel?.trim().isNotEmpty ?? false)
+                              ? variant.frontSponsorLabel!.trim()
+                              : variant.frontText,
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium
@@ -150,6 +152,42 @@ class _ShirtPreview extends StatelessWidget {
                               ),
                         ),
                       ),
+                      if (variant.sleeveSponsorLabel != null &&
+                          variant.sleeveSponsorLabel!.trim().isNotEmpty)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Padding(
+                            padding: EdgeInsets.only(right: size * 0.04),
+                            child: RotatedBox(
+                              quarterTurns: 3,
+                              child: Text(
+                                variant.sleeveSponsorLabel!.trim(),
+                                style: TextStyle(
+                                  color: identityReadableOn(
+                                    identityColorFromHex(variant.primaryColor),
+                                  ).withValues(alpha: 0.85),
+                                  fontSize: size * 0.08,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (variant.backSponsorLabel != null &&
+                          variant.backSponsorLabel!.trim().isNotEmpty)
+                        Align(
+                          alignment: const Alignment(0, 0.72),
+                          child: Text(
+                            variant.backSponsorLabel!.trim(),
+                            style: TextStyle(
+                              color: identityReadableOn(
+                                identityColorFromHex(variant.primaryColor),
+                              ).withValues(alpha: 0.8),
+                              fontSize: size * 0.07,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),

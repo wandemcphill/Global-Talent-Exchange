@@ -323,6 +323,24 @@ class RegenContractOfferView(CommonSchema):
     conversion_quote: CurrencyConversionQuoteView | None = None
 
 
+class RegenContractOfferInboxItemView(CommonSchema):
+    """Open contract offer row for the empire transfer desk / regen inbox."""
+
+    offer_id: str
+    regen_id: str
+    player_id: str
+    player_name: str
+    offering_club_id: str
+    offering_club_name: str
+    transfer_bid_id: str | None = None
+    transfer_window_id: str | None = None
+    offered_salary_fancoin_per_year: Decimal
+    contract_years: int = Field(ge=1)
+    status: str
+    decision_deadline: datetime
+    personality_note: str | None = None
+
+
 class RegenLifecycleView(CommonSchema):
     regen_id: str
     status: str

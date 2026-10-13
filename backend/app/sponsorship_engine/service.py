@@ -223,18 +223,24 @@ class SponsorshipEngineService:
         if payout is None:
             raise SponsorshipEngineError("No pending sponsorship payout remains.")
         credit_amount = (Decimal(payout.amount_minor) / Decimal("100")).quantize(Decimal("0.0001"))
+        # Dual inventory settlement: 60% club owner · 40% GTEX platform fee.
+        owner_share = (credit_amount * Decimal("0.60")).quantize(Decimal("0.0001"))
+        platform_fee = (credit_amount - owner_share).quantize(Decimal("0.0001"))
         platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
         owner_account = self.wallet_service.get_user_account(self.session, self.session.get(User, club.owner_user_id), LedgerUnit.CREDIT)
         self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=owner_account, amount=credit_amount),
-                LedgerPosting(account=platform_account, amount=-credit_amount),
+                LedgerPosting(account=owner_account, amount=owner_share),
+                LedgerPosting(account=platform_account, amount=-owner_share),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
             source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
             reference=f"sponsorship:{contract.id}:{payout.id}",
-            description=f"Sponsorship payout for {contract.sponsor_name}",
+            description=(
+                f"Sponsorship payout for {contract.sponsor_name} "
+                f"(owner 60%={owner_share}, platform 40%={platform_fee})"
+            ),
             actor=actor,
         )
         payout.status = "settled"
@@ -247,28 +253,40 @@ class SponsorshipEngineService:
         StoryFeedService(self.session).publish(
             story_type="sponsorship_payout",
             title=f"{club.club_name} received sponsorship revenue",
-            body=f"{contract.sponsor_name} sponsorship settled {credit_amount:.4f} credits into the club treasury lane.",
+            body=(
+                f"{contract.sponsor_name} sponsorship settled {owner_share:.4f} credits "
+                f"to the club owner (60/40 split; platform retained {platform_fee:.4f})."
+            ),
             subject_type="club_profile",
             subject_id=club.id,
-            metadata_json={"contract_id": contract.id, "payout_id": payout.id, "credit_amount": str(credit_amount)},
+            metadata_json={
+                "contract_id": contract.id,
+                "payout_id": payout.id,
+                "credit_amount": str(credit_amount),
+                "owner_share": str(owner_share),
+                "platform_fee": str(platform_fee),
+                "split": "60/40",
+            },
             published_by_user_id=actor.id,
         )
         self._publish_matrix_notification(
             event_key="sponsorship_paid",
             target_user_ids=[club.owner_user_id],
             resource_id=payout.id,
-            message=f"{contract.sponsor_name} sponsorship paid {credit_amount:.4f} credits.",
+            message=f"{contract.sponsor_name} sponsorship paid {owner_share:.4f} credits (60% owner share).",
             metadata={
                 "club_id": club.id,
                 "contract_id": contract.id,
                 "payout_id": payout.id,
                 "credit_amount": str(credit_amount),
+                "owner_share": str(owner_share),
+                "platform_fee": str(platform_fee),
                 "currency": contract.currency,
                 "route": "/app/club",
             },
         )
         self.session.flush()
-        return contract, payout, credit_amount, club.owner_user_id
+        return contract, payout, owner_share, club.owner_user_id
 
     def dashboard(self, *, club_id: str) -> dict:
         contracts = self.list_club_contracts(club_id=club_id)

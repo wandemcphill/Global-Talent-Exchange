@@ -178,6 +178,7 @@ from app.models.club_sponsorship_asset import ClubSponsorshipAsset
 from app.models.club_sponsorship_contract import ClubSponsorshipContract
 from app.models.club_sponsorship_package import ClubSponsorshipPackage
 from app.models.club_sponsorship_payout import ClubSponsorshipPayout
+from app.models.regen_endorsement import RegenEndorsementDeal, RegenEndorsementStatus
 from app.models.club_trophy import ClubTrophy
 from app.models.clip_variant import ClipVariant
 from app.models.viral_moderation import ClipModerationEvent

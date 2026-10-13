@@ -1457,12 +1457,16 @@ class RealPlayerIngestionService:
         player.potential = payload.potential
         # Stash pricing inputs so the appreciation scheduler can recompute the
         # banded price over time (GSI + potential + team factor).
-        if payload.overall_rating is not None or payload.club_rating is not None:
+        if payload.overall_rating is not None or payload.potential is not None or payload.club_rating is not None:
             dna = dict(player.dna_profile) if isinstance(player.dna_profile, dict) else {}
             if payload.overall_rating is not None:
                 dna["sofifa_overall"] = payload.overall_rating
+                # ``derive_player_attributes`` consumes the provider-neutral
+                # key.  Keep the legacy source key too for pricing paths.
+                dna["overall"] = payload.overall_rating
             if payload.potential is not None:
                 dna["sofifa_potential"] = payload.potential
+                dna["potential"] = payload.potential
             if payload.club_rating is not None:
                 dna["sofifa_club_rating"] = payload.club_rating
             player.dna_profile = dna

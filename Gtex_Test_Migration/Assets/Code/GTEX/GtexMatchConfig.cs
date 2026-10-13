@@ -296,6 +296,13 @@ namespace FStudio.GTEX
 
         public GtexRuntimeMode ResolveRuntimeMode()
         {
+            // Scene ownership wins: opening GTEX_OriginalVisualRuntime must never
+            // fall back to live transform playback from match-config.json.
+            if (FStudio.GTEX.Core.GtexOriginalVisualRuntimePolicy.IsOriginalVisualRuntimeScene())
+            {
+                return GtexRuntimeMode.OriginalVisualRuntime;
+            }
+
             switch (NormalizeRuntimeModeToken(runtimeMode))
             {
                 case "simulation":

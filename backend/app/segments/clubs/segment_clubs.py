@@ -72,6 +72,38 @@ from app.services.scouting_intelligence_service import (
 router = APIRouter(prefix="/api/clubs", tags=["clubs"])
 
 
+@router.get("/owned", response_model=list[ClubProfileView])
+def list_owned_clubs(
+    current_user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[ClubProfileView]:
+    """Empire roster: up to three controlling clubs for the signed-in user."""
+    from app.auth.service import AuthService
+    from app.schemas.club_identity_core import ClubProfileCore
+
+    clubs = AuthService().list_owned_clubs(session, current_user)
+    return [ClubProfileView(profile=ClubProfileCore.model_validate(club)) for club in clubs]
+
+
+@router.post("/owned/{club_id}/activate", response_model=ClubProfileView)
+def activate_owned_club(
+    club_id: str,
+    current_user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ClubProfileView:
+    """Switch the active empire club (primary membership)."""
+    from app.auth.service import AuthError, AuthService
+    from app.schemas.club_identity_core import ClubProfileCore
+
+    try:
+        club = AuthService().set_active_club(session, current_user, club_id)
+        session.commit()
+        session.refresh(club)
+        return ClubProfileView(profile=ClubProfileCore.model_validate(club))
+    except AuthError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 def _user_id(current_user) -> str:
     user_id = getattr(current_user, "id", None)
     if not isinstance(user_id, str) or not user_id:
@@ -87,6 +119,8 @@ def _to_http_error(error: Exception) -> HTTPException:
     if isinstance(error, ValueError):
         detail = str(error)
         if detail == "club_slug_taken":
+            status_code = status.HTTP_409_CONFLICT
+        elif detail == "club_ownership_cap_reached":
             status_code = status.HTTP_409_CONFLICT
         elif detail.endswith("_not_found"):
             status_code = status.HTTP_404_NOT_FOUND

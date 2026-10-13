@@ -171,6 +171,12 @@ class GtexArticleHero extends StatelessWidget {
                   color: GtexColors.red,
                   icon: Icons.bolt_outlined,
                 ),
+              if (article.isFeatured)
+                const GtexStatusChip(
+                  label: 'FEATURED',
+                  color: GtexColors.gold,
+                  icon: Icons.push_pin_outlined,
+                ),
               GtexStatusChip(
                 label: 'TRUST ${(article.trustScore * 100).round()}%',
                 color: GtexColors.cyan,
@@ -178,6 +184,17 @@ class GtexArticleHero extends StatelessWidget {
               ),
             ],
           ),
+          if (article.byline != null && article.byline!.trim().isNotEmpty) ...<Widget>[
+            const SizedBox(height: GtexSpacing.sm),
+            Text(
+              'By ${article.byline}',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: GtexColors.textMuted,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ],
           const SizedBox(height: GtexSpacing.lg),
           Text(
             article.title,

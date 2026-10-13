@@ -559,18 +559,21 @@ class GteUserSignupRequest {
   const GteUserSignupRequest({
     required this.fullName,
     required this.username,
-    required this.email,
     required this.password,
-    required this.country,
-    required this.state,
-    required this.city,
-    required this.clubName,
-    required this.clubShortTag,
-    required this.clubCountry,
-    required this.clubState,
-    required this.clubLocality,
-    required this.clubType,
-    required this.footballIdentity,
+    required this.isOver18,
+    this.email,
+    this.dateOfBirth,
+    this.turnstileToken,
+    this.country,
+    this.state,
+    this.city,
+    this.clubName,
+    this.clubShortTag,
+    this.clubCountry,
+    this.clubState,
+    this.clubLocality,
+    this.clubType,
+    this.footballIdentity = 'club_owner',
     this.compliance,
     this.position,
     this.dominantFoot,
@@ -581,17 +584,20 @@ class GteUserSignupRequest {
 
   final String fullName;
   final String username;
-  final String email;
+  final String? email;
   final String password;
-  final String country;
-  final String state;
-  final String city;
-  final String clubName;
-  final String clubShortTag;
-  final String clubCountry;
-  final String clubState;
-  final String clubLocality;
-  final String clubType;
+  final bool isOver18;
+  final String? dateOfBirth;
+  final String? turnstileToken;
+  final String? country;
+  final String? state;
+  final String? city;
+  final String? clubName;
+  final String? clubShortTag;
+  final String? clubCountry;
+  final String? clubState;
+  final String? clubLocality;
+  final String? clubType;
   final String footballIdentity;
   final GteComplianceSignupPayload? compliance;
   final String? position;
@@ -602,18 +608,24 @@ class GteUserSignupRequest {
 
   Map<String, Object?> toJson() => <String, Object?>{
     'full_name': fullName,
-    'username': username,
-    'email': email,
+    'username': username.startsWith('@') ? username.substring(1) : username,
     'password': password,
-    'country': country,
-    'state': state,
-    'city': city,
-    'club_name': clubName,
-    'club_short_tag': clubShortTag,
-    'club_country': clubCountry,
-    'club_state': clubState,
-    'club_locality': clubLocality,
-    'club_type': clubType,
+    'is_over_18': isOver18,
+    if (email != null && email!.trim().isNotEmpty) 'email': email,
+    if (dateOfBirth != null) 'date_of_birth': dateOfBirth,
+    if (turnstileToken != null) 'turnstile_token': turnstileToken,
+    if (country != null && country!.trim().isNotEmpty) 'country': country,
+    if (state != null && state!.trim().isNotEmpty) 'state': state,
+    if (city != null && city!.trim().isNotEmpty) 'city': city,
+    if (clubName != null && clubName!.trim().isNotEmpty) 'club_name': clubName,
+    if (clubShortTag != null && clubShortTag!.trim().isNotEmpty)
+      'club_short_tag': clubShortTag,
+    if (clubCountry != null && clubCountry!.trim().isNotEmpty)
+      'club_country': clubCountry,
+    if (clubState != null && clubState!.trim().isNotEmpty) 'club_state': clubState,
+    if (clubLocality != null && clubLocality!.trim().isNotEmpty)
+      'club_locality': clubLocality,
+    if (clubType != null) 'club_type': clubType,
     'football_identity': footballIdentity,
     if (position != null) 'position': position,
     if (dominantFoot != null) 'dominant_foot': dominantFoot,

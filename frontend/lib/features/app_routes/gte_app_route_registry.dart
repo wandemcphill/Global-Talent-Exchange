@@ -31,6 +31,7 @@ import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
 import 'package:gte_frontend/features/football_world_simulation/football_world_simulation.dart';
 import 'package:gte_frontend/features/gift_economy_admin/gift_economy_admin.dart';
 import 'package:gte_frontend/features/jackpot/presentation/gtex_jackpot_route_screen.dart';
+import 'package:gte_frontend/screens/jackpot/gtex_jackpot_win_notification_screen_v2.dart';
 import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
 import 'package:gte_frontend/features/match/replay_archive_route_screen.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
@@ -379,6 +380,9 @@ class GteAppRouteRegistry {
     }
     if (route is GtexJackpotRouteData) {
       return _buildGtexJackpotScreen(context, liveDependencies);
+    }
+    if (route is GtexJackpotWinRouteData) {
+      return _buildGtexJackpotWinScreen(route);
     }
     if (route is ClubAiAssistantRouteData) {
       return _buildClubAiAssistantScreen(context, liveDependencies, route);

@@ -59,10 +59,10 @@ void main() {
       ),
     );
 
-    expect(find.text('Shortlist Basket'), findsOneWidget);
+    expect(find.text('Negotiation shortlist'), findsOneWidget);
     expect(find.text('2,500 GTC'), findsWidgets);
     expect(
-      find.text('Wallet GTC only - KoraPay/manual top-up if balance is short'),
+      find.textContaining('Shortlist ≠ payment'),
       findsOneWidget,
     );
     expect(find.text('4,000 GTC'), findsOneWidget);
@@ -104,7 +104,7 @@ void main() {
 
     expect(find.text('You need 40 more GTC before checkout.'), findsOneWidget);
 
-    await tester.tap(find.text('Continue to payment'));
+    await tester.tap(find.text('Review shortlist'));
     await tester.pump();
     expect(checkedOut, isFalse);
 

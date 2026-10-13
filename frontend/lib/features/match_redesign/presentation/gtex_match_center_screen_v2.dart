@@ -203,10 +203,10 @@ class _MainPitchWorkspace extends StatelessWidget {
         const SizedBox(height: 12),
         Expanded(
           child: _BroadcastPanel(
-            title: 'TACTICAL CAM',
+            title: 'MATCH CAM',
             trailing: '${match.home.formation} / ${match.away.formation}',
             child: Center(
-              child: Gtex2dPitch(
+              child: _PitchViewStack(
                 match: match,
                 onPlayerSelected: controller.selectPitchPlayer,
               ),
@@ -226,6 +226,26 @@ class _MainPitchWorkspace extends StatelessWidget {
           _ReplayEntryBar(matchId: match.matchId, onOpenReplay: onOpenReplay),
         ],
       ],
+    );
+  }
+}
+
+class _PitchViewStack extends StatelessWidget {
+  const _PitchViewStack({
+    required this.match,
+    required this.onPlayerSelected,
+  });
+
+  final GtexLiveMatchState match;
+  final ValueChanged<String> onPlayerSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    // Flutter match center stays tactical/2D only.
+    // FM23-class broadcast 3D lives in Unity GTEX_OriginalVisualRuntime.
+    return Gtex2dPitch(
+      match: match,
+      onPlayerSelected: onPlayerSelected,
     );
   }
 }
@@ -394,9 +414,9 @@ class _MobileMatchView extends StatelessWidget {
         Expanded(
           flex: 5,
           child: _BroadcastPanel(
-            title: 'TACTICAL CAM',
+            title: 'MATCH CAM',
             child: Center(
-              child: Gtex2dPitch(
+              child: _PitchViewStack(
                 match: match,
                 onPlayerSelected: controller.selectPitchPlayer,
               ),

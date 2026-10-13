@@ -300,6 +300,8 @@ class GteNavigationRoute {
       case 'player-cards':
       case 'transfers':
       case 'football':
+        // Prefer app_router feature routes for `/app/transfer-hub` and
+        // `/football/transfer-center`; this parse path is shell fallback only.
         final String? modeParam =
             uri.queryParameters['mode'] ?? uri.queryParameters['tab'];
         if (modeParam == 'ownership' ||

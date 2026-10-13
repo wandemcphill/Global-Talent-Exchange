@@ -21,6 +21,7 @@ class GtexJackpotTriggerMode(StrEnum):
     THRESHOLD = "threshold"
     PROBABILITY = "probability"
     FAILSAFE = "failsafe"
+    SCHEDULED = "scheduled"
     MANUAL = "manual"
 
 

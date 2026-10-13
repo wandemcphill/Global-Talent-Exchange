@@ -443,6 +443,23 @@ class JackpotService(GtexBaseService):
         eligibility_score: Decimal,
         metadata: dict[str, Any] | None = None,
     ) -> GtexJackpotContribution:
+        try:
+            resolved_source_type = GtexContributionSourceType(str(source_type))
+        except ValueError as exc:
+            raise GtexValidationError("Unsupported jackpot contribution source type.") from exc
+        normalized_source_id = source_id.strip() if source_id else None
+        if normalized_source_id:
+            existing_contribution = session.scalar(
+                select(GtexJackpotContribution)
+                .where(
+                    GtexJackpotContribution.source_type == resolved_source_type,
+                    GtexJackpotContribution.source_id == normalized_source_id,
+                    GtexJackpotContribution.participant_user_id == actor.id,
+                )
+                .order_by(GtexJackpotContribution.created_at.desc())
+            )
+            if existing_contribution is not None:
+                return existing_contribution
         resolved_contribution_amount = self._amount(
             contribution_amount
             if contribution_amount is not None
@@ -452,6 +469,9 @@ class JackpotService(GtexBaseService):
             raise GtexValidationError("Jackpot contribution amount must be greater than zero.")
         lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
         actor_account = self.wallet_service.get_user_account(session, actor, LedgerUnit.COIN)
+        stable_reference = (
+            f"gtex-jackpot:{resolved_source_type.value}:{normalized_source_id or 'none'}:{actor.id}"
+        )
         try:
             self.wallet_service.append_transaction(
                 session,
@@ -462,7 +482,7 @@ class JackpotService(GtexBaseService):
                 reason=LedgerEntryReason.TRADE_SETTLEMENT,
                 source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
                 transaction_type=LedgerTransactionType.MATCH_ENTRY_FEE,
-                reference=f"gtex-jackpot:{actor.id}:{utcnow().timestamp()}",
+                reference=stable_reference,
                 description="GTEX jackpot contribution",
                 actor=actor,
             )
@@ -471,8 +491,8 @@ class JackpotService(GtexBaseService):
         return self.record_contribution(
             session,
             participant_user_id=actor.id,
-            source_type=source_type,
-            source_id=source_id,
+            source_type=resolved_source_type,
+            source_id=normalized_source_id,
             entry_fee=entry_fee,
             contribution_amount=resolved_contribution_amount,
             eligibility_score=eligibility_score,
@@ -591,6 +611,8 @@ class JackpotService(GtexBaseService):
             return current_round, GtexJackpotTriggerMode.THRESHOLD
         if now >= current_round.failsafe_at:
             return current_round, GtexJackpotTriggerMode.FAILSAFE
+        if self._scheduled_drop_due(session, pool_key=pool_key, now=now):
+            return current_round, GtexJackpotTriggerMode.SCHEDULED
         if self._amount(current_round.max_probability_limit) <= Decimal("0.0000"):
             return None
         probability = min(
@@ -600,6 +622,59 @@ class JackpotService(GtexBaseService):
         if self._random.random() < probability:
             return current_round, GtexJackpotTriggerMode.PROBABILITY
         return None
+
+    def _scheduled_drop_due(self, session: Session, *, pool_key: str, now: datetime) -> bool:
+        """Guarantee ≥ N drops/day by forcing a scheduled trigger when behind cadence."""
+        min_drops = int(self.settings.jackpot_min_drops_per_day)
+        if min_drops <= 0:
+            return False
+        day_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
+        settled_today = int(
+            session.scalar(
+                select(func.count())
+                .select_from(GtexJackpotRound)
+                .where(
+                    GtexJackpotRound.pool_key == pool_key,
+                    GtexJackpotRound.status == GtexJackpotRoundStatus.SETTLED,
+                    GtexJackpotRound.settled_at.is_not(None),
+                    GtexJackpotRound.settled_at >= day_start,
+                )
+            )
+            or 0
+        )
+        if settled_today >= min_drops:
+            return False
+        # Space remaining drops evenly across the day (e.g. 3 → every 8h).
+        slot_hours = max(1, 24 // min_drops)
+        next_due_slot = settled_today
+        due_at = day_start + timedelta(hours=slot_hours * next_due_slot)
+        return now >= due_at
+
+    def _user_has_recent_gameplay(self, session: Session, user_id: str) -> bool:
+        window = timedelta(hours=int(self.settings.jackpot_active_play_hours))
+        cutoff = utcnow() - window
+        recent_match = session.scalar(
+            select(GtexMatch.id)
+            .where(
+                GtexMatch.status == GtexMatchStatus.COMPLETED,
+                or_(
+                    GtexMatch.home_user_id == user_id,
+                    GtexMatch.away_user_id == user_id,
+                ),
+                or_(
+                    GtexMatch.completed_at >= cutoff,
+                    GtexMatch.updated_at >= cutoff,
+                ),
+            )
+            .limit(1)
+        )
+        if recent_match is not None:
+            return True
+        user = session.get(User, user_id)
+        if user is not None and user.last_login_at is not None and user.last_login_at >= cutoff:
+            # Soft fallthrough: recent login counts until match history is dense.
+            return True
+        return False
 
     def process_due_round(self, session: Session) -> GtexJackpotRound | None:
         outcome = self.evaluate_trigger(session)
@@ -616,8 +691,21 @@ class JackpotService(GtexBaseService):
         round_record: GtexJackpotRound,
         trigger_mode: GtexJackpotTriggerMode,
     ) -> GtexJackpotRound:
+        locked_round = session.scalar(
+            select(GtexJackpotRound)
+            .where(GtexJackpotRound.id == round_record.id)
+            .with_for_update()
+        )
+        if locked_round is None:
+            raise GtexConflictError("Jackpot round was not found.")
+        round_record = locked_round
         if round_record.status != GtexJackpotRoundStatus.OPEN:
             raise GtexConflictError("Jackpot round is no longer open.")
+        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
+        pool_balance = self._amount(self.wallet_service.get_balance(session, lottery_pool))
+        # Never pay more than the lottery pool holds.
+        if pool_balance >= Decimal("0.0000"):
+            round_record.current_balance = min(self._amount(round_record.current_balance), pool_balance)
         entries = session.execute(
             select(
                 GtexJackpotContribution.participant_user_id,
@@ -633,19 +721,22 @@ class JackpotService(GtexBaseService):
             )
             .group_by(GtexJackpotContribution.participant_user_id)
         ).all()
-        eligible: list[dict[str, Any]] = []
+        candidates: list[dict[str, Any]] = []
         for user_id, total_amount, max_score in entries:
             if user_id is None:
                 continue
             weight = self._amount(total_amount) * max(self._amount(max_score), Decimal("1.0000"))
             if self._amount(max_score) < self._amount(round_record.min_activity_score):
                 continue
-            eligible.append(
+            candidates.append(
                 {
                     "user_id": str(user_id),
                     "weight": self._amount(weight),
+                    "active": self._user_has_recent_gameplay(session, str(user_id)),
                 }
             )
+        active_candidates = [item for item in candidates if item["active"]]
+        eligible = active_candidates if active_candidates else candidates
         round_record.trigger_mode = trigger_mode
         round_record.trigger_reason = f"{trigger_mode.value}_trigger"
         round_record.triggered_at = utcnow()
@@ -669,7 +760,6 @@ class JackpotService(GtexBaseService):
             )
             return round_record
         payouts = self._build_payouts(round_record=round_record, eligible=eligible)
-        lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
         postings = [LedgerPosting(account=lottery_pool, amount=-self._amount(item["amount"])) for item in payouts]
         for payout in payouts:
             user = session.get(User, payout["user_id"])
@@ -680,7 +770,7 @@ class JackpotService(GtexBaseService):
         self.wallet_service.append_transaction(
             session,
             postings=postings,
-            reason=LedgerEntryReason.ADJUSTMENT,
+            reason=LedgerEntryReason.COMPETITION_REWARD,
             source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
             transaction_type=LedgerTransactionType.LOTTERY_REWARD,
             reference=f"gtex-jackpot-payout:{round_record.id}",
@@ -716,6 +806,12 @@ class JackpotService(GtexBaseService):
                         "amount": str(payout_amount),
                         "payout_rank": index,
                         "payout_ratio": str(self._amount(payout["ratio"])),
+                        "deep_link_route": (
+                            f"/gtex/jackpot/win"
+                            f"?amount={payout_amount}"
+                            f"&round={round_record.round_number}"
+                        ),
+                        "route": "/gtex/jackpot",
                     },
                 )
             )

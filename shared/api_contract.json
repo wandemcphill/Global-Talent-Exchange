@@ -13880,6 +13880,19 @@
         "source_file": "backend/app/analytics/router.py",
         "response_model": "ClipDashboardResponse"
       },
+      "get_api_v2_public_live_stats": {
+        "method": "GET",
+        "canonical_path": "/api/v2/public/live-stats",
+        "aliases": [
+          "/api/public/live-stats",
+          "/api/v1/public/live-stats",
+          "/api/v2/public/live-stats",
+          "/public/live-stats"
+        ],
+        "handler": "get_live_world_pulse",
+        "source_file": "backend/app/public_pulse/router.py",
+        "response_model": "LiveWorldPulseView"
+      },
       "post_api_v2_analytics_frontend": {
         "method": "POST",
         "canonical_path": "/api/v2/analytics/frontend",
@@ -14146,6 +14159,30 @@
       }
     },
     "regen": {
+      "get_api_v2_players_player_id_behavior_brief": {
+        "method": "GET",
+        "canonical_path": "/api/v2/players/{player_id}/behavior-brief",
+        "aliases": [
+          "/api/players/{player_id}/behavior-brief",
+          "/api/v1/players/{player_id}/behavior-brief",
+          "/api/v2/players/{player_id}/behavior-brief"
+        ],
+        "handler": "get_regen_behavior_brief",
+        "source_file": "backend/app/routes/regen_living_star.py",
+        "response_model": "RegenMatchBehaviorBriefView"
+      },
+      "get_api_v2_players_player_id_living_star": {
+        "method": "GET",
+        "canonical_path": "/api/v2/players/{player_id}/living-star",
+        "aliases": [
+          "/api/players/{player_id}/living-star",
+          "/api/v1/players/{player_id}/living-star",
+          "/api/v2/players/{player_id}/living-star"
+        ],
+        "handler": "get_regen_living_star",
+        "source_file": "backend/app/routes/regen_living_star.py",
+        "response_model": "RegenLivingStarView"
+      },
       "get_api_v2_regen_universe_achievements": {
         "method": "GET",
         "canonical_path": "/api/v2/regen-universe/achievements",
@@ -14665,6 +14702,18 @@
         "handler": "create_agent",
         "source_file": "backend/app/regen_ecosystem/router.py",
         "response_model": "AgentView"
+      },
+      "post_api_v2_players_player_id_agency_exit_petition": {
+        "method": "POST",
+        "canonical_path": "/api/v2/players/{player_id}/agency/exit-petition",
+        "aliases": [
+          "/api/players/{player_id}/agency/exit-petition",
+          "/api/v1/players/{player_id}/agency/exit-petition",
+          "/api/v2/players/{player_id}/agency/exit-petition"
+        ],
+        "handler": "petition_regen_exit",
+        "source_file": "backend/app/routes/regen_living_star.py",
+        "response_model": "RegenExitPetitionView"
       },
       "post_api_v2_players_player_id_career_events": {
         "method": "POST",
@@ -15864,6 +15913,18 @@
         "source_file": "backend/app/segments/clubs/segment_club_ops.py",
         "response_model": "YouthPipelineSnapshotView"
       },
+      "get_api_v2_clubs_owned": {
+        "method": "GET",
+        "canonical_path": "/api/v2/clubs/owned",
+        "aliases": [
+          "/api/clubs/owned",
+          "/api/v1/clubs/owned",
+          "/api/v2/clubs/owned"
+        ],
+        "handler": "list_owned_clubs",
+        "source_file": "backend/app/segments/clubs/segment_clubs.py",
+        "response_model": "list[ClubProfileView]"
+      },
       "get_api_v2_competitions": {
         "method": "GET",
         "canonical_path": "/api/v2/competitions",
@@ -16314,6 +16375,18 @@
         "source_file": "backend/app/segments/referrals/segment_referrals.py",
         "response_model": "list[ShareCodeView]"
       },
+      "get_api_v2_regen_contract_offers_inbox": {
+        "method": "GET",
+        "canonical_path": "/api/v2/regen/contract-offers/inbox",
+        "aliases": [
+          "/api/regen/contract-offers/inbox",
+          "/api/v1/regen/contract-offers/inbox",
+          "/api/v2/regen/contract-offers/inbox"
+        ],
+        "handler": "list_regen_contract_offer_inbox",
+        "source_file": "backend/app/segments/player_lifecycle/segment_player_lifecycle.py",
+        "response_model": "list[RegenContractOfferInboxItemView]"
+      },
       "get_api_v2_transfers_windows": {
         "method": "GET",
         "canonical_path": "/api/v2/transfers/windows",
@@ -16698,6 +16771,18 @@
         "handler": "create_sponsorship_contract",
         "source_file": "backend/app/segments/clubs/segment_club_ops.py",
         "response_model": "ClubSponsorshipContractView"
+      },
+      "post_api_v2_clubs_owned_club_id_activate": {
+        "method": "POST",
+        "canonical_path": "/api/v2/clubs/owned/{club_id}/activate",
+        "aliases": [
+          "/api/clubs/owned/{club_id}/activate",
+          "/api/v1/clubs/owned/{club_id}/activate",
+          "/api/v2/clubs/owned/{club_id}/activate"
+        ],
+        "handler": "activate_owned_club",
+        "source_file": "backend/app/segments/clubs/segment_clubs.py",
+        "response_model": "ClubProfileView"
       },
       "post_api_v2_competitions": {
         "method": "POST",
@@ -21037,6 +21122,8 @@
     "/api/v2/clubs/list": "post_api_v2_clubs_list",
     "/api/v2/clubs/marketplace": "get_api_v2_clubs_marketplace",
     "/api/v2/clubs/offer": "post_api_v2_clubs_offer",
+    "/api/v2/clubs/owned": "get_api_v2_clubs_owned",
+    "/api/v2/clubs/owned/{club_id}/activate": "post_api_v2_clubs_owned_club_id_activate",
     "/api/v2/clubs/personal-manager": "post_api_v2_clubs_personal_manager",
     "/api/v2/clubs/personal-manager/me": "get_api_v2_clubs_personal_manager_me",
     "/api/v2/clubs/sale-market/listings": "get_api_v2_clubs_sale_market_listings",
@@ -21694,9 +21781,11 @@
     "/api/v2/players/{player_id}": "get_api_v2_players_player_id",
     "/api/v2/players/{player_id}/agency": "get_api_v2_players_player_id_agency",
     "/api/v2/players/{player_id}/agency/contract-decision": "post_api_v2_players_player_id_agency_contract_decision",
+    "/api/v2/players/{player_id}/agency/exit-petition": "post_api_v2_players_player_id_agency_exit_petition",
     "/api/v2/players/{player_id}/agency/transfer-decision": "post_api_v2_players_player_id_agency_transfer_decision",
     "/api/v2/players/{player_id}/availability": "get_api_v2_players_player_id_availability",
     "/api/v2/players/{player_id}/avatar": "get_api_v2_players_player_id_avatar",
+    "/api/v2/players/{player_id}/behavior-brief": "get_api_v2_players_player_id_behavior_brief",
     "/api/v2/players/{player_id}/career": "get_api_v2_players_player_id_career",
     "/api/v2/players/{player_id}/career-events": "post_api_v2_players_player_id_career_events",
     "/api/v2/players/{player_id}/career/summary": "get_api_v2_players_player_id_career_summary",
@@ -21710,6 +21799,7 @@
     "/api/v2/players/{player_id}/injuries/{injury_id}/recover": "post_api_v2_players_player_id_injuries_injury_id_recover",
     "/api/v2/players/{player_id}/interviews": "get_api_v2_players_player_id_interviews",
     "/api/v2/players/{player_id}/lifecycle-snapshot": "get_api_v2_players_player_id_lifecycle_snapshot",
+    "/api/v2/players/{player_id}/living-star": "get_api_v2_players_player_id_living_star",
     "/api/v2/players/{player_id}/overview": "get_api_v2_players_player_id_overview",
     "/api/v2/players/{player_id}/personality": "get_api_v2_players_player_id_personality",
     "/api/v2/players/{player_id}/regen": "get_api_v2_players_player_id_regen",
@@ -21749,6 +21839,7 @@
     "/api/v2/profile": "patch_api_v2_profile",
     "/api/v2/profile/security": "get_api_v2_profile_security",
     "/api/v2/profile/sessions": "get_api_v2_profile_sessions",
+    "/api/v2/public/live-stats": "get_api_v2_public_live_stats",
     "/api/v2/pundits/matches/{match_key}": "get_api_v2_pundits_matches_match_key",
     "/api/v2/rankings/clubs": "get_api_v2_rankings_clubs",
     "/api/v2/rankings/global": "get_api_v2_rankings_global",
@@ -21790,6 +21881,7 @@
     "/api/v2/regen-universe/tracking": "get_api_v2_regen_universe_tracking",
     "/api/v2/regen-universe/youth-tournaments": "get_api_v2_regen_universe_youth_tournaments",
     "/api/v2/regen-universe/youth-tournaments/{tournament_id}": "get_api_v2_regen_universe_youth_tournaments_tournament_id",
+    "/api/v2/regen/contract-offers/inbox": "get_api_v2_regen_contract_offers_inbox",
     "/api/v2/regens": "get_api_v2_regens",
     "/api/v2/regens/awards": "get_api_v2_regens_awards",
     "/api/v2/regens/awards/{award_id}/vote": "post_api_v2_regens_awards_award_id_vote",
@@ -22700,6 +22792,8 @@
     "/api/clubs/catalog": "/api/v2/clubs/catalog",
     "/api/clubs/catalog/purchase": "/api/v2/clubs/catalog/purchase",
     "/api/clubs/marketplace": "/api/v2/clubs/marketplace",
+    "/api/clubs/owned": "/api/v2/clubs/owned",
+    "/api/clubs/owned/{club_id}/activate": "/api/v2/clubs/owned/{club_id}/activate",
     "/api/clubs/personal-manager": "/api/v2/clubs/personal-manager",
     "/api/clubs/personal-manager/me": "/api/v2/clubs/personal-manager/me",
     "/api/clubs/sale-market/listings": "/api/v2/clubs/sale-market/listings",
@@ -23363,9 +23457,11 @@
     "/api/players/{player_id}": "/api/v2/players/{player_id}",
     "/api/players/{player_id}/agency": "/api/v2/players/{player_id}/agency",
     "/api/players/{player_id}/agency/contract-decision": "/api/v2/players/{player_id}/agency/contract-decision",
+    "/api/players/{player_id}/agency/exit-petition": "/api/v2/players/{player_id}/agency/exit-petition",
     "/api/players/{player_id}/agency/transfer-decision": "/api/v2/players/{player_id}/agency/transfer-decision",
     "/api/players/{player_id}/availability": "/api/v2/players/{player_id}/availability",
     "/api/players/{player_id}/avatar": "/api/v2/players/{player_id}/avatar",
+    "/api/players/{player_id}/behavior-brief": "/api/v2/players/{player_id}/behavior-brief",
     "/api/players/{player_id}/career": "/api/v2/players/{player_id}/career",
     "/api/players/{player_id}/career-events": "/api/v2/players/{player_id}/career-events",
     "/api/players/{player_id}/career/summary": "/api/v2/players/{player_id}/career/summary",
@@ -23379,6 +23475,7 @@
     "/api/players/{player_id}/injuries/{injury_id}/recover": "/api/v2/players/{player_id}/injuries/{injury_id}/recover",
     "/api/players/{player_id}/interviews": "/api/v2/players/{player_id}/interviews",
     "/api/players/{player_id}/lifecycle-snapshot": "/api/v2/players/{player_id}/lifecycle-snapshot",
+    "/api/players/{player_id}/living-star": "/api/v2/players/{player_id}/living-star",
     "/api/players/{player_id}/overview": "/api/v2/players/{player_id}/overview",
     "/api/players/{player_id}/personality": "/api/v2/players/{player_id}/personality",
     "/api/players/{player_id}/regen": "/api/v2/players/{player_id}/regen",
@@ -23418,6 +23515,7 @@
     "/api/profile": "/api/v2/profile",
     "/api/profile/security": "/api/v2/profile/security",
     "/api/profile/sessions": "/api/v2/profile/sessions",
+    "/api/public/live-stats": "/api/v2/public/live-stats",
     "/api/pundits/matches/{match_key}": "/api/v2/pundits/matches/{match_key}",
     "/api/rankings/clubs": "/api/v2/rankings/clubs",
     "/api/rankings/global": "/api/v2/rankings/global",
@@ -23460,6 +23558,7 @@
     "/api/regen-universe/tracking": "/api/v2/regen-universe/tracking",
     "/api/regen-universe/youth-tournaments": "/api/v2/regen-universe/youth-tournaments",
     "/api/regen-universe/youth-tournaments/{tournament_id}": "/api/v2/regen-universe/youth-tournaments/{tournament_id}",
+    "/api/regen/contract-offers/inbox": "/api/v2/regen/contract-offers/inbox",
     "/api/regens/awards": "/api/v2/regens/awards",
     "/api/regens/awards/{award_id}/vote": "/api/v2/regens/awards/{award_id}/vote",
     "/api/regens/creation-orders": "/api/v2/regens/creation-orders",
@@ -24048,6 +24147,8 @@
     "/api/v1/clubs/catalog": "/api/v2/clubs/catalog",
     "/api/v1/clubs/catalog/purchase": "/api/v2/clubs/catalog/purchase",
     "/api/v1/clubs/marketplace": "/api/v2/clubs/marketplace",
+    "/api/v1/clubs/owned": "/api/v2/clubs/owned",
+    "/api/v1/clubs/owned/{club_id}/activate": "/api/v2/clubs/owned/{club_id}/activate",
     "/api/v1/clubs/personal-manager": "/api/v2/clubs/personal-manager",
     "/api/v1/clubs/personal-manager/me": "/api/v2/clubs/personal-manager/me",
     "/api/v1/clubs/sale-market/listings": "/api/v2/clubs/sale-market/listings",
@@ -24711,9 +24812,11 @@
     "/api/v1/players/{player_id}": "/api/v2/players/{player_id}",
     "/api/v1/players/{player_id}/agency": "/api/v2/players/{player_id}/agency",
     "/api/v1/players/{player_id}/agency/contract-decision": "/api/v2/players/{player_id}/agency/contract-decision",
+    "/api/v1/players/{player_id}/agency/exit-petition": "/api/v2/players/{player_id}/agency/exit-petition",
     "/api/v1/players/{player_id}/agency/transfer-decision": "/api/v2/players/{player_id}/agency/transfer-decision",
     "/api/v1/players/{player_id}/availability": "/api/v2/players/{player_id}/availability",
     "/api/v1/players/{player_id}/avatar": "/api/v2/players/{player_id}/avatar",
+    "/api/v1/players/{player_id}/behavior-brief": "/api/v2/players/{player_id}/behavior-brief",
     "/api/v1/players/{player_id}/career": "/api/v2/players/{player_id}/career",
     "/api/v1/players/{player_id}/career-events": "/api/v2/players/{player_id}/career-events",
     "/api/v1/players/{player_id}/career/summary": "/api/v2/players/{player_id}/career/summary",
@@ -24727,6 +24830,7 @@
     "/api/v1/players/{player_id}/injuries/{injury_id}/recover": "/api/v2/players/{player_id}/injuries/{injury_id}/recover",
     "/api/v1/players/{player_id}/interviews": "/api/v2/players/{player_id}/interviews",
     "/api/v1/players/{player_id}/lifecycle-snapshot": "/api/v2/players/{player_id}/lifecycle-snapshot",
+    "/api/v1/players/{player_id}/living-star": "/api/v2/players/{player_id}/living-star",
     "/api/v1/players/{player_id}/overview": "/api/v2/players/{player_id}/overview",
     "/api/v1/players/{player_id}/personality": "/api/v2/players/{player_id}/personality",
     "/api/v1/players/{player_id}/regen": "/api/v2/players/{player_id}/regen",
@@ -24766,6 +24870,7 @@
     "/api/v1/profile": "/api/v2/profile",
     "/api/v1/profile/security": "/api/v2/profile/security",
     "/api/v1/profile/sessions": "/api/v2/profile/sessions",
+    "/api/v1/public/live-stats": "/api/v2/public/live-stats",
     "/api/v1/pundits/matches/{match_key}": "/api/v2/pundits/matches/{match_key}",
     "/api/v1/rankings/clubs": "/api/v2/rankings/clubs",
     "/api/v1/rankings/global": "/api/v2/rankings/global",
@@ -24808,6 +24913,7 @@
     "/api/v1/regen-universe/tracking": "/api/v2/regen-universe/tracking",
     "/api/v1/regen-universe/youth-tournaments": "/api/v2/regen-universe/youth-tournaments",
     "/api/v1/regen-universe/youth-tournaments/{tournament_id}": "/api/v2/regen-universe/youth-tournaments/{tournament_id}",
+    "/api/v1/regen/contract-offers/inbox": "/api/v2/regen/contract-offers/inbox",
     "/api/v1/regens/awards": "/api/v2/regens/awards",
     "/api/v1/regens/awards/{award_id}/vote": "/api/v2/regens/awards/{award_id}/vote",
     "/api/v1/regens/creation-orders": "/api/v2/regens/creation-orders",
@@ -25231,6 +25337,7 @@
     "/api/v2/calendar-engine/seasons": "/api/v2/calendar-engine/seasons",
     "/api/v2/club/current": "/api/v2/club/current",
     "/api/v2/clubs": "/api/v2/clubs",
+    "/api/v2/clubs/owned": "/api/v2/clubs/owned",
     "/api/v2/clubs/sale-market/listings": "/api/v2/clubs/sale-market/listings",
     "/api/v2/coin-traders": "/api/v2/coin-traders",
     "/api/v2/coin-traders/apply": "/api/v2/coin-traders/apply",
@@ -25318,6 +25425,8 @@
     "/api/v2/notifications/read-all": "/api/v2/notifications/read-all",
     "/api/v2/notifications/subscriptions": "/api/v2/notifications/subscriptions",
     "/api/v2/orders": "/api/v2/orders",
+    "/api/v2/ownership-groups": "/api/v2/ownership-groups",
+    "/api/v2/player-cards/watchlist": "/api/v2/player-cards/watchlist",
     "/api/v2/portfolio/clubs": "/api/v2/portfolio/clubs",
     "/api/v2/profile": "/api/v2/profile",
     "/api/v2/profile/security": "/api/v2/profile/security",
@@ -25327,6 +25436,7 @@
     "/api/v2/referrals/me/summary": "/api/v2/referrals/me/summary",
     "/api/v2/referrals/share-codes": "/api/v2/referrals/share-codes",
     "/api/v2/referrals/share-codes/me": "/api/v2/referrals/share-codes/me",
+    "/api/v2/regen/contract-offers/inbox": "/api/v2/regen/contract-offers/inbox",
     "/api/v2/search": "/api/v2/search",
     "/api/v2/session/bootstrap": "/api/v2/session/bootstrap",
     "/api/v2/simulation-matchmaking/fast-match/entitlement": "/api/v2/simulation-matchmaking/fast-match/entitlement",
@@ -25996,6 +26106,7 @@
     "/portfolios/me": "/api/v2/portfolios/me",
     "/predictions": "/api/v2/predictions",
     "/predictions/leaderboard": "/api/v2/predictions/leaderboard",
+    "/public/live-stats": "/api/v2/public/live-stats",
     "/rankings/clubs": "/api/v2/rankings/clubs",
     "/rankings/global": "/api/v2/rankings/global",
     "/rankings/players": "/api/v2/rankings/players",

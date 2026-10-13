@@ -12,7 +12,6 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 import app.models.legendary_player  # noqa: F401
 
 if TYPE_CHECKING:
-
     from app.models.legendary_player import LegendaryPlayerProfile
     from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
 
@@ -397,6 +396,8 @@ class Player(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_ingestion_players_is_real_player", "is_real_player"),
         Index("ix_ingestion_players_canonical_display_name", "canonical_display_name"),
         Index("ix_ingestion_players_legendary_profile_id", "legendary_profile_id"),
+        # National-team pools filter normal players through this foreign key.
+        Index("ix_ingestion_players_country_id", "country_id"),
     )
 
     legendary_profile_id: Mapped[str | None] = mapped_column(

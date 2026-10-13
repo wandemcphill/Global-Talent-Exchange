@@ -2,6 +2,7 @@ import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_authed_api.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 
+import '../models/gtex_regen_living_star.dart';
 import '../models/gtex_regen_wire_models.dart';
 
 /// Thrown when a regen has no dossier on the backend.
@@ -141,6 +142,82 @@ class GtexRegenWorldApi {
       body: draft.toJson(),
     );
     return RegenLifecycleState.fromJson(payload);
+  }
+
+  /// Open RegenContractOffer rows for clubs the signed-in owner controls.
+  Future<List<Map<String, Object?>>> listContractOfferInbox() async {
+    final List<dynamic> payload = await client.getList(
+      '/api/regen/contract-offers/inbox',
+    );
+    return payload
+        .whereType<Map>()
+        .map((Map item) => Map<String, Object?>.from(item))
+        .toList(growable: false);
+  }
+
+  /// Resolve the preferred regen bid for [playerId] in the active window.
+  Future<void> resolveRegenBid(String playerId) async {
+    final List<dynamic> windows = await client.getList(
+      '/api/transfers/windows',
+      query: <String, Object?>{'active_on': DateTime.now().toIso8601String().split('T').first},
+    );
+    if (windows.isEmpty) {
+      throw StateError('No active transfer window is open for regen resolution.');
+    }
+    final Map<String, Object?> first = Map<String, Object?>.from(
+      windows.first as Map,
+    );
+    final String windowId =
+        (first['id'] ?? first['window_id'] ?? first['windowId'] ?? '')
+            .toString()
+            .trim();
+    if (windowId.isEmpty) {
+      throw StateError('Active transfer window id was missing.');
+    }
+    await client.post(
+      '/api/transfers/windows/$windowId/players/${playerId.trim()}/resolve-regen-bid',
+    );
+  }
+
+  /// `GET /api/players/{player_id}/living-star` — archetype, voice, mood, exit.
+  Future<GtexRegenLivingStar?> fetchLivingStar(String playerId) async {
+    final String id = playerId.trim();
+    if (id.isEmpty) {
+      return null;
+    }
+    try {
+      final Map<String, dynamic> payload = await client.getMap(
+        '/api/players/$id/living-star',
+        auth: false,
+      );
+      return GtexRegenLivingStar.fromJson(payload);
+    } on GteApiException catch (error) {
+      if (error.type == GteApiErrorType.notFound || error.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  /// `POST /api/players/{player_id}/agency/exit-petition`.
+  Future<GtexRegenLivingStar?> petitionExit(
+    String playerId, {
+    String? reason,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/players/${playerId.trim()}/agency/exit-petition',
+      body: <String, Object?>{
+        if ((reason ?? '').trim().isNotEmpty) 'reason': reason!.trim(),
+      },
+    );
+    final Map<String, Object?> json = GteJson.map(
+      payload,
+      label: 'exit petition',
+    );
+    return GtexRegenLivingStar.fromJson(
+      GteJson.value(json, const <String>['living_star', 'livingStar']) ??
+          payload,
+    );
   }
 
   /// `GET /regen-universe/bloodlines`.

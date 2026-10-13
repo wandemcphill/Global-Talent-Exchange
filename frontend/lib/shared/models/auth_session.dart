@@ -590,7 +590,9 @@ _ResolvedClub? _clubFromMemberships(Map<String, Object?> source) {
     'owned_clubs',
     'ownedClubs',
   ]) {
-    for (final Object? item in _listValue(source[key])) {
+    final List<Object?> items = _listValue(source[key]);
+    _ResolvedClub? fallback;
+    for (final Object? item in items) {
       final Map<String, Object?>? membership = _mapValue(item);
       if (membership == null) {
         continue;
@@ -614,9 +616,21 @@ _ResolvedClub? _clubFromMemberships(Map<String, Object?> source) {
         ),
         _clubFromObject(membership['club']),
       );
-      if (candidate != null) {
+      if (candidate == null) {
+        continue;
+      }
+      final bool isPrimary =
+          membership['is_primary'] == true ||
+          membership['isPrimary'] == true ||
+          membership['is_current'] == true ||
+          membership['isCurrent'] == true;
+      if (isPrimary) {
         return candidate;
       }
+      fallback ??= candidate;
+    }
+    if (fallback != null) {
+      return fallback;
     }
   }
   return null;

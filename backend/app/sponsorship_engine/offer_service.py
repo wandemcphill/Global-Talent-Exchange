@@ -165,6 +165,93 @@ class ClubSponsorOfferService:
             ).all()
         )
 
+    def broadcast_offer_to_top_clubs(
+        self,
+        *,
+        actor: User,
+        offer_id: str,
+        limit: int = 10,
+        min_fan_count: int = 0,
+        require_eligible: bool = True,
+    ) -> dict[str, Any]:
+        """Outbound sales motion: approach top clubs with a sponsorship offer."""
+        offer = self._require_offer(offer_id)
+        clubs = list(
+            self.session.scalars(select(ClubProfile).order_by(ClubProfile.created_at.desc()).limit(200)).all()
+        )
+        ranked: list[tuple[int, ClubProfile, ClubSponsorMetricsSnapshot]] = []
+        for club in clubs:
+            try:
+                metrics = self.evaluate_club_metrics(club.id)
+            except ClubSponsorOfferError:
+                continue
+            if metrics.fan_count < min_fan_count:
+                continue
+            score = (
+                metrics.fan_count * 10
+                + metrics.reputation_score * 5
+                + metrics.media_popularity
+                + metrics.competition_count * 20
+            )
+            ranked.append((score, club, metrics))
+        ranked.sort(key=lambda item: (-item[0], item[1].club_name or ""))
+        offered: list[str] = []
+        skipped: list[str] = []
+        for _score, club, metrics in ranked:
+            if len(offered) >= limit:
+                break
+            if require_eligible and self._evaluate_offer(offer, metrics)["unmet_rules"]:
+                skipped.append(club.id)
+                continue
+            existing = self.session.scalar(
+                select(ClubSponsor).where(
+                    ClubSponsor.club_id == club.id,
+                    ClubSponsor.sponsor_offer_id == offer.id,
+                    ClubSponsor.status.in_(("active", "pending", "offered")),
+                )
+            )
+            if existing is not None:
+                skipped.append(club.id)
+                continue
+            start_at = datetime.now(UTC)
+            sponsor = ClubSponsor(
+                club_id=club.id,
+                sponsor_offer_id=offer.id,
+                contract_id=None,
+                sponsor_name=offer.sponsor_name,
+                category=offer.category,
+                status="offered",
+                contract_value_minor=offer.base_value_minor,
+                currency=offer.currency,
+                duration_months=offer.default_duration_months,
+                start_at=start_at,
+                end_at=start_at + timedelta(days=30 * offer.default_duration_months),
+                approved_surfaces_json=list(offer.approved_surfaces_json or []),
+                creative_url=offer.creative_url,
+                analytics_json={"broadcast_by_user_id": actor.id, "outbound": True},
+                metadata_json={
+                    "offer_code": offer.code,
+                    "offer_name": offer.offer_name,
+                    "status": "offered",
+                    "owner_action": "accept_counter_decline",
+                },
+            )
+            self.session.add(sponsor)
+            offered.append(club.id)
+        self.session.flush()
+        self.analytics.track_event(
+            self.session,
+            name="club_sponsor.broadcast",
+            user_id=actor.id,
+            metadata={"offer_id": offer.id, "offered": len(offered), "skipped": len(skipped)},
+        )
+        return {
+            "offer_id": offer.id,
+            "offered_club_ids": offered,
+            "skipped_club_ids": skipped,
+            "count": len(offered),
+        }
+
     def assign_offer_to_club(self, *, actor: User, offer_id: str, payload) -> ClubSponsor:
         metrics = self.evaluate_club_metrics(payload.club_id)
         offer = self._require_offer(offer_id)
