@@ -469,9 +469,7 @@ class JackpotService(GtexBaseService):
             raise GtexValidationError("Jackpot contribution amount must be greater than zero.")
         lottery_pool = self.wallet_service.ensure_lottery_pool_account(session, LedgerUnit.COIN)
         actor_account = self.wallet_service.get_user_account(session, actor, LedgerUnit.COIN)
-        stable_reference = (
-            f"gtex-jackpot:{resolved_source_type.value}:{normalized_source_id or 'none'}:{actor.id}"
-        )
+        stable_reference = f"gtex-jackpot:{resolved_source_type.value}:{normalized_source_id or 'none'}:{actor.id}"
         try:
             self.wallet_service.append_transaction(
                 session,
@@ -692,9 +690,7 @@ class JackpotService(GtexBaseService):
         trigger_mode: GtexJackpotTriggerMode,
     ) -> GtexJackpotRound:
         locked_round = session.scalar(
-            select(GtexJackpotRound)
-            .where(GtexJackpotRound.id == round_record.id)
-            .with_for_update()
+            select(GtexJackpotRound).where(GtexJackpotRound.id == round_record.id).with_for_update()
         )
         if locked_round is None:
             raise GtexConflictError("Jackpot round was not found.")
@@ -807,9 +803,7 @@ class JackpotService(GtexBaseService):
                         "payout_rank": index,
                         "payout_ratio": str(self._amount(payout["ratio"])),
                         "deep_link_route": (
-                            f"/gtex/jackpot/win"
-                            f"?amount={payout_amount}"
-                            f"&round={round_record.round_number}"
+                            f"/gtex/jackpot/win" f"?amount={payout_amount}" f"&round={round_record.round_number}"
                         ),
                         "route": "/gtex/jackpot",
                     },

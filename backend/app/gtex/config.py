@@ -5,7 +5,6 @@ from decimal import Decimal
 import os
 from typing import Mapping
 
-
 AMOUNT_QUANTUM = Decimal("0.0001")
 
 
@@ -78,7 +77,9 @@ def load_gtex_settings(environ: Mapping[str, str] | None = None) -> GtexSettings
         jackpot_min_drops_per_day=_integer(resolved_environ, "GTEX_JACKPOT_MIN_DROPS_PER_DAY", 3, minimum=0),
         jackpot_active_play_hours=_integer(resolved_environ, "GTEX_JACKPOT_ACTIVE_PLAY_HOURS", 48, minimum=1),
         jackpot_contribution_rate=_fraction(resolved_environ, "GTEX_JACKPOT_CONTRIBUTION_RATE", "0.1000"),
-        jackpot_distribution_mode=(resolved_environ.get("GTEX_JACKPOT_DISTRIBUTION_MODE", "single_winner").strip() or "single_winner"),
+        jackpot_distribution_mode=(
+            resolved_environ.get("GTEX_JACKPOT_DISTRIBUTION_MODE", "single_winner").strip() or "single_winner"
+        ),
         jackpot_top_split_percent=_fraction(resolved_environ, "GTEX_JACKPOT_TOP_SPLIT_PERCENT", "0.1000"),
         jackpot_min_activity_score=_decimal(resolved_environ, "GTEX_JACKPOT_MIN_ACTIVITY_SCORE", "1.0000"),
         creator_default_base_price=_decimal(resolved_environ, "GTEX_CREATOR_DEFAULT_BASE_PRICE", "100.0000"),

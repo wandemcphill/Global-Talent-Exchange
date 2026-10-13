@@ -40,14 +40,24 @@ def list_story_feed(
 def get_story_digest(country_code: str | None = None, session: Session = Depends(get_session)):
     digest = StoryFeedService(session).digest(country_code=country_code)
     return StoryDigestResponse(
-        top_stories=[StoryFeedItemResponse.model_validate(item, from_attributes=True) for item in digest["top_stories"]],
-        country_spotlight=[StoryFeedItemResponse.model_validate(item, from_attributes=True) for item in digest["country_spotlight"]],
-        feature_stories=[StoryFeedItemResponse.model_validate(item, from_attributes=True) for item in digest["feature_stories"]],
+        top_stories=[
+            StoryFeedItemResponse.model_validate(item, from_attributes=True) for item in digest["top_stories"]
+        ],
+        country_spotlight=[
+            StoryFeedItemResponse.model_validate(item, from_attributes=True) for item in digest["country_spotlight"]
+        ],
+        feature_stories=[
+            StoryFeedItemResponse.model_validate(item, from_attributes=True) for item in digest["feature_stories"]
+        ],
     )
 
 
 @admin_router.post("", response_model=StoryFeedItemResponse)
-def publish_story(payload: StoryFeedPublishRequest, session: Session = Depends(get_session), current_admin: User = Depends(get_current_admin)):
+def publish_story(
+    payload: StoryFeedPublishRequest,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+):
     item = StoryFeedService(session).publish(
         story_type=payload.story_type,
         title=payload.title,

@@ -42,9 +42,7 @@ class RegenEndorsementService:
         player = self.session.get(Player, player_id)
         if player is None:
             raise RegenEndorsementError("Player was not found.")
-        ownership = self.session.scalar(
-            select(PlayerOwnership).where(PlayerOwnership.player_id == player_id).limit(1)
-        )
+        ownership = self.session.scalar(select(PlayerOwnership).where(PlayerOwnership.player_id == player_id).limit(1))
         owner_user_id = ownership.agent_user_id if ownership is not None else None
         now = datetime.now(UTC)
         status = RegenEndorsementStatus.ACTIVE if activate else RegenEndorsementStatus.OFFERED
@@ -129,11 +127,7 @@ class RegenEndorsementService:
         }
 
     def _publish_story(self, deal: RegenEndorsementDeal, player: Player) -> None:
-        name = (
-            getattr(player, "canonical_display_name", None)
-            or getattr(player, "full_name", None)
-            or "Regen star"
-        )
+        name = getattr(player, "canonical_display_name", None) or getattr(player, "full_name", None) or "Regen star"
         StoryFeedService(self.session).publish(
             story_type="sponsorship_update",
             title=f"{name} lands {deal.sponsor_name} endorsement",

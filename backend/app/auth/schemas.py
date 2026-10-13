@@ -304,7 +304,6 @@ class TraderSignupRequest(BaseModel):
         return candidate
 
 
-
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

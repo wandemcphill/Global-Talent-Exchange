@@ -349,9 +349,7 @@ class RegenLivingStarService:
                 statement = str(raw)
                 status = "open"
                 broken = False
-            views.append(
-                RegenPromiseMemoryView(key=str(key), statement=statement, status=status, broken=broken)
-            )
+            views.append(RegenPromiseMemoryView(key=str(key), statement=statement, status=status, broken=broken))
         for item in list(state.unmet_expectations_json or [])[:6]:
             if not isinstance(item, dict):
                 continue
@@ -392,7 +390,9 @@ class RegenLivingStarService:
         pressing = min(1.0, 0.4 + personality.competitiveness / 180.0)
         nerves = min(1.0, max(0.0, (1.0 - clutch) * 0.7 + unrest * 0.3))
         celebration = min(1.0, personality.media_appetite / 100.0 * 0.6 + personality.ego / 200.0)
-        captaincy = min(1.0, max(0.0, personality.professionalism / 100.0 * 0.5 + personality.loyalty / 200.0 - unrest * 0.4))
+        captaincy = min(
+            1.0, max(0.0, personality.professionalism / 100.0 * 0.5 + personality.loyalty / 200.0 - unrest * 0.4)
+        )
         shot_greed = min(1.0, personality.ego / 120.0 + personality.greed / 300.0)
         discipline = min(1.0, aggression * 0.55 + (100 - personality.professionalism) / 200.0 + unrest * 0.2)
         notes: list[str] = []

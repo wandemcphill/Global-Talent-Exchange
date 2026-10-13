@@ -10,9 +10,7 @@ from app.services.gtex_news_engine import _flatten_news_payload
 from app.story_feed_engine.service import StoryFeedService
 
 NEWS_ENGINE_SOURCE = "gtex_news_engine"
-PUBLIC_EXIT_STAGES = frozenset(
-    {"formal_request", "training_exile", "termination_petition", "force_sale_window"}
-)
+PUBLIC_EXIT_STAGES = frozenset({"formal_request", "training_exile", "termination_petition", "force_sale_window"})
 
 
 def publish_news_engine_payload(

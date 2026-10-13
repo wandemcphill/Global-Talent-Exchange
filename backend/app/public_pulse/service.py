@@ -13,9 +13,7 @@ from app.models.user import User
 from app.public_pulse.schemas import LiveWorldPulseView
 
 USERS_ONLINE_WINDOW_SECONDS = 300
-_LIVE_MATCH_STATUSES = frozenset(
-    {"live", "in_progress", "playing", "started", "first_half", "second_half", "halftime"}
-)
+_LIVE_MATCH_STATUSES = frozenset({"live", "in_progress", "playing", "started", "first_half", "second_half", "halftime"})
 
 
 @dataclass(slots=True)

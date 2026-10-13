@@ -139,7 +139,9 @@ class AuthService:
         _record_timing(timing_recorder, "auth.normalize_username_ms", username_started_at)
         self._validate_password(password)
 
-        resolved_full_name = (full_name or display_name or normalized_username or normalized_email.split("@", 1)[0]).strip()
+        resolved_full_name = (
+            full_name or display_name or normalized_username or normalized_email.split("@", 1)[0]
+        ).strip()
         if not resolved_full_name:
             raise AuthError("Full name is required.")
         resolved_phone_number = (phone_number or "0000000000").strip()
@@ -443,9 +445,7 @@ class AuthService:
         if session is not None:
             effective_role = AccessControlService(session).bind_user_access_context(user).effective_role
         normalized_permissions = {
-            permission.strip().lower()
-            for permission in permissions
-            if permission and permission.strip()
+            permission.strip().lower() for permission in permissions if permission and permission.strip()
         }
         if effective_role == UserRole.SUPER_ADMIN:
             return PROFILE_GOD_MODE_ROUTE
@@ -741,11 +741,7 @@ class AuthService:
     ) -> CurrentUserResponse:
         updates = payload.model_dump(exclude_unset=True)
         if updates:
-            session.execute(
-                update(USER_PROFILE_TABLE)
-                .where(USER_PROFILE_TABLE.c.id == user.id)
-                .values(**updates)
-            )
+            session.execute(update(USER_PROFILE_TABLE).where(USER_PROFILE_TABLE.c.id == user.id).values(**updates))
             session.flush()
             session.refresh(user)
 
@@ -837,7 +833,9 @@ class AuthService:
             raise AuthError("The email confirmation could not be completed.")
         now = utcnow()
         user.email_verified_at = user.email_verified_at or now
-        self._invalidate_active_email_tokens(session, user=user, purpose=AuthEmailTokenPurpose.SIGNUP_CONFIRMATION, now=now)
+        self._invalidate_active_email_tokens(
+            session, user=user, purpose=AuthEmailTokenPurpose.SIGNUP_CONFIRMATION, now=now
+        )
         token.used_at = now
         session.flush()
         return user
@@ -886,7 +884,9 @@ class AuthService:
             raise AuthError("The account recovery could not be completed.")
         now = utcnow()
         user.password_hash = hash_password(new_password)
-        self._invalidate_active_email_tokens(session, user=user, purpose=AuthEmailTokenPurpose.ACCOUNT_RECOVERY, now=now)
+        self._invalidate_active_email_tokens(
+            session, user=user, purpose=AuthEmailTokenPurpose.ACCOUNT_RECOVERY, now=now
+        )
         token.used_at = now
         session.flush()
         return user

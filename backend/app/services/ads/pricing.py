@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 CPM: dict[str, float] = {
     "goal_highlight": 15.0,
     "highlight": 12.0,

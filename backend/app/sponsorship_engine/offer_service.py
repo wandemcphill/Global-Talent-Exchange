@@ -107,7 +107,12 @@ class ClubSponsorOfferService:
             raise ClubSponsorOfferError("Club was not found.")
 
         supporter_token = self.session.scalar(select(ClubSupporterToken).where(ClubSupporterToken.club_id == club_id))
-        holdings_count = self.session.scalar(select(func.count(ClubSupporterHolding.id)).where(ClubSupporterHolding.club_id == club_id)) or 0
+        holdings_count = (
+            self.session.scalar(
+                select(func.count(ClubSupporterHolding.id)).where(ClubSupporterHolding.club_id == club_id)
+            )
+            or 0
+        )
         fan_count = max(int(getattr(supporter_token, "holder_count", 0) or 0), int(holdings_count))
 
         reputation = self.session.scalar(select(ClubReputationProfile).where(ClubReputationProfile.club_id == club_id))
@@ -116,7 +121,9 @@ class ClubSponsorOfferService:
 
         club_valuation = float(
             self.session.scalar(
-                select(func.coalesce(func.sum(Player.market_value_eur), 0)).where(Player.current_club_profile_id == club_id)
+                select(func.coalesce(func.sum(Player.market_value_eur), 0)).where(
+                    Player.current_club_profile_id == club_id
+                )
             )
             or 0
         )
@@ -129,7 +136,9 @@ class ClubSponsorOfferService:
             ).all()
         )
         media_popularity = sum(int(snapshot.total_views or 0) for snapshot in snapshots)
-        rivalry_visibility = sum(int((snapshot.metadata_json or {}).get("rivalry_visibility", 0) or 0) for snapshot in snapshots)
+        rivalry_visibility = sum(
+            int((snapshot.metadata_json or {}).get("rivalry_visibility", 0) or 0) for snapshot in snapshots
+        )
 
         participants = list(
             self.session.scalars(
@@ -176,9 +185,7 @@ class ClubSponsorOfferService:
     ) -> dict[str, Any]:
         """Outbound sales motion: approach top clubs with a sponsorship offer."""
         offer = self._require_offer(offer_id)
-        clubs = list(
-            self.session.scalars(select(ClubProfile).order_by(ClubProfile.created_at.desc()).limit(200)).all()
-        )
+        clubs = list(self.session.scalars(select(ClubProfile).order_by(ClubProfile.created_at.desc()).limit(200)).all())
         ranked: list[tuple[int, ClubProfile, ClubSponsorMetricsSnapshot]] = []
         for club in clubs:
             try:

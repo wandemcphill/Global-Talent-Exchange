@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 _COUNTRY_BRANDS: dict[str, tuple[str, ...]] = {
     "NG": ("MTN", "BetKing", "Flutterwave"),
     "GB": ("Nike", "Adidas", "EA Sports"),
@@ -56,11 +55,7 @@ def profile_from_input(user: AdTargetingProfile | dict[str, Any] | None) -> AdTa
     return AdTargetingProfile(
         country=str(user.get("country", "GLOBAL") or "GLOBAL"),
         coins=normalized_coins,
-        is_premium_user=bool(
-            user.get("is_premium_user")
-            or user.get("premium_ad_free")
-            or user.get("premium")
-        ),
+        is_premium_user=bool(user.get("is_premium_user") or user.get("premium_ad_free") or user.get("premium")),
         favorite_clubs=_as_tuple(user.get("favorite_clubs")),
         interests=_as_tuple(user.get("interests")),
     )
