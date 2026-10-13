@@ -24,6 +24,18 @@ enum GtexMarketDiscoveryLane {
   watched,
 }
 
+/// Strip order prefers All + Most watched before the movement lanes so the
+/// ranked watch lane stays on-stage on narrow desks without growing the
+/// discovery chrome into a multi-row Wrap.
+const List<GtexMarketDiscoveryLane> _discoveryLaneStripOrder =
+    <GtexMarketDiscoveryLane>[
+      GtexMarketDiscoveryLane.all,
+      GtexMarketDiscoveryLane.watched,
+      GtexMarketDiscoveryLane.opportunities,
+      GtexMarketDiscoveryLane.rising,
+      GtexMarketDiscoveryLane.falling,
+    ];
+
 extension GtexMarketDiscoveryLaneLabel on GtexMarketDiscoveryLane {
   String get label => switch (this) {
     GtexMarketDiscoveryLane.all => 'All listings',
@@ -118,11 +130,17 @@ class GtexMarketPlayerGrid extends StatefulWidget {
     required this.onBuyNow,
     this.ownedPlayerIds = const <String>{},
     this.header,
+    this.compactDiscovery = false,
   });
 
   /// Optional content rendered above the listing board - the market movers
   /// rail lives here.
   final Widget? header;
+
+  /// When true, discovery chrome stays a single 40px row so browse cards
+  /// remain on-stage inside short shell panes. Prefer the wrapping strip
+  /// (default) whenever the board has vertical room for it.
+  final bool compactDiscovery;
 
   final List<GtexMarketPlayerView> players;
   final int totalPlayers;
@@ -214,70 +232,12 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
               GtexSpacing.md,
               GtexSpacing.sm,
             ),
-            // One horizontal strip keeps discovery chrome from wrapping into
-            // multiple rows that push the first browse card off-stage inside
-            // the shell's short board pane.
             sliver: SliverToBoxAdapter(
-              child: SizedBox(
-                height: 40,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: <Widget>[
-                    GtexStatusChip(
-                      label: _loadedCountLabel(players.length, totalPlayers),
-                      icon: Icons.groups_outlined,
-                    ),
-                    const SizedBox(width: GtexSpacing.sm),
-                    if (totalPlayers > players.length) ...<Widget>[
-                      GtexStatusChip(
-                        label:
-                            '${_formatCount(totalPlayers)} matching listings',
-                        icon: Icons.public_outlined,
-                        color: GtexColors.pitch,
-                      ),
-                      const SizedBox(width: GtexSpacing.sm),
-                    ],
-                    if (basketState.items.isNotEmpty) ...<Widget>[
-                      GtexStatusChip(
-                        label: '${basketState.items.length} shortlisted',
-                        icon: Icons.shopping_basket_outlined,
-                        color: GtexColors.gold,
-                      ),
-                      const SizedBox(width: GtexSpacing.sm),
-                    ],
-                    for (final GtexMarketDiscoveryLane lane
-                        in GtexMarketDiscoveryLane.values) ...<Widget>[
-                      _DiscoveryLaneChip(
-                        lane: lane,
-                        count:
-                            lane == GtexMarketDiscoveryLane.all
-                                ? players.length
-                                : players
-                                    .where(
-                                      (GtexMarketPlayerView player) =>
-                                          lane.matches(player),
-                                    )
-                                    .length,
-                        isSelected: _lane == lane,
-                        onSelected: () => setState(() => _lane = lane),
-                      ),
-                      const SizedBox(width: GtexSpacing.sm),
-                    ],
-                    _SortMenu(
-                      sort: _sort,
-                      onSelected: (GtexMarketSort value) =>
-                          setState(() => _sort = value),
-                    ),
-                    if (error != null) ...<Widget>[
-                      const SizedBox(width: GtexSpacing.sm),
-                      GtexStatusChip(
-                        label: 'Last good snapshot',
-                        icon: Icons.sync_problem_outlined,
-                        color: GtexColors.red,
-                      ),
-                    ],
-                  ],
-                ),
+              child: _buildDiscoveryChrome(
+                players: players,
+                totalPlayers: totalPlayers,
+                basketState: basketState,
+                error: error,
               ),
             ),
           ),
@@ -431,6 +391,100 @@ class _GtexMarketPlayerGridState extends State<GtexMarketPlayerGrid> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiscoveryChrome({
+    required List<GtexMarketPlayerView> players,
+    required int totalPlayers,
+    required GtexMarketBasketState basketState,
+    required String? error,
+  }) {
+    final List<Widget> laneChips = <Widget>[
+      for (final GtexMarketDiscoveryLane lane in _discoveryLaneStripOrder)
+        _DiscoveryLaneChip(
+          lane: lane,
+          count:
+              lane == GtexMarketDiscoveryLane.all
+                  ? players.length
+                  : players
+                      .where(
+                        (GtexMarketPlayerView player) => lane.matches(player),
+                      )
+                      .length,
+          isSelected: _lane == lane,
+          onSelected: () => setState(() => _lane = lane),
+        ),
+    ];
+    final List<Widget> statusChips = <Widget>[
+      GtexStatusChip(
+        label: _loadedCountLabel(players.length, totalPlayers),
+        icon: Icons.groups_outlined,
+      ),
+      if (totalPlayers > players.length)
+        GtexStatusChip(
+          label: '${_formatCount(totalPlayers)} matching listings',
+          icon: Icons.public_outlined,
+          color: GtexColors.pitch,
+        ),
+      if (basketState.items.isNotEmpty)
+        GtexStatusChip(
+          label: '${basketState.items.length} shortlisted',
+          icon: Icons.shopping_basket_outlined,
+          color: GtexColors.gold,
+        ),
+      if (error != null)
+        GtexStatusChip(
+          label: 'Last good snapshot',
+          icon: Icons.sync_problem_outlined,
+          color: GtexColors.red,
+        ),
+    ];
+    final Widget sortMenu = _SortMenu(
+      sort: _sort,
+      onSelected: (GtexMarketSort value) => setState(() => _sort = value),
+    );
+
+    if (!widget.compactDiscovery) {
+      return Wrap(
+        spacing: GtexSpacing.sm,
+        runSpacing: GtexSpacing.xs,
+        children: <Widget>[...laneChips, ...statusChips, sortMenu],
+      );
+    }
+
+    // One horizontal strip keeps discovery chrome from wrapping into multiple
+    // rows that push the first browse card off-stage inside the shell's short
+    // board pane. Sort stays pinned so it remains tappable; lanes lead the
+    // scroll so All + Most watched stay reachable on narrow desks.
+    return SizedBox(
+      height: 40,
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: <Widget>[
+                  for (final Widget chip in laneChips) ...<Widget>[
+                    chip,
+                    const SizedBox(width: GtexSpacing.sm),
+                  ],
+                  for (int index = 0; index < statusChips.length; index += 1) ...<
+                    Widget
+                  >[
+                    if (index > 0 || laneChips.isNotEmpty)
+                      const SizedBox(width: GtexSpacing.sm),
+                    statusChips[index],
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: GtexSpacing.sm),
+          sortMenu,
         ],
       ),
     );

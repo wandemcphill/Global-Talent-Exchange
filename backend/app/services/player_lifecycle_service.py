@@ -1348,9 +1348,7 @@ class PlayerLifecycleService:
             try:
                 player = self._require_player(regen.player_id)
                 player_name = str(
-                    getattr(player, "display_name", None)
-                    or getattr(player, "name", None)
-                    or regen.player_id
+                    getattr(player, "display_name", None) or getattr(player, "name", None) or regen.player_id
                 )
             except PlayerLifecycleNotFoundError:
                 player_name = regen.player_id
@@ -1685,9 +1683,7 @@ class PlayerLifecycleService:
         offered_salary: Decimal | None = payload.wage_offer_amount
         if club_bound_contract is not None:
             if selling_club_id is not None and selling_club_id != club_bound_contract.club_id:
-                raise PlayerLifecycleValidationError(
-                    "Selling club must match the player's current club contract"
-                )
+                raise PlayerLifecycleValidationError("Selling club must match the player's current club contract")
             selling_club_id = club_bound_contract.club_id
         elif selling_club_id is not None:
             raise PlayerLifecycleValidationError("Selling club cannot be set when the player has no active contract")

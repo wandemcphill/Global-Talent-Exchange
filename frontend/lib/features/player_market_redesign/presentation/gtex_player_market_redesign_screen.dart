@@ -338,6 +338,10 @@ class _GtexPlayerMarketRedesignScreenState
                             onOpenPlayer: widget.onOpenPlayer,
                           )
                           : null,
+                      // Same height gate as the command pulse: when the board
+                      // is too short for pulse chrome, a multi-row Wrap would
+                      // also push browse cards off-stage.
+                      compactDiscovery: !showCommandPulse,
                       players: players,
                       ownedPlayerIds: ownedPlayerIds,
                       totalPlayers: widget.controller.marketTotalPlayerCount,
