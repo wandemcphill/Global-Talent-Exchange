@@ -16,6 +16,15 @@ class StoryFeedPublishRequest(BaseModel):
     country_code: str | None = Field(default=None, max_length=8)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
     featured: bool = False
+    scheduled_for: datetime | None = None
+
+
+class StoryFeedScheduleRequest(BaseModel):
+    scheduled_for: datetime
+
+
+class StoryFeedRejectRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class StoryFeedItemResponse(BaseModel):
@@ -29,6 +38,8 @@ class StoryFeedItemResponse(BaseModel):
     country_code: str | None
     metadata_json: dict[str, Any]
     featured: bool
+    moderation_status: str
+    scheduled_for: datetime | None
     created_at: datetime
     updated_at: datetime
 

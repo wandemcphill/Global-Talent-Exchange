@@ -13,6 +13,8 @@ class StoryFeedItem {
     required this.featured,
     required this.createdAt,
     required this.metadata,
+    this.moderationStatus = 'published',
+    this.scheduledFor,
   });
 
   final String id;
@@ -26,6 +28,8 @@ class StoryFeedItem {
   final bool featured;
   final DateTime createdAt;
   final Map<String, Object?> metadata;
+  final String moderationStatus;
+  final DateTime? scheduledFor;
 
   factory StoryFeedItem.fromJson(Object? value) {
     final Map<String, Object?> json =
@@ -48,6 +52,15 @@ class StoryFeedItem {
       metadata: GteJson.map(
           json, keys: <String>['metadata_json', 'metadataJson', 'metadata'],
           fallback: const <String, Object?>{}),
+      moderationStatus: GteJson.string(
+        json,
+        <String>['moderation_status', 'moderationStatus'],
+        fallback: 'published',
+      ),
+      scheduledFor: GteJson.dateTimeOrNull(
+        json,
+        <String>['scheduled_for', 'scheduledFor'],
+      ),
     );
   }
 }

@@ -176,6 +176,30 @@ def _normalized_secret_baseline(path: Path) -> object:
     return payload
 
 
+def _secret_result_fingerprint(path: Path) -> list[tuple[str, str, str]]:
+    """Stable identity of baseline secrets, ignoring line numbers and plugin metadata."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    results = payload.get("results") if isinstance(payload, dict) else {}
+    if not isinstance(results, dict):
+        return []
+    fingerprints: list[tuple[str, str, str]] = []
+    for filename, secrets in results.items():
+        norm_filename = str(filename).replace("\\", "/")
+        if not isinstance(secrets, list):
+            continue
+        for secret in secrets:
+            if not isinstance(secret, dict):
+                continue
+            fingerprints.append(
+                (
+                    norm_filename,
+                    str(secret.get("type") or ""),
+                    str(secret.get("hashed_secret") or ""),
+                )
+            )
+    return sorted(fingerprints)
+
+
 def run_secret_check(command: list[str], files: list[str]) -> None:
     if not files:
         print("[quality] Skipping Secret scan: no matching files changed.")
@@ -186,24 +210,28 @@ def run_secret_check(command: list[str], files: list[str]) -> None:
     print(f"[quality] $ {shlex.join(full_command)}")
 
     baseline_before = None
+    baseline_before_fingerprint = None
     baseline_bytes = None
     if SECRET_BASELINE_PATH.is_file():
         baseline_bytes = SECRET_BASELINE_PATH.read_bytes()
         baseline_before = _normalized_secret_baseline(SECRET_BASELINE_PATH)
+        baseline_before_fingerprint = _secret_result_fingerprint(SECRET_BASELINE_PATH)
 
     result = subprocess.run(full_command, cwd=REPO_ROOT, check=False)
     if result.returncode == 0:
         return
 
-    if (
-        result.returncode == 3
-        and baseline_before is not None
-        and SECRET_BASELINE_PATH.is_file()
-        and _normalized_secret_baseline(SECRET_BASELINE_PATH) == baseline_before
-    ):
-        SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
-        print("[quality] Secret baseline changed only by generated_at; restored original baseline.")
-        return
+    if result.returncode == 3 and baseline_before is not None and SECRET_BASELINE_PATH.is_file():
+        baseline_after = _normalized_secret_baseline(SECRET_BASELINE_PATH)
+        if baseline_after == baseline_before:
+            SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
+            print("[quality] Secret baseline changed only by generated_at; restored original baseline.")
+            return
+        baseline_after_fingerprint = _secret_result_fingerprint(SECRET_BASELINE_PATH)
+        if baseline_after_fingerprint == baseline_before_fingerprint:
+            SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
+            print("[quality] Secret baseline changed only by metadata/line numbers; restored original baseline.")
+            return
 
     raise subprocess.CalledProcessError(result.returncode, full_command)
 

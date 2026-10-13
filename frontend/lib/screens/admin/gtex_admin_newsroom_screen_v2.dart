@@ -52,7 +52,7 @@ class _GtexAdminNewsroomScreenV2State extends State<GtexAdminNewsroomScreenV2> {
   Future<List<_NewsroomStory>> _load() async {
     final StoryFeedApi? api = widget.api;
     if (api != null) {
-      final List<StoryFeedItem> items = await api.listFeed(limit: 100);
+      final List<StoryFeedItem> items = await api.listAdminFeed(limit: 100);
       return items.map(_NewsroomStory.fromFeedItem).toList(growable: false);
     }
     if (widget.queue.isNotEmpty) {
@@ -135,6 +135,149 @@ class _GtexAdminNewsroomScreenV2State extends State<GtexAdminNewsroomScreenV2> {
     }
   }
 
+  Future<void> _scheduleSelected(_NewsroomStory item) async {
+    final StoryFeedApi? api = widget.api;
+    if (api == null) {
+      setState(
+        () =>
+            _publishError =
+                'Scheduling requires an authenticated admin story-feed client.',
+      );
+      return;
+    }
+    final DateTime now = DateTime.now();
+    final DateTime initial = now.add(const Duration(hours: 1));
+    final DateTime? date = await showDatePicker(
+      context: context,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      initialDate: initial,
+    );
+    if (date == null || !mounted) {
+      return;
+    }
+    final TimeOfDay? time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null || !mounted) {
+      return;
+    }
+    final DateTime scheduledFor = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    setState(() {
+      _publishing = true;
+      _publishError = null;
+      _publishMessage = null;
+    });
+    try {
+      final StoryFeedItem updated = await api.scheduleStory(
+        storyId: item.id,
+        scheduledFor: scheduledFor,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _publishMessage =
+            'Scheduled “${updated.title}” for ${scheduledFor.toLocal()}.';
+        _selected = _NewsroomStory.fromFeedItem(updated);
+        _future = _load();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _publishError = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _publishing = false);
+      }
+    }
+  }
+
+  Future<void> _rejectSelected(_NewsroomStory item) async {
+    final StoryFeedApi? api = widget.api;
+    if (api == null) {
+      setState(
+        () =>
+            _publishError =
+                'Rejecting requires an authenticated admin story-feed client.',
+      );
+      return;
+    }
+    final TextEditingController reasonController = TextEditingController();
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: GtexColors.surfaceRaised,
+          title: const Text(
+            'Reject story',
+            style: TextStyle(color: GtexColors.textPrimary),
+          ),
+          content: TextField(
+            controller: reasonController,
+            maxLines: 3,
+            style: const TextStyle(color: GtexColors.textPrimary),
+            decoration: const InputDecoration(
+              hintText: 'Optional rejection reason',
+              hintStyle: TextStyle(color: GtexColors.textSecondary),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Reject'),
+            ),
+          ],
+        );
+      },
+    );
+    final String reason = reasonController.text.trim();
+    reasonController.dispose();
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() {
+      _publishing = true;
+      _publishError = null;
+      _publishMessage = null;
+    });
+    try {
+      final StoryFeedItem updated = await api.rejectStory(
+        storyId: item.id,
+        reason: reason.isEmpty ? null : reason,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _publishMessage = 'Rejected “${updated.title}”.';
+        _selected = _NewsroomStory.fromFeedItem(updated);
+        _future = _load();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _publishError = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _publishing = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget body = FutureBuilder<List<_NewsroomStory>>(
@@ -194,7 +337,7 @@ class _GtexAdminNewsroomScreenV2State extends State<GtexAdminNewsroomScreenV2> {
             rightPanel: const GtexPanel(
               title: 'Publish controls',
               subtitle:
-                  'Approve & publish posts the announcement composer to the audited admin story-feed endpoint. Schedule / reject moderation endpoints are not mounted yet.',
+                  'Approve & publish posts the announcement composer to the audited admin story-feed endpoint. Select a story to schedule or reject it.',
               accent: GtexColors.gold,
               child: Wrap(
                 spacing: GtexSpacing.xs,
@@ -202,11 +345,11 @@ class _GtexAdminNewsroomScreenV2State extends State<GtexAdminNewsroomScreenV2> {
                 children: <Widget>[
                   GtexStatusChip(label: 'PUBLISH LIVE', color: GtexColors.pitch),
                   GtexStatusChip(
-                    label: 'SCHEDULE LOCKED',
+                    label: 'SCHEDULE LIVE',
                     color: GtexColors.cyan,
                   ),
                   GtexStatusChip(
-                    label: 'REJECT LOCKED',
+                    label: 'REJECT LIVE',
                     color: GtexColors.red,
                   ),
                 ],
@@ -243,8 +386,16 @@ class _GtexAdminNewsroomScreenV2State extends State<GtexAdminNewsroomScreenV2> {
           rightPanel: _AdminPublishControls(
             item: selected,
             publishing: _publishing,
-            canPublish: widget.api != null,
+            canModerate: widget.api != null,
+            message: _publishMessage,
+            error: _publishError,
             onPublishAnnouncement: widget.api == null ? null : _publishAnnouncement,
+            onSchedule: widget.api == null
+                ? null
+                : () => _scheduleSelected(selected),
+            onReject: widget.api == null
+                ? null
+                : () => _rejectSelected(selected),
             onRefresh: _reload,
           ),
         );
@@ -282,11 +433,18 @@ class _NewsroomStory {
   final String? riskLabel;
 
   factory _NewsroomStory.fromFeedItem(StoryFeedItem item) {
+    final String status = switch (item.moderationStatus.toLowerCase()) {
+      'scheduled' => item.scheduledFor == null
+          ? 'Scheduled'
+          : 'Scheduled ${item.scheduledFor!.toLocal()}',
+      'rejected' => 'Rejected',
+      _ => item.featured ? 'Featured' : 'Published',
+    };
     return _NewsroomStory(
       id: item.id,
       title: item.title,
       body: item.body,
-      status: item.featured ? 'Featured' : 'Published',
+      status: status,
       category: _categoryFromStoryType(item.storyType),
       updatedAt: item.createdAt,
       audience: item.audience,
@@ -499,16 +657,24 @@ class _AdminPublishControls extends StatelessWidget {
   const _AdminPublishControls({
     required this.item,
     required this.publishing,
-    required this.canPublish,
+    required this.canModerate,
     required this.onPublishAnnouncement,
+    required this.onSchedule,
+    required this.onReject,
     required this.onRefresh,
+    this.message,
+    this.error,
   });
 
   final _NewsroomStory item;
   final bool publishing;
-  final bool canPublish;
+  final bool canModerate;
   final VoidCallback? onPublishAnnouncement;
+  final VoidCallback? onSchedule;
+  final VoidCallback? onReject;
   final VoidCallback onRefresh;
+  final String? message;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
@@ -518,32 +684,46 @@ class _AdminPublishControls extends StatelessWidget {
         GtexPanel(
           title: 'Publish controls',
           subtitle:
-              canPublish
-                  ? 'Compose an announcement and publish it live. Per-story schedule/reject moderation APIs are not mounted yet, so those actions stay disabled.'
+              canModerate
+                  ? 'Compose an announcement, or schedule / reject the selected story through the admin story-feed moderation endpoints.'
                   : 'Publishing stays locked until an authenticated admin story-feed client is supplied.',
           accent: newsCategoryColor(item.category),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              if (message != null) ...<Widget>[
+                Text(
+                  message!,
+                  style: const TextStyle(color: GtexColors.pitch, height: 1.4),
+                ),
+                const SizedBox(height: GtexSpacing.sm),
+              ],
+              if (error != null) ...<Widget>[
+                Text(
+                  error!,
+                  style: const TextStyle(color: GtexColors.red, height: 1.4),
+                ),
+                const SizedBox(height: GtexSpacing.sm),
+              ],
               GtexActionButton(
-                label: publishing ? 'Publishing…' : 'Approve & publish',
+                label: publishing ? 'Working…' : 'Approve & publish',
                 icon: Icons.publish_outlined,
                 onPressed: publishing ? null : onPublishAnnouncement,
                 accent: GtexColors.pitch,
               ),
               const SizedBox(height: GtexSpacing.sm),
-              const GtexActionButton(
+              GtexActionButton(
                 label: 'Schedule',
                 icon: Icons.schedule_outlined,
-                onPressed: null,
+                onPressed: publishing ? null : onSchedule,
                 accent: GtexColors.cyan,
                 secondary: true,
               ),
               const SizedBox(height: GtexSpacing.sm),
-              const GtexActionButton(
+              GtexActionButton(
                 label: 'Reject story',
                 icon: Icons.block_outlined,
-                onPressed: null,
+                onPressed: publishing ? null : onReject,
                 accent: GtexColors.red,
                 secondary: true,
               ),

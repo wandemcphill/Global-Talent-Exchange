@@ -13,6 +13,10 @@ void main() {
         ),
         GteTransportResponse(
           statusCode: 200,
+          body: <Object?>[_storyJson('story-1')],
+        ),
+        GteTransportResponse(
+          statusCode: 200,
           body: <String, Object?>{
             'top_stories': <Object?>[_storyJson('story-1')],
             'country_spotlight': const <Object?>[],
@@ -20,6 +24,14 @@ void main() {
           },
         ),
         GteTransportResponse(statusCode: 200, body: _storyJson('story-2')),
+        GteTransportResponse(
+          statusCode: 200,
+          body: _storyJson('story-1', moderationStatus: 'scheduled'),
+        ),
+        GteTransportResponse(
+          statusCode: 200,
+          body: _storyJson('story-1', moderationStatus: 'rejected'),
+        ),
       ],
     );
     final StoryFeedApi api = StoryFeedApi.standard(
@@ -30,6 +42,7 @@ void main() {
     );
 
     await api.listFeed(limit: 25);
+    await api.listAdminFeed(limit: 100);
     await api.fetchDigest();
     await api.publishStory(
       storyType: 'featured_update',
@@ -38,13 +51,21 @@ void main() {
       countryCode: 'NG',
       featured: true,
     );
+    await api.scheduleStory(
+      storyId: 'story-1',
+      scheduledFor: DateTime.parse('2026-10-14T18:00:00Z'),
+    );
+    await api.rejectStory(storyId: 'story-1', reason: 'Tone mismatch');
 
     expect(
       transport.requests.map((GteTransportRequest request) => request.uri.path),
       <String>[
         '/api/v2/story-feed',
+        '/api/v2/admin/story-feed',
         '/api/v2/story-feed/digest',
         '/api/v2/admin/story-feed',
+        '/api/v2/admin/story-feed/story-1/schedule',
+        '/api/v2/admin/story-feed/story-1/reject',
       ],
     );
     expect(transport.requests.first.uri.queryParameters['limit'], '25');
@@ -64,16 +85,23 @@ class _RecordingTransport implements GteTransport {
   }
 }
 
-Map<String, Object?> _storyJson(String id) => <String, Object?>{
-  'id': id,
-  'story_type': 'announcement',
-  'title': 'Matchday watchlist opens',
-  'body': 'Tonight\'s matchday feed is now live with cinematic loops.',
-  'audience': 'all',
-  'subject_type': 'club_sale_transfer',
-  'subject_id': 'club_transfer_demo',
-  'country_code': 'NG',
-  'featured': true,
-  'created_at': '2026-03-12T08:00:00Z',
-  'metadata_json': const <String, Object?>{},
-};
+Map<String, Object?> _storyJson(
+  String id, {
+  String moderationStatus = 'published',
+}) =>
+    <String, Object?>{
+      'id': id,
+      'story_type': 'announcement',
+      'title': 'Matchday watchlist opens',
+      'body': 'Tonight\'s matchday feed is now live with cinematic loops.',
+      'audience': 'all',
+      'subject_type': 'club_sale_transfer',
+      'subject_id': 'club_transfer_demo',
+      'country_code': 'NG',
+      'featured': true,
+      'moderation_status': moderationStatus,
+      'scheduled_for': null,
+      'created_at': '2026-03-12T08:00:00Z',
+      'updated_at': '2026-03-12T08:00:00Z',
+      'metadata_json': const <String, Object?>{},
+    };
