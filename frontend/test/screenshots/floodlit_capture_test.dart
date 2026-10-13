@@ -14,6 +14,7 @@ import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
 import 'package:gte_frontend/features/home/data/gtex_story_feed_ticker_provider.dart';
 import 'package:gte_frontend/features/home/home_screen.dart';
+import 'package:gte_frontend/features/onboarding_redesign/gtex_public_landing_screen_v2.dart';
 import 'package:gte_frontend/models/story_feed_models.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
 import 'package:gte_frontend/features/tasks/live_tasks_provider.dart';
@@ -271,26 +272,61 @@ Map<String, Object?> _sale(
 };
 
 Widget _market() {
-  final PlayerCardMarketplaceController controller =
-      PlayerCardMarketplaceController(
-        repository: CaptureMarketplaceRepository(
-          marketSales: PlayerCardMarketplaceSearchResult.fromJson(
-            <String, Object?>{
-              'total': 6,
-              'limit': 20,
-              'offset': 0,
-              'items': <Object?>[
-                _sale('1', 'Victor Osimhen', 'Galatasaray', 'ST', 84, 86, 91, 'World Class'),
-                _sale('2', 'Ademola Lookman', 'Atalanta', 'LW', 72, 84, 88, 'Elite'),
-                _sale('3', 'Calvin Bassey', 'Fulham', 'CB', 41, 79, 80, 'Established'),
-                _sale('4', 'Tobi Adeyemi', 'Ibadan Lions FC', 'CM', 18, 68, 77, 'Rising', regen: true),
-                _sale('5', 'Alex Iwobi', 'Fulham', 'CAM', 38, 78, 79, 'Established'),
-                _sale('6', 'Stanley Nwabali', 'Chippa United', 'GK', 22, 74, 75, 'Established'),
-              ],
-            },
+  final PlayerCardMarketplaceController
+  controller = PlayerCardMarketplaceController(
+    repository: CaptureMarketplaceRepository(
+      marketSales: PlayerCardMarketplaceSearchResult.fromJson(<String, Object?>{
+        'total': 6,
+        'limit': 20,
+        'offset': 0,
+        'items': <Object?>[
+          _sale(
+            '1',
+            'Victor Osimhen',
+            'Galatasaray',
+            'ST',
+            84,
+            86,
+            91,
+            'World Class',
           ),
-        ),
-      );
+          _sale('2', 'Ademola Lookman', 'Atalanta', 'LW', 72, 84, 88, 'Elite'),
+          _sale(
+            '3',
+            'Calvin Bassey',
+            'Fulham',
+            'CB',
+            41,
+            79,
+            80,
+            'Established',
+          ),
+          _sale(
+            '4',
+            'Tobi Adeyemi',
+            'Ibadan Lions FC',
+            'CM',
+            18,
+            68,
+            77,
+            'Rising',
+            regen: true,
+          ),
+          _sale('5', 'Alex Iwobi', 'Fulham', 'CAM', 38, 78, 79, 'Established'),
+          _sale(
+            '6',
+            'Stanley Nwabali',
+            'Chippa United',
+            'GK',
+            22,
+            74,
+            75,
+            'Established',
+          ),
+        ],
+      }),
+    ),
+  );
   return MaterialApp(
     debugShowCheckedModeBanner: false,
     theme: GteShellTheme.build(),
@@ -373,8 +409,13 @@ Widget _cardsGallery() {
                 ratingLabel: '68',
                 valueLabel: '18 GTC',
                 generationLabel: 'Gen 2',
-                storyLine: 'Academy graduate with elite vision and press resistance.',
-                traitLabels: <String>['Vision', 'Press resistant', 'Long passer'],
+                storyLine:
+                    'Academy graduate with elite vision and press resistance.',
+                traitLabels: <String>[
+                  'Vision',
+                  'Press resistant',
+                  'Long passer',
+                ],
               ),
             ),
             const SizedBox(
@@ -392,7 +433,8 @@ Widget _cardsGallery() {
                 ratingLabel: '64',
                 valueLabel: '12 GTC',
                 generationLabel: 'Gen 1',
-                storyLine: 'Explosive first step, cuts inside onto her right foot.',
+                storyLine:
+                    'Explosive first step, cuts inside onto her right foot.',
                 traitLabels: <String>['Pace', 'Dribbler'],
               ),
             ),
@@ -410,15 +452,41 @@ void main() {
   });
 
   testWidgets('cards', (WidgetTester tester) async {
-    await _capture(tester, name: 'cards', size: const Size(1440, 900), child: _cardsGallery());
+    await _capture(
+      tester,
+      name: 'cards',
+      size: const Size(1440, 900),
+      child: _cardsGallery(),
+    );
   });
 
-  for (final MapEntry<String, Size> vp in <String, Size>{
-    'desktop': _desktop,
-    'mobile': _mobile,
-  }.entries) {
+  for (final MapEntry<String, Size> vp
+      in <String, Size>{'desktop': _desktop, 'mobile': _mobile}.entries) {
+    testWidgets('landing ${vp.key}', (WidgetTester tester) async {
+      await _capture(
+        tester,
+        name: 'landing-${vp.key}',
+        size: vp.value,
+        child: const MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: GtexPublicLandingScreenV2(),
+        ),
+        settle: (WidgetTester t) async {
+          await t.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 500)),
+          );
+          await t.pump();
+        },
+      );
+    });
+
     testWidgets('dashboard ${vp.key}', (WidgetTester tester) async {
-      await _capture(tester, name: 'dashboard-${vp.key}', size: vp.value, child: _home());
+      await _capture(
+        tester,
+        name: 'dashboard-${vp.key}',
+        size: vp.value,
+        child: _home(),
+      );
     });
 
     testWidgets('discover ${vp.key}', (WidgetTester tester) async {
@@ -439,7 +507,9 @@ void main() {
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
           home: GteLoginScreen(
-            controller: GteExchangeController(api: GteExchangeApiClient.fixture()),
+            controller: GteExchangeController(
+              api: GteExchangeApiClient.fixture(),
+            ),
           ),
         ),
         settle: (WidgetTester t) => t.pumpAndSettle(),
@@ -455,7 +525,9 @@ void main() {
           debugShowCheckedModeBanner: false,
           theme: GteShellTheme.build(),
           home: GteSignupScreen(
-            controller: GteExchangeController(api: GteExchangeApiClient.fixture()),
+            controller: GteExchangeController(
+              api: GteExchangeApiClient.fixture(),
+            ),
           ),
         ),
         settle: (WidgetTester t) => t.pumpAndSettle(),

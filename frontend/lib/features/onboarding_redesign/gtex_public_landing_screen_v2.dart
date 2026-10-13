@@ -2,17 +2,21 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-const Color _bg = Color(0xFF090C10);
-const Color _card = Color(0xFF12171D);
-const Color _border = Color(0xFF232B34);
-const Color _green = Color(0xFF21C77A);
-const Color _greenBright = Color(0xFF2BE08A);
-const Color _gold = Color(0xFFE6B450);
-const Color _blue = Color(0xFF5AA2F0);
-const Color _violet = Color(0xFFB07CF0);
-const Color _text = Color(0xFFF4F7FA);
-const Color _textSecondary = Color(0xFFAEB9C4);
-const Color _textMuted = Color(0xFF7E8B98);
+import '../../ui_gtex/theme/gtex_colors.dart';
+
+const Color _bg = GtexFloodlit.night;
+const Color _card = GtexFloodlit.card;
+const Color _border = GtexFloodlit.line;
+const Color _green = GtexFloodlit.pitch;
+const Color _greenBright = GtexFloodlit.pitch;
+const Color _gold = GtexFloodlit.gold;
+const Color _blue = GtexFloodlit.chalk;
+const Color _violet = GtexFloodlit.scoreboard;
+const Color _text = GtexFloodlit.chalk;
+const Color _textSecondary = Color(0xFFC2CFC6);
+const Color _textMuted = GtexFloodlit.chalkMuted;
+const Color _onPitch = GtexFloodlit.night;
+const double _maxContentWidth = 720;
 
 const String _condensed = 'BarlowCondensed';
 
@@ -75,7 +79,7 @@ const List<_ShowcaseStep> _steps = <_ShowcaseStep>[
   _ShowcaseStep(
     index: '3',
     title: 'Play live',
-    body: 'Watch your match play out live in 2D — goals, cards, drama.',
+    body: 'Every match in full 3D — goals, cards, drama.',
     icon: Icons.sports_soccer_rounded,
     color: _greenBright,
     image: 'assets/media/gtex_match_live.webp',
@@ -108,6 +112,9 @@ class _GtexPublicLandingScreenV2State extends State<GtexPublicLandingScreenV2> {
       if (!mounted || !_pageController.hasClients) {
         return;
       }
+      if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+        return;
+      }
       _index = (_index + 1) % _steps.length;
       _pageController.animateToPage(
         _index,
@@ -124,6 +131,11 @@ class _GtexPublicLandingScreenV2State extends State<GtexPublicLandingScreenV2> {
     super.dispose();
   }
 
+  void _stopAutoAdvance() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -132,35 +144,52 @@ class _GtexPublicLandingScreenV2State extends State<GtexPublicLandingScreenV2> {
         bottom: false,
         child: SingleChildScrollView(
           physics: const ClampingScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              _Hero(onLogin: widget.onLogin),
-              const SizedBox(height: 20),
-              _SectionLabel(label: 'HOW YOU PLAY'),
-              const SizedBox(height: 12),
-              _Showcase(controller: _pageController, onChanged: (int i) => _index = i),
-              const SizedBox(height: 18),
-              const _ResultsTicker(),
-              const SizedBox(height: 20),
-              _SectionLabel(label: 'CHOOSE YOUR PATH'),
-              const SizedBox(height: 12),
-              _AccountChooser(
-                onSignup: widget.onSignup,
-                onTraderSignup: widget.onTraderSignup ?? widget.onExploreMarket,
-                onCreatorSignup: widget.onCreatorSignup,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _Hero(onLogin: widget.onLogin),
+                  const SizedBox(height: 20),
+                  _SectionLabel(label: 'HOW YOU PLAY'),
+                  const SizedBox(height: 12),
+                  NotificationListener<ScrollStartNotification>(
+                    onNotification: (ScrollStartNotification notification) {
+                      if (notification.dragDetails != null) {
+                        _stopAutoAdvance();
+                      }
+                      return false;
+                    },
+                    child: _Showcase(
+                      controller: _pageController,
+                      onChanged: (int i) => _index = i,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const _ResultsTicker(),
+                  const SizedBox(height: 20),
+                  _SectionLabel(label: 'CHOOSE YOUR PATH'),
+                  const SizedBox(height: 12),
+                  _AccountChooser(
+                    onSignup: widget.onSignup,
+                    onTraderSignup:
+                        widget.onTraderSignup ?? widget.onExploreMarket,
+                    onCreatorSignup: widget.onCreatorSignup,
+                  ),
+                  const SizedBox(height: 18),
+                  const _TrustStrip(),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 14, 20, 26),
+                    child: Text(
+                      'Admin access is invite-only.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: _textMuted, fontSize: 12),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 18),
-              const _TrustStrip(),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 14, 20, 26),
-                child: Text(
-                  'Admin access is invite-only.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Color(0xFF5B6772), fontSize: 12),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -184,7 +213,8 @@ class _Hero extends StatelessWidget {
             'assets/media/gtex_hero_trophy.webp',
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
-            errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0C2A1E)),
+            errorBuilder:
+                (_, __, ___) => const ColoredBox(color: GtexFloodlit.turf),
           ),
           const DecoratedBox(
             decoration: BoxDecoration(
@@ -192,10 +222,10 @@ class _Hero extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: <Color>[
-                  Color(0x33090C10),
-                  Color(0x00090C10),
-                  Color(0xCC090C10),
-                  Color(0xFF090C10),
+                  Color(0x3308140F),
+                  Color(0x0008140F),
+                  Color(0xCC08140F),
+                  _bg,
                 ],
                 stops: <double>[0, 0.32, 0.78, 1],
               ),
@@ -222,7 +252,7 @@ class _Hero extends StatelessWidget {
                           child: const Text(
                             'GT',
                             style: TextStyle(
-                              color: Color(0xFF06140C),
+                              color: _onPitch,
                               fontWeight: FontWeight.w800,
                               fontSize: 14,
                             ),
@@ -245,7 +275,7 @@ class _Hero extends StatelessWidget {
                       onPressed: onLogin,
                       child: const Text(
                         'Sign in',
-                        style: TextStyle(color: Color(0xFFC4CDD6), fontSize: 13),
+                        style: TextStyle(color: _textSecondary, fontSize: 13),
                       ),
                     ),
                   ],
@@ -254,16 +284,15 @@ class _Hero extends StatelessWidget {
                 Row(
                   children: const <Widget>[
                     _HeroPill(
-                      label: 'Jackpot 02:14:08',
-                      icon: Icons.card_giftcard_rounded,
-                      color: _gold,
+                      label: '3D matchday',
+                      icon: Icons.sports_soccer_rounded,
+                      color: _green,
                     ),
                     SizedBox(width: 7),
                     _HeroPill(
-                      label: '1,204 live',
-                      icon: Icons.circle,
-                      color: Color(0xFFFF6B6B),
-                      dot: true,
+                      label: 'Free to start',
+                      icon: Icons.bolt_rounded,
+                      color: _gold,
                     ),
                   ],
                 ),
@@ -362,7 +391,7 @@ class _SectionLabel extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          const Expanded(child: Divider(color: Color(0xFF20262E), height: 1)),
+          const Expanded(child: Divider(color: _border, height: 1)),
         ],
       ),
     );
@@ -381,7 +410,7 @@ class _Showcase extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF0E1318),
+          color: _card,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _border),
         ),
@@ -393,7 +422,8 @@ class _Showcase extends StatelessWidget {
                 controller: controller,
                 onPageChanged: onChanged,
                 itemCount: _steps.length,
-                itemBuilder: (BuildContext context, int i) => _StepCard(step: _steps[i]),
+                itemBuilder:
+                    (BuildContext context, int i) => _StepCard(step: _steps[i]),
               ),
             ),
             const SizedBox(height: 12),
@@ -563,10 +593,10 @@ class _ResultsTickerState extends State<_ResultsTicker>
 
   Widget _tickerRow(Key? key) {
     const List<Widget> items = <Widget>[
-      _TickerItem(text: 'Marlow FC signed J. Okafor', color: _greenBright),
-      _TickerItem(text: 'Lagos Cup won by Vista United', color: _gold),
-      _TickerItem(text: 'Rivas (regen) hits 92 GSI', color: _violet),
-      _TickerItem(text: '+1,420 GTC top transfer', color: _blue),
+      _TickerItem(text: 'Transfers settle in GTC', color: _greenBright),
+      _TickerItem(text: 'Cups run every matchday', color: _gold),
+      _TickerItem(text: 'Every regen is one of a kind', color: _violet),
+      _TickerItem(text: 'KYC only when you withdraw', color: _blue),
     ];
     return Row(
       key: key,
@@ -586,8 +616,8 @@ class _ResultsTickerState extends State<_ResultsTicker>
       height: 34,
       decoration: const BoxDecoration(
         border: Border(
-          top: BorderSide(color: Color(0xFF1B2128)),
-          bottom: BorderSide(color: Color(0xFF1B2128)),
+          top: BorderSide(color: _border),
+          bottom: BorderSide(color: _border),
         ),
       ),
       child: ClipRect(
@@ -605,8 +635,18 @@ class _ResultsTickerState extends State<_ResultsTicker>
             return Stack(
               clipBehavior: Clip.none,
               children: <Widget>[
-                Positioned(left: dx, top: 0, bottom: 0, child: _tickerRow(_contentKey)),
-                Positioned(left: dx + span, top: 0, bottom: 0, child: _tickerRow(null)),
+                Positioned(
+                  left: dx,
+                  top: 0,
+                  bottom: 0,
+                  child: _tickerRow(_contentKey),
+                ),
+                Positioned(
+                  left: dx + span,
+                  top: 0,
+                  bottom: 0,
+                  child: _tickerRow(null),
+                ),
               ],
             );
           },
@@ -629,10 +669,7 @@ class _TickerItem extends StatelessWidget {
       children: <Widget>[
         Icon(Icons.circle, size: 6, color: color),
         const SizedBox(width: 6),
-        Text(
-          text,
-          style: const TextStyle(color: _textSecondary, fontSize: 12),
-        ),
+        Text(text, style: const TextStyle(color: _textSecondary, fontSize: 12)),
       ],
     );
   }
@@ -688,7 +725,7 @@ class _PrimaryPathCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: const Color(0xFF113323).withValues(alpha: 0.38),
+        color: GtexFloodlit.turf.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _green, width: 2),
       ),
@@ -704,7 +741,11 @@ class _PrimaryPathCard extends StatelessWidget {
                   color: _green.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: const Icon(Icons.shield_rounded, color: _green, size: 23),
+                child: const Icon(
+                  Icons.shield_rounded,
+                  color: _green,
+                  size: 23,
+                ),
               ),
               const SizedBox(width: 11),
               const Expanded(
@@ -736,7 +777,7 @@ class _PrimaryPathCard extends StatelessWidget {
                 child: const Text(
                   'FREE · INSTANT',
                   style: TextStyle(
-                    color: Color(0xFF06140C),
+                    color: _onPitch,
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.5,
@@ -750,7 +791,7 @@ class _PrimaryPathCard extends StatelessWidget {
             onPressed: onTap,
             style: FilledButton.styleFrom(
               backgroundColor: _green,
-              foregroundColor: const Color(0xFF06140C),
+              foregroundColor: _onPitch,
               padding: const EdgeInsets.symmetric(vertical: 13),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(11),
@@ -836,7 +877,10 @@ class _PathRow extends StatelessWidget {
                     ),
                     Text(
                       body,
-                      style: const TextStyle(color: _textSecondary, fontSize: 12),
+                      style: const TextStyle(
+                        color: _textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -846,8 +890,10 @@ class _PathRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(6),
@@ -897,14 +943,26 @@ class _TrustStrip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.only(top: 14),
         decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xFF1B2128))),
+          border: Border(top: BorderSide(color: _border)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: const <Widget>[
-            _TrustItem(icon: Icons.verified_user_rounded, label: 'KYC payouts', color: _green),
-            _TrustItem(icon: Icons.groups_rounded, label: '17K+ players', color: _blue),
-            _TrustItem(icon: Icons.sports_soccer_rounded, label: 'Live 2D', color: _gold),
+            _TrustItem(
+              icon: Icons.verified_user_rounded,
+              label: 'KYC payouts',
+              color: _green,
+            ),
+            _TrustItem(
+              icon: Icons.groups_rounded,
+              label: '17K+ players',
+              color: _blue,
+            ),
+            _TrustItem(
+              icon: Icons.sports_soccer_rounded,
+              label: '3D matchday',
+              color: _gold,
+            ),
           ],
         ),
       ),
@@ -913,7 +971,11 @@ class _TrustStrip extends StatelessWidget {
 }
 
 class _TrustItem extends StatelessWidget {
-  const _TrustItem({required this.icon, required this.label, required this.color});
+  const _TrustItem({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
 
   final IconData icon;
   final String label;

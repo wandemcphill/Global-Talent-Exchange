@@ -9,6 +9,7 @@ export const metadata: Metadata = {
 
 const screens = [
   { name: "Player & regen cards", file: "cards", desktop: [1440, 900] as const },
+  { name: "Public landing", file: "landing" },
   { name: "Dashboard (Command Center)", file: "dashboard" },
   { name: "Player discovery (Transfer desk)", file: "discover" },
   { name: "Login", file: "login" },
