@@ -154,7 +154,7 @@ def run_check(label: str, command: list[str], files: list[str]) -> None:
     subprocess.run(full_command, cwd=REPO_ROOT, check=True)
 
 
-def _normalized_secret_baseline(path: Path) -> object:
+def _normalized_secret_baseline(path: Path, *, ignore_line_numbers: bool = False) -> object:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(payload, dict):
         payload.pop("generated_at", None)
@@ -168,9 +168,22 @@ def _normalized_secret_baseline(path: Path) -> object:
                         item = dict(secret)
                         if "filename" in item and isinstance(item["filename"], str):
                             item["filename"] = item["filename"].replace("\\", "/")
+                        if ignore_line_numbers:
+                            item.pop("line_number", None)
                         norm_secrets.append(item)
                     else:
                         norm_secrets.append(secret)
+                if ignore_line_numbers:
+                    norm_secrets = sorted(
+                        norm_secrets,
+                        key=lambda entry: (
+                            str(entry.get("type") or ""),
+                            str(entry.get("hashed_secret") or ""),
+                            str(entry.get("filename") or ""),
+                        )
+                        if isinstance(entry, dict)
+                        else str(entry),
+                    )
                 normalized_results[norm_filename] = norm_secrets
             payload["results"] = normalized_results
     return payload
@@ -186,24 +199,34 @@ def run_secret_check(command: list[str], files: list[str]) -> None:
     print(f"[quality] $ {shlex.join(full_command)}")
 
     baseline_before = None
+    baseline_before_fingerprint = None
     baseline_bytes = None
     if SECRET_BASELINE_PATH.is_file():
         baseline_bytes = SECRET_BASELINE_PATH.read_bytes()
         baseline_before = _normalized_secret_baseline(SECRET_BASELINE_PATH)
+        baseline_before_fingerprint = _normalized_secret_baseline(
+            SECRET_BASELINE_PATH, ignore_line_numbers=True
+        )
 
     result = subprocess.run(full_command, cwd=REPO_ROOT, check=False)
     if result.returncode == 0:
         return
 
-    if (
-        result.returncode == 3
-        and baseline_before is not None
-        and SECRET_BASELINE_PATH.is_file()
-        and _normalized_secret_baseline(SECRET_BASELINE_PATH) == baseline_before
-    ):
-        SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
-        print("[quality] Secret baseline changed only by generated_at; restored original baseline.")
-        return
+    if result.returncode == 3 and baseline_before is not None and SECRET_BASELINE_PATH.is_file():
+        baseline_after = _normalized_secret_baseline(SECRET_BASELINE_PATH)
+        if baseline_after == baseline_before:
+            SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
+            print("[quality] Secret baseline changed only by generated_at; restored original baseline.")
+            return
+        baseline_after_fingerprint = _normalized_secret_baseline(
+            SECRET_BASELINE_PATH, ignore_line_numbers=True
+        )
+        if baseline_after_fingerprint == baseline_before_fingerprint:
+            SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
+            print(
+                "[quality] Secret baseline changed only by line numbers; restored original baseline."
+            )
+            return
 
     raise subprocess.CalledProcessError(result.returncode, full_command)
 
