@@ -7,6 +7,7 @@ const links = [
   { href: "/discover", label: "Discover" },
   { href: "/login", label: "Login" },
   { href: "/signup", label: "Signup" },
+  { href: "/implemented", label: "Implemented" },
 ];
 
 export function ConceptNav({ active }: { active: string }) {

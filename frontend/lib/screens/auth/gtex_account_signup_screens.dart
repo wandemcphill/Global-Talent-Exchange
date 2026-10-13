@@ -77,7 +77,11 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                       TextButton.icon(
                         onPressed: () => context.go('/auth/login'),
                         icon: const Icon(Icons.login_rounded, size: 17),
-                        label: const Text('Already have an account? Sign in'),
+                        label: Text(
+                          MediaQuery.sizeOf(context).width < 560
+                              ? 'Sign in'
+                              : 'Already have an account? Sign in',
+                        ),
                       ),
                     ],
                   ),
@@ -121,7 +125,8 @@ class GtexAccountSelectorScreen extends StatelessWidget {
                           crossAxisCount: columns,
                           crossAxisSpacing: 14,
                           mainAxisSpacing: 14,
-                          childAspectRatio: columns == 1 ? 2.6 : 1.25,
+                          childAspectRatio: 1.25,
+                          mainAxisExtent: columns == 1 ? 210 : null,
                         ),
                         itemBuilder: (_, i) => _AccountRoleCard(role: roles[i]),
                       );
