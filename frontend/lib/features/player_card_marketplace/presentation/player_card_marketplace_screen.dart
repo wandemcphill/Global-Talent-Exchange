@@ -11,6 +11,7 @@ import '../../../widgets/gte_surface_panel.dart';
 import '../../../widgets/gtex_branding.dart';
 import '../../../shared/widgets/gtex_premium_panels.dart';
 import '../../../ui_gtex/football/gtex_player_card.dart';
+import '../../../ui_gtex/theme/gtex_colors.dart';
 import '../../../widgets/player_card_avatar.dart';
 import '../../shared/data/gte_feature_support.dart';
 import '../data/player_card_marketplace_models.dart';
@@ -155,10 +156,30 @@ class _PlayerCardMarketplaceScreenState
       animation: _controller,
       builder: (BuildContext context, Widget? child) {
         return Container(
-          decoration: gteBackdropDecoration(),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: <Color>[GtexFloodlit.turf, GtexFloodlit.night],
+              stops: <double>[0, 0.45],
+            ),
+          ),
           child: Scaffold(
             backgroundColor: Colors.transparent,
-            appBar: AppBar(title: const Text('Transfer desk')),
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              foregroundColor: GtexFloodlit.chalk,
+              title: const Text(
+                'Transfer desk',
+                style: TextStyle(
+                  fontFamily: GtexFloodlit.display,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
             body: RefreshIndicator(
               onRefresh: _reload,
               child: ListView(
@@ -169,7 +190,7 @@ class _PlayerCardMarketplaceScreenState
                     title: 'Trade live player cards and move squad capital.',
                     description:
                         'This desk keeps live sales, loans, squad inventory, and move execution in one football trading surface instead of scattering the action.',
-                    accent: const Color(0xFF91C9FF),
+                    accent: GtexFloodlit.pitch,
                     chips: <Widget>[
                       GteMetricChip(
                         label: 'Sale board',
@@ -222,7 +243,7 @@ class _PlayerCardMarketplaceScreenState
                   ),
                   const SizedBox(height: 18),
                   GtexLiveTickerBar(
-                    accentColor: const Color(0xFF91C9FF),
+                    accentColor: GtexFloodlit.gold,
                     items: _deskTickerItems(),
                   ),
                   if (_controller.actionError != null) ...<Widget>[
@@ -1401,7 +1422,23 @@ class _MarketplaceListingTile extends StatelessWidget {
             : listing.loanFeeCredits != null
             ? gteFormatCredits(listing.loanFeeCredits!)
             : 'Negotiated';
-    return GteSurfacePanel(
+    final bool isOpen = listing.status.toLowerCase() == 'open';
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[GtexFloodlit.turf, GtexFloodlit.card],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color:
+              isOpen
+                  ? GtexFloodlit.pitch.withValues(alpha: 0.38)
+                  : GtexFloodlit.line,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -1416,12 +1453,20 @@ class _MarketplaceListingTile extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       listing.playerName,
-                      style: Theme.of(context).textTheme.titleLarge,
+                      style: const TextStyle(
+                        fontFamily: GtexFloodlit.display,
+                        fontSize: 24,
+                        height: 1.05,
+                        fontWeight: FontWeight.w700,
+                        color: GtexFloodlit.chalk,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${listing.tierName} | ${listing.clubName ?? 'Unknown club'} | ${listing.position ?? 'n/a'}',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: GtexFloodlit.chalkMuted,
+                      ),
                     ),
                   ],
                 ),
