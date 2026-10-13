@@ -599,8 +599,9 @@ class _ProspectsBoard extends StatelessWidget {
             columns;
         // Raised from 480/400 when the card gained its lineage line and trait
         // chips: the cell is a fixed box, so new content has to be paid for
-        // here rather than clipped there.
-        final double cellHeight = cardWidth < 320 ? 504 : 432;
+        // here rather than clipped there. Raised again by 40 for the Floodlit
+        // card's roomier padding and larger display type.
+        final double cellHeight = cardWidth < 320 ? 544 : 472;
         // Section nav already labels this lane "Prospects"; skip a duplicate
         // board heading so the surface shows that label once.
         return Column(

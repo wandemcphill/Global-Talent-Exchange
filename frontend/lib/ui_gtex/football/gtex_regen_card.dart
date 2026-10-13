@@ -71,7 +71,7 @@ class GtexRegenCard extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           clipBehavior: Clip.antiAlias,
-          padding: const EdgeInsets.all(GtexSpacing.sm),
+          padding: const EdgeInsets.all(GtexSpacing.md),
           decoration: BoxDecoration(
             color: GtexFloodlit.card,
             borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
@@ -98,10 +98,10 @@ class GtexRegenCard extends StatelessWidget {
             clipBehavior: Clip.none,
             children: <Widget>[
               const Positioned(
-                left: -GtexSpacing.sm,
-                top: -GtexSpacing.sm,
-                right: -GtexSpacing.sm,
-                bottom: -GtexSpacing.sm,
+                left: -GtexSpacing.md,
+                top: -GtexSpacing.md,
+                right: -GtexSpacing.md,
+                bottom: -GtexSpacing.md,
                 child: IgnorePointer(
                   child: CustomPaint(
                     painter: GtexTurfStripesPainter(),
@@ -296,12 +296,12 @@ class _RegenCardDetails extends StatelessWidget {
                     style: const TextStyle(
                       color: GtexFloodlit.chalk,
                       fontFamily: GtexFloodlit.display,
-                      fontSize: 20,
+                      fontSize: 24,
                       fontWeight: FontWeight.w700,
                       height: 1,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
                     '$nationality · $position · $archetype',
                     maxLines: 1,
@@ -309,7 +309,7 @@ class _RegenCardDetails extends StatelessWidget {
                     style: const TextStyle(
                       color: GtexFloodlit.chalkMuted,
                       fontFamily: 'Inter',
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       height: 1.2,
                     ),
@@ -457,13 +457,15 @@ class _TraitChip extends StatelessWidget {
           children: <Widget>[
             Icon(Icons.auto_graph_rounded, size: 13, color: color),
             const SizedBox(width: 4),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: GtexColors.textPrimary,
-                fontWeight: FontWeight.w800,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: GtexColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -565,8 +567,8 @@ class _GsiPlate extends StatelessWidget {
     final String value =
         label.replaceFirst(RegExp(r'^GSI\s*', caseSensitive: false), '').trim();
     return Container(
-      width: 54,
-      padding: const EdgeInsets.symmetric(vertical: 7),
+      width: 60,
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: GtexFloodlit.night.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(6),
@@ -581,7 +583,7 @@ class _GsiPlate extends StatelessWidget {
             style: const TextStyle(
               color: GtexFloodlit.gold,
               fontFamily: GtexFloodlit.display,
-              fontSize: 20,
+              fontSize: 24,
               fontWeight: FontWeight.w700,
               height: 1,
             ),
