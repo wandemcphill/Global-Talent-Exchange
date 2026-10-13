@@ -107,6 +107,12 @@ class AppRealtimeSyncController {
       case 'competition_update':
         invalidateCompetitions();
         return;
+      case 'jackpot_triggered':
+      case 'gtex_jackpot_won':
+        // Wallet credit lands with the payout; refresh balances. Win UI is
+        // opened via notification deep_link_route (/gtex/jackpot/win).
+        invalidateMarket();
+        return;
       default:
         return;
     }

@@ -563,6 +563,8 @@ def signup_user(
     session: Session = Depends(get_session),
     request: Request = None,
 ) -> TokenResponse:
+    from app.auth.turnstile import verify_turnstile_token
+
     service = _build_auth_service(request)
     analytics = AnalyticsService()
     issued_session: IssuedAuthSession | None = None
@@ -570,35 +572,49 @@ def signup_user(
     telemetry = _AuthRouteTelemetry("signup_user")
     user: User | None = None
     try:
+        remote_ip = request.client.host if request is not None and request.client is not None else None
+        verify_turnstile_token(payload.turnstile_token, remote_ip=remote_ip)
+        resolved_username = payload.username
+        resolved_email = payload.email or f"{resolved_username}@users.gtex.local"
         analytics.track_event(
-            session, name="signup_started", user_id=None, metadata={"email": payload.email, "account_type": "user"}
+            session,
+            name="signup_started",
+            user_id=None,
+            metadata={
+                "email": resolved_email,
+                "account_type": "user",
+                "creates_club": payload.creates_club,
+                "email_provided": bool(payload.email),
+            },
         )
+        region_code = (payload.country or "XX")[:8]
         user = service.register_user(
             session,
-            email=payload.email,
+            email=resolved_email,
             full_name=payload.full_name,
             phone_number=None,
-            is_over_18=True,
-            region_code=payload.country[:8],
-            username=payload.username,
+            is_over_18=payload.is_over_18,
+            region_code=region_code,
+            username=resolved_username,
             password=payload.password,
             display_name=payload.full_name,
             account_type=PublicAccountType.USER,
             timing_recorder=telemetry.capture,
         )
-        service.create_explicit_club_profile(
-            session,
-            user,
-            club_name=payload.club_name,
-            short_name=payload.club_short_tag,
-            club_type=payload.club_type,
-            country_code=payload.club_country,
-            region_name=payload.club_state,
-            city_name=payload.club_locality,
-            crest_asset_ref=payload.crest_asset_ref,
-            primary_color=payload.primary_color,
-            secondary_color=payload.secondary_color,
-        )
+        if payload.creates_club:
+            service.create_explicit_club_profile(
+                session,
+                user,
+                club_name=payload.club_name or "",
+                short_name=payload.club_short_tag or "",
+                club_type=payload.club_type,
+                country_code=payload.club_country or payload.country or "XX",
+                region_name=payload.club_state,
+                city_name=payload.club_locality,
+                crest_asset_ref=payload.crest_asset_ref,
+                primary_color=payload.primary_color,
+                secondary_color=payload.secondary_color,
+            )
         user.preferred_position = payload.position
         user.nationality = payload.country
         # KYC is intentionally NOT submitted at signup. Users get instant access; KYC is
@@ -610,7 +626,12 @@ def signup_user(
             user=user,
             telemetry=telemetry,
         )
-        analytics.track_event(session, name="signup_completed", user_id=user.id, metadata={"account_type": "user"})
+        analytics.track_event(
+            session,
+            name="signup_completed",
+            user_id=user.id,
+            metadata={"account_type": "user", "creates_club": payload.creates_club},
+        )
         session.commit()
         session.refresh(user)
     except DuplicateUserError as exc:
@@ -623,7 +644,7 @@ def signup_user(
         _rollback_with_telemetry(session, telemetry)
         raise
     else:
-        if confirmation_code is not None:
+        if confirmation_code is not None and user is not None and not user.email.endswith("@users.gtex.local"):
             try:
                 email_started_at = perf_counter()
                 service.send_signup_confirmation_email(user=user, confirmation_code=confirmation_code)

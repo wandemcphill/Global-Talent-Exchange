@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/data/public_pulse_api.dart';
 
 const _ink = Color(0xFF050709);
 const _panel = Color(0xFF0A0F13);
@@ -14,7 +17,7 @@ const _blue = Color(0xFF00A7FF);
 const _gold = Color(0xFFFFC857);
 const _violet = Color(0xFF9C6BFF);
 
-class Gtex22HomeScreen extends StatelessWidget {
+class Gtex22HomeScreen extends StatefulWidget {
   const Gtex22HomeScreen({
     super.key,
     this.onSignup,
@@ -22,6 +25,7 @@ class Gtex22HomeScreen extends StatelessWidget {
     this.onCreatorSignup,
     this.onTraderSignup,
     this.onExploreMarket,
+    this.pulseApi,
   });
 
   final VoidCallback? onSignup;
@@ -29,6 +33,95 @@ class Gtex22HomeScreen extends StatelessWidget {
   final VoidCallback? onCreatorSignup;
   final VoidCallback? onTraderSignup;
   final VoidCallback? onExploreMarket;
+  final PublicPulseApi? pulseApi;
+
+  @override
+  State<Gtex22HomeScreen> createState() => _Gtex22HomeScreenState();
+}
+
+class _Gtex22HomeScreenState extends State<Gtex22HomeScreen> {
+  GtexLiveWorldPulse? _pulse;
+  String? _jackpotLabel;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPulse();
+    _loadJackpot();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      _loadPulse();
+      _loadJackpot();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadPulse() async {
+    try {
+      final GteAppConfig config = GteAppConfig.fromRuntimeEnvironment();
+      final PublicPulseApi api =
+          widget.pulseApi ??
+          PublicPulseApi.standard(
+            baseUrl: config.apiBaseUrl,
+            mode: config.activeShellBackendMode,
+          );
+      final GtexLiveWorldPulse pulse = await api.fetchLiveStats();
+      if (!mounted) {
+        return;
+      }
+      setState(() => _pulse = pulse);
+    } catch (_) {
+      // Landing stays usable without pulse; never invent numbers.
+    }
+  }
+
+  Future<void> _loadJackpot() async {
+    try {
+      final GteAppConfig config = GteAppConfig.fromRuntimeEnvironment();
+      final PublicPulseApi api =
+          widget.pulseApi ??
+          PublicPulseApi.standard(
+            baseUrl: config.apiBaseUrl,
+            mode: config.activeShellBackendMode,
+          );
+      final Map<String, dynamic> state = await api.client.getMap(
+        '/jackpot/state',
+        auth: false,
+      );
+      if (!mounted) {
+        return;
+      }
+      final Object? balance = state['balance'];
+      final Object? failsafeAt = state['failsafe_at'] ?? state['failsafeAt'];
+      String label = 'Jackpot';
+      if (balance != null) {
+        label = 'Jackpot $balance';
+      }
+      final DateTime? due = failsafeAt == null
+          ? null
+          : DateTime.tryParse(failsafeAt.toString())?.toUtc();
+      if (due != null) {
+        final Duration remaining = due.difference(DateTime.now().toUtc());
+        if (!remaining.isNegative) {
+          final String hh = remaining.inHours.toString().padLeft(2, '0');
+          final String mm = (remaining.inMinutes % 60).toString().padLeft(2, '0');
+          final String ss = (remaining.inSeconds % 60).toString().padLeft(2, '0');
+          label = 'Jackpot $hh:$mm:$ss';
+        }
+      }
+      setState(() => _jackpotLabel = label);
+    } catch (_) {
+      // Fail closed — never show a fake countdown.
+      if (mounted) {
+        setState(() => _jackpotLabel = null);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,14 +130,32 @@ class Gtex22HomeScreen extends StatelessWidget {
       body: SelectionArea(
         child: CustomScrollView(
           slivers: <Widget>[
-            SliverToBoxAdapter(child: _Nav(onLogin: onLogin, onSignup: onSignup)),
-            SliverToBoxAdapter(child: _Hero(onSignup: onSignup, onExplore: onExploreMarket)),
+            SliverToBoxAdapter(
+              child: _Nav(
+                onLogin: widget.onLogin,
+                onSignup: widget.onSignup,
+                pulse: _pulse,
+                jackpotLabel: _jackpotLabel,
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: _Hero(
+                onSignup: widget.onSignup,
+                onExplore: widget.onExploreMarket,
+              ),
+            ),
             const SliverToBoxAdapter(child: _ClarityStrip()),
-            SliverToBoxAdapter(child: _PlatformMap(onSignup: onSignup)),
+            SliverToBoxAdapter(child: _PlatformMap(onSignup: widget.onSignup)),
             const SliverToBoxAdapter(child: _WorldSection()),
-            SliverToBoxAdapter(child: _AudienceSection(onSignup: onSignup, onCreatorSignup: onCreatorSignup, onTraderSignup: onTraderSignup)),
+            SliverToBoxAdapter(
+              child: _AudienceSection(
+                onSignup: widget.onSignup,
+                onCreatorSignup: widget.onCreatorSignup,
+                onTraderSignup: widget.onTraderSignup,
+              ),
+            ),
             const SliverToBoxAdapter(child: _HowItWorks()),
-            SliverToBoxAdapter(child: _FinalCta(onSignup: onSignup)),
+            SliverToBoxAdapter(child: _FinalCta(onSignup: widget.onSignup)),
             const SliverToBoxAdapter(child: _Footer()),
           ],
         ),
@@ -54,9 +165,11 @@ class Gtex22HomeScreen extends StatelessWidget {
 }
 
 class _Nav extends StatelessWidget {
-  const _Nav({this.onLogin, this.onSignup});
+  const _Nav({this.onLogin, this.onSignup, this.pulse, this.jackpotLabel});
   final VoidCallback? onLogin;
+  final String? jackpotLabel;
   final VoidCallback? onSignup;
+  final GtexLiveWorldPulse? pulse;
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +194,36 @@ class _Nav extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             SvgPicture.asset('assets/branding/gtex_wordmark_22.svg', width: 140, height: 32, semanticsLabel: 'GTEX'),
-            const SizedBox(width: 24),
+            const SizedBox(width: 18),
+            if (jackpotLabel != null) ...<Widget>[
+              _PulseChip(
+                icon: Icons.card_giftcard_rounded,
+                label: jackpotLabel!,
+                color: _gold,
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (pulse != null) ...<Widget>[
+              _PulseChip(
+                icon: Icons.circle,
+                label: '${pulse!.usersOnlineLabel} online',
+                color: _green,
+                live: true,
+              ),
+              const SizedBox(width: 8),
+              _PulseChip(
+                icon: Icons.visibility_outlined,
+                label: '${pulse!.clubsLabel} clubs',
+                color: _gold,
+              ),
+              const SizedBox(width: 8),
+              _PulseChip(
+                icon: Icons.sports_soccer_outlined,
+                label: '${pulse!.playersOnlineLabel} in matches',
+                color: _blue,
+              ),
+              const SizedBox(width: 16),
+            ],
             if (MediaQuery.sizeOf(context).width >= 780) ...const <Widget>[
               _NavLink('Discover'),
               _NavLink('Exchange'),
@@ -96,6 +238,47 @@ class _Nav extends StatelessWidget {
             _GlowButton(label: 'Enter GTEX', onPressed: onSignup),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PulseChip extends StatelessWidget {
+  const _PulseChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.live = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool live;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: live ? 8 : 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: _white,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }

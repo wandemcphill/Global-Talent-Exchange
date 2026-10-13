@@ -749,6 +749,7 @@ DOMAIN_MODULES = (
     _module("analytics", router_path="app.analytics.router:router"),
     _module("admin_analytics", router_path="app.analytics.router:admin_router"),
     _module("public_analytics", router_path="app.analytics.router:public_router"),
+    _module("public_pulse", router_path="app.public_pulse.router:router", with_api_alias=True),
     _module("players", router_path="app.players.router:router"),
     _module("talent_exchange", router_path="app.talent.router:router", with_api_alias=True),
     _module("talent_exchange_admin", router_path="app.talent.router:admin_router", with_api_alias=True),

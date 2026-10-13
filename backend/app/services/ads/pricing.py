@@ -5,6 +5,8 @@ CPM: dict[str, float] = {
     "goal_highlight": 15.0,
     "highlight": 12.0,
     "preroll": 8.0,
+    "flash": 14.0,
+    "split": 11.0,
     "live_banner": 10.0,
     "rewarded": 20.0,
 }
@@ -17,8 +19,10 @@ def pricing_key(ad_type: str, *, event_type: str | None = None) -> str:
         if normalized_event in {"goal", "goals", "penalty", "penalties"}:
             return "goal_highlight"
         return "highlight"
-    if normalized_type == "pre_roll":
-        return "preroll"
+    if normalized_type in {"pre_roll", "flash"}:
+        return "flash" if normalized_type == "flash" else "preroll"
+    if normalized_type == "split":
+        return "split"
     if normalized_type == "live_banner":
         return "live_banner"
     if normalized_type == "rewarded_ad":

@@ -41,6 +41,8 @@ class GtexSettings:
     jackpot_probability_limit: Decimal
     jackpot_probability_cap: Decimal
     jackpot_failsafe_hours: int
+    jackpot_min_drops_per_day: int
+    jackpot_active_play_hours: int
     jackpot_contribution_rate: Decimal
     jackpot_distribution_mode: str
     jackpot_top_split_percent: Decimal
@@ -73,6 +75,8 @@ def load_gtex_settings(environ: Mapping[str, str] | None = None) -> GtexSettings
         jackpot_probability_limit=_decimal(resolved_environ, "GTEX_JACKPOT_PROBABILITY_LIMIT", "1000.0000"),
         jackpot_probability_cap=_fraction(resolved_environ, "GTEX_JACKPOT_PROBABILITY_CAP", "0.5000"),
         jackpot_failsafe_hours=_integer(resolved_environ, "GTEX_JACKPOT_FAILSAFE_HOURS", 6, minimum=1),
+        jackpot_min_drops_per_day=_integer(resolved_environ, "GTEX_JACKPOT_MIN_DROPS_PER_DAY", 3, minimum=0),
+        jackpot_active_play_hours=_integer(resolved_environ, "GTEX_JACKPOT_ACTIVE_PLAY_HOURS", 48, minimum=1),
         jackpot_contribution_rate=_fraction(resolved_environ, "GTEX_JACKPOT_CONTRIBUTION_RATE", "0.1000"),
         jackpot_distribution_mode=(resolved_environ.get("GTEX_JACKPOT_DISTRIBUTION_MODE", "single_winner").strip() or "single_winner"),
         jackpot_top_split_percent=_fraction(resolved_environ, "GTEX_JACKPOT_TOP_SPLIT_PERCENT", "0.1000"),

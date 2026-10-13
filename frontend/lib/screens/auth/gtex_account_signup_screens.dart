@@ -270,70 +270,77 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
   final _username = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  final _country = TextEditingController(text: 'NG');
-  final _state = TextEditingController();
-  final _city = TextEditingController();
-  final _clubName = TextEditingController();
-  final _clubTag = TextEditingController();
-  final _clubState = TextEditingController();
-  final _clubLocality = TextEditingController();
-  final _position = TextEditingController(text: 'CM');
-  final _dominantFoot = TextEditingController(text: 'Right');
-  final _height = TextEditingController(text: '178');
-  final _jersey = TextEditingController(text: '8');
-  final _preferredRole = TextEditingController(text: 'Box-to-box midfielder');
-  String _clubType = 'academy';
-  String _footballIdentity = 'club_owner';
+  int _birthYear = 2000;
+  int _birthMonth = 1;
+  int _birthDay = 15;
+  bool _isOver18 = false;
   bool _submitting = false;
   String? _error;
   @override
   Widget build(BuildContext context) => _SignupScaffold(
-    title: 'Football User',
-    subtitle: 'Build your identity. Create a club. Find talent. Compete.',
+    title: 'Join GTEX',
+    subtitle: 'Display name, @handle, password — create your club after you land.',
     icon: Icons.sports_soccer_rounded,
     error: _error,
     submitting: _submitting,
     formKey: _formKey,
     onSubmit: _submit,
     children: <Widget>[
-      _sectionLabel(context, '01', 'Personal identity'),
-      _field(_name, 'Full Name'),
-      _field(_username, 'Username'),
-      _field(_email, 'Email'),
-      _field(_password, 'Password', obscure: true),
-      _field(_country, 'Country'),
-      _field(_state, 'State'),
-      _field(_city, 'City'),
-      _sectionLabel(context, '02', 'Club creation'),
-      _field(_clubName, 'Club Name'),
-      _field(_clubTag, 'Club Short Tag'),
-      _field(_clubState, 'Club State'),
-      _field(_clubLocality, 'Club Locality'),
-      _dropdown('Club Type', _clubType, const <String>[
-        'academy',
-        'professional',
-        'community',
-        'street_team',
-      ], (value) => setState(() => _clubType = value)),
-      _sectionLabel(context, '03', 'Football identity'),
-      _dropdown(
-        'Football Identity',
-        _footballIdentity,
-        const <String>['club_owner', 'player', 'both'],
-        (value) => setState(() => _footballIdentity = value),
+      _sectionLabel(context, '01', 'Your identity'),
+      _field(_name, 'Display name'),
+      _field(_username, '@username'),
+      _field(_email, 'Email (optional)'),
+      _field(_password, 'Password (at least 8 characters)', obscure: true),
+      _sectionLabel(context, '02', 'Age check'),
+      Row(
+        children: <Widget>[
+          Expanded(
+            child: _dropdown(
+              'Year',
+              '$_birthYear',
+              List<String>.generate(60, (int i) => '${DateTime.now().year - 18 - i}'),
+              (value) => setState(() => _birthYear = int.parse(value)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _dropdown(
+              'Month',
+              '$_birthMonth',
+              List<String>.generate(12, (int i) => '${i + 1}'),
+              (value) => setState(() => _birthMonth = int.parse(value)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _dropdown(
+              'Day',
+              '$_birthDay',
+              List<String>.generate(31, (int i) => '${i + 1}'),
+              (value) => setState(() => _birthDay = int.parse(value)),
+            ),
+          ),
+        ],
       ),
-      if (_footballIdentity == 'player' ||
-          _footballIdentity == 'both') ...<Widget>[
-        _field(_position, 'Position'),
-        _field(_dominantFoot, 'Dominant Foot'),
-        _field(_height, 'Height'),
-        _field(_jersey, 'Jersey Number'),
-        _field(_preferredRole, 'Preferred Role'),
-      ],
+      CheckboxListTile(
+        contentPadding: EdgeInsets.zero,
+        value: _isOver18,
+        onChanged: (bool? value) => setState(() => _isOver18 = value ?? false),
+        title: const Text('I confirm I am 18 or older'),
+        controlAffinity: ListTileControlAffinity.leading,
+      ),
+      const Text(
+        'Security check runs automatically. Club creation happens in the Hub after signup.',
+        style: TextStyle(fontSize: 12, color: Color(0xFF8B97A5)),
+      ),
     ],
   );
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_isOver18) {
+      setState(() => _error = 'Confirm you are 18 or older to continue.');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -343,42 +350,17 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
         baseUrl: widget.config.apiBaseUrl,
         mode: widget.config.backendMode,
       );
+      final String dob =
+          '$_birthYear-${_birthMonth.toString().padLeft(2, '0')}-${_birthDay.toString().padLeft(2, '0')}';
       final session = await client.signupUser(
         GteUserSignupRequest(
-          fullName: _name.text,
-          username: _username.text,
-          email: _email.text,
+          fullName: _name.text.trim(),
+          username: _username.text.trim(),
+          email: _email.text.trim().isEmpty ? null : _email.text.trim(),
           password: _password.text,
-          country: _country.text,
-          state: _state.text,
-          city: _city.text,
-          clubName: _clubName.text,
-          clubShortTag: _clubTag.text,
-          clubCountry: _country.text,
-          clubState: _clubState.text,
-          clubLocality: _clubLocality.text,
-          clubType: _clubType,
-          footballIdentity: _footballIdentity,
-          position:
-              _footballIdentity == 'player' || _footballIdentity == 'both'
-                  ? _position.text
-                  : null,
-          dominantFoot:
-              _footballIdentity == 'player' || _footballIdentity == 'both'
-                  ? _dominantFoot.text
-                  : null,
-          heightCm:
-              _footballIdentity == 'player' || _footballIdentity == 'both'
-                  ? int.tryParse(_height.text)
-                  : null,
-          jerseyNumber:
-              _footballIdentity == 'player' || _footballIdentity == 'both'
-                  ? int.tryParse(_jersey.text)
-                  : null,
-          preferredRole:
-              _footballIdentity == 'player' || _footballIdentity == 'both'
-                  ? _preferredRole.text
-                  : null,
+          isOver18: _isOver18,
+          dateOfBirth: dob,
+          turnstileToken: 'dev-bypass',
         ),
       );
       widget.controller.syncSession(session);

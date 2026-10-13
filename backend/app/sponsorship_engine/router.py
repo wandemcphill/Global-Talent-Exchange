@@ -8,9 +8,14 @@ from app.models.user import User
 from app.sponsorship_engine.schemas import (
     ClubSponsorAssignmentRequest,
     ClubSponsorView,
+    RegenEndorsementCreateRequest,
+    RegenEndorsementRespondRequest,
+    RegenEndorsementView,
     SponsorCategoryToggleRequest,
     SponsorEligibilityMetricsView,
     SponsorEligibilityView,
+    SponsorOfferBroadcastRequest,
+    SponsorOfferBroadcastResult,
     SponsorOfferCreateRequest,
     SponsorOfferRuleUpsertRequest,
     SponsorOfferRuleView,
@@ -28,6 +33,7 @@ from app.sponsorship_engine.schemas import (
     SponsorshipReviewRequest,
     SponsorshipSettlementView,
 )
+from app.sponsorship_engine.endorsement_service import RegenEndorsementError, RegenEndorsementService
 from app.sponsorship_engine.offer_service import ClubSponsorOfferError, ClubSponsorOfferService
 from app.sponsorship_engine.service import SponsorshipEngineError, SponsorshipEngineService
 from app.services.sponsorship_placement_service import SponsorshipPlacementService
@@ -194,6 +200,91 @@ def admin_assign_offer(
     session.commit()
     session.refresh(sponsor)
     return ClubSponsorView.model_validate(sponsor)
+
+
+@admin_router.post("/offers/{offer_id}/broadcast", response_model=SponsorOfferBroadcastResult)
+def admin_broadcast_offer(
+    offer_id: str,
+    payload: SponsorOfferBroadcastRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> SponsorOfferBroadcastResult:
+    service = ClubSponsorOfferService(session=session, analytics=AnalyticsService())
+    try:
+        result = service.broadcast_offer_to_top_clubs(
+            actor=actor,
+            offer_id=offer_id,
+            limit=payload.limit,
+            min_fan_count=payload.min_fan_count,
+            require_eligible=payload.require_eligible,
+        )
+    except ClubSponsorOfferError as exc:
+        _raise_offer(exc)
+    session.commit()
+    return SponsorOfferBroadcastResult.model_validate(result)
+
+
+@admin_router.post("/regen-endorsements", response_model=RegenEndorsementView, status_code=status.HTTP_201_CREATED)
+def admin_create_regen_endorsement(
+    payload: RegenEndorsementCreateRequest,
+    actor: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
+) -> RegenEndorsementView:
+    service = RegenEndorsementService(session)
+    try:
+        deal = service.create_offer(
+            actor=actor,
+            player_id=payload.player_id,
+            sponsor_name=payload.sponsor_name,
+            brand_label=payload.brand_label,
+            deal_value_minor=payload.deal_value_minor,
+            term_months=payload.term_months,
+            badge_label=payload.badge_label,
+            creative_url=payload.creative_url,
+            notes=payload.notes,
+            activate=payload.activate,
+        )
+    except RegenEndorsementError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    session.commit()
+    session.refresh(deal)
+    return RegenEndorsementView.model_validate(deal)
+
+
+@router.get("/regen-endorsements/{player_id}", response_model=list[RegenEndorsementView])
+def list_regen_endorsements(
+    player_id: str,
+    session: Session = Depends(get_session),
+) -> list[RegenEndorsementView]:
+    service = RegenEndorsementService(session)
+    return [RegenEndorsementView.model_validate(item) for item in service.list_for_player(player_id=player_id)]
+
+
+@router.get("/regen-endorsements/{player_id}/badge")
+def regen_endorsement_badge(
+    player_id: str,
+    session: Session = Depends(get_session),
+) -> dict:
+    service = RegenEndorsementService(session)
+    badge = service.active_badge(player_id=player_id)
+    return badge or {}
+
+
+@router.post("/regen-endorsements/{deal_id}/respond", response_model=RegenEndorsementView)
+def respond_regen_endorsement(
+    deal_id: str,
+    payload: RegenEndorsementRespondRequest,
+    actor: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> RegenEndorsementView:
+    service = RegenEndorsementService(session)
+    try:
+        deal = service.respond(actor=actor, deal_id=deal_id, accept=payload.accept)
+    except RegenEndorsementError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    session.commit()
+    session.refresh(deal)
+    return RegenEndorsementView.model_validate(deal)
 
 
 @admin_router.post("/categories/{category}", response_model=list[SponsorOfferView])

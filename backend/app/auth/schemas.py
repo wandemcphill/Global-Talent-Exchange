@@ -115,21 +115,31 @@ class ComplianceSubmissionRequest(BaseModel):
 
 
 class UserClubSignupRequest(BaseModel):
+    """Easy signup: display name + @handle + password; email/club optional.
+
+    Older clients that still POST club + country continue to work. When club
+    fields are omitted, signup defers club create (requires_club bootstrap).
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     full_name: str = Field(min_length=2, max_length=160)
     username: str = Field(min_length=3, max_length=64)
-    email: str = Field(min_length=5, max_length=320)
+    email: str | None = Field(default=None, max_length=320)
     password: str = Field(min_length=8, max_length=128)
-    country: str = Field(min_length=2, max_length=120)
+    country: str | None = Field(default=None, max_length=120)
     state: str | None = Field(default=None, max_length=120)
     city: str | None = Field(default=None, max_length=120)
-    club_name: str = Field(min_length=2, max_length=120)
-    club_short_tag: str = Field(min_length=2, max_length=40)
-    club_country: str = Field(min_length=2, max_length=120)
+    date_of_birth: str | None = Field(default=None, max_length=32)
+    # Default True keeps older clients working; easy signup FE always sends explicit.
+    is_over_18: bool = Field(default=True)
+    turnstile_token: str | None = Field(default=None, max_length=2048)
+    club_name: str | None = Field(default=None, max_length=120)
+    club_short_tag: str | None = Field(default=None, max_length=40)
+    club_country: str | None = Field(default=None, max_length=120)
     club_state: str | None = Field(default=None, max_length=120)
     club_locality: str | None = Field(default=None, max_length=120)
-    club_type: ClubType
+    club_type: ClubType | None = None
     crest_asset_ref: str | None = Field(default=None, max_length=255)
     primary_color: str = Field(default="#0F766E", max_length=16)
     secondary_color: str = Field(default="#F8FAFC", max_length=16)
@@ -146,13 +156,21 @@ class UserClubSignupRequest(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def validate_email(cls, value: str) -> str:
-        return RegisterRequest.validate_email(value)
+    def validate_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        return RegisterRequest.validate_email(candidate)
 
     @field_validator("username")
     @classmethod
     def normalize_username(cls, value: str) -> str:
-        resolved = RegisterRequest.normalize_username(value)
+        candidate = value.strip().lower()
+        if candidate.startswith("@"):
+            candidate = candidate[1:]
+        resolved = RegisterRequest.normalize_username(candidate)
         if resolved is None:
             raise ValueError("Username is required.")
         return resolved
@@ -162,6 +180,7 @@ class UserClubSignupRequest(BaseModel):
         "country",
         "state",
         "city",
+        "date_of_birth",
         "club_name",
         "club_short_tag",
         "club_country",
@@ -174,6 +193,7 @@ class UserClubSignupRequest(BaseModel):
         "position",
         "dominant_foot",
         "preferred_role",
+        "turnstile_token",
     )
     @classmethod
     def normalize_text(cls, value: str | None) -> str | None:
@@ -184,13 +204,40 @@ class UserClubSignupRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_player_fields(self) -> "UserClubSignupRequest":
-        identity = self.football_identity.strip().lower().replace(" ", "_")
+        from datetime import date
+
+        if not self.is_over_18:
+            raise ValueError("You must confirm you are at least 18 years old.")
+        if self.date_of_birth:
+            try:
+                dob = date.fromisoformat(self.date_of_birth[:10])
+            except ValueError as exc:
+                raise ValueError("date_of_birth must be YYYY-MM-DD.") from exc
+            today = date.today()
+            age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+            if age < 18:
+                raise ValueError("You must be at least 18 years old to sign up.")
+
+        identity = (self.football_identity or "club_owner").strip().lower().replace(" ", "_")
         if identity not in {"club_owner", "player", "both"}:
             raise ValueError("football_identity must be club_owner, player, or both.")
         self.football_identity = identity
         if identity in {"player", "both"} and not self.position:
             raise ValueError("position is required when football_identity includes player.")
+
+        creating_club = bool(self.club_name)
+        if creating_club:
+            if not self.club_short_tag:
+                raise ValueError("club_short_tag is required when creating a club.")
+            if self.club_type is None:
+                raise ValueError("club_type is required when creating a club.")
+            if not self.club_country and not self.country:
+                raise ValueError("club_country or country is required when creating a club.")
         return self
+
+    @property
+    def creates_club(self) -> bool:
+        return bool(self.club_name and self.club_short_tag and self.club_type is not None)
 
 
 class CreatorSignupRequest(BaseModel):
