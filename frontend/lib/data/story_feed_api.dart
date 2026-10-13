@@ -57,6 +57,16 @@ class StoryFeedApi {
     }, () => _requireFixtures().feed());
   }
 
+  Future<List<StoryFeedItem>> listAdminFeed({int limit = 100}) {
+    return client.withFallback<List<StoryFeedItem>>(() async {
+      final List<dynamic> payload = await client.getList(
+        '/api/admin/story-feed',
+        query: <String, Object?>{'limit': limit},
+      );
+      return payload.map(StoryFeedItem.fromJson).toList(growable: false);
+    }, () => _requireFixtures().feed());
+  }
+
   Future<StoryDigest> fetchDigest() {
     return client.withFallback<StoryDigest>(() async {
       final Map<String, dynamic> payload = await client.getMap(
@@ -76,6 +86,7 @@ class StoryFeedApi {
     String? subjectId,
     String? countryCode,
     bool featured = false,
+    DateTime? scheduledFor,
   }) {
     return client.withFallback<StoryFeedItem>(() async {
       final Object? payload = await client.request(
@@ -91,10 +102,44 @@ class StoryFeedApi {
           if (countryCode != null) 'country_code': countryCode,
           'featured': featured,
           'metadata_json': <String, Object?>{},
+          if (scheduledFor != null)
+            'scheduled_for': scheduledFor.toUtc().toIso8601String(),
         },
       );
       return StoryFeedItem.fromJson(payload);
     }, () async => _requireFixtures().publishStory(title: title, body: body));
+  }
+
+  Future<StoryFeedItem> scheduleStory({
+    required String storyId,
+    required DateTime scheduledFor,
+  }) {
+    return client.withFallback<StoryFeedItem>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/api/admin/story-feed/$storyId/schedule',
+        body: <String, Object?>{
+          'scheduled_for': scheduledFor.toUtc().toIso8601String(),
+        },
+      );
+      return StoryFeedItem.fromJson(payload);
+    }, () async => _requireFixtures().scheduleStory(storyId: storyId, scheduledFor: scheduledFor));
+  }
+
+  Future<StoryFeedItem> rejectStory({
+    required String storyId,
+    String? reason,
+  }) {
+    return client.withFallback<StoryFeedItem>(() async {
+      final Object? payload = await client.request(
+        'POST',
+        '/api/admin/story-feed/$storyId/reject',
+        body: <String, Object?>{
+          if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+        },
+      );
+      return StoryFeedItem.fromJson(payload);
+    }, () async => _requireFixtures().rejectStory(storyId: storyId, reason: reason));
   }
 
   _StoryFeedFixtures _requireFixtures() {
@@ -163,5 +208,63 @@ class _StoryFeedFixtures {
     );
     _items.insert(0, item);
     return item;
+  }
+
+  Future<StoryFeedItem> scheduleStory({
+    required String storyId,
+    required DateTime scheduledFor,
+  }) async {
+    final int index = _items.indexWhere((StoryFeedItem item) => item.id == storyId);
+    if (index < 0) {
+      throw StateError('Fixture story $storyId was not found.');
+    }
+    final StoryFeedItem current = _items[index];
+    final StoryFeedItem updated = StoryFeedItem(
+      id: current.id,
+      storyType: current.storyType,
+      title: current.title,
+      body: current.body,
+      audience: current.audience,
+      subjectType: current.subjectType,
+      subjectId: current.subjectId,
+      countryCode: current.countryCode,
+      featured: current.featured,
+      createdAt: current.createdAt,
+      metadata: current.metadata,
+      moderationStatus: 'scheduled',
+      scheduledFor: scheduledFor.toUtc(),
+    );
+    _items[index] = updated;
+    return updated;
+  }
+
+  Future<StoryFeedItem> rejectStory({
+    required String storyId,
+    String? reason,
+  }) async {
+    final int index = _items.indexWhere((StoryFeedItem item) => item.id == storyId);
+    if (index < 0) {
+      throw StateError('Fixture story $storyId was not found.');
+    }
+    final StoryFeedItem current = _items[index];
+    final StoryFeedItem updated = StoryFeedItem(
+      id: current.id,
+      storyType: current.storyType,
+      title: current.title,
+      body: current.body,
+      audience: current.audience,
+      subjectType: current.subjectType,
+      subjectId: current.subjectId,
+      countryCode: current.countryCode,
+      featured: false,
+      createdAt: current.createdAt,
+      metadata: <String, Object?>{
+        ...current.metadata,
+        if (reason != null && reason.trim().isNotEmpty) 'reject_reason': reason.trim(),
+      },
+      moderationStatus: 'rejected',
+    );
+    _items[index] = updated;
+    return updated;
   }
 }

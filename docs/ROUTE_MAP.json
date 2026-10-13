@@ -40538,6 +40538,91 @@
     },
     {
       "method": "GET",
+      "path": "/admin/story-feed",
+      "effective_paths": [
+        "/api/admin/story-feed"
+      ],
+      "file": "backend/app/story_feed_engine/router.py",
+      "handler": "admin_list_story_feed",
+      "router_variable": "admin_router",
+      "module_path": "app.story_feed_engine.router",
+      "module_mounts": [
+        "story_feed_engine_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "limit",
+          "story_type",
+          "country_code",
+          "session",
+          "current_admin"
+        ]
+      },
+      "response_shape": {
+        "response_model": "list[StoryFeedItemResponse]",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "story"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/story-feed/{story_id}/schedule",
+      "effective_paths": [
+        "/api/admin/story-feed/{story_id}/schedule"
+      ],
+      "file": "backend/app/story_feed_engine/router.py",
+      "handler": "schedule_story",
+      "router_variable": "admin_router",
+      "module_path": "app.story_feed_engine.router",
+      "module_mounts": [
+        "story_feed_engine_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "story_id",
+          "payload",
+          "session",
+          "current_admin"
+        ]
+      },
+      "response_shape": {
+        "response_model": "StoryFeedItemResponse",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "story"
+    },
+    {
+      "method": "POST",
+      "path": "/admin/story-feed/{story_id}/reject",
+      "effective_paths": [
+        "/api/admin/story-feed/{story_id}/reject"
+      ],
+      "file": "backend/app/story_feed_engine/router.py",
+      "handler": "reject_story",
+      "router_variable": "admin_router",
+      "module_path": "app.story_feed_engine.router",
+      "module_mounts": [
+        "story_feed_engine_admin"
+      ],
+      "request_shape": {
+        "parameters": [
+          "story_id",
+          "payload",
+          "session",
+          "current_admin"
+        ]
+      },
+      "response_shape": {
+        "response_model": "StoryFeedItemResponse",
+        "returns": null
+      },
+      "version": "canonical",
+      "domain": "story"
+    },
+    {
+      "method": "GET",
       "path": "/admin/streamer-tournaments/policy",
       "effective_paths": [
         "/api/admin/streamer-tournaments/policy"

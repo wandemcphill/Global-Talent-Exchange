@@ -14,8 +14,8 @@ Trading (System A) and Coin Trader UX are treated as complete and are out of sco
 ### 1. Regen — Admin Create-a-Son queue — DONE
 Wired live `listCreationOrders` / pay / generate; demo queue only via fixture repository.
 
-### 2. AI Newsroom — Admin publish path — DONE (schedule/reject still locked)
-Live story-feed queue + `POST /api/admin/story-feed` publish; mounted in Admin Command Center newsroom module. Schedule/reject stay disabled until moderation endpoints exist.
+### 2. AI Newsroom — Admin publish + schedule/reject — DONE
+Live story-feed queue + `POST /api/admin/story-feed` publish; `GET /api/admin/story-feed` desk list; `POST .../schedule` and `POST .../reject` moderation; Admin Newsroom Schedule/Reject controls wired.
 
 ### 3. Advertising — Match overlay mount — DONE
 `GtexFlashSplitAdOverlay` mounts in `GtexMatchViewerScreen` from live flash/split/pre-roll placements; premium ad-free skips overlay.

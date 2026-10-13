@@ -17614,6 +17614,19 @@
       }
     },
     "story": {
+      "get_api_v2_admin_story_feed": {
+        "method": "GET",
+        "canonical_path": "/api/v2/admin/story-feed",
+        "aliases": [
+          "/admin/story-feed",
+          "/api/admin/story-feed",
+          "/api/v1/admin/story-feed",
+          "/api/v2/admin/story-feed"
+        ],
+        "handler": "admin_list_story_feed",
+        "source_file": "backend/app/story_feed_engine/router.py",
+        "response_model": "list[StoryFeedItemResponse]"
+      },
       "get_api_v2_story_feed": {
         "method": "GET",
         "canonical_path": "/api/v2/story-feed",
@@ -17650,6 +17663,32 @@
           "/api/v2/admin/story-feed"
         ],
         "handler": "publish_story",
+        "source_file": "backend/app/story_feed_engine/router.py",
+        "response_model": "StoryFeedItemResponse"
+      },
+      "post_api_v2_admin_story_feed_story_id_reject": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/story-feed/{story_id}/reject",
+        "aliases": [
+          "/admin/story-feed/{story_id}/reject",
+          "/api/admin/story-feed/{story_id}/reject",
+          "/api/v1/admin/story-feed/{story_id}/reject",
+          "/api/v2/admin/story-feed/{story_id}/reject"
+        ],
+        "handler": "reject_story",
+        "source_file": "backend/app/story_feed_engine/router.py",
+        "response_model": "StoryFeedItemResponse"
+      },
+      "post_api_v2_admin_story_feed_story_id_schedule": {
+        "method": "POST",
+        "canonical_path": "/api/v2/admin/story-feed/{story_id}/schedule",
+        "aliases": [
+          "/admin/story-feed/{story_id}/schedule",
+          "/api/admin/story-feed/{story_id}/schedule",
+          "/api/v1/admin/story-feed/{story_id}/schedule",
+          "/api/v2/admin/story-feed/{story_id}/schedule"
+        ],
+        "handler": "schedule_story",
         "source_file": "backend/app/story_feed_engine/router.py",
         "response_model": "StoryFeedItemResponse"
       }
@@ -20970,7 +21009,9 @@
     "/api/v2/admin/sponsorship/offers/{offer_id}/assign": "post_api_v2_admin_sponsorship_offers_offer_id_assign",
     "/api/v2/admin/sponsorship/offers/{offer_id}/rule": "put_api_v2_admin_sponsorship_offers_offer_id_rule",
     "/api/v2/admin/sponsorship/packages": "get_api_v2_admin_sponsorship_packages",
-    "/api/v2/admin/story-feed": "post_api_v2_admin_story_feed",
+    "/api/v2/admin/story-feed": "get_api_v2_admin_story_feed",
+    "/api/v2/admin/story-feed/{story_id}/reject": "post_api_v2_admin_story_feed_story_id_reject",
+    "/api/v2/admin/story-feed/{story_id}/schedule": "post_api_v2_admin_story_feed_story_id_schedule",
     "/api/v2/admin/streamer-tournaments/policy": "put_api_v2_admin_streamer_tournaments_policy",
     "/api/v2/admin/streamer-tournaments/risk-signals": "get_api_v2_admin_streamer_tournaments_risk_signals",
     "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review": "post_api_v2_admin_streamer_tournaments_risk_signals_signal_id_review",
@@ -22318,6 +22359,8 @@
     "/admin/sponsorship/offers/{offer_id}/rule": "/api/v2/admin/sponsorship/offers/{offer_id}/rule",
     "/admin/sponsorship/packages": "/api/v2/admin/sponsorship/packages",
     "/admin/story-feed": "/api/v2/admin/story-feed",
+    "/admin/story-feed/{story_id}/reject": "/api/v2/admin/story-feed/{story_id}/reject",
+    "/admin/story-feed/{story_id}/schedule": "/api/v2/admin/story-feed/{story_id}/schedule",
     "/admin/streamer-tournaments/policy": "/api/v2/admin/streamer-tournaments/policy",
     "/admin/streamer-tournaments/risk-signals": "/api/v2/admin/streamer-tournaments/risk-signals",
     "/admin/streamer-tournaments/risk-signals/{signal_id}/review": "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review",
@@ -22644,6 +22687,8 @@
     "/api/admin/sponsorship/offers/{offer_id}/rule": "/api/v2/admin/sponsorship/offers/{offer_id}/rule",
     "/api/admin/sponsorship/packages": "/api/v2/admin/sponsorship/packages",
     "/api/admin/story-feed": "/api/v2/admin/story-feed",
+    "/api/admin/story-feed/{story_id}/reject": "/api/v2/admin/story-feed/{story_id}/reject",
+    "/api/admin/story-feed/{story_id}/schedule": "/api/v2/admin/story-feed/{story_id}/schedule",
     "/api/admin/streamer-tournaments/policy": "/api/v2/admin/streamer-tournaments/policy",
     "/api/admin/streamer-tournaments/risk-signals": "/api/v2/admin/streamer-tournaments/risk-signals",
     "/api/admin/streamer-tournaments/risk-signals/{signal_id}/review": "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review",
@@ -23999,6 +24044,8 @@
     "/api/v1/admin/sponsorship/offers/{offer_id}/rule": "/api/v2/admin/sponsorship/offers/{offer_id}/rule",
     "/api/v1/admin/sponsorship/packages": "/api/v2/admin/sponsorship/packages",
     "/api/v1/admin/story-feed": "/api/v2/admin/story-feed",
+    "/api/v1/admin/story-feed/{story_id}/reject": "/api/v2/admin/story-feed/{story_id}/reject",
+    "/api/v1/admin/story-feed/{story_id}/schedule": "/api/v2/admin/story-feed/{story_id}/schedule",
     "/api/v1/admin/streamer-tournaments/policy": "/api/v2/admin/streamer-tournaments/policy",
     "/api/v1/admin/streamer-tournaments/risk-signals": "/api/v2/admin/streamer-tournaments/risk-signals",
     "/api/v1/admin/streamer-tournaments/risk-signals/{signal_id}/review": "/api/v2/admin/streamer-tournaments/risk-signals/{signal_id}/review",

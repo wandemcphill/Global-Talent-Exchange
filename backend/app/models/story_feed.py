@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, ForeignKey, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -23,6 +24,12 @@ class StoryFeedItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     country_code: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
-    published_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    moderation_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="published", server_default="published", index=True
+    )
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    published_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     published_by_user: Mapped["User | None"] = relationship()

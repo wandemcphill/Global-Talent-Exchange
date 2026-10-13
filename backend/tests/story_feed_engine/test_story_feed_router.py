@@ -1,42 +1,10 @@
 from __future__ import annotations
 
-from app.auth.service import AuthService
-from app.main import (
-    INITIAL_ADMIN_DISPLAY_NAME,
-    INITIAL_ADMIN_EMAIL,
-    INITIAL_ADMIN_PASSWORD,
-)
-from backend.tests.support.secrets import DASHBOARD_TEST_ADMIN_PASSWORD
 
-
-def _ensure_admin_ready(client) -> None:
-    startup_thread = getattr(client.app.state, "deferred_startup_thread", None)
-    if startup_thread is not None and startup_thread.is_alive():
-        startup_thread.join(timeout=5)
-    with client.app.state.session_factory() as session:
-        AuthService().ensure_admin_user(
-            session,
-            email=INITIAL_ADMIN_EMAIL,
-            password=INITIAL_ADMIN_PASSWORD,
-            username="story-feed-test-admin",
-            display_name=INITIAL_ADMIN_DISPLAY_NAME,
-        )
-        session.commit()
-
-
-def _login(client, *, email: str, password: str) -> dict[str, str]:
-    _ensure_admin_ready(client)
-    response = client.post("/auth/login", json={"email": email, "password": password})
-    assert response.status_code == 200, response.text
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
-
-
-def test_story_feed_lists_auto_generated_national_team_stories(client, demo_seed) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+def test_story_feed_lists_auto_generated_national_team_stories(client, demo_seed, bootstrap_admin_headers) -> None:
     response = client.post(
-        "/admin/national-team-engine/competitions",
-        headers=admin_headers,
+        "/api/admin/national-team-engine/competitions",
+        headers=bootstrap_admin_headers,
         json={
             "key": "afcon-2032",
             "title": "AFCON Showcase",
@@ -49,17 +17,16 @@ def test_story_feed_lists_auto_generated_national_team_stories(client, demo_seed
     )
     assert response.status_code == 200, response.text
 
-    feed_response = client.get("/story-feed")
+    feed_response = client.get("/api/story-feed")
     assert feed_response.status_code == 200
     stories = feed_response.json()
     assert any(item["story_type"] == "national_team_launch" for item in stories)
 
 
-def test_admin_can_publish_manual_story_and_digest_surfaces_it(client) -> None:
-    admin_headers = _login(client, email="vidvimedialtd@gmail.com", password=DASHBOARD_TEST_ADMIN_PASSWORD)
+def test_admin_can_publish_manual_story_and_digest_surfaces_it(client, bootstrap_admin_headers) -> None:
     response = client.post(
-        "/admin/story-feed",
-        headers=admin_headers,
+        "/api/admin/story-feed",
+        headers=bootstrap_admin_headers,
         json={
             "story_type": "featured_update",
             "title": "Transfer window heating up",
@@ -73,14 +40,15 @@ def test_admin_can_publish_manual_story_and_digest_surfaces_it(client) -> None:
     assert response.status_code == 200, response.text
     payload = response.json()
     assert payload["featured"] is True
+    assert payload["moderation_status"] == "published"
 
-    digest_response = client.get("/story-feed/digest?country_code=NG")
+    digest_response = client.get("/api/story-feed/digest?country_code=NG")
     assert digest_response.status_code == 200, digest_response.text
     digest = digest_response.json()
     assert any(item["story_type"] == "featured_update" for item in digest["feature_stories"])
 
     filtered_response = client.get(
-        "/story-feed?subject_type=club_sale_transfer&subject_id=club_transfer_demo&featured_only=true"
+        "/api/story-feed?subject_type=club_sale_transfer&subject_id=club_transfer_demo&featured_only=true"
     )
     assert filtered_response.status_code == 200, filtered_response.text
     filtered_payload = filtered_response.json()
