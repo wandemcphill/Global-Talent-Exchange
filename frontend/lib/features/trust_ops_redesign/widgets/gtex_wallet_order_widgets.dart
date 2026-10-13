@@ -198,8 +198,10 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
     this.selectedKycCase,
     this.adminMode = false,
     this.kycReviewBusy = false,
+    this.disputeReplyBusy = false,
     this.onApproveKyc,
     this.onRejectKyc,
+    this.onReplyDispute,
   });
 
   final GtexTrustOpsState state;
@@ -210,8 +212,10 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
   final GtexKycCaseRecord? selectedKycCase;
   final bool adminMode;
   final bool kycReviewBusy;
+  final bool disputeReplyBusy;
   final VoidCallback? onApproveKyc;
   final VoidCallback? onRejectKyc;
+  final VoidCallback? onReplyDispute;
 
   bool get _canReviewSelectedKyc {
     final GtexKycCaseRecord? item = selectedKycCase;
@@ -225,8 +229,18 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
         item.status == GtexTrustStatus.attention;
   }
 
+  bool get _canReplySelectedDispute {
+    final GtexDisputeRecord? item = selectedDispute;
+    if (!adminMode || item == null || onReplyDispute == null) {
+      return false;
+    }
+    return item.status == GtexTrustStatus.attention ||
+        item.status == GtexTrustStatus.pending;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool hasLiveAction = _canReviewSelectedKyc || _canReplySelectedDispute;
     return ListView(
       padding: const EdgeInsets.all(GtexSpacing.md),
       children: <Widget>[
@@ -234,9 +248,11 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
           title: adminMode ? 'Operator actions' : 'Wallet actions',
           subtitle:
               adminMode
-                  ? (_canReviewSelectedKyc
-                      ? 'Live treasury KYC review is mounted for the selected case.'
-                      : 'KYC approve/reject is live; disputes and orders stay read-only until their adapters mount.')
+                  ? (_canReplySelectedDispute
+                      ? 'Live treasury dispute reply is mounted for the selected case.'
+                      : (_canReviewSelectedKyc
+                          ? 'Live treasury KYC review is mounted for the selected case.'
+                          : 'KYC review and dispute reply are live; orders stay read-only until their adapters mount.'))
                   : state.wallet.kycStatus,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -262,6 +278,7 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
                     dispute: selectedDispute,
                     kycCase: selectedKycCase,
                     canReviewKyc: _canReviewSelectedKyc,
+                    canReplyDispute: _canReplySelectedDispute,
                   ),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: GtexColors.textSecondary,
@@ -298,7 +315,28 @@ class GtexTrustRightSummaryPanel extends StatelessWidget {
                       ),
                     ],
                   ),
-                ] else
+                ] else if (_canReplySelectedDispute) ...<Widget>[
+                  GtexActionButton(
+                    label: disputeReplyBusy ? 'Sending…' : 'Reply to dispute',
+                    icon: Icons.reply_outlined,
+                    onPressed: disputeReplyBusy ? null : onReplyDispute,
+                  ),
+                  const SizedBox(height: GtexSpacing.md),
+                  const Wrap(
+                    spacing: GtexSpacing.xs,
+                    runSpacing: GtexSpacing.xs,
+                    children: <Widget>[
+                      GtexStatusChip(
+                        label: 'DISPUTE LIVE',
+                        color: GtexColors.cyan,
+                      ),
+                      GtexStatusChip(
+                        label: 'ADMIN REPLY',
+                        color: GtexColors.gold,
+                      ),
+                    ],
+                  ),
+                ] else if (!hasLiveAction)
                   const Wrap(
                     spacing: GtexSpacing.xs,
                     runSpacing: GtexSpacing.xs,
@@ -361,12 +399,16 @@ String _selectedReviewSummary({
   required GtexDisputeRecord? dispute,
   required GtexKycCaseRecord? kycCase,
   required bool canReviewKyc,
+  required bool canReplyDispute,
 }) {
   if (order != null) {
     return 'Selected order ${order.id} is available for inspection. Approve, info-request, and escalation mutations remain locked until the live review adapter is mounted.';
   }
   if (dispute != null) {
-    return 'Selected dispute ${dispute.id} is available for inspection. Resolution mutations remain locked until the live review adapter is mounted.';
+    if (canReplyDispute) {
+      return 'Selected dispute ${dispute.id} is ready for a live admin reply (moves case to awaiting user).';
+    }
+    return 'Selected dispute ${dispute.id} is available for inspection. Reply unlocks for open or awaiting-admin cases.';
   }
   if (kycCase != null) {
     if (canReviewKyc) {
@@ -374,7 +416,7 @@ String _selectedReviewSummary({
     }
     return 'Selected KYC case ${kycCase.id} is available for inspection. Approve/reject unlocks for pending or attention cases.';
   }
-  return 'Select a KYC case to approve or reject, or inspect orders and disputes (still read-only).';
+  return 'Select a KYC case to approve/reject or a dispute to reply. Orders remain read-only.';
 }
 
 class _OperationsReadinessCard extends StatelessWidget {

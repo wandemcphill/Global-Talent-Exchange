@@ -11,6 +11,12 @@ abstract class GtexTrustOpsRepository {
     required bool approve,
     String? rejectionReason,
   }) async {}
+
+  /// Post an admin reply on a treasury dispute. Demo/fixture repos no-op.
+  Future<void> replyToDispute(
+    String disputeId, {
+    required String message,
+  }) async {}
 }
 
 /// Fixture repository used by tests and offline preview mode.

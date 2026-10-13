@@ -37,6 +37,7 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
   String? _selectedDisputeId;
   String? _selectedOrderId;
   bool _kycReviewBusy = false;
+  bool _disputeReplyBusy = false;
 
   @override
   void initState() {
@@ -133,6 +134,7 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
             selectedKycCase: selectedKyc,
             adminMode: true,
             kycReviewBusy: _kycReviewBusy,
+            disputeReplyBusy: _disputeReplyBusy,
             onApproveKyc:
                 selectedKyc == null
                     ? null
@@ -141,6 +143,8 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
                 selectedKyc == null
                     ? null
                     : () => _reviewSelectedKyc(approve: false),
+            onReplyDispute:
+                selectedDispute == null ? null : _promptDisputeReply,
             onTopUp: _showAdminActionUnavailable,
             onWithdraw: _showAdminActionUnavailable,
           ),
@@ -192,8 +196,8 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
   }
 
   Future<void> _reviewSelectedKyc({required bool approve}) async {
-    final GtexTrustOpsState? state = await _future;
-    if (!mounted || state == null) {
+    final GtexTrustOpsState state = await _future;
+    if (!mounted) {
       return;
     }
     final GtexKycCaseRecord? selected = _selectedKycCase(state);
@@ -230,6 +234,80 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
       setState(() => _kycReviewBusy = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('KYC review failed: $error')),
+      );
+    }
+  }
+
+  Future<void> _promptDisputeReply() async {
+    final GtexTrustOpsState state = await _future;
+    if (!mounted) {
+      return;
+    }
+    final GtexDisputeRecord? selected = _selectedDispute(state);
+    if (selected == null) {
+      return;
+    }
+    final TextEditingController controller = TextEditingController(
+      text:
+          'We reviewed dispute ${selected.id}. Please reply with any additional details.',
+    );
+    final String? message = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Reply to dispute'),
+          content: TextField(
+            controller: controller,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              labelText: 'Admin message',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('Send reply'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (message == null || !mounted) {
+      return;
+    }
+    final String trimmed = message.trim();
+    if (trimmed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dispute reply message is required.')),
+      );
+      return;
+    }
+    setState(() => _disputeReplyBusy = true);
+    try {
+      await _repository.replyToDispute(selected.id, message: trimmed);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Reply sent on dispute ${selected.id}.')),
+      );
+      setState(() {
+        _disputeReplyBusy = false;
+        _future = _repository.load();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _disputeReplyBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Dispute reply failed: $error')),
       );
     }
   }

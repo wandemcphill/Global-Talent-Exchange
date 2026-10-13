@@ -78,6 +78,37 @@ void main() {
     expect(find.text('KYC kyc-201 verified.'), findsOneWidget);
   });
 
+  testWidgets('admin trust ops reply posts dispute message', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final _RecordingTrustOpsRepository repository =
+        _RecordingTrustOpsRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: Scaffold(
+          body: GtexAdminTrustOpsScreen(repository: repository),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Disputes').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Reply to dispute'), findsOneWidget);
+    await tester.tap(find.text('Reply to dispute'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send reply'));
+    await tester.pumpAndSettle();
+
+    expect(repository.replyCalls.length, 1);
+    expect(repository.replyCalls.single.$1, 'dsp-301');
+    expect(repository.replyCalls.single.$2, contains('dsp-301'));
+    expect(find.text('Reply sent on dispute dsp-301.'), findsOneWidget);
+  });
+
   test('operations readiness JSON parses live admin snapshot', () {
     final GtexOperationsReadinessSnapshot snapshot =
         GtexOperationsReadinessSnapshot.fromJson(<String, Object?>{
@@ -201,6 +232,7 @@ void main() {
 
 class _RecordingTrustOpsRepository extends GtexTrustOpsRepository {
   final List<(String, bool)> reviewCalls = <(String, bool)>[];
+  final List<(String, String)> replyCalls = <(String, String)>[];
 
   @override
   Future<GtexTrustOpsState> load() async {
@@ -226,7 +258,17 @@ class _RecordingTrustOpsRepository extends GtexTrustOpsRepository {
           notes: 'Address document needs operator confirmation.',
         ),
       ],
-      disputes: <GtexDisputeRecord>[],
+      disputes: <GtexDisputeRecord>[
+        GtexDisputeRecord(
+          id: 'dsp-301',
+          title: 'Order escrow clarification',
+          counterparty: 'Lagos Titans FC',
+          status: GtexTrustStatus.attention,
+          amountCredits: 2200000,
+          openedLabel: 'Today',
+          summary: 'Buyer claims basket payment was captured.',
+        ),
+      ],
     );
   }
 
@@ -237,6 +279,14 @@ class _RecordingTrustOpsRepository extends GtexTrustOpsRepository {
     String? rejectionReason,
   }) async {
     reviewCalls.add((profileId, approve));
+  }
+
+  @override
+  Future<void> replyToDispute(
+    String disputeId, {
+    required String message,
+  }) async {
+    replyCalls.add((disputeId, message));
   }
 }
 
