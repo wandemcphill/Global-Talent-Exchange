@@ -1675,7 +1675,6 @@ class PlayerLifecycleService:
             if binding_status in {ContractStatus.ACTIVE, ContractStatus.EXPIRING, ContractStatus.AGREED}
             else None
         )
-        active_contract = self._select_current_contract(player_contracts, reference_on=reference_on)
         selling_club_id = payload.selling_club_id
         current_contract_summary = self.get_contract_summary(payload.player_id, on_date=reference_on)
         is_regen_free_agent_offer = regen is not None and club_bound_contract is None
