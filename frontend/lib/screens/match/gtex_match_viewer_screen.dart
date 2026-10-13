@@ -7,6 +7,7 @@ import 'package:gte_frontend/data/match_gift_api.dart';
 import 'package:gte_frontend/models/competition_models.dart';
 import 'package:gte_frontend/models/match_event.dart';
 import 'package:gte_frontend/models/match_timeline_frame.dart';
+import 'package:gte_frontend/models/match_monetization.dart';
 import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/match_viewer_presentation.dart';
 import 'package:gte_frontend/services/match_3d_bridge.dart';
@@ -14,6 +15,7 @@ import 'package:gte_frontend/services/match_3d_live_bootstrap_service.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_commentary_engine.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
+import 'package:gte_frontend/features/match/widgets/gtex_flash_split_ad_overlay.dart';
 import 'package:gte_frontend/features/navigation/presentation/gte_navigation_shell_screen.dart';
 import 'package:gte_frontend/services/ambient_audio_controller.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
@@ -145,6 +147,54 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
     });
   }
 
+  /// Mounts the GTEX flash/split ad overlay from live monetization placements.
+  /// Premium / ad-free viewers skip the overlay entirely.
+  Widget _wrapWithMatchAds({
+    required MatchViewState viewState,
+    required double positionSeconds,
+    required Widget child,
+  }) {
+    final MatchViewerMonetization monetization = viewState.monetization;
+    if (!monetization.adsEnabled || monetization.premiumAdFree) {
+      return child;
+    }
+    final MatchAdPlacement? flash =
+        monetization.firstActiveOfType(
+          MatchAdPlacementType.flash,
+          positionSeconds,
+        ) ??
+        monetization.firstOfType(MatchAdPlacementType.flash) ??
+        monetization.firstOfType(MatchAdPlacementType.preRoll);
+    final MatchAdPlacement? split =
+        monetization.firstActiveOfType(
+          MatchAdPlacementType.split,
+          positionSeconds,
+        ) ??
+        monetization.firstOfType(MatchAdPlacementType.split) ??
+        monetization.firstOfType(MatchAdPlacementType.liveBanner);
+    final String? flashBrand = flash?.brand.trim();
+    final String? splitBrand = split?.brand.trim();
+    if ((flashBrand == null || flashBrand.isEmpty) &&
+        (splitBrand == null || splitBrand.isEmpty)) {
+      return child;
+    }
+    return GtexFlashSplitAdOverlay(
+      flashBrand: flashBrand,
+      splitBrand: splitBrand,
+      enableFlash: flashBrand != null && flashBrand.isNotEmpty,
+      enableSplit: splitBrand != null && splitBrand.isNotEmpty,
+      flashSeconds: flash == null
+          ? 5
+          : ((flash.activeUntilSecond ?? 5) - (flash.activeFromSecond ?? 0))
+              .clamp(1, 5),
+      splitSeconds: split == null
+          ? 10
+          : ((split.activeUntilSecond ?? 10) - (split.activeFromSecond ?? 0))
+              .clamp(1, 10),
+      child: child,
+    );
+  }
+
   Future<void> _openGiftSheet(MatchGiftTarget target) {
     return GtexGiftingSheet.show(
       context,
@@ -251,12 +301,16 @@ class _GtexMatchViewerScreenState extends State<GtexMatchViewerScreen>
                         ),
                         const SizedBox(height: 10),
                         Expanded(
-                          child: _MatchLiveLayout(
+                          child: _wrapWithMatchAds(
                             viewState: viewState,
-                            frame: frame,
-                            previousFrame: controller.leftFrame,
-                            activeEvent: activeEvent,
                             positionSeconds: controller.positionSeconds,
+                            child: _MatchLiveLayout(
+                              viewState: viewState,
+                              frame: frame,
+                              previousFrame: controller.leftFrame,
+                              activeEvent: activeEvent,
+                              positionSeconds: controller.positionSeconds,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 10),

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../core/app_feedback.dart';
 import '../data/competition_control_repository.dart';
 import '../data/manager_market_repository.dart';
+import '../data/personal_manager_api.dart';
+import '../features/manager/gtex_personal_manager_office_panel.dart';
 import '../widgets/gte_shell_theme.dart';
 import '../widgets/gte_state_panel.dart';
 import '../widgets/gte_surface_panel.dart';
@@ -29,6 +31,7 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
   final TextEditingController _searchController = TextEditingController();
   late final ManagerMarketRepository _managerRepository;
   late final CompetitionControlRepository _competitionRepository;
+  late final PersonalManagerApi _personalManagerApi;
   bool _isLoading = true;
   bool _isRunningAction = false;
   String? _error;
@@ -120,6 +123,10 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
       accessToken: widget.accessToken,
     );
     _competitionRepository = CompetitionControlRepository.standard(
+      baseUrl: widget.baseUrl,
+      accessToken: widget.accessToken,
+    );
+    _personalManagerApi = PersonalManagerApi.standard(
       baseUrl: widget.baseUrl,
       accessToken: widget.accessToken,
     );
@@ -1227,6 +1234,12 @@ class _ManagerMarketScreenState extends State<ManagerMarketScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: <Widget>[
+                    GtexPersonalManagerOfficePanel(
+                      api: _personalManagerApi,
+                      clubId: (_team?['club_id'] ?? _team?['clubId'])
+                          ?.toString(),
+                    ),
+                    const SizedBox(height: 16),
                     GteSurfacePanel(
                       accentColor: GteShellTheme.accentWarm,
                       emphasized: true,

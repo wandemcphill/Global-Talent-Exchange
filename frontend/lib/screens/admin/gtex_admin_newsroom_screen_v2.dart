@@ -1,13 +1,26 @@
 import 'package:flutter/material.dart';
 
+import '../../data/story_feed_api.dart';
 import '../../features/engagement_redesign/engagement_models.dart';
 import '../../features/engagement_redesign/engagement_widgets.dart';
+import '../../models/story_feed_models.dart';
 import '../../ui_gtex/ui_gtex.dart';
 
 class GtexAdminNewsroomScreenV2 extends StatefulWidget {
-  const GtexAdminNewsroomScreenV2({super.key, this.queue = const []});
+  const GtexAdminNewsroomScreenV2({
+    super.key,
+    this.api,
+    this.queue = const <GtexNewsroomQueueItem>[],
+    this.allowFixtureData = false,
+    this.embedded = false,
+  });
 
+  /// Live story-feed client. When null and [queue] is empty, the desk fails
+  /// closed unless fixture data is explicitly allowed.
+  final StoryFeedApi? api;
   final List<GtexNewsroomQueueItem> queue;
+  final bool allowFixtureData;
+  final bool embedded;
 
   @override
   State<GtexAdminNewsroomScreenV2> createState() =>
@@ -15,60 +28,301 @@ class GtexAdminNewsroomScreenV2 extends StatefulWidget {
 }
 
 class _GtexAdminNewsroomScreenV2State extends State<GtexAdminNewsroomScreenV2> {
-  GtexNewsroomQueueItem? _selected;
+  late Future<List<_NewsroomStory>> _future;
+  _NewsroomStory? _selected;
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _bodyController = TextEditingController();
+  bool _publishing = false;
+  String? _publishError;
+  String? _publishMessage;
 
   @override
   void initState() {
     super.initState();
+    _future = _load();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _bodyController.dispose();
+    super.dispose();
+  }
+
+  Future<List<_NewsroomStory>> _load() async {
+    final StoryFeedApi? api = widget.api;
+    if (api != null) {
+      final List<StoryFeedItem> items = await api.listFeed(limit: 100);
+      return items.map(_NewsroomStory.fromFeedItem).toList(growable: false);
+    }
     if (widget.queue.isNotEmpty) {
-      _selected = widget.queue.first;
+      return widget.queue
+          .map(_NewsroomStory.fromQueueItem)
+          .toList(growable: false);
+    }
+    if (widget.allowFixtureData) {
+      return StoryFeedApi.fixture().listFeed(limit: 20).then(
+        (List<StoryFeedItem> items) =>
+            items.map(_NewsroomStory.fromFeedItem).toList(growable: false),
+      );
+    }
+    throw StateError(
+      'Live story-feed API is required for Admin Newsroom in production.',
+    );
+  }
+
+  void _reload() {
+    setState(() {
+      _publishError = null;
+      _publishMessage = null;
+      _selected = null;
+      _future = _load();
+    });
+  }
+
+  Future<void> _publishAnnouncement() async {
+    final StoryFeedApi? api = widget.api;
+    final String title = _titleController.text.trim();
+    final String body = _bodyController.text.trim();
+    if (api == null) {
+      setState(
+        () =>
+            _publishError =
+                'Publishing requires an authenticated admin story-feed client.',
+      );
+      return;
+    }
+    if (title.isEmpty || body.isEmpty) {
+      setState(
+        () =>
+            _publishError =
+                'Announcement title and body are required before publish.',
+      );
+      return;
+    }
+    setState(() {
+      _publishing = true;
+      _publishError = null;
+      _publishMessage = null;
+    });
+    try {
+      final StoryFeedItem published = await api.publishStory(
+        storyType: 'announcement',
+        title: title,
+        body: body,
+        audience: 'all',
+        featured: true,
+      );
+      if (!mounted) {
+        return;
+      }
+      _titleController.clear();
+      _bodyController.clear();
+      setState(() {
+        _publishMessage = 'Published “${published.title}”.';
+        _selected = _NewsroomStory.fromFeedItem(published);
+        _future = _load();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _publishError = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _publishing = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final GtexNewsroomQueueItem? selected = _selected;
-    if (selected == null || widget.queue.isEmpty) {
-      return Scaffold(
-        backgroundColor: GtexColors.stadiumBlack,
-        body: SafeArea(
-          child: Center(
+    final Widget body = FutureBuilder<List<_NewsroomStory>>(
+      future: _future,
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<List<_NewsroomStory>> snapshot,
+      ) {
+        if (snapshot.hasError) {
+          return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 560),
               child: GtexPanel(
                 title: 'Live newsroom unavailable',
-                subtitle:
-                    'Admin Newsroom V2 requires the audited live newsroom queue API. Demo newsroom queues are not mounted in strict-live production.',
+                subtitle: snapshot.error.toString(),
                 accent: GtexColors.gold,
-                child: Text(
-                  'No live newsroom queue was supplied by backend authority.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: GtexColors.textMuted,
-                    fontWeight: FontWeight.w700,
-                  ),
+                child: GtexActionButton(
+                  label: 'Retry newsroom',
+                  icon: Icons.refresh,
+                  onPressed: _reload,
+                  accent: GtexColors.gold,
+                  secondary: true,
                 ),
               ),
             ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(color: GtexColors.gold),
+          );
+        }
+        final List<_NewsroomStory> queue = snapshot.data!;
+        final _NewsroomStory? selected =
+            _selected ?? (queue.isEmpty ? null : queue.first);
+        if (selected == null) {
+          return GtexMasterDetailScaffold(
+            title: 'Admin Newsroom',
+            subtitle:
+                'No live stories yet. Compose a GTEX-wide announcement to publish through /api/admin/story-feed.',
+            accent: GtexColors.gold,
+            leftPanel: const GtexEmptyState(
+              title: 'Story feed empty',
+              message:
+                  'Published transfer, club, regen and market stories will appear here for review.',
+              icon: Icons.newspaper_outlined,
+              accent: GtexColors.gold,
+            ),
+            detail: _AnnouncementComposer(
+              titleController: _titleController,
+              bodyController: _bodyController,
+              publishing: _publishing,
+              error: _publishError,
+              message: _publishMessage,
+              onPublish: widget.api == null ? null : _publishAnnouncement,
+            ),
+            rightPanel: const GtexPanel(
+              title: 'Publish controls',
+              subtitle:
+                  'Approve & publish posts the announcement composer to the audited admin story-feed endpoint. Schedule / reject moderation endpoints are not mounted yet.',
+              accent: GtexColors.gold,
+              child: Wrap(
+                spacing: GtexSpacing.xs,
+                runSpacing: GtexSpacing.xs,
+                children: <Widget>[
+                  GtexStatusChip(label: 'PUBLISH LIVE', color: GtexColors.pitch),
+                  GtexStatusChip(
+                    label: 'SCHEDULE LOCKED',
+                    color: GtexColors.cyan,
+                  ),
+                  GtexStatusChip(
+                    label: 'REJECT LOCKED',
+                    color: GtexColors.red,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return GtexMasterDetailScaffold(
+          title: 'Admin Newsroom',
+          subtitle:
+              'Review live story-feed items and publish GTEX-wide announcements.',
+          accent: GtexColors.gold,
+          mobileLeftTitle: 'News queue',
+          leftPanel: _AdminNewsQueue(
+            queue: queue,
+            selected: selected,
+            onSelected: (_NewsroomStory item) => setState(() => _selected = item),
           ),
-        ),
-      );
+          detail: Column(
+            children: <Widget>[
+              Expanded(child: _AdminNewsPreview(item: selected)),
+              Expanded(
+                child: _AnnouncementComposer(
+                  titleController: _titleController,
+                  bodyController: _bodyController,
+                  publishing: _publishing,
+                  error: _publishError,
+                  message: _publishMessage,
+                  onPublish: widget.api == null ? null : _publishAnnouncement,
+                ),
+              ),
+            ],
+          ),
+          rightPanel: _AdminPublishControls(
+            item: selected,
+            publishing: _publishing,
+            canPublish: widget.api != null,
+            onPublishAnnouncement: widget.api == null ? null : _publishAnnouncement,
+            onRefresh: _reload,
+          ),
+        );
+      },
+    );
+    if (widget.embedded) {
+      return body;
     }
-    return GtexMasterDetailScaffold(
-      title: 'Admin Newsroom',
-      subtitle:
-          'Review AI stories, publish announcements, moderate risk, and control GTEX-wide football news.',
-      accent: GtexColors.gold,
-      mobileLeftTitle: 'News queue',
-      leftPanel: _AdminNewsQueue(
-        queue: widget.queue,
-        selected: selected,
-        onSelected:
-            (GtexNewsroomQueueItem item) => setState(() => _selected = item),
-      ),
-      detail: _AdminNewsPreview(item: selected),
-      rightPanel: _AdminPublishControls(item: selected),
+    return Scaffold(
+      backgroundColor: GtexColors.stadiumBlack,
+      body: SafeArea(child: body),
     );
   }
+}
+
+class _NewsroomStory {
+  const _NewsroomStory({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.status,
+    required this.category,
+    required this.updatedAt,
+    required this.audience,
+    this.riskLabel,
+  });
+
+  final String id;
+  final String title;
+  final String body;
+  final String status;
+  final GtexNewsCategory category;
+  final DateTime updatedAt;
+  final String audience;
+  final String? riskLabel;
+
+  factory _NewsroomStory.fromFeedItem(StoryFeedItem item) {
+    return _NewsroomStory(
+      id: item.id,
+      title: item.title,
+      body: item.body,
+      status: item.featured ? 'Featured' : 'Published',
+      category: _categoryFromStoryType(item.storyType),
+      updatedAt: item.createdAt,
+      audience: item.audience,
+      riskLabel: item.metadata['risk_label']?.toString(),
+    );
+  }
+
+  factory _NewsroomStory.fromQueueItem(GtexNewsroomQueueItem item) {
+    return _NewsroomStory(
+      id: item.id,
+      title: item.title,
+      body: 'Queue item supplied without full story body.',
+      status: item.status,
+      category: item.category,
+      updatedAt: item.updatedAt,
+      audience: item.audience,
+      riskLabel: item.riskLabel,
+    );
+  }
+}
+
+GtexNewsCategory _categoryFromStoryType(String storyType) {
+  final String normalized = storyType.toLowerCase();
+  if (normalized.contains('transfer')) return GtexNewsCategory.transfers;
+  if (normalized.contains('club')) return GtexNewsCategory.clubs;
+  if (normalized.contains('regen')) return GtexNewsCategory.regens;
+  if (normalized.contains('award')) return GtexNewsCategory.awards;
+  if (normalized.contains('tournament') || normalized.contains('competition')) {
+    return GtexNewsCategory.tournaments;
+  }
+  if (normalized.contains('jackpot')) return GtexNewsCategory.jackpot;
+  if (normalized.contains('market')) return GtexNewsCategory.market;
+  if (normalized.contains('creator')) return GtexNewsCategory.creators;
+  if (normalized.contains('dispute')) return GtexNewsCategory.disputes;
+  if (normalized.contains('break')) return GtexNewsCategory.breaking;
+  return GtexNewsCategory.market;
 }
 
 class _AdminNewsQueue extends StatelessWidget {
@@ -78,30 +332,28 @@ class _AdminNewsQueue extends StatelessWidget {
     required this.onSelected,
   });
 
-  final List<GtexNewsroomQueueItem> queue;
-  final GtexNewsroomQueueItem selected;
-  final ValueChanged<GtexNewsroomQueueItem> onSelected;
+  final List<_NewsroomStory> queue;
+  final _NewsroomStory selected;
+  final ValueChanged<_NewsroomStory> onSelected;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
-        const GtexSearchField(hintText: 'Search stories, announcements'),
-        const SizedBox(height: GtexSpacing.md),
-        Wrap(
+        const Wrap(
           spacing: GtexSpacing.xs,
           runSpacing: GtexSpacing.xs,
-          children: const <Widget>[
-            GtexStatusChip(label: 'DRAFTS', color: GtexColors.textSecondary),
-            GtexStatusChip(label: 'REVIEW', color: GtexColors.gold),
-            GtexStatusChip(label: 'SCHEDULED', color: GtexColors.cyan),
+          children: <Widget>[
+            GtexStatusChip(label: 'LIVE FEED', color: GtexColors.pitch),
+            GtexStatusChip(label: 'FEATURED', color: GtexColors.gold),
+            GtexStatusChip(label: 'PUBLISHED', color: GtexColors.cyan),
           ],
         ),
         const SizedBox(height: GtexSpacing.md),
         Expanded(
           child: ListView(
             children: <Widget>[
-              for (final GtexNewsroomQueueItem item in queue)
+              for (final _NewsroomStory item in queue)
                 GtexSectionListTile(
                   title: item.title,
                   subtitle: '${item.status} • ${item.audience}',
@@ -128,7 +380,7 @@ class _AdminNewsQueue extends StatelessWidget {
 class _AdminNewsPreview extends StatelessWidget {
   const _AdminNewsPreview({required this.item});
 
-  final GtexNewsroomQueueItem item;
+  final _NewsroomStory item;
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +399,7 @@ class _AdminNewsPreview extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Generated story body, editorial notes, linked objects, and moderation history appear here when the newsroom queue item includes them.',
+                item.body,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: GtexColors.textSecondary,
                   height: 1.5,
@@ -164,17 +416,78 @@ class _AdminNewsPreview extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: GtexSpacing.md),
-        const GtexPanel(
+      ],
+    );
+  }
+}
+
+class _AnnouncementComposer extends StatelessWidget {
+  const _AnnouncementComposer({
+    required this.titleController,
+    required this.bodyController,
+    required this.publishing,
+    required this.error,
+    required this.message,
+    required this.onPublish,
+  });
+
+  final TextEditingController titleController;
+  final TextEditingController bodyController;
+  final bool publishing;
+  final String? error;
+  final String? message;
+  final VoidCallback? onPublish;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(GtexSpacing.lg),
+      children: <Widget>[
+        GtexPanel(
           title: 'Announcement composer',
           subtitle:
-              'Use this area for manual GTEX-wide announcements: tournaments, jackpot, KYC deadlines, maintenance, or market events.',
-          child: TextField(
-            minLines: 5,
-            maxLines: 8,
-            decoration: InputDecoration(
-              hintText: 'Write announcement or editor note...',
-            ),
+              'Manual GTEX-wide announcements publish through POST /api/admin/story-feed.',
+          accent: GtexColors.gold,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(
+                  hintText: 'Announcement title',
+                ),
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              TextField(
+                controller: bodyController,
+                minLines: 5,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  hintText: 'Write announcement body...',
+                ),
+              ),
+              if (error != null) ...<Widget>[
+                const SizedBox(height: GtexSpacing.sm),
+                Text(
+                  error!,
+                  style: const TextStyle(color: GtexColors.red, height: 1.4),
+                ),
+              ],
+              if (message != null) ...<Widget>[
+                const SizedBox(height: GtexSpacing.sm),
+                Text(
+                  message!,
+                  style: const TextStyle(color: GtexColors.pitch, height: 1.4),
+                ),
+              ],
+              const SizedBox(height: GtexSpacing.md),
+              GtexActionButton(
+                label: publishing ? 'Publishing…' : 'Approve & publish',
+                icon: Icons.publish_outlined,
+                onPressed: publishing ? null : onPublish,
+                accent: GtexColors.pitch,
+              ),
+            ],
           ),
         ),
       ],
@@ -183,9 +496,19 @@ class _AdminNewsPreview extends StatelessWidget {
 }
 
 class _AdminPublishControls extends StatelessWidget {
-  const _AdminPublishControls({required this.item});
+  const _AdminPublishControls({
+    required this.item,
+    required this.publishing,
+    required this.canPublish,
+    required this.onPublishAnnouncement,
+    required this.onRefresh,
+  });
 
-  final GtexNewsroomQueueItem item;
+  final _NewsroomStory item;
+  final bool publishing;
+  final bool canPublish;
+  final VoidCallback? onPublishAnnouncement;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -195,55 +518,41 @@ class _AdminPublishControls extends StatelessWidget {
         GtexPanel(
           title: 'Publish controls',
           subtitle:
-              'Publishing stays locked until audited admin newsroom endpoints are mounted.',
+              canPublish
+                  ? 'Compose an announcement and publish it live. Per-story schedule/reject moderation APIs are not mounted yet, so those actions stay disabled.'
+                  : 'Publishing stays locked until an authenticated admin story-feed client is supplied.',
           accent: newsCategoryColor(item.category),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               GtexActionButton(
-                label: 'Approve & publish',
+                label: publishing ? 'Publishing…' : 'Approve & publish',
                 icon: Icons.publish_outlined,
-                onPressed:
-                    () => _showNewsroomHandoff(
-                      context,
-                      'Publishing requires the audited admin story-feed endpoint before this queue item can go live.',
-                    ),
+                onPressed: publishing ? null : onPublishAnnouncement,
                 accent: GtexColors.pitch,
               ),
               const SizedBox(height: GtexSpacing.sm),
-              GtexActionButton(
+              const GtexActionButton(
                 label: 'Schedule',
                 icon: Icons.schedule_outlined,
-                onPressed:
-                    () => _showNewsroomHandoff(
-                      context,
-                      'Scheduling is handed off to the admin notification calendar once this story has a live id.',
-                    ),
+                onPressed: null,
                 accent: GtexColors.cyan,
                 secondary: true,
               ),
               const SizedBox(height: GtexSpacing.sm),
-              GtexActionButton(
-                label: 'Send as notification',
-                icon: Icons.notifications_active_outlined,
-                onPressed:
-                    () => _showNewsroomHandoff(
-                      context,
-                      'Open Admin Notifications to send platform announcements from mounted notification endpoints.',
-                    ),
-                accent: GtexColors.gold,
+              const GtexActionButton(
+                label: 'Reject story',
+                icon: Icons.block_outlined,
+                onPressed: null,
+                accent: GtexColors.red,
                 secondary: true,
               ),
               const SizedBox(height: GtexSpacing.sm),
               GtexActionButton(
-                label: 'Reject story',
-                icon: Icons.block_outlined,
-                onPressed:
-                    () => _showNewsroomHandoff(
-                      context,
-                      'Story rejection needs the audited moderation endpoint; no silent client-only rejection is allowed.',
-                    ),
-                accent: GtexColors.red,
+                label: 'Refresh feed',
+                icon: Icons.refresh,
+                onPressed: publishing ? null : onRefresh,
+                accent: GtexColors.gold,
                 secondary: true,
               ),
             ],
@@ -252,12 +561,12 @@ class _AdminPublishControls extends StatelessWidget {
         const SizedBox(height: GtexSpacing.md),
         GtexPanel(
           title: 'Risk checks',
-          subtitle: item.riskLabel ?? 'No unresolved risk flags.',
+          subtitle: item.riskLabel ?? 'No unresolved risk flags on this story.',
           accent: item.riskLabel == null ? GtexColors.pitch : GtexColors.red,
-          child: Wrap(
+          child: const Wrap(
             spacing: GtexSpacing.xs,
             runSpacing: GtexSpacing.xs,
-            children: const <Widget>[
+            children: <Widget>[
               GtexStatusChip(label: 'AUDIT LOG', color: GtexColors.cyan),
               GtexStatusChip(label: 'ENTITY LINKS', color: GtexColors.pitch),
               GtexStatusChip(label: 'NO SECRETS', color: GtexColors.gold),
@@ -267,8 +576,4 @@ class _AdminPublishControls extends StatelessWidget {
       ],
     );
   }
-}
-
-void _showNewsroomHandoff(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }

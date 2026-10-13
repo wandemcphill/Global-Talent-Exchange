@@ -13,6 +13,10 @@ import 'gtex_regen_world_api.dart';
 abstract class GtexRegenRepository {
   Future<GtexRegenWorldData> loadWorld();
   Future<GtexCreateSonOrder> createSon(GtexCreateSonDraft draft);
+  /// Live Create-a-Son operational queue for the signed-in account.
+  Future<List<RegenCreationOrder>> listCreationOrders({int limit = 40});
+  Future<RegenCreationOrder> payCreationOrder(String orderId);
+  Future<RegenCreationOrder> generateCreationOrder(String orderId);
   Future<RegenLifecycleState?> submitContractOffer(
     String playerId,
     GtexRegenOfferDraft draft,
@@ -287,6 +291,36 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
       );
     }
     return List<GtexRegenContractOffer>.unmodifiable(offers);
+  }
+
+  @override
+  Future<List<RegenCreationOrder>> listCreationOrders({int limit = 40}) async {
+    final RegenCreationApi? api = creationApi;
+    if (!isAuthenticated || api == null) {
+      return const <RegenCreationOrder>[];
+    }
+    final RegenCreationOrderList list = await api.listCreationOrders(
+      limit: limit,
+    );
+    return List<RegenCreationOrder>.unmodifiable(list.items);
+  }
+
+  @override
+  Future<RegenCreationOrder> payCreationOrder(String orderId) async {
+    final RegenCreationApi? api = creationApi;
+    if (!isAuthenticated || api == null) {
+      throw StateError('Sign in to pay a Create-a-Son order.');
+    }
+    return api.payWithWallet(orderId);
+  }
+
+  @override
+  Future<RegenCreationOrder> generateCreationOrder(String orderId) async {
+    final RegenCreationApi? api = creationApi;
+    if (!isAuthenticated || api == null) {
+      throw StateError('Sign in to generate a Create-a-Son order.');
+    }
+    return api.generateAfterPayment(orderId);
   }
 
   @override
@@ -763,6 +797,130 @@ class DemoGtexRegenRepository implements GtexRegenRepository {
                   ? draft.requestedName
                   : 'Generated Son')
               : null,
+    );
+  }
+
+  @override
+  Future<List<RegenCreationOrder>> listCreationOrders({int limit = 40}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    final List<GtexParentPlayer> parents = demoWorldData.parentPlayers;
+    return List<RegenCreationOrder>.unmodifiable(<RegenCreationOrder>[
+      RegenCreationOrder(
+        id: 'order-demo-pending',
+        userId: 'fixture-user',
+        requestType: 'request_son',
+        parentPlayerId: parents.isNotEmpty ? parents.first.id : null,
+        requestedName: 'Adebayo Jr',
+        amountCoin: 20500,
+        currency: 'COIN',
+        paymentMethod: 'wallet',
+        status: 'pending_payment',
+        createdAt: DateTime.now().toUtc().subtract(const Duration(hours: 2)),
+        updatedAt: DateTime.now().toUtc().subtract(const Duration(hours: 2)),
+      ),
+      RegenCreationOrder(
+        id: 'order-demo-paid',
+        userId: 'fixture-user',
+        requestType: 'request_son',
+        parentPlayerId: parents.length > 1 ? parents[1].id : null,
+        requestedName: 'Theo II',
+        amountCoin: 18000,
+        currency: 'COIN',
+        paymentMethod: 'wallet',
+        status: 'paid',
+        createdAt: DateTime.now().toUtc().subtract(const Duration(days: 1)),
+        updatedAt: DateTime.now().toUtc().subtract(const Duration(hours: 6)),
+        paidAt: DateTime.now().toUtc().subtract(const Duration(hours: 6)),
+      ),
+      RegenCreationOrder(
+        id: 'order-demo-generated',
+        userId: 'fixture-user',
+        requestType: 'request_son',
+        parentPlayerId: parents.length > 2 ? parents[2].id : null,
+        requestedName: 'Lucasito Reyes',
+        amountCoin: 22500,
+        currency: 'COIN',
+        paymentMethod: 'wallet',
+        status: 'generated',
+        createdAt: DateTime.now().toUtc().subtract(const Duration(days: 3)),
+        updatedAt: DateTime.now().toUtc().subtract(const Duration(days: 2)),
+        paidAt: DateTime.now().toUtc().subtract(const Duration(days: 2)),
+        generatedAt: DateTime.now().toUtc().subtract(const Duration(days: 2)),
+        generatedPlayer: const RegenCreationGeneratedPlayer(
+          playerId: 'regen-demo-1',
+          regenProfileId: 'regen-profile-demo-1',
+          fullName: 'Lucasito Reyes',
+          age: 17,
+          position: 'LW',
+          currentRating: 68,
+          potentialRating: 86,
+        ),
+      ),
+    ].take(limit));
+  }
+
+  @override
+  Future<RegenCreationOrder> payCreationOrder(String orderId) async {
+    final List<RegenCreationOrder> orders = await listCreationOrders();
+    final RegenCreationOrder order = orders.firstWhere(
+      (RegenCreationOrder item) => item.id == orderId,
+      orElse: () => throw StateError('Unknown Create-a-Son order: $orderId'),
+    );
+    return RegenCreationOrder(
+      id: order.id,
+      userId: order.userId,
+      requestType: order.requestType,
+      amountCoin: order.amountCoin,
+      currency: order.currency,
+      paymentMethod: order.paymentMethod,
+      status: 'paid',
+      createdAt: order.createdAt,
+      updatedAt: DateTime.now().toUtc(),
+      clubId: order.clubId,
+      parentPlayerId: order.parentPlayerId,
+      requestedName: order.requestedName,
+      requestedCountryCode: order.requestedCountryCode,
+      requestedPosition: order.requestedPosition,
+      paidAt: DateTime.now().toUtc(),
+    );
+  }
+
+  @override
+  Future<RegenCreationOrder> generateCreationOrder(String orderId) async {
+    final List<RegenCreationOrder> orders = await listCreationOrders();
+    final RegenCreationOrder order = orders.firstWhere(
+      (RegenCreationOrder item) => item.id == orderId,
+      orElse: () => throw StateError('Unknown Create-a-Son order: $orderId'),
+    );
+    final String name = order.requestedName?.trim().isNotEmpty == true
+        ? order.requestedName!.trim()
+        : 'Generated Son';
+    return RegenCreationOrder(
+      id: order.id,
+      userId: order.userId,
+      requestType: order.requestType,
+      amountCoin: order.amountCoin,
+      currency: order.currency,
+      paymentMethod: order.paymentMethod,
+      status: 'generated',
+      createdAt: order.createdAt,
+      updatedAt: DateTime.now().toUtc(),
+      clubId: order.clubId,
+      parentPlayerId: order.parentPlayerId,
+      requestedName: order.requestedName,
+      requestedCountryCode: order.requestedCountryCode,
+      requestedPosition: order.requestedPosition,
+      paidAt: order.paidAt ?? DateTime.now().toUtc(),
+      generatedAt: DateTime.now().toUtc(),
+      generatedPlayer: RegenCreationGeneratedPlayer(
+        playerId: 'regen-${order.id}',
+        regenProfileId: 'regen-profile-${order.id}',
+        fullName: name,
+        age: 17,
+        position: order.requestedPosition ?? 'CM',
+        currentRating: 66,
+        potentialRating: 84,
+      ),
     );
   }
 

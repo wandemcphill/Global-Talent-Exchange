@@ -1,17 +1,21 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../data/admin_command_center_api.dart';
+import '../../../data/story_feed_api.dart';
 import '../models/gtex_admin_command_models.dart';
 
 class GtexAdminCommandController extends ChangeNotifier {
   GtexAdminCommandController({
     AdminCommandCenterApi? api,
+    StoryFeedApi? storyFeedApi,
     GtexAdminCommandSnapshot? initialSnapshot,
   }) : _api = api,
+       _storyFeedApi = storyFeedApi,
        _snapshot =
            initialSnapshot ?? GtexAdminCommandSnapshot.liveUnavailable();
 
   final AdminCommandCenterApi? _api;
+  final StoryFeedApi? _storyFeedApi;
   GtexAdminCommandSnapshot _snapshot;
   GtexAdminModuleType _selectedModule = GtexAdminModuleType.overview;
   String? _selectedQueueItemId;
@@ -24,6 +28,18 @@ class GtexAdminCommandController extends ChangeNotifier {
 
   GtexAdminCommandSnapshot get snapshot => _snapshot;
   GtexAdminModuleType get selectedModule => _selectedModule;
+  /// Live admin story-feed client for the newsroom module, when wired.
+  StoryFeedApi? get storyFeedApi {
+    final StoryFeedApi? explicit = _storyFeedApi;
+    if (explicit != null) {
+      return explicit;
+    }
+    final AdminCommandCenterApi? api = _api;
+    if (api == null) {
+      return null;
+    }
+    return StoryFeedApi(client: api.client, fixtures: null);
+  }
   String? get selectedQueueItemId => _selectedQueueItemId;
   String get searchQuery => _searchQuery;
   bool get loading => _loading;
