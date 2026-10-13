@@ -40,9 +40,7 @@ def test_admin_can_schedule_story_and_hide_until_due(client, bootstrap_admin_hea
 
     admin_feed = client.get("/api/admin/story-feed", headers=bootstrap_admin_headers)
     assert admin_feed.status_code == 200, admin_feed.text
-    assert any(
-        item["id"] == story_id and item["moderation_status"] == "scheduled" for item in admin_feed.json()
-    )
+    assert any(item["id"] == story_id and item["moderation_status"] == "scheduled" for item in admin_feed.json())
 
 
 def test_admin_can_reject_story_and_remove_from_public_feed(client, bootstrap_admin_headers) -> None:
