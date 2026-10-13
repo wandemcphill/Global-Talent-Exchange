@@ -23,6 +23,9 @@ Live story-feed queue + `POST /api/admin/story-feed` publish; `GET /api/admin/st
 ### 4. Manager — Personal manager office surface — DONE
 `PersonalManagerApi` + office panel on Coach Exchange: me / create / appoint to operated club.
 
+### 5. Admin Jackpot — Live runtime controls — DONE
+`JackpotAdminApi` + `GtexJackpotAdminPanel` wired to runtime / balance / trigger / history; stub Create pool / Winner review CTAs replaced with real controls.
+
 ## Explicitly deferred (not half-done product claims)
 - Match “Coming soon” 3D / spectate / broadcast routes (launch policy: 2D tactical / OriginalVisualRuntime path)
 - Unity runner / Vercel infra failures

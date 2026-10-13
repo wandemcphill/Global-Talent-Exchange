@@ -203,7 +203,10 @@ class _MainWorkspace extends StatelessWidget {
           GtexAdminMetricGrid(metrics: snapshot.metrics),
           const SizedBox(height: 16),
           if (controller.selectedModule == GtexAdminModuleType.jackpot)
-            GtexJackpotAdminPanel(rounds: snapshot.jackpots)
+            GtexJackpotAdminPanel(
+              api: controller.jackpotAdminApi,
+              rounds: snapshot.jackpots,
+            )
           else if (controller.selectedModule == GtexAdminModuleType.coinEconomy)
             GtexCoinEconomyPanel(snapshot: snapshot.coinEconomy)
           else if (controller.selectedModule ==
@@ -281,7 +284,7 @@ class _MainWorkspace extends StatelessWidget {
   String _subtitleFor(GtexAdminModuleType type) {
     switch (type) {
       case GtexAdminModuleType.jackpot:
-        return 'Create pools, monitor entries, verify winners, manage claim reviews and fraud signals.';
+        return 'Monitor the live pool, edit runtime settings, set balance, trigger settlement, and review winner history.';
       case GtexAdminModuleType.coinEconomy:
         return 'Control wallet risk, treasury balance, top-ups, withdrawals, ledger audits and coin supply.';
       case GtexAdminModuleType.transferHub:
@@ -480,7 +483,7 @@ class _OperationalPlaybook extends StatelessWidget {
   String _copyFor(GtexAdminModuleType module) {
     switch (module) {
       case GtexAdminModuleType.jackpot:
-        return 'Wire jackpot controls to existing admin jackpot APIs. Do not allow draw, winner approval, or claim payment unless the authenticated admin has the required permissions.';
+        return 'Live controls use GET/POST /api/admin/jackpot/runtime, PATCH /api/admin/jackpot/balance, POST /api/admin/jackpot/trigger, and GET /api/jackpot/history. Manual trigger settles the current round immediately.';
       case GtexAdminModuleType.coinEconomy:
         return 'Wire coin controls to wallet, ledger, withdrawal, treasury, and anomaly APIs. Every action should create an audit trail.';
       case GtexAdminModuleType.systemHealth:
