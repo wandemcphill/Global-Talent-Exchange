@@ -601,24 +601,11 @@ class _ProspectsBoard extends StatelessWidget {
         // chips: the cell is a fixed box, so new content has to be paid for
         // here rather than clipped there.
         final double cellHeight = cardWidth < 320 ? 504 : 432;
+        // Section nav already labels this lane "Prospects"; skip a duplicate
+        // board heading so the surface shows that label once.
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                GtexSpacing.md,
-                GtexSpacing.md,
-                GtexSpacing.md,
-                0,
-              ),
-              child: Text(
-                'Prospects',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: GtexColors.text,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
             Expanded(
               child: GridView.builder(
                 padding: const EdgeInsets.all(GtexSpacing.md),

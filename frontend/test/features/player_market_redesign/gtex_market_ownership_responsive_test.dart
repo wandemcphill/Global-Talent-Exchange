@@ -46,7 +46,7 @@ void main() {
       await tester.pumpWidget(buildTestWidget(const Size(390, 844)));
       await tester.pumpAndSettle();
 
-      expect(find.text('MARKET'), findsOneWidget);
+      expect(find.text('TRANSFER INTELLIGENCE'), findsOneWidget);
       expect(find.text('Transfer Hub'), findsWidgets);
       expect(tester.takeException(), isNull);
     });
@@ -59,7 +59,7 @@ void main() {
       await tester.pumpWidget(buildTestWidget(const Size(768, 1024)));
       await tester.pumpAndSettle();
 
-      expect(find.text('MARKET'), findsOneWidget);
+      expect(find.text('TRANSFER INTELLIGENCE'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -71,7 +71,7 @@ void main() {
       await tester.pumpWidget(buildTestWidget(const Size(1440, 900)));
       await tester.pumpAndSettle();
 
-      expect(find.text('MARKET'), findsOneWidget);
+      expect(find.text('TRANSFER INTELLIGENCE'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

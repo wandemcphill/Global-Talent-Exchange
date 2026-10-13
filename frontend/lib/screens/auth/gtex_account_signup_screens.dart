@@ -322,12 +322,17 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
           ),
         ],
       ),
-      CheckboxListTile(
-        contentPadding: EdgeInsets.zero,
-        value: _isOver18,
-        onChanged: (bool? value) => setState(() => _isOver18 = value ?? false),
-        title: const Text('I confirm I am 18 or older'),
-        controlAffinity: ListTileControlAffinity.leading,
+      Material(
+        // ListTile ink/background need a Material ancestor; the signup card
+        // is a DecoratedBox, so give the checkbox its own transparent Material.
+        color: Colors.transparent,
+        child: CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _isOver18,
+          onChanged: (bool? value) => setState(() => _isOver18 = value ?? false),
+          title: const Text('I confirm I am 18 or older'),
+          controlAffinity: ListTileControlAffinity.leading,
+        ),
       ),
       const Text(
         'Security check runs automatically. Club creation happens in the Hub after signup.',
