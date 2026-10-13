@@ -56,6 +56,30 @@ def user_account(client, app_session_factory) -> tuple[str, dict[str, str]]:
     return user_id, _login(client, email="launch-user@example.com", password=TEST_PASSWORD)
 
 
+def test_seeded_product_modules_are_public_for_members(
+    client,
+    admin_engine_defaults,
+    user_account,
+) -> None:
+    _, user_headers = user_account
+    response = client.get("/api/feature-flags/client", headers=user_headers)
+    assert response.status_code == 200, response.text
+    flags = {item["feature_key"]: item for item in response.json()}
+    for feature_key in (
+        "transfer_hub",
+        "fan_coin",
+        "create_a_son",
+        "broadcast",
+        "staff_marketplace",
+        "predictions",
+        "club_lifecycle",
+        "national-team-engine",
+    ):
+        assert flags[feature_key]["enabled"] is True
+        assert flags[feature_key]["launch_state"] == "public"
+    assert "launch_control" not in flags
+
+
 def test_bootstrap_contains_seeded_defaults(client, admin_engine_defaults, admin_headers) -> None:
     response = client.get("/admin-engine/bootstrap", headers=admin_headers)
     assert response.status_code == 200, response.text
