@@ -251,18 +251,18 @@ class _PersonaCopy {
 }
 
 class _GtexCommandColors {
-  static const Color surfaceBase = Color(0xFF0A0C0F);
-  static const Color surfaceRaised = Color(0xFF111418);
-  static const Color surfaceOverlay = Color(0xFF181C22);
-  static const Color surfaceInput = Color(0xFF1C2128);
-  static const Color surfaceBorder = Color(0xFF252D38);
-  static const Color surfaceBorderStrong = Color(0xFF2E3A48);
-  static const Color textPrimary = Color(0xFFE8EDF4);
-  static const Color textSecondary = Color(0xFF8A97A8);
-  static const Color textTertiary = Color(0xFF4D5D6E);
-  static const Color accentPrimary = Color(0xFF00E87A);
-  static const Color accentAmber = Color(0xFFFFB800);
-  static const Color accentRed = Color(0xFFFF3D3D);
+  static const Color surfaceBase = GtexFloodlit.night;
+  static const Color surfaceRaised = GtexFloodlit.card;
+  static const Color surfaceOverlay = GtexFloodlit.turf;
+  static const Color surfaceInput = Color(0xFF173224);
+  static const Color surfaceBorder = GtexFloodlit.line;
+  static const Color surfaceBorderStrong = Color(0xFF2B5640);
+  static const Color textPrimary = GtexFloodlit.chalk;
+  static const Color textSecondary = GtexFloodlit.chalkMuted;
+  static const Color textTertiary = Color(0xFF5E7767);
+  static const Color accentPrimary = GtexFloodlit.pitch;
+  static const Color accentAmber = GtexFloodlit.gold;
+  static const Color accentRed = GtexFloodlit.scoreboard;
   static const Color accentBlue = Color(0xFF2F80ED);
   static const Color accentViolet = Color(0xFF9B5FFF);
 }
@@ -333,15 +333,23 @@ class _CommandPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: _GtexCommandColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _GtexCommandColors.surfaceBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Container(height: 3, color: accent),
+          Container(
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: <Color>[accent, accent.withValues(alpha: 0)],
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -356,7 +364,10 @@ class _CommandPanel extends StatelessWidget {
                         children: <Widget>[
                           Text(
                             title.toUpperCase(),
-                            style: _labelStyle(context, color: accent),
+                            style: _labelStyle(
+                              context,
+                              color: accent,
+                            ).copyWith(fontSize: 15, letterSpacing: 1.2),
                           ),
                           const SizedBox(height: 6),
                           Text(subtitle, style: _bodyStyle(context)),
@@ -800,15 +811,22 @@ class _MetricCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _GtexCommandColors.surfaceOverlay,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: tone.withValues(alpha: 0.34)),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: tone.withValues(alpha: 0.42)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(label, style: _labelStyle(context, color: tone)),
           const SizedBox(height: 10),
-          Text(value, style: _dataStyle(context, size: 20)),
+          Text(
+            value,
+            style: _dataStyle(
+              context,
+              size: 22,
+              weight: FontWeight.w800,
+            ).copyWith(fontFamily: GtexFloodlit.display),
+          ),
           const SizedBox(height: 8),
           Text(support, style: _bodyStyle(context)),
         ],
@@ -880,9 +898,10 @@ class _LiveModule<T> extends StatelessWidget {
     return _CommandPanel(
       title: title,
       subtitle: subtitle,
-      accent: value.hasError && authenticated
-          ? _GtexCommandColors.accentAmber
-          : accent,
+      accent:
+          value.hasError && authenticated
+              ? _GtexCommandColors.accentAmber
+              : accent,
       trailing:
           value.hasError
               ? errorBadge
@@ -1570,11 +1589,7 @@ class _RouteLaunchButton extends StatelessWidget {
       AppRouteSurfaceState.placeholder => OutlinedButton.icon(
         onPressed: () {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${surface.label} is coming soon.',
-              ),
-            ),
+            SnackBar(content: Text('${surface.label} is coming soon.')),
           );
         },
         icon: Icon(icon),
@@ -2230,7 +2245,8 @@ class HomeYourClubsPanel extends StatelessWidget {
                               ? _GtexCommandColors.accentPrimary
                               : _GtexCommandColors.accentRed,
                     ),
-                    onTap: () => context.go(const GteNavigationRoute.club().path),
+                    onTap:
+                        () => context.go(const GteNavigationRoute.club().path),
                   ),
                 )
                 .toList(growable: false),
@@ -2267,7 +2283,10 @@ class HomeYourProspectsPanel extends StatelessWidget {
                       metric: regen.rankLabel,
                       color: _GtexCommandColors.accentViolet,
                     ),
-                    onTap: GtexPlayerNavigator.tapToOpen(context, regen.playerId),
+                    onTap: GtexPlayerNavigator.tapToOpen(
+                      context,
+                      regen.playerId,
+                    ),
                   ),
                 )
                 .toList(growable: false),
@@ -2339,25 +2358,28 @@ class HomeRecentActivityPanel extends StatelessWidget {
       builder:
           (BuildContext context, GtexHomeDigest digest) => Column(
             children: digest.recentActivity
-                .map(
-                  (GtexHomeActivityItem item) {
-                    VoidCallback? onTap;
-                    if (item.playerId != null && item.playerId!.trim().isNotEmpty) {
-                      onTap = GtexPlayerNavigator.tapToOpen(context, item.playerId!);
-                    } else if (item.routeLocation != null && item.routeLocation!.trim().isNotEmpty) {
-                      onTap = () => context.go(item.routeLocation!);
-                    }
-                    return _PulseRow(
-                      line: _PulseLine(
-                        label: item.label,
-                        detail: item.timestampLabel,
-                        metric: '',
-                        color: _GtexCommandColors.textSecondary,
-                      ),
-                      onTap: onTap,
+                .map((GtexHomeActivityItem item) {
+                  VoidCallback? onTap;
+                  if (item.playerId != null &&
+                      item.playerId!.trim().isNotEmpty) {
+                    onTap = GtexPlayerNavigator.tapToOpen(
+                      context,
+                      item.playerId!,
                     );
-                  },
-                )
+                  } else if (item.routeLocation != null &&
+                      item.routeLocation!.trim().isNotEmpty) {
+                    onTap = () => context.go(item.routeLocation!);
+                  }
+                  return _PulseRow(
+                    line: _PulseLine(
+                      label: item.label,
+                      detail: item.timestampLabel,
+                      metric: '',
+                      color: _GtexCommandColors.textSecondary,
+                    ),
+                    onTap: onTap,
+                  );
+                })
                 .toList(growable: false),
           ),
     );
