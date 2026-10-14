@@ -132,16 +132,21 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
+
+    // ListView builds lazily; scroll until the glance panel mounts.
+    await tester.dragUntilVisible(
+      find.text('At a glance'),
+      find.byType(ListView).first,
+      const Offset(0, -240),
+    );
+    await tester.pumpAndSettle();
 
     // What it keeps is a read on the player, not a second detail screen.
     expect(find.text('At a glance'), findsOneWidget);
     expect(find.text('+2.4%'), findsWidgets);
 
-    // The preview leads with the way through to the canonical detail. It
-    // sits below the summary in a scrolling panel, so scroll to it.
-    await tester.drag(find.text('At a glance'), const Offset(0, -400));
-    await tester.pump();
+    // Open-full-profile is pinned outside the scroll list.
     expect(
       find.byKey(const Key('gtex-market-open-full-profile')),
       findsOneWidget,
