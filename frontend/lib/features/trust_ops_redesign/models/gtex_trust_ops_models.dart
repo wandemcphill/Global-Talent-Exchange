@@ -6,6 +6,8 @@ enum GtexTrustModule { wallet, orders, kyc, disputes }
 
 enum GtexTrustStatus { healthy, pending, attention, blocked, resolved }
 
+enum GtexOrderKind { withdrawal, purchase, ops }
+
 class GtexTrustOpsState {
   const GtexTrustOpsState({
     required this.wallet,
@@ -244,6 +246,7 @@ class GtexOrderRecord {
     required this.status,
     required this.createdLabel,
     required this.itemCount,
+    this.kind = GtexOrderKind.ops,
   });
 
   final String id;
@@ -253,8 +256,13 @@ class GtexOrderRecord {
   final GtexTrustStatus status;
   final String createdLabel;
   final int itemCount;
+  final GtexOrderKind kind;
 
   String get totalLabel => GtexTrustFormatters.credits(totalCredits);
+
+  bool get isReviewable =>
+      kind != GtexOrderKind.ops &&
+      (status == GtexTrustStatus.pending || status == GtexTrustStatus.attention);
 }
 
 class GtexKycCaseRecord {

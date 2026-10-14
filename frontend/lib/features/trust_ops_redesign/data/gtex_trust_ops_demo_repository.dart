@@ -17,6 +17,14 @@ abstract class GtexTrustOpsRepository {
     String disputeId, {
     required String message,
   }) async {}
+
+  /// Approve or reject a withdrawal / purchase order. Demo/fixture repos no-op.
+  Future<void> reviewOrder(
+    String orderId, {
+    required bool approve,
+    required GtexOrderKind kind,
+    String? notes,
+  }) async {}
 }
 
 /// Fixture repository used by tests and offline preview mode.
@@ -65,22 +73,24 @@ class GtexTrustOpsDemoRepository extends GtexTrustOpsRepository {
       ],
       orders: <GtexOrderRecord>[
         GtexOrderRecord(
-          id: 'ord-901',
-          title: 'Player basket purchase',
-          subtitle: '3 players shortlisted from Premier League clubs',
-          totalCredits: 4100000,
+          id: 'wd-901',
+          title: 'Withdrawal WD-901',
+          subtitle: 'GTBank · Ayo Clubhouse · pending review',
+          totalCredits: 750000,
           status: GtexTrustStatus.pending,
-          createdLabel: 'Yesterday',
-          itemCount: 3,
+          createdLabel: 'Today',
+          itemCount: 1,
+          kind: GtexOrderKind.withdrawal,
         ),
         GtexOrderRecord(
-          id: 'ord-902',
-          title: 'National team rental',
-          subtitle: 'Nigeria U20 rental pool',
+          id: 'po-902',
+          title: 'Purchase PO-902',
+          subtitle: 'Card top-up · reviewing',
           totalCredits: 1250000,
-          status: GtexTrustStatus.healthy,
-          createdLabel: 'Last week',
-          itemCount: 5,
+          status: GtexTrustStatus.attention,
+          createdLabel: 'Yesterday',
+          itemCount: 1,
+          kind: GtexOrderKind.purchase,
         ),
       ],
       kycCases: <GtexKycCaseRecord>[

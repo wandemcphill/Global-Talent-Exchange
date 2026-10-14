@@ -62,6 +62,14 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
           '/api/admin/treasury/disputes',
           query: const <String, Object?>{'limit': 50, 'offset': 0},
         ),
+        client.getMap(
+          '/api/admin/treasury/withdrawals',
+          query: const <String, Object?>{'limit': 50, 'offset': 0},
+        ),
+        client.getMap(
+          '/api/admin/wallets/purchase-orders',
+          query: const <String, Object?>{'page': 1, 'per_page': 50},
+        ),
       ]);
       final GtexOperationsReadinessSnapshot readiness =
           GtexOperationsReadinessSnapshot.fromJson(
@@ -77,12 +85,44 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
             Map<String, Object?>.from(payloads[2]),
             GteDispute.fromJson,
           );
+      final GteAdminQueuePage<GteAdminWithdrawal> withdrawalPage =
+          GteAdminQueuePage<GteAdminWithdrawal>.fromJson(
+            Map<String, Object?>.from(payloads[3]),
+            GteAdminWithdrawal.fromJson,
+          );
+      final List<GtexOrderRecord> purchaseOrders = _mapPurchaseOrders(
+        payloads[4],
+      );
+      final List<GtexOrderRecord> withdrawalOrders =
+          withdrawalPage.items
+              .map(_mapAdminWithdrawal)
+              .toList(growable: false);
       return _stateFromOperationsReadiness(
         readiness,
-        kycCases:
-            kycPage.items.map(_mapAdminKyc).toList(growable: false),
+        kycCases: kycPage.items.map(_mapAdminKyc).toList(growable: false),
         disputes:
             disputePage.items.map(_mapAdminDispute).toList(growable: false),
+        orders: <GtexOrderRecord>[
+          ...withdrawalOrders,
+          ...purchaseOrders,
+        ],
+        transactions:
+            withdrawalPage.items
+                .map(_transactionFromWithdrawal)
+                .toList(growable: false),
+        pendingWithdrawalCredits: withdrawalPage.items
+            .where(
+              (GteAdminWithdrawal item) =>
+                  item.status == GteWithdrawalStatus.pendingReview ||
+                  item.status == GteWithdrawalStatus.pendingKyc ||
+                  item.status == GteWithdrawalStatus.approved ||
+                  item.status == GteWithdrawalStatus.processing,
+            )
+            .fold<double>(
+              0,
+              (double total, GteAdminWithdrawal item) =>
+                  total + item.amountCoin,
+            ),
       );
     }, () => _requireFixtures().load());
   }
@@ -132,6 +172,46 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
     }, () => _requireFixtures().replyToDispute(disputeId, message: trimmed));
   }
 
+  @override
+  Future<void> reviewOrder(
+    String orderId, {
+    required bool approve,
+    required GtexOrderKind kind,
+    String? notes,
+  }) {
+    return client.withFallback<void>(() async {
+      switch (kind) {
+        case GtexOrderKind.withdrawal:
+          await client.post(
+            '/api/admin/treasury/withdrawals/$orderId/status',
+            body: <String, Object?>{
+              'status': approve ? 'approved' : 'rejected',
+              if (notes != null && notes.trim().isNotEmpty)
+                'admin_notes': notes.trim(),
+            },
+          );
+        case GtexOrderKind.purchase:
+          await client.post(
+            '/api/admin/wallets/purchase-orders/$orderId/status',
+            body: <String, Object?>{
+              'status': approve ? 'settled' : 'rejected',
+              if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+            },
+          );
+        case GtexOrderKind.ops:
+          throw const GteApiException(
+            type: GteApiErrorType.validation,
+            message: 'Ops readiness rows are not mutable.',
+          );
+      }
+    }, () => _requireFixtures().reviewOrder(
+      orderId,
+      approve: approve,
+      kind: kind,
+      notes: notes,
+    ));
+  }
+
   GtexTrustOpsDemoRepository _requireFixtures() {
     final GtexTrustOpsDemoRepository? resolvedFixtures = fixtures;
     if (resolvedFixtures == null) {
@@ -146,18 +226,13 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
     GtexOperationsReadinessSnapshot snapshot, {
     required List<GtexKycCaseRecord> kycCases,
     required List<GtexDisputeRecord> disputes,
+    required List<GtexOrderRecord> orders,
+    required List<GtexTransactionRecord> transactions,
+    required double pendingWithdrawalCredits,
   }) {
     final GtexOperationsReadinessQueue risk = _queue(
       snapshot,
       'risk_compliance',
-    );
-    final GtexOperationsReadinessQueue policy = _queue(
-      snapshot,
-      'policy_launch_control',
-    );
-    final GtexOperationsReadinessQueue diagnostics = _queue(
-      snapshot,
-      'production_data_diagnostics',
     );
     final GtexOperationsReadinessQueue ledger = _queue(
       snapshot,
@@ -167,27 +242,148 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
       wallet: GtexWalletSummary(
         balanceCredits: _metricValue(ledger, 'user_wallets'),
         availableCredits: _metricValue(ledger, 'ledger_entries_24h'),
-        pendingWithdrawalCredits: _metricValue(
-          ledger,
-          'pending_wallet_transactions',
-        ),
+        pendingWithdrawalCredits: pendingWithdrawalCredits,
         kycStatus: _statusLabel(risk.status),
         lastUpdatedLabel: 'Ops ${_statusLabel(snapshot.status).toLowerCase()}',
       ),
-      transactions: <GtexTransactionRecord>[
-        _transactionFromQueue(ledger, 'ledger'),
-        _transactionFromQueue(policy, 'launch'),
-        _transactionFromQueue(diagnostics, 'data'),
-      ],
-      orders: <GtexOrderRecord>[
-        _orderFromQueue(ledger),
-        _orderFromQueue(policy),
-        _orderFromQueue(diagnostics),
-      ],
+      transactions: transactions,
+      orders: orders,
       kycCases: kycCases,
       disputes: disputes,
       operationsReadiness: snapshot,
     );
+  }
+
+  List<GtexOrderRecord> _mapPurchaseOrders(Map<String, dynamic> payload) {
+    final Object? rawItems = payload['items'];
+    if (rawItems is! List) {
+      return const <GtexOrderRecord>[];
+    }
+    return rawItems
+        .whereType<Object>()
+        .map(_mapPurchaseOrder)
+        .toList(growable: false);
+  }
+
+  GtexOrderRecord _mapPurchaseOrder(Object value) {
+    final Map<String, Object?> json = Map<String, Object?>.from(
+      value as Map<dynamic, dynamic>,
+    );
+    final String id = '${json['id'] ?? ''}';
+    final String reference = '${json['reference'] ?? id}';
+    final String status = '${json['status'] ?? 'requested'}'.toLowerCase();
+    final String provider = '${json['provider_key'] ?? 'provider'}';
+    final double amount = _asDouble(json['net_amount'] ?? json['gross_amount']);
+    return GtexOrderRecord(
+      id: id,
+      title: 'Purchase $reference',
+      subtitle: '$provider · $status',
+      totalCredits: amount,
+      status: _purchaseTrustStatus(status),
+      createdLabel:
+          '${json['created_at'] ?? json['createdAt'] ?? 'Created'}',
+      itemCount: 1,
+      kind: GtexOrderKind.purchase,
+    );
+  }
+
+  GtexOrderRecord _mapAdminWithdrawal(GteAdminWithdrawal item) {
+    final String? fullName = item.userFullName?.trim();
+    final String userLabel =
+        (fullName != null && fullName.isNotEmpty) ? fullName : item.userEmail;
+    return GtexOrderRecord(
+      id: item.id,
+      title: 'Withdrawal ${item.reference}',
+      subtitle: '${item.bankName} · $userLabel · ${_withdrawalStatusLabel(item.status)}',
+      totalCredits: item.amountCoin,
+      status: _withdrawalTrustStatus(item.status),
+      createdLabel:
+          item.createdAt?.toUtc().toIso8601String() ?? 'Created',
+      itemCount: 1,
+      kind: GtexOrderKind.withdrawal,
+    );
+  }
+
+  GtexTransactionRecord _transactionFromWithdrawal(GteAdminWithdrawal item) {
+    return GtexTransactionRecord(
+      id: item.id,
+      title: 'Withdrawal ${item.reference}',
+      subtitle: '${item.bankName} · ${_withdrawalStatusLabel(item.status)}',
+      amountCredits: -item.amountCoin,
+      status: _withdrawalTrustStatus(item.status),
+      timestampLabel:
+          item.createdAt?.toUtc().toIso8601String() ?? 'Live',
+      type: 'Withdrawal',
+    );
+  }
+
+  GtexTrustStatus _withdrawalTrustStatus(GteWithdrawalStatus status) {
+    switch (status) {
+      case GteWithdrawalStatus.paid:
+      case GteWithdrawalStatus.approved:
+        return GtexTrustStatus.healthy;
+      case GteWithdrawalStatus.rejected:
+      case GteWithdrawalStatus.cancelled:
+        return GtexTrustStatus.blocked;
+      case GteWithdrawalStatus.disputed:
+        return GtexTrustStatus.attention;
+      case GteWithdrawalStatus.pendingReview:
+      case GteWithdrawalStatus.pendingKyc:
+      case GteWithdrawalStatus.draft:
+      case GteWithdrawalStatus.processing:
+        return GtexTrustStatus.pending;
+    }
+  }
+
+  String _withdrawalStatusLabel(GteWithdrawalStatus status) {
+    switch (status) {
+      case GteWithdrawalStatus.pendingReview:
+        return 'pending review';
+      case GteWithdrawalStatus.pendingKyc:
+        return 'pending KYC';
+      case GteWithdrawalStatus.approved:
+        return 'approved';
+      case GteWithdrawalStatus.rejected:
+        return 'rejected';
+      case GteWithdrawalStatus.processing:
+        return 'processing';
+      case GteWithdrawalStatus.paid:
+        return 'paid';
+      case GteWithdrawalStatus.disputed:
+        return 'disputed';
+      case GteWithdrawalStatus.cancelled:
+        return 'cancelled';
+      case GteWithdrawalStatus.draft:
+        return 'draft';
+    }
+  }
+
+  GtexTrustStatus _purchaseTrustStatus(String status) {
+    switch (status) {
+      case 'settled':
+        return GtexTrustStatus.healthy;
+      case 'rejected':
+      case 'failed':
+      case 'cancelled':
+      case 'expired':
+        return GtexTrustStatus.blocked;
+      case 'disputed':
+      case 'chargeback':
+      case 'reversed':
+        return GtexTrustStatus.attention;
+      case 'reviewing':
+      case 'requested':
+      case 'processing':
+      default:
+        return GtexTrustStatus.pending;
+    }
+  }
+
+  double _asDouble(Object? value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse('$value') ?? 0;
   }
 
   GtexDisputeRecord _mapAdminDispute(GteDispute item) {
@@ -318,64 +514,6 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
       alerts: const <String>[],
       actionRoutes: const <String>[],
     );
-  }
-
-  GtexTransactionRecord _transactionFromQueue(
-    GtexOperationsReadinessQueue queue,
-    String type,
-  ) {
-    final double value = queue.metrics.fold<double>(
-      0,
-      (double total, GtexOperationsReadinessMetric metric) =>
-          total + metric.value,
-    );
-    return GtexTransactionRecord(
-      id: 'ops-${queue.key}',
-      title: queue.title,
-      subtitle:
-          queue.alerts.isNotEmpty ? queue.alerts.first : queue.description,
-      amountCredits: value,
-      status: _trustStatus(queue.status),
-      timestampLabel: 'Live',
-      type: type,
-    );
-  }
-
-  GtexOrderRecord _orderFromQueue(GtexOperationsReadinessQueue queue) {
-    final double issueCount = queue.metrics
-        .where(
-          (GtexOperationsReadinessMetric metric) =>
-              metric.status == 'attention' || metric.status == 'blocked',
-        )
-        .fold<double>(
-          0,
-          (double total, GtexOperationsReadinessMetric metric) =>
-              total + metric.value,
-        );
-    return GtexOrderRecord(
-      id: 'ops-${queue.key}',
-      title: queue.title,
-      subtitle: queue.description,
-      totalCredits: issueCount,
-      status: _trustStatus(queue.status),
-      createdLabel: 'Live',
-      itemCount: queue.metrics.length,
-    );
-  }
-
-  GtexTrustStatus _trustStatus(String status) {
-    switch (status) {
-      case 'blocked':
-        return GtexTrustStatus.blocked;
-      case 'attention':
-      case 'maintenance':
-        return GtexTrustStatus.attention;
-      case 'gated':
-      case 'hidden':
-        return GtexTrustStatus.pending;
-      default:
-        return GtexTrustStatus.healthy;
-    }
   }
 
   String _statusLabel(String status) {

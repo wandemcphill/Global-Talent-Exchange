@@ -36,7 +36,7 @@ class GtexTrustContextPanel extends StatelessWidget {
               ),
               _ModuleItem(
                 GtexTrustModule.orders,
-                'Orders',
+                'Orders / Withdrawals',
                 '${state.pendingOrderCount} pending',
                 Icons.receipt_long_outlined,
               ),

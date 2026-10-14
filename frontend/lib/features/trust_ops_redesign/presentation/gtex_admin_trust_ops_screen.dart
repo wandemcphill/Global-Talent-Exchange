@@ -38,6 +38,7 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
   String? _selectedOrderId;
   bool _kycReviewBusy = false;
   bool _disputeReplyBusy = false;
+  bool _orderReviewBusy = false;
 
   @override
   void initState() {
@@ -135,6 +136,7 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
             adminMode: true,
             kycReviewBusy: _kycReviewBusy,
             disputeReplyBusy: _disputeReplyBusy,
+            orderReviewBusy: _orderReviewBusy,
             onApproveKyc:
                 selectedKyc == null
                     ? null
@@ -145,6 +147,14 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
                     : () => _reviewSelectedKyc(approve: false),
             onReplyDispute:
                 selectedDispute == null ? null : _promptDisputeReply,
+            onApproveOrder:
+                selectedOrder == null
+                    ? null
+                    : () => _reviewSelectedOrder(approve: true),
+            onRejectOrder:
+                selectedOrder == null
+                    ? null
+                    : () => _reviewSelectedOrder(approve: false),
             onTopUp: _showAdminActionUnavailable,
             onWithdraw: _showAdminActionUnavailable,
           ),
@@ -308,6 +318,54 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
       setState(() => _disputeReplyBusy = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Dispute reply failed: $error')),
+      );
+    }
+  }
+
+  Future<void> _reviewSelectedOrder({required bool approve}) async {
+    final GtexTrustOpsState state = await _future;
+    if (!mounted) {
+      return;
+    }
+    final GtexOrderRecord? selected = _selectedOrder(state);
+    if (selected == null || !selected.isReviewable) {
+      return;
+    }
+    setState(() => _orderReviewBusy = true);
+    try {
+      await _repository.reviewOrder(
+        selected.id,
+        approve: approve,
+        kind: selected.kind,
+        notes: approve ? null : 'Rejected by trust ops',
+      );
+      if (!mounted) {
+        return;
+      }
+      final String kindLabel =
+          selected.kind == GtexOrderKind.withdrawal
+              ? 'Withdrawal'
+              : 'Purchase order';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            approve
+                ? '$kindLabel ${selected.id} approved.'
+                : '$kindLabel ${selected.id} rejected.',
+          ),
+        ),
+      );
+      setState(() {
+        _orderReviewBusy = false;
+        _future = _repository.load();
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _orderReviewBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Order review failed: $error')),
       );
     }
   }
