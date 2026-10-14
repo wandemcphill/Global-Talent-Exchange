@@ -5,7 +5,7 @@ const isProduction = process.env.NODE_ENV === "production" || process.env.CI ===
 
 module.exports = [
   {
-    ignores: ["node_modules/**"],
+    ignores: ["node_modules/**", "design-concepts/**"],
   },
   js.configs.recommended,
   {

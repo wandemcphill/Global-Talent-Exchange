@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../football/gtex_pitch_marks.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_command_center_tokens.dart';
 import '../theme/gtex_spacing.dart';
@@ -71,93 +72,106 @@ class GtexCommandCenterMasthead extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            GtexColors.surfaceOverlay,
-            GtexColors.surfaceRaised,
-            GtexCommandTokens.pitch.withValues(alpha: 0.12),
-          ],
-        ),
+        color: GtexFloodlit.turf,
         borderRadius: BorderRadius.circular(GtexCommandTokens.mastheadRadius),
-        border: Border.all(color: GtexColors.surfaceBorderStrong),
+        border: Border.all(color: GtexFloodlit.line),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(GtexSpacing.lg),
-        child: LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final bool compact = constraints.maxWidth < 720;
-            final Widget identityBlock = _IdentityBlock(
-              identity: identity,
-              detail: identityDetail,
-              statusLabel: statusLabel,
-              status: status,
-            );
-            final Widget copy = Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  eyebrow.toUpperCase(),
-                  style: GtexText.labelSM.copyWith(
-                    color: GtexCommandTokens.pitch,
-                    letterSpacing: 1.3,
-                  ),
-                ),
-                const SizedBox(height: GtexSpacing.xs),
-                Text(
-                  title,
-                  style: GtexText.displayXL.copyWith(
-                    color: GtexColors.textPrimary,
-                    height: 0.95,
-                  ),
-                ),
-                const SizedBox(height: GtexSpacing.sm),
-                Text(
-                  summary,
-                  style: GtexText.bodyMD.copyWith(
-                    color: GtexColors.textSecondary,
-                  ),
-                ),
-                if (primaryAction != null ||
-                    secondaryAction != null) ...<Widget>[
-                  const SizedBox(height: GtexSpacing.md),
-                  Wrap(
-                    spacing: GtexSpacing.sm,
-                    runSpacing: GtexSpacing.sm,
-                    children: <Widget>[
-                      if (primaryAction != null) primaryAction!,
-                      if (secondaryAction != null) secondaryAction!,
+      child: Stack(
+        children: <Widget>[
+          const Positioned.fill(
+            child: CustomPaint(painter: GtexTurfStripesPainter(opacity: 0.035)),
+          ),
+          Positioned(
+            right: -90,
+            top: -90,
+            width: 300,
+            height: 300,
+            child: const IgnorePointer(
+              child: CustomPaint(
+                painter: GtexCentreCirclePainter(opacity: 0.12),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(GtexSpacing.lg),
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final bool compact = constraints.maxWidth < 720;
+                final Widget identityBlock = _IdentityBlock(
+                  identity: identity,
+                  detail: identityDetail,
+                  statusLabel: statusLabel,
+                  status: status,
+                );
+                final Widget copy = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      eyebrow.toUpperCase(),
+                      style: GtexText.labelSM.copyWith(
+                        color: GtexFloodlit.gold,
+                        letterSpacing: 1.6,
+                      ),
+                    ),
+                    const SizedBox(height: GtexSpacing.xs),
+                    Text(
+                      title,
+                      style: GtexText.displayXL.copyWith(
+                        fontFamily: GtexFloodlit.display,
+                        fontWeight: FontWeight.w800,
+                        color: GtexFloodlit.chalk,
+                        height: 0.92,
+                      ),
+                    ),
+                    const SizedBox(height: GtexSpacing.sm),
+                    Text(
+                      summary,
+                      style: GtexText.bodyMD.copyWith(
+                        color: GtexFloodlit.chalkMuted,
+                      ),
+                    ),
+                    if (primaryAction != null ||
+                        secondaryAction != null) ...<Widget>[
+                      const SizedBox(height: GtexSpacing.md),
+                      Wrap(
+                        spacing: GtexSpacing.sm,
+                        runSpacing: GtexSpacing.sm,
+                        children: <Widget>[
+                          if (primaryAction != null) primaryAction!,
+                          if (secondaryAction != null) secondaryAction!,
+                        ],
+                      ),
                     ],
-                  ),
-                ],
-              ],
-            );
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                if (compact) ...<Widget>[
-                  identityBlock,
-                  const SizedBox(height: GtexSpacing.lg),
-                ],
-                if (!compact)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Expanded(child: copy),
-                      const SizedBox(width: GtexSpacing.lg),
-                      SizedBox(width: 230, child: identityBlock),
+                  ],
+                );
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    if (compact) ...<Widget>[
+                      identityBlock,
+                      const SizedBox(height: GtexSpacing.lg),
                     ],
-                  )
-                else
-                  copy,
-                const SizedBox(height: GtexSpacing.lg),
-                _MetricRail(metrics: metrics),
-              ],
-            );
-          },
-        ),
+                    if (!compact)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(child: copy),
+                          const SizedBox(width: GtexSpacing.lg),
+                          SizedBox(width: 230, child: identityBlock),
+                        ],
+                      )
+                    else
+                      copy,
+                    const SizedBox(height: GtexSpacing.lg),
+                    _MetricRail(metrics: metrics),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -295,9 +309,9 @@ class _IdentityBlock extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(GtexSpacing.md),
     decoration: BoxDecoration(
-      color: Colors.black.withValues(alpha: 0.18),
+      color: GtexFloodlit.night.withValues(alpha: 0.72),
       borderRadius: BorderRadius.circular(GtexCommandTokens.panelRadius),
-      border: Border.all(color: GtexColors.surfaceBorder),
+      border: Border.all(color: GtexFloodlit.line),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,13 +342,16 @@ class _IdentityBlock extends StatelessWidget {
           identity,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: GtexText.displayMD.copyWith(color: GtexColors.textPrimary),
+          style: GtexText.displayMD.copyWith(
+            fontFamily: GtexFloodlit.display,
+            color: GtexFloodlit.chalk,
+          ),
         ),
         if (detail != null) ...<Widget>[
           const SizedBox(height: 4),
           Text(
             detail!,
-            style: GtexText.bodySM.copyWith(color: GtexColors.textSecondary),
+            style: GtexText.bodySM.copyWith(color: GtexFloodlit.chalkMuted),
           ),
         ],
       ],
@@ -378,9 +395,9 @@ class _MetricCell extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(GtexSpacing.sm),
     decoration: BoxDecoration(
-      color: GtexColors.surfaceBase.withValues(alpha: 0.72),
+      color: GtexFloodlit.night.withValues(alpha: 0.78),
       borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
-      border: Border.all(color: metric.accent.withValues(alpha: 0.24)),
+      border: Border.all(color: metric.accent.withValues(alpha: 0.42)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,14 +425,18 @@ class _MetricCell extends StatelessWidget {
         Text(
           metric.value,
           overflow: TextOverflow.ellipsis,
-          style: GtexText.monoLG.copyWith(color: GtexColors.textPrimary),
+          style: GtexText.monoLG.copyWith(
+            fontFamily: GtexFloodlit.display,
+            fontWeight: FontWeight.w800,
+            color: GtexFloodlit.chalk,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           metric.detail,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: GtexText.bodySM.copyWith(color: GtexColors.textSecondary),
+          style: GtexText.bodySM.copyWith(color: GtexFloodlit.chalkMuted),
         ),
       ],
     ),

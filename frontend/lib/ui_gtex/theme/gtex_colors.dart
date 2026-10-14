@@ -47,6 +47,25 @@ class GtexColorTokens {
 
 enum GtexRoleAccent { admin, clubOwner, trader, creator, user, guest }
 
+/// "Floodlit" card surfaces: night-pitch greens, chalk-line foreground,
+/// floodlight gold for coin and 1-of-1 prestige. Used by the collectible
+/// player and regen cards so they read as football objects, not panels.
+class GtexFloodlit {
+  const GtexFloodlit._();
+
+  static const Color night = Color(0xFF08140F);
+  static const Color card = Color(0xFF0E1F17);
+  static const Color turf = Color(0xFF13291E);
+  static const Color line = Color(0xFF20402F);
+  static const Color chalk = Color(0xFFEDF1E8);
+  static const Color chalkMuted = Color(0xFF8EA596);
+  static const Color pitch = Color(0xFF34D57F);
+  static const Color gold = Color(0xFFF4C24D);
+  static const Color scoreboard = Color(0xFFFF5B3A);
+
+  static const String display = 'BarlowCondensed';
+}
+
 /// GTEX design-bible color tokens.
 ///
 /// The canonical palette is a professional football-economy system: dark

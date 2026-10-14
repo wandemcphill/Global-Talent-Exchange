@@ -10,7 +10,9 @@ import '../../../widgets/gte_state_panel.dart';
 import '../../../widgets/gte_surface_panel.dart';
 import '../../../widgets/gtex_branding.dart';
 import '../../../shared/widgets/gtex_premium_panels.dart';
+import '../../../ui_gtex/football/gtex_pitch_marks.dart';
 import '../../../ui_gtex/football/gtex_player_card.dart';
+import '../../../ui_gtex/theme/gtex_colors.dart';
 import '../../../widgets/player_card_avatar.dart';
 import '../../shared/data/gte_feature_support.dart';
 import '../data/player_card_marketplace_models.dart';
@@ -155,10 +157,30 @@ class _PlayerCardMarketplaceScreenState
       animation: _controller,
       builder: (BuildContext context, Widget? child) {
         return Container(
-          decoration: gteBackdropDecoration(),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: <Color>[GtexFloodlit.turf, GtexFloodlit.night],
+              stops: <double>[0, 0.45],
+            ),
+          ),
           child: Scaffold(
             backgroundColor: Colors.transparent,
-            appBar: AppBar(title: const Text('Transfer desk')),
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              foregroundColor: GtexFloodlit.chalk,
+              title: const Text(
+                'Transfer desk',
+                style: TextStyle(
+                  fontFamily: GtexFloodlit.display,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
             body: RefreshIndicator(
               onRefresh: _reload,
               child: ListView(
@@ -169,7 +191,7 @@ class _PlayerCardMarketplaceScreenState
                     title: 'Trade live player cards and move squad capital.',
                     description:
                         'This desk keeps live sales, loans, squad inventory, and move execution in one football trading surface instead of scattering the action.',
-                    accent: const Color(0xFF91C9FF),
+                    accent: GtexFloodlit.pitch,
                     chips: <Widget>[
                       GteMetricChip(
                         label: 'Sale board',
@@ -222,7 +244,7 @@ class _PlayerCardMarketplaceScreenState
                   ),
                   const SizedBox(height: 18),
                   GtexLiveTickerBar(
-                    accentColor: const Color(0xFF91C9FF),
+                    accentColor: GtexFloodlit.gold,
                     items: _deskTickerItems(),
                   ),
                   if (_controller.actionError != null) ...<Widget>[
@@ -1401,89 +1423,273 @@ class _MarketplaceListingTile extends StatelessWidget {
             : listing.loanFeeCredits != null
             ? gteFormatCredits(listing.loanFeeCredits!)
             : 'Negotiated';
-    return GteSurfacePanel(
+    final bool isOpen = listing.status.toLowerCase() == 'open';
+    final int? gsi = listing.gsiScore;
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: GtexFloodlit.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color:
+              isOpen
+                  ? GtexFloodlit.gold.withValues(alpha: 0.45)
+                  : GtexFloodlit.line,
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: GtexFloodlit.night.withValues(alpha: 0.5),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              PlayerCardAvatar(avatar: avatar, imageUrl: listing.imageUrl),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          _ListingPitchHeader(
+            avatar: PlayerCardAvatar(
+              avatar: avatar,
+              imageUrl: listing.imageUrl,
+              size: 76,
+            ),
+            gsi: gsi,
+            position: listing.position,
+            statusLabel:
+                '${listing.listingType.toUpperCase()} | ${listing.status.toUpperCase()}',
+            isOpen: isOpen,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: <Widget>[
-                    Text(
-                      listing.playerName,
-                      style: Theme.of(context).textTheme.titleLarge,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            listing.playerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: GtexFloodlit.display,
+                              fontSize: 26,
+                              height: 1.0,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                              color: GtexFloodlit.chalk,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${listing.tierName} | ${listing.clubName ?? 'Unknown club'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: GtexFloodlit.chalkMuted),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${listing.tierName} | ${listing.clubName ?? 'Unknown club'} | ${listing.position ?? 'n/a'}',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: <Widget>[
+                        const Text(
+                          'ASKING',
+                          style: TextStyle(
+                            fontSize: 10,
+                            letterSpacing: 1.6,
+                            fontWeight: FontWeight.w700,
+                            color: GtexFloodlit.chalkMuted,
+                          ),
+                        ),
+                        Text(
+                          priceLabel,
+                          style: const TextStyle(
+                            fontFamily: GtexFloodlit.display,
+                            fontSize: 22,
+                            height: 1.05,
+                            fontWeight: FontWeight.w700,
+                            color: GtexFloodlit.gold,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ),
-              GteMetricChip(
-                label: listing.listingType.toUpperCase(),
-                value: listing.status.toUpperCase(),
-                positive: listing.status.toLowerCase() == 'open',
-              ),
-            ],
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    if (listing.gsiTierLabel != null)
+                      GteMetricChip(
+                        label: 'Quality',
+                        value: listing.gsiTierLabel!,
+                        positive:
+                            listing.gsiScore != null && listing.gsiScore! >= 82,
+                      ),
+                    if (listing.availableQuantity != null)
+                      GteMetricChip(
+                        label: 'Available',
+                        value: listing.availableQuantity.toString(),
+                      ),
+                    if (listing.averageRating != null)
+                      GteMetricChip(
+                        label: 'Form',
+                        value: listing.averageRating!.round().toString(),
+                      ),
+                    if (listing.position != null)
+                      GteMetricChip(
+                        label: 'Position',
+                        value: listing.position!,
+                      ),
+                    if (listing.loanDurationDays != null)
+                      GteMetricChip(
+                        label: 'Duration',
+                        value: '${listing.loanDurationDays}d',
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: GtexFloodlit.pitch,
+                          foregroundColor: GtexFloodlit.night,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                        onPressed: onPrimary,
+                        child: Text(primaryLabel),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: GtexFloodlit.chalk,
+                          side: const BorderSide(color: GtexFloodlit.line),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: onSecondary,
+                        child: Text(secondaryLabel),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              GteMetricChip(label: 'Price', value: priceLabel),
-              if (listing.gsiScore != null)
-                GteMetricChip(
-                  label: 'GSI',
-                  value: listing.gsiScore!.toString(),
-                  positive: listing.gsiScore! >= 82,
+        ],
+      ),
+    );
+  }
+}
+
+class _ListingPitchHeader extends StatelessWidget {
+  const _ListingPitchHeader({
+    required this.avatar,
+    required this.gsi,
+    required this.position,
+    required this.statusLabel,
+    required this.isOpen,
+  });
+
+  final Widget avatar;
+  final int? gsi;
+  final String? position;
+  final String statusLabel;
+  final bool isOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 132,
+      child: Stack(
+        children: <Widget>[
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[GtexFloodlit.turf, GtexFloodlit.card],
                 ),
-              if (listing.gsiTierLabel != null)
-                GteMetricChip(
-                  label: 'Quality',
-                  value: listing.gsiTierLabel!,
-                  positive: listing.gsiScore != null && listing.gsiScore! >= 82,
-                ),
-              if (listing.availableQuantity != null)
-                GteMetricChip(
-                  label: 'Available',
-                  value: listing.availableQuantity.toString(),
-                ),
-              if (listing.averageRating != null)
-                GteMetricChip(
-                  label: 'Form',
-                  value: listing.averageRating!.round().toString(),
-                ),
-              if (listing.position != null)
-                GteMetricChip(label: 'Position', value: listing.position!),
-              if (listing.loanDurationDays != null)
-                GteMetricChip(
-                  label: 'Duration',
-                  value: '${listing.loanDurationDays}d',
-                ),
-            ],
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: <Widget>[
-              FilledButton.tonal(
-                onPressed: onPrimary,
-                child: Text(primaryLabel),
+          const Positioned.fill(
+            child: CustomPaint(
+              painter: GtexTurfStripesPainter(band: 28, opacity: 0.04),
+            ),
+          ),
+          const Positioned.fill(
+            child: CustomPaint(painter: GtexCentreCirclePainter(opacity: 0.14)),
+          ),
+          Positioned(
+            left: 18,
+            top: 16,
+            bottom: 12,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  gsi?.toString() ?? '--',
+                  style: const TextStyle(
+                    fontFamily: GtexFloodlit.display,
+                    fontSize: 54,
+                    height: 0.9,
+                    fontWeight: FontWeight.w800,
+                    color: GtexFloodlit.gold,
+                  ),
+                ),
+                Text(
+                  'GSI${position == null ? '' : '  ${position!.toUpperCase()}'}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 1.8,
+                    fontWeight: FontWeight.w800,
+                    color: GtexFloodlit.chalk,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(right: 18, bottom: 10, child: avatar),
+          Positioned(
+            top: 12,
+            right: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: GtexFloodlit.night.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: isOpen ? GtexFloodlit.pitch : GtexFloodlit.line,
+                ),
               ),
-              OutlinedButton(
-                onPressed: onSecondary,
-                child: Text(secondaryLabel),
+              child: Text(
+                statusLabel,
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w800,
+                  color: isOpen ? GtexFloodlit.pitch : GtexFloodlit.chalkMuted,
+                ),
               ),
-            ],
+            ),
           ),
         ],
       ),

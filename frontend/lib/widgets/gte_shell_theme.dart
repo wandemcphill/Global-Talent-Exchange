@@ -12,21 +12,21 @@ import '../theme/gte_theme_tokens.dart';
 class GteShellTheme {
   const GteShellTheme._();
 
-  static const Color background = Color(0xFF040608);
-  static const Color backgroundSoft = Color(0xFF0A0E11);
-  static const Color panel = Color(0xFF101518);
-  static const Color panelStrong = Color(0xFF151C20);
-  static const Color panelElevated = Color(0xFF1B2328);
-  static const Color stroke = Color(0xFF2B363B);
-  static const Color accent = Color(0xFFB9FF2C);
+  static const Color background = Color(0xFF050D09);
+  static const Color backgroundSoft = Color(0xFF08140F);
+  static const Color panel = Color(0xFF0E1F17);
+  static const Color panelStrong = Color(0xFF13291E);
+  static const Color panelElevated = Color(0xFF183324);
+  static const Color stroke = Color(0xFF20402F);
+  static const Color accent = Color(0xFF34D57F);
   static const Color accentWarm = Color(0xFF70F0C0);
-  static const Color accentArena = Color(0xFFE7FF79);
-  static const Color accentCapital = Color(0xFFFFD75B);
+  static const Color accentArena = Color(0xFFFF5B3A);
+  static const Color accentCapital = Color(0xFFF4C24D);
   static const Color accentCommunity = Color(0xFF49DDA1);
   static const Color accentClub = Color(0xFF66D7FF);
   static const Color accentAdmin = Color(0xFFFF7B5C);
-  static const Color textPrimary = Color(0xFFF4F7F4);
-  static const Color textMuted = Color(0xFF93A39D);
+  static const Color textPrimary = Color(0xFFEDF1E8);
+  static const Color textMuted = Color(0xFF8EA596);
   static const Color textSecondary = textMuted;
   static const Color positive = Color(0xFF69F3A4);
   static const Color negative = Color(0xFFFF6A6A);
@@ -412,7 +412,7 @@ Color _surfaceTint(
 
 BoxDecoration gteBackdropDecoration() {
   return BoxDecoration(
-    color: const Color(0xFF050807),
+    color: const Color(0xFF050D09),
     image: DecorationImage(
       image: const AssetImage('assets/media/gtex_matchday_wallpaper.png'),
       fit: BoxFit.cover,

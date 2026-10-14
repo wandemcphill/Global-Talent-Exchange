@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
+import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 
 class Gtex22AuthGateway extends StatelessWidget {
   const Gtex22AuthGateway({super.key, this.onLogin});
@@ -15,26 +16,26 @@ class Gtex22AuthGateway extends StatelessWidget {
         'PLAYER / CLUB',
         'Build your football identity, discover talent, manage squads and compete.',
         Icons.sports_soccer_rounded,
-        Color(0xFFB9FF3D),
+        GtexFloodlit.pitch,
         '/auth/signup/user',
       ),
       const _Role(
         'CREATOR',
         'Publish football stories, grow a following and build your community.',
         Icons.campaign_rounded,
-        Color(0xFFFF5FA2),
+        GtexFloodlit.scoreboard,
         '/auth/signup/creator',
       ),
       const _Role(
         'TRADER',
         'Access the GTEX economy with dedicated trading and wallet security.',
         Icons.candlestick_chart_rounded,
-        Color(0xFFFFC857),
+        GtexFloodlit.gold,
         '/auth/signup/trader',
       ),
     ];
     return Scaffold(
-      backgroundColor: const Color(0xFF050709),
+      backgroundColor: GtexFloodlit.night,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -64,7 +65,7 @@ class Gtex22AuthGateway extends StatelessWidget {
                     'ENTER THE\nFOOTBALL WORLD.',
                     style: TextStyle(
                       fontFamily: 'BarlowCondensed',
-                      color: Color(0xFFF4F7F8),
+                      color: GtexFloodlit.chalk,
                       fontSize: 68,
                       height: .84,
                       fontWeight: FontWeight.w700,
@@ -77,7 +78,7 @@ class Gtex22AuthGateway extends StatelessWidget {
                     child: Text(
                       'One account opens a living football ecosystem of talent, clubs, markets, matches and community. Pick the way you want to play.',
                       style: TextStyle(
-                        color: Color(0xFF93A0AA),
+                        color: GtexFloodlit.chalkMuted,
                         fontSize: 16,
                         height: 1.55,
                       ),
@@ -110,15 +111,15 @@ class Gtex22AuthGateway extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0A0F13),
+                      color: GtexFloodlit.card,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF1C2830)),
+                      border: Border.all(color: GtexFloodlit.line),
                     ),
                     child: const Row(
                       children: <Widget>[
                         Icon(
                           Icons.verified_user_rounded,
-                          color: Color(0xFF36E38A),
+                          color: GtexFloodlit.pitch,
                           size: 20,
                         ),
                         SizedBox(width: 12),
@@ -126,7 +127,7 @@ class Gtex22AuthGateway extends StatelessWidget {
                           child: Text(
                             'Secure identity, protected account sessions and role-aware onboarding. KYC is requested where the platform actually needs it.',
                             style: TextStyle(
-                              color: Color(0xFF93A0AA),
+                              color: GtexFloodlit.chalkMuted,
                               fontSize: 12,
                               height: 1.45,
                             ),
@@ -162,7 +163,7 @@ class _RoleCard extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A0F13),
+        color: GtexFloodlit.card,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: role.accent.withValues(alpha: .28)),
       ),
@@ -192,7 +193,7 @@ class _RoleCard extends StatelessWidget {
           Text(
             role.body,
             style: const TextStyle(
-              color: Color(0xFFF4F7F8),
+              color: GtexFloodlit.chalk,
               fontSize: 13,
               height: 1.4,
             ),
@@ -203,7 +204,7 @@ class _RoleCard extends StatelessWidget {
               Text(
                 'CONTINUE',
                 style: TextStyle(
-                  color: Color(0xFF93A0AA),
+                  color: GtexFloodlit.chalkMuted,
                   fontFamily: 'DMMono',
                   fontSize: 9,
                   letterSpacing: 1,
@@ -212,7 +213,7 @@ class _RoleCard extends StatelessWidget {
               Spacer(),
               Icon(
                 Icons.arrow_forward_rounded,
-                color: Color(0xFF93A0AA),
+                color: GtexFloodlit.chalkMuted,
                 size: 17,
               ),
             ],
@@ -264,7 +265,7 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF050709),
+    backgroundColor: GtexFloodlit.night,
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
@@ -285,7 +286,7 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
                       'THE WORLD\nIS STILL MOVING.',
                       style: TextStyle(
                         fontFamily: 'BarlowCondensed',
-                        color: Color(0xFFF4F7F8),
+                        color: GtexFloodlit.chalk,
                         fontSize: 62,
                         height: .84,
                         fontWeight: FontWeight.w700,
@@ -295,7 +296,7 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
                     Text(
                       'Pick up where you left off. Your club, talent watchlist, market activity, matches and community are waiting.',
                       style: TextStyle(
-                        color: Color(0xFF93A0AA),
+                        color: GtexFloodlit.chalkMuted,
                         fontSize: 15,
                         height: 1.5,
                       ),
@@ -334,9 +335,9 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
   Widget _form(BuildContext context) => Container(
     padding: const EdgeInsets.all(26),
     decoration: BoxDecoration(
-      color: const Color(0xFF0A0F13),
+      color: GtexFloodlit.card,
       borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: const Color(0xFF1C2830)),
+      border: Border.all(color: GtexFloodlit.line),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -352,7 +353,7 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
           'Sign in',
           style: TextStyle(
             fontFamily: 'BarlowCondensed',
-            color: Color(0xFFF4F7F8),
+            color: GtexFloodlit.chalk,
             fontSize: 34,
             fontWeight: FontWeight.w700,
           ),
@@ -360,7 +361,7 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
         const SizedBox(height: 5),
         const Text(
           'Continue your football world.',
-          style: TextStyle(color: Color(0xFF93A0AA), fontSize: 12),
+          style: TextStyle(color: GtexFloodlit.chalkMuted, fontSize: 12),
         ),
         const SizedBox(height: 22),
         _field(_email, 'Email', Icons.mail_outline_rounded),
@@ -371,15 +372,18 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
             padding: const EdgeInsets.only(top: 12),
             child: Text(
               _error!,
-              style: const TextStyle(color: Color(0xFFFF6B7A), fontSize: 11),
+              style: const TextStyle(
+                color: GtexFloodlit.scoreboard,
+                fontSize: 11,
+              ),
             ),
           ),
         const SizedBox(height: 18),
         FilledButton(
           onPressed: _busy ? null : _submit,
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFFB9FF3D),
-            foregroundColor: const Color(0xFF08100A),
+            backgroundColor: GtexFloodlit.pitch,
+            foregroundColor: GtexFloodlit.night,
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -404,27 +408,27 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
         const SizedBox(height: 16),
         Row(
           children: const <Widget>[
-            Expanded(child: Divider(color: Color(0xFF1C2830))),
+            Expanded(child: Divider(color: GtexFloodlit.line)),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 10),
               child: Text(
                 'OR',
                 style: TextStyle(
-                  color: Color(0xFF66737D),
+                  color: GtexFloodlit.chalkMuted,
                   fontFamily: 'DMMono',
                   fontSize: 9,
                 ),
               ),
             ),
-            Expanded(child: Divider(color: Color(0xFF1C2830))),
+            Expanded(child: Divider(color: GtexFloodlit.line)),
           ],
         ),
         const SizedBox(height: 14),
         OutlinedButton(
           onPressed: widget.onSignup ?? () => context.go('/auth'),
           style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFFF4F7F8),
-            side: const BorderSide(color: Color(0xFF1C2830)),
+            foregroundColor: GtexFloodlit.chalk,
+            side: const BorderSide(color: GtexFloodlit.line),
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
           child: const Text(
@@ -439,19 +443,19 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
       TextField(
         controller: c,
         keyboardType: TextInputType.emailAddress,
-        style: const TextStyle(color: Color(0xFFF4F7F8), fontSize: 13),
+        style: const TextStyle(color: GtexFloodlit.chalk, fontSize: 13),
         decoration: _decoration(label, icon),
       );
   Widget _passwordField() => TextField(
     controller: _password,
     obscureText: _obscure,
-    style: const TextStyle(color: Color(0xFFF4F7F8), fontSize: 13),
+    style: const TextStyle(color: GtexFloodlit.chalk, fontSize: 13),
     decoration: _decoration('Password', Icons.lock_outline_rounded).copyWith(
       suffixIcon: IconButton(
         onPressed: () => setState(() => _obscure = !_obscure),
         icon: Icon(
           _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-          color: const Color(0xFF66737D),
+          color: GtexFloodlit.chalkMuted,
           size: 18,
         ),
       ),
@@ -459,21 +463,21 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
   );
   InputDecoration _decoration(String label, IconData icon) => InputDecoration(
     labelText: label,
-    labelStyle: const TextStyle(color: Color(0xFF66737D), fontSize: 12),
-    prefixIcon: Icon(icon, color: const Color(0xFF66737D), size: 18),
+    labelStyle: const TextStyle(color: GtexFloodlit.chalkMuted, fontSize: 12),
+    prefixIcon: Icon(icon, color: GtexFloodlit.chalkMuted, size: 18),
     filled: true,
-    fillColor: const Color(0xFF070B0F),
+    fillColor: GtexFloodlit.night,
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFF1C2830)),
+      borderSide: const BorderSide(color: GtexFloodlit.line),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFF1C2830)),
+      borderSide: const BorderSide(color: GtexFloodlit.line),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFF36E38A)),
+      borderSide: const BorderSide(color: GtexFloodlit.pitch),
     ),
   );
 }
@@ -488,7 +492,7 @@ class _Eyebrow extends StatelessWidget {
         width: 6,
         height: 6,
         decoration: const BoxDecoration(
-          color: Color(0xFFB9FF3D),
+          color: GtexFloodlit.pitch,
           shape: BoxShape.circle,
         ),
       ),
@@ -497,7 +501,7 @@ class _Eyebrow extends StatelessWidget {
         text,
         style: const TextStyle(
           fontFamily: 'DMMono',
-          color: Color(0xFFB9FF3D),
+          color: GtexFloodlit.pitch,
           fontSize: 10,
           letterSpacing: 1.6,
         ),
@@ -518,13 +522,16 @@ class _TinyStat extends StatelessWidget {
           a,
           style: const TextStyle(
             fontFamily: 'DMMono',
-            color: Color(0xFFF4F7F8),
+            color: GtexFloodlit.chalk,
             fontSize: 9,
             letterSpacing: 1,
           ),
         ),
         const SizedBox(width: 10),
-        Text(b, style: const TextStyle(color: Color(0xFF66737D), fontSize: 11)),
+        Text(
+          b,
+          style: const TextStyle(color: GtexFloodlit.chalkMuted, fontSize: 11),
+        ),
       ],
     ),
   );

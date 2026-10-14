@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../components/gtex_status_chip.dart';
 import '../theme/gtex_colors.dart';
 import '../theme/gtex_spacing.dart';
+import 'gtex_pitch_marks.dart';
 import 'gtex_regen_portrait.dart';
 
 class GtexRegenCard extends StatelessWidget {
@@ -70,35 +71,41 @@ class GtexRegenCard extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           clipBehavior: Clip.antiAlias,
-          padding: const EdgeInsets.all(GtexSpacing.sm),
+          padding: const EdgeInsets.all(GtexSpacing.md),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: <Color>[
-                GtexColors.surfaceRaised,
-                GtexColors.surfaceBase,
-                GtexColors.accentViolet.withValues(alpha: 0.07),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(8),
+            color: GtexFloodlit.card,
+            borderRadius: BorderRadius.circular(GtexSpacing.radiusLg),
             border: Border.all(
-              color:
-                  isSelected
-                      ? GtexColors.accentViolet.withValues(alpha: 0.92)
-                      : GtexColors.surfaceBorderStrong,
+              color: isSelected ? GtexFloodlit.pitch : GtexFloodlit.line,
               width: isSelected ? 1.8 : 1,
             ),
             boxShadow: <BoxShadow>[
-              if (isSelected) GtexColors.glow(GtexColors.accentViolet),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.4),
+                blurRadius: 24,
+                spreadRadius: -12,
+                offset: const Offset(0, 14),
+              ),
+              if (isSelected)
+                BoxShadow(
+                  color: GtexFloodlit.pitch.withValues(alpha: 0.3),
+                  blurRadius: 32,
+                  spreadRadius: -14,
+                ),
             ],
           ),
           child: Stack(
+            clipBehavior: Clip.none,
             children: <Widget>[
-              Positioned.fill(
+              const Positioned(
+                left: -GtexSpacing.md,
+                top: -GtexSpacing.md,
+                right: -GtexSpacing.md,
+                bottom: -GtexSpacing.md,
                 child: IgnorePointer(
                   child: CustomPaint(
-                    painter: _RegenDnaWatermarkPainter(GtexColors.accentViolet),
+                    painter: GtexTurfStripesPainter(),
+                    foregroundPainter: GtexChalkFramePainter(opacity: 0.22),
                   ),
                 ),
               ),
@@ -286,20 +293,25 @@ class _RegenCardDetails extends StatelessWidget {
                     name.toUpperCase(),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: GtexColors.text,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0,
+                    style: const TextStyle(
+                      color: GtexFloodlit.chalk,
+                      fontFamily: GtexFloodlit.display,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
-                    '$nationality | $position | $archetype',
+                    '$nationality · $position · $archetype',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: GtexColors.textMuted,
-                      fontWeight: FontWeight.w800,
+                    style: const TextStyle(
+                      color: GtexFloodlit.chalkMuted,
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
                     ),
                   ),
                 ],
@@ -314,7 +326,7 @@ class _RegenCardDetails extends StatelessWidget {
           children: <Widget>[
             const GtexStatusChip(
               label: 'REGEN DNA',
-              color: GtexColors.accentViolet,
+              color: GtexFloodlit.pitch,
               compact: true,
             ),
             if (!isDense &&
@@ -327,7 +339,7 @@ class _RegenCardDetails extends StatelessWidget {
               ),
             GtexStatusChip(
               label: potentialLabel,
-              color: GtexColors.accentViolet,
+              color: GtexFloodlit.gold,
               compact: true,
             ),
             if (!isDense &&
@@ -445,13 +457,15 @@ class _TraitChip extends StatelessWidget {
           children: <Widget>[
             Icon(Icons.auto_graph_rounded, size: 13, color: color),
             const SizedBox(width: 4),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: GtexColors.textPrimary,
-                fontWeight: FontWeight.w800,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: GtexColors.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -542,47 +556,6 @@ class _PositionStripe extends StatelessWidget {
   }
 }
 
-class _RegenDnaWatermarkPainter extends CustomPainter {
-  const _RegenDnaWatermarkPainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint =
-        Paint()
-          ..color = color.withValues(alpha: 0.055)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2;
-    final Path left = Path();
-    final Path right = Path();
-    for (double y = -20; y <= size.height + 20; y += 12) {
-      final double progress = y / size.height;
-      final double wave = 18 * (0.5 + 0.5 * progress);
-      final double centerX = size.width - 44;
-      final double offset = 16 * (1 + progress);
-      final double x1 = centerX + (wave * 0.35);
-      final double x2 = centerX - offset;
-      if (y == -20) {
-        left.moveTo(x1, y);
-        right.moveTo(x2, y);
-      } else {
-        left.lineTo(x1, y);
-        right.lineTo(x2, y);
-      }
-      if (((y / 24).round()).isEven) {
-        canvas.drawLine(Offset(x1, y), Offset(x2, y + 6), paint);
-      }
-    }
-    canvas.drawPath(left, paint);
-    canvas.drawPath(right, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _RegenDnaWatermarkPainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
 class _GsiPlate extends StatelessWidget {
   const _GsiPlate({required this.label, this.tierLabel});
 
@@ -594,12 +567,12 @@ class _GsiPlate extends StatelessWidget {
     final String value =
         label.replaceFirst(RegExp(r'^GSI\s*', caseSensitive: false), '').trim();
     return Container(
-      width: 54,
-      padding: const EdgeInsets.symmetric(vertical: 7),
+      width: 60,
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
-        color: GtexColors.gold.withValues(alpha: 0.15),
+        color: GtexFloodlit.night.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: GtexColors.gold.withValues(alpha: 0.6)),
+        border: Border.all(color: GtexFloodlit.gold.withValues(alpha: 0.55)),
       ),
       child: Column(
         children: <Widget>[
@@ -608,19 +581,22 @@ class _GsiPlate extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: GtexColors.gold,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
+              color: GtexFloodlit.gold,
+              fontFamily: GtexFloodlit.display,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
               height: 1,
             ),
           ),
           const Text(
             'GSI',
             style: TextStyle(
-              color: GtexColors.textMuted,
+              color: GtexFloodlit.chalkMuted,
+              fontFamily: 'Inter',
               fontSize: 9,
-              fontWeight: FontWeight.w900,
-              height: 1.2,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+              height: 1.3,
             ),
           ),
           if (tierLabel != null)
