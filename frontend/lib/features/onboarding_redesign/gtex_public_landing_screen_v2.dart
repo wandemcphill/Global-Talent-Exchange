@@ -720,102 +720,150 @@ class _PrimaryPathCard extends StatelessWidget {
 
   final VoidCallback? onTap;
 
+  static const double _inlineBreakpoint = 560;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool inline = constraints.maxWidth >= _inlineBreakpoint;
+        final Widget button = FilledButton(
+          onPressed: onTap,
+          style: FilledButton.styleFrom(
+            backgroundColor: _green,
+            foregroundColor: _onPitch,
+            padding: EdgeInsets.symmetric(
+              horizontal: inline ? 22 : 0,
+              vertical: 13,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(11),
+            ),
+          ),
+          child: const Text(
+            'Create free account',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+          ),
+        );
+        const Widget kycNote = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.lock_outline_rounded, size: 13, color: _textMuted),
+            SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'Verify ID (KYC) only when you withdraw.',
+                style: TextStyle(color: _textMuted, fontSize: 11.5),
+              ),
+            ),
+          ],
+        );
+
+        return Container(
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: GtexFloodlit.turf.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _green, width: 2),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: _green.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(
+                      Icons.shield_rounded,
+                      color: _green,
+                      size: 23,
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            const Flexible(
+                              child: Text(
+                                'Player & club owner',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: _condensed,
+                                  color: _text,
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if (inline) ...<Widget>[
+                              const SizedBox(width: 10),
+                              const _FreeBadge(),
+                            ],
+                          ],
+                        ),
+                        const Text(
+                          'Start free. Buy players to open your club.',
+                          style: TextStyle(
+                            color: _textSecondary,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        if (inline) ...<Widget>[
+                          const SizedBox(height: 6),
+                          kycNote,
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (inline) ...<Widget>[
+                    const SizedBox(width: 16),
+                    button,
+                  ] else
+                    const _FreeBadge(),
+                ],
+              ),
+              if (!inline) ...<Widget>[
+                const SizedBox(height: 13),
+                button,
+                const SizedBox(height: 9),
+                kycNote,
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FreeBadge extends StatelessWidget {
+  const _FreeBadge();
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: GtexFloodlit.turf.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _green, width: 2),
+        color: _green,
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: _green.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: const Icon(
-                  Icons.shield_rounded,
-                  color: _green,
-                  size: 23,
-                ),
-              ),
-              const SizedBox(width: 11),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      'Player & club owner',
-                      style: TextStyle(
-                        fontFamily: _condensed,
-                        color: _text,
-                        fontSize: 21,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      'Start free. Buy players to open your club.',
-                      style: TextStyle(color: _textSecondary, fontSize: 12.5),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _green,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  'FREE · INSTANT',
-                  style: TextStyle(
-                    color: _onPitch,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 13),
-          FilledButton(
-            onPressed: onTap,
-            style: FilledButton.styleFrom(
-              backgroundColor: _green,
-              foregroundColor: _onPitch,
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(11),
-              ),
-            ),
-            child: const Text(
-              'Create free account',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-            ),
-          ),
-          const SizedBox(height: 9),
-          Row(
-            children: const <Widget>[
-              Icon(Icons.lock_outline_rounded, size: 13, color: _textMuted),
-              SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Verify ID (KYC) only when you withdraw.',
-                  style: TextStyle(color: _textMuted, fontSize: 11.5),
-                ),
-              ),
-            ],
-          ),
-        ],
+      child: const Text(
+        'FREE · INSTANT',
+        style: TextStyle(
+          color: _onPitch,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
