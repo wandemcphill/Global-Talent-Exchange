@@ -30,8 +30,12 @@ Live story-feed queue + `POST /api/admin/story-feed` publish; `GET /api/admin/st
 `GtexTrustOpsApiRepository` loads `GET /api/admin/treasury/kyc` into the KYC queue (operations-readiness stays the health rail); Approve/Reject call `POST .../kyc/{id}/review` with `verified` / `rejected`.
 
 ### 7. Admin Trust Ops — Live disputes queue + reply — DONE
-Loads `GET /api/admin/treasury/disputes` into the disputes rail; Reply posts `POST .../disputes/{id}/messages` (admin reply → awaiting user). No resolve endpoint exists yet — orders / withdrawals remain deferred.
+Loads `GET /api/admin/treasury/disputes` into the disputes rail; Reply posts `POST .../disputes/{id}/messages` (admin reply → awaiting user). No resolve endpoint exists yet.
+
+### 8. Admin Trust Ops — Live withdrawals + purchase orders — DONE
+Orders rail loads `GET /api/admin/treasury/withdrawals` + `GET /api/admin/wallets/purchase-orders`; Approve/Reject call withdrawal status (`approved`/`rejected`) or purchase-order status (`settled`/`rejected`). Wallet recent list mirrors withdrawal rows.
 
 ## Explicitly deferred (not half-done product claims)
 - Match “Coming soon” 3D / spectate / broadcast routes (launch policy: 2D tactical / OriginalVisualRuntime path)
 - Unity runner / Vercel infra failures
+- Dispute hard-resolve endpoint (admin reply is the mounted mutation)

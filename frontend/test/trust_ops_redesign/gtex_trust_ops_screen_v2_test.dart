@@ -109,6 +109,36 @@ void main() {
     expect(find.text('Reply sent on dispute dsp-301.'), findsOneWidget);
   });
 
+  testWidgets('admin trust ops approve withdrawal order', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final _RecordingTrustOpsRepository repository =
+        _RecordingTrustOpsRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: Scaffold(
+          body: GtexAdminTrustOpsScreen(repository: repository),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Orders / Withdrawals'));
+    await tester.pumpAndSettle();
+    expect(find.text('Approve'), findsOneWidget);
+    await tester.tap(find.text('Approve'));
+    await tester.pumpAndSettle();
+
+    expect(repository.orderReviewCalls.length, 1);
+    expect(repository.orderReviewCalls.single.$1, 'wd-901');
+    expect(repository.orderReviewCalls.single.$2, isTrue);
+    expect(repository.orderReviewCalls.single.$3, GtexOrderKind.withdrawal);
+    expect(find.text('Withdrawal wd-901 approved.'), findsOneWidget);
+  });
+
   test('operations readiness JSON parses live admin snapshot', () {
     final GtexOperationsReadinessSnapshot snapshot =
         GtexOperationsReadinessSnapshot.fromJson(<String, Object?>{
@@ -233,6 +263,8 @@ void main() {
 class _RecordingTrustOpsRepository extends GtexTrustOpsRepository {
   final List<(String, bool)> reviewCalls = <(String, bool)>[];
   final List<(String, String)> replyCalls = <(String, String)>[];
+  final List<(String, bool, GtexOrderKind)> orderReviewCalls =
+      <(String, bool, GtexOrderKind)>[];
 
   @override
   Future<GtexTrustOpsState> load() async {
@@ -240,12 +272,23 @@ class _RecordingTrustOpsRepository extends GtexTrustOpsRepository {
       wallet: GtexWalletSummary(
         balanceCredits: 0,
         availableCredits: 0,
-        pendingWithdrawalCredits: 0,
+        pendingWithdrawalCredits: 750000,
         kycStatus: 'Needs attention',
         lastUpdatedLabel: 'Live',
       ),
       transactions: <GtexTransactionRecord>[],
-      orders: <GtexOrderRecord>[],
+      orders: <GtexOrderRecord>[
+        GtexOrderRecord(
+          id: 'wd-901',
+          title: 'Withdrawal WD-901',
+          subtitle: 'GTBank · pending review',
+          totalCredits: 750000,
+          status: GtexTrustStatus.pending,
+          createdLabel: 'Today',
+          itemCount: 1,
+          kind: GtexOrderKind.withdrawal,
+        ),
+      ],
       kycCases: <GtexKycCaseRecord>[
         GtexKycCaseRecord(
           id: 'kyc-201',
@@ -287,6 +330,16 @@ class _RecordingTrustOpsRepository extends GtexTrustOpsRepository {
     required String message,
   }) async {
     replyCalls.add((disputeId, message));
+  }
+
+  @override
+  Future<void> reviewOrder(
+    String orderId, {
+    required bool approve,
+    required GtexOrderKind kind,
+    String? notes,
+  }) async {
+    orderReviewCalls.add((orderId, approve, kind));
   }
 }
 
