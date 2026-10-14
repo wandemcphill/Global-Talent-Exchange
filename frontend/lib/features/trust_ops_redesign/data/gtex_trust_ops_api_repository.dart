@@ -58,6 +58,10 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
           '/api/admin/treasury/kyc',
           query: const <String, Object?>{'limit': 50, 'offset': 0},
         ),
+        client.getMap(
+          '/api/admin/treasury/disputes',
+          query: const <String, Object?>{'limit': 50, 'offset': 0},
+        ),
       ]);
       final GtexOperationsReadinessSnapshot readiness =
           GtexOperationsReadinessSnapshot.fromJson(
@@ -68,12 +72,17 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
             Map<String, Object?>.from(payloads[1]),
             GteAdminKyc.fromJson,
           );
+      final GteAdminQueuePage<GteDispute> disputePage =
+          GteAdminQueuePage<GteDispute>.fromJson(
+            Map<String, Object?>.from(payloads[2]),
+            GteDispute.fromJson,
+          );
       return _stateFromOperationsReadiness(
         readiness,
         kycCases:
-            kycPage.items
-                .map(_mapAdminKyc)
-                .toList(growable: false),
+            kycPage.items.map(_mapAdminKyc).toList(growable: false),
+        disputes:
+            disputePage.items.map(_mapAdminDispute).toList(growable: false),
       );
     }, () => _requireFixtures().load());
   }
@@ -103,6 +112,26 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
     ));
   }
 
+  @override
+  Future<void> replyToDispute(
+    String disputeId, {
+    required String message,
+  }) {
+    final String trimmed = message.trim();
+    if (trimmed.isEmpty) {
+      throw const GteApiException(
+        type: GteApiErrorType.validation,
+        message: 'Dispute reply message is required.',
+      );
+    }
+    return client.withFallback<void>(() async {
+      await client.post(
+        '/api/admin/treasury/disputes/$disputeId/messages',
+        body: <String, Object?>{'message': trimmed},
+      );
+    }, () => _requireFixtures().replyToDispute(disputeId, message: trimmed));
+  }
+
   GtexTrustOpsDemoRepository _requireFixtures() {
     final GtexTrustOpsDemoRepository? resolvedFixtures = fixtures;
     if (resolvedFixtures == null) {
@@ -116,14 +145,11 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
   GtexTrustOpsState _stateFromOperationsReadiness(
     GtexOperationsReadinessSnapshot snapshot, {
     required List<GtexKycCaseRecord> kycCases,
+    required List<GtexDisputeRecord> disputes,
   }) {
     final GtexOperationsReadinessQueue risk = _queue(
       snapshot,
       'risk_compliance',
-    );
-    final GtexOperationsReadinessQueue moderation = _queue(
-      snapshot,
-      'moderation_disputes',
     );
     final GtexOperationsReadinessQueue policy = _queue(
       snapshot,
@@ -159,22 +185,41 @@ class GtexTrustOpsApiRepository extends GtexTrustOpsRepository {
         _orderFromQueue(diagnostics),
       ],
       kycCases: kycCases,
-      disputes: <GtexDisputeRecord>[
-        GtexDisputeRecord(
-          id: 'moderation-disputes',
-          title: moderation.title,
-          counterparty: moderation.owner,
-          status: _trustStatus(moderation.status),
-          amountCredits: _metricValue(moderation, 'open_disputes'),
-          openedLabel: 'Live',
-          summary:
-              moderation.alerts.isNotEmpty
-                  ? moderation.alerts.join(' ')
-                  : moderation.description,
-        ),
-      ],
+      disputes: disputes,
       operationsReadiness: snapshot,
     );
+  }
+
+  GtexDisputeRecord _mapAdminDispute(GteDispute item) {
+    final String? fullName = item.userFullName?.trim();
+    final String counterparty =
+        (fullName != null && fullName.isNotEmpty) ? fullName : item.userEmail;
+    final String? subject = item.subject?.trim();
+    return GtexDisputeRecord(
+      id: item.id,
+      title:
+          (subject != null && subject.isNotEmpty) ? subject : item.reference,
+      counterparty: counterparty,
+      status: _disputeTrustStatus(item.status),
+      amountCredits: 0,
+      openedLabel:
+          item.createdAt?.toUtc().toIso8601String() ?? 'Opened',
+      summary:
+          '${item.resourceType} ${item.resourceId} · ${item.reference}',
+    );
+  }
+
+  GtexTrustStatus _disputeTrustStatus(GteDisputeStatus status) {
+    switch (status) {
+      case GteDisputeStatus.resolved:
+      case GteDisputeStatus.closed:
+        return GtexTrustStatus.resolved;
+      case GteDisputeStatus.awaitingUser:
+        return GtexTrustStatus.pending;
+      case GteDisputeStatus.awaitingAdmin:
+      case GteDisputeStatus.open:
+        return GtexTrustStatus.attention;
+    }
   }
 
   GtexKycCaseRecord _mapAdminKyc(GteAdminKyc item) {
