@@ -3,8 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using Stopwatch = System.Diagnostics.Stopwatch;
 using FStudio.GTEX;
 using FStudio.GTEX.Core;
@@ -83,15 +86,17 @@ namespace FStudio.GTEX.Editor
             private const string ActionName = "Original visual runtime verification";
             private const double BootTimeoutSeconds = 25d;
             private const double NoBackendObserveSeconds = 60d;
-            private const double ReplayObserveSeconds = 15d;
+            private const double ReplayTimeoutSeconds = 75d;
             private const double LocalSimTimeoutSeconds = 120d;
+            private const double LiveFeedTimeoutSeconds = 60d;
 
             private enum SessionKind
             {
                 None,
                 NoBackend,
                 ScriptedReplay,
-                LocalSim
+                LocalSim,
+                LiveFeed
             }
 
             private sealed class SectionResult
@@ -123,6 +128,7 @@ namespace FStudio.GTEX.Editor
             private readonly SectionResult editorNoBackend = new SectionResult { Name = "Editor no-backend test" };
             private readonly SectionResult scriptedReplay = new SectionResult { Name = "Scripted replay" };
             private readonly SectionResult localSim = new SectionResult { Name = "Local sim feed" };
+            private readonly SectionResult liveFeed = new SectionResult { Name = "Live backend feed" };
 
             private readonly string outputDirectory;
             private readonly string screenshotDirectory;
@@ -187,8 +193,19 @@ namespace FStudio.GTEX.Editor
             private int sessionConsoleStartIndex;
             private int replayCaptureIndex;
             private int noBackendCaptureIndex;
+            private int replayStartHomeScore;
+            private int liveFeedRequestCount;
+            private int liveFeedServedFrameCount;
+            private int liveFeedPort;
             private float sessionStartMatchMinute;
             private float lastObservedMatchMinute;
+            private bool liveFeedStarted;
+            private bool liveRuntimeObjectObserved;
+            private volatile bool liveFeedServerStopping;
+            private volatile string liveFeedListenerFailure = string.Empty;
+            private volatile HttpListener liveFeedListener;
+            private Thread liveFeedServerThread;
+            private string[] liveFeedPayloads = Array.Empty<string>();
 
             public VerificationRun(bool exitEditorWhenFinished)
             {
@@ -267,6 +284,20 @@ namespace FStudio.GTEX.Editor
                 lastObservedMatchMinute = 0f;
                 Trace("BeginSession=" + sessionKind);
 
+                if (sessionKind == SessionKind.LiveFeed)
+                {
+                    try
+                    {
+                        liveFeedPort = StartLiveFeedListener();
+                        WriteLiveFeedVerificationConfig();
+                    }
+                    catch (Exception exception)
+                    {
+                        liveFeedListenerFailure = exception.Message;
+                        liveFeed.Errors.Add("Could not start the live-feed listener: " + exception.Message);
+                    }
+                }
+
                 EditorSceneManager.OpenScene(GtexSceneLoader.OriginalVisualRuntimeScenePath, OpenSceneMode.Single);
                 EditorApplication.delayCall += EnterPlayMode;
             }
@@ -301,6 +332,9 @@ namespace FStudio.GTEX.Editor
                             break;
                         case SessionKind.LocalSim:
                             UpdateLocalSimSession();
+                            break;
+                        case SessionKind.LiveFeed:
+                            UpdateLiveFeedSession();
                             break;
                     }
                 }
@@ -411,7 +445,8 @@ namespace FStudio.GTEX.Editor
                     runtimeReadyObserved = true;
                     readyObservedAt = Time.realtimeSinceStartupAsDouble;
                     EnableVisualCommandLogging(director);
-                    director.RunScriptedCommandReplay();
+                    replayStartHomeScore = GtexScoreAuthority.Current.homeScore;
+                    director.RunScriptedAcceptanceReplay();
                     replayStarted = true;
                     replayStartedAt = Time.realtimeSinceStartupAsDouble;
                     Trace("ReplayReady");
@@ -432,9 +467,21 @@ namespace FStudio.GTEX.Editor
                     replayCaptureIndex += 1;
                 }
 
-                if (replayElapsed < ReplayObserveSeconds)
+                if (!director.ScriptedAcceptanceReplayComplete)
                 {
+                    if (replayElapsed >= ReplayTimeoutSeconds)
+                    {
+                        scriptedReplay.Errors.Add("Scripted acceptance replay did not complete before the 75-second timeout.");
+                        scriptedReplay.Summary = "Scripted acceptance replay timed out.";
+                        ExitCurrentPlaySession();
+                    }
+
                     return;
+                }
+
+                if (!director.ScriptedAcceptanceReplaySucceeded)
+                {
+                    scriptedReplay.Errors.Add("Scripted acceptance replay reported failure.");
                 }
 
                 var replayLog = GetSessionLogs()
@@ -463,6 +510,24 @@ namespace FStudio.GTEX.Editor
                     }
                 }
 
+                var goalLogIndex = Array.FindIndex(replayLog, line =>
+                    line.IndexOf("Command -> Goal", StringComparison.OrdinalIgnoreCase) >= 0);
+                var resetAfterGoal = goalLogIndex >= 0 &&
+                                     replayLog.Skip(goalLogIndex + 1).Any(line =>
+                                         line.IndexOf("Command -> ResetKickoff", StringComparison.OrdinalIgnoreCase) >= 0);
+                if (!resetAfterGoal)
+                {
+                    scriptedReplay.Errors.Add("No ResetKickoff command was logged after the first Goal command.");
+                }
+
+                var expectedHomeScore = replayStartHomeScore + 1;
+                if (GtexScoreAuthority.Current.homeScore != expectedHomeScore)
+                {
+                    scriptedReplay.Errors.Add(
+                        "Scripted replay home score was " + GtexScoreAuthority.Current.homeScore +
+                        "; expected " + expectedHomeScore + ".");
+                }
+
                 if (replayCaptureIndex < replayCaptureTimes.Length)
                 {
                     scriptedReplay.Errors.Add("Scripted replay did not finish all expected screenshot checkpoints.");
@@ -471,6 +536,8 @@ namespace FStudio.GTEX.Editor
                 scriptedReplay.Notes.Add("CommandLogCount=" + replayLog.Length);
                 scriptedReplay.Notes.Add("ExternalPlaybackEnabled=" + (MatchManager.Current != null && MatchManager.Current.ExternalPlaybackEnabled));
                 scriptedReplay.Notes.Add("Score=" + GtexScoreAuthority.Current.homeScore + "-" + GtexScoreAuthority.Current.awayScore);
+                scriptedReplay.Notes.Add("ReplayStartHomeScore=" + replayStartHomeScore);
+                scriptedReplay.Notes.Add("AcceptanceReplaySucceeded=" + director.ScriptedAcceptanceReplaySucceeded);
 
                 scriptedReplay.Passed =
                     !externalPlaybackObserved &&
@@ -592,6 +659,109 @@ namespace FStudio.GTEX.Editor
                 ExitCurrentPlaySession();
             }
 
+            private void UpdateLiveFeedSession()
+            {
+                TrackSharedGuards(liveFeed);
+                if (UnityEngine.Object.FindFirstObjectByType<GtexMatchRuntime>() != null ||
+                    UnityEngine.Object.FindFirstObjectByType<GtexSimRuntimeHost>() != null)
+                {
+                    liveRuntimeObjectObserved = true;
+                    if (!liveFeed.Errors.Contains("GtexMatchRuntime or GtexSimRuntimeHost existed during the live-feed OVR session."))
+                    {
+                        liveFeed.Errors.Add("GtexMatchRuntime or GtexSimRuntimeHost existed during the live-feed OVR session.");
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(liveFeedListenerFailure) &&
+                    !liveFeed.Errors.Contains("Live-feed listener failed: " + liveFeedListenerFailure))
+                {
+                    liveFeed.Errors.Add("Live-feed listener failed: " + liveFeedListenerFailure);
+                }
+
+                if (!liveFeedStarted && TryResolveRuntime(out var director))
+                {
+                    runtimeReadyObserved = true;
+                    EnableVisualCommandLogging(director);
+                    liveFeedStarted = true;
+                    Trace("LiveFeedReady port=" + liveFeedPort);
+                }
+
+                var sessionLogs = GetSessionLogs();
+                var endMatchLogged = sessionLogs.Any(line =>
+                    line.IndexOf("[GTEX VisualBridge] Command -> EndMatch", StringComparison.OrdinalIgnoreCase) >= 0);
+                var timedOut = EditorApplication.timeSinceStartup - sessionStartedAt >= LiveFeedTimeoutSeconds;
+                if (!endMatchLogged && !timedOut)
+                {
+                    return;
+                }
+
+                if (!endMatchLogged)
+                {
+                    liveFeed.Errors.Add("Live backend feed did not log EndMatch before the 60-second timeout.");
+                }
+
+                var commandLogs = sessionLogs
+                    .Where(line => line.IndexOf("[GTEX VisualBridge] Command ->", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToArray();
+                var expectedTokens = new[]
+                {
+                    "AssignPossession",
+                    "Pass",
+                    "Shoot",
+                    "KeeperSave",
+                    "Goal",
+                    "EndHalf",
+                    "EndMatch"
+                };
+                foreach (var token in expectedTokens)
+                {
+                    if (!commandLogs.Any(line => line.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        liveFeed.Errors.Add("Missing live-feed command log for " + token + ".");
+                    }
+                }
+
+                var score = GtexScoreAuthority.Current;
+                var requestCount = Interlocked.CompareExchange(ref liveFeedRequestCount, 0, 0);
+                if (score.homeScore != 1 || score.awayScore != 0)
+                {
+                    liveFeed.Errors.Add("Live backend feed final score was " + score.homeScore + "-" + score.awayScore + "; expected 1-0.");
+                }
+
+                if (requestCount < 8)
+                {
+                    liveFeed.Errors.Add("Live backend feed received " + requestCount + " requests; expected at least 8.");
+                }
+
+                if (sessionLogs.Any(line =>
+                        line.IndexOf("Live feed poll failed", StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    liveFeed.Errors.Add("A Live feed poll failed log was observed.");
+                }
+
+                liveFeed.Notes.Add("ListenerPort=" + liveFeedPort);
+                liveFeed.Notes.Add("RequestCount=" + requestCount);
+                liveFeed.Notes.Add("FinalScore=" + score.homeScore + "-" + score.awayScore);
+                liveFeed.Notes.Add("RuntimeObjectGuardTriggered=" + liveRuntimeObjectObserved);
+                liveFeed.Notes.Add("EndMatchLogged=" + endMatchLogged);
+                liveFeed.Passed =
+                    endMatchLogged &&
+                    requestCount >= 8 &&
+                    score.homeScore == 1 &&
+                    score.awayScore == 0 &&
+                    !externalPlaybackObserved &&
+                    !scoreMismatchObserved &&
+                    !disallowedLogObserved &&
+                    !liveRuntimeObjectObserved &&
+                    liveFeed.Errors.Count == 0;
+                liveFeed.Summary = liveFeed.Passed
+                    ? "The original visual runtime consumed the scripted local HTTP feed through fulltime without live transform or simulation runtime hosts."
+                    : "Live backend feed failed one or more command, score, transport, or runtime-isolation checks.";
+
+                StopLiveFeedListener();
+                ExitCurrentPlaySession();
+            }
+
             private bool TryResolveRuntime(out GtexVisualMatchDirector director)
             {
                 director = UnityEngine.Object.FindFirstObjectByType<GtexVisualMatchDirector>();
@@ -685,6 +855,9 @@ namespace FStudio.GTEX.Editor
                         BeginSession(SessionKind.LocalSim);
                         break;
                     case SessionKind.LocalSim:
+                        BeginSession(SessionKind.LiveFeed);
+                        break;
+                    case SessionKind.LiveFeed:
                         shouldFinalize = true;
                         FinalizeRun();
                         break;
@@ -695,6 +868,7 @@ namespace FStudio.GTEX.Editor
             {
                 unexpectedFailure = exception;
                 Trace("AbortRun=" + exception);
+                StopLiveFeedListener();
 
                 var section = GetCurrentSection();
                 if (section != null)
@@ -723,6 +897,8 @@ namespace FStudio.GTEX.Editor
                         return scriptedReplay;
                     case SessionKind.LocalSim:
                         return localSim;
+                    case SessionKind.LiveFeed:
+                        return liveFeed;
                     default:
                         return null;
                 }
@@ -734,6 +910,17 @@ namespace FStudio.GTEX.Editor
                 Exception finalizeFailure = null;
                 try
                 {
+                    try
+                    {
+                        StopLiveFeedListener();
+                        Trace("FinalizeRun.StopLiveFeedListener");
+                    }
+                    catch (Exception exception)
+                    {
+                        finalizeFailure ??= exception;
+                        Trace("FinalizeRun.StopLiveFeedListenerFailed=" + exception);
+                    }
+
                     try
                     {
                         RestoreConfig();
@@ -794,7 +981,8 @@ namespace FStudio.GTEX.Editor
                     unexpectedFailure == null &&
                     editorNoBackend.Passed &&
                     scriptedReplay.Passed &&
-                    localSim.Passed;
+                    localSim.Passed &&
+                    liveFeed.Passed;
 
                 var score = GtexScoreAuthority.Current;
                 var summary =
@@ -855,6 +1043,268 @@ namespace FStudio.GTEX.Editor
                 File.WriteAllText(configPath, NormalizeJson(JsonUtility.ToJson(config, true)));
                 AssetDatabase.ImportAsset("Assets/Resources/GTEX/match-config.json", ImportAssetOptions.ForceSynchronousImport);
                 AssetDatabase.Refresh();
+            }
+
+            private int StartLiveFeedListener()
+            {
+                var portProbe = new TcpListener(IPAddress.Loopback, 0);
+                portProbe.Start();
+                int port;
+                try
+                {
+                    port = ((IPEndPoint)portProbe.LocalEndpoint).Port;
+                }
+                finally
+                {
+                    portProbe.Stop();
+                }
+
+                var frames = BuildLiveFeedFrames();
+                liveFeedPayloads = frames.Select(frame => JsonUtility.ToJson(frame)).ToArray();
+                liveFeedListenerFailure = string.Empty;
+                liveFeedServerStopping = false;
+                Interlocked.Exchange(ref liveFeedRequestCount, 0);
+                Interlocked.Exchange(ref liveFeedServedFrameCount, 0);
+                liveFeedListener = new HttpListener();
+                liveFeedListener.Prefixes.Add("http://localhost:" + port + "/");
+                liveFeedListener.Start();
+                liveFeedServerThread = new Thread(ServeLiveFeedRequests)
+                {
+                    IsBackground = true,
+                    Name = "GTEX OVR live-feed listener"
+                };
+                liveFeedServerThread.Start();
+                return port;
+            }
+
+            private void ServeLiveFeedRequests()
+            {
+                var expectedPath = "/match/ovr-verifier-live/live";
+                while (!liveFeedServerStopping && liveFeedListener != null && liveFeedListener.IsListening)
+                {
+                    HttpListenerContext context;
+                    try
+                    {
+                        context = liveFeedListener.GetContext();
+                    }
+                    catch (HttpListenerException exception)
+                    {
+                        if (!liveFeedServerStopping)
+                        {
+                            liveFeedListenerFailure = exception.Message;
+                        }
+
+                        break;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
+
+                    Interlocked.Increment(ref liveFeedRequestCount);
+                    try
+                    {
+                        var request = context.Request;
+                        if (!string.Equals(request.HttpMethod, "GET", StringComparison.OrdinalIgnoreCase) ||
+                            request.Url == null ||
+                            !string.Equals(request.Url.AbsolutePath, expectedPath, StringComparison.Ordinal))
+                        {
+                            context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                            context.Response.Close();
+                            continue;
+                        }
+
+                        var frameIndex = Interlocked.Increment(ref liveFeedServedFrameCount) - 1;
+                        var payload = Encoding.UTF8.GetBytes(liveFeedPayloads[Math.Min(frameIndex, liveFeedPayloads.Length - 1)]);
+                        context.Response.StatusCode = (int)HttpStatusCode.OK;
+                        context.Response.ContentType = "application/json; charset=utf-8";
+                        context.Response.ContentEncoding = Encoding.UTF8;
+                        context.Response.ContentLength64 = payload.Length;
+                        context.Response.OutputStream.Write(payload, 0, payload.Length);
+                        context.Response.Close();
+                    }
+                    catch (Exception exception)
+                    {
+                        liveFeedListenerFailure = exception.Message;
+                        try
+                        {
+                            context.Response.Close();
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+            }
+
+            private void StopLiveFeedListener()
+            {
+                liveFeedServerStopping = true;
+                var listener = liveFeedListener;
+                liveFeedListener = null;
+                if (listener != null)
+                {
+                    try
+                    {
+                        if (listener.IsListening)
+                        {
+                            listener.Stop();
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        Trace("LiveFeedListener.StopFailed=" + exception.Message);
+                    }
+
+                    try
+                    {
+                        listener.Close();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                    }
+                    catch (Exception exception)
+                    {
+                        Trace("LiveFeedListener.CloseFailed=" + exception.Message);
+                    }
+                }
+
+                var serverThread = liveFeedServerThread;
+                liveFeedServerThread = null;
+                if (serverThread != null && serverThread.IsAlive && serverThread != Thread.CurrentThread)
+                {
+                    serverThread.Join(1000);
+                }
+            }
+
+            private void WriteLiveFeedVerificationConfig()
+            {
+                var config = JsonUtility.FromJson<GtexMatchConfig>(originalConfigJson) ?? new GtexMatchConfig();
+                config.enabled = true;
+                config.autoStartOnBoot = true;
+                config.runtimeMode = "original-visual";
+                config.matchId = "ovr-verifier-live";
+                config.environment = "custom";
+                config.customBaseUrl = "http://localhost:" + liveFeedPort;
+                config.liveAccessToken = "ovr-verifier-token";
+                config.liveRefreshToken = string.Empty;
+                config.pollIntervalSeconds = 1.5f;
+                config.stopReconnectAfterTerminal = true;
+                config.preserveOriginalScenePresentation = true;
+                config.useOriginalMatchCamera = true;
+                config.enableStadiumUpgrade = false;
+                config.showBroadcastScaffolding = false;
+                config.showCrowd = false;
+                config.use3DPlaybackForLocalSimulation = false;
+                config.simulationTargetDurationMinutes = 1f;
+                config.simulationEventCheckWindowMinutes = 1f;
+                config.simulationBaseEventChancePerWindow = 0.92f;
+                config.simulationRandomSeed = 1337;
+                config.verboseLogging = true;
+                File.WriteAllText(configPath, NormalizeJson(JsonUtility.ToJson(config, true)));
+                AssetDatabase.ImportAsset("Assets/Resources/GTEX/match-config.json", ImportAssetOptions.ForceSynchronousImport);
+                AssetDatabase.Refresh();
+            }
+
+            private static MatchResponse[] BuildLiveFeedFrames()
+            {
+                var players = BuildLiveFeedPlayers();
+                return new[]
+                {
+                    BuildLiveFeedFrame(players, 0, 1f, "first_half", 0, 0, "home-09", "state_update", string.Empty, string.Empty),
+                    BuildLiveFeedFrame(players, 1, 2f, "first_half", 0, 0, "home-09", "pass", "home-09", "home-10"),
+                    BuildLiveFeedFrame(players, 2, 3f, "first_half", 0, 0, "home-10", "shot", "home-10", string.Empty),
+                    BuildLiveFeedFrame(players, 3, 4f, "first_half", 0, 0, "away-01", "keeper_save", "away-01", "home-10"),
+                    BuildLiveFeedFrame(players, 4, 5f, "first_half", 1, 0, "home-10", "goal", "home-10", string.Empty),
+                    BuildLiveFeedFrame(players, 5, 45f, "halftime", 1, 0, "home-10", "state_update", string.Empty, string.Empty),
+                    BuildLiveFeedFrame(players, 6, 46f, "second_half", 1, 0, "home-10", "state_update", string.Empty, string.Empty),
+                    BuildLiveFeedFrame(players, 7, 90f, "fulltime", 1, 0, "home-10", "state_update", string.Empty, string.Empty, true)
+                };
+            }
+
+            private static PlayerPosition[] BuildLiveFeedPlayers()
+            {
+                var players = new List<PlayerPosition>(22);
+                var sides = new[] { "home", "away" };
+                foreach (var side in sides)
+                {
+                    for (var shirtNumber = 1; shirtNumber <= 11; shirtNumber += 1)
+                    {
+                        var playerId = side + "-" + shirtNumber.ToString("00");
+                        players.Add(new PlayerPosition
+                        {
+                            entityId = playerId,
+                            playerId = playerId,
+                            teamId = side,
+                            teamSide = side,
+                            label = side + " player " + shirtNumber,
+                            role = shirtNumber == 1 ? "goalkeeper" : "outfield",
+                            line = shirtNumber == 1 ? "goalkeeper" : "field",
+                            shirtNumber = shirtNumber,
+                            active = true,
+                            x = side == "home" ? 20f + shirtNumber : 85f - shirtNumber,
+                            z = shirtNumber - 6f
+                        });
+                    }
+                }
+
+                return players.ToArray();
+            }
+
+            private static MatchResponse BuildLiveFeedFrame(
+                PlayerPosition[] players,
+                int frameNumber,
+                float minute,
+                string phase,
+                int homeScore,
+                int awayScore,
+                string ballOwner,
+                string eventType,
+                string primaryPlayerId,
+                string secondaryPlayerId,
+                bool terminal = false)
+            {
+                var eventId = "ovr-live-event-" + frameNumber;
+                var eventRecord = new FStudio.GTEX.Event
+                {
+                    id = eventId,
+                    type = eventType,
+                    sequence = frameNumber + 1,
+                    minute = (int)minute,
+                    clockLabel = ((int)minute).ToString(),
+                    teamId = primaryPlayerId.StartsWith("away-", StringComparison.OrdinalIgnoreCase) ? "away" : "home",
+                    primaryPlayerId = primaryPlayerId,
+                    secondaryPlayerId = secondaryPlayerId,
+                    homeScore = homeScore,
+                    awayScore = awayScore,
+                    commentary = "OVR scripted local live-feed frame " + frameNumber
+                };
+                var ballSide = ballOwner.StartsWith("away-", StringComparison.OrdinalIgnoreCase) ? "away" : "home";
+                return new MatchResponse
+                {
+                    matchId = "ovr-verifier-live",
+                    source = "ovr-verifier",
+                    status = terminal ? "finished" : "live",
+                    frameId = "ovr-live-frame-" + frameNumber,
+                    clockMinute = minute,
+                    phase = phase,
+                    homeScore = homeScore,
+                    awayScore = awayScore,
+                    possessionSide = ballSide,
+                    activeEventId = eventId,
+                    players = players,
+                    ballPosition = new PlayerPosition
+                    {
+                        entityId = "ball",
+                        playerId = ballOwner,
+                        teamId = ballSide,
+                        teamSide = ballSide,
+                        label = "Ball",
+                        isBall = true,
+                        hasPossession = true
+                    },
+                    events = new[] { eventRecord }
+                };
             }
 
             private void RestoreConfig()
@@ -948,6 +1398,7 @@ namespace FStudio.GTEX.Editor
                 AppendSection(builder, "A. Editor no-backend test", editorNoBackend);
                 AppendSection(builder, "B. Scripted replay", scriptedReplay);
                 AppendSection(builder, "C. Local sim feed", localSim);
+                AppendSection(builder, "D. Live backend feed", liveFeed);
 
                 File.WriteAllText(reportPath, builder.ToString());
             }

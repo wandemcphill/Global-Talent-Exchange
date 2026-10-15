@@ -99,11 +99,15 @@ namespace FStudio.GTEX.VisualBridge
         private int scriptedReplayCaptureIndex;
         private readonly List<string> scriptedReplayCapturePaths = new List<string>();
         private bool scriptedReplayActive;
+        private bool scriptedAcceptanceReplayComplete;
+        private bool scriptedAcceptanceReplaySucceeded;
         private Coroutine manualHomeAttackRoutine;
         private bool manualHomeAttackActive;
 
         public bool IsRuntimeReady => runtimeReady;
         public bool IsScriptedReplayRunning => scriptedReplayActive;
+        public bool ScriptedAcceptanceReplayComplete => scriptedAcceptanceReplayComplete;
+        public bool ScriptedAcceptanceReplaySucceeded => scriptedAcceptanceReplaySucceeded;
         public bool ShouldSuppressAmbientIntent =>
             scriptedReplayActive ||
             scriptedReplayRequestedFromLaunch ||
@@ -587,6 +591,139 @@ namespace FStudio.GTEX.VisualBridge
 
             StopLocalReplayRoutine();
             localReplayRoutine = StartCoroutine(RunScriptedVisualReplayWhenReady());
+        }
+
+        public void RunScriptedAcceptanceReplay()
+        {
+            startLiveFeedAfterBootstrap = false;
+            startLocalSimulationAfterBootstrap = false;
+            if (launchReplayRoutine != null)
+            {
+                StopCoroutine(launchReplayRoutine);
+                launchReplayRoutine = null;
+            }
+
+            StopLocalReplayRoutine();
+            scriptedAcceptanceReplayComplete = false;
+            scriptedAcceptanceReplaySucceeded = false;
+            localReplayRoutine = StartCoroutine(RunScriptedAcceptanceReplayWhenReady());
+        }
+
+        private IEnumerator RunScriptedAcceptanceReplayWhenReady()
+        {
+            var timeout = RuntimeReadyTimeoutSeconds;
+            while (!runtimeReady && timeout > 0f)
+            {
+                timeout -= Time.deltaTime;
+                yield return null;
+            }
+
+            if (!runtimeReady)
+            {
+                CompleteScriptedAcceptanceReplay(false, "runtime_not_ready");
+                localReplayRoutine = null;
+                yield break;
+            }
+
+            scriptedReplayActive = true;
+            var wideBuilt = false;
+            var centralBuilt = false;
+            var wideSucceeded = false;
+            var centralSucceeded = false;
+            var wideReason = string.Empty;
+            var centralReason = string.Empty;
+
+            HandleCommand(new GtexVisualCommand { type = GtexVisualCommandType.StartMatch });
+            yield return WaitBriefly();
+            HandleCommand(new GtexVisualCommand { type = GtexVisualCommandType.ResetKickoff });
+            yield return new WaitForSeconds(1f);
+
+            EnsureReferences();
+            originalSim.ConfigureOriginalRuntime();
+            originalSim.RebuildPlayerMap();
+            wideBuilt = GtexVisualSequencePatternLibrary.TryBuild(
+                GtexVisualSequencePatternLibrary.WideCrossChance,
+                "home",
+                originalSim,
+                out var wideSequence,
+                out wideReason);
+
+            if (wideBuilt)
+            {
+                var crossStep = wideSequence.steps.FirstOrDefault(step =>
+                    step.command != null && step.command.type == GtexVisualCommandType.Cross);
+                var shotStep = wideSequence.steps.FirstOrDefault(step =>
+                    step.command != null && step.command.type == GtexVisualCommandType.Shoot);
+                if (crossStep == null || shotStep == null)
+                {
+                    wideBuilt = false;
+                    wideReason = "wide_cross_sequence_missing_cross_or_shoot_step";
+                }
+                else
+                {
+                    crossStep.required = true;
+                    shotStep.required = true;
+                    shotStep.forcedShotOutcome = "save";
+                    yield return sequenceRunner.RunSequence(wideSequence);
+                    wideSucceeded = sequenceRunner.LastRunSucceeded;
+                    if (!wideSucceeded)
+                    {
+                        wideReason = sequenceRunner.LastFailureReason;
+                    }
+                }
+            }
+
+            originalSim.RebuildPlayerMap();
+            centralBuilt = GtexVisualSequencePatternLibrary.TryBuild(
+                GtexVisualSequencePatternLibrary.CentralBuildupShot,
+                "home",
+                originalSim,
+                out var centralSequence,
+                out centralReason);
+
+            if (centralBuilt)
+            {
+                var shotStep = centralSequence.steps.FirstOrDefault(step =>
+                    step.command != null && step.command.type == GtexVisualCommandType.Shoot);
+                if (shotStep == null)
+                {
+                    centralBuilt = false;
+                    centralReason = "central_buildup_sequence_missing_shoot_step";
+                }
+                else
+                {
+                    shotStep.forcedShotOutcome = "goal";
+                    yield return sequenceRunner.RunSequence(centralSequence);
+                    centralSucceeded = sequenceRunner.LastRunSucceeded;
+                    if (!centralSucceeded)
+                    {
+                        centralReason = sequenceRunner.LastFailureReason;
+                    }
+                }
+            }
+
+            HandleCommand(new GtexVisualCommand { type = GtexVisualCommandType.ResetKickoff });
+            scriptedReplayActive = false;
+
+            var succeeded = wideBuilt && centralBuilt && wideSucceeded && centralSucceeded;
+            var reason = succeeded
+                ? "both_sequences_complete"
+                : "wideBuilt=" + wideBuilt +
+                  " wideSucceeded=" + wideSucceeded +
+                  " wideReason=" + wideReason +
+                  " centralBuilt=" + centralBuilt +
+                  " centralSucceeded=" + centralSucceeded +
+                  " centralReason=" + centralReason;
+            CompleteScriptedAcceptanceReplay(succeeded, reason);
+            localReplayRoutine = null;
+        }
+
+        private void CompleteScriptedAcceptanceReplay(bool succeeded, string reason)
+        {
+            scriptedReplayActive = false;
+            scriptedAcceptanceReplaySucceeded = succeeded;
+            scriptedAcceptanceReplayComplete = true;
+            Debug.Log("[GTEX VisualBridge] Acceptance replay complete success=" + succeeded + " reason=" + reason);
         }
 
         [ContextMenu("GTEX/Trigger Test Sequence Home Attack")]
