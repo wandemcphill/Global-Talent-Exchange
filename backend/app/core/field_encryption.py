@@ -42,9 +42,7 @@ def derive_key_from_secret(secret: str, *, info: bytes) -> bytes:
 
 def derived_development_fernet_key(auth_secret: str) -> str:
     """Deterministic Fernet key for non-production environments."""
-    return base64.urlsafe_b64encode(
-        derive_key_from_secret(auth_secret, info=FIELD_ENCRYPTION_INFO)
-    ).decode("ascii")
+    return base64.urlsafe_b64encode(derive_key_from_secret(auth_secret, info=FIELD_ENCRYPTION_INFO)).decode("ascii")
 
 
 def is_production_environment(app_env: str | None) -> bool:

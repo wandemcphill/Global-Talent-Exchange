@@ -191,7 +191,10 @@ def test_key_rotation_decrypts_with_secondary_key(monkeypatch) -> None:
     new_key = Fernet.generate_key().decode("ascii")
 
     def fake_settings(field_encryption_key):
-        return SimpleNamespace(field_encryption_key=field_encryption_key, auth_secret="test-secret")
+        return SimpleNamespace(
+            field_encryption_key=field_encryption_key,
+            auth_secret="test-secret",  # pragma: allowlist secret
+        )
 
     monkeypatch.setattr(
         config_module,
@@ -210,9 +213,7 @@ def test_key_rotation_decrypts_with_secondary_key(monkeypatch) -> None:
     )
     assert decrypt_field(token) == "rotate-me"
     fresh = encrypt_field("fresh-value")
-    assert Fernet(new_key.encode()).decrypt(
-        fresh[len(ENCRYPTION_PREFIX) :].encode()
-    ).decode() == "fresh-value"
+    assert Fernet(new_key.encode()).decrypt(fresh[len(ENCRYPTION_PREFIX) :].encode()).decode() == "fresh-value"
 
 
 def test_production_settings_require_field_encryption_key(tmp_path) -> None:
@@ -220,8 +221,8 @@ def test_production_settings_require_field_encryption_key(tmp_path) -> None:
         "GTE_APP_ENV": "production",
         "GTE_DATABASE_URL": f"sqlite+pysqlite:///{(tmp_path / 'prod.db').as_posix()}",
         "DATABASE_URL": "",
-        "GTE_AUTH_SECRET": "prod-auth-secret",
-        "GTE_MEDIA_SIGNING_SECRET": "prod-media-secret",
+        "GTE_AUTH_SECRET": "prod-auth-secret",  # pragma: allowlist secret
+        "GTE_MEDIA_SIGNING_SECRET": "prod-media-secret",  # pragma: allowlist secret
         "GTE_BOOTSTRAP_ADMIN_ENABLED": "0",
     }
     with pytest.raises(ValueError, match="GTE_FIELD_ENCRYPTION_KEY"):
@@ -233,15 +234,13 @@ def test_development_settings_derive_key_from_auth_secret(tmp_path) -> None:
         "GTE_APP_ENV": "development",
         "GTE_DATABASE_URL": f"sqlite+pysqlite:///{(tmp_path / 'dev.db').as_posix()}",
         "DATABASE_URL": "",
-        "GTE_AUTH_SECRET": "dev-auth-secret",
-        "GTE_MEDIA_SIGNING_SECRET": "dev-media-secret",
+        "GTE_AUTH_SECRET": "dev-auth-secret",  # pragma: allowlist secret
+        "GTE_MEDIA_SIGNING_SECRET": "dev-media-secret",  # pragma: allowlist secret
         "GTE_BOOTSTRAP_ADMIN_ENABLED": "0",
     }
     settings = load_settings(environ=environ)
     assert settings.field_encryption_key  # derived, non-empty
-    other = load_settings(
-        environ={**environ, "GTE_AUTH_SECRET": "different-secret"}
-    )
+    other = load_settings(environ={**environ, "GTE_AUTH_SECRET": "different-secret"})
     assert settings.field_encryption_key != other.field_encryption_key
 
 
@@ -265,9 +264,7 @@ def test_blind_index_search_finds_kyc_and_withdrawal(session) -> None:
     session.add(withdrawal)
     session.commit()
 
-    found = session.scalars(
-        select(KycProfile).where(KycProfile.bvn_hash == blind_index(" 22112233445 ".strip()))
-    ).all()
+    found = session.scalars(select(KycProfile).where(KycProfile.bvn_hash == blind_index(" 22112233445 ".strip()))).all()
     assert [row.id for row in found] == [profile.id]
 
     found_wd = session.scalars(
@@ -278,15 +275,10 @@ def test_blind_index_search_finds_kyc_and_withdrawal(session) -> None:
     assert [row.id for row in found_wd] == [withdrawal.id]
 
     # Non-matching term finds nothing.
-    assert (
-        session.scalars(
-            select(KycProfile).where(KycProfile.bvn_hash == blind_index("000"))
-        ).all()
-        == []
-    )
+    assert session.scalars(select(KycProfile).where(KycProfile.bvn_hash == blind_index("000"))).all() == []
 
 
-def test_backfill_script_encrypts_legacy_rows_and_is_idempotent(tmp_path) -> None:
+def test_backfill_script_encrypts_legacy_rows_and_is_idempotent(tmp_path, capsys) -> None:
     from backend.scripts.encrypt_sensitive_fields import main as backfill_main
 
     db_path = tmp_path / "backfill.db"
@@ -297,37 +289,76 @@ def test_backfill_script_encrypts_legacy_rows_and_is_idempotent(tmp_path) -> Non
     SessionLocal = sessionmaker(bind=engine)
     with SessionLocal() as seed:
         seed.execute(
-            text("INSERT INTO users (id, email, username, display_name, password_hash, role, kyc_status) "
-                 "VALUES ('u1', 'u1@example.com', 'u1', 'U One', 'x', 'user', 'unverified')")
+            text(
+                "INSERT INTO users (id, email, username, display_name, password_hash, role, kyc_status) "
+                "VALUES ('u1', 'u1@example.com', 'u1', 'U One', 'x', 'user', 'unverified')"
+            )
         )
         seed.execute(
-            text("INSERT INTO kyc_profiles (id, user_id, status, nin, bvn) "
-                 "VALUES ('k1', 'u1', 'under_review', '11122233344', '55566677788')")
+            text(
+                "INSERT INTO kyc_profiles (id, user_id, status, nin, bvn) "
+                "VALUES ('k1', 'u1', 'under_review', '11122233344', '55566677788')"
+            )
         )
         seed.execute(
-            text("INSERT INTO user_bank_accounts (id, user_id, bank_name, account_number, account_name, currency_code, is_active) "
-                 "VALUES ('b1', 'u1', 'Bank', '1231231231', 'U One', 'NGN', 1)")
+            text(
+                "INSERT INTO user_bank_accounts (id, user_id, bank_name, account_number, account_name, currency_code, is_active) "
+                "VALUES ('b1', 'u1', 'Bank', '1231231231', 'U One', 'NGN', 1)"
+            )
+        )
+        seed.execute(
+            text(
+                "INSERT INTO wallets (id, owner_user_id, code, label, unit, kind, allow_negative, is_active) "
+                "VALUES ('acct-1', 'u1', 'acct-1', 'Wallet', 'coin', 'user', 0, 1)"
+            )
+        )
+        seed.execute(
+            text(
+                "INSERT INTO payout_requests (id, user_id, account_id, amount, unit, status, destination_reference) "
+                "VALUES ('p1', 'u1', 'acct-1', 10, 'coin', 'requested', 'dest-1')"
+            )
+        )
+        seed.execute(
+            text(
+                "INSERT INTO treasury_withdrawal_requests "
+                "(id, payout_request_id, user_id, reference, status, unit, amount_coin, amount_fiat, "
+                "fee_amount, net_amount, rate_value, rate_direction, bank_name, bank_account_number, "
+                "bank_account_name, bank_snapshot_json, kyc_status_snapshot, kyc_tier_snapshot) "
+                "VALUES ('w1', 'p1', 'u1', 'ref-1', 'PENDING_REVIEW', 'COIN', 10, 9000, 0, 10, 900, "
+                "'FIAT_PER_COIN', 'Bank', '9876543210', 'U One', "
+                '\'{"bank_name": "Bank", "account_number": "9876543210", "account_name": "U One"}\', '
+                "'unverified', 'unverified')"
+            )
         )
         seed.commit()
 
     assert backfill_main(["--database-url", url, "--dry-run"]) == 0
+    dry_counts = capsys.readouterr().out
+    assert "kyc_profiles: 1 legacy plaintext row(s)" in dry_counts
+    assert "treasury_withdrawal_requests: 1 legacy plaintext row(s)" in dry_counts
 
     assert backfill_main(["--database-url", url]) == 0
     with SessionLocal() as check:
-        raw = check.execute(
-            text("SELECT nin, bvn FROM kyc_profiles WHERE id='k1'")
-        ).one()
+        raw = check.execute(text("SELECT nin, bvn FROM kyc_profiles WHERE id='k1'")).one()
         assert raw[0].startswith(ENCRYPTION_PREFIX)
         assert raw[1].startswith(ENCRYPTION_PREFIX)
-        acct = check.execute(
-            text("SELECT account_number FROM user_bank_accounts WHERE id='b1'")
-        ).scalar_one()
+        acct = check.execute(text("SELECT account_number FROM user_bank_accounts WHERE id='b1'")).scalar_one()
         assert acct.startswith(ENCRYPTION_PREFIX)
         profile = check.get(KycProfile, "k1")
         assert profile.nin == "11122233344"
         assert profile.bvn_hash == blind_index("55566677788")
 
-    # Second run is a no-op.
+        withdrawal = check.get(TreasuryWithdrawalRequest, "w1")
+        assert withdrawal.bank_account_number == "9876543210"
+        assert "account_number" not in withdrawal.bank_snapshot_json
+        assert withdrawal.bank_snapshot_json["account_number_masked"] == "******3210"
+
+    # Dry-run now reports no legacy rows, and a second run writes nothing.
+    assert backfill_main(["--database-url", url, "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "kyc_profiles: 0 legacy plaintext row(s)" in out
+    assert "user_bank_accounts: 0 legacy plaintext row(s)" in out
+    assert "treasury_withdrawal_requests: 0 legacy plaintext row(s)" in out
+
     assert backfill_main(["--database-url", url]) == 0
-    with SessionLocal() as check:
-        assert check.get(KycProfile, "k1").nin == "11122233344"
+    assert "Done. 0 row(s) encrypted." in capsys.readouterr().out

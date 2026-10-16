@@ -39,14 +39,14 @@ def upgrade() -> None:
         batch.alter_column("bank_account_number", type_=sa.String(length=512), existing_nullable=False)
         batch.add_column(sa.Column("bank_account_number_hash", sa.String(length=64), nullable=True))
         batch.create_index(
-            "ix_treasury_withdrawal_bank_account_number_hash",
+            "ix_treasury_withdrawal_requests_bank_account_number_hash",
             ["bank_account_number_hash"],
         )
 
 
 def downgrade() -> None:
     with op.batch_alter_table("treasury_withdrawal_requests") as batch:
-        batch.drop_index("ix_treasury_withdrawal_bank_account_number_hash")
+        batch.drop_index("ix_treasury_withdrawal_requests_bank_account_number_hash")
         batch.drop_column("bank_account_number_hash")
         batch.alter_column("bank_account_number", type_=sa.String(length=32), existing_nullable=False)
 
