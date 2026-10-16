@@ -1,0 +1,1395 @@
+# ruff: noqa: F401, F811
+
+import app.ingestion.models  # noqa: F401
+import app.agents.models  # noqa: F401
+from app.agents.models import AgentRecord, AgentStrategyRecord
+import app.global_memory.models  # noqa: F401
+import app.models.event_backbone  # noqa: F401
+import app.models.scale_backbone  # noqa: F401
+
+from app.models.academy_graduation_event import AcademyGraduationEvent
+from app.models.academy_player import AcademyPlayer
+from app.models.academy_player_progress import AcademyPlayerProgress
+from app.models.academy_program import AcademyProgram
+from app.models.academy_training_cycle import AcademyTrainingCycle
+from app.models.analytics_event import AnalyticsEvent
+from app.models.access_control import (
+    AccessAuditLog,
+    Organization,
+    OrganizationInvite,
+    OrganizationMembership,
+    OrganizationRole,
+    OrganizationType,
+    PlayerOwnership,
+)
+from app.models.auth_email_token import AuthEmailToken, AuthEmailTokenPurpose
+from app.models.auth_session import AuthSession
+from app.models.agent_marketplace import (
+    AgentAskingType,
+    AgentMarketplaceListing,
+    ConversationParticipantRole,
+    PlayerConversation,
+    PlayerConversationMessage,
+    PlayerConversationParticipant,
+    PlayerConversationStatus,
+)
+from app.models.admin_rules import (
+    AdminBetaAccessGrant,
+    AdminCalendarRule,
+    AdminFeatureFlag,
+    AdminFeatureFlagAuditLog,
+    AdminRewardRule,
+)
+from app.models.admin_runtime_state import AdminRuntimeState
+from app.models.attachment import Attachment
+from app.models.betting import BetAuditLog, BetIntegrityAlert, BetTicket, BettingProfile
+from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun, GlobalEvent
+from app.models.base import Base
+from app.models.card_access import (
+    CardLoanContract,
+    CardLoanListing,
+    CardLoanNegotiation,
+    CardMarketplaceAuditEvent,
+    CardSwapExecution,
+    CardSwapListing,
+    StarterSquadRental,
+)
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_budget_snapshot import ClubBudgetSnapshot
+from app.models.club_cashflow_summary import ClubCashflowSummary
+from app.models.club_cosmetic_catalog_item import ClubCosmeticCatalogItem
+from app.models.club_cosmetic_purchase import ClubCosmeticPurchase
+from app.models.club_dynasty_progress import ClubDynastyProgress
+from app.models.club_finance_account import ClubFinanceAccount
+from app.models.club_finance_ledger_entry import ClubFinanceLedgerEntry
+from app.models.club_hall_of_fame import ClubHallOfFameEntry
+from app.models.club_infra import (
+    ClubFacility,
+    ClubStadium,
+    ClubSupporterHolding,
+    ClubSupporterToken,
+    SupporterTokenStatus,
+)
+from app.models.club_ownership import (
+    ClubDividendDistribution,
+    ClubGovernanceState,
+    ClubHolding,
+    ClubToken,
+    ClubTreasury,
+    ClubTreasuryEntry,
+)
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_squad_tier import ClubSquadTierMembership
+from app.models.club_match_plan import ClubMatchPlan
+from app.models.club_lifecycle import (
+    ClubEligibilityFlag,
+    ClubLifecycleAuditEvent,
+    ClubLifecycleState,
+    ClubOperatingStatus,
+    ClubReadinessStatus,
+    ClubRegistrationSlot,
+    ClubSquadRegistration,
+)
+from app.models.club_growth import (
+    AcademyGenerationRun,
+    AcademyProfile,
+    AcademyPromotionHistory,
+    AcademyProspect,
+    AcademyRegenContractOffer,
+    AcademyTrainingPlan,
+    ClubGrowthAuditEvent,
+    ClubStaffAssignment,
+    ClubStaffContract,
+    ClubStaffPerformanceLog,
+    ClubStaffProfile,
+    PersonalManager,
+)
+from app.models.club_profile import ClubProfile
+from app.models.club_sale import (
+    ClubSaleAuditEvent,
+    ClubSaleInquiry,
+    ClubSaleInquiryStatus,
+    ClubSaleListing,
+    ClubSaleListingStatus,
+    ClubSaleOffer,
+    ClubSaleOfferStatus,
+    ClubSaleTransfer,
+    ClubSaleTransferStatus,
+    ClubValuationSnapshot,
+)
+from app.models.coin_trader import (
+    CoinTradeDirection,
+    CoinTradeOrder,
+    CoinTradeOrderStatus,
+    CoinTraderProfile,
+    CoinTraderProfileStatus,
+    CoinTraderRate,
+    CoinTraderTier,
+)
+from app.models.fast_cup_finance import (
+    FastCupEscrowStatus,
+    FastCupPayout,
+    FastCupPayoutStatus,
+    FastCupRegistration,
+)
+from app.models.fast_match import (
+    FastMatchEntitlement,
+    FastMatchResult,
+    FastMatchSession,
+    FastMatchSessionStatus,
+    FastMatchSettlement,
+    FastMatchSettlementStatus,
+)
+from app.models.club_showcase_snapshot import ClubShowcaseSnapshot
+from app.models.club_social import (
+    ChallengeShareEvent,
+    ClubChallenge,
+    ClubChallengeLink,
+    ClubChallengeResponse,
+    ClubIdentityMetrics,
+    MatchReactionEvent,
+    RivalryMatchHistory,
+    RivalryProfile,
+)
+from app.models.football_world import ClubWorldProfile, FootballCultureProfile, WorldNarrativeArc
+from app.models.football_universe import (
+    BroadcastSession,
+    ClubIdentity,
+    ClubPhilosophy,
+    FanBase,
+    FanSentiment,
+    MediaEvent,
+    MediaEventType,
+)
+from app.models.broadcast_rights import (
+    BroadcastAccessGrant,
+    BroadcastRevenueDistribution,
+    BroadcastRight,
+    BroadcastRightsAuction,
+    BroadcastRightsBid,
+    ViewSession,
+)
+from app.models.broadcast_watch_session import BroadcastWatchSession
+from app.models.platform_experience_state import PlatformExperienceState
+from app.models.ticketing import StadiumEvent, StadiumTicket, TicketReaction, TicketWaitlist
+from app.models.club_sponsor import ClubSponsor, SponsorOffer, SponsorOfferRule
+from app.models.club_sponsorship_asset import ClubSponsorshipAsset
+from app.models.club_sponsorship_contract import ClubSponsorshipContract
+from app.models.club_sponsorship_package import ClubSponsorshipPackage
+from app.models.club_sponsorship_payout import ClubSponsorshipPayout
+from app.models.regen_endorsement import RegenEndorsementDeal, RegenEndorsementStatus
+from app.models.club_trophy import ClubTrophy
+from app.models.clip_variant import ClipVariant
+from app.models.viral_moderation import ClipModerationEvent
+from app.models.competition import Competition, UserCompetition
+from app.models.competition_autofill_rule import CompetitionAutofillRule
+from app.models.competition_escrow import CompetitionEscrow
+from app.models.competition_entry import CompetitionEntry
+from app.models.competition_history_entry import CompetitionHistoryEntry
+from app.models.competition_invite import CompetitionInvite
+from app.models.competition_match import CompetitionMatch
+from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.player_match_performance import PlayerMatchPerformance
+from app.models.club_ranking_integrity import ClubRankingAbuseFlag, ClubRankingEvent, CompetitionIntegrityScore
+from app.models.highlight_event import HighlightEvent
+from app.models.commentary_event import CommentaryEvent
+from app.models.commentator_profile import CommentaryProfileSelection, CommentatorProfile
+
+
+def _leaderboard_models():
+    from app.leaderboards.models import (
+        LeaderboardMatchResult,
+        LeaderboardPlayerRating,
+        LeaderboardSeason,
+        LeaderboardSeasonReward,
+        LeaderboardSeasonSnapshot,
+    )
+
+    return (
+        LeaderboardMatchResult,
+        LeaderboardPlayerRating,
+        LeaderboardSeason,
+        LeaderboardSeasonReward,
+        LeaderboardSeasonSnapshot,
+    )
+
+
+from app.models.gtex_universe import (
+    CareerDecision,
+    CareerDecisionType,
+    CareerLegacyRecord,
+    CareerPlayer,
+    CareerPlayerStatus,
+    CareerTrainingSession,
+    ManagerMatchHistory,
+    ManagerVsManagerHistory,
+    RealWorldEntityMapping,
+    RealWorldEvent,
+    RealWorldEventStatus,
+    RealWorldMappingType,
+)
+from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerControlMode, ManagerProfile
+from app.models.match_event import MatchEvent, MatchEventTeam, MatchEventType
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_playoff import CompetitionPlayoff
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_progress_profile import CompetitionProgressProfile
+from app.models.competition_reward import CompetitionReward
+from app.models.competition_reward_pool import CompetitionRewardPool
+from app.models.competition_round import CompetitionRound
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_schedule_job import CompetitionScheduleJob
+from app.models.competition_seed_rule import CompetitionSeedRule
+from app.models.competition_visibility_rule import CompetitionVisibilityRule
+from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.models.world_super_cup_authority import (
+    WorldSuperCupCoefficient,
+    WorldSuperCupCountdown,
+    WorldSuperCupFixture,
+    WorldSuperCupGroup,
+    WorldSuperCupQualifiedClub,
+    WorldSuperCupSettlement,
+    WorldSuperCupStanding,
+    WorldSuperCupTournament,
+)
+from app.models.tournament import (
+    Tournament,
+    TournamentGameType,
+    TournamentMatch,
+    TournamentMatchStatus,
+    TournamentPlayer,
+    TournamentPlayerStatus,
+    TournamentRound,
+    TournamentRoundStatus,
+    TournamentStatus,
+)
+from app.models.creator_campaign import CreatorCampaign
+from app.models.creator_marketplace import (
+    CreatorMarketplaceCampaign,
+    CreatorMarketplaceCampaignPayoutBasis,
+    CreatorMarketplaceCampaignPayoutType,
+    CreatorMarketplaceCampaignStatus,
+    CreatorMarketplaceOffer,
+    CreatorMarketplaceOfferStatus,
+    CreatorMarketplaceParticipation,
+    CreatorMarketplaceReputationScore,
+)
+from app.models.creator_monetization import (
+    CreatorBroadcastModeConfig,
+    CreatorBroadcastPurchase,
+    CreatorMatchGiftEvent,
+    CreatorRevenueSettlement,
+    CreatorSeasonPass,
+    CreatorStadiumControl,
+    CreatorStadiumPlacement,
+    CreatorStadiumPricing,
+    CreatorStadiumProfile,
+    CreatorStadiumTicketPurchase,
+)
+from app.models.creator_share_market import (
+    CreatorClubShareDistribution,
+    CreatorClubShareHolding,
+    CreatorClubShareMarket,
+    CreatorClubShareMarketControl,
+    CreatorClubSharePayout,
+    CreatorClubSharePurchase,
+)
+from app.models.creator_fan_engagement import (
+    CreatorClubFollow,
+    CreatorFanCompetition,
+    CreatorFanCompetitionEntry,
+    CreatorFanCompetitionStatus,
+    CreatorFanGroup,
+    CreatorFanGroupMembership,
+    CreatorFanWallEvent,
+    CreatorMatchChatMessage,
+    CreatorMatchChatMessageVisibility,
+    CreatorMatchChatRoom,
+    CreatorMatchChatRoomStatus,
+    CreatorMatchTacticalAdvice,
+    CreatorRivalrySignalOutput,
+    CreatorRivalrySignalStatus,
+    CreatorRivalrySignalSurface,
+    CreatorTacticalAdviceStatus,
+    CreatorTacticalAdviceType,
+)
+from app.models.creator_league import (
+    CreatorLeagueConfig,
+    CreatorLeagueSeason,
+    CreatorLeagueSeasonTier,
+    CreatorLeagueTier,
+)
+from app.models.creator_application import CreatorApplication
+from app.models.creator_card import CreatorCard, CreatorCardListing, CreatorCardLoan, CreatorCardSale, CreatorCardSwap
+from app.models.creator_profile import CreatorProfile
+from app.models.creator_provisioning import CreatorClubProvisioning, CreatorRegen, CreatorSquad
+from app.models.streamer_tournament import (
+    StreamerTournament,
+    StreamerTournamentApprovalStatus,
+    StreamerTournamentEntry,
+    StreamerTournamentEntryStatus,
+    StreamerTournamentInvite,
+    StreamerTournamentInviteStatus,
+    StreamerTournamentPolicy,
+    StreamerTournamentQualificationType,
+    StreamerTournamentReward,
+    StreamerTournamentRewardGrant,
+    StreamerTournamentRewardGrantStatus,
+    StreamerTournamentRewardType,
+    StreamerTournamentRiskSignal,
+    StreamerTournamentRiskStatus,
+    StreamerTournamentStatus,
+    StreamerTournamentType,
+)
+from app.models.community_engine import (
+    CommunityReaction,
+    CommunityUserBlock,
+    CompetitionWatchlist,
+    LiveThread,
+    LiveThreadMessage,
+    MessageVisibility,
+    PrivateMessage,
+    PrivateMessageParticipant,
+    PrivateMessageThread,
+    PrivateMessageThreadStatus,
+    LiveThreadStatus,
+)
+from app.models.discovery_engine import FeaturedRail, SavedSearch
+from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
+from app.models.economy_config import GiftCatalogItem, ServicePricingRule
+from app.models.economic_conversion import EconomicConversion
+from app.models.economy_burn_event import EconomyBurnEvent
+from app.models.economy_daily_stat import EconomyDailyStat
+from app.models.economy_governor import EconomyGovernorPolicy
+from app.models.fx_pricing import FxRate, RegionalPricingRule
+from app.models.event_backbone import CompetitionQueueRecord, EventConsumerState, EventDeadLetter, EventOutbox
+from app.models.fancoin_purchase_order import FancoinPurchaseOrder, PurchaseOrderStatus
+from app.models.regen_creation_order import (
+    RegenCreationOrder,
+    RegenCreationOrderStatus,
+    RegenCreationPaymentMethod,
+    RegenCreationRequestType,
+)
+from app.models.fan_experience import (
+    FanExperienceTicket,
+    FanProfile,
+    FanReaction,
+    FanTribe,
+    LegacySnapshot,
+    MarketShockEvent,
+    MatchChatMessage,
+    MatchChatRoom,
+    MegaEvent,
+    NarrativeConflict,
+)
+from app.models.gift_combo_event import GiftComboEvent
+from app.models.gift_combo_rule import GiftComboRule
+from app.models.gift_transaction import GiftAbuseFlag, GiftStats, GiftTransaction, GiftTransactionStatus
+from app.models.market_topup import MarketTopup, MarketTopupStatus
+from app.models.player_rivalry import PlayerRivalry
+from app.models.player_fan_reaction import PlayerFanReaction
+from app.models.player_interview import PlayerInterview
+from app.models.player_story import PlayerStory
+from app.models.player_face import PlayerFace
+from app.models.player_career_entry import PlayerCareerEntry
+from app.models.player_agency_state import PlayerAgencyState
+from app.models.player_contract import PlayerContract
+from app.models.player_import import PlayerImportItem, PlayerImportItemStatus, PlayerImportJob, PlayerImportJobStatus
+from app.models.player_injury_case import PlayerInjuryCase
+from app.models.player_lifecycle_event import PlayerLifecycleEvent
+from app.models.player_personality import PlayerPersonality
+from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
+from app.models.prestige_rating import PrestigeRating
+from app.models.news_article import NewsArticle
+from app.models.real_world_hub import (
+    RealClub,
+    RealCompetition,
+    RealDataProvider,
+    RealDataSyncJob,
+    RealDataSyncStatus,
+    RealPlayer,
+    RealityMode,
+    RealityModeSetting,
+)
+from app.models.real_player_import_batch import (
+    RealPlayerImportBatch,
+    RealPlayerImportBatchStatus,
+    RealPlayerImportRow,
+    RealPlayerImportRowStatus,
+)
+from app.models.real_player_profile import RealPlayerProfile
+from app.models.real_player_reference_mapping import RealPlayerReferenceMapping, RealPlayerUnresolvedReference
+from app.models.real_player_source_link import RealPlayerSourceLink
+from app.models.player_cards import (
+    PlayerAlias,
+    PlayerMoniker,
+    PlayerCard,
+    PlayerCardTier,
+    PlayerCardSupplyBatch,
+    PlayerCardHolding,
+    PlayerCardHistory,
+    PlayerCardOwnerHistory,
+    PlayerCardEffect,
+    PlayerCardFormBuff,
+    PlayerCardMomentum,
+    PlayerCardListing,
+    PlayerCardSale,
+    PlayerCardWatchlist,
+    PlayerStatsSnapshot,
+    PlayerMarketValueSnapshot,
+)
+from app.models.player_match_learning import MatchWeight, PlayerFeatureSnapshot, PlayerMatchEventType, UserPlayerEvent
+from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
+from app.models.real_world_football import (
+    EventEffectRule,
+    EventIngestionJob,
+    PlayerDemandSignal,
+    PlayerFormModifier,
+    RealWorldFootballEvent,
+    TrendingPlayerFlag,
+)
+from app.models.federation import (
+    Federation,
+    FederationCompetitionType,
+    FederationLeague,
+    FederationMembership,
+    FederationMembershipStatus,
+    FederationNarrativeSnapshot,
+    FederationProposal,
+    FederationProposalStatus,
+    FederationRuleAudit,
+    FederationRuleAuditStatus,
+    FederationSanction,
+    FederationSanctionType,
+    FederationTreasuryEntry,
+    FederationVote,
+    FederationVoteType,
+)
+from app.models.referral_attribution import ReferralAttribution
+from app.models.referral_event import ReferralEvent
+from app.models.referral_reward import ReferralReward
+from app.models.referral_reward_ledger import ReferralRewardLedger
+from app.models.scout_assignment import ScoutAssignment
+from app.models.scouting_region import ScoutingRegion
+from app.models.share_code import ShareCode
+from app.models.manager_market import (
+    ManagerAuditLog,
+    ManagerCatalogEntry,
+    ManagerCompetitionSetting,
+    ManagerHolding,
+    ManagerSettlementRecord,
+    ManagerTeamAssignment,
+    ManagerTradeListing,
+    ManagerTradeRecord,
+)
+from app.models.manager_duel import ManagerDuel, ManagerDuelProfile
+from app.models.transfer_bid import TransferBid
+from app.models.transfer_market import (
+    ClubTeamDynamics,
+    CoachDemand,
+    CoachProfile,
+    MarketWatchlistEntry,
+    PlayerCoachRelationship,
+    PlayerDecisionProfile,
+    TransferHubOffer,
+    TransferListing,
+    TransferListingBid,
+    TransferNegotiation,
+    TransferRequest,
+)
+from app.models.transfer_window import TransferWindow
+from app.models.treasury import (
+    DepositRequest,
+    DepositStatus,
+    KycProfile,
+    PaymentMode,
+    RateDirection,
+    TreasuryAuditEvent,
+    TreasuryBankAccount,
+    TreasurySettings,
+    TreasuryWithdrawalRequest,
+    TreasuryWithdrawalStatus,
+    UserBankAccount,
+)
+from app.models.trader import (
+    TraderExperience,
+    TraderMarket,
+    TraderOrder,
+    TraderOrderSide,
+    TraderOrderStatus,
+    TraderP2POffer,
+    TraderP2PStatus,
+    TraderPriceTick,
+    TraderProfile,
+    TraderSecurity,
+    TraderSecurityEvent,
+    TraderWatchlist,
+)
+from app.models.follow import Follow
+from app.models.user import KycStatus, PublicAccountType, User, UserRole
+from app.models.user_wallet import UserWallet, WalletTransactionRecord
+from app.models.user_affinity_profile import UserAffinityProfile
+from app.models.user_region import UserRegionProfile
+from app.models.notification_center import NotificationPreference, NotificationSubscription, PlatformAnnouncement
+from app.models.notification_record import NotificationRecord
+from app.models.competitive_integrity import (
+    CompetitiveMatchCompetitionType,
+    CompetitiveMatchStatus,
+    CompetitiveNotificationChannel,
+    CompetitiveNotificationStatus,
+    FastGameRun,
+    Manager,
+    ManagerType,
+    Match,
+    MatchControlLog,
+    MatchControllerType,
+    MatchControlSide,
+    Notification,
+)
+from app.models.spectator_session import SpectatorSession
+from app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord, PolicyDocument, PolicyDocumentVersion
+from app.models.fan_prediction import (
+    FanPredictionFixture,
+    FanPredictionFixtureStatus,
+    FanPredictionLeaderboardScope,
+    FanPredictionOutcome,
+    FanPredictionRewardGrant,
+    FanPredictionRewardType,
+    FanPredictionSubmission,
+    FanPredictionSubmissionStatus,
+    FanPredictionTokenLedger,
+    FanPredictionTokenReason,
+)
+from app.models.fan_war import (
+    CountryCreatorAssignment,
+    FanWarPoint,
+    FanWarProfile,
+    FanbaseRanking,
+    NationsCupEntry,
+    NationsCupFanMetric,
+)
+from app.models.reward_settlement import RewardSettlement, RewardSettlementStatus
+from app.models.spending_control import SpendingControlAuditEvent, SpendingControlDecision
+from app.models.regen import (
+    AcademyCandidate,
+    AcademyIntakeBatch,
+    CurrencyConversionQuote,
+    MajorTransferAnnouncement,
+    RegenDemandSignal,
+    RegenGenerationEvent,
+    RegenBigClubApproach,
+    RegenLineageProfile,
+    RegenMarketActivity,
+    RegenContractOffer,
+    RegenAward,
+    RegenDiscoveryBadge,
+    RegenLegacyRecord,
+    RegenOnboardingFlag,
+    RegenOfferVisibilityState,
+    RegenOriginMetadata,
+    RegenPersonalityProfile,
+    RegenProfile,
+    RegenRelationshipTag,
+    RegenRecommendationItem,
+    RegenScoutReport,
+    RegenTeamDynamicsEffect,
+    RegenTransferFeeRule,
+    RegenTransferPressureState,
+    RegenTwinsGroup,
+    RegenUnsettlingEvent,
+    RegenValueSnapshot,
+    RegenVisualProfile,
+    TransferHeadlineMediaRecord,
+)
+from app.models.regen_ecosystem import (
+    Agent,
+    CareerEvent,
+    NationalRegenSeed,
+    RegenAttributeProfile,
+    RegenAwardVote,
+    RegenBloodlineLink,
+    Scout,
+    YouthAcademy,
+)
+from app.regen_universe.models import (
+    RegenAward as RegenUniverseAward,
+    RegenAwardWinner,
+    RegenHallOfFame,
+    RegenPerformanceRecord,
+    RegenRankingSnapshot,
+    RegenSeason,
+)
+from app.models.scouting_intelligence import (
+    AcademySupplySignal,
+    HiddenPotentialEstimate,
+    ManagerScoutingProfile,
+    PlayerLifecycleProfile,
+    ScoutMission,
+    ScoutReport,
+    ScoutingNetwork,
+    ScoutingNetworkAssignment,
+    TalentDiscoveryBadge,
+)
+from app.models.revenue_share_rule import RevenueShareRule
+from app.models.risk_ops import (
+    AmlCase,
+    AuditLog,
+    FraudCase,
+    RiskCaseStatus,
+    RiskSeverity,
+    SystemEvent,
+    SystemEventSeverity,
+)
+from app.models.sponsorship_engine import SponsorshipLead
+from app.models.creator_campaign_engine import CreatorCampaignMetricSnapshot
+from app.models.governance_engine import (
+    GovernanceProposal,
+    GovernanceProposalScope,
+    GovernanceProposalStatus,
+    GovernanceVote,
+    GovernanceVoteChoice,
+)
+from app.models.creator_attention_earnings import ClipEarningEventType, ClipEarningsLog, CreatorWallet
+from app.models.creator_clip_monetization import CreatorClipRevenueAttribution
+from app.models.sponsored_clip import SponsoredClip
+from app.models.highlight_share import HighlightShareAmplification, HighlightShareExport, HighlightShareTemplate
+from app.models.moderation_report import (
+    ModerationPriority,
+    ModerationReport,
+    ModerationReportStatus,
+    ModerationResolutionAction,
+)
+from app.models.history_engagement import (
+    Achievement,
+    AchievementCategory,
+    DailyTask,
+    FollowTargetType,
+    HistoricalLeaderboardEntry,
+    HistoricalRecord,
+    HistoricalRecordType,
+    MilestoneProgress,
+    ObjectiveFrequency,
+    SeasonPassMission,
+    SeasonPassReward,
+    SeasonPassSeason,
+    SocialActivity,
+    UserAchievement,
+    UserFollow,
+    UserObjectiveProgress,
+    UserProfile,
+    UserSeasonMissionProgress,
+    UserSeasonProgress,
+    UserSeasonRewardClaim,
+    UserStreak,
+    WeeklyTask,
+)
+from app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
+from app.models.ownership_group import (
+    OwnershipGroup,
+    OwnershipGroupBudgetMovement,
+    OwnershipGroupClub,
+    OwnershipGroupEvent,
+)
+from app.models.national_team import (
+    NationalTeamCompetition,
+    NationalTeamCompetitionEntry,
+    NationalTeamEntry,
+    NationalTeamManagerHistory,
+    NationalTeamSquadMember,
+)
+from app.models.national_team_tournament import (
+    FreePlayerTier,
+    NationalTeamRentalSquadMember,
+    RentalContract,
+    RentalContractStatus,
+    StadiumAd,
+    StadiumAdPlacement,
+    StoryEvent,
+    StoryEventType,
+    TournamentTheme,
+)
+from app.models.story_feed import StoryFeedItem
+from app.models.youth_tournament import YouthTournament
+from app.models.daily_challenge import DailyChallenge, DailyChallengeClaim, DailyChallengeStatus
+from app.models.hosted_competition import (
+    CompetitionTemplate,
+    HostedCompetitionSettlement,
+    HostedCompetitionSettlementStatus,
+    HostedCompetitionStanding,
+    HostedCompetitionStatus,
+    UserHostedCompetition,
+    UserHostedCompetitionParticipant,
+)
+from app.models.integrity import IntegrityIncident, IntegrityScore
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerAccountKind,
+    LedgerBalanceProjection,
+    LedgerEntry,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransaction,
+    LedgerTransactionStatus,
+    LedgerTransactionType,
+    LedgerUnit,
+    PaymentEvent,
+    PaymentProvider,
+    PaymentStatus,
+    PayoutRequest,
+    PayoutStatus,
+)
+from app.models.gtex_economy import (
+    GtexAIProfile,
+    GtexAiProfileType,
+    GtexAssetSubjectType,
+    GtexContributionSourceType,
+    GtexCreatorAsset,
+    GtexCreatorHolding,
+    GtexCreatorPriceHistory,
+    GtexCreatorTrade,
+    GtexJackpotContribution,
+    GtexJackpotDistributionMode,
+    GtexJackpotPayout,
+    GtexJackpotRound,
+    GtexJackpotRoundStatus,
+    GtexJackpotTriggerMode,
+    GtexLeague,
+    GtexLeagueStanding,
+    GtexLeagueType,
+    GtexMatch,
+    GtexMatchEvent,
+    GtexMatchQueueEntry,
+    GtexMatchStatus,
+    GtexParticipantType,
+    GtexQueueEntryStatus,
+    GtexRiskFlag,
+    GtexRiskFlagStatus,
+    GtexTradeSide,
+)
+from app.models.withdrawal_review import WithdrawalReview
+from app.models.youth_pipeline_snapshot import YouthPipelineSnapshot
+from app.models.youth_prospect import YouthProspect
+from app.models.youth_prospect_report import YouthProspectReport
+
+__all__ = [
+    "AcademyGraduationEvent",
+    "AcademyPlayer",
+    "AcademyPlayerProgress",
+    "AcademyProgram",
+    "AcademyTrainingCycle",
+    "AnalyticsEvent",
+    "AccessAuditLog",
+    "AuthEmailToken",
+    "AuthEmailTokenPurpose",
+    "AdminCalendarRule",
+    "AdminBetaAccessGrant",
+    "AdminFeatureFlag",
+    "AdminFeatureFlagAuditLog",
+    "AdminRewardRule",
+    "Attachment",
+    "BetAuditLog",
+    "BetIntegrityAlert",
+    "BetTicket",
+    "BettingProfile",
+    "CalendarEvent",
+    "CalendarSeason",
+    "CompetitionLifecycleRun",
+    "GlobalEvent",
+    "Base",
+    "CardLoanContract",
+    "CardLoanListing",
+    "CardLoanNegotiation",
+    "CardMarketplaceAuditEvent",
+    "CardSwapExecution",
+    "CardSwapListing",
+    "ClubBrandingAsset",
+    "ClubBudgetSnapshot",
+    "ClubCashflowSummary",
+    "ClubCosmeticCatalogItem",
+    "ClubCosmeticPurchase",
+    "ClubDynastyProgress",
+    "ClubFinanceAccount",
+    "ClubFinanceLedgerEntry",
+    "ClubFacility",
+    "ClubStadium",
+    "ClubToken",
+    "ClubHolding",
+    "ClubTreasury",
+    "ClubTreasuryEntry",
+    "ClubGovernanceState",
+    "ClubDividendDistribution",
+    "ClubSupporterHolding",
+    "ClubSupporterToken",
+    "ClubIdentityTheme",
+    "ClubJerseyDesign",
+    "ClubEligibilityFlag",
+    "ClubLifecycleAuditEvent",
+    "ClubLifecycleState",
+    "ClubSquadTierMembership",
+    "ClubMatchPlan",
+    "ClubOperatingStatus",
+    "ClubReadinessStatus",
+    "ClubRegistrationSlot",
+    "ClubSquadRegistration",
+    "AcademyGenerationRun",
+    "AcademyProfile",
+    "AcademyPromotionHistory",
+    "AcademyProspect",
+    "AcademyRegenContractOffer",
+    "AcademyTrainingPlan",
+    "ClubGrowthAuditEvent",
+    "ClubStaffAssignment",
+    "ClubStaffContract",
+    "ClubStaffPerformanceLog",
+    "ClubStaffProfile",
+    "PersonalManager",
+    "ClubProfile",
+    "ClubSaleAuditEvent",
+    "ClubSaleInquiry",
+    "ClubSaleInquiryStatus",
+    "ClubSaleListing",
+    "ClubSaleListingStatus",
+    "ClubSaleOffer",
+    "ClubSaleOfferStatus",
+    "ClubSaleTransfer",
+    "ClubSaleTransferStatus",
+    "ClubValuationSnapshot",
+    "ClubShowcaseSnapshot",
+    "ChallengeShareEvent",
+    "ClubChallenge",
+    "ClubChallengeLink",
+    "ClubChallengeResponse",
+    "ClubIdentityMetrics",
+    "MatchReactionEvent",
+    "RivalryMatchHistory",
+    "RivalryProfile",
+    "BroadcastSession",
+    "BroadcastAccessGrant",
+    "BroadcastRevenueDistribution",
+    "BroadcastRight",
+    "BroadcastRightsAuction",
+    "BroadcastRightsBid",
+    "BroadcastWatchSession",
+    "PlatformExperienceState",
+    "ClubIdentity",
+    "ClubPhilosophy",
+    "FanBase",
+    "FanSentiment",
+    "MediaEvent",
+    "MediaEventType",
+    "ClubSponsor",
+    "ClubSponsorshipAsset",
+    "ClubSponsorshipContract",
+    "ClubSponsorshipPackage",
+    "ClubSponsorshipPayout",
+    "ClubTrophy",
+    "Competition",
+    "UserCompetition",
+    "CompetitionAutofillRule",
+    "CompetitionEntry",
+    "CompetitionHistoryEntry",
+    "CompetitionInvite",
+    "CompetitionMatch",
+    "CompetitionMatchEvent",
+    "PlayerMatchPerformance",
+    "HighlightEvent",
+    "CommentaryEvent",
+    "CommentatorProfile",
+    "CommentaryProfileSelection",
+    "LeaderboardMatchResult",
+    "LeaderboardPlayerRating",
+    "LeaderboardSeason",
+    "LeaderboardSeasonReward",
+    "LeaderboardSeasonSnapshot",
+    "CareerDecision",
+    "CareerDecisionType",
+    "CareerLegacyRecord",
+    "CareerPlayer",
+    "CareerPlayerStatus",
+    "CareerTrainingSession",
+    "ManagerContract",
+    "ManagerContractStatus",
+    "ManagerControlMode",
+    "ManagerMatchHistory",
+    "ManagerProfile",
+    "ManagerVsManagerHistory",
+    "MatchEvent",
+    "MatchEventTeam",
+    "MatchEventType",
+    "CompetitionParticipant",
+    "CompetitionPlayoff",
+    "CompetitionPrizeRule",
+    "CompetitionProgressProfile",
+    "CompetitionReward",
+    "CompetitionRewardPool",
+    "CompetitionRound",
+    "CompetitionRuleSet",
+    "CompetitionScheduleJob",
+    "CompetitionSeedRule",
+    "CompetitionVisibilityRule",
+    "CompetitionWalletLedger",
+    "WorldSuperCupCoefficient",
+    "WorldSuperCupCountdown",
+    "WorldSuperCupFixture",
+    "WorldSuperCupGroup",
+    "WorldSuperCupQualifiedClub",
+    "WorldSuperCupSettlement",
+    "WorldSuperCupStanding",
+    "WorldSuperCupTournament",
+    "ClubRankingAbuseFlag",
+    "ClubRankingEvent",
+    "CompetitionIntegrityScore",
+    "Tournament",
+    "TournamentGameType",
+    "TournamentMatch",
+    "TournamentMatchStatus",
+    "TournamentPlayer",
+    "TournamentPlayerStatus",
+    "TournamentRound",
+    "TournamentRoundStatus",
+    "TournamentStatus",
+    "CreatorCampaign",
+    "CreatorBroadcastModeConfig",
+    "CreatorBroadcastPurchase",
+    "CreatorClubShareDistribution",
+    "CreatorMatchGiftEvent",
+    "CreatorClubShareHolding",
+    "CreatorClubShareMarket",
+    "CreatorClubShareMarketControl",
+    "CreatorClubSharePayout",
+    "CreatorClubSharePurchase",
+    "CreatorRevenueSettlement",
+    "CreatorSeasonPass",
+    "CreatorLeagueConfig",
+    "CreatorLeagueSeason",
+    "CreatorLeagueSeasonTier",
+    "CreatorLeagueTier",
+    "CreatorApplication",
+    "CreatorCard",
+    "CreatorCardListing",
+    "CreatorCardLoan",
+    "CreatorCardSale",
+    "CreatorCardSwap",
+    "CreatorClubFollow",
+    "CreatorFanCompetition",
+    "CreatorFanCompetitionEntry",
+    "CreatorFanCompetitionStatus",
+    "CreatorFanGroup",
+    "CreatorFanGroupMembership",
+    "CreatorFanWallEvent",
+    "CreatorMatchChatMessage",
+    "CreatorMatchChatMessageVisibility",
+    "CreatorMatchChatRoom",
+    "CreatorMatchChatRoomStatus",
+    "CreatorMatchTacticalAdvice",
+    "CreatorClubProvisioning",
+    "CreatorProfile",
+    "CreatorRegen",
+    "CreatorRivalrySignalOutput",
+    "CreatorRivalrySignalStatus",
+    "CreatorRivalrySignalSurface",
+    "StreamerTournament",
+    "StreamerTournamentApprovalStatus",
+    "StreamerTournamentEntry",
+    "StreamerTournamentEntryStatus",
+    "StreamerTournamentInvite",
+    "StreamerTournamentInviteStatus",
+    "StreamerTournamentPolicy",
+    "StreamerTournamentQualificationType",
+    "StreamerTournamentReward",
+    "StreamerTournamentRewardGrant",
+    "StreamerTournamentRewardGrantStatus",
+    "StreamerTournamentRewardType",
+    "StreamerTournamentRiskSignal",
+    "StreamerTournamentRiskStatus",
+    "StreamerTournamentStatus",
+    "StreamerTournamentType",
+    "CreatorSquad",
+    "CreatorTacticalAdviceStatus",
+    "CreatorTacticalAdviceType",
+    "CommunityReaction",
+    "CommunityUserBlock",
+    "CompetitionWatchlist",
+    "FanExperienceTicket",
+    "FanProfile",
+    "FanReaction",
+    "FanTribe",
+    "LegacySnapshot",
+    "LiveThread",
+    "LiveThreadMessage",
+    "LiveThreadStatus",
+    "MarketShockEvent",
+    "MessageVisibility",
+    "MatchChatMessage",
+    "MatchChatRoom",
+    "MegaEvent",
+    "NarrativeConflict",
+    "PrivateMessage",
+    "PrivateMessageParticipant",
+    "PrivateMessageThread",
+    "PrivateMessageThreadStatus",
+    "Dispute",
+    "FeaturedRail",
+    "DisputeMessage",
+    "DisputeStatus",
+    "GiftCatalogItem",
+    "EconomyBurnEvent",
+    "EconomyDailyStat",
+    "EconomyGovernorPolicy",
+    "FxRate",
+    "RegionalPricingRule",
+    "CompetitionQueueRecord",
+    "EventConsumerState",
+    "EventDeadLetter",
+    "EventOutbox",
+    "FancoinPurchaseOrder",
+    "PurchaseOrderStatus",
+    "RegenCreationOrder",
+    "RegenCreationOrderStatus",
+    "RegenCreationPaymentMethod",
+    "RegenCreationRequestType",
+    "GiftComboEvent",
+    "GiftComboRule",
+    "NotificationPreference",
+    "NotificationSubscription",
+    "PlatformAnnouncement",
+    "GiftAbuseFlag",
+    "GiftStats",
+    "GiftTransaction",
+    "GiftTransactionStatus",
+    "KycStatus",
+    "PublicAccountType",
+    "LedgerAccount",
+    "LedgerAccountKind",
+    "LedgerBalanceProjection",
+    "LedgerEntry",
+    "LedgerEntryReason",
+    "LedgerSourceTag",
+    "LedgerTransaction",
+    "LedgerTransactionStatus",
+    "LedgerUnit",
+    "PaymentEvent",
+    "PaymentProvider",
+    "PaymentStatus",
+    "PayoutRequest",
+    "PayoutStatus",
+    "UserWallet",
+    "WalletTransactionRecord",
+    "TraderExperience",
+    "TraderMarket",
+    "TraderOrder",
+    "TraderOrderSide",
+    "TraderOrderStatus",
+    "TraderP2POffer",
+    "TraderP2PStatus",
+    "TraderPriceTick",
+    "TraderProfile",
+    "TraderSecurity",
+    "TraderSecurityEvent",
+    "TraderWatchlist",
+    "MarketTopup",
+    "MarketTopupStatus",
+    "WithdrawalReview",
+    "PlayerRivalry",
+    "PlayerFanReaction",
+    "PlayerInterview",
+    "PlayerStory",
+    "PlayerFace",
+    "PlayerCareerEntry",
+    "PlayerAgencyState",
+    "PlayerContract",
+    "PlayerImportItem",
+    "PlayerImportItemStatus",
+    "PlayerImportJob",
+    "PlayerImportJobStatus",
+    "PlayerInjuryCase",
+    "PlayerLifecycleEvent",
+    "PlayerPersonality",
+    "PlayerShareEvent",
+    "PlayerShareHolding",
+    "PlayerShareMarket",
+    "PrestigeRating",
+    "NewsArticle",
+    "PlayerAlias",
+    "PlayerMoniker",
+    "PlayerCard",
+    "PlayerCardTier",
+    "PlayerCardSupplyBatch",
+    "PlayerCardHolding",
+    "PlayerCardHistory",
+    "PlayerCardOwnerHistory",
+    "PlayerCardEffect",
+    "PlayerCardFormBuff",
+    "PlayerCardMomentum",
+    "PlayerCardListing",
+    "PlayerCardSale",
+    "PlayerCardWatchlist",
+    "PlayerStatsSnapshot",
+    "PlayerMarketValueSnapshot",
+    "PlayerShareEvent",
+    "PlayerShareHolding",
+    "PlayerShareMarket",
+    "EventEffectRule",
+    "EventIngestionJob",
+    "PlayerDemandSignal",
+    "PlayerFormModifier",
+    "RealWorldFootballEvent",
+    "TrendingPlayerFlag",
+    "SponsorOffer",
+    "SponsorOfferRule",
+    "StarterSquadRental",
+    "ReferralAttribution",
+    "ReferralEvent",
+    "ReferralReward",
+    "ReferralRewardLedger",
+    "ScoutAssignment",
+    "ScoutingRegion",
+    "ServicePricingRule",
+    "RevenueShareRule",
+    "SupporterTokenStatus",
+    "SavedSearch",
+    "ShareCode",
+    "ManagerAuditLog",
+    "ManagerCatalogEntry",
+    "ManagerCompetitionSetting",
+    "ManagerHolding",
+    "ManagerSettlementRecord",
+    "ManagerTeamAssignment",
+    "ManagerTradeListing",
+    "ManagerTradeRecord",
+    "ManagerDuel",
+    "ManagerDuelProfile",
+    "TransferBid",
+    "TransferWindow",
+    "DepositRequest",
+    "DepositStatus",
+    "KycProfile",
+    "PaymentMode",
+    "RateDirection",
+    "TreasuryAuditEvent",
+    "TreasuryBankAccount",
+    "TreasurySettings",
+    "TreasuryWithdrawalRequest",
+    "TreasuryWithdrawalStatus",
+    "UserBankAccount",
+    "UserRegionProfile",
+    "User",
+    "UserAffinityProfile",
+    "UserRole",
+    "NotificationRecord",
+    "OwnershipGroup",
+    "OwnershipGroupBudgetMovement",
+    "OwnershipGroupClub",
+    "OwnershipGroupEvent",
+    "SpectatorSession",
+    "CountryFeaturePolicy",
+    "PolicyAcceptanceRecord",
+    "PolicyDocument",
+    "PolicyDocumentVersion",
+    "FanPredictionFixture",
+    "FanPredictionFixtureStatus",
+    "FanPredictionLeaderboardScope",
+    "FanPredictionOutcome",
+    "FanPredictionRewardGrant",
+    "FanPredictionRewardType",
+    "FanPredictionSubmission",
+    "FanPredictionSubmissionStatus",
+    "FanPredictionTokenLedger",
+    "FanPredictionTokenReason",
+    "CountryCreatorAssignment",
+    "FanWarPoint",
+    "FanWarProfile",
+    "FanbaseRanking",
+    "NationsCupEntry",
+    "NationsCupFanMetric",
+    "RewardSettlement",
+    "RewardSettlementStatus",
+    "SpendingControlAuditEvent",
+    "SpendingControlDecision",
+    "AcademyCandidate",
+    "AcademyIntakeBatch",
+    "CurrencyConversionQuote",
+    "MajorTransferAnnouncement",
+    "RegenDemandSignal",
+    "RegenGenerationEvent",
+    "RegenBigClubApproach",
+    "RegenMarketActivity",
+    "RegenContractOffer",
+    "RegenOnboardingFlag",
+    "RegenOfferVisibilityState",
+    "RegenOriginMetadata",
+    "RegenPersonalityProfile",
+    "RegenProfile",
+    "RegenRecommendationItem",
+    "RegenScoutReport",
+    "RegenTeamDynamicsEffect",
+    "RegenTransferFeeRule",
+    "RegenTransferPressureState",
+    "RegenUnsettlingEvent",
+    "RegenValueSnapshot",
+    "RegenVisualProfile",
+    "TransferHeadlineMediaRecord",
+    "Agent",
+    "CareerEvent",
+    "NationalRegenSeed",
+    "RegenAttributeProfile",
+    "RegenAwardVote",
+    "RegenBloodlineLink",
+    "Scout",
+    "YouthAcademy",
+    "RegenUniverseAward",
+    "RegenAwardWinner",
+    "RegenHallOfFame",
+    "RegenPerformanceRecord",
+    "RegenRankingSnapshot",
+    "RegenSeason",
+    "AcademySupplySignal",
+    "HiddenPotentialEstimate",
+    "ManagerScoutingProfile",
+    "PlayerLifecycleProfile",
+    "ScoutMission",
+    "ScoutReport",
+    "ScoutingNetwork",
+    "ScoutingNetworkAssignment",
+    "TalentDiscoveryBadge",
+    "AmlCase",
+    "AuditLog",
+    "FraudCase",
+    "RiskCaseStatus",
+    "RiskSeverity",
+    "SystemEvent",
+    "SystemEventSeverity",
+    "SponsorshipLead",
+    "CreatorCampaignMetricSnapshot",
+    "ClipEarningEventType",
+    "ClipEarningsLog",
+    "CreatorWallet",
+    "CreatorClipRevenueAttribution",
+    "SponsoredClip",
+    "GovernanceProposal",
+    "GovernanceProposalScope",
+    "GovernanceProposalStatus",
+    "GovernanceVote",
+    "GovernanceVoteChoice",
+    "HighlightShareExport",
+    "HighlightShareTemplate",
+    "ModerationPriority",
+    "ModerationReport",
+    "ModerationReportStatus",
+    "ModerationResolutionAction",
+    "Organization",
+    "OrganizationInvite",
+    "OrganizationMembership",
+    "OrganizationRole",
+    "OrganizationType",
+    "MatchRevenueSnapshot",
+    "MatchView",
+    "PremiumVideoPurchase",
+    "ViewSession",
+    "HistoricalRecord",
+    "HistoricalRecordType",
+    "HistoricalLeaderboardEntry",
+    "Achievement",
+    "AchievementCategory",
+    "Follow",
+    "UserAchievement",
+    "MilestoneProgress",
+    "UserProfile",
+    "UserFollow",
+    "FollowTargetType",
+    "SocialActivity",
+    "DailyTask",
+    "WeeklyTask",
+    "UserObjectiveProgress",
+    "ObjectiveFrequency",
+    "UserStreak",
+    "NationalTeamCompetition",
+    "NationalTeamEntry",
+    "NationalTeamManagerHistory",
+    "NationalTeamSquadMember",
+    "StoryFeedItem",
+    "YouthTournament",
+    "DailyChallenge",
+    "DailyChallengeClaim",
+    "DailyChallengeStatus",
+    "CompetitionTemplate",
+    "HostedCompetitionSettlement",
+    "HostedCompetitionSettlementStatus",
+    "HostedCompetitionStanding",
+    "HostedCompetitionStatus",
+    "UserHostedCompetition",
+    "UserHostedCompetitionParticipant",
+    "PlayerOwnership",
+    "IntegrityIncident",
+    "IntegrityScore",
+    "YouthPipelineSnapshot",
+    "YouthProspect",
+    "YouthProspectReport",
+    "CompetitiveMatchCompetitionType",
+    "CompetitiveMatchStatus",
+    "CompetitiveNotificationChannel",
+    "CompetitiveNotificationStatus",
+    "FastGameRun",
+    "GtexAIProfile",
+    "GtexAiProfileType",
+    "GtexAssetSubjectType",
+    "GtexContributionSourceType",
+    "GtexCreatorAsset",
+    "GtexCreatorHolding",
+    "GtexCreatorPriceHistory",
+    "GtexCreatorTrade",
+    "GtexJackpotContribution",
+    "GtexJackpotDistributionMode",
+    "GtexJackpotPayout",
+    "GtexJackpotRound",
+    "GtexJackpotRoundStatus",
+    "GtexJackpotTriggerMode",
+    "GtexLeague",
+    "GtexLeagueStanding",
+    "GtexLeagueType",
+    "GtexMatch",
+    "GtexMatchEvent",
+    "GtexMatchQueueEntry",
+    "GtexMatchStatus",
+    "GtexParticipantType",
+    "GtexQueueEntryStatus",
+    "GtexRiskFlag",
+    "GtexRiskFlagStatus",
+    "GtexTradeSide",
+    "Manager",
+    "ManagerType",
+    "Match",
+    "MatchControlLog",
+    "MatchControllerType",
+    "MatchControlSide",
+    "Notification",
+    "StadiumEvent",
+    "StadiumTicket",
+    "TicketReaction",
+    "TicketWaitlist",
+]
+
+
+def __getattr__(name: str):
+    if name == "Player":
+        from app.ingestion.models import Player
+
+        return Player
+    if name in (
+        "LeaderboardMatchResult",
+        "LeaderboardPlayerRating",
+        "LeaderboardSeason",
+        "LeaderboardSeasonReward",
+        "LeaderboardSeasonSnapshot",
+    ):
+        from app.leaderboards.models import (
+            LeaderboardMatchResult,
+            LeaderboardPlayerRating,
+            LeaderboardSeason,
+            LeaderboardSeasonReward,
+            LeaderboardSeasonSnapshot,
+        )
+
+        return locals()[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,0 +1,23 @@
+name: Dependency Scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  backend-dependency-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.txt pip-audit
+      - run: python -m pip_audit -r backend/requirements.txt --format json --output backend-pip-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-pip-audit
+          path: backend-pip-audit.json

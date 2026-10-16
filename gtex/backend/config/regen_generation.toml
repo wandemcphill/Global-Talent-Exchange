@@ -1,0 +1,62 @@
+academy_intakes_per_season = 1
+academy_intake_min_players = 2
+academy_intake_max_players = 4
+starter_regen_count = 2
+starter_age_min = 25
+starter_age_max = 30
+starter_gsi_min = 50
+starter_gsi_max = 68
+seasonal_supply_cap_ratio = 0.025
+base_elite_probability = 0.01
+max_elite_probability = 0.12
+default_active_player_base = 100000
+market_fee_bps_default = 4500
+market_fee_bps_min = 4000
+market_fee_bps_max = 5000
+ecosystem_target_regen_share = 0.20
+elite_regen_share_cap = 0.08
+demand_cooling_floor = 0.55
+regen_lifecycle_growth_months = 9
+regen_lifecycle_peak_months = 21
+regen_lifecycle_decline_months = 30
+regen_lifecycle_retirement_months = 36
+player_lifecycle_growth_max_age = 23
+player_lifecycle_peak_max_age = 29
+player_lifecycle_decline_max_age = 34
+lineage_base_probability = 0.004
+lineage_legend_probability = 0.55
+lineage_owner_probability = 0.15
+lineage_retired_regen_probability = 0.20
+lineage_hometown_probability = 0.10
+twin_probability = 0.002
+owner_son_lifetime_cap = 3
+owner_son_rival_club_chance = 0.12
+owner_son_paid_request_base_cost = 125
+owner_son_paid_request_name_cost = 25
+owner_son_paid_request_customization_cost = 35
+owner_son_paid_request_limit = 1
+default_country_code = "NG"
+
+[[country_tuning]]
+country_code = "NG"
+academy_quality_bias = 1.05
+elite_probability_boost = 0.015
+urban_bias = 0.10
+default_regions = ["Lagos", "Enugu", "Kano"]
+default_cities = ["Lagos", "Enugu", "Kano"]
+
+[[country_tuning]]
+country_code = "GH"
+academy_quality_bias = 1.02
+elite_probability_boost = 0.008
+urban_bias = 0.06
+default_regions = ["Greater Accra", "Ashanti"]
+default_cities = ["Accra", "Kumasi"]
+
+[[country_tuning]]
+country_code = "MA"
+academy_quality_bias = 1.01
+elite_probability_boost = 0.006
+urban_bias = 0.05
+default_regions = ["Casablanca-Settat", "Rabat-Sale-Kenitra"]
+default_cities = ["Casablanca", "Rabat"]

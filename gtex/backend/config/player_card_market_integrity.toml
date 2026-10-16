@@ -1,0 +1,13 @@
+sale_reference_lookback_days = 14
+minimum_reference_sales = 2
+listing_price_floor_ratio = 0.60
+listing_price_ceiling_ratio = 1.80
+relist_cooldown_minutes = 30
+pair_trade_lookback_hours = 168
+pair_trade_alert_threshold = 3
+asset_churn_window_hours = 24
+asset_churn_alert_threshold = 6
+circular_trade_window_hours = 24
+price_spike_alert_ratio = 2.50
+volume_cluster_window_minutes = 60
+volume_cluster_trade_threshold = 12

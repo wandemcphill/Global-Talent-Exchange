@@ -1,0 +1,702 @@
+from __future__ import annotations
+
+from decimal import Decimal
+from pathlib import Path
+from types import SimpleNamespace
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import delete
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+import pytest
+
+import app.ingestion.models  # noqa: F401
+import app.ledger.models  # noqa: F401
+import app.models  # noqa: F401
+import app.orders.models  # noqa: F401
+from app.admin_godmode.runtime_paths import admin_godmode_state_path
+from app.auth.dependencies import get_current_user, get_session
+from app.auth.service import AuthService
+from app.ingestion.models import Player
+from app.models.policy import CountryFeaturePolicy, PolicyAcceptanceRecord
+from app.models.base import Base
+from app.models.treasury import PaymentMode
+from app.policies.service import PolicyService
+from app.services.runtime_control_service import RuntimeControlService
+from app.treasury.service import GTEX_PLATFORM_POSITIONING, TreasuryService
+from app.orders.models import OrderSide
+from app.orders.service import OrderService
+from app.wallets.router import router
+from app.wallets.service import LedgerPosting, WalletService
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.models.user import KycStatus
+from backend.tests.support.economic_policy import seed_economic_policy
+
+
+@pytest.fixture()
+def api_context():
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    session = SessionLocal()
+    seed_economic_policy(session)
+    session.commit()
+    current_user = AuthService().register_user(
+        session,
+        email="wallet-http@example.com",
+        region_code="NG",
+        username="wallethttp",
+        password="SuperSecret1",
+    )
+    session.commit()
+    _seed_policy_defaults(session, current_user)
+
+    app = FastAPI()
+    app.include_router(router)
+    app.state.settings = SimpleNamespace(config_root=None)
+
+    def override_session():
+        yield session
+
+    def override_current_user():
+        return current_user
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_current_user] = override_current_user
+
+    with TestClient(app) as client:
+        yield client, session, current_user
+
+    session.close()
+
+
+def _create_player(session, *, provider_external_id: str = "player-wallet-1") -> Player:
+    player = Player(
+        source_provider="manual",
+        provider_external_id=provider_external_id,
+        full_name="Wallet Test Player",
+        is_tradable=True,
+    )
+    session.add(player)
+    session.commit()
+    return player
+
+
+def _fund_user(session, current_user, *, amount: Decimal, unit: LedgerUnit = LedgerUnit.CREDIT) -> None:
+    wallet_service = WalletService()
+    user_account = wallet_service.get_user_account(session, current_user, unit)
+    platform_account = wallet_service.ensure_platform_account(session, unit)
+    wallet_service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=user_account, amount=amount),
+            LedgerPosting(account=platform_account, amount=-amount),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference="wallet-http-funding",
+        description=f"Seed wallet {unit.value}s for testing",
+        actor=current_user,
+    )
+    session.commit()
+
+
+def _seed_policy_defaults(session, current_user) -> None:
+    service = PolicyService(session)
+    service.seed_defaults()
+    profile = service.ensure_user_region_profile(user=current_user, region_code="NG")
+    profile.region_code = "NG"
+    for version in service.list_missing_acceptances(user_id=current_user.id):
+        service.accept_document(
+            user_id=current_user.id,
+            document_key=version.document.document_key,
+            version_label=version.version_label,
+            ip_address=None,
+            device_id=None,
+        )
+    session.commit()
+
+
+def _enable_automatic_deposits(session) -> None:
+    settings = TreasuryService().ensure_settings(session)
+    settings.deposit_mode = PaymentMode.AUTOMATIC
+    session.commit()
+
+
+def _enable_hybrid_deposits(session) -> None:
+    settings = TreasuryService().ensure_settings(session)
+    settings.deposit_mode = PaymentMode.HYBRID
+    session.commit()
+
+
+def _enable_automatic_withdrawals(session) -> None:
+    settings = TreasuryService().ensure_settings(session)
+    settings.withdrawal_mode = PaymentMode.AUTOMATIC
+    session.commit()
+
+
+def _provision_withdrawable_user(session, current_user) -> None:
+    treasury = TreasuryService()
+    treasury.create_user_bank_account(
+        session,
+        user=current_user,
+        bank_name="GT Bank",
+        account_number="0123456789",
+        account_name="Wallet HTTP",
+        bank_code="058",
+        currency_code="NGN",
+        set_active=True,
+    )
+    treasury.submit_kyc(
+        session,
+        user=current_user,
+        nin="12345678901",
+        bvn=None,
+        address_line1="12 Marina",
+        address_line2=None,
+        city="Lagos",
+        state="Lagos",
+        country="Nigeria",
+        id_document_attachment_id=None,
+    )
+    current_user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+
+
+def test_get_portfolio_returns_empty_holdings_for_new_user(api_context) -> None:
+    client, _session, current_user = api_context
+
+    response = client.get("/api/portfolio/snapshot")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["user_id"] == current_user.id
+    assert payload["currency"] == "coin"
+    assert payload["holdings"] == []
+    assert Decimal(str(payload["available_balance"])) == Decimal("0.0000")
+    assert Decimal(str(payload["reserved_balance"])) == Decimal("0.0000")
+    assert Decimal(str(payload["total_balance"])) == Decimal("0.0000")
+
+
+def _reserve_via_order(session, user, player, *, quantity: str, max_price: str) -> None:
+    """Create the buy-order fund reservation these wallet tests depend on.
+
+    POST /orders is retired (410) now that System A is the canonical player-share
+    venue, but OrderService and its reservation/ledger behaviour are still live
+    for historical records, admin buyback and the simulation harness - so the
+    reservation is created through the service directly. What these tests assert
+    (wallet summary and ledger shape after a reservation) is unchanged.
+    """
+    OrderService().place_order(
+        session,
+        user=user,
+        player_id=player.id,
+        side=OrderSide.BUY,
+        quantity=Decimal(quantity),
+        max_price=Decimal(max_price),
+    )
+    session.commit()
+
+
+def test_get_wallet_summary_returns_available_reserved_and_total_balances(api_context) -> None:
+    client, session, current_user = api_context
+    player = _create_player(session)
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+
+    _reserve_via_order(session, current_user, player, quantity="10", max_price="5")
+
+    response = client.get("/api/wallets/summary", params={"currency": "coin"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {
+        "available_balance",
+        "reserved_balance",
+        "total_balance",
+        "currency",
+    }
+    assert payload["currency"] == "coin"
+    assert Decimal(str(payload["available_balance"])) == Decimal("50.0000")
+    assert Decimal(str(payload["reserved_balance"])) == Decimal("50.0000")
+    assert Decimal(str(payload["total_balance"])) == Decimal("100.0000")
+
+
+def test_list_wallet_ledger_returns_latest_entries_first(api_context) -> None:
+    client, session, current_user = api_context
+    player = _create_player(session, provider_external_id="player-wallet-ledger")
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+
+    _reserve_via_order(session, current_user, player, quantity="10", max_price="5")
+
+    response = client.get("/api/wallets/ledger", params={"page": 1, "page_size": 3})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {"page", "page_size", "total", "items"}
+    assert payload["page"] == 1
+    assert payload["page_size"] == 3
+    assert payload["total"] == 3
+    assert len(payload["items"]) == 3
+    assert set(payload["items"][0]) == {
+        "id",
+        "transaction_id",
+        "account_id",
+        "amount",
+        "unit",
+        "transaction_type",
+        "reason",
+        "source_tag",
+        "reference",
+        "external_reference",
+        "description",
+        "created_at",
+    }
+    assert all(item["reason"] == "withdrawal_hold" for item in payload["items"][:2])
+    assert payload["items"][2]["reason"] == "adjustment"
+
+
+def test_api_wallet_accounts_and_legacy_payment_events_are_blocked(api_context) -> None:
+    client, session, _current_user = api_context
+    _enable_automatic_deposits(session)
+
+    accounts_response = client.get("/api/wallets/accounts")
+    payment_event_response = client.post(
+        "/api/wallets/payment-events",
+        json={
+            "provider": "paystack",
+            "provider_reference": "paystack-ref-001",
+            "amount": "50.0000",
+            "pack_code": "starter-50",
+        },
+    )
+
+    assert accounts_response.status_code == 200
+    accounts_payload = accounts_response.json()
+    assert len(accounts_payload) == 2
+    assert set(accounts_payload[0]) == {
+        "id",
+        "code",
+        "label",
+        "unit",
+        "kind",
+        "allow_negative",
+        "is_active",
+        "balance",
+    }
+
+    assert payment_event_response.status_code == 410
+    assert "Client-authored payment events are disabled" in payment_event_response.json()["detail"]
+
+
+def test_payment_event_rejects_before_wallet_transaction_lock(api_context) -> None:
+    client, session, current_user = api_context
+    _enable_automatic_deposits(session)
+    RuntimeControlService(client.app).acquire_wallet_transaction_lock(
+        user_id=current_user.id,
+        operation="payment_event_create",
+        ttl_seconds=120,
+        updated_by_user_id=current_user.id,
+    )
+
+    response = client.post(
+        "/api/wallets/payment-events",
+        json={
+            "provider": "paystack",
+            "provider_reference": "paystack-ref-locked",
+            "amount": "50.0000",
+            "pack_code": "starter-50",
+        },
+    )
+
+    assert response.status_code == 410
+    assert "Client-authored payment events are disabled" in response.json()["detail"]
+
+
+def test_create_trade_withdrawal_request_reserves_balance(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={
+            "amount_coin": "20.0000",
+            "source_scope": "trade",
+            "idempotency_key": "reserves-balance",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["source_scope"] == "trade"
+    assert payload["status"] == "pending_review"
+    assert payload["processor_mode"] == "manual_bank_transfer"
+    assert Decimal(str(payload["fee_amount"])) == Decimal("5.0000")
+    assert Decimal(str(payload["total_debit"])) == Decimal("25.0000")
+
+
+def test_create_competition_withdrawal_request_is_blocked_by_default(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={
+            "amount_coin": "20.0000",
+            "source_scope": "competition",
+            "idempotency_key": "competition-blocked-by-default",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert "e-game reward withdrawals" in response.json()["detail"].lower()
+
+
+def test_create_trade_withdrawal_request_requires_bank_account_details(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    current_user.kyc_status = KycStatus.FULLY_VERIFIED
+    session.commit()
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={
+            "amount_coin": "20.0000",
+            "source_scope": "trade",
+            "idempotency_key": "requires-bank-account-details",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert "bank account details are required" in response.json()["detail"].lower()
+
+
+def test_create_trade_withdrawal_request_uses_processing_when_gateway_mode_enabled(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
+    _enable_automatic_withdrawals(session)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"commissions":{"withdrawal_fee_bps":1000,"minimum_withdrawal_fee_credits":"5.0000"},"withdrawal_controls":{"egame_withdrawals_enabled":false,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={
+            "amount_coin": "20.0000",
+            "source_scope": "trade",
+            "idempotency_key": "gateway-mode-enabled",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["status"] == "pending_review"
+    assert payload["processor_mode"] == "automatic_gateway"
+    assert payload["payout_channel"] == "gateway"
+
+
+def test_wallet_adaptive_overview_surfaces_withdrawal_policy(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("50"))
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"manual_bank_transfer","deposits_via_bank_transfer":true,"payouts_via_bank_transfer":true}}',
+        encoding="utf-8",
+    )
+
+    response = client.get("/api/wallets/adaptive-overview")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["processor_mode"] == "manual_bank_transfer"
+    assert payload["egame_withdrawals_enabled"] is True
+    labels = {item["label"]: item["value"] for item in payload["insights"]}
+    assert labels["Withdrawal rail"] == "Bank transfer"
+    assert labels["E-game cash-out"] == "Enabled"
+
+
+def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_context, monkeypatch) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
+    _enable_automatic_deposits(session)
+    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_ENCRYPTION_KEY", raising=False)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
+        encoding="utf-8",
+    )
+
+    response = client.get("/api/wallets/overview")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["country_code"] == "NG"
+    assert payload["required_policy_acceptances_missing"] == 0
+    assert payload["policy_blocked"] is False
+    assert payload["deposit_mode"] == "bank_transfer"
+    assert payload["withdrawal_mode"] == "bank_transfer"
+    assert payload["payment_provider_status"]["paystack"] == "blocked"
+    assert payload["payment_provider_status"]["korapay"] == "blocked"
+
+
+def test_wallet_overview_supports_hybrid_bank_transfer_and_korapay(api_context, monkeypatch) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
+    _enable_hybrid_deposits(session)
+    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.setenv("GTE_KORAPAY_SECRET_KEY", "sk_test_launch")
+    monkeypatch.setenv("GTE_KORAPAY_ENCRYPTION_KEY", "test-encryption-key")
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"manual_bank_transfer","deposits_via_bank_transfer":true,"payouts_via_bank_transfer":true}}',
+        encoding="utf-8",
+    )
+
+    response = client.get("/api/wallets/overview")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["deposit_mode"] == "hybrid"
+    assert payload["payment_provider_status"]["paystack"] == "blocked"
+    assert payload["payment_provider_status"]["korapay"] == "ready"
+
+
+def test_manual_deposit_request_is_not_blocked_by_missing_policy_acceptance(api_context) -> None:
+    client, session, current_user = api_context
+    session.execute(delete(PolicyAcceptanceRecord).where(PolicyAcceptanceRecord.user_id == current_user.id))
+    session.commit()
+
+    response = client.post(
+        "/api/wallets/deposits",
+        json={
+            "amount": "4500.0000",
+            "input_unit": "fiat",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["status"] == "awaiting_payment"
+    assert Decimal(str(payload["amount_coin"])) == Decimal("5.0000")
+
+
+def test_manual_deposit_request_obeys_admin_payment_rail_switch(api_context) -> None:
+    client, session, _current_user = api_context
+    settings = TreasuryService().ensure_settings(session)
+    settings.deposit_mode = PaymentMode.MANUAL
+    session.commit()
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"payment_rails":[{"provider":"bank_transfer_manual","deposits_enabled":false,"withdrawals_enabled":true,"is_live":false}]}',
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        "/api/wallets/deposits",
+        json={
+            "amount": "4500.0000",
+            "input_unit": "fiat",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert "manual bank-transfer deposits are disabled" in response.json()["detail"].lower()
+
+
+def test_manual_deposit_request_requires_real_bank_account_in_production(api_context, monkeypatch) -> None:
+    client, _session, _current_user = api_context
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+
+    response = client.post(
+        "/api/wallets/deposits",
+        json={
+            "amount": "4500.0000",
+            "input_unit": "fiat",
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    assert "treasury bank account" in response.json()["detail"].lower()
+
+
+def test_wallet_overview_marks_missing_paystack_secret_unavailable_in_production(api_context, monkeypatch) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("50"), unit=LedgerUnit.COIN)
+    _enable_automatic_deposits(session)
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+    monkeypatch.delenv("GTE_PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("PAYSTACK_SECRET_KEY", raising=False)
+    monkeypatch.delenv("GTE_KORAPAY_SECRET_KEY", raising=False)
+    monkeypatch.delenv("KORAPAY_SECRET_KEY", raising=False)
+    client.app.state.settings = SimpleNamespace(config_root=Path(session.bind.url.database).parent)
+    state_path = admin_godmode_state_path(client.app.state.settings.config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        '{"withdrawal_controls":{"egame_withdrawals_enabled":true,"trade_withdrawals_enabled":true,"processor_mode":"automatic_gateway","deposits_via_bank_transfer":false,"payouts_via_bank_transfer":false}}',
+        encoding="utf-8",
+    )
+
+    response = client.get("/api/wallets/overview")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["payment_provider_status"]["paystack"] == "blocked"
+    assert payload["payment_provider_status"]["korapay"] == "unavailable"
+
+
+def test_provider_webhook_rejects_stub_provider(api_context) -> None:
+    client, _, _ = api_context
+
+    response = client.post("/wallets/providers/cards/webhook", json={})
+
+    assert response.status_code == 404
+    assert "not currently available" in response.json()["detail"]
+
+
+def test_purchase_order_quote_rejects_stub_provider(api_context) -> None:
+    client, _, _ = api_context
+
+    response = client.post(
+        "/wallets/purchase-orders/quote",
+        json={
+            "amount": "1000.0000",
+            "input_unit": "fiat",
+            "provider_key": "cards",
+            "unit": "coin",
+            "source_scope": "wallet",
+        },
+    )
+
+    assert response.status_code == 404
+    assert "not currently available" in response.json()["detail"]
+
+
+def test_wallet_overview_handles_missing_country_policy_rows(api_context) -> None:
+    client, session, current_user = api_context
+    policy_service = PolicyService(session)
+    profile = policy_service.ensure_user_region_profile(user=current_user, region_code="US")
+    profile.region_code = "US"
+    session.execute(delete(CountryFeaturePolicy))
+    session.commit()
+
+    response = client.get("/api/wallets/overview")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert Decimal(str(payload["withdrawable_now"])) == Decimal("0.0000")
+
+
+def test_withdrawal_quote_and_receipt_include_fee_breakdown(api_context) -> None:
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("120"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
+
+    quote_response = client.post(
+        "/api/wallets/withdrawals/quote",
+        json={"amount_coin": "20.0000", "source_scope": "trade"},
+    )
+    assert quote_response.status_code == 200, quote_response.text
+    quote_payload = quote_response.json()
+    assert Decimal(str(quote_payload["gross_amount"])) == Decimal("20.0000")
+    assert Decimal(str(quote_payload["fee_amount"])) == Decimal("5.0000")
+    assert Decimal(str(quote_payload["total_debit"])) == Decimal("25.0000")
+
+    response = client.post(
+        "/api/wallets/withdrawals",
+        json={"amount_coin": "20.0000", "source_scope": "trade", "idempotency_key": "fee-breakdown"},
+    )
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["source_scope"] == "trade"
+    assert payload["processor_mode"] == "manual_bank_transfer"
+    assert Decimal(str(payload["fee_amount"])) == Decimal("5.0000")
+    assert payload["platform_positioning"] == GTEX_PLATFORM_POSITIONING
+    assert payload["legal_disclosures"] == [
+        "No guaranteed profit.",
+        "Prices are volatile.",
+        "Platform controls mechanics.",
+        "Rewards are promotional for GTEX competitions.",
+    ]
+
+    receipt_response = client.get(f"/api/wallets/withdrawals/{payload['id']}/receipt")
+    assert receipt_response.status_code == 200, receipt_response.text
+    receipt = receipt_response.json()
+    assert receipt["withdrawal"]["id"] == payload["id"]
+    assert Decimal(str(receipt["gross_amount"])) == Decimal("20.0000")
+    assert Decimal(str(receipt["fee_amount"])) == Decimal("5.0000")
+    assert Decimal(str(receipt["total_debit"])) == Decimal("25.0000")
+    assert receipt["platform_positioning"] == GTEX_PLATFORM_POSITIONING
+
+
+def test_withdrawal_submission_is_idempotent_per_intent_key(api_context) -> None:
+    """A replayed submission returns the first payout and holds the balance once."""
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
+
+    wallet_service = WalletService()
+    account = wallet_service.get_user_account(session, current_user, LedgerUnit.COIN)
+    opening = wallet_service.get_balance(session, account)
+
+    body = {"amount_coin": "20.0000", "source_scope": "trade", "idempotency_key": "submit-once"}
+    first = client.post("/api/wallets/withdrawals", json=body)
+    second = client.post("/api/wallets/withdrawals", json=body)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["payout_request_id"] == first.json()["payout_request_id"]
+    # 20 net + 5 minimum fee, debited once rather than twice.
+    assert wallet_service.get_balance(session, account) == opening - Decimal("25.0000")
+
+
+def test_two_users_may_reuse_the_same_withdrawal_intent_key(api_context) -> None:
+    """The intent key is namespaced per user, so the global unique index cannot collide."""
+    client, session, current_user = api_context
+    _fund_user(session, current_user, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, current_user)
+
+    other = AuthService().register_user(
+        session,
+        email="wallet-http-second@example.com",
+        region_code="NG",
+        username="wallethttpsecond",
+        password="SuperSecret1",
+    )
+    session.commit()
+    _seed_policy_defaults(session, other)
+    _fund_user(session, other, amount=Decimal("100"), unit=LedgerUnit.COIN)
+    _provision_withdrawable_user(session, other)
+
+    body = {"amount_coin": "20.0000", "source_scope": "trade", "idempotency_key": "shared-key"}
+    mine = client.post("/api/wallets/withdrawals", json=body)
+    client.app.dependency_overrides[get_current_user] = lambda: other
+    theirs = client.post("/api/wallets/withdrawals", json=body)
+
+    assert mine.status_code == 201
+    assert theirs.status_code == 201
+    assert theirs.json()["payout_request_id"] != mine.json()["payout_request_id"]

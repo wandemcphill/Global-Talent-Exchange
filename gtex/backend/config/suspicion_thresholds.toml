@@ -1,0 +1,13 @@
+player_min_suspicious_events = 10
+player_min_suspicious_share = 0.25
+player_price_band_breach_ratio = 0.05
+cluster_min_member_count = 3
+cluster_min_interaction_count = 6
+cluster_max_asset_count = 4
+thin_market_min_price_credits = 150
+thin_market_max_pending_offers = 1
+thin_market_max_active_trade_intents = 1
+holder_concentration_min_assets = 3
+holder_concentration_share = 0.40
+circular_trade_min_cycle_length = 3
+circular_trade_min_repetitions = 1

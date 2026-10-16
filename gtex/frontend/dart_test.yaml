@@ -1,0 +1,7 @@
+# Declares tags used by the Flutter test suite so `flutter test` does not warn
+# about unknown tags.
+tags:
+  golden:
+    # Platform-dependent golden captures. Valid only on the platform that
+    # generated them, so CI runs `flutter test --exclude-tags golden`.
+    # See frontend/test/ux_refinement/visual_qa_golden_test.dart.

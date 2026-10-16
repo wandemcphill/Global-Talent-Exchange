@@ -1,0 +1,378 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
+import 'package:gte_frontend/data/competition_api.dart';
+import 'package:gte_frontend/data/gte_authed_api.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/launch_control_redesign/launch_control_feature_gate.dart';
+import 'package:gte_frontend/features/shared/data/gte_feature_support.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_api_repository.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/data/dynasty_repository.dart';
+import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_dto.dart';
+import 'package:gte_frontend/features/club_identity/jerseys/data/club_identity_repository.dart';
+import 'package:gte_frontend/features/club_identity/reputation/data/reputation_repository.dart';
+import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_api_repository.dart';
+import 'package:gte_frontend/features/club_identity/trophies/data/trophy_cabinet_repository.dart';
+import 'package:gte_frontend/models/competition_models.dart';
+import 'package:gte_frontend/services/match_3d_monetization_service.dart';
+import 'package:gte_frontend/shared/auth/auth_identity_store.dart';
+import 'package:gte_frontend/shared/models/auth_session.dart';
+
+enum GteNavigationFallbackReason {
+  inactiveWorldSuperCup,
+  emptyTrophyCabinet,
+  noDynastyYet,
+  missingIdentitySetup,
+  featureFlagBlocked,
+}
+
+class GteGuardResolution {
+  const GteGuardResolution({
+    required this.route,
+    this.fallbackReason,
+    this.message,
+    this.featureGateDecision,
+  });
+
+  final GteAppRouteData route;
+  final GteNavigationFallbackReason? fallbackReason;
+  final String? message;
+  final GtexFeatureGateDecision? featureGateDecision;
+
+  bool get redirected =>
+      fallbackReason != null &&
+      fallbackReason != GteNavigationFallbackReason.featureFlagBlocked;
+
+  bool get blockedByFeatureGate => featureGateDecision?.blocked ?? false;
+
+  GteGuardResolution copyWith({
+    GteAppRouteData? route,
+    GteNavigationFallbackReason? fallbackReason,
+    String? message,
+    GtexFeatureGateDecision? featureGateDecision,
+  }) {
+    return GteGuardResolution(
+      route: route ?? this.route,
+      fallbackReason: fallbackReason ?? this.fallbackReason,
+      message: message ?? this.message,
+      featureGateDecision: featureGateDecision ?? this.featureGateDecision,
+    );
+  }
+}
+
+class GteNavigationDependencies {
+  const GteNavigationDependencies({
+    required this.apiBaseUrl,
+    this.backendMode = GteBackendMode.live,
+    String currentUserId = 'guest-user',
+    String? currentUserName,
+    String? currentUserRole,
+    String? currentClubId,
+    String? currentClubName,
+    String? accessToken,
+    bool isAuthenticated = false,
+    bool isCheckingCreatorAccess = false,
+    bool hasApprovedCreatorAccess = false,
+    bool canHostCompetitions = false,
+    this.onOpenLogin,
+    this.onOpenCreatorAccessRequest,
+    this.competitionApi,
+    this.trophyCabinetRepository,
+    this.dynastyRepository,
+    this.reputationRepository,
+    this.clubIdentityRepository,
+    this.resolveWorldSuperCupCompetitionId,
+    this.hasIdentitySetup,
+    this.currentUserIdProvider,
+    this.currentUserNameProvider,
+    this.currentUserRoleProvider,
+    this.currentClubIdProvider,
+    this.currentClubNameProvider,
+    this.accessTokenProvider,
+    this.isAuthenticatedProvider,
+    this.isCheckingCreatorAccessProvider,
+    this.hasApprovedCreatorAccessProvider,
+    this.canHostCompetitionsProvider,
+    this.match3dEntitlementProvider,
+    this.authSessionStore,
+    this.fallbackAuthSessionStore,
+    this.onAuthSessionChanged,
+    this.deviceId,
+    this.deviceIdProvider,
+  }) : _currentUserId = currentUserId,
+       _currentUserName = currentUserName,
+       _currentUserRole = currentUserRole,
+       _currentClubId = currentClubId,
+       _currentClubName = currentClubName,
+       _accessToken = accessToken,
+       _isAuthenticated = isAuthenticated,
+       _isCheckingCreatorAccess = isCheckingCreatorAccess,
+       _hasApprovedCreatorAccess = hasApprovedCreatorAccess,
+       _canHostCompetitions = canHostCompetitions;
+
+  final String apiBaseUrl;
+  final GteBackendMode backendMode;
+  final String _currentUserId;
+  final String? _currentUserName;
+  final String? _currentUserRole;
+  final String? _currentClubId;
+  final String? _currentClubName;
+  final String? _accessToken;
+  final bool _isAuthenticated;
+  final bool _isCheckingCreatorAccess;
+  final bool _hasApprovedCreatorAccess;
+  final bool _canHostCompetitions;
+  final Future<bool> Function(BuildContext context)? onOpenLogin;
+  final Future<void> Function(BuildContext context)? onOpenCreatorAccessRequest;
+  final CompetitionApi? competitionApi;
+  final TrophyCabinetRepository? trophyCabinetRepository;
+  final DynastyRepository? dynastyRepository;
+  final ReputationRepository? reputationRepository;
+  final ClubIdentityRepository? clubIdentityRepository;
+  final FutureOr<String?> Function()? resolveWorldSuperCupCompetitionId;
+  final FutureOr<bool> Function(String clubId, ClubIdentityDto? identity)?
+  hasIdentitySetup;
+  final String Function()? currentUserIdProvider;
+  final String? Function()? currentUserNameProvider;
+  final String? Function()? currentUserRoleProvider;
+  final String? Function()? currentClubIdProvider;
+  final String? Function()? currentClubNameProvider;
+  final String? Function()? accessTokenProvider;
+  final bool Function()? isAuthenticatedProvider;
+  final bool Function()? isCheckingCreatorAccessProvider;
+  final bool Function()? hasApprovedCreatorAccessProvider;
+  final bool Function()? canHostCompetitionsProvider;
+  final Match3dEntitlementProvider? match3dEntitlementProvider;
+  final AuthSessionStore? authSessionStore;
+  final AuthSessionStore? fallbackAuthSessionStore;
+  final Future<void> Function(AuthSession? session)? onAuthSessionChanged;
+  final String? deviceId;
+  final String? Function()? deviceIdProvider;
+
+  String get currentUserId => currentUserIdProvider?.call() ?? _currentUserId;
+
+  String? get currentUserName =>
+      currentUserNameProvider?.call() ?? _currentUserName;
+
+  String? get currentUserRole =>
+      currentUserRoleProvider?.call() ?? _currentUserRole;
+
+  String? get currentClubId => currentClubIdProvider?.call() ?? _currentClubId;
+
+  String? get currentClubName =>
+      currentClubNameProvider?.call() ?? _currentClubName;
+
+  String? get accessToken => accessTokenProvider?.call() ?? _accessToken;
+
+  bool get isAuthenticated =>
+      isAuthenticatedProvider?.call() ?? _isAuthenticated;
+
+  bool get isCheckingCreatorAccess =>
+      isCheckingCreatorAccessProvider?.call() ?? _isCheckingCreatorAccess;
+
+  bool get hasApprovedCreatorAccess =>
+      hasApprovedCreatorAccessProvider?.call() ?? _hasApprovedCreatorAccess;
+
+  bool get canHostCompetitions =>
+      canHostCompetitionsProvider?.call() ?? _canHostCompetitions;
+
+  Match3dUserEntitlement? get match3dEntitlement =>
+      match3dEntitlementProvider?.call();
+
+  GteNavigationDependencies liveOnly() {
+    return GteNavigationDependencies(
+      apiBaseUrl: apiBaseUrl,
+      backendMode: GteBackendMode.live,
+      currentUserId: currentUserId,
+      currentUserName: currentUserName,
+      currentUserRole: currentUserRole,
+      currentClubId: currentClubId,
+      currentClubName: currentClubName,
+      accessToken: accessToken,
+      isAuthenticated: isAuthenticated,
+      isCheckingCreatorAccess: isCheckingCreatorAccess,
+      hasApprovedCreatorAccess: hasApprovedCreatorAccess,
+      canHostCompetitions: canHostCompetitions,
+      onOpenLogin: onOpenLogin,
+      onOpenCreatorAccessRequest: onOpenCreatorAccessRequest,
+      resolveWorldSuperCupCompetitionId: resolveWorldSuperCupCompetitionId,
+      hasIdentitySetup: hasIdentitySetup,
+      currentUserIdProvider: currentUserIdProvider,
+      currentUserNameProvider: currentUserNameProvider,
+      currentUserRoleProvider: currentUserRoleProvider,
+      currentClubIdProvider: currentClubIdProvider,
+      currentClubNameProvider: currentClubNameProvider,
+      accessTokenProvider: accessTokenProvider,
+      isAuthenticatedProvider: isAuthenticatedProvider,
+      isCheckingCreatorAccessProvider: isCheckingCreatorAccessProvider,
+      hasApprovedCreatorAccessProvider: hasApprovedCreatorAccessProvider,
+      canHostCompetitionsProvider: canHostCompetitionsProvider,
+      match3dEntitlementProvider: match3dEntitlementProvider,
+      authSessionStore: authSessionStore,
+      fallbackAuthSessionStore: fallbackAuthSessionStore,
+      onAuthSessionChanged: onAuthSessionChanged,
+      deviceId: deviceId,
+      deviceIdProvider: deviceIdProvider,
+    );
+  }
+
+  bool get isAdminRole => gtexIsAdminRole(currentUserRole);
+
+  CompetitionApi createCompetitionApi() {
+    return competitionApi ??
+        CompetitionApi.standard(
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+          accessToken: accessToken,
+        );
+  }
+
+  TrophyCabinetRepository createTrophyCabinetRepository() {
+    return trophyCabinetRepository ??
+        TrophyCabinetApiRepository.standard(
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+        );
+  }
+
+  DynastyRepository createDynastyRepository() {
+    return dynastyRepository ??
+        DynastyApiRepository.standard(baseUrl: apiBaseUrl, mode: backendMode);
+  }
+
+  ReputationRepository createReputationRepository() {
+    return reputationRepository ??
+        ReputationApiRepository.standard(
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+        );
+  }
+
+  ClubIdentityRepository createClubIdentityRepository() {
+    return clubIdentityRepository ??
+        ClubIdentityApiRepository.standard(
+          baseUrl: apiBaseUrl,
+          mode: backendMode,
+        );
+  }
+
+  GteAuthedApi createAuthedApi({String? overrideAccessToken}) {
+    return GteAuthedApi(
+      config: GteRepositoryConfig(baseUrl: apiBaseUrl, mode: backendMode),
+      transport: createModeAwareTransport(backendMode),
+      accessToken: overrideAccessToken ?? accessToken,
+      authSessionStore: authSessionStore,
+      fallbackAuthSessionStore: fallbackAuthSessionStore,
+      onSessionChanged: onAuthSessionChanged,
+      deviceId: deviceIdProvider?.call() ?? deviceId,
+      mode: backendMode,
+    );
+  }
+}
+
+class GteNavigationGuardResolver {
+  const GteNavigationGuardResolver({required this.dependencies});
+
+  final GteNavigationDependencies dependencies;
+
+  Future<GteGuardResolution> resolve(GteAppRouteData route) async {
+    final GteGuardResolution baseResolution;
+    if (route is CompetitionWorldSuperCupRouteData) {
+      baseResolution = await _resolveWorldSuperCup(route);
+    } else {
+      baseResolution = GteGuardResolution(route: route);
+    }
+    return _applyFeatureGate(baseResolution);
+  }
+
+  Future<GteGuardResolution> _applyFeatureGate(
+    GteGuardResolution resolution,
+  ) async {
+    final GtexFeatureGateDecision decision =
+        await GtexLaunchControlFeatureGate.resolveRouteData(
+          route: resolution.route,
+          baseUrl: dependencies.apiBaseUrl,
+          backendMode: dependencies.backendMode,
+          accessToken: dependencies.accessToken,
+          isAdmin: dependencies.isAdminRole,
+        );
+    if (decision.allowed) {
+      return resolution;
+    }
+    return resolution.copyWith(
+      fallbackReason: GteNavigationFallbackReason.featureFlagBlocked,
+      message: decision.message,
+      featureGateDecision: decision,
+    );
+  }
+
+  Future<GteGuardResolution> _resolveWorldSuperCup(
+    CompetitionWorldSuperCupRouteData route,
+  ) async {
+    final String? resolvedCompetitionId =
+        await dependencies.resolveWorldSuperCupCompetitionId?.call();
+    if (resolvedCompetitionId != null &&
+        resolvedCompetitionId.trim().isNotEmpty) {
+      return GteGuardResolution(
+        route: CompetitionDetailRouteData(
+          competitionId: resolvedCompetitionId.trim(),
+        ),
+      );
+    }
+
+    try {
+      final CompetitionListResponse response = await dependencies
+          .createCompetitionApi()
+          .fetchCompetitions(userId: dependencies.currentUserId);
+      final CompetitionSummary? competition = _findWorldSuperCupCompetition(
+        response.items,
+      );
+      if (competition != null && _isWorldSuperCupActive(competition)) {
+        return GteGuardResolution(
+          route: CompetitionDetailRouteData(competitionId: competition.id),
+        );
+      }
+    } catch (_) {
+      // Route safely degrades to the broader discovery feed when live status
+      // cannot be confirmed.
+    }
+
+    return const GteGuardResolution(
+      route: CompetitionsDiscoveryRouteData(highlight: 'world-super-cup'),
+      fallbackReason: GteNavigationFallbackReason.inactiveWorldSuperCup,
+      message: 'World Super Cup is not active right now.',
+    );
+  }
+}
+
+CompetitionSummary? _findWorldSuperCupCompetition(
+  List<CompetitionSummary> competitions,
+) {
+  for (final CompetitionSummary competition in competitions) {
+    final String haystack =
+        '${competition.id} ${competition.name}'.toLowerCase();
+    if (haystack.contains('world super cup') ||
+        haystack.contains('world-super-cup')) {
+      return competition;
+    }
+  }
+  return null;
+}
+
+bool _isWorldSuperCupActive(CompetitionSummary competition) {
+  switch (competition.status) {
+    case CompetitionStatus.draft:
+    case CompetitionStatus.completed:
+    case CompetitionStatus.cancelled:
+    case CompetitionStatus.refunded:
+    case CompetitionStatus.disputed:
+      return false;
+    case CompetitionStatus.published:
+    case CompetitionStatus.openForJoin:
+    case CompetitionStatus.filled:
+    case CompetitionStatus.locked:
+    case CompetitionStatus.inProgress:
+      return true;
+  }
+}

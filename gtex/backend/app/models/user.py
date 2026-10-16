@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+from datetime import datetime
+from enum import StrEnum
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, DateTime, Enum, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from app.models.wallet import LedgerAccount, LedgerEntry, PaymentEvent, PayoutRequest
+    from app.models.user_wallet import UserWallet, WalletTransactionRecord
+
+
+class UserRole(StrEnum):
+    USER = "user"
+    ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
+    SCOUT = "scout"
+    AGENT = "agent"
+    CLUB = "club"
+    COIN_TRADER = "coin_trader"
+
+
+class PublicAccountType(StrEnum):
+    USER = "user"
+    CREATOR = "creator"
+    COIN_TRADER = "coin_trader"
+
+
+class KycStatus(StrEnum):
+    PENDING = "pending"
+    UNDER_REVIEW = "under_review"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+    UNVERIFIED = "pending"
+    PARTIAL_VERIFIED_NO_ID = "verified"
+    FULLY_VERIFIED = "verified"
+
+
+class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "users"
+
+    email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    full_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    avatar_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    favourite_club: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    nationality: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    preferred_position: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role", native_enum=False),
+        nullable=False,
+        default=UserRole.USER,
+    )
+    account_type: Mapped[PublicAccountType] = mapped_column(
+        Enum(
+            PublicAccountType,
+            name="public_account_type",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=PublicAccountType.USER,
+        server_default=PublicAccountType.USER.value,
+        index=True,
+    )
+    kyc_status: Mapped[KycStatus] = mapped_column(
+        Enum(
+            KycStatus,
+            name="kyc_status",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=KycStatus.UNVERIFIED,
+    )
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    age_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    ledger_accounts: Mapped[list["LedgerAccount"]] = relationship(
+        back_populates="owner",
+        cascade="all, delete-orphan",
+    )
+    ledger_entries_created: Mapped[list["LedgerEntry"]] = relationship(
+        back_populates="created_by",
+        foreign_keys="LedgerEntry.created_by_user_id",
+    )
+    payment_events: Mapped[list["PaymentEvent"]] = relationship(back_populates="user")
+    payout_requests: Mapped[list["PayoutRequest"]] = relationship(back_populates="user")
+    wallet_profile: Mapped["UserWallet | None"] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    wallet_transactions: Mapped[list["WalletTransactionRecord"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )

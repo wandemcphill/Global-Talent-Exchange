@@ -1,0 +1,122 @@
+{
+  "project_title": "GTEX Nigeria Launch Plan — Premium Football Club Ownership Console",
+  "theme_strategy": {
+    "default_mode": "dark",
+    "theme_toggle": true,
+    "rationale": "High-density football club management demands deep contrast, immersive arena lighting, and executive boardroom seriousness. Obsidian background (#090D14) with pitch-grass emerald highlights (#10B981) and vibrant neon cyan/gold triggers for live events."
+  },
+  "typography": {
+    "fonts": {
+      "headline_font": "Barlow Condensed, Outfit, sans-serif",
+      "body_font": "Inter, DM Sans, sans-serif",
+      "mono_font": "JetBrains Mono, monospace"
+    },
+    "pairing_archetype": "The Performance Pro & Tactical Executive (Barlow Condensed Heavy Headings + Crisp Sans Body + JetBrains Mono for Currency/Metrics)",
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-none uppercase",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight uppercase",
+      "h3": "text-xl sm:text-2xl font-bold tracking-normal",
+      "h4": "text-lg sm:text-xl font-semibold",
+      "body": "text-sm sm:text-base leading-relaxed text-slate-300",
+      "caption_overline": "text-xs font-mono uppercase tracking-[0.2em] text-emerald-400 font-bold"
+    }
+  },
+  "colors": {
+    "archetype": "THE PERFORMANCE PRO (Elite Athleticism & Executive Boardroom)",
+    "palette": {
+      "background_deep": "#070B11",
+      "background_card": "#0F172A",
+      "background_glass": "rgba(15, 23, 42, 0.75)",
+      "border_subtle": "rgba(255, 255, 255, 0.08)",
+      "border_active": "rgba(16, 185, 129, 0.4)",
+      "primary_emerald": "#10B981",
+      "primary_emerald_glow": "#059669",
+      "accent_gold": "#F59E0B",
+      "accent_cyan": "#06B6D4",
+      "accent_blaze": "#EF4444",
+      "text_primary": "#F8FAFC",
+      "text_secondary": "#94A3B8",
+      "text_muted": "#64748B",
+      "naira_context": "#22C55E",
+      "gtex_coin": "#3B82F6",
+      "fan_coin": "#F59E0B"
+    },
+    "contrast_rules": "All text must achieve > 4.5:1 APCA contrast ratio. Explicit text colors set on interactive hover (e.g., hover:bg-emerald-500 hover:text-slate-950). Limits on primary green: used strictly for CTAs, positive momentum, live status, and core metrics."
+  },
+  "visual_enhancers": {
+    "surface_styles": {
+      "tracing_beam": "Glowing 1px gradient line border for active live matches and high-priority inbox actions.",
+      "glassmorphism": "backdrop-blur-xl bg-slate-900/80 border border-white/10 shadow-2xl for top header bar and floating owner action drawers.",
+      "tactical_grid": "Grid borders border-r border-b border-white/5 for information-dense dashboard blocks."
+    },
+    "micro_textures": "Subtle tactical grass pitch grid patterns in background section overlays, 1px sharp inner strokes instead of heavy diffuse drop shadows."
+  },
+  "layout_and_grids": {
+    "marketing_landing": "Asymmetric Bento Grid (Mode A Tetris Grid) with high visual impact hero, 30-second ownership clarity card, live world simulator ticker, and quick club creation wizard trigger.",
+    "dashboard_6_blocks": "High Density Grid (Mode B) layout for Owner Control Center:",
+    "blocks": [
+      "1. My Clubs (Up to 3 clubs, status, league position, value trend, manager mood, multi-club group disclosure)",
+      "2. Owner Inbox (Manager meeting requests, player unrest, regen breakthroughs, transfer bids, sponsor offers, competition invites)",
+      "3. Today's Decisions (Approve/reject transfer request, facility spend, manager response, enter competition, resolve morale)",
+      "4. Live Club Health (Finances, squad depth, morale, injuries, academy output, fan engagement)",
+      "5. Competition & Fixtures Rail (Upcoming fixtures, live 2D matches, hosted cups, friend rivalries)",
+      "6. Club Economy Snapshot (Cash, revenue streams, pending payouts, gifts received, 70/30 sponsor split, Club Support Units)"
+    ]
+  },
+  "key_features_and_views": [
+    "Landing Page (30-second ownership pitch, feature highlights, Nigeria Paystack readiness, active world status)",
+    "Owner Control Center (6-block central console)",
+    "First-Club Activation Onboarding Wizard (Club Identity -> Sign starting XI within budget -> Appoint manager from 3 candidates -> Enter first league/cup)",
+    "My Clubs (Multi-club group ownership view, facility upgrades, related-party transfer tracking)",
+    "Market & Transfers (Player list with filter/search, fair-value band validator for same-owner transfers)",
+    "2D Match Center (Live pitch visualizer with commentary feed, momentum bar, mentality toggle [Defensive/Balanced/Attacking], manager reactions, football-native gift rail [Golden Boot, Floodlights, Stadium Roar])",
+    "Manager & Squad (Manager trait sheet: tactical, transfer pref, temperament, ambition, loyalty, discipline; squad table with morale & contract)",
+    "Academy & Regens (Regen personality matrix: ambition, marketability, growth drivers, transfer pressure)",
+    "Unified Finance & Ledger (Naira deposit via Paystack simulator, GTEX Coin vs Fan Coin breakdown, balances labeled: withdrawable / non-withdrawable / earned / deposited / promotional / pending review, 70/30 sponsor split, Club Support Units)",
+    "Inbox & Decisions (Consequence-driven notifications with What/Why/Next Owner Action)",
+    "Admin Review Queue (Withdrawal audits, integrity flags, payout holds)"
+  ],
+  "motion_and_interactions": {
+    "hover_states": "Interactive buttons expand slightly with subtle shadow glow, cards illuminate border on hover.",
+    "match_momentum": "Animated momentum bar in 2D Match Center pulsing live pitch updates every few seconds.",
+    "stagger_entrances": "Framer motion staggered fade-in for inbox items and squad player rows.",
+    "reduced_motion": "Respect prefers-reduced-motion CSS media query."
+  },
+  "accessibility": {
+    "apca_contrast": "Ensure white/bright emerald text against dark slate background.",
+    "aria_labels": "All interactive elements, match triggers, and modal actions have explicit aria-labels and data-testid attributes.",
+    "focus_states": "High contrast ring focus:ring-2 focus:ring-emerald-400."
+  },
+  "testing_requirements": {
+    "data_testid_rule": "MUST include data-testid attribute on all interactive elements (buttons, inputs, tabs, filter dropdowns, action cards, modal triggers) using kebab-case role naming (e.g., data-testid='approve-transfer-button', data-testid='owner-inbox-tab')."
+  },
+  "media": {
+    "image_urls": {
+      "hero_stadium": "https://images.unsplash.com/photo-1706675780107-7c43cc487928?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "pitch_night": "https://images.unsplash.com/photo-1676746424139-77f8bd8922a8?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "stadium_aerial": "https://images.pexels.com/photos/35898730/pexels-photo-35898730.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "match_action": "https://images.pexels.com/photos/38881871/pexels-photo-38881871.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "player_dribble": "https://images.pexels.com/photos/32285250/pexels-photo-32285250.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "executive_boardroom": "https://images.pexels.com/photos/7433929/pexels-photo-7433929.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "manager_contemplative": "https://images.pexels.com/photos/6814533/pexels-photo-6814533.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "stadium_crowd": "https://images.unsplash.com/photo-1629217855633-79a6925d6c47?crop=entropy&cs=srgb&fm=jpg&q=85"
+    }
+  },
+  "component_path": "/app/frontend/src/components/",
+  "instructions_to_main_agent": [
+    "1. Build the frontend as a React 19 app with Tailwind CSS and lucide-react icons.",
+    "2. Ensure the top navigation includes Home/Owner Control Center, My Clubs, Market & Transfers, Competitions, Manager & Squad, Academy/Regens, Finance, Inbox, and Admin Queue toggle.",
+    "3. On first load, provide a high-converting Landing Page with 30-second ownership value proposition and 'Activate My First Club' wizard trigger.",
+    "4. Implement the 6 distinct dashboard blocks in Owner Control Center with data density, consequence clarity, and actionable decision modals.",
+    "5. Provide 2D Match Center with dynamic commentary tick, pitch visualizer, momentum bar, mentality controller, and Football-Native Gifting Rail (Golden Boot, Floodlights, Stadium Roar).",
+    "6. Include Paystack Naira deposit simulation for Nigerian market launch with unified balance classification breakdown (Withdrawable, Non-withdrawable, Earned, Deposited, Promotional, Pending Review).",
+    "7. Attach data-testid attributes to ALL interactive elements for seamless automated validation."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "Avoid generic centered layouts and standard blue gradients. Maintain deep executive sports console visual weight.",
+    "Every container with borders MUST have internal padding (p-4 to p-8) to prevent text collision.",
+    "Hover states must explicitly state text color (e.g. hover:bg-emerald-500 hover:text-slate-950).",
+    "Use lucide-react icons instead of emojis.",
+    "All interactive elements MUST have data-testid attributes."
+  ]
+}

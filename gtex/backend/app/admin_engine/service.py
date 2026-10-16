@@ -1,0 +1,471 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Iterable
+
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import Session
+
+from app.admin_engine.schemas import (
+    AdminCalendarRuleUpsertRequest,
+    AdminFeatureFlagUpsertRequest,
+    AdminRewardRuleUpsertRequest,
+    AdminRewardRuleStabilityControls,
+)
+from app.competition_engine.scheduler import CompetitionScheduler
+from app.models.admin_rules import AdminCalendarRule, AdminFeatureFlag, AdminRewardRule
+from app.models.user import User
+
+# Stored shape is `DEFAULT_FEATURE_FLAGS`. Launch Control stays admin-only.
+# Every other module is opened to public by `_opened_flag_payload`.
+_FEATURE_FLAG_SEEDS: tuple[dict[str, object], ...] = (
+    {
+        "feature_key": "story-feed",
+        "title": "Story Feed",
+        "description": "Surface giant-killer stories, rivalries, and major tournament narratives.",
+        "enabled": True,
+        "audience": "global",
+    },
+    {
+        "feature_key": "daily-challenges",
+        "title": "Daily Challenges",
+        "description": "Enable small FanCoin daily engagement rewards.",
+        "enabled": True,
+        "audience": "global",
+    },
+    {
+        "feature_key": "national-team-engine",
+        "title": "National Team Engine",
+        "description": "Expose national team tournament entry surfaces.",
+        "enabled": False,
+        "audience": "global",
+        "launch_state": "beta",
+    },
+    {
+        "feature_key": "launch_control",
+        "title": "Launch Control",
+        "description": "Batch 34 rollout states, kill switches, beta access grants, and module health.",
+        "enabled": True,
+        "audience": "admin",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/admin/launch-control"},
+    },
+    {
+        "feature_key": "club_lifecycle",
+        "title": "Club Lifecycle",
+        "description": "Gate club readiness, launch checklist, squad registration, and operating dashboard flows.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/club/lifecycle"},
+    },
+    {
+        "feature_key": "academy_pipeline",
+        "title": "Academy Pipeline",
+        "description": "Gate academy prospect generation, youth contracts, training progression, and promotion controls.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/club"},
+    },
+    {
+        "feature_key": "transfer_hub",
+        "title": "Transfer Hub",
+        "description": "Gate the loan, swap, private bid, and transfer-deadline ecosystem.",
+        "enabled": False,
+        "audience": "beta",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/market"},
+    },
+    {
+        "feature_key": "coin_traders",
+        "title": "Coin Traders",
+        "description": "Gate liquidity partners, escrow windows, and coin-trader order flows.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/admin/launch-control"},
+    },
+    {
+        "feature_key": "fan_coin",
+        "title": "Fan Coin",
+        "description": "Gate Fan Coin earning, settlement, rewards, and spending loops.",
+        "enabled": False,
+        "audience": "beta",
+        "launch_state": "beta",
+        "metadata_json": {"route": "/app/community"},
+    },
+    {
+        "feature_key": "gtex_coin",
+        "title": "GTEX Coin",
+        "description": "Gate GTEX Coin trading, treasury controls, and platform liquidity.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/admin/launch-control"},
+    },
+    {
+        "feature_key": "gifting",
+        "title": "Gifting",
+        "description": "Gate live match, creator, and club gift flows.",
+        "enabled": False,
+        "audience": "beta",
+        "launch_state": "beta",
+        "metadata_json": {"route": "/admin/gift-stabilizer"},
+    },
+    {
+        "feature_key": "newgen_portraits",
+        "title": "NewGen Portraits",
+        "description": "Gate AI/NewGen portrait assignment and moderation surfaces.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/world/regens"},
+    },
+    {
+        "feature_key": "club_shares",
+        "title": "Club Shares",
+        "description": "Gate creator share markets and club investment controls.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/admin/creator-share-market/control"},
+    },
+    {
+        "feature_key": "create_a_son",
+        "title": "Create-a-Son",
+        "description": "Gate paid custom regen requests and admin approval queues.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/admin/launch-control"},
+    },
+    {
+        "feature_key": "ticketing",
+        "title": "Ticketing",
+        "description": "Gate stadium ticket sales, resale, attendance rewards, and revenue splits.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/play"},
+    },
+    {
+        "feature_key": "broadcast",
+        "title": "Broadcast",
+        "description": "Gate premium broadcast packages, clips, highlights, and rights flows.",
+        "enabled": False,
+        "audience": "beta",
+        "launch_state": "beta",
+        "metadata_json": {"route": "/broadcast"},
+    },
+    {
+        "feature_key": "player_card_marketplace",
+        "title": "Player Card Marketplace",
+        "description": "Gate collectible cards, packs, offers, and upgrade/fuse flows.",
+        "enabled": False,
+        "audience": "beta",
+        "launch_state": "beta",
+        "metadata_json": {"route": "/player-cards"},
+    },
+    {
+        "feature_key": "club_sale_market",
+        "title": "Club Sale Market",
+        "description": "Gate due-diligence, escrow, and ownership transfer safety flows.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/clubs/sale-market"},
+    },
+    {
+        "feature_key": "staff_marketplace",
+        "title": "Staff Marketplace",
+        "description": "Gate managers, agents, scouts, coaches, contracts, and assignments.",
+        "enabled": False,
+        "audience": "hidden",
+        "launch_state": "hidden",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/staff-market"},
+    },
+    {
+        "feature_key": "sponsorships",
+        "title": "Sponsorships",
+        "description": "Gate sponsor marketplace, brand assets, payout analytics, and review queues.",
+        "enabled": False,
+        "audience": "internal",
+        "launch_state": "internal",
+        "allowed_roles_json": ["admin", "super_admin"],
+        "metadata_json": {"route": "/app/sponsorships"},
+    },
+    {
+        "feature_key": "federations",
+        "title": "Federations",
+        "description": "Gate federation governance, sanctions, rankings, and national association ops.",
+        "enabled": False,
+        "audience": "beta",
+        "launch_state": "beta",
+        "metadata_json": {"route": "/app/federations"},
+    },
+    {
+        "feature_key": "fan_wars",
+        "title": "Fan Wars",
+        "description": "Gate fan wars, leaderboards, rewards, and anti-abuse controls.",
+        "enabled": False,
+        "audience": "beta",
+        "launch_state": "beta",
+        "metadata_json": {"route": "/app/community"},
+    },
+    {
+        "feature_key": "predictions",
+        "title": "Predictions",
+        "description": "Gate fan prediction entry, settlement, and reward payout loops.",
+        "enabled": False,
+        "audience": "beta",
+        "launch_state": "beta",
+        "metadata_json": {"route": "/app/community"},
+    },
+)
+
+_ADMIN_ONLY_FLAG_KEYS = frozenset({"launch_control"})
+
+
+def _opened_flag_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Product modules are public. Launch Control remains the admin switchboard."""
+    if payload["feature_key"] in _ADMIN_ONLY_FLAG_KEYS:
+        return dict(payload)
+    opened = dict(payload)
+    opened["enabled"] = True
+    opened["audience"] = "global"
+    opened["launch_state"] = "public"
+    opened["allowed_roles_json"] = []
+    opened["beta_only"] = False
+    return opened
+
+
+DEFAULT_FEATURE_FLAGS: tuple[dict[str, object], ...] = tuple(_opened_flag_payload(item) for item in _FEATURE_FLAG_SEEDS)
+
+DEFAULT_CALENDAR_RULES: tuple[dict[str, object], ...] = (
+    {
+        "rule_key": "world-cup-exclusive-senior-windows",
+        "title": "World Cup Exclusive Senior Windows",
+        "description": "Pause GTEX leagues and champions competitions when GTEX World Cup or World Championship occupies the same senior windows.",
+        "world_cup_exclusive": True,
+        "active": True,
+        "priority": 10,
+        "config_json": {
+            "pause_competition_types": ["league", "champions_league"],
+            "exclusive_competition_types": ["world_super_cup"],
+        },
+    },
+    {
+        "rule_key": "youth-tournaments-share-weeks",
+        "title": "Youth Tournaments Share Weeks",
+        "description": "Keep U17, U20 and U21 continental/youth competitions aligned in the same calendar week.",
+        "world_cup_exclusive": False,
+        "active": True,
+        "priority": 20,
+        "config_json": {
+            "competition_families": ["academy"],
+            "same_week_groups": ["u17", "u20", "u21"],
+        },
+    },
+)
+
+DEFAULT_REWARD_RULES: tuple[dict[str, object], ...] = (
+    {
+        "rule_key": "platform-economy-defaults",
+        "title": "Platform Economy Defaults",
+        "description": "Default fee and rake envelope for trading, gifting and withdrawals.",
+        "trading_fee_bps": 2000,
+        "gift_platform_rake_bps": 3000,
+        "withdrawal_fee_bps": 1000,
+        "minimum_withdrawal_fee_credits": Decimal("5.0000"),
+        "competition_platform_fee_bps": 3000,
+        "stability_controls_json": AdminRewardRuleStabilityControls().model_dump(mode="json"),
+        "active": True,
+    },
+)
+
+
+@dataclass(slots=True)
+class AdminEngineService:
+    session: Session
+
+    @staticmethod
+    def normalize_stability_controls(
+        payload: AdminRewardRuleStabilityControls | dict[str, object] | None = None,
+    ) -> AdminRewardRuleStabilityControls:
+        return AdminRewardRuleStabilityControls.model_validate(payload or {})
+
+    @classmethod
+    def normalize_stability_controls_payload(
+        cls,
+        payload: AdminRewardRuleStabilityControls | dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        return cls.normalize_stability_controls(payload).model_dump(mode="json")
+
+    def seed_defaults(self) -> None:
+        self._seed_feature_flags()
+        self._seed_calendar_rules()
+        self._seed_reward_rules()
+        self.session.flush()
+
+    def _seed_feature_flags(self) -> None:
+        existing = {item.feature_key: item for item in self.session.scalars(select(AdminFeatureFlag)).all()}
+        for payload in DEFAULT_FEATURE_FLAGS:
+            record = existing.get(payload["feature_key"])
+            if record is None:
+                self.session.add(AdminFeatureFlag(**payload))
+                continue
+            # An admin edit or an active kill switch wins over the seed.
+            if record.updated_by_user_id is not None or record.kill_switch_enabled:
+                continue
+            record.enabled = bool(payload["enabled"])
+            record.audience = str(payload.get("audience") or record.audience)
+            if "launch_state" in payload:
+                record.launch_state = str(payload["launch_state"])
+            roles = payload.get("allowed_roles_json")
+            if isinstance(roles, list):
+                record.allowed_roles_json = [str(item) for item in roles]
+            record.beta_only = bool(payload.get("beta_only", False))
+
+    def _seed_calendar_rules(self) -> None:
+        existing = {item.rule_key for item in self.session.scalars(select(AdminCalendarRule)).all()}
+        for payload in DEFAULT_CALENDAR_RULES:
+            if payload["rule_key"] in existing:
+                continue
+            self.session.add(AdminCalendarRule(**payload))
+
+    def _seed_reward_rules(self) -> None:
+        existing = {item.rule_key for item in self.session.scalars(select(AdminRewardRule)).all()}
+        for payload in DEFAULT_REWARD_RULES:
+            if payload["rule_key"] in existing:
+                continue
+            self.session.add(AdminRewardRule(**payload))
+
+    def list_feature_flags(self, *, active_only: bool = False) -> list[AdminFeatureFlag]:
+        statement = select(AdminFeatureFlag).order_by(AdminFeatureFlag.feature_key.asc())
+        if active_only:
+            statement = statement.where(AdminFeatureFlag.enabled.is_(True))
+        return list(self.session.scalars(statement).all())
+
+    def upsert_feature_flag(self, *, actor: User, payload: AdminFeatureFlagUpsertRequest) -> AdminFeatureFlag:
+        record = self.session.scalar(
+            select(AdminFeatureFlag).where(AdminFeatureFlag.feature_key == payload.feature_key)
+        )
+        if record is None:
+            record = AdminFeatureFlag(feature_key=payload.feature_key)
+            self.session.add(record)
+        record.title = payload.title
+        record.description = payload.description
+        record.enabled = payload.enabled
+        record.audience = payload.audience
+        record.updated_by_user_id = actor.id
+        self.session.flush()
+        return record
+
+    def list_calendar_rules(self, *, active_only: bool = False) -> list[AdminCalendarRule]:
+        statement = select(AdminCalendarRule).order_by(
+            AdminCalendarRule.priority.asc(), AdminCalendarRule.rule_key.asc()
+        )
+        if active_only:
+            statement = statement.where(AdminCalendarRule.active.is_(True))
+        return list(self.session.scalars(statement).all())
+
+    def upsert_calendar_rule(self, *, actor: User, payload: AdminCalendarRuleUpsertRequest) -> AdminCalendarRule:
+        record = self.session.scalar(select(AdminCalendarRule).where(AdminCalendarRule.rule_key == payload.rule_key))
+        if record is None:
+            record = AdminCalendarRule(rule_key=payload.rule_key)
+            self.session.add(record)
+        record.title = payload.title
+        record.description = payload.description
+        record.world_cup_exclusive = payload.world_cup_exclusive
+        record.active = payload.active
+        record.priority = payload.priority
+        record.config_json = dict(payload.config_json)
+        record.updated_by_user_id = actor.id
+        self.session.flush()
+        return record
+
+    def list_reward_rules(self, *, active_only: bool = False) -> list[AdminRewardRule]:
+        statement = select(AdminRewardRule).order_by(AdminRewardRule.rule_key.asc())
+        if active_only:
+            statement = statement.where(AdminRewardRule.active.is_(True))
+        return list(self.session.scalars(statement).all())
+
+    def get_active_reward_rule(self) -> AdminRewardRule | None:
+        rows = list(
+            self.session.scalars(
+                select(AdminRewardRule)
+                .where(AdminRewardRule.active.is_(True))
+                .order_by(AdminRewardRule.updated_at.desc(), AdminRewardRule.id.asc())
+            ).all()
+        )
+        if len(rows) > 1:
+            raise ValueError("Exactly one active Admin reward/economic policy is required.")
+        return rows[0] if rows else None
+
+    def get_active_stability_controls(self) -> AdminRewardRuleStabilityControls:
+        rule = self.get_active_reward_rule()
+        payload = None if rule is None else rule.stability_controls_json
+        return self.normalize_stability_controls(payload)
+
+    def upsert_reward_rule(self, *, actor: User, payload: AdminRewardRuleUpsertRequest) -> AdminRewardRule:
+        record = self.session.scalar(select(AdminRewardRule).where(AdminRewardRule.rule_key == payload.rule_key))
+        if record is None:
+            record = AdminRewardRule(rule_key=payload.rule_key)
+            self.session.add(record)
+        record.title = payload.title
+        record.description = payload.description
+        record.trading_fee_bps = payload.trading_fee_bps
+        record.gift_platform_rake_bps = payload.gift_platform_rake_bps
+        record.withdrawal_fee_bps = payload.withdrawal_fee_bps
+        record.minimum_withdrawal_fee_credits = payload.minimum_withdrawal_fee_credits
+        record.competition_platform_fee_bps = payload.competition_platform_fee_bps
+        record.stability_controls_json = self.normalize_stability_controls_payload(payload.stability_controls)
+        record.active = payload.active
+        if payload.active:
+            # Exclude by rule_key, not id. A newly constructed record still has
+            # id=None at this point, so `id != record.id` compiles to
+            # `id IS NOT NULL` and matches every active row -- including the one
+            # autoflush is about to insert. That left zero active policies and
+            # hard-stopped every flow behind resolve_economic_policy().
+            self.session.execute(
+                update(AdminRewardRule)
+                .where(
+                    AdminRewardRule.active.is_(True),
+                    AdminRewardRule.rule_key != payload.rule_key,
+                )
+                .values(active=False)
+            )
+        record.updated_by_user_id = actor.id
+        self.session.flush()
+        if payload.active:
+            # Post-condition, not decoration: resolve_economic_policy() fails
+            # closed on zero active rules as well as on several, so an activation
+            # that leaves any other count would take the whole economy offline.
+            # Raising here aborts the surrounding transaction and leaves the
+            # previous policy in place instead of committing an unusable state.
+            active_count = self.session.scalar(
+                select(func.count(AdminRewardRule.id)).where(AdminRewardRule.active.is_(True))
+            )
+            if active_count != 1:
+                raise ValueError(
+                    "Activating an Admin economic policy must leave exactly one active rule, " f"found {active_count}."
+                )
+        return record
+
+    def schedule_preview(self, requests: Iterable, /):
+        scheduler = CompetitionScheduler()
+        return scheduler.build_schedule(tuple(requests))

@@ -1,0 +1,32 @@
+[source]
+source_mode = "licensed-only"
+moderation_required = true
+allowed_formats = ["jpeg", "png", "webp"]
+max_source_bytes = 8000000
+
+[processing]
+watermark_enabled = true
+max_width = 2400
+max_height = 2400
+default_variant = "card"
+
+[[variants]]
+name = "thumb"
+width = 320
+height = 320
+format = "webp"
+fit = "cover"
+
+[[variants]]
+name = "card"
+width = 768
+height = 1024
+format = "webp"
+fit = "contain"
+
+[[variants]]
+name = "hero"
+width = 1440
+height = 1920
+format = "webp"
+fit = "contain"

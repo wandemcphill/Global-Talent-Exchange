@@ -1,0 +1,300 @@
+from __future__ import annotations
+
+import argparse
+import json
+import shlex
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+NULL_SHA = "0" * 40
+SECRET_BASELINE_PATH = REPO_ROOT / ".secrets.baseline"
+PYTHON_EXTENSIONS = {".py"}
+JAVASCRIPT_EXTENSIONS = {".js", ".mjs", ".cjs"}
+SECRET_SCAN_EXTENSIONS = {
+    ".bat",
+    ".cjs",
+    ".cmd",
+    ".conf",
+    ".css",
+    ".dart",
+    ".env",
+    ".go",
+    ".html",
+    ".ini",
+    ".java",
+    ".js",
+    ".json",
+    ".jsx",
+    ".kt",
+    ".kts",
+    ".md",
+    ".mjs",
+    ".php",
+    ".properties",
+    ".ps1",
+    ".py",
+    ".rb",
+    ".scala",
+    ".scss",
+    ".sh",
+    ".sql",
+    ".swift",
+    ".toml",
+    ".ts",
+    ".tsx",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+SECRET_SCAN_FILENAMES = {
+    "dockerfile",
+    "docker-compose.yml",
+}
+NPM_EXECUTABLE = shutil.which("npm") or shutil.which("npm.cmd")
+UNTRACKED_SKIP_PREFIXES = (
+    ".tmp",
+    ".codex_tmp",
+    ".dart_tool",
+    ".pytest_tmp",
+    ".runtime",
+    "_zip_review/",
+    "backend/generated_media/",
+    "backend/media_dropzones/",
+    "frontend/.dart_tool/",
+    "frontend/build/",
+    "tmp/",
+)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run repo quality gates against changed files.",
+    )
+    parser.add_argument(
+        "--base",
+        default="HEAD",
+        help="Base git ref or SHA. Defaults to HEAD for local working tree checks.",
+    )
+    parser.add_argument(
+        "--head",
+        default=None,
+        help="Optional head git ref or SHA. When omitted, compares the working tree to --base.",
+    )
+    return parser.parse_args()
+
+
+def git_stdout(*args: str) -> list[str]:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def changed_files(base: str, head: str | None) -> list[str]:
+    files: set[str] = set()
+    if head:
+        if base == NULL_SHA:
+            files.update(
+                git_stdout(
+                    "diff-tree",
+                    "--root",
+                    "--no-commit-id",
+                    "--name-only",
+                    "-r",
+                    head,
+                )
+            )
+        else:
+            files.update(git_stdout("diff", "--name-only", "--diff-filter=ACMRT", f"{base}..{head}"))
+        return sorted(files)
+
+    files.update(git_stdout("diff", "--name-only", "--diff-filter=ACMRT", base, "--"))
+    files.update(
+        path for path in git_stdout("ls-files", "--others", "--exclude-standard") if include_untracked_file(path)
+    )
+    return sorted(files)
+
+
+def existing_files(paths: list[str]) -> list[str]:
+    return [path for path in paths if (REPO_ROOT / path).is_file()]
+
+
+def include_untracked_file(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    return not normalized.startswith(UNTRACKED_SKIP_PREFIXES)
+
+
+def select_files(paths: list[str], extensions: set[str]) -> list[str]:
+    return [path for path in paths if Path(path).suffix.lower() in extensions]
+
+
+def is_secret_scan_file(path: str) -> bool:
+    file_path = Path(path)
+    name = file_path.name.lower()
+    if name in SECRET_SCAN_FILENAMES or name.startswith(".env"):
+        return True
+    return any(suffix.lower() in SECRET_SCAN_EXTENSIONS for suffix in file_path.suffixes)
+
+
+def run_check(label: str, command: list[str], files: list[str]) -> None:
+    if not files:
+        print(f"[quality] Skipping {label}: no matching files changed.")
+        return
+
+    full_command = [*command, *files]
+    print(f"[quality] Running {label}")
+    print(f"[quality] $ {shlex.join(full_command)}")
+    subprocess.run(full_command, cwd=REPO_ROOT, check=True)
+
+
+def _normalized_secret_baseline(path: Path) -> object:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        payload.pop("generated_at", None)
+        if "results" in payload and isinstance(payload["results"], dict):
+            normalized_results = {}
+            for filename, secrets in payload["results"].items():
+                norm_filename = filename.replace("\\", "/")
+                norm_secrets = []
+                for secret in secrets:
+                    if isinstance(secret, dict):
+                        item = dict(secret)
+                        if "filename" in item and isinstance(item["filename"], str):
+                            item["filename"] = item["filename"].replace("\\", "/")
+                        norm_secrets.append(item)
+                    else:
+                        norm_secrets.append(secret)
+                normalized_results[norm_filename] = norm_secrets
+            payload["results"] = normalized_results
+    return payload
+
+
+def _secret_result_fingerprint(path: Path) -> list[tuple[str, str, str]]:
+    """Stable identity of baseline secrets, ignoring line numbers and plugin metadata."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    results = payload.get("results") if isinstance(payload, dict) else {}
+    if not isinstance(results, dict):
+        return []
+    fingerprints: list[tuple[str, str, str]] = []
+    for filename, secrets in results.items():
+        norm_filename = str(filename).replace("\\", "/")
+        if not isinstance(secrets, list):
+            continue
+        for secret in secrets:
+            if not isinstance(secret, dict):
+                continue
+            fingerprints.append(
+                (
+                    norm_filename,
+                    str(secret.get("type") or ""),
+                    str(secret.get("hashed_secret") or ""),
+                )
+            )
+    return sorted(fingerprints)
+
+
+def run_secret_check(command: list[str], files: list[str]) -> None:
+    if not files:
+        print("[quality] Skipping Secret scan: no matching files changed.")
+        return
+
+    full_command = [*command, *files]
+    print("[quality] Running Secret scan")
+    print(f"[quality] $ {shlex.join(full_command)}")
+
+    baseline_before = None
+    baseline_before_fingerprint = None
+    baseline_bytes = None
+    if SECRET_BASELINE_PATH.is_file():
+        baseline_bytes = SECRET_BASELINE_PATH.read_bytes()
+        baseline_before = _normalized_secret_baseline(SECRET_BASELINE_PATH)
+        baseline_before_fingerprint = _secret_result_fingerprint(SECRET_BASELINE_PATH)
+
+    result = subprocess.run(full_command, cwd=REPO_ROOT, check=False)
+    if result.returncode == 0:
+        return
+
+    if result.returncode == 3 and baseline_before is not None and SECRET_BASELINE_PATH.is_file():
+        baseline_after = _normalized_secret_baseline(SECRET_BASELINE_PATH)
+        if baseline_after == baseline_before:
+            SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
+            print("[quality] Secret baseline changed only by generated_at; restored original baseline.")
+            return
+        baseline_after_fingerprint = _secret_result_fingerprint(SECRET_BASELINE_PATH)
+        if baseline_after_fingerprint == baseline_before_fingerprint:
+            SECRET_BASELINE_PATH.write_bytes(baseline_bytes or b"")
+            print("[quality] Secret baseline changed only by metadata/line numbers; restored original baseline.")
+            return
+
+    raise subprocess.CalledProcessError(result.returncode, full_command)
+
+
+def ensure_javascript_dependencies() -> None:
+    if NPM_EXECUTABLE is None:
+        raise RuntimeError("npm is required to run JavaScript quality gates.")
+    if (REPO_ROOT / "package-lock.json").is_file():
+        command = [NPM_EXECUTABLE, "ci", "--include=dev"]
+    else:
+        command = [NPM_EXECUTABLE, "install", "--include=dev"]
+    print("[quality] Installing JavaScript quality dependencies")
+    print(f"[quality] $ {shlex.join(command)}")
+    subprocess.run(command, cwd=REPO_ROOT, check=True)
+
+
+def main() -> int:
+    args = parse_args()
+    files = existing_files(changed_files(args.base, args.head))
+
+    if not files:
+        print("[quality] No changed tracked files detected.")
+        return 0
+
+    python_files = select_files(files, PYTHON_EXTENSIONS)
+    javascript_files = select_files(files, JAVASCRIPT_EXTENSIONS)
+    secret_scan_files = [path for path in files if is_secret_scan_file(path)]
+    if javascript_files:
+        ensure_javascript_dependencies()
+
+    run_check(
+        "Python format check",
+        [sys.executable, "-m", "black", "--check"],
+        python_files,
+    )
+    run_check(
+        "Python lint",
+        [sys.executable, "-m", "ruff", "check", "--no-cache"],
+        python_files,
+    )
+    run_check(
+        "JavaScript format check",
+        [NPM_EXECUTABLE or "npm", "exec", "--", "prettier", "--check"],
+        javascript_files,
+    )
+    run_check(
+        "JavaScript lint",
+        [NPM_EXECUTABLE or "npm", "exec", "--", "eslint", "--max-warnings=0"],
+        javascript_files,
+    )
+    secret_scan_command = [
+        sys.executable,
+        "-m",
+        "detect_secrets.pre_commit_hook",
+        "--no-verify",
+    ]
+    if SECRET_BASELINE_PATH.is_file():
+        secret_scan_command.extend(["--baseline", str(SECRET_BASELINE_PATH.relative_to(REPO_ROOT))])
+    run_secret_check(secret_scan_command, secret_scan_files)
+
+    print("[quality] All configured quality gates passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

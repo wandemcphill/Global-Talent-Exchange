@@ -1,0 +1,158 @@
+{
+  "schema_version": "legendary-enrichment-v1",
+  "generated_at": "2026-09-17T20:30:00Z",
+  "patches": [
+    {
+      "source_id": "wikidata:Q12897",
+      "country_code": "BRA",
+      "date_of_birth": "1940-10-23",
+      "historical_height_cm": 173,
+      "position_candidates": ["forward", "midfielder"],
+      "preferred_foot": "both",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q12897", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "Transfermarkt", "uri": "https://www.transfermarkt.com/pele/profil/spieler/17121", "claim_types": ["preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Source-native football facts only. Preferred foot is supported by Transfermarkt. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
+    },
+    {
+      "source_id": "wikidata:Q17515",
+      "country_code": "ARG",
+      "date_of_birth": "1960-10-30",
+      "historical_height_cm": 165,
+      "position_candidates": ["midfielder", "forward"],
+      "preferred_foot": "left",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q17515", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FIFA", "uri": "https://www.fifa.com/en/articles/dribbles-diego-maradona-1982-1986-1990-1994", "claim_types": ["preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Source-native football facts only. Preferred foot is supported by FIFA's description of Maradona as a left-footed player. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
+    },
+    {
+      "source_id": "wikidata:Q17163",
+      "country_code": "NLD",
+      "date_of_birth": "1947-04-25",
+      "historical_height_cm": 178,
+      "position_candidates": ["midfielder", "forward"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q17163", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FIFA", "uri": "https://collect.fifa.com/marketplace/ac-sp-ch", "claim_types": ["preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Source-native football facts only. Preferred foot is supported by FIFA's account of Cruyff scoring the 1974 Brazil goal with a right-footed strike. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
+    },
+    {
+      "source_id": "wikidata:Q4457",
+      "date_of_birth": "1945-09-11",
+      "historical_height_cm": 181,
+      "position_candidates": ["defender", "sweeper"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q4457", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "Transfermarkt", "uri": "https://www.transfermarkt.de/franz-beckenbauer/profil/spieler/72347", "claim_types": ["preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Wikidata identifies West Germany as country for sport. GTEX country-code mapping is deliberately deferred. Preferred foot is supported by Transfermarkt. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred", "country_mapping": "deferred"}
+    },
+    {
+      "source_id": "wikidata:Q1835",
+      "country_code": "FRA",
+      "date_of_birth": "1972-06-23",
+      "historical_height_cm": 185,
+      "position_candidates": ["midfielder", "attacking midfielder"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q1835", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "FFF", "uri": "https://www.fff.fr/equipe-nationale/joueur/9772-zidane-zinedine/fiche.html", "claim_types": ["preferred_foot", "position", "date_of_birth", "height"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Preferred foot is supported by the French Football Federation. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
+    },
+    {
+      "source_id": "wikidata:Q483027",
+      "country_code": "ITA",
+      "date_of_birth": "1968-06-26",
+      "historical_height_cm": 186,
+      "position_candidates": ["centre-back", "defender"],
+      "preferred_foot": "both",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q483027", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "Transfermarkt", "uri": "https://www.transfermarkt.com/paolo-maldini/profil/spieler/5803", "claim_types": ["preferred_foot"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Preferred foot is supported by Transfermarkt. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
+    },
+    {
+      "source_id": "wikidata:Q1255625",
+      "country_code": "CMR",
+      "date_of_birth": "1981-03-10",
+      "historical_height_cm": 180,
+      "position_candidates": ["forward"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q1255625", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "Premier League", "uri": "https://www.premierleague.com/en/players/8438/samuel-eto", "claim_types": ["preferred_foot", "position", "nationality", "date_of_birth"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Preferred foot is supported by the Premier League player profile. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
+    },
+    {
+      "source_id": "wikidata:Q605817",
+      "country_code": "NGA",
+      "date_of_birth": "1973-08-14",
+      "historical_height_cm": 175,
+      "position_candidates": ["attacking midfielder"],
+      "preferred_foot": "right",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q605817", "claim_types": ["country_for_sport", "date_of_birth", "height", "position_played"]},
+        {"provider": "Soccerzz", "uri": "https://www.soccerzz.com/player/jay-jay-okocha/1290?epoca_id=136", "claim_types": ["preferred_foot", "position", "date_of_birth", "nationality"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Preferred foot is supported by Soccerzz. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
+    },
+    {
+      "source_id": "wikidata:Q482931",
+      "country_code": "HUN",
+      "date_of_birth": "1927-04-01",
+      "historical_height_cm": 172,
+      "position_candidates": ["forward"],
+      "preferred_foot": "left",
+      "football_evidence": [
+        {"provider": "Wikidata", "uri": "https://www.wikidata.org/wiki/Q482931", "claim_types": ["country_of_citizenship", "date_of_birth", "height", "position_played"]},
+        {"provider": "Real Madrid", "uri": "https://www.realmadrid.com/en-US/the-club/history/football-legends/ferenc-puskas-biro", "claim_types": ["preferred_foot", "position", "date_of_birth"]}
+      ],
+      "editorial_status": "enriched",
+      "rights_status": "unknown",
+      "catalogue_status": "staged",
+      "source_notes": "Preferred foot is supported by the Real Madrid official legend profile. GTEX position mapping, era, traits, profiles, editorial approval, rights approval and fictional portrait configuration remain deferred.",
+      "metadata": {"research_batch": "2026-09-17-core-legends-001", "position_mapping": "deferred"}
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+from datetime import date
+
+from enum import StrEnum
+
+from sqlalchemy import Date, Enum, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.common.enums.club_identity_visibility import ClubIdentityVisibility
+from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+
+class ClubType(StrEnum):
+    ACADEMY = "academy"
+    PROFESSIONAL = "professional"
+    COMMUNITY = "community"
+    STREET_TEAM = "street_team"
+
+
+class ClubLifecycleStatus(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED_GENERATED = "archived_generated"
+
+
+class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "club_profiles"
+    __table_args__ = (
+        UniqueConstraint("slug", name="uq_club_profiles_slug"),
+    )
+
+    owner_user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    club_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    short_name: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    club_type: Mapped[ClubType] = mapped_column(
+        Enum(
+            ClubType,
+            name="club_type",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=ClubType.COMMUNITY,
+        server_default=ClubType.COMMUNITY.value,
+    )
+    lifecycle_status: Mapped[ClubLifecycleStatus] = mapped_column(
+        Enum(
+            ClubLifecycleStatus,
+            name="club_lifecycle_status",
+            native_enum=False,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        nullable=False,
+        default=ClubLifecycleStatus.ACTIVE,
+        server_default=ClubLifecycleStatus.ACTIVE.value,
+        index=True,
+    )
+    slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    crest_asset_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    primary_color: Mapped[str] = mapped_column(String(16), nullable=False)
+    secondary_color: Mapped[str] = mapped_column(String(16), nullable=False)
+    accent_color: Mapped[str] = mapped_column(String(16), nullable=False)
+    home_venue_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    country_code: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    region_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    city_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    visibility: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default=ClubIdentityVisibility.PUBLIC.value,
+        server_default=ClubIdentityVisibility.PUBLIC.value,
+    )
+    founded_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+    @property
+    def state_name(self) -> str | None:
+        return self.region_name
+
+    @property
+    def club_address(self) -> str:
+        return ", ".join(
+            item
+            for item in (
+                self.country_code,
+                self.region_name,
+                self.city_name,
+            )
+            if item
+        )

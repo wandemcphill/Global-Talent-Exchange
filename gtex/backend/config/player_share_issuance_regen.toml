@@ -1,0 +1,87 @@
+# Regen issuance policy for GTEX National Talent Pool newgens.
+# Mirrors player_share_issuance.toml but admits is_real_player=false regens.
+# It still requires country + club/competition context, so Phase 4 enrichment
+# (National Talent Pool competition + Free Agent club + country_id backfill)
+# must run before regens become eligible. Reuses the same pricing, liquidity,
+# idempotency, and launch-status semantics as the real-player policy — no
+# parallel market system.
+
+[targets]
+searchable_universe_min = 5000
+active_buyable_markets_min = 5000
+one_active_market_per_player = true
+manual_one_by_one_issuance_allowed = false
+
+[eligibility]
+require_real_player = false
+require_tradable = true
+require_canonical_display_name = true
+require_country = true
+require_club_or_competition_context = true
+allow_fallback_valuation = true
+block_when_integrity_hold = true
+block_metadata_flags = [
+  "integrity_hold",
+  "sanctions",
+  "manual_block",
+  "manual_review_required",
+  "player_share_block",
+  "share_market_blocked",
+]
+
+[idempotency]
+skip_active_market = true
+keep_paused_market_paused = true
+skip_closed_market_with_circulation = true
+emit_counts = [
+  "created",
+  "updated",
+  "skipped_existing",
+  "skipped_blocked",
+  "failed",
+]
+
+[cohorts]
+recommended_min_batch_size = 250
+recommended_max_batch_size = 500
+default_limit = 250
+supported_types = [
+  "all",
+  "import_batch",
+  "league",
+  "country",
+  "supply_tier",
+  "liquidity_band",
+]
+
+[launch_status]
+default = "active"
+low_confidence = "paused"
+blocked = "blocked"
+# Regens have no real-world identity confidence; they carry no
+# identity_confidence_score, so they launch active by default.
+low_confidence_threshold = 0.55
+
+[liquidity]
+platform_minimum_coin = "25.0000"
+core_plus_preferred_minimum_coin = "50.0000"
+core_plus_preferred_maximum_coin = "150.0000"
+
+[pricing]
+use_reference_value_path = true
+launch_floor_coin = "0.0500"
+launch_ceiling_coin = "1000.0000"
+allow_manual_price_edits = false
+
+# Regens map only into the developmental tiers. _normalize_tier falls back to
+# "discovery" when a player has no supply tier; the "prospect" entry is kept so
+# regens tagged young/youth/prospect resolve cleanly.
+[tiers.prospect]
+total_shares = 600
+initial_circulating_cap = 80
+initial_mm_inventory_target = 80
+
+[tiers.discovery]
+total_shares = 300
+initial_circulating_cap = 40
+initial_mm_inventory_target = 50

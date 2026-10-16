@@ -1,0 +1,463 @@
+services:
+  - name: gtex-cache
+    type: keyvalue
+    region: frankfurt
+    plan: starter
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+    ipAllowList: []
+
+  - name: gtex-api
+    type: web
+    runtime: python
+    region: frankfurt
+    plan: standard
+    buildCommand: "pip install -r backend/requirements.txt"
+    preDeployCommand: "PGOPTIONS='-c default_transaction_read_only=off' bash -lc 'source ops/render/production-preflight.sh && cd backend && alembic -c migrations/alembic.ini upgrade head'"
+    startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-1} --timeout 180 --graceful-timeout 120"
+    envVars:
+      # Two workers so a slow request cannot monopolize the whole API.  Each
+      # worker builds a write engine and a read engine, so the pooler budget is
+      # pool_size x 2 engines x 2 workers = 16 base + max_overflow x 2 x 2 = 8,
+      # i.e. 24 connections at full stretch, under the 30-connection Supabase
+      # session-pooler limit.  Raise these together or not at all.
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: GTE_DB_POOL_SIZE
+        value: "4"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "2"
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      - key: GTE_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_RUN_MIGRATION_CHECK
+        value: "true"
+      - key: GTE_INGESTION_PROVIDER
+        value: sportmonks
+      - key: GTE_CORS_ALLOW_ORIGINS
+        value: https://gtex-web-tw6c.onrender.com
+      - key: GTE_CORS_ALLOW_ORIGIN_REGEX
+        value: ""
+      - key: GTE_TRUSTED_PROXY_HOPS
+        value: "1"
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+      - key: GTE_KORAPAY_PUBLIC_KEY
+        sync: false
+      - key: GTE_KORAPAY_SECRET_KEY
+        sync: false
+      - key: GTE_KORAPAY_ENCRYPTION_KEY
+        sync: false
+      - key: GTE_KORAPAY_WEBHOOK_SECRET
+        sync: false
+      - key: GTE_KORAPAY_NOTIFICATION_URL
+        value: https://gtex-api-opea.onrender.com/integrations/payments/korapay/webhook
+      - key: GTE_ENABLE_PAYSTACK
+        value: "true"
+      - key: GTE_PAYSTACK_SECRET_KEY
+        sync: false
+      - key: GTE_PAYSTACK_WEBHOOK_SECRET
+        sync: false
+      - key: GTE_PAYSTACK_CALLBACK_URL
+        sync: false
+      - key: TREASURY_BANK_NAME
+        sync: false
+      - key: TREASURY_ACCOUNT_NAME
+        sync: false
+      - key: TREASURY_ACCOUNT_NUMBER
+        sync: false
+      - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "false"
+      - key: GTE_TASK_QUEUE_ENABLED
+        value: "true"
+      # Regen portraits are served from Cloudinary, not from this host's disk
+      # (Render's filesystem is ephemeral and the 8.5k face bank PNGs are not in
+      # the repo -- only the manifest is).  The uploaded public_ids mirror the
+      # /generated-media route, so this base makes _generated_media_url() emit
+      # working Cloudinary URLs.  Without it the base falls back to
+      # http://127.0.0.1:8000 and every portrait URL is persisted as localhost.
+      - key: GTE_GENERATED_MEDIA_BASE_URL
+        value: https://res.cloudinary.com/dvxiniqew/image/upload
+      - key: GTE_MARKET_RECORDS_CACHE_TTL_SECONDS
+        value: "300"
+      - key: GTE_KAFKA_BROKERS
+        value: ""
+
+  - name: gtex-web
+    type: web
+    runtime: static
+    buildCommand: "bash ops/render/build-frontend.sh"
+    staticPublishPath: "frontend/build/web"
+    envVars:
+      - key: GTE_API_BASE_URL
+        value: https://gtex-api-opea.onrender.com
+      - key: GTE_BACKEND_MODE
+        value: live
+
+  - name: gtex-rq-worker
+    type: worker
+    runtime: python
+    region: frankfurt
+    plan: starter
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "cd backend && python -m app.workers.rq_worker_main"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      - key: GTE_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+      - key: GTE_RUN_MIGRATION_CHECK
+        value: "true"
+      - key: GTE_INGESTION_PROVIDER
+        value: sportmonks
+      - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "false"
+      - key: GTE_TASK_QUEUE_ENABLED
+        value: "true"
+
+  - name: gtex-simulation-worker
+    type: worker
+    runtime: python
+    region: frankfurt
+    plan: starter
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "cd backend && python -m app.backbone.simulation_worker_main"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      - key: GTE_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+      - key: GTE_RUN_MIGRATION_CHECK
+        value: "true"
+      - key: GTE_INGESTION_PROVIDER
+        value: sportmonks
+      - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "false"
+
+  - name: gtex-outbox-relay
+    type: worker
+    runtime: python
+    region: frankfurt
+    plan: starter
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "cd backend && python -m app.backbone.outbox_relay_main"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      - key: GTE_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+      - key: GTE_RUN_MIGRATION_CHECK
+        value: "true"
+      - key: GTE_INGESTION_PROVIDER
+        value: sportmonks
+      - key: GTE_OUTBOX_RELAY_ENABLED
+        value: "true"
+
+  - name: gtex-player-ingestion-worker
+    type: worker
+    runtime: node
+    region: frankfurt
+    plan: starter
+    buildCommand: "cd services/player-ingestion && npm ci"
+    startCommand: "cd services/player-ingestion && npm run migrate && npm start"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_ENABLED
+        value: "true"
+      - key: GTE_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: gtex-cache
+          property: connectionString
+      - key: DATABASE_SSL
+        value: "true"
+      - key: SPORTMONKS_BASE_URL
+        value: https://api.sportmonks.com/v3/football
+      - key: SPORTMONKS_API_TOKEN
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: AUDIO_COMMENTARY_ENABLED
+        value: "false"
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+      - key: CLOUDINARY_PLAYER_FOLDER
+        value: gtex/players
+      - key: WIKIMEDIA_FALLBACK_ENABLED
+        value: "true"
+      - key: WIKIMEDIA_RIGHTS_CLEARED_DEFAULT
+        value: "false"
+      - key: GTEX_REGENS_PER_LEAGUE
+        value: "3"
+      - key: INGESTION_CRON
+        value: "0 */6 * * *"
+      - key: INGESTION_RUN_ON_START
+        value: "true"
+      - key: INGESTION_WORKER_CONCURRENCY
+        value: "4"
+      - key: INGESTION_LOCK_KEY
+        value: ingestion_lock
+      - key: INGESTION_LOCK_TTL_SECONDS
+        value: "3600"
+      - key: INGESTION_RUN_TIMEOUT_SECONDS
+        value: "3300"
+      - key: HEALTH_SERVER_ENABLED
+        value: "true"
+      - key: HEALTH_PORT
+        value: "3000"
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=512"
+      - key: SENTRY_DSN
+        sync: false
+      - key: SEASON_ENGINE_ENABLED
+        value: "false"
+      - key: SEASON_CRON
+        value: "15 0 * * *"
+      - key: SEASON_FIXTURES_PER_DAY
+        value: "1"
+      - key: SEASON_REGENS_PER_SEASON
+        value: "12"
+      - key: SEASON_TRANSFERS_ENABLED
+        value: "false"
+      - key: SEASON_TRANSFER_LIMIT_PER_TICK
+        value: "1"
+      - key: SEASON_TRANSFER_WINDOWS
+        value: "2026-01-01:2026-01-31,2026-08-01:2026-08-31"
+
+  - name: gtex-realplayer-ingest
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 3 * * *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-realplayer-ingest.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      # Admin user id that ingestion-time share-market issuance is attributed
+      # to.  Unset means new players are ingested without a market and will not
+      # appear in the market listing until the issuance job runs.
+      - key: GTE_INGESTION_ISSUANCE_ACTOR_USER_ID
+        sync: false
+      - key: SPORTMONKS_API_TOKEN
+        sync: false
+      - key: SPORTMONKS_BASE_URL
+        value: https://api.sportmonks.com/v3/football
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_INGESTION_PROVIDER
+        value: sportmonks
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
+  - name: gtex-sofifa-import
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 6 1 * *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-sofifa-import.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: CSV_URL
+        sync: false
+      - key: IMAGES
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
+  - name: gtex-appreciation-reprice
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 2 * * 1"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-reprice-appreciation.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
+  # Scheduled valuation rebuild. This is what makes matchday performance reach a
+  # holder: performances persist at match settlement and form derives from them,
+  # but the published valuation only moves when this job runs. Runs the same
+  # IngestionValueEngineBridge.run() as the operator rebuild endpoint - not a
+  # second pipeline. Idempotent, so a retried run rewrites rather than duplicates.
+  # Daily at 04:00 UTC, an hour after the real-player ingest at 03:00 so fresh
+  # provider data is already in place when valuations recompute.
+  - name: gtex-value-snapshots
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 4 * * *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-value-snapshots.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
+  - name: gtex-regen-rebuild
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 4 1 * *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-regen-rebuild.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REGEN_TARGET
+        value: "12000"
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
+  - name: gtex-squad-tier-backfill
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 5 1 * *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-squad-tier-backfill.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
+  # Manual-trigger job: populates the regen world (canonical countries, the
+  # national regen pool for every enabled country, and an active regen season).
+  # Scheduled far out because it is meant to be run on demand from the Render
+  # dashboard; both steps are idempotent.
+  - name: gtex-regen-world-bootstrap
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 3 1 1 *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-regen-world-bootstrap.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SEEDS_PER_COUNTRY
+        value: "70"
+      - key: PRESEED_BATCH
+        value: "global_u21_batch"
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false
+
+  # Manual-trigger job: issues share markets for eligible tradable players that
+  # do not have one.  Defaults to a dry run; set ISSUANCE_ACTIVATE=true to
+  # actually issue.  Idempotent, so it is safe to re-run.
+  - name: gtex-player-share-issuance
+    type: cron
+    runtime: python
+    region: frankfurt
+    plan: starter
+    schedule: "0 2 1 1 *"
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "bash ops/render/run-player-share-issuance.sh"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      # Admin/super-admin user id issuance is attributed to in the audit trail.
+      - key: ISSUANCE_ACTOR_USER_ID
+        sync: false
+      - key: ISSUANCE_ACTIVATE
+        value: "false"
+      - key: ISSUANCE_LIMIT
+        value: "50000"
+      - key: GTE_APP_ENV
+        value: production
+      - key: GTE_AUTH_SECRET
+        sync: false
+      - key: GTE_MEDIA_SIGNING_SECRET
+        sync: false

@@ -1,0 +1,40 @@
+from app.manager_market.seed_catalog import CATALOG_VERSION, build_seed_catalog
+
+
+def test_seed_catalog_includes_tunde_oni() -> None:
+    catalog = build_seed_catalog()
+    tunde = next(item for item in catalog if item["name"] == "Tunde Oni")
+
+    assert CATALOG_VERSION >= 8
+    assert tunde["mentality"] == "balanced"
+    assert tunde["rarity"] == "elite_active"
+    assert tunde["supply_total"] == 1
+    assert tunde["club_associations"] == ["Nigeria"]
+    assert set(tunde["tactics"]) == {
+        "counter_attack",
+        "technical_build_up",
+        "set_piece_focus",
+        "youth_development_system",
+    }
+    assert set(tunde["traits"]) == {
+        "develops_young_players",
+        "tactical_flexibility",
+        "technical_coaching",
+        "quick_substitution",
+    }
+    assert "3-4-3" in tunde["philosophy"]
+    assert "4-1-2-1-2 diamond" in tunde["philosophy"]
+    assert "3-4-1-2" in tunde["philosophy"]
+    assert "great motivator" in tunde["philosophy"]
+    assert "play through the middle" in tunde["philosophy"]
+    assert "short passing" in tunde["philosophy"]
+
+
+def test_seed_catalog_applies_locked_scarcity_rules() -> None:
+    catalog = build_seed_catalog()
+    entries = {item["name"]: item for item in catalog}
+
+    assert entries["Sir Alex Ferguson"]["supply_total"] == 1
+    assert entries["Arsene Wenger"]["supply_total"] == 1
+    assert entries["Pep Guardiola"]["supply_total"] == 1
+    assert entries["Tunde Oni"]["supply_total"] == 1

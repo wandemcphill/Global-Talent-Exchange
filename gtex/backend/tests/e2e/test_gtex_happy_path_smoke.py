@@ -1,0 +1,259 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from tempfile import mkdtemp
+from datetime import date, timedelta
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.admin_godmode.runtime_paths import admin_godmode_state_path
+from app.auth.dependencies import get_current_user
+from app.club_identity.models.reputation import ClubReputationProfile, ReputationEventLog, ReputationSnapshot
+from app.competition_engine.match_dispatcher import MatchDispatcher
+from app.competition_engine.queue_contracts import InMemoryQueuePublisher
+from app.core.events import InMemoryEventPublisher
+from app.db import get_session
+from app.leagues.models import LeagueClub
+from app.leagues.repository import InMemoryLeagueEventRepository
+from app.leagues.service import LeagueSeasonLifecycleService
+from app.match_engine.services import LeagueFixtureExecutionService, LocalMatchExecutionWorker
+from app.models.base import Base
+from app.models.club_branding_asset import ClubBrandingAsset
+from app.models.club_dynasty_milestone import ClubDynastyMilestone
+from app.models.club_dynasty_progress import ClubDynastyProgress
+from app.models.club_identity_theme import ClubIdentityTheme
+from app.models.club_jersey_design import ClubJerseyDesign
+from app.models.club_profile import ClubProfile
+from app.models.club_showcase_snapshot import ClubShowcaseSnapshot
+from app.models.club_trophy import ClubTrophy
+from app.models.club_trophy_cabinet import ClubTrophyCabinet
+from app.models.competition import Competition
+from app.models.competition_entry import CompetitionEntry
+from app.models.competition_invite import CompetitionInvite
+from app.models.competition_participant import CompetitionParticipant
+from app.models.competition_prize_rule import CompetitionPrizeRule
+from app.models.competition_reward_pool import CompetitionRewardPool
+from app.models.competition_rule_set import CompetitionRuleSet
+from app.models.competition_seed_rule import CompetitionSeedRule
+from app.models.competition_visibility_rule import CompetitionVisibilityRule
+from app.models.competition_wallet_ledger import CompetitionWalletLedger
+from app.models.user import KycStatus, User, UserRole
+from app.notifications.service import NotificationCenter
+from app.replay_archive.persistence import InMemoryReplayArchiveRepository
+from app.replay_archive.policy import SpectatorVisibilityPolicyService
+from app.replay_archive.service import ReplayArchiveService
+from app.routes.clubs import router as clubs_router
+from app.routes.competitions import router as competitions_router
+from app.services.competition_orchestrator import CompetitionOrchestrator, get_competition_orchestrator
+
+
+def test_gtex_happy_path_smoke() -> None:
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(
+        engine,
+        tables=[
+            User.__table__,
+            ClubProfile.__table__,
+            ClubReputationProfile.__table__,
+            ReputationEventLog.__table__,
+            ReputationSnapshot.__table__,
+            ClubTrophyCabinet.__table__,
+            ClubTrophy.__table__,
+            ClubDynastyProgress.__table__,
+            ClubDynastyMilestone.__table__,
+            ClubBrandingAsset.__table__,
+            ClubJerseyDesign.__table__,
+            ClubIdentityTheme.__table__,
+            ClubShowcaseSnapshot.__table__,
+            Competition.__table__,
+            CompetitionRuleSet.__table__,
+            CompetitionPrizeRule.__table__,
+            CompetitionRewardPool.__table__,
+            CompetitionSeedRule.__table__,
+            CompetitionVisibilityRule.__table__,
+            CompetitionInvite.__table__,
+            CompetitionEntry.__table__,
+            CompetitionParticipant.__table__,
+            CompetitionWalletLedger.__table__,
+        ],
+    )
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    session: Session = SessionLocal()
+    session.add(
+        User(
+            id="user-owner",
+            email="owner@example.com",
+            username="owner",
+            display_name="Owner",
+            password_hash="x",
+            role=UserRole.USER,
+            kyc_status=KycStatus.FULLY_VERIFIED,
+        ),
+        User(
+            id="user-admin",
+            email="admin@example.com",
+            username="admin",
+            display_name="Admin",
+            password_hash="x",
+            role=UserRole.SUPER_ADMIN,
+            kyc_status=KycStatus.FULLY_VERIFIED,
+        ),
+        User(
+            id="user-away",
+            email="away@example.com",
+            username="away",
+            display_name="Away",
+            password_hash="x",
+            role=UserRole.USER,
+            kyc_status=KycStatus.FULLY_VERIFIED,
+        ),
+    )
+    session.commit()
+
+    app = FastAPI()
+    config_root = Path(mkdtemp(prefix="gtex-happy-path-smoke-"))
+    state_path = admin_godmode_state_path(config_root)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "roles": {
+                    "default_admin_role": "scoped_admin",
+                    "available_roles": {
+                        "god_mode": [
+                            "manage_admin_roles",
+                            "manage_commissions",
+                            "manage_payment_rails",
+                            "manage_withdrawals",
+                            "manage_treasury_withdrawals",
+                            "manage_liquidity_desk",
+                            "view_audit_log",
+                            "pause_payments",
+                            "view_integrity_controls",
+                            "manage_competitions",
+                        ],
+                        "scoped_admin": [],
+                    },
+                    "assignments": [],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    app.state.settings = type("Settings", (), {"config_root": config_root})()
+    app.include_router(clubs_router)
+    app.include_router(competitions_router)
+    orchestrator = CompetitionOrchestrator(session)
+    app.dependency_overrides[get_competition_orchestrator] = lambda: orchestrator
+    app.dependency_overrides[get_session] = lambda: session
+    current_user_id = {"value": "user-owner"}
+    app.dependency_overrides[get_current_user] = lambda: session.get(User, current_user_id["value"])
+
+    with TestClient(app) as client:
+        home = client.post(
+            "/api/clubs",
+            json={
+                "club_name": "Metro FC",
+                "short_name": "MFC",
+                "slug": "metro-fc",
+                "primary_color": "#112233",
+                "secondary_color": "#445566",
+                "accent_color": "#ddeeff",
+                "visibility": "public",
+            },
+        )
+        away = client.post(
+            "/api/clubs",
+            json={
+                "club_name": "River FC",
+                "short_name": "RFC",
+                "slug": "river-fc",
+                "primary_color": "#221144",
+                "secondary_color": "#ffffff",
+                "accent_color": "#ff9900",
+                "visibility": "public",
+            },
+        )
+        assert home.status_code == 201, home.text
+        assert away.status_code == 201, away.text
+        home_id = home.json()["profile"]["id"]
+        away_id = away.json()["profile"]["id"]
+
+        created = client.post(
+            "/api/competitions",
+            json={
+                "name": "GTEX League Smoke",
+                "format": "league",
+                "visibility": "public",
+                "entry_fee": "0.00",
+                "currency": "credit",
+                "capacity": 2,
+                "creator_id": home_id,
+                "creator_name": "Metro FC",
+                "payout_structure": [{"place": 1, "percent": "1.00"}],
+            },
+        )
+        assert created.status_code == 201, created.text
+        competition_id = created.json()["id"]
+
+        current_user_id["value"] = "user-admin"
+        published = client.post(f"/api/competitions/{competition_id}/publish", json={"open_for_join": True})
+        assert published.status_code == 200, published.text
+
+        current_user_id["value"] = "user-away"
+        joined = client.post(
+            f"/api/competitions/{competition_id}/join",
+            json={"user_id": "user-away", "user_name": "River FC"},
+        )
+        assert joined.status_code == 200, joined.text
+
+    repository = InMemoryLeagueEventRepository()
+    league_service = LeagueSeasonLifecycleService(repository=repository)
+    event_publisher = InMemoryEventPublisher()
+    notifications = NotificationCenter()
+    replay_archive = ReplayArchiveService(
+        spectator_policy=SpectatorVisibilityPolicyService(),
+        repository=InMemoryReplayArchiveRepository(),
+    )
+    event_publisher.subscribe(notifications.handle_event)
+    event_publisher.subscribe(replay_archive.handle_event)
+    queue_publisher = InMemoryQueuePublisher(event_publisher=event_publisher)
+    dispatcher = MatchDispatcher(queue_publisher=queue_publisher)
+    worker = LocalMatchExecutionWorker(
+        dispatcher=dispatcher, event_publisher=event_publisher, league_service=league_service
+    )
+    event_publisher.subscribe(worker.handle_event)
+    execution = LeagueFixtureExecutionService(
+        dispatcher=dispatcher, event_publisher=event_publisher, execution_worker=worker
+    )
+
+    clubs = (
+        LeagueClub(club_id=home_id, club_name="Metro FC", strength_rating=82),
+        LeagueClub(club_id=away_id, club_name="River FC", strength_rating=79),
+    )
+    season = league_service.register_season(
+        season_id=competition_id, buy_in_tier=25, season_start=date(2026, 3, 12), clubs=clubs
+    )
+    fixture = season.fixtures[0]
+    execution.schedule_fixture(
+        season_id=season.season_id,
+        fixture=fixture,
+        clubs=clubs,
+        competition_name="GTEX League Smoke",
+        club_user_ids={home_id: "user-owner", away_id: "user-away"},
+        simulation_seed=1,
+        reference_at=fixture.kickoff_at - timedelta(minutes=9),
+    )
+
+    replay = replay_archive.repository.get_latest_record(f"replay:{fixture.fixture_id}")
+    assert replay is not None
+    assert replay.timeline

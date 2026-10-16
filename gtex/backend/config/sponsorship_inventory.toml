@@ -1,0 +1,28 @@
+default_campaign = "gtex_internal"
+surfaces = [
+  "stadium_board",
+  "tunnel_walkout",
+  "replay_sting",
+  "halftime_overlay",
+  "lineup_strip",
+  "finals_trophy_backdrop",
+]
+
+[[campaigns]]
+code = "gtex_internal"
+name = "GTEX Internal Promo"
+sponsor_name = "GTEX"
+priority = 0
+internal = true
+surfaces = [
+  "stadium_board",
+  "tunnel_walkout",
+  "replay_sting",
+  "halftime_overlay",
+  "lineup_strip",
+  "finals_trophy_backdrop",
+]
+region_codes = []
+competition_ids = []
+stage_names = []
+creative_url = ""

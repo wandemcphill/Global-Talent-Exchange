@@ -1,0 +1,1255 @@
+import 'package:flutter/material.dart';
+import 'package:gte_frontend/app/test_runtime_detector.dart';
+import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
+import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
+
+import '../data/gtex_regen_repository.dart';
+import '../models/gtex_regen_dossier.dart';
+import '../models/gtex_regen_models.dart';
+import '../models/gtex_regen_wire_models.dart';
+import '../widgets/gtex_regen_discovery_boards.dart';
+import '../../../ui_gtex/components/gtex_football_command_pulse.dart';
+import '../widgets/gtex_regen_dossier_panel.dart';
+import '../widgets/gtex_regen_ownership_actions.dart';
+import 'gtex_admin_create_son_screen_v2.dart';
+import 'gtex_create_son_screen_v2.dart';
+
+class GtexRegenWorldScreenV2 extends StatefulWidget {
+  const GtexRegenWorldScreenV2({
+    super.key,
+    required this.repository,
+    this.isAdmin = false,
+    this.onOpenAwards,
+    this.allowFixtureData = false,
+  });
+
+  factory GtexRegenWorldScreenV2.fixture({
+    Key? key,
+    GtexRegenRepository repository = const DemoGtexRegenRepository(),
+    bool isAdmin = false,
+    VoidCallback? onOpenAwards,
+  }) {
+    assertFixtureFactoryAllowed('GtexRegenWorldScreenV2.fixture');
+    return GtexRegenWorldScreenV2(
+      key: key,
+      repository: repository,
+      isAdmin: isAdmin,
+      onOpenAwards: onOpenAwards,
+      allowFixtureData: true,
+    );
+  }
+
+  final GtexRegenRepository repository;
+  final bool isAdmin;
+  final VoidCallback? onOpenAwards;
+  final bool allowFixtureData;
+
+  @override
+  State<GtexRegenWorldScreenV2> createState() => _GtexRegenWorldScreenV2State();
+}
+
+class _GtexRegenWorldScreenV2State extends State<GtexRegenWorldScreenV2> {
+  late Future<GtexRegenWorldData> _future;
+  String _section = 'prospects';
+  String _query = '';
+  String _origin = 'All';
+  GtexRegenProspect? _selected;
+
+  /// The dossier for whichever regen is selected. Held beside the selection
+  /// rather than fetched inside the panel, so changing selection supersedes
+  /// the previous read and a rebuild does not refetch.
+  String? _dossierPlayerId;
+  Future<GtexRegenDossierResult>? _dossierFuture;
+
+  // The three world-level surfaces are fetched only when their lane is first
+  // opened - browsing prospects should not pay for the hall of fame.
+  Future<List<RegenBloodlineChain>>? _bloodlinesFuture;
+  Future<List<RegenRankingEntry>>? _rankingsFuture;
+  Future<List<RegenHallOfFameEntry>>? _hallOfFameFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.repository.loadWorld();
+  }
+
+  void _select(GtexRegenProspect prospect) {
+    setState(() {
+      _selected = prospect;
+      _loadDossierFor(prospect);
+    });
+  }
+
+  /// Starts a dossier read for [prospect] unless one is already in flight for
+  /// that same regen. Must be called from inside a setState.
+  void _loadDossierFor(GtexRegenProspect prospect) {
+    if (_dossierPlayerId == prospect.id && _dossierFuture != null) {
+      return;
+    }
+    _dossierPlayerId = prospect.id;
+    _dossierFuture = widget.repository.loadDossier(prospect.id);
+  }
+
+  void _retryDossier() {
+    final GtexRegenProspect? prospect = _selected;
+    if (prospect == null) {
+      return;
+    }
+    setState(() {
+      _dossierPlayerId = null;
+      _loadDossierFor(prospect);
+    });
+  }
+
+  Future<List<RegenBloodlineChain>> _bloodlines() =>
+      _bloodlinesFuture ??= widget.repository.loadBloodlines();
+
+  Future<List<RegenRankingEntry>> _rankings() =>
+      _rankingsFuture ??= widget.repository.loadRankings();
+
+  Future<List<RegenHallOfFameEntry>> _hallOfFame() =>
+      _hallOfFameFuture ??= widget.repository.loadHallOfFame();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<GtexRegenWorldData>(
+      future: _future,
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<GtexRegenWorldData> snapshot,
+      ) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(
+            child: CircularProgressIndicator(color: GtexColors.purple),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return GtexEmptyState(
+            title: 'Regen world unavailable',
+            message: 'The live regen universe could not be loaded right now.',
+            icon: Icons.warning_amber_rounded,
+            accent: GtexColors.purple,
+            actionLabel: 'Retry',
+            onAction:
+                () => setState(() => _future = widget.repository.loadWorld()),
+          );
+        }
+
+        final GtexRegenWorldData data = snapshot.data!;
+        final List<GtexRegenProspect> rawFiltered = _filteredProspects(
+          data.prospects,
+        );
+        final bool hiddenOriginLane =
+            rawFiltered.isEmpty &&
+            data.prospects.isNotEmpty &&
+            _query.trim().isEmpty &&
+            _origin != 'All';
+        final List<GtexRegenProspect> filtered =
+            hiddenOriginLane ? data.prospects : rawFiltered;
+        if (hiddenOriginLane) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() => _origin = 'All');
+            }
+          });
+        }
+        if (_selected == null && filtered.isNotEmpty) {
+          _selected = filtered.first;
+          _loadDossierFor(filtered.first);
+        }
+
+        return GtexMasterDetailScaffold(
+          title: 'Regen World',
+          subtitle:
+              'A living football universe for regens, awards, contracts, personalities, and Create-a-Son orders.',
+          accent: GtexColors.purple,
+          mobileLeftTitle: 'Regen menu',
+          actions: <Widget>[
+            GtexActionButton(
+              label: 'Create a Son',
+              icon: Icons.family_restroom_rounded,
+              accent: GtexColors.gold,
+              onPressed: () => _openCreateSon(context, data),
+            ),
+            if (widget.onOpenAwards != null)
+              GtexActionButton(
+                label: 'Awards',
+                icon: Icons.emoji_events_outlined,
+                accent: GtexColors.purple,
+                secondary: true,
+                onPressed: widget.onOpenAwards,
+              ),
+            if (widget.isAdmin)
+              GtexActionButton(
+                label: 'Admin Queue',
+                icon: Icons.admin_panel_settings_rounded,
+                secondary: true,
+                accent: GtexColors.cyan,
+                onPressed: () => _openAdminCreateSon(context, data),
+              ),
+          ],
+          leftPanel: _RegenLeftPanel(
+            data: data,
+            section: _section,
+            origin: _origin,
+            query: _query,
+            isAdmin: widget.isAdmin,
+            onQueryChanged: (String value) => setState(() => _query = value),
+            onSectionChanged:
+                (String value) => setState(() => _section = value),
+            onOriginChanged: (String value) => setState(() => _origin = value),
+          ),
+          detail: Column(
+            children: <Widget>[
+              GtexFootballCommandPulse(
+                kicker: 'Football Command Centre',
+                title: 'Regen operations cockpit',
+                accent: GtexColors.purple,
+                metrics: <GtexCommandPulseMetric>[
+                  GtexCommandPulseMetric(
+                    label: 'World regens',
+                    value: '${data.stats.totalRegens}',
+                    icon: Icons.auto_awesome,
+                    accent: GtexColors.purple,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'National pool',
+                    value: '${data.stats.nationalPoolCount}',
+                    icon: Icons.flag_outlined,
+                    accent: GtexColors.cyan,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Create-a-Son',
+                    value: '${data.stats.createSonOrders}',
+                    icon: Icons.family_restroom_outlined,
+                    accent: GtexColors.gold,
+                  ),
+                  GtexCommandPulseMetric(
+                    label: 'Selected',
+                    value: _selected?.displayName ?? 'None',
+                    icon: Icons.person_search_outlined,
+                    accent: GtexColors.mint,
+                  ),
+                ],
+                trailing: Text(
+                  'LIVE WORLD',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: GtexColors.textMuted,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: GtexSpacing.sm),
+              Expanded(child: _buildDetail(data, filtered)),
+            ],
+          ),
+          rightPanel: _RegenRightPanel(
+            selected: _selected,
+            repository: widget.repository,
+            dossierFuture: _dossierFuture,
+            onRetryDossier: _retryDossier,
+            contracts: data.contracts,
+            achievements: data.achievementFeed,
+            onCreateSon: () => _openCreateSon(context, data),
+          ),
+          rightPanelWidth: 370,
+        );
+      },
+    );
+  }
+
+  List<GtexRegenProspect> _filteredProspects(
+    List<GtexRegenProspect> prospects,
+  ) {
+    final String normalizedQuery = _query.trim().toLowerCase();
+    return prospects
+        .where((GtexRegenProspect prospect) {
+          final bool originMatches =
+              _origin == 'All' || prospect.originLabel == _origin;
+          final bool queryMatches =
+              normalizedQuery.isEmpty ||
+              prospect.displayName.toLowerCase().contains(normalizedQuery) ||
+              prospect.countryName.toLowerCase().contains(normalizedQuery) ||
+              prospect.position.toLowerCase().contains(normalizedQuery) ||
+              prospect.archetype.toLowerCase().contains(normalizedQuery);
+          return originMatches && queryMatches;
+        })
+        .toList(growable: false);
+  }
+
+  Widget _buildDetail(
+    GtexRegenWorldData data,
+    List<GtexRegenProspect> prospects,
+  ) {
+    switch (_section) {
+      case 'awards':
+        return _AwardsBoard(awards: data.awards);
+      case 'contracts':
+        return _ContractBoard(contracts: data.contracts);
+      case 'create-son':
+        return GtexCreateSonScreenV2(
+          repository: widget.repository,
+          initialData: data,
+          embedded: true,
+          allowFixtureData: widget.allowFixtureData,
+        );
+      case 'achievements':
+        return _AchievementBoard(items: data.achievementFeed);
+      case 'bloodlines':
+        return GtexRegenAsyncBoard<RegenBloodlineChain>(
+          future: _bloodlines(),
+          accent: GtexColors.gold,
+          emptyTitle: 'No bloodlines recorded',
+          emptyMessage:
+              'GTEX has not linked any regen to a parent line yet. Bloodlines '
+              'appear as Create-a-Son and legend regens are generated.',
+          onRetry: () => setState(() => _bloodlinesFuture = null),
+          builder:
+              (BuildContext context, List<RegenBloodlineChain> chains) =>
+                  GtexRegenBloodlinesBoard(chains: chains),
+        );
+      case 'rankings':
+        return GtexRegenAsyncBoard<RegenRankingEntry>(
+          future: _rankings(),
+          accent: GtexColors.purple,
+          emptyTitle: 'No rankings published',
+          emptyMessage:
+              'Regen rankings are published when a season closes. None has '
+              'closed yet.',
+          onRetry: () => setState(() => _rankingsFuture = null),
+          builder:
+              (BuildContext context, List<RegenRankingEntry> entries) =>
+                  GtexRegenRankingsBoard(entries: entries),
+        );
+      case 'hall-of-fame':
+        return GtexRegenAsyncBoard<RegenHallOfFameEntry>(
+          future: _hallOfFame(),
+          accent: GtexColors.gold,
+          emptyTitle: 'Hall of Fame is empty',
+          emptyMessage:
+              'Hall of Fame inductees are published when a Regen Universe '
+              'season closes. None has closed yet.',
+          onRetry: () => setState(() => _hallOfFameFuture = null),
+          builder:
+              (BuildContext context, List<RegenHallOfFameEntry> entries) =>
+                  GtexRegenHallOfFameBoard(entries: entries),
+        );
+      case 'admin-create-son':
+        if (!widget.isAdmin) {
+          return const GtexEmptyState(
+            title: 'Admin Create-a-Son unavailable',
+            message:
+                'This live workflow is only available to authorized admin sessions.',
+            icon: Icons.admin_panel_settings_outlined,
+            accent: GtexColors.danger,
+          );
+        }
+        return GtexAdminCreateSonScreenV2(
+          repository: widget.repository,
+          initialData: data,
+          embedded: true,
+          allowFixtureData: widget.allowFixtureData,
+        );
+      case 'prospects':
+      default:
+        return _ProspectsBoard(
+          prospects: prospects,
+          selectedId: _selected?.id,
+          onSelected: _select,
+        );
+    }
+  }
+
+  void _openCreateSon(BuildContext context, GtexRegenWorldData data) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder:
+            (_) => GtexCreateSonScreenV2(
+              repository: widget.repository,
+              initialData: data,
+              allowFixtureData: widget.allowFixtureData,
+            ),
+      ),
+    );
+  }
+
+  void _openAdminCreateSon(BuildContext context, GtexRegenWorldData data) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder:
+            (_) => GtexAdminCreateSonScreenV2(
+              repository: widget.repository,
+              initialData: data,
+              allowFixtureData: widget.allowFixtureData,
+            ),
+      ),
+    );
+  }
+}
+
+class _RegenLeftPanel extends StatelessWidget {
+  const _RegenLeftPanel({
+    required this.data,
+    required this.section,
+    required this.origin,
+    required this.query,
+    required this.isAdmin,
+    required this.onQueryChanged,
+    required this.onSectionChanged,
+    required this.onOriginChanged,
+  });
+
+  final GtexRegenWorldData data;
+  final String section;
+  final String origin;
+  final String query;
+  final bool isAdmin;
+  final ValueChanged<String> onQueryChanged;
+  final ValueChanged<String> onSectionChanged;
+  final ValueChanged<String> onOriginChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<String> origins =
+        <String>{
+          'All',
+          ...data.prospects.map((GtexRegenProspect p) => p.originLabel),
+        }.toList();
+    return ListView(
+      children: <Widget>[
+        const SizedBox(height: GtexSpacing.md),
+        GtexSearchField(
+          hintText: 'Search regens, countries, traits',
+          onChanged: onQueryChanged,
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        ...<Widget>[
+          _SectionTile(
+            label: 'Prospects',
+            icon: Icons.auto_awesome,
+            selected: section == 'prospects',
+            onTap: () => onSectionChanged('prospects'),
+          ),
+          _SectionTile(
+            label: 'Awards',
+            icon: Icons.emoji_events,
+            selected: section == 'awards',
+            onTap: () => onSectionChanged('awards'),
+          ),
+          _SectionTile(
+            label: 'Contracts',
+            icon: Icons.assignment_outlined,
+            selected: section == 'contracts',
+            onTap: () => onSectionChanged('contracts'),
+          ),
+          _SectionTile(
+            label: 'Bloodlines',
+            icon: Icons.account_tree_outlined,
+            selected: section == 'bloodlines',
+            onTap: () => onSectionChanged('bloodlines'),
+          ),
+          _SectionTile(
+            label: 'Rankings',
+            icon: Icons.leaderboard_outlined,
+            selected: section == 'rankings',
+            onTap: () => onSectionChanged('rankings'),
+          ),
+          _SectionTile(
+            label: 'Hall of Fame',
+            icon: Icons.workspace_premium_outlined,
+            selected: section == 'hall-of-fame',
+            onTap: () => onSectionChanged('hall-of-fame'),
+          ),
+          _SectionTile(
+            label: 'Achievements',
+            icon: Icons.timeline,
+            selected: section == 'achievements',
+            onTap: () => onSectionChanged('achievements'),
+          ),
+          _SectionTile(
+            label: 'Create-a-Son',
+            icon: Icons.family_restroom,
+            selected: section == 'create-son',
+            onTap: () => onSectionChanged('create-son'),
+          ),
+          if (isAdmin)
+            _SectionTile(
+              label: 'Admin Create-a-Son',
+              icon: Icons.admin_panel_settings,
+              selected: section == 'admin-create-son',
+              onTap: () => onSectionChanged('admin-create-son'),
+            ),
+        ],
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          title: 'Origin filters',
+          subtitle: 'Reduce the world to one prospect lane.',
+          accent: GtexColors.purple,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: origins
+                .map((String item) {
+                  return ChoiceChip(
+                    label: Text(item),
+                    selected: origin == item,
+                    onSelected: (_) => onOriginChanged(item),
+                    selectedColor: GtexColors.purple.withValues(alpha: 0.28),
+                    backgroundColor: GtexColors.panelStrong,
+                    labelStyle: TextStyle(
+                      color:
+                          origin == item
+                              ? GtexColors.text
+                              : GtexColors.textSecondary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  );
+                })
+                .toList(growable: false),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionTile extends StatelessWidget {
+  const _SectionTile({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexPanel(
+      margin: const EdgeInsets.only(bottom: GtexSpacing.xs),
+      padding: const EdgeInsets.symmetric(
+        horizontal: GtexSpacing.sm,
+        vertical: GtexSpacing.sm,
+      ),
+      accent: GtexColors.purple,
+      isSelected: selected,
+      onTap: onTap,
+      child: Row(
+        children: <Widget>[
+          Icon(
+            icon,
+            color: selected ? GtexColors.purple : GtexColors.textMuted,
+          ),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: selected ? GtexColors.text : GtexColors.textSecondary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProspectsBoard extends StatelessWidget {
+  const _ProspectsBoard({
+    required this.prospects,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  final List<GtexRegenProspect> prospects;
+  final String? selectedId;
+  final ValueChanged<GtexRegenProspect> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (prospects.isEmpty) {
+      return const GtexEmptyState(
+        title: 'No regens in this lane',
+        message: 'Adjust filters or refresh the live regen universe.',
+        icon: Icons.auto_awesome,
+        accent: GtexColors.purple,
+      );
+    }
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final int columns =
+            constraints.maxWidth > 980
+                ? 3
+                : constraints.maxWidth > 620
+                ? 2
+                : 1;
+        // The cell height has to follow the width of a *card*, not of the
+        // board: two columns in a narrow detail pane produce a narrower card
+        // than one column in a wide one. Below 320 the card stacks its
+        // portrait above its details and needs the taller box.
+        final double cardWidth =
+            (constraints.maxWidth -
+                GtexSpacing.md * 2 -
+                GtexSpacing.md * (columns - 1)) /
+            columns;
+        // Raised from 480/400 when the card gained its lineage line and trait
+        // chips: the cell is a fixed box, so new content has to be paid for
+        // here rather than clipped there. Raised again by 40 for the Floodlit
+        // card's roomier padding and larger display type.
+        final double cellHeight = cardWidth < 320 ? 544 : 472;
+        // Section nav already labels this lane "Prospects"; skip a duplicate
+        // board heading so the surface shows that label once.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(GtexSpacing.md),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  // A ratio made the cell height follow the column width,
+                  // which left the card's content taller than its box on
+                  // wide panes and overflowed the prospect grid. Pin the
+                  // height to what the card actually needs instead.
+                  mainAxisExtent: cellHeight,
+                  crossAxisSpacing: GtexSpacing.md,
+                  mainAxisSpacing: GtexSpacing.md,
+                ),
+                itemCount: prospects.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final GtexRegenProspect prospect = prospects[index];
+                  return GtexRegenCard(
+                    name: prospect.displayName,
+                    archetype: prospect.archetype,
+                    nationality: prospect.countryName,
+                    portraitUrl: prospect.imageUrl,
+                    portraitSeed: prospect.id,
+                    position: prospect.position,
+                    countryCode: prospect.countryCode,
+                    gsiLabel: prospect.gsiLabel,
+                    gsiTierLabel: prospect.gsiTierLabel,
+                    ratingLabel: prospect.currentRatingLabel,
+                    potentialLabel: prospect.potentialLabel,
+                    ageLabel: prospect.ageLabel,
+                    valueLabel: _valueLabelFor(prospect),
+                    lineageLabel: prospect.lineageLabel,
+                    traitLabels: prospect.traits,
+                    storyLine: prospect.storyline,
+                    isSelected: prospect.id == selectedId,
+                    onTap: () => onSelected(prospect),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String? _valueLabelFor(GtexRegenProspect prospect) {
+    if (prospect.valueCoin <= 0) {
+      return null;
+    }
+    return '${prospect.valueCoin.toStringAsFixed(0)} coin';
+  }
+}
+
+class _RegenRightPanel extends StatelessWidget {
+  const _RegenRightPanel({
+    required this.selected,
+    required this.repository,
+    required this.dossierFuture,
+    required this.onRetryDossier,
+    required this.contracts,
+    required this.achievements,
+    required this.onCreateSon,
+  });
+
+  final GtexRegenProspect? selected;
+  final GtexRegenRepository repository;
+  final Future<GtexRegenDossierResult>? dossierFuture;
+  final VoidCallback onRetryDossier;
+  final List<GtexRegenContractOffer> contracts;
+  final List<GtexRegenAchievement> achievements;
+  final VoidCallback onCreateSon;
+
+  @override
+  Widget build(BuildContext context) {
+    final GtexRegenProspect? prospect = selected;
+    return ListView(
+      children: <Widget>[
+        if (prospect == null)
+          GtexEmptyState(
+            title: 'Select a regen',
+            message:
+                'Choose a prospect to inspect contracts, origin, traits, and personality.',
+            icon: Icons.auto_awesome,
+            accent: GtexColors.purple,
+          )
+        else ...<Widget>[
+          _SelectedProspectPanel(prospect: prospect),
+          const SizedBox(height: GtexSpacing.md),
+          _DossierSection(
+            future: dossierFuture,
+            onRetry: onRetryDossier,
+            repository: repository,
+          ),
+        ],
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          title: 'Create-a-Son',
+          subtitle: 'Generate a premium regen from an eligible parent player.',
+          accent: GtexColors.gold,
+          child: GtexActionButton(
+            label: 'Open request flow',
+            icon: Icons.family_restroom,
+            accent: GtexColors.gold,
+            onPressed: onCreateSon,
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          title: 'Contract watch',
+          subtitle: 'Regens should feel alive in negotiations.',
+          accent: GtexColors.cyan,
+          child: Column(
+            children: contracts
+                .take(3)
+                .map(
+                  (GtexRegenContractOffer offer) =>
+                      _MiniContractTile(offer: offer),
+                )
+                .toList(growable: false),
+          ),
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        GtexPanel(
+          title: 'Latest achievements',
+          accent: GtexColors.purple,
+          child: Column(
+            children: achievements
+                .take(3)
+                .map(
+                  (GtexRegenAchievement item) =>
+                      _AchievementTile(item: item, compact: true),
+                )
+                .toList(growable: false),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SelectedProspectHero extends StatelessWidget {
+  const _SelectedProspectHero({required this.prospect});
+
+  final GtexRegenProspect prospect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(GtexSpacing.sm),
+      decoration: BoxDecoration(
+        color: GtexColors.panelStrong.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(GtexSpacing.radiusMd),
+        border: Border.all(color: GtexColors.line),
+      ),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 86,
+            child: GtexRegenPortrait(
+              portraitUrl: prospect.imageUrl,
+              seed: prospect.id,
+              position: prospect.position,
+              nationalityCode: prospect.countryCode,
+            ),
+          ),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  prospect.displayName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${prospect.countryName} • ${prospect.position} • ${prospect.archetype}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: GtexColors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: GtexSpacing.xs),
+                Wrap(
+                  spacing: GtexSpacing.xs,
+                  runSpacing: GtexSpacing.xs,
+                  children: <Widget>[
+                    GtexStatusChip(
+                      label: 'OVR ${prospect.gsi}',
+                      color: GtexColors.cyan,
+                      compact: true,
+                    ),
+                    GtexStatusChip(
+                      label: 'POT ${prospect.potentialRating}',
+                      color: GtexColors.purple,
+                      compact: true,
+                    ),
+                    if (prospect.ageLabel != null)
+                      GtexStatusChip(
+                        label: prospect.ageLabel!,
+                        color: GtexColors.gold,
+                        compact: true,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+class _SelectedProspectPanel extends StatelessWidget {
+  const _SelectedProspectPanel({required this.prospect});
+
+  final GtexRegenProspect prospect;
+
+  @override
+  Widget build(BuildContext context) {
+    final int growthHeadroom = prospect.potentialRating - prospect.gsi;
+    return GtexPanel(
+      title: prospect.displayName,
+      subtitle:
+          '${prospect.countryName} • ${prospect.position} • ${prospect.archetype}',
+      accent: GtexColors.purple,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _SelectedProspectHero(prospect: prospect),
+          const SizedBox(height: GtexSpacing.md),
+          // A Row here overflowed the 370px summary panel by 131px once the
+          // growth chip joined it. Chips wrap instead of being clipped.
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              GtexStatusChip(
+                label: prospect.originLabel,
+                color: GtexColors.purple,
+              ),
+              GtexStatusChip(
+                label: prospect.contractStatusLabel,
+                color:
+                    prospect.isNationalRentalOnly
+                        ? GtexColors.cyan
+                        : GtexColors.gold,
+              ),
+              if (growthHeadroom > 0)
+                GtexStatusChip(
+                  label: '+$growthHeadroom Growth',
+                  color: GtexColors.mint,
+                ),
+            ],
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: GtexMetricTile(
+                  label: 'GSI Rating',
+                  value: '${prospect.gsi}',
+                  accent: GtexColors.cyan,
+                ),
+              ),
+              const SizedBox(width: GtexSpacing.sm),
+              Expanded(
+                child: GtexMetricTile(
+                  label: 'Potential Ceiling',
+                  value: '${prospect.potentialRating}',
+                  accent: GtexColors.purple,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          GtexStatusChip(label: prospect.gsiTierLabel, color: GtexColors.cyan),
+          const SizedBox(height: GtexSpacing.md),
+          Text(
+            prospect.storyline,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: GtexColors.textSecondary,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: prospect.traits
+                .map(
+                  (String trait) => GtexStatusChip(
+                    label: trait,
+                    color: GtexColors.mint,
+                    compact: true,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+          const SizedBox(height: GtexSpacing.md),
+          // The contract situation is no longer "unavailable": it is read
+          // from the regen lifecycle endpoint and rendered by the dossier's
+          // Ownership section below, so this chip only carries the one fact
+          // the browse row itself knows.
+          if (prospect.isNationalRentalOnly)
+            const GtexStatusChip(
+              label: 'National rental only - not tradable',
+              color: GtexColors.cyan,
+            ),
+          // A tradable regen is a player like any other, so it opens the one
+          // canonical Player Detail through the sanctioned navigator. A
+          // national-pool depth regen has no market identity, so no control is
+          // offered rather than one that dead-ends.
+          if (!prospect.isNationalRentalOnly)
+            Builder(
+              builder: (BuildContext context) {
+                final VoidCallback? openPlayer = GtexPlayerNavigator.tapToOpen(
+                  context,
+                  prospect.id,
+                );
+                if (openPlayer == null) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: GtexSpacing.md),
+                  child: GtexActionButton(
+                    label: 'Open player detail',
+                    icon: Icons.badge_outlined,
+                    accent: GtexColors.purple,
+                    onPressed: openPlayer,
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AwardsBoard extends StatelessWidget {
+  const _AwardsBoard({required this.awards});
+
+  final List<GtexRegenAward> awards;
+
+  @override
+  Widget build(BuildContext context) {
+    if (awards.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(GtexSpacing.md),
+        child: GtexEmptyState(
+          title: 'No awards yet',
+          message:
+              'Award categories appear with an open season; winners land when '
+              'the season closes or scouts crown rising stars.',
+          icon: Icons.emoji_events_outlined,
+          accent: GtexColors.gold,
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      itemCount: awards.length,
+      separatorBuilder: (_, __) => const SizedBox(height: GtexSpacing.md),
+      itemBuilder: (BuildContext context, int index) {
+        final GtexRegenAward award = awards[index];
+        return GtexPanel(
+          title: award.name,
+          subtitle: '${award.seasonLabel} • ${award.category}',
+          accent: GtexColors.gold,
+          child: Row(
+            children: <Widget>[
+              const Icon(Icons.emoji_events, color: GtexColors.gold, size: 38),
+              const SizedBox(width: GtexSpacing.md),
+              Expanded(
+                child: Text(
+                  award.winnerName,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              GtexStatusChip(
+                label: 'Score ${award.scoreLabel}',
+                color: GtexColors.gold,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ContractBoard extends StatelessWidget {
+  const _ContractBoard({required this.contracts});
+
+  final List<GtexRegenContractOffer> contracts;
+
+  @override
+  Widget build(BuildContext context) {
+    if (contracts.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(GtexSpacing.md),
+        child: GtexEmptyState(
+          title: 'Contract watch is quiet',
+          message:
+              'Offers and agency pressure show up here once you approach '
+              'regens from Discover or Ownership.',
+          icon: Icons.handshake_outlined,
+          accent: GtexColors.cyan,
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      itemCount: contracts.length,
+      separatorBuilder: (_, __) => const SizedBox(height: GtexSpacing.md),
+      itemBuilder: (BuildContext context, int index) {
+        final GtexRegenContractOffer offer = contracts[index];
+        return GtexPanel(
+          title: offer.regenName,
+          subtitle: offer.personalityNote,
+          accent: GtexColors.cyan,
+          trailing: GtexStatusChip(
+            label: offer.status.name,
+            color: GtexColors.cyan,
+          ),
+          child: Wrap(
+            spacing: GtexSpacing.md,
+            runSpacing: GtexSpacing.sm,
+            children: <Widget>[
+              GtexMetricTile(
+                label: 'Weekly',
+                value: '${offer.weeklyWageCoin.toStringAsFixed(0)} coin',
+                accent: GtexColors.cyan,
+              ),
+              GtexMetricTile(
+                label: 'Bonus',
+                value: '${offer.signingBonusCoin.toStringAsFixed(0)} coin',
+                accent: GtexColors.gold,
+              ),
+              GtexMetricTile(
+                label: 'Years',
+                value: '${offer.durationSeasons}',
+                accent: GtexColors.purple,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AchievementBoard extends StatelessWidget {
+  const _AchievementBoard({required this.items});
+
+  final List<GtexRegenAchievement> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(GtexSpacing.md),
+        child: GtexEmptyState(
+          title: 'No scouting announcements yet',
+          message:
+              'Rising-star and discovery beats fill this lane from the national '
+              'regen pool. If it stays empty, the world bootstrap has not run.',
+          icon: Icons.campaign_outlined,
+          accent: GtexColors.purple,
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(GtexSpacing.md),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: GtexSpacing.sm),
+      itemBuilder:
+          (BuildContext context, int index) =>
+              _AchievementTile(item: items[index]),
+    );
+  }
+}
+
+class _AchievementTile extends StatelessWidget {
+  const _AchievementTile({required this.item, this.compact = false});
+
+  final GtexRegenAchievement item;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return GtexPanel(
+      padding: EdgeInsets.all(compact ? GtexSpacing.sm : GtexSpacing.md),
+      accent: GtexColors.purple,
+      child: Row(
+        children: <Widget>[
+          Icon(item.icon, color: GtexColors.purple),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    color: GtexColors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  item.body,
+                  maxLines: compact ? 2 : 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: GtexColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            item.timestampLabel,
+            style: const TextStyle(
+              color: GtexColors.textMuted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniContractTile extends StatelessWidget {
+  const _MiniContractTile({required this.offer});
+
+  final GtexRegenContractOffer offer;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: GtexSpacing.sm),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.assignment_outlined, color: GtexColors.cyan),
+          const SizedBox(width: GtexSpacing.sm),
+          Expanded(
+            child: Text(
+              offer.regenName,
+              style: const TextStyle(
+                color: GtexColors.text,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Text(
+            '${offer.weeklyWageCoin.toStringAsFixed(0)}/wk',
+            style: const TextStyle(
+              color: GtexColors.cyan,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Hosts the dossier read beside the selected regen.
+///
+/// The dossier is a second request, so it gets its own loading and failure
+/// treatment: the identity panel above stays readable while it resolves,
+/// rather than the whole right rail flashing.
+class _DossierSection extends StatelessWidget {
+  const _DossierSection({
+    required this.future,
+    required this.onRetry,
+    required this.repository,
+  });
+
+  final Future<GtexRegenDossierResult>? future;
+  final VoidCallback onRetry;
+  final GtexRegenRepository repository;
+
+  @override
+  Widget build(BuildContext context) {
+    final Future<GtexRegenDossierResult>? pending = future;
+    if (pending == null) {
+      return const SizedBox.shrink();
+    }
+    return FutureBuilder<GtexRegenDossierResult>(
+      future: pending,
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<GtexRegenDossierResult> snapshot,
+      ) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              GtexSkeleton.box(height: 120),
+              SizedBox(height: GtexSpacing.sm),
+              GtexSkeleton.box(height: 120),
+            ],
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return GtexBlockedState(
+            title: 'Dossier unavailable',
+            reason:
+                'The regen dossier could not be loaded: '
+                '${snapshot.error ?? 'no response'}',
+            severity: GtexBlockedSeverity.warning,
+            icon: Icons.cloud_off_rounded,
+            ctaLabel: 'Retry',
+            ctaAction: onRetry,
+          );
+        }
+        return GtexRegenDossierPanel(
+          result: snapshot.data!,
+          onRetry: onRetry,
+          ownershipActionsBuilder:
+              (BuildContext context, GtexRegenDossier dossier) =>
+                  GtexRegenOwnershipActions(
+                    repository: repository,
+                    dossier: dossier,
+                    // A listing change invalidates the dossier we are showing,
+                    // so re-read it rather than patching state locally and
+                    // risking a view that disagrees with the backend.
+                    onLifecycleChanged: (RegenLifecycleState? _) => onRetry(),
+                  ),
+        );
+      },
+    );
+  }
+}

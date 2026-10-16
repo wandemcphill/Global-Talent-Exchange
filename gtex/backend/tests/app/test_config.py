@@ -1,0 +1,427 @@
+from __future__ import annotations
+
+from pathlib import Path
+import textwrap
+
+import pytest
+
+from app.core.config import (
+    DEFAULT_CORS_ALLOWED_ORIGINS,
+    DEFAULT_CORS_ALLOW_ORIGIN_REGEX,
+    load_settings,
+)
+from app.core.database import get_target_metadata
+from app.value_engine.scoring import ValueEngine
+
+
+def _write_config(path: Path, content: str) -> None:
+    path.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+
+
+def test_load_settings_reads_file_backed_product_configs(tmp_path: Path) -> None:
+    _write_config(
+        tmp_path / "player_universe_weighting.toml",
+        """
+        target_player_count = 100000
+        rebalance_interval_hours = 12
+
+        [weights]
+        performance = 0.40
+        projected_ceiling = 0.35
+        market_interest = 0.25
+
+        [age_curve_multipliers]
+        u21 = 1.15
+        prime = 1.00
+
+        [competition_tier_multipliers]
+        elite = 1.20
+        pro = 1.00
+        """,
+    )
+    _write_config(
+        tmp_path / "supply_tiers.toml",
+        """
+        [[tiers]]
+        name = "elite"
+        min_score = 0.80
+        max_score = 1.00
+        target_share = 0.30
+        circulating_supply = 240
+        daily_pack_supply = 6
+        season_mint_cap = 300
+
+        [[tiers]]
+        name = "core"
+        min_score = 0.00
+        max_score = 0.7999
+        target_share = 0.70
+        circulating_supply = 600
+        daily_pack_supply = 18
+        season_mint_cap = 1200
+        """,
+    )
+    _write_config(
+        tmp_path / "liquidity_bands.toml",
+        """
+        [[bands]]
+        name = "entry"
+        min_price_credits = 0
+        max_price_credits = 99
+        max_spread_bps = 1200
+        maker_inventory_target = 30
+        instant_sell_fee_bps = 1000
+
+        [[bands]]
+        name = "prime"
+        min_price_credits = 100
+        max_spread_bps = 500
+        maker_inventory_target = 70
+        instant_sell_fee_bps = 650
+        """,
+    )
+    _write_config(
+        tmp_path / "image_policy.toml",
+        """
+        [source]
+        source_mode = "licensed-only"
+        moderation_required = true
+        allowed_formats = ["jpeg", "webp"]
+        max_source_bytes = 4000000
+
+        [processing]
+        watermark_enabled = false
+        max_width = 1600
+        max_height = 2000
+        default_variant = "card"
+
+        [[variants]]
+        name = "card"
+        width = 768
+        height = 1024
+        format = "webp"
+        fit = "contain"
+        """,
+    )
+    _write_config(
+        tmp_path / "value_engine_weighting.toml",
+        """
+        baseline_eur_per_credit = 95000
+        smoothing_factor = 0.65
+        daily_movement_cap = 0.10
+        demand_movement_cap = 0.04
+        market_signal_cap = 0.16
+        gsi_neutral_score = 48.0
+        gsi_smoothing_factor = 1.0
+        gsi_daily_movement_cap = 0.28
+        gsi_signal_cap = 0.40
+        gsi_signal_scale = 120.0
+        gsi_anchor_pull_strength = 0.10
+        anchor_pull_strength = 0.18
+        market_price_pull_strength = 0.60
+        default_liquidity_weight = 0.22
+        minimum_floor_ratio = 0.58
+        performance_scale = 800.0
+        award_scale = 500.0
+        transfer_scale = 850.0
+        demand_scale = 1000.0
+        big_moment_bonus = 21.0
+
+        [competition_multipliers]
+        "world cup" = 1.4
+
+        [award_impacts]
+        ballon_dor_winner = 88.0
+
+        [demand_weights]
+        purchases = 7.0
+        sales = 5.5
+        shortlist_adds = 3.0
+        watchlist_adds = 1.5
+        follows = 0.6
+
+        [gsi_signal_weights]
+        watchlist_adds = 2.2
+        shortlist_adds = 4.0
+        transfer_room_adds = 5.8
+        scouting_activity = 6.4
+
+        [liquidity_band_market_weights]
+        entry = 0.15
+        marquee = 0.80
+
+        [ftv_msv_blend_weights]
+        ftv_weight = 0.62
+        msv_weight = 0.38
+
+        [[price_band_limits]]
+        code = "default"
+        min_ratio = 0.82
+        max_ratio = 1.18
+
+        [[price_band_limits]]
+        code = "marquee"
+        min_ratio = 0.74
+        max_ratio = 1.28
+        """,
+    )
+    _write_config(
+        tmp_path / "regen_generation.toml",
+        """
+        academy_intakes_per_season = 1
+        academy_intake_min_players = 2
+        academy_intake_max_players = 4
+        starter_regen_count = 2
+        starter_age_min = 25
+        starter_age_max = 30
+        starter_gsi_min = 50
+        starter_gsi_max = 68
+        seasonal_supply_cap_ratio = 0.03
+        base_elite_probability = 0.02
+        max_elite_probability = 0.11
+        default_active_player_base = 50000
+        market_fee_bps_default = 4400
+        market_fee_bps_min = 4000
+        market_fee_bps_max = 5000
+        ecosystem_target_regen_share = 0.18
+        elite_regen_share_cap = 0.07
+        demand_cooling_floor = 0.60
+        regen_lifecycle_growth_months = 8
+        regen_lifecycle_peak_months = 20
+        regen_lifecycle_decline_months = 29
+        regen_lifecycle_retirement_months = 35
+        player_lifecycle_growth_max_age = 22
+        player_lifecycle_peak_max_age = 28
+        player_lifecycle_decline_max_age = 33
+        default_country_code = "NG"
+
+        [[country_tuning]]
+        country_code = "NG"
+        academy_quality_bias = 1.08
+        elite_probability_boost = 0.02
+        urban_bias = 0.10
+        default_regions = ["Lagos", "Enugu", "Kano"]
+        default_cities = ["Lagos", "Enugu", "Kano"]
+        """,
+    )
+    _write_config(
+        tmp_path / "suspicion_thresholds.toml",
+        """
+        player_min_suspicious_events = 12
+        player_min_suspicious_share = 0.30
+        player_price_band_breach_ratio = 0.08
+        cluster_min_member_count = 4
+        cluster_min_interaction_count = 7
+        cluster_max_asset_count = 3
+        thin_market_min_price_credits = 200
+        thin_market_max_pending_offers = 1
+        thin_market_max_active_trade_intents = 1
+        holder_concentration_min_assets = 4
+        holder_concentration_share = 0.55
+        circular_trade_min_cycle_length = 3
+        circular_trade_min_repetitions = 2
+        """,
+    )
+    _write_config(
+        tmp_path / "player_card_market_integrity.toml",
+        """
+        sale_reference_lookback_days = 10
+        minimum_reference_sales = 3
+        listing_price_floor_ratio = 0.65
+        listing_price_ceiling_ratio = 1.55
+        relist_cooldown_minutes = 45
+        pair_trade_lookback_hours = 72
+        pair_trade_alert_threshold = 4
+        asset_churn_window_hours = 12
+        asset_churn_alert_threshold = 5
+        circular_trade_window_hours = 18
+        price_spike_alert_ratio = 2.2
+        volume_cluster_window_minutes = 30
+        volume_cluster_trade_threshold = 7
+        """,
+    )
+
+    database_url = f"sqlite:///{(tmp_path / 'test_settings.db').as_posix()}"
+    settings = load_settings(environ={"DATABASE_URL": database_url}, config_root=tmp_path)
+
+    assert settings.config_root == tmp_path.resolve()
+    assert settings.database_url == database_url
+    assert settings.player_universe_weighting.rebalance_interval_hours == 12
+    assert settings.player_universe_weighting.weights["performance"] == 0.40
+    assert settings.supply_tiers.tiers[0].code == "elite"
+    assert settings.supply_tiers.tiers[0].name == "elite"
+    assert settings.liquidity_bands.bands[0].code == "entry"
+    assert settings.liquidity_bands.bands[-1].max_price_credits is None
+    assert settings.image_policy.default_variant == "card"
+    assert settings.regen_generation.starter_regen_count == 2
+    assert settings.regen_generation.seasonal_supply_cap_ratio == 0.03
+    assert settings.regen_generation.market_fee_bps_default == 4400
+    assert settings.regen_generation.ecosystem_target_regen_share == 0.18
+    assert settings.regen_generation.regen_lifecycle_growth_months == 8
+    assert settings.regen_generation.regen_lifecycle_retirement_months == 35
+    assert settings.regen_generation.player_lifecycle_peak_max_age == 28
+    assert settings.regen_generation.country_tuning[0].country_code == "NG"
+    assert settings.suspicion_thresholds.player_min_suspicious_events == 12
+    assert settings.suspicion_thresholds.holder_concentration_share == 0.55
+    assert settings.player_card_market_integrity.sale_reference_lookback_days == 10
+    assert settings.player_card_market_integrity.listing_price_ceiling_ratio == 1.55
+    assert settings.player_card_market_integrity.volume_cluster_trade_threshold == 7
+    assert settings.value_engine_weighting.baseline_eur_per_credit == 95_000
+    assert settings.value_engine_weighting.big_moment_bonus == 21.0
+    assert settings.value_engine_weighting.market_signal_cap == 0.16
+    assert settings.value_engine_weighting.gsi_neutral_score == 48.0
+    assert settings.value_engine_weighting.gsi_signal_weights["transfer_room_adds"] == 5.8
+    assert settings.value_engine_weighting.liquidity_band_market_weights["marquee"] == 0.80
+    assert settings.value_engine_weighting.ftv_weight == 0.62
+    assert settings.value_engine_weighting.msv_weight == 0.38
+    assert settings.value_engine_weighting.price_band_limits[-1].code == "marquee"
+    assert settings.value_engine_weighting.price_band_limits[-1].max_ratio == 1.28
+    assert settings.run_startup_seeding is True
+
+
+def test_load_settings_reads_run_startup_seeding_env_override() -> None:
+    settings = load_settings(
+        environ={
+            "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "RUN_STARTUP_SEEDING": "false",
+        },
+        config_root=(Path(__file__).resolve().parents[2] / "config"),
+    )
+
+    assert settings.run_startup_seeding is False
+
+
+def test_load_settings_reads_cors_env_overrides() -> None:
+    settings = load_settings(
+        environ={
+            "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "GTE_CORS_ALLOW_ORIGINS": "https://frontend.example.com, https://preview.example.com",
+            "GTE_CORS_ALLOW_ORIGIN_REGEX": "https://.*\\.vercel\\.app",
+            "GTE_CORS_ALLOW_CREDENTIALS": "true",
+        },
+        config_root=(Path(__file__).resolve().parents[2] / "config"),
+    )
+
+    assert settings.cors_allowed_origins == (
+        "https://frontend.example.com",
+        "https://preview.example.com",
+    )
+    assert settings.cors_allow_origin_regex == "https://.*\\.vercel\\.app"
+    assert settings.cors_allow_credentials is True
+
+
+def test_load_settings_provides_default_cors_origins_and_regex() -> None:
+    settings = load_settings(
+        environ={"DATABASE_URL": "sqlite+pysqlite:///:memory:"},
+        config_root=(Path(__file__).resolve().parents[2] / "config"),
+    )
+
+    assert settings.cors_allowed_origins == DEFAULT_CORS_ALLOWED_ORIGINS
+    assert settings.cors_allow_origin_regex == DEFAULT_CORS_ALLOW_ORIGIN_REGEX
+    assert settings.cors_allow_credentials is False
+
+
+def test_load_settings_requires_runtime_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GTE_AUTH_SECRET", raising=False)
+    monkeypatch.delenv("GTE_MEDIA_SIGNING_SECRET", raising=False)
+
+    with pytest.raises(ValueError, match="GTE_AUTH_SECRET"):
+        load_settings(
+            environ={"DATABASE_URL": "sqlite+pysqlite:///:memory:"},
+            config_root=(Path(__file__).resolve().parents[2] / "config"),
+        )
+
+
+def test_load_settings_rejects_placeholder_runtime_secrets() -> None:
+    with pytest.raises(ValueError, match="GTE_AUTH_SECRET"):
+        load_settings(
+            environ={
+                "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+                "GTE_AUTH_SECRET": "replace-me-with-a-long-random-string",  # pragma: allowlist secret
+                "GTE_MEDIA_SIGNING_SECRET": "test-media-signing-secret-not-for-production",  # pragma: allowlist secret
+            },
+            config_root=(Path(__file__).resolve().parents[2] / "config"),
+        )
+
+
+def test_load_settings_rejects_incomplete_bootstrap_admin_config() -> None:
+    with pytest.raises(ValueError, match="GTE_BOOTSTRAP_ADMIN_PASSWORD"):
+        load_settings(
+            environ={
+                "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+                "GTE_BOOTSTRAP_ADMIN_ENABLED": "true",
+                "GTE_BOOTSTRAP_ADMIN_EMAIL": "admin@example.com",
+                "GTE_BOOTSTRAP_ADMIN_USERNAME": "admin_user",
+            },
+            config_root=(Path(__file__).resolve().parents[2] / "config"),
+        )
+
+
+def test_load_settings_rejects_incomplete_bootstrap_admin_config_from_explicit_environ(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GTE_BOOTSTRAP_ADMIN_PASSWORD", "ambient-process-password")
+
+    with pytest.raises(ValueError, match="GTE_BOOTSTRAP_ADMIN_PASSWORD"):
+        load_settings(
+            environ={
+                "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+                "GTE_BOOTSTRAP_ADMIN_ENABLED": "true",
+                "GTE_BOOTSTRAP_ADMIN_EMAIL": "admin@example.com",
+                "GTE_BOOTSTRAP_ADMIN_USERNAME": "admin_user",
+            },
+            config_root=(Path(__file__).resolve().parents[2] / "config"),
+        )
+
+
+def test_load_settings_reads_real_player_import_env_overrides() -> None:
+    settings = load_settings(
+        environ={
+            "DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "GTE_INGESTION_PROVIDER": "mock",
+            "GTE_PROVIDER_TIMEOUT_SECONDS": "18",
+            "GTE_REAL_PLAYER_IMPORT_PROVIDER": "football_data",
+            "GTE_REAL_PLAYER_IMPORT_BATCH_SIZE": "320",
+            "GTE_REAL_PLAYER_IMPORT_MAX_PAGES_PER_RUN": "12",
+            "GTE_REAL_PLAYER_IMPORT_RATE_LIMIT_PER_MINUTE": "45",
+            "GTE_REAL_PLAYER_IMPORT_TIMEOUT_SECONDS": "27",
+            "GTE_REAL_PLAYER_IMPORT_CURSOR_KEY": "real-player-phase-a",
+        },
+        config_root=(Path(__file__).resolve().parents[2] / "config"),
+    )
+
+    assert settings.real_player_import.provider_name == "football_data"
+    assert settings.real_player_import.batch_size == 320
+    assert settings.real_player_import.max_pages_per_run == 12
+    assert settings.real_player_import.rate_limit_per_minute == 45
+    assert settings.real_player_import.timeout_seconds == 27
+    assert settings.real_player_import.cursor_key == "real-player-phase-a"
+
+
+def test_default_supply_config_reduces_supply_for_obscure_players() -> None:
+    settings = load_settings()
+    supply_by_code = {tier.code: tier for tier in settings.supply_tiers.tiers}
+
+    assert supply_by_code["discovery"].circulating_supply < supply_by_code["prospect"].circulating_supply
+    assert supply_by_code["prospect"].circulating_supply < supply_by_code["elite"].circulating_supply
+    assert supply_by_code["elite"].circulating_supply < supply_by_code["icon"].circulating_supply
+
+
+def test_target_metadata_includes_phase_one_read_models() -> None:
+    metadata = get_target_metadata()
+
+    assert "player_summary_read_models" in metadata.tables
+    assert "market_summary_read_models" in metadata.tables
+    assert "player_value_snapshots" in metadata.tables
+    assert "real_player_import_staging" in metadata.tables
+
+
+def test_value_engine_uses_central_value_weighting_config() -> None:
+    engine = ValueEngine()
+    settings = load_settings()
+
+    assert engine.config.baseline_eur_per_credit == settings.value_engine_weighting.baseline_eur_per_credit
+    assert (
+        engine.config.competition_multipliers["world cup"]
+        == settings.value_engine_weighting.competition_multipliers["world cup"]
+    )

@@ -1,0 +1,313 @@
+import 'dart:convert';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../app/gte_app_config.dart';
+import '../../data/gte_api_repository.dart';
+import '../../data/gte_authed_api.dart';
+import '../../features/shared/data/gte_feature_support.dart';
+import '../../services/match_3d_monetization_service.dart';
+import '../auth/auth_identity_store.dart';
+import '../models/auth_presentation.dart';
+import '../models/auth_session.dart';
+
+const String adminPermissionViewAuditLog = 'view_audit_log';
+const String adminPermissionManageCompetitions = 'manage_competitions';
+const String adminPermissionManageManagerCatalog = 'manage_manager_catalog';
+const String adminPermissionManageManagerSupply = 'manage_manager_supply';
+const String adminPermissionManagePaymentRails = 'manage_payment_rails';
+const String adminPermissionManageTreasuryWithdrawals =
+    'manage_treasury_withdrawals';
+
+final Provider<AuthSessionStore> authSessionStoreProvider =
+    Provider<AuthSessionStore>((Ref ref) => MemoryAuthSessionStore());
+
+final Provider<DeviceIdentityStore> deviceIdentityStoreProvider =
+    Provider<DeviceIdentityStore>((Ref ref) => MemoryDeviceIdentityStore());
+
+final Provider<AuthSession?> initialAuthSessionProvider =
+    Provider<AuthSession?>((Ref ref) => null);
+
+final NotifierProvider<AppSessionController, AuthSession?>
+appSessionControllerProvider =
+    NotifierProvider<AppSessionController, AuthSession?>(
+      AppSessionController.new,
+    );
+
+final Provider<AuthSession?> authProvider = Provider<AuthSession?>(
+  (Ref ref) => ref.watch(appSessionControllerProvider),
+);
+
+final Provider<String> deviceIdProvider = Provider<String>(
+  (Ref ref) => 'gtex-local-device',
+);
+
+final Provider<bool> isAuthenticatedProvider = Provider<bool>(
+  (Ref ref) => ref.watch(authProvider)?.isAuthenticated ?? false,
+);
+
+final Provider<String?> accessTokenProvider = Provider<String?>(
+  (Ref ref) => ref.watch(authProvider)?.accessToken,
+);
+
+final Provider<String?> currentUserIdProvider = Provider<String?>(
+  (Ref ref) => ref.watch(authProvider)?.userId,
+);
+
+final Provider<String?> currentUserNameProvider = Provider<String?>((Ref ref) {
+  final AuthSession? session = ref.watch(authProvider);
+  if (session == null) {
+    return null;
+  }
+  final String resolved = session.resolvedUserName.trim();
+  return resolved.isEmpty || resolved == 'Guest' ? null : resolved;
+});
+
+final Provider<String> currentUserRoleProvider = Provider<String>(
+  (Ref ref) => ref.watch(authProvider)?.role ?? 'unauthenticated',
+);
+
+final Provider<List<String>> currentUserPermissionsProvider =
+    Provider<List<String>>(
+      (Ref ref) => ref.watch(authProvider)?.permissions ?? const <String>[],
+    );
+
+final Provider<bool> isAdminProvider = Provider<bool>(
+  (Ref ref) => ref.watch(authProvider)?.isAdmin ?? false,
+);
+
+final Provider<bool> isSuperAdminProvider = Provider<bool>(
+  (Ref ref) => ref.watch(authProvider)?.isSuperAdmin ?? false,
+);
+
+final Provider<bool> isDelegatedAdminProvider = Provider<bool>(
+  (Ref ref) => ref.watch(authProvider)?.isDelegatedAdmin ?? false,
+);
+
+final Provider<bool> canAccessGodModeProvider = Provider<bool>(
+  (Ref ref) => ref.watch(authProvider)?.canAccessGodMode ?? false,
+);
+
+final Provider<bool> canManageCompetitionsProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManageCompetitions,
+  ),
+);
+
+final Provider<bool> canManageManagerCatalogProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManageManagerCatalog,
+  ),
+);
+
+final Provider<bool> canManageManagerSupplyProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManageManagerSupply,
+  ),
+);
+
+final Provider<bool> canManagePaymentRailsProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManagePaymentRails,
+  ),
+);
+
+final Provider<bool> canManageTreasuryWithdrawalsProvider = Provider<bool>(
+  (Ref ref) => _hasAdminPermission(
+    ref.watch(authProvider),
+    adminPermissionManageTreasuryWithdrawals,
+  ),
+);
+
+final Provider<String?> godModeBlockedReasonProvider = Provider<String?>((
+  Ref ref,
+) {
+  final AuthSession? session = ref.watch(authProvider);
+  if (session == null || !session.isAuthenticated) {
+    return 'admin required';
+  }
+  if (!session.isAdmin) {
+    return 'admin required';
+  }
+  if (session.accessToken.trim().isEmpty) {
+    return 'missing session claims';
+  }
+  if (!session.canAccessGodMode) {
+    return 'missing audit permission';
+  }
+  return null;
+});
+
+final Provider<ClubContext?> clubContextProvider = Provider<ClubContext?>((
+  Ref ref,
+) {
+  final AuthSession? session = ref.watch(authProvider);
+  final String? clubId = session?.clubId?.trim();
+  if (clubId == null || clubId.isEmpty) {
+    return null;
+  }
+  return ClubContext(id: clubId, name: session?.clubName);
+});
+
+final Provider<FederationContext?> federationContextProvider =
+    Provider<FederationContext?>((Ref ref) {
+      final AuthSession? session = ref.watch(authProvider);
+      final String? federationId = session?.federationId?.trim();
+      if (federationId == null || federationId.isEmpty) {
+        return null;
+      }
+      return FederationContext(id: federationId, name: session?.federationName);
+    });
+
+final Provider<Match3dUserEntitlement> match3dEntitlementProvider =
+    Provider<Match3dUserEntitlement>((Ref ref) {
+      final AuthSession? session = ref.watch(authProvider);
+      final bool signedIn = session?.isAuthenticated ?? false;
+      final bool premium = _hasMatch3dPremiumAccess(session);
+      return Match3dUserEntitlement(
+        isPremiumUser: premium,
+        premiumCameraAccess: signedIn,
+        fastReplayAccess: signedIn,
+      );
+    });
+
+final Provider<GteAppConfig> appConfigProvider = Provider<GteAppConfig>(
+  (Ref ref) => GteAppConfig.fromRuntimeEnvironment(),
+);
+
+final Provider<String> apiBaseUrlProvider = Provider<String>(
+  (Ref ref) => ref.watch(appConfigProvider).apiBaseUrl,
+);
+
+final Provider<GteBackendMode> criticalBackendModeProvider =
+    Provider<GteBackendMode>((Ref ref) {
+      return ref.watch(appConfigProvider).activeShellBackendMode;
+    });
+
+final Provider<GteAuthedApi> authedApiProvider = Provider<GteAuthedApi>(
+  (Ref ref) => GteAuthedApi(
+    config: GteRepositoryConfig(
+      baseUrl: ref.watch(apiBaseUrlProvider),
+      mode: ref.watch(criticalBackendModeProvider),
+    ),
+    transport: createModeAwareTransport(ref.watch(criticalBackendModeProvider)),
+    authSession: ref.watch(authProvider),
+    authSessionStore: ref.watch(authSessionStoreProvider),
+    onSessionChanged:
+        ref.read(appSessionControllerProvider.notifier).updateSession,
+    deviceId: ref.watch(deviceIdProvider),
+    mode: ref.watch(criticalBackendModeProvider),
+  ),
+);
+
+final FutureProvider<void> sessionHydrationProvider = FutureProvider<void>((
+  Ref ref,
+) async {
+  final AuthSession? session = ref.watch(authProvider);
+  if (session == null || !session.isAuthenticated) {
+    return;
+  }
+  if (ref.watch(criticalBackendModeProvider) == GteBackendMode.fixture) {
+    return;
+  }
+  final bool alreadyHydrated =
+      session.rawJson['_session_bootstrap_hydrated'] == true;
+  if (alreadyHydrated) {
+    return;
+  }
+  try {
+    final Map<String, dynamic> payload = await ref
+        .read(authedApiProvider)
+        .getMap('/api/session/bootstrap');
+    await ref
+        .read(appSessionControllerProvider.notifier)
+        .mergeProfile(<String, Object?>{
+          ...Map<String, Object?>.from(payload),
+          '_session_bootstrap_blocked': false,
+          '_session_bootstrap_error': null,
+          '_session_bootstrap_hydrated': true,
+        });
+  } catch (error, stackTrace) {
+    await ref
+        .read(appSessionControllerProvider.notifier)
+        .mergeProfile(<String, Object?>{
+          '_session_bootstrap_blocked': true,
+          '_session_bootstrap_error': error.toString(),
+          '_session_bootstrap_hydrated': false,
+        });
+    Error.throwWithStackTrace(error, stackTrace);
+  }
+});
+
+final Provider<AuthPresentation> authPresentationProvider =
+    Provider<AuthPresentation>((Ref ref) {
+      final AuthSession? session = ref.watch(authProvider);
+      return AuthPresentation(
+        userName: session?.resolvedUserName ?? 'Not signed in',
+        role: session?.role ?? 'Unauthenticated',
+        clubName:
+            session == null || !session.isAuthenticated
+                ? 'Sign in to access club features'
+                : (session.clubName ?? 'Syncing club context'),
+        avatarAsset: 'assets/branding/gtex_icon.png',
+        notifications: 0,
+      );
+    });
+
+class AppSessionController extends Notifier<AuthSession?> {
+  @override
+  AuthSession? build() => ref.watch(initialAuthSessionProvider);
+
+  Future<void> updateSession(AuthSession? session) async {
+    state = session;
+    await ref.read(authSessionStoreProvider).writeSession(session);
+  }
+
+  Future<void> mergeProfile(Map<String, Object?> profileJson) async {
+    final AuthSession? current = state;
+    if (current == null) {
+      return;
+    }
+    final AuthSession merged = current.mergeProfile(profileJson);
+    // Re-emitting an identical session still notifies every provider that
+    // watches this notifier -- including [sessionHydrationProvider], which
+    // merges its failure metadata back in here. That feedback loop re-runs
+    // the hydration request with zero delay, forever.
+    if (_hasSamePayload(current, merged)) {
+      return;
+    }
+    state = merged;
+    await ref.read(authSessionStoreProvider).writeSession(merged);
+  }
+
+  static bool _hasSamePayload(AuthSession a, AuthSession b) {
+    try {
+      return jsonEncode(a.rawJson) == jsonEncode(b.rawJson);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> clear() => updateSession(null);
+}
+
+bool _hasAdminPermission(AuthSession? session, String permission) {
+  if (session == null || !session.isAuthenticated || !session.isAdmin) {
+    return false;
+  }
+  return session.isSuperAdmin || session.hasPermission(permission);
+}
+
+bool _hasMatch3dPremiumAccess(AuthSession? session) {
+  if (session == null || !session.isAuthenticated) {
+    return false;
+  }
+  return session.hasAnyPermission(const <String>[
+    'match_3d_premium',
+    'match_3d_access',
+  ]);
+}

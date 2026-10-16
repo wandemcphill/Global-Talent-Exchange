@@ -1,0 +1,43 @@
+{
+  "roles": {
+    "assignments": [],
+    "available_roles": {
+      "finance_admin": [
+        "manage_commissions",
+        "manage_payment_rails",
+        "manage_withdrawals",
+        "manage_treasury_withdrawals",
+        "view_audit_log"
+      ],
+      "god_mode": [
+        "manage_admin_roles",
+        "manage_commissions",
+        "manage_payment_rails",
+        "manage_withdrawals",
+        "manage_treasury_withdrawals",
+        "manage_liquidity_desk",
+        "view_audit_log",
+        "pause_payments",
+        "view_integrity_controls"
+      ],
+      "market_ops_admin": [
+        "manage_liquidity_desk",
+        "view_audit_log",
+        "view_integrity_controls"
+      ],
+      "scoped_admin": [],
+      "support_admin": [
+        "manage_withdrawals",
+        "view_audit_log"
+      ]
+    },
+    "default_admin_role": "scoped_admin"
+  },
+  "withdrawal_controls": {
+    "deposits_via_bank_transfer": true,
+    "egame_withdrawals_enabled": true,
+    "payouts_via_bank_transfer": true,
+    "processor_mode": "manual_bank_transfer",
+    "trade_withdrawals_enabled": true
+  }
+}

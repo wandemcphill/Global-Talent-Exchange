@@ -1,0 +1,406 @@
+from __future__ import annotations
+
+import asyncio
+from dataclasses import replace
+
+from fastapi.testclient import TestClient
+import pytest
+from sqlalchemy import create_engine
+from starlette.datastructures import Headers, QueryParams
+from starlette.websockets import WebSocketDisconnect
+
+from app.api_v1.router import stream_match_commentary
+from backend.tests.support.secrets import TEST_PASSWORD
+from app.auth.service import AuthService
+from app.main import create_app
+
+
+@pytest.fixture()
+def app_client(tmp_path, monkeypatch):
+    monkeypatch.setenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", "true")
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'api_v1_router.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    app = create_app(engine=engine, run_migration_check=True)
+    with TestClient(app) as client:
+        startup_thread = getattr(app.state, "deferred_startup_thread", None)
+        if startup_thread is not None:
+            startup_thread.join(timeout=10)
+        yield app, client
+    engine.dispose()
+
+
+def _create_authenticated_user(app) -> tuple[str, str]:
+    with app.state.session_factory() as session:
+        service = AuthService()
+        user = service.register_user(
+            session,
+            email="v1fan@example.com",
+            username="v1fan",
+            password=TEST_PASSWORD,
+            display_name="V1 Fan",
+        )
+        token, _ = service.issue_access_token(user, session=session)
+        session.commit()
+        session.refresh(user)
+        return user.id, token
+
+
+def test_api_v1_requires_auth_and_wraps_success_envelopes(app_client) -> None:
+    app, client = app_client
+
+    unauthorized = client.get("/api/v2/home/dashboard")
+
+    assert unauthorized.status_code == 401
+    assert unauthorized.json() == {
+        "error": True,
+        "message": "Authentication credentials were not provided.",
+        "code": "unauthorized",
+    }
+
+    _user_id, token = _create_authenticated_user(app)
+    response = client.get(
+        "/api/v2/home/dashboard",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert "error" not in payload
+    assert "code" not in payload
+    assert payload["data"]["club"]["name"] == "Lagos Titans"
+    assert payload["data"]["live_matches"][0]["match_id"] == "m1"
+
+
+def test_api_v1_protected_environment_does_not_serve_demo_dashboard(app_client, monkeypatch) -> None:
+    app, client = app_client
+    monkeypatch.delenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", raising=False)
+    app.state.settings = replace(app.state.settings, app_env="production")
+    _user_id, token = _create_authenticated_user(app)
+
+    response = client.get(
+        "/api/v2/home/dashboard",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()["data"]
+    assert payload["club"] is None
+    assert payload["live_matches"] == []
+    assert payload["stories"] == []
+    assert payload["transfer_alerts"] == []
+
+
+def test_api_v1_protected_environment_ignores_demo_fixture_flag(app_client, monkeypatch) -> None:
+    app, client = app_client
+    monkeypatch.setenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", "true")
+    app.state.settings = replace(app.state.settings, app_env="production")
+    _user_id, token = _create_authenticated_user(app)
+
+    response = client.get(
+        "/api/v2/home/dashboard",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()["data"]
+    assert payload["club"] is None
+    assert payload["live_matches"] == []
+
+
+def test_api_v1_protected_environment_rejects_demo_mutations(app_client, monkeypatch) -> None:
+    app, client = app_client
+    monkeypatch.delenv("GTE_ENABLE_API_V1_DEMO_FIXTURES", raising=False)
+    app.state.settings = replace(app.state.settings, app_env="production")
+    _user_id, token = _create_authenticated_user(app)
+
+    response = client.post(
+        "/api/v2/market/bid",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"listing_id": "l1", "amount": 550000},
+    )
+
+    assert response.status_code == 503, response.text
+    payload = response.json()
+    assert payload["code"] in {"unavailable", "service_unavailable"}
+
+
+def test_api_v1_http_facade_preserves_mutations_between_requests(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    bid_response = client.post(
+        "/api/v2/market/bid",
+        headers=headers,
+        json={"listing_id": "l1", "amount": 550000},
+    )
+    assert bid_response.status_code == 201, bid_response.text
+    assert bid_response.json()["data"]["bid"]["amount"] == 550000
+
+    listings_response = client.get(
+        "/api/v2/market/listings",
+        headers=headers,
+        params={"page": 1, "rating_min": 80, "position": "ST"},
+    )
+    assert listings_response.status_code == 200, listings_response.text
+    listings_payload = listings_response.json()["data"]
+    assert listings_payload["total"] == 1
+    assert listings_payload["listings"][0]["latest_bid"]["amount"] == 550000
+
+    follow_response = client.post("/api/v2/users/scout_42/follow", headers=headers)
+    assert follow_response.status_code == 200, follow_response.text
+    assert follow_response.json()["data"]["following"] is True
+
+    profile_response = client.get("/api/v2/users/scout_42", headers=headers)
+    assert profile_response.status_code == 200, profile_response.text
+    assert profile_response.json()["data"]["followed_by_current_user"] is True
+
+    claim_response = client.post("/api/v2/tasks/task_daily_login/claim", headers=headers)
+    assert claim_response.status_code == 200, claim_response.text
+    assert claim_response.json()["data"]["status"] == "claimed"
+
+    tasks_response = client.get("/api/v2/tasks", headers=headers)
+    assert tasks_response.status_code == 200, tasks_response.text
+    claimed_task = next(item for item in tasks_response.json()["data"]["tasks"] if item["id"] == "task_daily_login")
+    assert claimed_task["claimed"] is True
+
+    tournament_response = client.post("/api/v2/tournaments/t1/join", headers=headers)
+    assert tournament_response.status_code == 200, tournament_response.text
+    assert tournament_response.json()["data"]["participant_count"] == 1
+
+    federation_response = client.post(
+        "/api/v2/federations",
+        headers=headers,
+        json={"name": "Lagos Managers Union", "region": "Nigeria"},
+    )
+    assert federation_response.status_code == 201, federation_response.text
+    federation_id = federation_response.json()["data"]["federation"]["id"]
+
+    vote_response = client.post(
+        "/api/v2/federations/vote",
+        headers=headers,
+        json={"federation_id": federation_id, "proposal_id": "proposal_budget_1", "vote": "yes"},
+    )
+    assert vote_response.status_code == 200, vote_response.text
+    assert vote_response.json()["data"]["vote"]["proposal_id"] == "proposal_budget_1"
+
+
+def test_api_v1_websockets_emit_match_market_and_notification_events(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    bid_response = client.post(
+        "/api/v2/market/bid",
+        headers=headers,
+        json={"listing_id": "l1", "amount": 560000},
+    )
+    assert bid_response.status_code == 201, bid_response.text
+
+    story_response = client.post(
+        "/api/v2/stories/generate",
+        headers=headers,
+        json={"title": "Shock Winner", "story_type": "story_event", "subject_id": "m1"},
+    )
+    assert story_response.status_code == 201, story_response.text
+
+    with client.websocket_connect(f"/api/v2/ws/match/m1?token={token}") as websocket:
+        event = websocket.receive_json()
+        assert event["type"] == "commentary"
+        assert event["timestamp"] == 72
+
+    with client.websocket_connect(f"/api/v2/ws/market/l1?token={token}") as websocket:
+        event = websocket.receive_json()
+        assert event["type"] == "new_bid"
+        assert event["amount"] == 560000
+
+    with client.websocket_connect(f"/api/v2/ws/notifications?token={token}") as websocket:
+        event = websocket.receive_json()
+        assert event["type"] == "story_event"
+        assert event["title"] == "Shock Winner"
+
+
+def test_api_v1_match_websocket_supports_unity_live_bridge_stream(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    unity_access_response = client.post(
+        f"/api/matches/{match_id}/unity-access",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert unity_access_response.status_code == 200, unity_access_response.text
+    unity_access_token = unity_access_response.json()["access_token"]
+
+    with client.websocket_connect(
+        f"/api/v2/ws/match/{match_id}?format=unity&access_token={unity_access_token}"
+    ) as websocket:
+        first_payload = websocket.receive_json()
+        assert first_payload["matchId"] == match_id
+        assert "players" in first_payload
+        assert "ballPosition" in first_payload
+        assert "events" in first_payload
+
+        saw_update = False
+        for _ in range(12):
+            next_payload = websocket.receive_json()
+            if (
+                next_payload.get("frameId") != first_payload.get("frameId")
+                or next_payload.get("clockMinute") != first_payload.get("clockMinute")
+                or next_payload.get("activeEventId") != first_payload.get("activeEventId")
+            ):
+                saw_update = True
+                break
+
+        assert saw_update is True
+
+
+def test_api_v1_unity_live_bridge_survives_http_bootstrap_before_websocket(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    unity_access_response = client.post(
+        f"/api/matches/{match_id}/unity-access",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert unity_access_response.status_code == 200, unity_access_response.text
+    unity_access_token = unity_access_response.json()["access_token"]
+
+    live_response = client.get(
+        f"/match/{match_id}/live",
+        headers={"Authorization": f"Bearer {unity_access_token}"},
+    )
+    assert live_response.status_code == 200, live_response.text
+    first_frame = live_response.json()
+
+    with client.websocket_connect(
+        f"/api/v2/ws/match/{match_id}?format=unity&access_token={unity_access_token}"
+    ) as websocket:
+        initial_payload = websocket.receive_json()
+        saw_update = False
+        for _ in range(12):
+            next_payload = websocket.receive_json()
+            if (
+                next_payload.get("frameId") != initial_payload.get("frameId")
+                or next_payload.get("clockMinute") != initial_payload.get("clockMinute")
+                or next_payload.get("activeEventId") != initial_payload.get("activeEventId")
+            ):
+                saw_update = True
+                break
+
+    assert initial_payload["matchId"] == match_id
+    assert first_frame["matchId"] == match_id
+    assert saw_update is True
+
+
+def test_api_v1_unity_live_access_can_be_refreshed(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    unity_access_response = client.post(
+        f"/api/matches/{match_id}/unity-access",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert unity_access_response.status_code == 200, unity_access_response.text
+    issued = unity_access_response.json()
+
+    refresh_response = client.post(
+        f"/api/matches/{match_id}/unity-access/refresh",
+        json={"refresh_token": issued["refresh_token"]},
+    )
+    assert refresh_response.status_code == 200, refresh_response.text
+    refreshed = refresh_response.json()
+
+    assert refreshed["match_id"] == match_id
+    assert refreshed["spectator_session_id"] == issued["spectator_session_id"]
+    assert refreshed["access_token"] != issued["access_token"]
+    assert refreshed["refresh_token"] != issued["refresh_token"]
+
+    live_response = client.get(
+        f"/match/{match_id}/live",
+        headers={"Authorization": f"Bearer {refreshed['access_token']}"},
+    )
+    assert live_response.status_code == 200, live_response.text
+
+
+def test_api_v1_match_websocket_rejects_unity_live_bridge_without_access_token(app_client) -> None:
+    _app, client = app_client
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(f"/api/v2/ws/match/{match_id}?format=unity"):
+            pass
+
+    assert exc_info.value.code == 4401
+
+
+def test_api_v1_match_websocket_rejects_unity_live_bridge_with_invalid_access_token(app_client) -> None:
+    _app, client = app_client
+
+    tick_response = client.post("/infinite-league/tick", params={"count": 1})
+    assert tick_response.status_code == 200, tick_response.text
+    match_id = tick_response.json()["matches"][0]["match_id"]
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            f"/api/v2/ws/match/{match_id}?format=unity&access_token=not-a-real-unity-access-token"
+        ):
+            pass
+
+    assert exc_info.value.code == 4401
+
+
+def test_api_v1_match_websocket_rejects_non_unity_requests_pre_accept(app_client) -> None:
+    app, client = app_client
+    _user_id, token = _create_authenticated_user(app)
+    unauthorized_socket = _RecordingWebSocket(app=app)
+    asyncio.run(stream_match_commentary(unauthorized_socket, "m1"))
+
+    assert unauthorized_socket.close_code == 4401
+    assert unauthorized_socket.close_reason == "unauthorized"
+    assert unauthorized_socket.accepted is False
+
+    missing_socket = _RecordingWebSocket(app=app, token=token)
+    asyncio.run(stream_match_commentary(missing_socket, "missing-match"))
+
+    assert missing_socket.close_code == 4404
+    assert missing_socket.close_reason == "not_found"
+    assert missing_socket.accepted is False
+
+
+class _RecordingWebSocket:
+    def __init__(self, *, app, token: str | None = None) -> None:
+        self.scope = {"app": app}
+        self.query_params = QueryParams("" if token is None else {"token": token})
+        self.headers = Headers({})
+        self.accepted = False
+        self.close_code: int | None = None
+        self.close_reason: str | None = None
+
+    async def close(self, code: int = 1000, reason: str | None = None) -> None:
+        self.close_code = code
+        self.close_reason = reason
+
+    async def accept(self) -> None:
+        self.accepted = True
+
+    async def send_json(self, _payload) -> None:
+        return None
+
+    async def receive_text(self) -> str:
+        raise WebSocketDisconnect(code=1000)

@@ -1,0 +1,202 @@
+config_version = "gtex-compressed-v1"
+baseline_eur_per_credit = 100000
+smoothing_factor = 0.70
+daily_movement_cap = 0.12
+demand_movement_cap = 0.03
+market_signal_cap = 0.10
+scouting_signal_cap = 0.04
+egame_signal_cap = 0.12
+gsi_neutral_score = 50.0
+gsi_smoothing_factor = 1.0
+gsi_daily_movement_cap = 0.30
+gsi_signal_cap = 0.45
+gsi_signal_scale = 140.0
+gsi_anchor_pull_strength = 0.08
+anchor_pull_strength = 0.20
+market_price_pull_strength = 0.65
+default_liquidity_weight = 0.20
+minimum_floor_ratio = 0.60
+low_liquidity_penalty = 0.10
+suspicious_trade_penalty = 0.15
+performance_scale = 850.0
+award_scale = 600.0
+transfer_scale = 900.0
+demand_scale = 1400.0
+scouting_scale = 1000.0
+egame_scale = 850.0
+big_moment_bonus = 18.0
+momentum_short_window_days = 7
+momentum_medium_window_days = 30
+momentum_short_sensitivity = 0.35
+momentum_medium_sensitivity = 0.20
+momentum_cap = 0.04
+reference_stale_days = 21
+reference_very_stale_days = 60
+reference_stale_blend = 0.45
+participant_diversity_scale = 6.0
+order_book_wide_spread_bps = 1800
+real_player_bridge_enabled = true
+real_player_bridge_version = "real-player-bridge-v1"
+real_player_bridge_smoothing_factor = 0.35
+real_player_bridge_floor_ratio = 0.85
+real_player_bridge_ceiling_ratio = 1.15
+
+[component_weights]
+ftv_weight = 0.18
+msv_weight = 0.05
+sgv_weight = 0.02
+egv_weight = 0.15
+
+[ftv_msv_blend_weights]
+ftv_weight = 0.782609
+msv_weight = 0.217391
+
+[competition_multipliers]
+"world cup" = 1.35
+"uefa club championship" = 1.30
+afcon = 1.25
+"copa america" = 1.25
+euros = 1.25
+"league a" = 1.20
+"league b" = 1.10
+"league c" = 1.05
+
+[award_impacts]
+ballon_dor_winner = 82.0
+ballon_dor_top_3 = 56.0
+ballon_dor_top_10 = 32.0
+ballon_dor_top_20 = 16.0
+player_of_the_season = 34.0
+young_player_of_the_season = 28.0
+golden_ball = 30.0
+golden_shoe = 26.0
+u20_golden = 24.0
+u20_silver = 18.0
+u20_bronze = 12.0
+u17_golden = 18.0
+u17_silver = 12.0
+u17_bronze = 8.0
+man_of_the_match = 6.0
+
+[demand_weights]
+purchases = 6.0
+sales = 5.0
+shortlist_adds = 2.5
+watchlist_adds = 1.0
+follows = 0.5
+
+[gsi_signal_weights]
+watchlist_adds = 1.8
+shortlist_adds = 3.8
+transfer_room_adds = 5.5
+scouting_activity = 6.5
+
+[egame_signal_weights]
+selection_count = 1.0
+captain_count = 2.4
+contest_win_count = 3.2
+spotlight_count = 2.0
+featured_performance_count = 2.8
+
+[liquidity_band_market_weights]
+entry = 0.15
+growth = 0.30
+premium = 0.50
+bluechip = 0.65
+marquee = 0.80
+
+[real_player_bridge_reference_weights]
+direct_verified_reference = 0.90
+inferred_reference = 0.65
+heuristic_only = 0.30
+
+[real_player_bridge_tier_multipliers]
+elite = 1.06
+featured = 1.03
+core = 1.00
+watchlist = 0.97
+
+[[weight_profiles]]
+code = "default"
+description = "Default GTEX testing-market weighting profile."
+liquidity_tiers = []
+confidence_tiers = []
+player_classes = []
+ftv_weight = 0.18
+msv_weight = 0.05
+sgv_weight = 0.02
+egv_weight = 0.15
+
+[[weight_profiles]]
+code = "prospect"
+description = "Prospects lean harder on football truth and scouting momentum."
+liquidity_tiers = []
+confidence_tiers = []
+player_classes = ["prospect"]
+ftv_weight = 0.20
+msv_weight = 0.04
+sgv_weight = 0.03
+egv_weight = 0.13
+
+[[weight_profiles]]
+code = "veteran"
+description = "Veterans stay anchored to football truth with reduced hype premium."
+liquidity_tiers = []
+confidence_tiers = []
+player_classes = ["veteran"]
+ftv_weight = 0.20
+msv_weight = 0.05
+sgv_weight = 0.01
+egv_weight = 0.14
+
+[[weight_profiles]]
+code = "low_confidence"
+description = "Low-confidence references suppress non-football influence."
+liquidity_tiers = []
+confidence_tiers = ["low"]
+player_classes = []
+ftv_weight = 0.16
+msv_weight = 0.03
+sgv_weight = 0.01
+egv_weight = 0.10
+
+[[weight_profiles]]
+code = "entry_liquidity"
+description = "Thin entry markets keep market signal tightly bounded."
+liquidity_tiers = ["entry"]
+confidence_tiers = []
+player_classes = []
+ftv_weight = 0.16
+msv_weight = 0.02
+sgv_weight = 0.02
+egv_weight = 0.10
+
+[[price_band_limits]]
+code = "default"
+min_ratio = 0.80
+max_ratio = 1.20
+
+[[price_band_limits]]
+code = "entry"
+min_ratio = 0.88
+max_ratio = 1.08
+
+[[price_band_limits]]
+code = "growth"
+min_ratio = 0.84
+max_ratio = 1.12
+
+[[price_band_limits]]
+code = "premium"
+min_ratio = 0.80
+max_ratio = 1.18
+
+[[price_band_limits]]
+code = "bluechip"
+min_ratio = 0.76
+max_ratio = 1.24
+
+[[price_band_limits]]
+code = "marquee"
+min_ratio = 0.72
+max_ratio = 1.30

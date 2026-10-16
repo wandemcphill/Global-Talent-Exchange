@@ -1,0 +1,761 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
+import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/data/story_feed_api.dart';
+import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
+import 'package:gte_frontend/features/app_routes/gte_feature_route_support.dart';
+import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_leaderboard_screen.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/presentation/dynasty_screen.dart';
+import 'package:gte_frontend/features/club_identity/dynasty/presentation/era_history_screen.dart';
+import 'package:gte_frontend/features/club_identity/jerseys/presentation/club_identity_screen.dart';
+import 'package:gte_frontend/features/club_identity/reputation/presentation/prestige_leaderboard_screen.dart';
+import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_controller.dart';
+import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_history_screen.dart';
+import 'package:gte_frontend/features/club_identity/reputation/presentation/reputation_screen.dart';
+import 'package:gte_frontend/features/club_identity/trophies/presentation/honors_timeline_screen.dart';
+import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_cabinet_screen.dart';
+import 'package:gte_frontend/features/club_identity/trophies/presentation/trophy_leaderboard_screen.dart';
+import 'package:gte_frontend/features/club_sale_market/club_sale_market.dart';
+import 'package:gte_frontend/features/creator_league_admin/creator_league_admin.dart';
+import 'package:gte_frontend/features/creator_share_market/creator_share_market.dart';
+import 'package:gte_frontend/features/creator_stadium_monetization/creator_stadium_monetization.dart';
+import 'package:gte_frontend/features/awards/gtex_awards_screen_v2.dart';
+import 'package:gte_frontend/features/fan_prediction/fan_prediction.dart';
+import 'package:gte_frontend/features/fan_wars/fan_wars.dart';
+import 'package:gte_frontend/features/federations/federations_hub_screen.dart';
+import 'package:gte_frontend/features/football_world_simulation/football_world_simulation.dart';
+import 'package:gte_frontend/features/gift_economy_admin/gift_economy_admin.dart';
+import 'package:gte_frontend/features/jackpot/presentation/gtex_jackpot_route_screen.dart';
+import 'package:gte_frontend/screens/jackpot/gtex_jackpot_win_notification_screen_v2.dart';
+import 'package:gte_frontend/features/match/gte_live_match_hub_route_screen.dart';
+import 'package:gte_frontend/features/match/replay_archive_route_screen.dart';
+import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
+import 'package:gte_frontend/features/competitions_hub/presentation/gte_competitions_hub_screen_v2.dart';
+import 'package:gte_frontend/features/news_agency/gtex_news_agency_screen_v2.dart';
+import 'package:gte_frontend/features/player_card_marketplace/player_card_marketplace.dart';
+import 'package:gte_frontend/features/regens/regens_screen_v2.dart';
+import 'package:gte_frontend/features/streamer_tournament_engine/streamer_tournament_engine.dart';
+import 'package:gte_frontend/features/transfer_news_calendar/transfer_news_calendar.dart';
+import 'package:gte_frontend/features/viral_feed/data/viral_feed_repository.dart';
+import 'package:gte_frontend/features/viral_feed/presentation/viral_feed_screen.dart';
+import 'package:gte_frontend/screens/competitions/competition_create_screen_v2.dart';
+import 'package:gte_frontend/screens/clubs/gtex_public_club_profile_screen_v2.dart';
+import 'package:gte_frontend/shared/models/auth_session.dart';
+import 'package:gte_frontend/widgets/gte_shell_theme.dart';
+import 'package:gte_frontend/widgets/gte_state_panel.dart';
+
+part 'gte_feature_route_builders.dart';
+
+class GteAppRouteRegistry {
+  const GteAppRouteRegistry({required this.dependencies});
+
+  final GteNavigationDependencies dependencies;
+
+  List<GteAppRouteRegistration> get registrations =>
+      GteAppRouteCatalog.registrations;
+
+  Route<T> routeFor<T>(GteAppRouteData route, {RouteSettings? settings}) {
+    return MaterialPageRoute<T>(
+      settings:
+          settings ??
+          RouteSettings(name: route.toUri().toString(), arguments: route),
+      builder:
+          (BuildContext context) =>
+              _GteGuardedRouteHost(registry: this, route: route),
+    );
+  }
+
+  Widget guardedScreenFor(GteAppRouteData route) {
+    return _GteGuardedRouteHost(registry: this, route: route);
+  }
+
+  Route<dynamic>? onGenerateRoute(RouteSettings settings) {
+    final GteAppRouteData? route = parseSettings(settings);
+    if (route == null) {
+      return null;
+    }
+    return routeFor<dynamic>(route, settings: settings);
+  }
+
+  Route<dynamic> onUnknownRoute(RouteSettings settings) {
+    return MaterialPageRoute<dynamic>(
+      settings: settings,
+      builder:
+          (BuildContext context) => _RouteStateScreen(
+            title: 'Route unavailable',
+            message:
+                settings.name == null
+                    ? 'No route information was provided.'
+                    : 'No screen is registered for ${settings.name}.',
+            icon: Icons.alt_route_outlined,
+          ),
+    );
+  }
+
+  GteAppRouteData? parseSettings(RouteSettings settings) {
+    final GteAppRouteData? routeFromArguments = GteAppRouteParser.parse(
+      settings.arguments,
+    );
+    if (routeFromArguments != null) {
+      return routeFromArguments;
+    }
+    return GteAppRouteParser.parse(settings.name);
+  }
+
+  Widget buildScreen(BuildContext context, GteAppRouteData route) {
+    final GteNavigationDependencies liveDependencies = dependencies;
+    if (route is CompetitionsDiscoveryRouteData) {
+      return _CompetitionHubRouteScreen(dependencies: liveDependencies);
+    }
+    if (route is CompetitionCreateRouteData) {
+      return _CompetitionCreateRouteScreen(dependencies: liveDependencies);
+    }
+    if (route is CompetitionDetailRouteData) {
+      return _CompetitionHubRouteScreen(
+        dependencies: liveDependencies,
+        competitionId: route.competitionId,
+      );
+    }
+    if (route is CompetitionJoinRouteData) {
+      return _CompetitionHubRouteScreen(
+        dependencies: liveDependencies,
+        competitionId: route.competitionId,
+        inviteCode: route.inviteCode,
+      );
+    }
+    if (route is CompetitionShareRouteData) {
+      return _CompetitionHubRouteScreen(
+        dependencies: liveDependencies,
+        competitionId: route.competitionId,
+      );
+    }
+    if (route is CompetitionWorldSuperCupRouteData) {
+      return _CompetitionHubRouteScreen(dependencies: liveDependencies);
+    }
+    if (route is ClubIdentityJerseysRouteData) {
+      return ClubIdentityScreen(
+        clubId: route.clubId,
+        initialClubName: route.clubName,
+        repository: liveDependencies.createClubIdentityRepository(),
+      );
+    }
+    if (route is ClubReputationOverviewRouteData) {
+      return ClubReputationOverviewScreen(
+        clubId: route.clubId,
+        clubName: route.clubName,
+        repository: liveDependencies.createReputationRepository(),
+      );
+    }
+    if (route is ClubReputationHistoryRouteData) {
+      return _ReputationSubscreenRouteScreen(
+        dependencies: liveDependencies,
+        clubId: route.clubId,
+        builder: (ReputationController controller) {
+          return ReputationHistoryScreen(controller: controller);
+        },
+      );
+    }
+    if (route is ClubReputationLeaderboardRouteData) {
+      return _ReputationSubscreenRouteScreen(
+        dependencies: liveDependencies,
+        clubId: route.clubId,
+        builder: (ReputationController controller) {
+          return PrestigeLeaderboardScreen(controller: controller);
+        },
+      );
+    }
+    if (route is ClubTrophyCabinetRouteData) {
+      return TrophyCabinetScreen(
+        clubId: route.clubId,
+        clubName: route.clubName,
+        repository: liveDependencies.createTrophyCabinetRepository(),
+        initialFilter: route.filter,
+      );
+    }
+    if (route is ClubTrophyTimelineRouteData) {
+      return HonorsTimelineScreen(
+        clubId: route.clubId,
+        clubName: route.clubName,
+        repository: liveDependencies.createTrophyCabinetRepository(),
+        initialFilter: route.filter,
+      );
+    }
+    if (route is ClubTrophyLeaderboardRouteData) {
+      return TrophyLeaderboardScreen(
+        repository: liveDependencies.createTrophyCabinetRepository(),
+        initialFilter: route.filter,
+      );
+    }
+    if (route is ClubDynastyOverviewRouteData) {
+      return DynastyScreen(
+        clubId: route.clubId,
+        repository: liveDependencies.createDynastyRepository(),
+        backendMode: liveDependencies.backendMode,
+        onOpenTimeline:
+            () => GteNavigationHelpers.pushRoute<void>(
+              context,
+              route: ClubDynastyHistoryRouteData(
+                clubId: route.clubId,
+                clubName: route.clubName,
+              ),
+              dependencies: liveDependencies,
+            ),
+        onOpenLeaderboard:
+            () => GteNavigationHelpers.pushRoute<void>(
+              context,
+              route: ClubDynastyLeaderboardRouteData(
+                clubId: route.clubId,
+                clubName: route.clubName,
+              ),
+              dependencies: liveDependencies,
+            ),
+      );
+    }
+    if (route is ClubDynastyHistoryRouteData) {
+      return EraHistoryScreen(
+        clubId: route.clubId,
+        repository: liveDependencies.createDynastyRepository(),
+        backendMode: liveDependencies.backendMode,
+      );
+    }
+    if (route is ClubDynastyLeaderboardRouteData) {
+      return DynastyLeaderboardScreen(
+        repository: liveDependencies.createDynastyRepository(),
+        backendMode: liveDependencies.backendMode,
+      );
+    }
+    if (route is ClubReplaysRouteData) {
+      return GteReplayArchiveRouteScreen(
+        dependencies: dependencies,
+        clubName: route.clubName,
+      );
+    }
+    if (route is StreamerTournamentsListRouteData) {
+      return _buildStreamerTournamentsListScreen(context, liveDependencies);
+    }
+    if (route is StreamerTournamentDetailRouteData) {
+      return _buildStreamerTournamentDetailScreen(
+        context,
+        liveDependencies,
+        route,
+      );
+    }
+    if (route is FanPredictionMatchRouteData) {
+      return _buildFanPredictionMatchScreen(context, liveDependencies, route);
+    }
+    if (route is PlayerCardsBrowseRouteData) {
+      return _buildPlayerCardsBrowseScreen(context, liveDependencies);
+    }
+    if (route is PlayerCardDetailRouteData) {
+      return _buildPlayerCardDetailScreen(context, liveDependencies, route);
+    }
+    if (route is PlayerCardsInventoryRouteData) {
+      return _buildPlayerCardsInventoryScreen(context, liveDependencies);
+    }
+    if (route is CreatorShareMarketClubRouteData) {
+      return _buildCreatorShareMarketClubScreen(
+        context,
+        liveDependencies,
+        route,
+      );
+    }
+    if (route is CreatorShareMarketAdminControlRouteData) {
+      return _buildCreatorShareMarketAdminControlScreen(
+        context,
+        liveDependencies,
+      );
+    }
+    if (route is ClubSaleMarketListingsRouteData) {
+      return _buildClubSaleMarketListingsScreen(context, liveDependencies);
+    }
+    if (route is ClubSaleMarketDetailRouteData) {
+      return _buildClubSaleMarketDetailScreen(context, liveDependencies, route);
+    }
+    if (route is ClubSaleMarketOwnerOffersRouteData) {
+      return _buildClubSaleMarketOwnerOffersScreen(
+        context,
+        liveDependencies,
+        route,
+      );
+    }
+    if (route is WorldOverviewRouteData) {
+      return _buildWorldOverviewScreen(context, liveDependencies);
+    }
+    if (route is RegenUniverseRouteData) {
+      return RegensScreenV2(
+        baseUrl: liveDependencies.apiBaseUrl,
+        backendMode: liveDependencies.backendMode,
+        accessToken: liveDependencies.accessToken,
+        isAuthenticated: liveDependencies.isAuthenticated,
+        isAdmin: gtexIsAdminRole(liveDependencies.currentUserRole),
+        onOpenAwards: () {
+          unawaited(
+            GteNavigationHelpers.pushRoute<void>(
+              context,
+              route: const WorldAwardsRouteData(),
+              dependencies: liveDependencies,
+            ),
+          );
+        },
+      );
+    }
+    if (route is WorldFederationsRouteData) {
+      return FederationsHubRouteScreen(
+        client: liveDependencies.createAuthedApi(),
+      );
+    }
+    if (route is WorldAwardsRouteData) {
+      return GtexAwardsScreenV2(
+        baseUrl: liveDependencies.apiBaseUrl,
+        backendMode: liveDependencies.backendMode,
+        accessToken: liveDependencies.accessToken,
+      );
+    }
+    if (route is NewsDeskRouteData) {
+      return GtexNewsAgencyScreenV2(
+        api: StoryFeedApi.standard(
+          baseUrl: liveDependencies.apiBaseUrl,
+          mode: liveDependencies.backendMode,
+          accessToken: liveDependencies.accessToken,
+        ),
+      );
+    }
+    if (route is ViralFeedRouteData) {
+      return ViralFeedScreen(
+        currentUserId: liveDependencies.currentUserId,
+        repository: ViralFeedApiRepository.standard(
+          baseUrl: liveDependencies.apiBaseUrl,
+          accessToken: liveDependencies.accessToken,
+          mode: liveDependencies.backendMode,
+        ),
+      );
+    }
+    if (route is FanWarsRouteData) {
+      return FanWarsScreen(
+        baseUrl: liveDependencies.apiBaseUrl,
+        backendMode: liveDependencies.backendMode,
+        accessToken: liveDependencies.accessToken,
+        currentUserRole: liveDependencies.currentUserRole,
+        entryId: route.entryId,
+        showHistory: route.showHistory,
+      );
+    }
+    if (route is WorldClubContextRouteData) {
+      return _buildWorldClubContextScreen(context, liveDependencies, route);
+    }
+    if (route is WorldCompetitionContextRouteData) {
+      return _buildWorldCompetitionContextScreen(
+        context,
+        liveDependencies,
+        route,
+      );
+    }
+    if (route is NationalTeamCompetitionsRouteData) {
+      return _buildNationalTeamCompetitionsScreen(context, liveDependencies);
+    }
+    if (route is NationalTeamEntryRouteData) {
+      return _buildNationalTeamEntryScreen(context, liveDependencies, route);
+    }
+    if (route is NationalTeamHistoryRouteData) {
+      return _buildNationalTeamHistoryScreen(context, liveDependencies);
+    }
+    if (route is FootballTransferCenterRouteData) {
+      return _buildFootballTransferCenterScreen(
+        context,
+        liveDependencies,
+        route,
+      );
+    }
+    if (route is BroadcastDeskRouteData) {
+      return GteLiveMatchHubRouteScreen(
+        dependencies: liveDependencies,
+        clubId: liveDependencies.currentClubId,
+        clubName: liveDependencies.currentClubName,
+      );
+    }
+    if (route is GtexJackpotRouteData) {
+      return _buildGtexJackpotScreen(context, liveDependencies);
+    }
+    if (route is GtexJackpotWinRouteData) {
+      return _buildGtexJackpotWinScreen(route);
+    }
+    if (route is ClubAiAssistantRouteData) {
+      return _buildClubAiAssistantScreen(context, liveDependencies, route);
+    }
+    if (route is CreatorStadiumClubRouteData) {
+      return _buildCreatorStadiumClubScreen(context, liveDependencies, route);
+    }
+    if (route is CreatorStadiumMatchRouteData) {
+      return _buildCreatorStadiumMatchScreen(context, liveDependencies, route);
+    }
+    if (route is CreatorStadiumAdminControlRouteData) {
+      return _buildCreatorStadiumAdminControlScreen(context, liveDependencies);
+    }
+    if (route is CreatorLeagueFinancialReportRouteData) {
+      return _buildCreatorLeagueFinancialReportScreen(
+        context,
+        liveDependencies,
+        route,
+      );
+    }
+    if (route is CreatorLeagueSettlementsRouteData) {
+      return _buildCreatorLeagueSettlementsScreen(
+        context,
+        liveDependencies,
+        route,
+      );
+    }
+    if (route is GiftStabilizerRouteData) {
+      return _buildGiftStabilizerScreen(context, liveDependencies);
+    }
+    return _RouteStateScreen(
+      title: 'Route unavailable',
+      message: 'No renderer is registered for ${route.name}.',
+      icon: Icons.alt_route_outlined,
+    );
+  }
+}
+
+class _GteGuardedRouteHost extends StatefulWidget {
+  const _GteGuardedRouteHost({required this.registry, required this.route});
+
+  final GteAppRouteRegistry registry;
+  final GteAppRouteData route;
+
+  @override
+  State<_GteGuardedRouteHost> createState() => _GteGuardedRouteHostState();
+}
+
+class _GteGuardedRouteHostState extends State<_GteGuardedRouteHost> {
+  GteGuardResolution? _resolution;
+  Object? _resolutionError;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveRoute();
+  }
+
+  @override
+  void didUpdateWidget(covariant _GteGuardedRouteHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.route.toUri() != widget.route.toUri()) {
+      _resolveRoute();
+    }
+  }
+
+  Future<void> _resolveRoute() async {
+    setState(() {
+      _resolution = null;
+      _resolutionError = null;
+    });
+    try {
+      final GteGuardResolution resolution = await GteNavigationGuardResolver(
+        dependencies: widget.registry.dependencies,
+      ).resolve(widget.route);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _resolution = resolution;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _resolutionError = error;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_resolutionError != null) {
+      return _RouteStateScreen(
+        title: 'Navigation unavailable',
+        message: _resolutionError.toString(),
+        actionLabel: 'Retry',
+        onAction: _resolveRoute,
+        icon: Icons.route_outlined,
+      );
+    }
+    if (_resolution == null) {
+      return const _RouteLoadingScreen();
+    }
+    final gate = _resolution!.featureGateDecision;
+    if (gate != null && gate.blocked) {
+      return _RouteStateScreen(
+        title: '${gate.title} unavailable',
+        message:
+            gate.message ??
+            'This route is controlled by Launch Control and is not available right now.',
+        actionLabel: 'Retry',
+        onAction: _resolveRoute,
+        icon: Icons.lock_clock_outlined,
+      );
+    }
+    return widget.registry.buildScreen(context, _resolution!.route);
+  }
+}
+
+class _CompetitionCreateRouteScreen extends StatefulWidget {
+  const _CompetitionCreateRouteScreen({required this.dependencies});
+
+  final GteNavigationDependencies dependencies;
+
+  @override
+  State<_CompetitionCreateRouteScreen> createState() =>
+      _CompetitionCreateRouteScreenState();
+}
+
+class _CompetitionCreateRouteScreenState
+    extends State<_CompetitionCreateRouteScreen> {
+  late final CompetitionController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = CompetitionController(
+      api: widget.dependencies.createCompetitionApi(),
+      currentUserId: widget.dependencies.currentUserId,
+      currentUserName: widget.dependencies.currentUserName,
+    )..startNewDraft();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final VoidCallback? openLogin =
+        widget.dependencies.onOpenLogin == null
+            ? null
+            : () {
+              widget.dependencies.onOpenLogin!.call(context);
+            };
+    return CompetitionCreateScreenV2(
+      controller: _controller,
+      isAuthenticated: widget.dependencies.isAuthenticated,
+      onOpenLogin: openLogin,
+    );
+  }
+}
+
+class _CompetitionHubRouteScreen extends StatefulWidget {
+  const _CompetitionHubRouteScreen({
+    required this.dependencies,
+    this.competitionId,
+    this.inviteCode,
+  });
+
+  final GteNavigationDependencies dependencies;
+  final String? competitionId;
+  final String? inviteCode;
+
+  @override
+  State<_CompetitionHubRouteScreen> createState() =>
+      _CompetitionHubRouteScreenState();
+}
+
+class _CompetitionHubRouteScreenState
+    extends State<_CompetitionHubRouteScreen> {
+  late final CompetitionController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = CompetitionController(
+      api: widget.dependencies.createCompetitionApi(),
+      currentUserId: widget.dependencies.currentUserId,
+      currentUserName: widget.dependencies.currentUserName,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final VoidCallback? openLogin =
+        widget.dependencies.onOpenLogin == null
+            ? null
+            : () {
+              widget.dependencies.onOpenLogin!.call(context);
+            };
+    return GteCompetitionsHubScreenV2(
+      controller: _controller,
+      isAuthenticated: widget.dependencies.isAuthenticated,
+      canHostCompetitions: widget.dependencies.canHostCompetitions,
+      isCheckingCreatorAccess: widget.dependencies.isCheckingCreatorAccess,
+      initialCompetitionId: widget.competitionId,
+      inviteCode: widget.inviteCode,
+      onOpenLogin: openLogin,
+      onOpenCreatorAccessRequest:
+          widget.dependencies.onOpenCreatorAccessRequest == null
+              ? null
+              : () {
+                widget.dependencies.onOpenCreatorAccessRequest!.call(context);
+              },
+      navigationDependencies: widget.dependencies,
+    );
+  }
+}
+
+class _ReputationSubscreenRouteScreen extends StatefulWidget {
+  const _ReputationSubscreenRouteScreen({
+    required this.dependencies,
+    required this.clubId,
+    required this.builder,
+  });
+
+  final GteNavigationDependencies dependencies;
+  final String clubId;
+  final Widget Function(ReputationController controller) builder;
+
+  @override
+  State<_ReputationSubscreenRouteScreen> createState() =>
+      _ReputationSubscreenRouteScreenState();
+}
+
+class _ReputationSubscreenRouteScreenState
+    extends State<_ReputationSubscreenRouteScreen> {
+  late final ReputationController _controller;
+  String? _errorMessage;
+  bool _isReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ReputationController(
+      repository: widget.dependencies.createReputationRepository(),
+      clubId: widget.clubId,
+    );
+    _prime();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _prime() async {
+    setState(() {
+      _isReady = false;
+      _errorMessage = null;
+    });
+    try {
+      await _controller.load();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isReady = true;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = AppFeedback.messageFor(error);
+        _isReady = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isReady && !_controller.hasData) {
+      return const _RouteLoadingScreen(title: 'Loading reputation');
+    }
+    if (_errorMessage != null && !_controller.hasData) {
+      return _RouteStateScreen(
+        title: 'Reputation unavailable',
+        message: _errorMessage!,
+        actionLabel: 'Retry',
+        onAction: _prime,
+        icon: Icons.stars_outlined,
+      );
+    }
+    return widget.builder(_controller);
+  }
+}
+
+class _RouteLoadingScreen extends StatelessWidget {
+  const _RouteLoadingScreen({this.title = 'Opening route'});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: gteBackdropDecoration(),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(title, style: Theme.of(context).textTheme.titleMedium),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RouteStateScreen extends StatelessWidget {
+  const _RouteStateScreen({
+    required this.title,
+    required this.message,
+    required this.icon,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: gteBackdropDecoration(),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: GteStatePanel(
+                title: title,
+                message: message,
+                actionLabel: actionLabel,
+                onAction: onAction,
+                icon: icon,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

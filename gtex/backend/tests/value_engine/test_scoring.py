@@ -1,0 +1,791 @@
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
+import unittest
+
+from app.core.config import PriceBandLimit, ValueWeightProfile
+from app.ingestion.models import CompetitionContext, NormalizedAwardEvent, NormalizedMatchEvent, NormalizedTransferEvent
+from app.value_engine.models import (
+    DemandSignal,
+    EGameSignal,
+    HistoricalValuePoint,
+    MarketPulse,
+    PlayerProfileContext,
+    PlayerValueInput,
+    ReferenceValueContext,
+    ScoutingSignal,
+    TradePrint,
+)
+from app.value_engine.scoring import ValueEngine, credits_from_real_world_value
+
+
+class ValueEngineScoringTests(unittest.TestCase):
+    def test_baseline_conversion_uses_gtex_anchor_curve(self) -> None:
+        self.assertEqual(credits_from_real_world_value(100_000_000), 75.0)
+        self.assertEqual(credits_from_real_world_value(75_000_000), 61.5)
+        self.assertEqual(credits_from_real_world_value(2_000_000), 1.0)
+
+    def test_snapshot_combines_football_truth_market_signal_and_published_layers(self) -> None:
+        engine = ValueEngine()
+        competition = CompetitionContext(competition_id="wc", name="World Cup", stage="final")
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-1",
+                player_name="Ada Forward",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=90_000_000,
+                current_credits=68.0,
+                previous_ftv_credits=67.5,
+                previous_pcv_credits=68.0,
+                previous_gsi_score=52.0,
+                liquidity_band="marquee",
+                match_events=(
+                    NormalizedMatchEvent(
+                        source="provider_a",
+                        source_event_id="m1:p1",
+                        match_id="match-1",
+                        player_id="p-1",
+                        player_name="Ada Forward",
+                        team_id="a",
+                        team_name="Alpha",
+                        opponent_id="b",
+                        opponent_name="Beta",
+                        competition=competition,
+                        occurred_at=datetime(2026, 3, 1, 20, 0, tzinfo=timezone.utc),
+                        minutes=90,
+                        rating=9.2,
+                        goals=1,
+                        assists=0,
+                        won_match=True,
+                        won_final=True,
+                        big_moment=True,
+                        started=True,
+                    ),
+                ),
+                transfer_events=(
+                    NormalizedTransferEvent(
+                        source="transfer_wire",
+                        source_event_id="tx-1",
+                        player_id="p-1",
+                        player_name="Ada Forward",
+                        occurred_at=datetime(2026, 3, 2, 12, 0, tzinfo=timezone.utc),
+                        from_club="Alpha",
+                        to_club="Galacticos",
+                        from_competition="League A",
+                        to_competition="UEFA Club Championship",
+                        reported_fee_eur=110_000_000,
+                        status="completed",
+                    ),
+                ),
+                award_events=(
+                    NormalizedAwardEvent(
+                        source="awards_feed",
+                        source_event_id="award-1",
+                        player_id="p-1",
+                        player_name="Ada Forward",
+                        occurred_at=datetime(2026, 3, 4, 9, 0, tzinfo=timezone.utc),
+                        award_code="ballon_dor_top_3",
+                        award_name="Ballon dOr",
+                        rank=3,
+                    ),
+                ),
+                demand_signal=DemandSignal(
+                    purchases=12,
+                    sales=4,
+                    shortlist_adds=30,
+                    watchlist_adds=60,
+                    follows=100,
+                    suspicious_purchases=2,
+                    suspicious_watchlist_adds=10,
+                ),
+                scouting_signal=ScoutingSignal(
+                    shortlist_adds=30,
+                    watchlist_adds=60,
+                    transfer_room_adds=8,
+                    scouting_activity=12,
+                    suspicious_watchlist_adds=10,
+                ),
+                market_pulse=MarketPulse(
+                    midpoint_price_credits=74.0,
+                    best_bid_price_credits=73.0,
+                    best_ask_price_credits=75.0,
+                ),
+            )
+        )
+
+        self.assertGreater(snapshot.football_truth_value_credits, 0.0)
+        self.assertGreater(snapshot.market_signal_value_credits, snapshot.football_truth_value_credits)
+        self.assertGreater(snapshot.target_credits, snapshot.previous_credits)
+        self.assertEqual(snapshot.published_card_value_credits, snapshot.target_credits)
+        self.assertGreater(snapshot.global_scouting_index, snapshot.previous_global_scouting_index)
+        self.assertIn("big_moment", snapshot.drivers)
+        self.assertIn("global_scouting_index", snapshot.drivers)
+        self.assertIn("market_snapshot", snapshot.drivers)
+        self.assertLessEqual(snapshot.breakdown.capped_adjustment_pct, 0.12)
+
+    def test_low_liquidity_players_stay_closer_to_ftv_than_high_liquidity_players(self) -> None:
+        engine = ValueEngine()
+        payload = dict(
+            player_id="p-2",
+            player_name="Kai Creator",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=40_000_000,
+            current_credits=30.0,
+            previous_ftv_credits=30.0,
+            previous_pcv_credits=30.0,
+            demand_signal=DemandSignal(purchases=18, shortlist_adds=50, follows=90),
+            market_pulse=MarketPulse(midpoint_price_credits=38.0),
+        )
+
+        low_liquidity = engine.build_snapshot(PlayerValueInput(liquidity_band="entry", **payload))
+        high_liquidity = engine.build_snapshot(PlayerValueInput(liquidity_band="marquee", **payload))
+
+        low_gap = abs(low_liquidity.market_signal_value_credits - low_liquidity.football_truth_value_credits)
+        high_gap = abs(high_liquidity.market_signal_value_credits - high_liquidity.football_truth_value_credits)
+
+        self.assertLess(low_gap, high_gap)
+        self.assertLessEqual(low_liquidity.breakdown.liquidity_weight, high_liquidity.breakdown.liquidity_weight)
+        self.assertLess(low_liquidity.target_credits, high_liquidity.target_credits)
+
+    def test_elite_bands_use_tighter_update_caps_than_entry_bands(self) -> None:
+        engine = ValueEngine()
+        payload = dict(
+            player_id="p-cap",
+            player_name="Cap Check",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=50_000_000,
+            previous_ftv_credits=60.0,
+            previous_pcv_credits=60.0,
+        )
+
+        entry_snapshot = engine.build_snapshot(PlayerValueInput(liquidity_band="entry", **payload))
+        marquee_snapshot = engine.build_snapshot(PlayerValueInput(liquidity_band="marquee", **payload))
+
+        self.assertGreater(entry_snapshot.breakdown.band_update_cap_pct, marquee_snapshot.breakdown.band_update_cap_pct)
+        self.assertGreater(abs(entry_snapshot.movement_pct), abs(marquee_snapshot.movement_pct))
+        self.assertEqual(entry_snapshot.breakdown.band_update_cap_pct, 0.15)
+        self.assertEqual(marquee_snapshot.breakdown.band_update_cap_pct, 0.05)
+
+    def test_published_card_value_moves_toward_market_signal_value_from_previous_snapshot(self) -> None:
+        engine = ValueEngine()
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-3",
+                player_name="Mina Anchor",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=55_000_000,
+                current_credits=44.0,
+                previous_ftv_credits=43.5,
+                previous_pcv_credits=44.0,
+                liquidity_band="premium",
+                demand_signal=DemandSignal(purchases=10, watchlist_adds=35, follows=70),
+                market_pulse=MarketPulse(midpoint_price_credits=52.0),
+            )
+        )
+
+        self.assertGreater(snapshot.market_signal_value_credits, snapshot.previous_credits)
+        self.assertGreater(snapshot.target_credits, snapshot.previous_credits)
+        self.assertLess(snapshot.target_credits, snapshot.market_signal_value_credits)
+        self.assertAlmostEqual(
+            snapshot.breakdown.capped_adjustment_pct * engine.config.smoothing_factor,
+            snapshot.movement_pct,
+            places=3,
+        )
+
+    def test_last_trade_signal_is_not_used_as_naive_price_input(self) -> None:
+        engine = ValueEngine()
+        base_payload = PlayerValueInput(
+            player_id="p-4",
+            player_name="Noah Steady",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=35_000_000,
+            current_credits=25.0,
+            previous_ftv_credits=25.0,
+            previous_pcv_credits=25.0,
+            liquidity_band="marquee",
+        )
+
+        with_last_trade = engine.build_snapshot(
+            replace(
+                base_payload,
+                market_pulse=MarketPulse(last_trade_price_credits=48.0),
+            )
+        )
+        without_last_trade = engine.build_snapshot(base_payload)
+
+        self.assertEqual(with_last_trade.market_signal_value_credits, without_last_trade.market_signal_value_credits)
+        self.assertEqual(with_last_trade.target_credits, without_last_trade.target_credits)
+        self.assertIn("last_trade_ignored", with_last_trade.drivers)
+
+    def test_scouting_interest_adds_only_bounded_price_uplift(self) -> None:
+        engine = ValueEngine()
+        base_payload = PlayerValueInput(
+            player_id="p-5",
+            player_name="Iris Scout",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=50_000_000,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
+            previous_gsi_score=45.0,
+            liquidity_band="premium",
+        )
+
+        quiet_snapshot = engine.build_snapshot(base_payload)
+        scouting_snapshot = engine.build_snapshot(
+            replace(
+                base_payload,
+                scouting_signal=ScoutingSignal(
+                    watchlist_adds=80,
+                    shortlist_adds=35,
+                    transfer_room_adds=14,
+                    scouting_activity=10,
+                ),
+            )
+        )
+
+        self.assertGreater(scouting_snapshot.target_credits, quiet_snapshot.target_credits)
+        self.assertLess(scouting_snapshot.target_credits - quiet_snapshot.target_credits, 2.0)
+        self.assertGreater(
+            scouting_snapshot.scouting_signal_value_credits,
+            quiet_snapshot.scouting_signal_value_credits,
+        )
+        self.assertGreater(scouting_snapshot.global_scouting_index, quiet_snapshot.global_scouting_index)
+        self.assertGreater(scouting_snapshot.global_scouting_index_movement_pct, quiet_snapshot.global_scouting_index_movement_pct)
+
+    def test_card_price_can_move_without_dragging_gsi_with_it(self) -> None:
+        engine = ValueEngine()
+        scouting_signal = ScoutingSignal(watchlist_adds=20, shortlist_adds=8, transfer_room_adds=3, scouting_activity=4)
+        base_payload = PlayerValueInput(
+            player_id="p-6",
+            player_name="Omar Market",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=48_000_000,
+            current_credits=38.0,
+            previous_ftv_credits=38.0,
+            previous_pcv_credits=38.0,
+            previous_gsi_score=54.0,
+            liquidity_band="marquee",
+            scouting_signal=scouting_signal,
+        )
+
+        neutral_snapshot = engine.build_snapshot(base_payload)
+        price_snapshot = engine.build_snapshot(
+            replace(
+                base_payload,
+                demand_signal=DemandSignal(purchases=12, sales=4),
+                market_pulse=MarketPulse(midpoint_price_credits=42.0),
+            )
+        )
+
+        self.assertGreater(price_snapshot.target_credits, neutral_snapshot.target_credits)
+        self.assertEqual(price_snapshot.global_scouting_index, neutral_snapshot.global_scouting_index)
+        self.assertEqual(
+            price_snapshot.global_scouting_index_movement_pct,
+            neutral_snapshot.global_scouting_index_movement_pct,
+        )
+
+    def test_gsi_can_move_faster_than_pcv(self) -> None:
+        engine = ValueEngine()
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-7",
+                player_name="Rhea Tracker",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=52_000_000,
+                current_credits=42.0,
+                previous_ftv_credits=42.0,
+                previous_pcv_credits=42.0,
+                previous_gsi_score=50.0,
+                liquidity_band="growth",
+                demand_signal=DemandSignal(purchases=3, sales=1),
+                market_pulse=MarketPulse(midpoint_price_credits=44.0),
+                scouting_signal=ScoutingSignal(
+                    watchlist_adds=120,
+                    shortlist_adds=60,
+                    transfer_room_adds=18,
+                    scouting_activity=22,
+                ),
+            )
+        )
+
+        self.assertGreater(snapshot.global_scouting_index_movement_pct, snapshot.movement_pct)
+        self.assertGreater(snapshot.global_scouting_index, snapshot.previous_global_scouting_index)
+
+    def test_shadow_ignored_wash_trades_do_not_move_price(self) -> None:
+        engine = ValueEngine()
+        base_payload = PlayerValueInput(
+            player_id="p-8",
+            player_name="Lena Signal",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=50_000_000,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
+            liquidity_band="marquee",
+        )
+
+        neutral_snapshot = engine.build_snapshot(base_payload)
+        suspicious_snapshot = engine.build_snapshot(
+            replace(
+                base_payload,
+                market_pulse=MarketPulse(
+                    trade_prints=(
+                        TradePrint(
+                            trade_id="wash-1",
+                            seller_user_id="alpha",
+                            buyer_user_id="bravo",
+                            price_credits=62.0,
+                            occurred_at=datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
+                            shadow_ignored=True,
+                        ),
+                        TradePrint(
+                            trade_id="wash-2",
+                            seller_user_id="bravo",
+                            buyer_user_id="alpha",
+                            price_credits=62.2,
+                            occurred_at=datetime(2026, 3, 5, 12, 0, tzinfo=timezone.utc),
+                            shadow_ignored=True,
+                        ),
+                    ),
+                ),
+            )
+        )
+
+        self.assertEqual(suspicious_snapshot.target_credits, neutral_snapshot.target_credits)
+        self.assertEqual(suspicious_snapshot.market_signal_value_credits, neutral_snapshot.market_signal_value_credits)
+        self.assertEqual(suspicious_snapshot.breakdown.shadow_ignored_trade_count, 2)
+        self.assertEqual(suspicious_snapshot.breakdown.wash_trade_count, 2)
+        self.assertEqual(suspicious_snapshot.breakdown.trusted_trade_count, 0)
+        self.assertTrue(suspicious_snapshot.breakdown.thin_market)
+        self.assertIn("shadow_ignored_trades", suspicious_snapshot.drivers)
+        self.assertIn("wash_trade_detected", suspicious_snapshot.drivers)
+
+    def test_wash_trades_reduce_market_pull_vs_clean_market(self) -> None:
+        engine = ValueEngine()
+        base_payload = PlayerValueInput(
+            player_id="p-9",
+            player_name="Tariq Market",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=50_000_000,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
+            liquidity_band="marquee",
+            demand_signal=DemandSignal(purchases=10, follows=35),
+        )
+
+        clean_snapshot = engine.build_snapshot(
+            replace(
+                base_payload,
+                market_pulse=MarketPulse(
+                    midpoint_price_credits=48.0,
+                    trade_prints=(
+                        TradePrint(
+                            trade_id="clean-1",
+                            seller_user_id="u1",
+                            buyer_user_id="u2",
+                            price_credits=47.5,
+                            occurred_at=datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc),
+                        ),
+                        TradePrint(
+                            trade_id="clean-2",
+                            seller_user_id="u3",
+                            buyer_user_id="u4",
+                            price_credits=48.0,
+                            occurred_at=datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc),
+                        ),
+                        TradePrint(
+                            trade_id="clean-3",
+                            seller_user_id="u5",
+                            buyer_user_id="u6",
+                            price_credits=48.2,
+                            occurred_at=datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
+                        ),
+                    ),
+                    holder_count=28,
+                    top_holder_share_pct=0.11,
+                    top_3_holder_share_pct=0.29,
+                ),
+            )
+        )
+        wash_snapshot = engine.build_snapshot(
+            replace(
+                base_payload,
+                market_pulse=MarketPulse(
+                    midpoint_price_credits=48.0,
+                    trade_prints=(
+                        TradePrint(
+                            trade_id="wash-1",
+                            seller_user_id="ring-a",
+                            buyer_user_id="ring-b",
+                            price_credits=48.0,
+                            occurred_at=datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc),
+                        ),
+                        TradePrint(
+                            trade_id="wash-2",
+                            seller_user_id="ring-b",
+                            buyer_user_id="ring-a",
+                            price_credits=48.2,
+                            occurred_at=datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc),
+                        ),
+                    ),
+                    holder_count=28,
+                    top_holder_share_pct=0.11,
+                    top_3_holder_share_pct=0.29,
+                ),
+            )
+        )
+
+        self.assertGreater(clean_snapshot.target_credits, wash_snapshot.target_credits)
+        self.assertGreater(clean_snapshot.breakdown.trade_trust_score, wash_snapshot.breakdown.trade_trust_score)
+        self.assertGreater(
+            clean_snapshot.breakdown.anti_manipulation_guard_multiplier,
+            wash_snapshot.breakdown.anti_manipulation_guard_multiplier,
+        )
+        self.assertEqual(wash_snapshot.breakdown.wash_trade_count, 2)
+        self.assertTrue(wash_snapshot.breakdown.thin_market)
+
+    def test_circular_trades_are_ignored_from_trusted_trade_price(self) -> None:
+        engine = ValueEngine()
+        base_payload = PlayerValueInput(
+            player_id="p-10",
+            player_name="Juno Loop",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=50_000_000,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
+            liquidity_band="premium",
+        )
+
+        trusted_only_snapshot = engine.build_snapshot(
+            replace(
+                base_payload,
+                market_pulse=MarketPulse(
+                    trade_prints=(
+                        TradePrint(
+                            trade_id="trusted-1",
+                            seller_user_id="real-a",
+                            buyer_user_id="real-b",
+                            price_credits=42.0,
+                            occurred_at=datetime(2026, 3, 5, 13, 0, tzinfo=timezone.utc),
+                        ),
+                    ),
+                ),
+            )
+        )
+        circular_snapshot = engine.build_snapshot(
+            replace(
+                base_payload,
+                market_pulse=MarketPulse(
+                    trade_prints=(
+                        TradePrint(
+                            trade_id="trusted-1",
+                            seller_user_id="real-a",
+                            buyer_user_id="real-b",
+                            price_credits=42.0,
+                            occurred_at=datetime(2026, 3, 5, 13, 0, tzinfo=timezone.utc),
+                        ),
+                        TradePrint(
+                            trade_id="cycle-1",
+                            seller_user_id="c1",
+                            buyer_user_id="c2",
+                            price_credits=56.0,
+                            occurred_at=datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc),
+                        ),
+                        TradePrint(
+                            trade_id="cycle-2",
+                            seller_user_id="c2",
+                            buyer_user_id="c3",
+                            price_credits=56.2,
+                            occurred_at=datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
+                        ),
+                        TradePrint(
+                            trade_id="cycle-3",
+                            seller_user_id="c3",
+                            buyer_user_id="c1",
+                            price_credits=56.1,
+                            occurred_at=datetime(2026, 3, 5, 11, 0, tzinfo=timezone.utc),
+                        ),
+                    ),
+                ),
+            )
+        )
+
+        self.assertLess(circular_snapshot.target_credits, trusted_only_snapshot.target_credits)
+        self.assertEqual(circular_snapshot.breakdown.snapshot_market_price_credits, 42.0)
+        self.assertEqual(circular_snapshot.breakdown.trusted_trade_price_credits, 42.0)
+        self.assertEqual(circular_snapshot.breakdown.circular_trade_count, 3)
+        self.assertIn("circular_trade_detected", circular_snapshot.drivers)
+
+    def test_holder_concentration_penalty_and_thin_market_dampen_market_signal(self) -> None:
+        engine = ValueEngine()
+        base_payload = PlayerValueInput(
+            player_id="p-11",
+            player_name="Nia Float",
+            as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            reference_market_value_eur=50_000_000,
+            current_credits=40.0,
+            previous_ftv_credits=40.0,
+            previous_pcv_credits=40.0,
+            liquidity_band="marquee",
+            demand_signal=DemandSignal(purchases=8, follows=40),
+        )
+
+        deep_market_snapshot = engine.build_snapshot(
+            replace(
+                base_payload,
+                market_pulse=MarketPulse(
+                    midpoint_price_credits=44.0,
+                    trade_prints=(
+                        TradePrint(
+                            trade_id="deep-1",
+                            seller_user_id="d1",
+                            buyer_user_id="d2",
+                            price_credits=43.8,
+                            occurred_at=datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc),
+                        ),
+                        TradePrint(
+                            trade_id="deep-2",
+                            seller_user_id="d3",
+                            buyer_user_id="d4",
+                            price_credits=44.1,
+                            occurred_at=datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc),
+                        ),
+                        TradePrint(
+                            trade_id="deep-3",
+                            seller_user_id="d5",
+                            buyer_user_id="d6",
+                            price_credits=43.9,
+                            occurred_at=datetime(2026, 3, 5, 10, 0, tzinfo=timezone.utc),
+                        ),
+                    ),
+                    holder_count=36,
+                    top_holder_share_pct=0.12,
+                    top_3_holder_share_pct=0.31,
+                ),
+            )
+        )
+        concentrated_snapshot = engine.build_snapshot(
+            replace(
+                base_payload,
+                market_pulse=MarketPulse(
+                    midpoint_price_credits=44.0,
+                    trade_prints=(
+                        TradePrint(
+                            trade_id="thin-1",
+                            seller_user_id="x1",
+                            buyer_user_id="x2",
+                            price_credits=44.0,
+                            occurred_at=datetime(2026, 3, 5, 8, 0, tzinfo=timezone.utc),
+                        ),
+                    ),
+                    holder_count=4,
+                    top_holder_share_pct=0.55,
+                    top_3_holder_share_pct=0.95,
+                ),
+            )
+        )
+
+        self.assertGreater(deep_market_snapshot.target_credits, concentrated_snapshot.target_credits)
+        self.assertGreater(
+            concentrated_snapshot.breakdown.holder_concentration_penalty_pct,
+            0.0,
+        )
+        self.assertTrue(concentrated_snapshot.breakdown.thin_market)
+        self.assertIn("holder_concentration_penalty", concentrated_snapshot.drivers)
+        self.assertIn("thin_market", concentrated_snapshot.drivers)
+
+    def test_price_band_limits_cap_blended_target_when_market_signal_runs_hot(self) -> None:
+        base_engine = ValueEngine()
+        engine = ValueEngine(
+            config=replace(
+                base_engine.config,
+                ftv_weight=0.0,
+                msv_weight=1.0,
+                sgv_weight=0.0,
+                egv_weight=0.0,
+                weight_profiles=(
+                    ValueWeightProfile(
+                        code="default",
+                        description="Test market-dominant profile",
+                        liquidity_tiers=(),
+                        confidence_tiers=(),
+                        player_classes=(),
+                        ftv_weight=0.0,
+                        msv_weight=1.0,
+                        sgv_weight=0.0,
+                        egv_weight=0.0,
+                    ),
+                ),
+                price_band_limits=(
+                    PriceBandLimit(code="default", min_ratio=0.80, max_ratio=1.20),
+                    PriceBandLimit(code="entry", min_ratio=0.95, max_ratio=1.05),
+                ),
+            )
+        )
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-12",
+                player_name="Band Guard",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=40_000_000,
+                current_credits=30.0,
+                previous_ftv_credits=30.0,
+                previous_pcv_credits=30.0,
+                liquidity_band="entry",
+                demand_signal=DemandSignal(purchases=20, follows=80),
+                market_pulse=MarketPulse(midpoint_price_credits=48.0),
+            )
+        )
+
+        self.assertGreater(snapshot.market_signal_value_credits, snapshot.breakdown.price_band_ceiling_credits)
+        self.assertEqual(snapshot.breakdown.band_limited_target_credits, snapshot.breakdown.price_band_ceiling_credits)
+        self.assertLessEqual(snapshot.target_credits, snapshot.breakdown.price_band_ceiling_credits)
+        self.assertIn("price_band_guard", snapshot.drivers)
+
+    def test_position_aware_seeding_keeps_forwards_above_goalkeepers_with_like_for_like_profiles(self) -> None:
+        engine = ValueEngine()
+        shared_reference = ReferenceValueContext(
+            market_value_eur=12_000_000,
+            source="heuristic_profile_baseline",
+            confidence_tier="heuristic_only",
+            confidence_score=35.0,
+            blended_with_profile_baseline=True,
+        )
+        goalkeeper_snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="gk-1",
+                player_name="Keeper One",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=12_000_000,
+                profile_context=PlayerProfileContext(
+                    age_years=24.0,
+                    position_family="goalkeeper",
+                    appearances=28,
+                    starts=28,
+                    minutes_played=2520,
+                    recent_form_rating=7.1,
+                    clean_sheets=12,
+                    saves=98,
+                ),
+                reference_context=shared_reference,
+            )
+        )
+        forward_snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="fw-1",
+                player_name="Forward One",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=12_000_000,
+                profile_context=PlayerProfileContext(
+                    age_years=24.0,
+                    position_family="forward",
+                    appearances=28,
+                    starts=28,
+                    minutes_played=2520,
+                    recent_form_rating=7.1,
+                    goals=18,
+                    assists=8,
+                ),
+                reference_context=shared_reference,
+            )
+        )
+
+        self.assertGreater(
+            forward_snapshot.breakdown.seeded_reference_market_value_eur,
+            goalkeeper_snapshot.breakdown.seeded_reference_market_value_eur,
+        )
+        self.assertGreater(forward_snapshot.football_truth_value_credits, goalkeeper_snapshot.football_truth_value_credits)
+
+    def test_stale_reference_rebases_toward_profile_baseline(self) -> None:
+        engine = ValueEngine()
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-stale",
+                player_name="Stale Anchor",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=22_000_000,
+                profile_context=PlayerProfileContext(
+                    age_years=22.0,
+                    position_family="forward",
+                    appearances=30,
+                    starts=26,
+                    minutes_played=2400,
+                    recent_form_rating=7.8,
+                    goals=20,
+                    assists=9,
+                    player_class="prospect",
+                ),
+                reference_context=ReferenceValueContext(
+                    market_value_eur=22_000_000,
+                    source="market_value_feed",
+                    confidence_tier="inferred_reference",
+                    confidence_score=58.0,
+                    staleness_days=90,
+                    is_stale=True,
+                    blended_with_profile_baseline=True,
+                ),
+            )
+        )
+
+        self.assertEqual(snapshot.breakdown.reference_confidence_tier, "inferred_reference")
+        self.assertGreater(snapshot.breakdown.seeded_reference_market_value_eur, 22_000_000)
+        self.assertLess(snapshot.confidence_score, 80.0)
+        self.assertIn("stale_reference_rebase", snapshot.reason_codes)
+
+    def test_egame_influence_is_bounded_by_cap(self) -> None:
+        engine = ValueEngine()
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-egame",
+                player_name="Arena Star",
+                as_of=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                reference_market_value_eur=45_000_000,
+                previous_ftv_credits=35.0,
+                previous_pcv_credits=35.0,
+                egame_signal=EGameSignal(
+                    selection_count=600,
+                    captain_count=180,
+                    contest_win_count=75,
+                    spotlight_count=40,
+                    featured_performance_count=22,
+                ),
+            )
+        )
+
+        max_egame_value = round(
+            snapshot.football_truth_value_credits * (1.0 + engine.config.egame_signal_cap),
+            2,
+        )
+        self.assertLessEqual(snapshot.breakdown.egame_adjustment_pct, engine.config.egame_signal_cap)
+        self.assertLessEqual(snapshot.egame_signal_value_credits, max_egame_value)
+        self.assertGreater(snapshot.egame_signal_value_credits, snapshot.football_truth_value_credits)
+
+    def test_positive_history_creates_upward_trend_without_breaking_daily_cap(self) -> None:
+        engine = ValueEngine()
+        as_of = datetime(2026, 3, 10, tzinfo=timezone.utc)
+        snapshot = engine.build_snapshot(
+            PlayerValueInput(
+                player_id="p-momentum",
+                player_name="Momentum Mid",
+                as_of=as_of,
+                reference_market_value_eur=50_000_000,
+                previous_ftv_credits=40.5,
+                previous_pcv_credits=41.0,
+                historical_values=(
+                    HistoricalValuePoint(as_of=as_of - timedelta(days=30), published_value_credits=37.0, confidence_score=62.0),
+                    HistoricalValuePoint(as_of=as_of - timedelta(days=7), published_value_credits=39.5, confidence_score=68.0),
+                    HistoricalValuePoint(as_of=as_of - timedelta(days=1), published_value_credits=41.0, confidence_score=72.0),
+                ),
+            )
+        )
+
+        self.assertEqual(snapshot.trend_direction, "up")
+        self.assertGreater(snapshot.trend_7d_pct, 0.0)
+        self.assertGreater(snapshot.trend_30d_pct, 0.0)
+        self.assertLessEqual(abs(snapshot.movement_pct), engine.config.daily_movement_cap)
+
+
+if __name__ == "__main__":
+    unittest.main()

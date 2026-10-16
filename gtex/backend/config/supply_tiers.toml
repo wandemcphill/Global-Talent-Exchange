@@ -1,0 +1,49 @@
+[[tiers]]
+code = "icon"
+name = "icon"
+min_score = 0.97
+max_score = 1.00
+target_share = 0.01
+circulating_supply = 1400
+daily_pack_supply = 42
+season_mint_cap = 2200
+
+[[tiers]]
+code = "elite"
+name = "elite"
+min_score = 0.90
+max_score = 0.9699
+target_share = 0.04
+circulating_supply = 900
+daily_pack_supply = 28
+season_mint_cap = 1500
+
+[[tiers]]
+code = "core"
+name = "core"
+min_score = 0.72
+max_score = 0.8999
+target_share = 0.20
+circulating_supply = 520
+daily_pack_supply = 14
+season_mint_cap = 900
+
+[[tiers]]
+code = "prospect"
+name = "prospect"
+min_score = 0.50
+max_score = 0.7199
+target_share = 0.30
+circulating_supply = 220
+daily_pack_supply = 5
+season_mint_cap = 360
+
+[[tiers]]
+code = "discovery"
+name = "discovery"
+min_score = 0.00
+max_score = 0.4999
+target_share = 0.45
+circulating_supply = 80
+daily_pack_supply = 1
+season_mint_cap = 120
