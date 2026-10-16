@@ -24,7 +24,7 @@ def _normalize_datetime(value: datetime) -> datetime:
 
 
 def build_job_id(clip_id: str, phase: PublishPhase, platform: PlatformName) -> str:
-    digest = hashlib.sha1(f"{clip_id}|{phase}|{platform}".encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha1(f"{clip_id}|{phase}|{platform}".encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
     return f"pub_{digest}"
 
 
@@ -215,7 +215,7 @@ class PublisherQueue:
                 return []
             placeholders = ", ".join("?" for _ in claimed_ids)
             claimed_rows = connection.execute(
-                f"SELECT * FROM publish_jobs WHERE job_id IN ({placeholders})",
+                f"SELECT * FROM publish_jobs WHERE job_id IN ({placeholders})",  # nosec B608 - placeholders are generated '?' markers, values are bound
                 tuple(claimed_ids),
             ).fetchall()
         records = {str(row["job_id"]): self._row_to_record(row) for row in claimed_rows}

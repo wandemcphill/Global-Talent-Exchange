@@ -5,7 +5,12 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from typing import TYPE_CHECKING
+
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class UserRegionProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):

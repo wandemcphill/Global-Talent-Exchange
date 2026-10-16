@@ -7,6 +7,11 @@ import random
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.player_cards import PlayerCardSupplyBatch
+
 from app.common.enums.player_pathway_stage import PlayerPathwayStage
 from app.common.enums.youth_prospect_rating_band import YouthProspectRatingBand
 from app.ingestion.models import Player
@@ -169,7 +174,6 @@ class PlayerImportService:
 
     def generate_youth_batch(self, *, actor: User, club_id: str | None, count: int, nationality_code: str, region_label: str) -> tuple[PlayerImportJob, list[PlayerImportItem], list[YouthProspect]]:
         club = self._resolve_club(actor=actor, club_id=club_id)
-        rows: list[dict[str, object]] = []
         prospects: list[YouthProspect] = []
         job = PlayerImportJob(created_by_user_id=actor.id, source_type='youth_generation', source_label=f'Youth generation for {club.club_name}', status=PlayerImportJobStatus.PROCESSED)
         self.session.add(job)

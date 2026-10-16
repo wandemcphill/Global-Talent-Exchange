@@ -211,7 +211,7 @@ def _villain_line(*, context: Mapping[str, Any], base_line: str) -> str:
     if family == "card":
         if board_pressure:
             return f"{board_pressure} and this panic is making it worse."
-        return f"That is panic football, plain and simple."
+        return "That is panic football, plain and simple."
     if family == "substitution":
         return f"That bench move screams damage control from {team}."
     return base_line.strip() or f"The pressure is exposing somebody here, and {team} know it."
@@ -258,7 +258,7 @@ def _stable_index(*, profile: CommentaryProfileSnapshot, context: Mapping[str, A
                 str(variant_index),
             ]
         ).encode("utf-8")
-    ).hexdigest()
+    , usedforsecurity=False).hexdigest()
     return int(digest[:8], 16)
 
 

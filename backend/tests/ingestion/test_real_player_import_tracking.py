@@ -13,7 +13,6 @@ from app.ingestion.models import ProviderSyncRun
 from app.ingestion.real_player_import_models import (
     RealPlayerImportProcessingState,
     RealPlayerImportRunStatus,
-    RealPlayerImportStagingRecord,
 )
 from app.ingestion.real_player_import_repository import RealPlayerImportRepository
 from app.models.base import Base

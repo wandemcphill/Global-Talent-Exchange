@@ -187,7 +187,7 @@ def seeded_ops_services(club_ops_services):
             status=AcademyPlayerStatus.PROMOTED,
         ),
     )
-    assignment = scouting.create_assignment(
+    scouting.create_assignment(
         "club-alpha",
         payload=CreateScoutAssignmentRequest(
             region_code="domestic-core",

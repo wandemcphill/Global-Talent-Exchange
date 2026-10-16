@@ -7,16 +7,8 @@ import pytest
 
 from app.core.database import build_alembic_config
 from app.models import Base
-from app.models.creator_campaign import CreatorCampaign
-from app.models.creator_leaderboard_snapshot import CreatorLeaderboardSnapshot
-from app.models.creator_profile import CreatorProfile
-from app.models.referral_analytics_daily import ReferralAnalyticsDaily
-from app.models.referral_attribution import ReferralAttribution
-from app.models.referral_event import ReferralEvent
-from app.models.referral_flag import ReferralFlag
 from app.models.referral_reward import ReferralReward
 from app.models.referral_reward_ledger import ReferralRewardLedger
-from app.models.share_code import ShareCode
 from app.services.share_code_generation_service import ShareCodeGenerationService
 from app.schemas.share_code_core import ShareCodeGenerationRequest
 

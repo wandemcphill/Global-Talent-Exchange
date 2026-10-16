@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from decimal import Decimal
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker

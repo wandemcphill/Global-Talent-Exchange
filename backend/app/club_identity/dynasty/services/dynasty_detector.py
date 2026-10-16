@@ -8,7 +8,6 @@ from app.club_identity.models.dynasty_models import (
     ClubDynastyHistory,
     ClubDynastyProfile,
     ClubDynastySeasonSummary,
-    DynastyAssessment,
     DynastyEra,
     DynastyEvent,
     DynastyLeaderboardEntry,

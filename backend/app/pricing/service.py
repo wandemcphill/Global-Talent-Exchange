@@ -189,7 +189,7 @@ class MarketPricingService:
         if limit <= 0:
             raise PricingValidationError("candle limit must be positive")
 
-        snapshot = self.get_snapshot(
+        self.get_snapshot(
             player_id=player_id,
             listings=listings,
             offers=offers,

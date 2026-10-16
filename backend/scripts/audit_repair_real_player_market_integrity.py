@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import sys
 import time
-from typing import Any, Sequence, TypeVar
+from typing import Sequence, TypeVar
 
 from sqlalchemy import inspect
 from sqlalchemy import func, select, tuple_

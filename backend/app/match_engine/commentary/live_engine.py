@@ -168,7 +168,7 @@ class RemoteCommentaryLLMClient:
             "max_output_tokens": 120,
         }
         try:
-            response = requests.post(
+            response = requests.post(  # nosec B113 - timeout set from configured timeout_seconds
                 self.endpoint_url,
                 headers=headers,
                 json=body,
@@ -771,7 +771,7 @@ class LiveCommentaryEngine:
         if not options:
             return ""
         seed = f"{context.get('match_id')}|{context.get('minute')}|{context.get('event_type')}|{salt}"
-        digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+        digest = hashlib.sha1(seed.encode("utf-8"), usedforsecurity=False).hexdigest()
         index = int(digest[:8], 16) % len(options)
         return options[index]
 

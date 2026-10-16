@@ -364,7 +364,6 @@ class DatabaseClipLiveMetricsStore:
             return None
         if not events:
             return None
-        snapshot = ClipLiveMetricsSnapshot()
         views_last_10min = 0
         views_last_60min = 0
         completions = 0.0

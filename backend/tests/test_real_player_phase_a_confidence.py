@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import date
 import os
 
 from sqlalchemy import create_engine, select

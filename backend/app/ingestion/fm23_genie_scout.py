@@ -113,7 +113,7 @@ def _to_player_row(
     ).hexdigest()[:24]
     value = _money(row.get("Value"))
     sale_value = _money(row.get("Sale Value"))
-    wage = _money(row.get("Wage"))
+
     return {
         "source_name": provider_name,
         "source_player_key": source_key,

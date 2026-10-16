@@ -92,9 +92,9 @@ def inject_storylines(
     elif rivalry:
         hook = f"{home.name} and {away.name} bring a crowd-heavy rivalry into a match that should feel bigger than the table."
     elif title_race:
-        hook = f"Both clubs are in the hunt, so dropped points here will immediately change the title picture."
+        hook = "Both clubs are in the hunt, so dropped points here will immediately change the title picture."
     else:
-        hook = f"This is a momentum match for two clubs trying to write the next chapter of the GTEX universe."
+        hook = "This is a momentum match for two clubs trying to write the next chapter of the GTEX universe."
     commentary_angle = (
         f"Lean into the {storyline_label} tension, mention {weaker.name if underdog else home.name}, and frame every big chance as a swing in the wider league narrative."
     )

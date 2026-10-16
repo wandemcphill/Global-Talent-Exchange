@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_round import CompetitionRound
-from app.models.creator_fan_engagement import CreatorMatchChatMessage, CreatorRivalrySignalSurface
+from app.models.creator_fan_engagement import CreatorRivalrySignalSurface
 from app.models.creator_monetization import CreatorMatchGiftEvent
 from app.models.media_engine import MatchView
 from app.models.user import User

@@ -102,7 +102,7 @@ class RemoteCaptionLLMClient:
             "max_output_tokens": 80,
         }
         try:
-            response = requests.post(
+            response = requests.post(  # nosec B113 - timeout set from configured timeout_seconds
                 self.endpoint_url,
                 headers=headers,
                 json=body,

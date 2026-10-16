@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

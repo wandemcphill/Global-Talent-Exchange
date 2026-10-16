@@ -1024,7 +1024,7 @@ class RiskOpsService:
         return any(token in normalized_blob for token in ("rapid_trade_loop", "trade_loop", "bot_trading"))
 
     def _rule_case_key(self, user_id: str | None, rule_key: str, evidence_key: str) -> str:
-        digest = sha1(f"{user_id or 'global'}|{rule_key}|{evidence_key}".encode("utf-8")).hexdigest()[:12]
+        digest = sha1(f"{user_id or 'global'}|{rule_key}|{evidence_key}".encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
         return f"{(rule_key or 'rule').strip().lower()}-{(user_id or 'global').strip().lower()}-{digest}"
 
     def _clean(self, value: Any) -> str | None:

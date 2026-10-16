@@ -136,7 +136,7 @@ def test_paid_owner_son_request_flow() -> None:
     )
     assert request.total_cost_coin == expected_cost
     club_context = RegenClubContext(country_code="NG", region_name="Lagos", city_name="Lagos")
-    batch = regen_service.generate_academy_intake(
+    regen_service.generate_academy_intake(
         club_id="club-lagos",
         club_context=club_context,
         season_label="2029/2030",

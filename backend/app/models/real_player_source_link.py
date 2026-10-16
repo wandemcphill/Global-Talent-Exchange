@@ -5,7 +5,12 @@ from datetime import date
 from sqlalchemy import Boolean, Date, Float, ForeignKey, Index, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from typing import TYPE_CHECKING
+
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from app.models.real_player_profile import RealPlayerProfile
 
 
 def _player_model():

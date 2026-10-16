@@ -110,7 +110,7 @@ def _stable_dumps(data: Any) -> str:
 
 
 def _stable_digest(data: Any) -> str:
-    return md5(_stable_dumps(data).encode("utf-8")).hexdigest()
+    return md5(_stable_dumps(data).encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def _stable_rng(data: Any) -> random.Random:

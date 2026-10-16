@@ -3,11 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import random
-from typing import Any, Mapping, Sequence
+from typing import Mapping, Sequence
 
 from services.universe.generator import GeneratedClub, GeneratedPlayer, UniverseGenerator
 from services.universe.scheduler import Fixture
 from services.universe.storyline import StorylineBundle, build_content_brief, inject_storylines
+from typing import Any as Any
 
 
 _STYLE_TEMPO = {
@@ -123,7 +124,7 @@ def _normalize_rating(value: float) -> float:
 
 def _stable_seed(*parts: object) -> int:
     payload = "|".join(str(part) for part in parts)
-    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha1(payload.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
     return int(digest, 16)
 
 
@@ -488,7 +489,7 @@ def create_league(
     generator: UniverseGenerator | None = None,
 ) -> League:
     resolved_clubs = tuple(clubs or (generator or UniverseGenerator()).generate_clubs(count=club_count))
-    digest = hashlib.sha1(f"{name}|{season}".encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(f"{name}|{season}".encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     return League(
         league_id=f"league_{digest}",
         name=name,

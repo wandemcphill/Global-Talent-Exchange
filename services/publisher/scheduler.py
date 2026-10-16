@@ -69,7 +69,7 @@ def _resolve_clip_id(clip: Mapping[str, Any]) -> str:
     )
     if not seed:
         raise ValueError("Clip must provide clip_id/highlight_id or enough identifying fields.")
-    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha1(seed.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
     return f"clip_{digest}"
 
 

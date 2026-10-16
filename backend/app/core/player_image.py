@@ -8,7 +8,6 @@ No uploads, no migrations, no downloads.
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 
 
 def _cloud_name() -> str:

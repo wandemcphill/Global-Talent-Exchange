@@ -285,7 +285,7 @@ class SecurityMonitoringService:
                 }
             )
             if len(ip_user_ids) >= self.shared_ip_account_threshold:
-                user_agent_fingerprint = sha1(str(user_agent or "").encode("utf-8")).hexdigest()[:12]
+                user_agent_fingerprint = sha1(str(user_agent or "").encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
                 for clustered_user_id in ip_user_ids:
                     self._create_or_update_multi_account_case(
                         risk_ops=risk_ops,

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.auth.dependencies import get_current_user, get_session
 from app.models.attachment import Attachment
 from app.models.user import User
 

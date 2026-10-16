@@ -91,7 +91,7 @@ class ColdStartManager:
             return 0
         if self.max_initial_impressions <= self.min_initial_impressions:
             return self.min_initial_impressions
-        digest = md5(clip_id.encode("utf-8")).digest()[0]
+        digest = md5(clip_id.encode("utf-8"), usedforsecurity=False).digest()[0]
         spread = self.max_initial_impressions - self.min_initial_impressions
         return self.min_initial_impressions + (digest % (spread + 1))
 

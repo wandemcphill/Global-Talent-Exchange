@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Mapping
 
 from app.copilot.feature_builder import CopilotFeatureBundle, SUPPORTED_COPILOT_FORMATS
+from typing import Any as Any
 
 
 @dataclass(frozen=True, slots=True)

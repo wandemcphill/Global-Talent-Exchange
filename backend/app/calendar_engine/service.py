@@ -14,7 +14,6 @@ from app.competition_engine.scheduler import CompetitionScheduler
 from app.hosted_competition_engine.service import HostedCompetitionService
 from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun, GlobalEvent
 from app.models.hosted_competition import UserHostedCompetition
-from app.models.national_team import NationalTeamCompetition
 from app.models.user import User
 from app.national_team_engine.service import NationalTeamEngineService
 from app.story_feed_engine.service import StoryFeedService

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.cache import CacheBackend, JsonCacheNamespace, NullCacheBackend, RedisCacheBackend, build_cache_backend
+from app.core.cache import CacheBackend, JsonCacheNamespace
 from app.ingestion.cache_keys import (
     CACHE_TTLS,
     club_cache_keys,
@@ -14,6 +14,7 @@ from app.ingestion.cache_keys import (
     top_prospects_key,
     trending_players_key,
 )
+from app.core.cache import NullCacheBackend as NullCacheBackend, RedisCacheBackend as RedisCacheBackend, build_cache_backend as build_cache_backend
 class HotReadCache:
     def __init__(self, backend: CacheBackend | None = None):
         self.cache = JsonCacheNamespace(backend)

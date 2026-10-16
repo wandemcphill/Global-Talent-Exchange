@@ -192,7 +192,8 @@ class AdminBuybackService:
             if column_name not in available_columns:
                 continue
             value = session.execute(
-                text(f"SELECT {column_name} FROM users WHERE id = :user_id"),
+                # column_name is restricted to the fixed whitelist above
+                text(f"SELECT {column_name} FROM users WHERE id = :user_id"),  # nosec B608
                 {"user_id": user.id},
             ).scalar_one_or_none()
             if value is None:

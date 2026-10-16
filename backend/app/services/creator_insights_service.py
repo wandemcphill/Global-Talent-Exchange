@@ -177,7 +177,6 @@ class CreatorInsightsService:
     def _analyzer(self, *, records: list[_ClipInsightRecord], creator_metrics: Mapping[str, Any]) -> dict[str, Any]:
         patterns: list[str] = []
         format_stats = self._group_stats(records, lambda item: item.format_key)
-        duration_stats = self._group_stats(records, lambda item: item.duration_bucket)
         hook_stats = self._group_stats(records, lambda item: item.hook_style)
 
         best_format = self._top_group(format_stats)

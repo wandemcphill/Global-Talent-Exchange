@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 
 from app.match_engine.schemas import MatchPlayerVisualView, MatchReplayPayloadView
 from app.models.competition_match import CompetitionMatch

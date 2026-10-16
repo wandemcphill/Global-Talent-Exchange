@@ -265,7 +265,6 @@ def test_reactions_and_rivalry_accumulate_from_match_flow(session: Session, serv
 
 def test_match_completion_with_legacy_club_ids_does_not_break(session: Session) -> None:
     match = _seed_legacy_match_context(session)
-    match_service = CompetitionMatchService(session)
     rule_set = session.get(CompetitionRuleSet, "rules-legacy")
     assert rule_set is not None
 

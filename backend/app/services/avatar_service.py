@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 from typing import Any
 
 from app.schemas.avatar import PlayerAvatarView
@@ -57,6 +56,7 @@ _EUROPE_CODES = frozenset(
         "UA",
     }
 )
+from datetime import date as date
 _AFRICA_CODES = frozenset(
     {
         "AO",

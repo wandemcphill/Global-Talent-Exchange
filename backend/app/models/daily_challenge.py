@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Boolean, Date, DateTime, Enum as SqlEnum, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, Enum as SqlEnum, ForeignKey, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow

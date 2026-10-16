@@ -16,7 +16,7 @@ def _render_caption(caption: str, hashtags: Sequence[str]) -> str:
 
 
 def _dry_run_post_id(platform: str, payload: dict[str, Any]) -> str:
-    digest = hashlib.sha1(json.dumps(payload, ensure_ascii=True, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(json.dumps(payload, ensure_ascii=True, sort_keys=True).encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     return f"{platform}-dry-{digest}"
 
 

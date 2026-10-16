@@ -5,7 +5,8 @@ from statistics import fmean
 
 from app.match_engine.reality_engine.match_state import MatchState
 from app.match_engine.reality_engine.roles import resolve_role_profile
-from app.match_engine.simulation.models import PlayerRole, TeamRuntimeState
+from app.match_engine.simulation.models import TeamRuntimeState
+from app.match_engine.simulation.models import PlayerRole as PlayerRole
 
 
 @dataclass(frozen=True, slots=True)

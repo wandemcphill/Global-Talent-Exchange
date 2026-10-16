@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -27,7 +27,6 @@ from app.ads_engine.router import router as ads_router
 from app.ads_engine.unified_ranking import UnifiedFeedCandidate, rank_unified_feed
 from app.analytics.router import public_router as analytics_public_router
 from app.auth.dependencies import get_current_admin, get_optional_current_user, get_session
-from app.creator_marketplace.router import router as creator_marketplace_router
 from app.creator_marketplace.schemas import (
     CampaignAcceptRequest,
     CampaignApplyRequest,
@@ -61,7 +60,7 @@ from app.models.story_feed import StoryFeedItem
 from app.models.user import User, UserRole
 from app.models.user_affinity_profile import UserAffinityProfile
 from app.models.user_region import UserRegionProfile
-from app.models.wallet import LedgerAccount, LedgerBalanceProjection, LedgerEntry, LedgerTransaction, LedgerUnit
+from app.models.wallet import LedgerAccount, LedgerBalanceProjection, LedgerEntry, LedgerTransaction
 from app.replay_archive.persistence import ReplayArchiveRecordRow
 from app.services.creator_clip_monetization_service import CreatorClipMonetizationService
 from app.users.follow_service import FollowGraphNotificationService, FollowGraphService, NullFollowGraphCache
@@ -78,7 +77,6 @@ from app.viral.schemas import (
     ViralFeedResponse,
     ViralScoreBreakdownView,
 )
-from app.wallets.service import WalletService
 
 
 def _json_default(value: Any) -> Any:

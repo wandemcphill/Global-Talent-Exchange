@@ -21,7 +21,7 @@ def _smoothstep(value: float) -> float:
 
 
 def _hash_phase(player_id: str) -> tuple[float, float]:
-    digest = md5(player_id.encode("utf-8")).digest()
+    digest = md5(player_id.encode("utf-8"), usedforsecurity=False).digest()
     return ((int.from_bytes(digest[:4], "big") / 0xFFFFFFFF) * tau, (int.from_bytes(digest[4:8], "big") / 0xFFFFFFFF) * tau)
 
 

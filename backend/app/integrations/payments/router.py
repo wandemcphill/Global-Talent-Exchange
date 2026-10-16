@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_user, get_current_wallet_user, get_session
+from app.auth.dependencies import get_current_wallet_user, get_session
 from app.models.user import User
 from app.services.payment_gateway_service import PaymentGatewayError, PaymentGatewayService
 from app.services.runtime_control_service import RuntimeControlService, WalletTransactionLockConflict

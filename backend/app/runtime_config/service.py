@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import json
 import time
-from typing import Any
 
 from fastapi import FastAPI
 from redis import Redis
@@ -22,6 +21,7 @@ from app.runtime_config.schemas import (
     TrustThresholdsConfig,
     ViralWeightsConfig,
 )
+from typing import Any as Any
 
 RUNTIME_CONFIG_EVENT_NAME = "runtime_config.updated"
 RUNTIME_CONFIG_CACHE_KEY = "runtime:config:latest"

@@ -89,7 +89,12 @@ class RemoteDebateLLMClient:
             "max_output_tokens": 220,
         }
         try:
-            response = requests.post(self.endpoint_url, headers=headers, json=body, timeout=max(self.timeout_seconds, 1))
+            response = requests.post(  # nosec B113 - timeout set from configured timeout_seconds
+                self.endpoint_url,
+                headers=headers,
+                json=body,
+                timeout=max(self.timeout_seconds, 1),
+            )
             response.raise_for_status()
         except Exception:
             return None

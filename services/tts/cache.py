@@ -71,5 +71,5 @@ class AudioCache:
                 sort_keys=True,
                 ensure_ascii=True,
             ).encode("utf-8")
-        ).hexdigest()
+        , usedforsecurity=False).hexdigest()
         return f"{self.namespace}:{digest}"

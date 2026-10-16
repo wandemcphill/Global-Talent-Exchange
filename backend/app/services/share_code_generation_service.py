@@ -69,7 +69,7 @@ class ShareCodeGenerationService:
                     ),
                 )
             ).encode("utf-8")
-        ).hexdigest().upper()
+        , usedforsecurity=False).hexdigest().upper()
         base_code = f"{prefix}{normalized_slug}{digest[:4]}"
         base_code = base_code[: max(self.min_generated_length, len(base_code))]
         resolved = base_code

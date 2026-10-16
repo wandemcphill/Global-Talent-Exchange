@@ -482,7 +482,7 @@ class AdDecisionEngine:
     def _stable_index(self, seed: str, size: int) -> int:
         if size <= 1:
             return 0
-        digest = md5(seed.encode("utf-8")).hexdigest()[:8]
+        digest = md5(seed.encode("utf-8"), usedforsecurity=False).hexdigest()[:8]
         return int(digest, 16) % size
 
     def _is_final(self, view_state: MatchViewStateView) -> bool:

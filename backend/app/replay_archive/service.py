@@ -22,7 +22,6 @@ from app.replay_archive.schemas import (
     ReplayArchiveRecord,
     ReplayClubView,
     ReplayMomentView,
-    ReplayScoreline,
     ReplaySummaryView,
 )
 

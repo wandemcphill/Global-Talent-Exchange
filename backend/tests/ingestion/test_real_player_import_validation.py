@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import redirect_stdout
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
 
