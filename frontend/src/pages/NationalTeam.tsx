@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Flag, Wand2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { fmt, label } from "@/lib/owner";
+import { fmt, label, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 
@@ -138,6 +138,13 @@ export default function NationalTeam() {
   const isAdmin = ["admin", "super_admin"].includes(String(user?.role).toLowerCase());
   const [selected, setSelected] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const qc = useQueryClient();
+  const refreshOwner = useRefreshOwner();
+  const onRented = () => {
+    setTick((t) => t + 1);
+    refreshOwner();
+    qc.invalidateQueries({ queryKey: ["rental-pool"] });
+  };
   const comps = useQuery({ queryKey: ["national-comps"], queryFn: async () => (await api.get(`${BASE}/competitions`)).data });
   const history = useQuery({ queryKey: ["national-history", tick], queryFn: async () => (await api.get(`${BASE}/me/history`)).data });
   const list: any[] = comps.data || [];
@@ -169,7 +176,7 @@ export default function NationalTeam() {
                 <EntryRoster entryId={entry.id} refreshKey={tick} />
                 <AutoBuild comp={comp} entry={entry} />
               </div>
-              <RentalPool comp={comp} entry={entry} onRented={() => setTick(tick + 1)} />
+              <RentalPool comp={comp} entry={entry} onRented={onRented} />
             </>
           )}
         </>

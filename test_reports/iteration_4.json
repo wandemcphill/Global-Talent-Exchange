@@ -1,0 +1,32 @@
+{
+  "summary": "RETEST PASSED. The varchar(128) idempotency_key bug from iteration_3 is fixed in /app/gtex/backend/app/national_team_engine/tournament_service.py:2578 (now `'national-rental:' + sha256(competition.id:entry.id:player_id:actor.id)[:64]`, len=80). Full end-to-end rental of Victor Boniface succeeded on the LIVE DB with exactly one write: UI login as admin -> /app/national loaded with Nigeria squad (5 free) and header wallet 150 GTX, clicked rent-player-b87c5690-ed83-4691-947e-697362a2e92c ONCE -> success toast 'Victor Okoh Boniface rented for the tournament', roster now shows #6 Victor Okoh Boniface with RENTAL badge (roster-b87c5690-ed83-4691-947e-697362a2e92c). Backend verification: GET /api/wallets/summary = available_balance 50.0000 (was 150), GET /api/national-team-engine/entries/3487e6de-cbe3-4344-abbc-e969026e0e01 rental_squad_members now 6 and includes b87c5690-ed83-4691-947e-697362a2e92c, GET /competitions/{cid}/rental-pool warm 4.9s HTTP 200 and Boniface eligibility.eligible=false reasons=[duplicate_player, active_rental_exists] message='This player is already in the rental squad.' All speed, write, and state assertions in the review request are met.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Post-rental client cache invalidation on /app/national",
+        "issue": "After a successful rental, the header 'Wallet 150 GTX' badge and the Boniface pool card ('RENT · 100 GTX') don't refresh in-place. Server state is correct (wallet=50, Boniface eligible=false duplicate), and a page refresh shows the right state, but the UI should invalidate the wallet-summary query and the rental-pool query (or at least the clicked card's eligibility) on rental success. The toast and the roster insertion do update correctly.",
+        "affected_selectors": ["Wallet badge in top-right header", "[data-testid=\"rent-player-b87c5690-ed83-4691-947e-697362a2e92c\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_national_team_rental.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Optional polish: on rental success in NationalTeam.tsx, invalidate the wallets/summary query and the rental-pool query (or optimistically flip the clicked card to 'DUPLICATE PLAYER') so the user doesn't need to refresh to see wallet 50 GTX and the updated eligibility."
+  ],
+  "critical_code_review_comments": [
+    "Fix at tournament_service.py:2578 is correct: sha256 hex truncated to 64 chars + 'national-rental:' prefix = 80 chars, well within varchar(128). Semantics preserved (same tuple -> same key, idempotent).",
+    "`reference` and `external_reference` at :2574 and :2576 are still raw concatenations ('national-rental:{competition.id}:{entry.id}:{player_id}' ~ 16+36+1+36+1+36 = 126 chars). They fit today but any prefix change will overflow varchar(128). Consider hashing or widening those columns too (same risk pattern as the fixed bug).",
+    "Perf target met: warm rental-pool call 4.9s on public URL (previous warm run 3.9-5.2s). The batched _prefetch_eligibility change is holding."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (rental POST, wallet, entry, pool all correct)", "frontend": "95% (one approved click rents Boniface end-to-end; minor stale-cache UI nit on wallet badge and pool card)"},
+  "test_credentials": "Admin: vidvimedialtd@gmail.com / Desolamcphill89.",
+  "seed_data_creation": "The single approved write: rented Victor Okoh Boniface (b87c5690-ed83-4691-947e-697362a2e92c) on entry 3487e6de-cbe3-4344-abbc-e969026e0e01, debiting 100 GTX from admin wallet (150 -> 50). No other writes.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Everything in the review request is verified green. If main agent later touches ledger key construction, re-audit `reference` / `external_reference` (currently ~126 chars, 2 chars away from the same varchar(128) overflow that previously broke this flow). Do NOT re-click the rent button — Boniface is already rented, the card will now reject with duplicate_player.",
+  "rca_of_the_issue": "Previous iteration_3 bug: idempotency_key built as f'national-rental:{competition.id}:{entry.id}:{player_id}:{actor.id}' = 163 chars vs varchar(128). Fix applied by main agent at tournament_service.py:2578 replaces the four-UUID concatenation with sha256 hex truncated to 64, prefixed with 'national-rental:' => 80 chars. The hash input still contains all four UUIDs so the dedupe semantic is preserved. Verified by running the full flow end-to-end on LIVE DB: POST /rentals returned success (no 500), wallet debited atomically 150->50, and the player appeared in rental_squad_members with eligibility flipping to duplicate on the next pool read."
+}
