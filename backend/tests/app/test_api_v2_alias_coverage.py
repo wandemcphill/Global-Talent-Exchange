@@ -34,3 +34,16 @@ def test_full_app_registers_expected_versioned_routes(mounted_app, method: str, 
         if isinstance(route, APIRoute) and route.path == path and method in (route.methods or ())
     ]
     assert matches, f"missing {method} {path} from app.router.routes"
+
+
+@pytest.mark.parametrize("path", ("/api/v2/players/markets",))
+def test_static_versioned_alias_is_not_shadowed_by_parameterized_route(mounted_app, path: str) -> None:
+    from starlette.routing import Match
+
+    scope = {"type": "http", "path": path, "method": "GET"}
+    for route in mounted_app.router.routes:
+        match, _ = route.matches(dict(scope))
+        if match is Match.FULL:
+            assert route.path == path
+            return
+    pytest.fail(f"No route matched GET {path}")
