@@ -1,4 +1,5 @@
 using FStudio.GTEX;
+using FStudio.GTEX.Core;
 using UnityEngine;
 
 namespace FStudio.GTEX.Engine

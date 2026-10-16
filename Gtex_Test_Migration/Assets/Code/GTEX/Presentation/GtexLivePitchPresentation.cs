@@ -14,6 +14,8 @@ namespace FStudio.GTEX.Presentation
 
         private static GtexLivePitchPresentation instance;
         private GameObject generatedRoot;
+        private MeshFilter pitchFilter;
+        private MeshFilter linesFilter;
         private MeshRenderer pitchRenderer;
         private MeshRenderer linesRenderer;
         private Vector3 lastCenter;
@@ -82,6 +84,7 @@ namespace FStudio.GTEX.Presentation
         {
             var pitchObject = new GameObject("Pitch Surface");
             pitchObject.transform.SetParent(generatedRoot.transform, false);
+            pitchFilter = pitchObject.AddComponent<MeshFilter>();
             pitchRenderer = pitchObject.AddComponent<MeshRenderer>();
             pitchRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             pitchRenderer.receiveShadows = false;
@@ -89,6 +92,7 @@ namespace FStudio.GTEX.Presentation
 
             var linesObject = new GameObject("Pitch Markings");
             linesObject.transform.SetParent(generatedRoot.transform, false);
+            linesFilter = linesObject.AddComponent<MeshFilter>();
             linesRenderer = linesObject.AddComponent<MeshRenderer>();
             linesRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             linesRenderer.receiveShadows = false;
@@ -129,8 +133,8 @@ namespace FStudio.GTEX.Presentation
             };
             pitchMesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
             pitchMesh.RecalculateBounds();
-            pitchRenderer.sharedMesh = pitchMesh;
-            linesRenderer.sharedMesh = BuildLineMesh(pitch, y + 0.008f);
+            pitchFilter.sharedMesh = pitchMesh;
+            linesFilter.sharedMesh = BuildLineMesh(pitch, y + 0.008f);
         }
 
         private static Mesh BuildLineMesh(GtexPitchSpace pitch, float y)
