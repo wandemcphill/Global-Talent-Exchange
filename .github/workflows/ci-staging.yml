@@ -289,6 +289,7 @@ jobs:
       UNITY_EDITOR_PATH: ${{ vars.GTEX_UNITY_EDITOR_PATH }}
       GTEX_UNITY_PROJECT_PATH: ${{ github.workspace }}\Gtex_Test_Migration
       GTEX_UNITY_BUILD_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_windows_build.log
+      GTEX_UNITY_VERIFIER_LOG: ${{ github.workspace }}\tmp\gtex_test_migration_original_visual_runtime_verifier.log
       GTEX_FORCE_CLEAN_LIBRARY: "false"
       GTEX_UNITY_RUNNER_PROFILE_ROOT: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}
       LOCALAPPDATA: ${{ github.workspace }}\tmp\gtex-unity-runner-profile-${{ github.run_id }}-${{ github.run_attempt }}\LocalAppData
@@ -400,6 +401,52 @@ jobs:
             }
             throw "Unity Windows batch build failed with exit code $exitCode."
           }
+      - name: Verify GTEX original visual runtime
+        run: |
+          New-Item -ItemType Directory -Force -Path (Split-Path $env:GTEX_UNITY_VERIFIER_LOG) | Out-Null
+
+          $unityArgs = @(
+            '-batchmode'
+            '-projectPath'
+            ('"{0}"' -f $env:GTEX_UNITY_PROJECT_PATH)
+            '-executeMethod'
+            'FStudio.GTEX.Editor.GtexOriginalVisualRuntimeVerifier.VerifyFromCommandLine'
+            '-logFile'
+            ('"{0}"' -f $env:GTEX_UNITY_VERIFIER_LOG)
+          ) -join ' '
+
+          $unityProcess = Start-Process `
+            -FilePath $env:UNITY_EDITOR_PATH `
+            -ArgumentList $unityArgs `
+            -NoNewWindow `
+            -Wait `
+            -PassThru
+
+          $exitCode = [int]$unityProcess.ExitCode
+          if ($exitCode -ne 0) {
+            if (Test-Path $env:GTEX_UNITY_VERIFIER_LOG) {
+              Get-Content $env:GTEX_UNITY_VERIFIER_LOG -Tail 200
+
+              $licenseFailurePatterns = @(
+                'No valid Unity Editor license found',
+                'Found 0 entitlement groups and 0 free entitlements matching requested entitlement ids',
+                "'com.unity.editor.headless' was not found"
+              )
+
+              foreach ($pattern in $licenseFailurePatterns) {
+                if (Select-String -Path $env:GTEX_UNITY_VERIFIER_LOG -Pattern $pattern -Quiet) {
+                  $runnerIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+                  throw (
+                    "Unity original visual runtime verification failed before execution because the runner account does not have a usable Unity Editor license. " +
+                    "Runner account: $runnerIdentity. " +
+                    "Activate Unity for that account or run the self-hosted runner service as the Windows user that already owns the Unity activation. " +
+                    "See $env:GTEX_UNITY_VERIFIER_LOG for the full Unity licensing log."
+                  )
+                }
+              }
+            }
+            throw "Unity original visual runtime verification failed with exit code $exitCode."
+          }
       - name: Verify Unity build log
         run: |
           if (-not (Test-Path $env:GTEX_UNITY_BUILD_LOG)) {
@@ -419,6 +466,15 @@ jobs:
               throw "Unity build log contains failure marker: $pattern"
             }
           }
+      - name: Upload original visual runtime verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtex-original-visual-runtime-verification
+          path: |
+            Gtex_Test_Migration/tmp/original-visual-runtime-verification/**
+            tmp/gtex_test_migration_original_visual_runtime_verifier.log
+          if-no-files-found: warn
       - name: Upload Unity build log
         if: always() && hashFiles('tmp/gtex_test_migration_windows_build.log') != ''
         uses: actions/upload-artifact@v4

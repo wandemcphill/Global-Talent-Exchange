@@ -592,7 +592,12 @@ namespace FStudio.GTEX.VisualBridge
             angle = Vector3.Angle(forward.normalized, toGoal.normalized);
             var laneClear = adapter.HasShootingLane(shooterId, goalTarget);
             chance = ResolveGoalChance(distance, angle, laneClear);
-            var goalSelected = UnityEngine.Random.value < chance;
+            var forcedOutcome = (shotStep.forcedShotOutcome ?? string.Empty).Trim();
+            var goalSelected = string.Equals(forcedOutcome, "goal", StringComparison.OrdinalIgnoreCase)
+                ? true
+                : string.Equals(forcedOutcome, "save", StringComparison.OrdinalIgnoreCase)
+                    ? false
+                    : UnityEngine.Random.value < chance;
 
             if (goalSelected)
             {
