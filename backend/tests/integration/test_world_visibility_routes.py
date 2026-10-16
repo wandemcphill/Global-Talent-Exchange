@@ -129,20 +129,14 @@ def test_rebuild_demo_market_restores_seeded_live_visibility_routes(tmp_path: Pa
 
                     with app.state.session_factory() as session:
                         competition = session.scalar(
-                            select(UserCompetition).where(
-                                UserCompetition.source_type == "federation_league"
-                            )
+                            select(UserCompetition).where(UserCompetition.source_type == "federation_league")
                         )
                         assert competition is not None
                         rule_set = session.scalar(
-                            select(CompetitionRuleSet).where(
-                                CompetitionRuleSet.competition_id == competition.id
-                            )
+                            select(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == competition.id)
                         )
                         prize_rule = session.scalar(
-                            select(CompetitionPrizeRule).where(
-                                CompetitionPrizeRule.competition_id == competition.id
-                            )
+                            select(CompetitionPrizeRule).where(CompetitionPrizeRule.competition_id == competition.id)
                         )
                         assert rule_set is not None
                         assert rule_set.format == "league"

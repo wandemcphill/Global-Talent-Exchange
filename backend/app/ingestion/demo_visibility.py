@@ -868,9 +868,7 @@ class DemoWorldVisibilitySeeder:
         self.session.flush()
 
         rule_set = self.session.scalar(
-            select(CompetitionRuleSet).where(
-                CompetitionRuleSet.competition_id == competition.id
-            )
+            select(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == competition.id)
         )
         if rule_set is None:
             rule_set = CompetitionRuleSet(
@@ -898,9 +896,7 @@ class DemoWorldVisibilitySeeder:
             self.session.add(rule_set)
 
         prize_rule = self.session.scalar(
-            select(CompetitionPrizeRule).where(
-                CompetitionPrizeRule.competition_id == competition.id
-            )
+            select(CompetitionPrizeRule).where(CompetitionPrizeRule.competition_id == competition.id)
         )
         if prize_rule is None:
             self.session.add(

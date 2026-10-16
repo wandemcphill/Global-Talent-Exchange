@@ -217,16 +217,8 @@ def test_competition_detail_reports_missing_rules_as_bad_request(
     competition_id = create_response.json()["id"]
 
     with app_session_factory() as session:
-        session.execute(
-            delete(CompetitionRuleSet).where(
-                CompetitionRuleSet.competition_id == competition_id
-            )
-        )
-        session.execute(
-            delete(CompetitionPrizeRule).where(
-                CompetitionPrizeRule.competition_id == competition_id
-            )
-        )
+        session.execute(delete(CompetitionRuleSet).where(CompetitionRuleSet.competition_id == competition_id))
+        session.execute(delete(CompetitionPrizeRule).where(CompetitionPrizeRule.competition_id == competition_id))
         session.commit()
 
     response = client.get(f"/api/competitions/{competition_id}")
