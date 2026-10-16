@@ -1,10 +1,13 @@
+using FStudio.Data;
 using FStudio.GTEX.Core;
 using FStudio.GTEX.Engine;
+using FStudio.GTEX.Playback;
 using FStudio.MatchEngine;
 using FStudio.MatchEngine.Balls;
 using FStudio.MatchEngine.Enums;
 using FStudio.MatchEngine.Players;
 using FStudio.MatchEngine.Players.PlayerController;
+using FStudio.MatchEngine.Utilities;
 using UnityEngine;
 
 namespace FStudio.GTEX.Presentation
@@ -85,7 +88,7 @@ namespace FStudio.GTEX.Presentation
 
         private static Vector3 ResolveHolderBallPoint(
             PlayerBase holder,
-            CodeBasedController playerController)
+            IPlayerController playerController)
         {
             var animator = playerController.Animator;
             if (animator != null)
