@@ -5,7 +5,6 @@ from fastapi.routing import APIRoute
 
 from app.modules import ensure_modules_loaded
 
-
 VERSIONED_ROUTE_CASES = (
     ("GET", "/api/v2/auth/me"),
     ("POST", "/api/v2/auth/refresh"),
@@ -21,9 +20,7 @@ VERSIONED_ROUTE_CASES = (
 def test_full_app_routes_are_flattened_after_module_hydration(mounted_app) -> None:
     ensure_modules_loaded(mounted_app)
 
-    included_routers = [
-        route for route in mounted_app.router.routes if type(route).__name__ == "_IncludedRouter"
-    ]
+    included_routers = [route for route in mounted_app.router.routes if type(route).__name__ == "_IncludedRouter"]
     assert not included_routers, included_routers
 
 
