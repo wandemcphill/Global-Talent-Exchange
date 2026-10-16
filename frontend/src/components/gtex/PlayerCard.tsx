@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Sparkles } from "lucide-react";
 
 const POS: Record<string, string> = { goalkeeper: "GK", defender: "DEF", midfielder: "MID", forward: "FWD", attacker: "FWD", gk: "GK", df: "DEF", mf: "MID", fw: "FWD", striker: "ST", winger: "W", "centre-back": "CB", "center-back": "CB", "full-back": "FB", "central midfielder": "CM", "attacking midfielder": "AM", "defensive midfielder": "DM", "centre-forward": "CF" };
@@ -21,8 +21,9 @@ export function tierOf(rating: number, regen?: boolean) {
 }
 
 function Portrait({ image, name }: { image?: string | null; name: string }) {
+  const [broken, setBroken] = useState(false);
   const initials = name.split(" ").map((s) => s[0]).slice(0, 2).join("");
-  if (image) return <img src={image} alt={name} loading="lazy" className="h-24 w-24 object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,0.6)] transition-transform duration-300 group-hover:scale-105" />;
+  if (image && !broken) return <img src={image} alt="" onError={() => setBroken(true)} loading="lazy" className="h-24 w-24 object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,0.6)] transition-transform duration-300 group-hover:scale-105" />;
   return <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-black/30 font-display text-2xl font-black text-white/70">{initials}</div>;
 }
 
@@ -31,6 +32,11 @@ export function PlayerCard({ name, rating, potential, position, age, nationality
   return (
     <div data-testid={testid} className={`group gx-rise relative flex flex-col overflow-hidden rounded-md border bg-gradient-to-b ${tier.card} ${tier.glow} transition-transform duration-300 hover:-translate-y-1`}>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_0%,rgba(255,255,255,0.18),transparent_55%)]" />
+      {(badge || regen) && (
+        <span className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-sm bg-black/50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-200" data-testid={testid ? `${testid}-badge` : undefined}>
+          {regen && <Sparkles size={10} />}{badge || "Academy"}
+        </span>
+      )}
       <button type="button" onClick={onClick} disabled={!onClick} className="relative flex items-start justify-between px-4 pt-4 text-left disabled:cursor-default" data-testid={testid ? `${testid}-open` : undefined}>
         <div className={tier.ink}>
           <p className="gx-display text-4xl font-black leading-none" data-testid={testid ? `${testid}-rating` : undefined}>{rating ?? "-"}</p>
@@ -43,11 +49,6 @@ export function PlayerCard({ name, rating, potential, position, age, nationality
       <div className="relative mt-2 border-y border-white/10 bg-black/25 px-4 py-2">
         <p className="gx-display truncate text-base font-bold uppercase text-white" title={name}>{name}</p>
         <p className="truncate text-[11px] text-white/60">{[nationality, club, age ? `${age}y` : null].filter(Boolean).join(" · ")}</p>
-        {(badge || regen) && (
-          <span className="absolute right-3 top-2 inline-flex items-center gap-1 rounded-sm bg-black/40 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-200">
-            {regen && <Sparkles size={10} />}{badge || "Academy"}
-          </span>
-        )}
       </div>
       {stats.length > 0 && (
         <div className="relative grid grid-cols-3 gap-px bg-white/5">

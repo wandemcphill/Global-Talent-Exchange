@@ -729,13 +729,40 @@ class NationalTeamTournamentService:
             )
             or 0
         )
+        return self._multiplier_from_counts(active_contracts, recent_contracts)
+
+    @staticmethod
+    def _multiplier_from_counts(active_contracts: int, recent_contracts: int) -> Decimal:
         multiplier = Decimal("1.0000")
         multiplier += Decimal(active_contracts) * Decimal("0.1500")
         multiplier += Decimal(max(recent_contracts - active_contracts, 0)) * Decimal("0.0500")
         return min(multiplier, Decimal("1.7500")).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
 
-    def _priced_pool_item(self, item: dict[str, Any]) -> dict[str, Any]:
-        demand_multiplier = self._demand_multiplier(player_id=str(item["player_id"]))
+    def _priced_pool(self, items: Any) -> list[dict[str, Any]]:
+        """Price a whole pool with two grouped queries instead of two per player."""
+        items = list(items)
+        ids = list({str(item["player_id"]) for item in items})
+        active: dict[str, int] = {}
+        recent: dict[str, int] = {}
+        since = utcnow() - timedelta(days=14)
+        for start in range(0, len(ids), 500):
+            part = ids[start : start + 500]
+            base = select(RentalContract.player_id, func.count()).where(RentalContract.player_id.in_(part)).group_by(RentalContract.player_id)
+            active.update(dict(self.session.execute(base.where(RentalContract.status == RentalContractStatus.ACTIVE)).all()))
+            recent.update(dict(self.session.execute(base.where(RentalContract.created_at >= since)).all()))
+        return [
+            self._priced_pool_item(
+                item,
+                demand_multiplier=self._multiplier_from_counts(
+                    int(active.get(str(item["player_id"]), 0)), int(recent.get(str(item["player_id"]), 0))
+                ),
+            )
+            for item in items
+        ]
+
+    def _priced_pool_item(self, item: dict[str, Any], *, demand_multiplier: Decimal | None = None) -> dict[str, Any]:
+        if demand_multiplier is None:
+            demand_multiplier = self._demand_multiplier(player_id=str(item["player_id"]))
         base_loan_price = self._normalize_amount(item["loan_price_coin"])
         priced = dict(item)
         priced["demand_multiplier"] = demand_multiplier
@@ -1117,6 +1144,7 @@ class NationalTeamTournamentService:
             .outerjoin(IngestionCompetition, IngestionCompetition.id == Player.current_competition_id)
             .outerjoin(InternalLeague, InternalLeague.id == Player.internal_league_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
+            .options(selectinload(Player.image_metadata))
             .limit(limit)
         )
         # Apply the nationality constraint in SQL before the catalogue cap.
@@ -1542,24 +1570,14 @@ class NationalTeamTournamentService:
             tradable_only=tradable_only,
         )
         warnings: list[str] = []
-        catalog: list[dict[str, Any]] = []
-        for item in self._national_pool(
-            filters=filters,
-            competition=competition,
-            limit=max(limit + offset, 1000),
-            warnings=warnings,
-        ):
-            try:
-                catalog.append(self._priced_pool_item(item))
-            except Exception as error:
-                self._record_pool_warning(
-                    warnings,
-                    competition_id=competition.id,
-                    country_code=filters.country_code,
-                    source_bucket=str(item.get("source_bucket") or "unknown"),
-                    record_id=str(item.get("player_id") or ""),
-                    reason=error.__class__.__name__,
-                )
+        catalog = self._priced_pool(
+            self._national_pool(
+                filters=filters,
+                competition=competition,
+                limit=max(limit + offset, 1000),
+                warnings=warnings,
+            )
+        )
         items = catalog[offset : offset + limit]
         source_counts: dict[str, int] = {}
         for item in catalog:
@@ -1805,11 +1823,11 @@ class NationalTeamTournamentService:
             positions=positions,
             tradable_only=tradable_only,
         )
-        pool = [
-            self._priced_pool_item(item)
+        pool = self._priced_pool(
+            item
             for item in self._national_pool(filters=filters, competition=competition, limit=1500)
             if self._age_grade_allows(item, age_grade)
-        ]
+        )
         slots = self._auto_build_slots(formation, squad_size)
         selection = self._pick_mixed_auto_build(
             pool=pool,
@@ -2291,14 +2309,13 @@ class NationalTeamTournamentService:
         starter_slots = STARTER_PACK_SLOTS + tuple(
             "MIDFIELDER" for _ in range(max(0, total_remaining - len(STARTER_PACK_SLOTS)))
         )
-        pool = [
-            self._priced_pool_item(item)
-            for item in self._national_pool(
+        pool = self._priced_pool(
+            self._national_pool(
                 filters=self._normalize_pool_filters(country_code=entry.country_code),
                 competition=competition,
                 limit=1000,
             )
-        ]
+        )
         selection = self._pick_slot_players(
             pool=pool,
             slots=starter_slots[:total_remaining],
@@ -2381,11 +2398,13 @@ class NationalTeamTournamentService:
             )
 
         player_catalog = {
-            item["player_id"]: self._priced_pool_item(item)
-            for item in self._national_pool(
-                filters=self._normalize_pool_filters(country_code=entry.country_code),
-                competition=competition,
-                limit=1000,
+            item["player_id"]: item
+            for item in self._priced_pool(
+                self._national_pool(
+                    filters=self._normalize_pool_filters(country_code=entry.country_code),
+                    competition=competition,
+                    limit=1000,
+                )
             )
         }
         item = player_catalog.get(player_id)

@@ -61,9 +61,11 @@ function RentCard({ p, entry, onRented }: any) {
 function RentalPool({ comp, entry, onRented }: any) {
   const [position, setPosition] = useState("");
   const [nationOnly, setNationOnly] = useState(true);
-  const { data, isLoading } = useQuery({
-    queryKey: ["rental-pool", comp.id, entry.id, position, nationOnly],
-    queryFn: async () => (await api.get(`${BASE}/competitions/${comp.id}/rental-pool`, { params: { limit: 24, entry_id: entry.id, ...(nationOnly ? { country_code: entry.country_code } : {}), ...(position ? { position } : {}) } })).data,
+  const [limit, setLimit] = useState(12);
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["rental-pool", comp.id, entry.id, position, nationOnly, limit],
+    queryFn: async () => (await api.get(`${BASE}/competitions/${comp.id}/rental-pool`, { params: { limit, entry_id: entry.id, ...(nationOnly ? { country_code: entry.country_code } : {}), ...(position ? { position } : {}) } })).data,
+    placeholderData: (prev: any) => prev,
   });
   return (
     <Panel eyebrow={`${fmt(data?.total)} players available`} title="Rental pool" testid="rental-pool-panel"
@@ -74,6 +76,7 @@ function RentalPool({ comp, entry, onRented }: any) {
       {isLoading ? <Loading label="Calling up players" /> : !data?.items?.length ? <Empty title="No players in this pool" body="Try all nations or another position." /> : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">{data.items.map((p: any) => <RentCard key={p.player_id} p={p} entry={entry} onRented={onRented} />)}</div>
       )}
+      {data && data.total > data.items.length && <div className="mt-5 text-center"><Btn variant="secondary" disabled={isFetching} onClick={() => setLimit(limit + 12)} data-testid="rental-load-more">{isFetching ? "Scouting…" : "Load more players"}</Btn></div>}
     </Panel>
   );
 }
@@ -138,8 +141,9 @@ export default function NationalTeam() {
   const comps = useQuery({ queryKey: ["national-comps"], queryFn: async () => (await api.get(`${BASE}/competitions`)).data });
   const history = useQuery({ queryKey: ["national-history", tick], queryFn: async () => (await api.get(`${BASE}/me/history`)).data });
   const list: any[] = comps.data || [];
-  const comp = list.find((c) => c.id === selected) || list[0];
-  const entry = (history.data?.managed_entries || []).find((e: any) => e.competition_id === comp?.id);
+  const managed: any[] = history.data?.managed_entries || [];
+  const comp = list.find((c) => c.id === selected) || list.find((c) => managed.some((e) => e.competition_id === c.id)) || list[0];
+  const entry = managed.find((e: any) => e.competition_id === comp?.id);
   const seed = async () => {
     try {
       await api.post(`/admin${BASE}/competitions/seed-defaults`);

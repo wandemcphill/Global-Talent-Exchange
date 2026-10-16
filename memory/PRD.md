@@ -42,12 +42,20 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - React (yarn start = craco): the api.ts interceptor unwraps the /api/v2 envelope; auth via /api/v2/auth/*; FUT-style PlayerCard (tiers, plus a Regen tier); PlayerDrawer scouting report (real-universe signals, form, share market buy); world market on /api/v2/players; Share Market panel on /api/v2/players/markets; Squad card view; Academy regen cards; new /app/national page (repo national-team-engine: enter as a nation, rental pool, rent, free-player claim, AI auto-build squad, admin seed defaults).
 - Verification: self-tested (curl and screenshots, read-only on the live DB). The testing agent timed out.
 
+## Iteration 5 (2026-10-16): national tournaments live + academy pack reveal
+- Seeded the 12 default national tournaments on the live DB (World Cup, AFCON, Copa, Euros in senior, U20 and U17; status draft) via the admin seed endpoint.
+- End-to-end on live data: the root admin took charge of Nigeria in GTEX AFCON (entry 3487e6de-...) and claimed 5 free players (Okoye, Tella, Ndidi, Gidado, John). A paid rental is correctly refused because the admin wallet holds 0 GTX (loan 100 GTX).
+- Perf: the rental pool went from over 220s (timeout) to about 19s. _priced_pool batches demand counts into 2 grouped queries, and image metadata is selectin-loaded. Applied to the list, auto-build, free-claim and rent paths. The UI pages the pool 12 at a time with Load more.
+- Academy pack reveal (PackReveal.tsx, framer-motion): unseen regens per club (localStorage gtex.regens.seen.<club>) trigger a sealed pack, then card-by-card flips with a Wonderkid banner (ceiling of 15+), then a summary. It shows once per regen.
+- PlayerCard: the badge moved to the card corner (no name overlap), with an initials fallback for broken photos. The National page defaults to the tournament you've entered.
+
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
 - P0: Register the Paystack webhook URL in the dashboard for the production domain.
 - P1: KYC submission UI (/api/kyc); Paystack transfer payouts if processor mode changes; remove the demo trader and its 2,000 GTX demo float before launch.
 - P1: Fix the pre-existing GtexUniverseService super() TypeError in the repo's gtex runtime hook.
 - P2: Club identity editor (crest/colours), supporter-only competitions, 3D/season passes.
-- P1: Admin must click 'Seed default tournaments' on /app/national to open rentals (none exist in the live DB).
+- P1: Admin must click 'Seed default tournaments' on /app/national to open rentals: DONE.
+- P1: Fund the wallet (Paystack deposit) to complete a paid national rental. The rental pool is still about 19s (per-item eligibility queries); batch the eligibility checks next.
 - P1: /api/market/players is slow (about 60s) on the live DB; React uses /api/v2/players instead.
 - Future: Phase 3 manager requests and regen pressure; Phase 4 unified ledger and anti-collusion hardening; Phase 5 gifting and sponsor inventory.

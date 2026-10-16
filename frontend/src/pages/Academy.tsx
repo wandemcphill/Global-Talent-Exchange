@@ -1,10 +1,14 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Sprout } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label, useActiveClub, useClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, TraitBar } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
+import { PackReveal } from "@/components/gtex/PackReveal";
+
+const seenKey = (clubId: string) => `gtex.regens.seen.${clubId}`;
+const readSeen = (clubId: string): string[] => JSON.parse(localStorage.getItem(seenKey(clubId)) || "[]");
 
 const TRAITS = ["ambition", "loyalty", "marketability", "professionalism", "adaptability", "growth_responsiveness", "environment_sensitivity"];
 
@@ -47,8 +51,20 @@ export default function Academy() {
   const { data: club, isLoading } = useClub(active?.club_id);
   const refresh = useRefreshOwner();
   const [busy, setBusy] = useState("");
+  const [pack, setPack] = useState<any[]>([]);
+  useEffect(() => {
+    if (!club) {
+      return;
+    }
+    const seen = new Set(readSeen(club.club_id));
+    setPack(club.squad.filter((p: any) => p.is_regen && !seen.has(p.id)));
+  }, [club]);
   if (isLoading || !club) return <Loading />;
   const regens = club.squad.filter((p: any) => p.is_regen);
+  const closePack = () => {
+    localStorage.setItem(seenKey(club.club_id), JSON.stringify(Array.from(new Set([...readSeen(club.club_id), ...regens.map((r: any) => r.id)]))));
+    setPack([]);
+  };
   const run = async (kind: string) => {
     setBusy(kind);
     try {
@@ -69,6 +85,7 @@ export default function Academy() {
   const academyLevel = club.facilities.academy.level;
   return (
     <div data-testid="academy-page">
+      {pack.length > 0 && <PackReveal regens={pack} onClose={closePack} />}
       <PageHeader eyebrow="Academy / regens" title="The youth pipeline" sub="Regens grow from facilities, manager youth skill, playing time, competition quality, morale and club prestige. Ambitious regens left on the bench will push for a move."
         action={<div className="flex gap-2"><Btn variant="secondary" disabled={!!busy} onClick={() => run("advance")} data-testid="academy-advance-button">Advance world day</Btn><Btn disabled={!!busy} onClick={() => run("intake")} data-testid="academy-intake-button"><Sprout size={14} />Scout intake · {fmt(1500 * academyLevel)} GTX</Btn></div>} />
       <Panel className="mb-6" testid="growth-inputs">
