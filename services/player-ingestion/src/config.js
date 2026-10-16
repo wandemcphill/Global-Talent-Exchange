@@ -23,7 +23,6 @@ function required(name) {
   return value;
 }
 
-
 function boolEnv(name, fallback) {
   const value = env(name);
   if (value === undefined) {
