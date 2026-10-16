@@ -25,6 +25,13 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - Fiat rates come from the repo's admin-controlled TreasurySettings (deposit ₦900, withdrawal ₦880 per GTEX Coin), used for Paystack deposits and withdrawals.
 - Coin Trader Orders on the Finance page: buy/sell with verified traders through the repo coin_traders API (create, accept with escrow, proof, confirm/release, cancel, dispute) plus a trader desk view. Demo trader seeded by scripts/seed_demo_coin_trader.py.
 
+## Iteration 3 (2026-10-16): run the user's own GTEX app
+- User direction: no parallel app. Make the existing GTEX (Flutter frontend + FastAPI backend) functional and audit the planned items.
+- The repo's Flutter web app is built (`/root/flutter`, `cd /app/gtex/frontend && flutter build web --release --dart-define=GTE_API_BASE_URL=<preview url> --dart-define=GTE_BACKEND_MODE=strict_live`) and served on port 3000 by `/app/frontend/flutter-server.js` (`yarn start`). The React console is no longer served (`yarn start:react-console`).
+- Fixes in repo: gtex_universe dataclass super() TypeError (jackpot/world pulse), /api/v2/auth/* aliases for the Flutter contract, POSIX-locale boot crash in web/index.html.
+- Parity audit: /app/gtex/docs/EMERGENT_PARITY_AUDIT_2026-10-16.md
+- Open: /api/v2/players/markets returns 503 (API v1 demo facade); lineup AI auto-draft fallback; owner_console module removal pending the user's decision.
+
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
 - P0: Register the Paystack webhook URL in the dashboard for the production domain.

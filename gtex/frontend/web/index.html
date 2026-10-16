@@ -183,6 +183,15 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
   <script>
+    (function () {
+      // Some browsers report POSIX locales (e.g. "en-US@posix") that crash Intl.Locale in the Flutter engine.
+      var clean = function (l) { return (l || 'en-US').split('@')[0].replace('_', '-') || 'en-US'; };
+      try {
+        var langs = (navigator.languages || [navigator.language]).map(clean);
+        Object.defineProperty(navigator, 'languages', { get: function () { return langs; } });
+        Object.defineProperty(navigator, 'language', { get: function () { return langs[0]; } });
+      } catch (e) {}
+    })();
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function (registrations) {
         registrations.forEach(function (registration) {
