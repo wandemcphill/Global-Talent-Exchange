@@ -5,6 +5,7 @@ import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub, useClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, PageHeader, Panel } from "@/components/gtex/ui";
 import { MarketTable } from "@/components/gtex/MarketTable";
+import { ShareMarket } from "@/components/gtex/ShareMarket";
 
 function SisterTransfer({ clubs, club }: any) {
   const refresh = useRefreshOwner();
@@ -67,8 +68,11 @@ export default function Market() {
     <div data-testid="market-page" className="space-y-6">
       <PageHeader eyebrow="Market & transfers" title="Build the squad" sub={`Signing for ${active?.club_name || "-"}. Fees are paid from club cash and recorded on the unified ledger. Club cash: ${fmt(club?.economy?.cash_gtex)} GTX.`} />
       {position && <Chip tone="cyan" testid="manager-request-filter">Manager request: {position}</Chip>}
-      <Panel eyebrow="World market" title="Available players" testid="world-market-panel">
+      <Panel eyebrow="World market · live player universe" title="Available players" testid="world-market-panel">
         <MarketTable clubId={active?.club_id} initialPosition={position} signedRefs={(club?.squad || []).map((p: any) => p.player_ref)} onSigned={() => refetch()} />
+      </Panel>
+      <Panel eyebrow="Player share market · live" title="Issued player markets" testid="share-market-panel">
+        <ShareMarket />
       </Panel>
       <Panel eyebrow="Related-party · anti-collusion" title="Sister-club transfer" testid="sister-transfer-panel">
         <SisterTransfer clubs={clubs} club={club} />

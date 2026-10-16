@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, Navigate, Outlet, useNavigate } from "react-router-dom";
-import { Building2, Gauge, Inbox, LogOut, Shield, Shirt, ShoppingBag, Sprout, Trophy, Wallet } from "lucide-react";
+import { Building2, Flag, Gauge, Inbox, LogOut, Shield, Shirt, ShoppingBag, Sprout, Trophy, Wallet } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fmt, useActiveClub, useControlCenter } from "@/lib/owner";
 import { Loading } from "@/components/gtex/ui";
@@ -12,6 +12,7 @@ const NAV = [
   { to: "/app/competitions", label: "Competitions", icon: Trophy, id: "competitions" },
   { to: "/app/squad", label: "Manager & Squad", icon: Shirt, id: "squad" },
   { to: "/app/academy", label: "Academy / Regens", icon: Sprout, id: "academy" },
+  { to: "/app/national", label: "National Team", icon: Flag, id: "national" },
   { to: "/app/finance", label: "Finance", icon: Wallet, id: "finance" },
   { to: "/app/inbox", label: "Inbox", icon: Inbox, id: "inbox" },
 ];
@@ -55,7 +56,7 @@ export default function AppShell() {
   if (loading) return <Loading label="Opening the boardroom" />;
   if (!user) return <Navigate to="/login" replace />;
   if (isLoading) return <Loading label="Loading your clubs" />;
-  const isAdmin = ["admin", "super_admin"].includes(String(user.role));
+  const isAdmin = ["admin", "super_admin"].includes(String(user.role).toLowerCase());
   if (!isAdmin && data && !data.clubs.some((c: any) => ["competition", "active"].includes(c.stage))) return <Navigate to="/onboarding" replace />;
   const wallet = data?.economy?.wallet || {};
   return (

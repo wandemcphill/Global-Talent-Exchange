@@ -61,7 +61,8 @@
     "zod": "3.24.4"
   },
   "scripts": {
-    "start": "node flutter-server.js",
+    "start": "craco start",
+    "start:flutter": "node flutter-server.js",
     "start:react-console": "craco start",
     "build": "craco build",
     "test": "craco test"

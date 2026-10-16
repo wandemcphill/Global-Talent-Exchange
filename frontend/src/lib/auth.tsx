@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      const { data } = await api.get("/auth/me");
+      const { data } = await api.get("/v2/auth/me");
       setUser(data);
     } catch {
       setUser(null);
@@ -36,23 +36,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadMe]);
 
   const login = async (email: string, password: string) => {
-    const { data } = await api.post("/auth/login", { email, password });
+    const { data } = await api.post("/v2/auth/login", { email, password });
     tokens.set(data.access_token, data.refresh_token);
     await loadMe();
   };
 
   const signup = async (payload: any) => {
-    const { data } = await api.post("/auth/signup/user", payload);
+    const { data } = await api.post("/v2/auth/signup/user", payload);
     if (data.access_token) tokens.set(data.access_token, data.refresh_token);
     else {
-      const res = await api.post("/auth/login", { email: payload.email, password: payload.password });
+      const res = await api.post("/v2/auth/login", { email: payload.email, password: payload.password });
       tokens.set(res.data.access_token, res.data.refresh_token);
     }
     await loadMe();
   };
 
   const logout = () => {
-    api.post("/auth/logout").catch(() => undefined);
+    api.post("/v2/auth/logout").catch(() => undefined);
     tokens.clear();
     setUser(null);
   };

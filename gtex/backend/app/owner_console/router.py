@@ -155,12 +155,10 @@ def sign(club_id: str, body: SignRequest, user=Depends(get_current_user), sessio
 def quote(player_ids: str, session: Session = Depends(get_session), user=Depends(get_current_user)) -> dict[str, Any]:
     from app.ingestion.models import Player
 
-    out = {}
-    for pid in player_ids.split(",")[:100]:
-        p = session.get(Player, pid)
-        if p:
-            out[pid] = {"price": engine.price_from_value(p.market_value_eur), "rating": engine.rating_from_value(p.market_value_eur)}
-    return {"quotes": out}
+    ids = [pid for pid in player_ids.split(",")[:100] if pid]
+    players = list(session.scalars(select(Player).where(Player.id.in_(ids))).all()) if ids else []
+    quotes = service.player_quotes(session, players)
+    return {"quotes": {pid: {"price": price, "rating": rating} for pid, (price, rating) in quotes.items()}}
 
 
 @router.post("/clubs/{club_id}/manager")

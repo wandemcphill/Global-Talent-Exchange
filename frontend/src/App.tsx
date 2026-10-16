@@ -18,6 +18,7 @@ import Finance from "@/pages/Finance";
 import InboxPage from "@/pages/Inbox";
 import Admin from "@/pages/Admin";
 import PaymentCallback from "@/pages/PaymentCallback";
+import NationalTeam from "@/pages/NationalTeam";
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="match/:id" element={<MatchCenter />} />
             <Route path="squad" element={<Squad />} />
             <Route path="academy" element={<Academy />} />
+            <Route path="national" element={<NationalTeam />} />
             <Route path="finance" element={<Finance />} />
             <Route path="inbox" element={<InboxPage />} />
             <Route path="admin" element={<Admin />} />

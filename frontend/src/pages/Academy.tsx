@@ -4,6 +4,7 @@ import { Sprout } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label, useActiveClub, useClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, TraitBar } from "@/components/gtex/ui";
+import { PlayerCard } from "@/components/gtex/PlayerCard";
 
 const TRAITS = ["ambition", "loyalty", "marketability", "professionalism", "adaptability", "growth_responsiveness", "environment_sensitivity"];
 
@@ -11,33 +12,32 @@ function RegenCard({ p }: any) {
   const t = p.personality || {};
   const last = p.growth_log?.[p.growth_log.length - 1];
   const pressure = t.transfer_pressure ?? 0;
+  const ceiling = Math.max(0, (p.potential || 0) - (p.rating || 0));
+  const totalGain = (p.growth_log || []).reduce((s: number, g: any) => s + Number(g.gain || 0), 0);
   return (
-    <div data-testid={`regen-card-${p.id}`} className="gx-rise rounded-sm border border-white/10 bg-slate-950/40 p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="gx-display text-xl font-bold uppercase text-white">{p.name}</p>
-          <p className="text-xs capitalize text-slate-400">{p.position} · age {p.age}</p>
+    <div data-testid={`regen-card-${p.id}`} className="grid gap-4 rounded-md border border-white/10 bg-slate-950/40 p-4 sm:grid-cols-[180px_1fr]">
+      <PlayerCard name={p.name} rating={p.rating} potential={p.potential} position={p.position} age={p.age} regen
+        badge={pressure >= 60 ? "Unsettled" : ceiling >= 15 ? "Wonderkid" : "Academy"}
+        stats={[{ k: "Ceiling", v: `+${ceiling}` }, { k: "Morale", v: p.morale }, { k: "Value", v: fmt(p.value_coin) }]} />
+      <div className="min-w-0">
+        <div className="mb-3 h-1.5 rounded-sm bg-white/5" title="Progress to potential">
+          <div className="h-1.5 rounded-sm bg-gradient-to-r from-emerald-500 to-cyan-400 transition-[width] duration-700" style={{ width: `${Math.min(100, (p.rating / Math.max(1, p.potential)) * 100)}%` }} />
         </div>
-        <div className="text-right">
-          <p className="gx-mono text-2xl font-bold text-emerald-300">{p.rating}</p>
-          <p className="gx-mono text-[10px] text-slate-500">POT {p.potential}</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+          {TRAITS.map((k) => <TraitBar key={k} label={label(k)} value={t[k] ?? 0} />)}
+          <TraitBar label="Transfer pressure" value={pressure} max={100} />
         </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Chip>{p.minutes} mins</Chip>
+          {totalGain > 0 && <Chip tone="emerald">+{totalGain} recent growth</Chip>}
+          {pressure >= 60 && <Chip tone="red">Wants game time</Chip>}
+        </div>
+        {last && (
+          <p className="mt-3 border-t border-white/5 pt-3 text-xs text-slate-400" data-testid="regen-growth-explanation">
+            <span className="gx-mono mr-1 text-[10px] uppercase text-slate-500">Day {last.day}</span>+{last.gain} · {last.explanation}
+          </p>
+        )}
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2.5">
-        {TRAITS.map((k) => <TraitBar key={k} label={label(k)} value={t[k] ?? 0} />)}
-        <TraitBar label="Transfer pressure" value={pressure} max={100} />
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Chip tone={p.morale >= 65 ? "emerald" : "gold"}>Morale {p.morale}</Chip>
-        <Chip>{p.minutes} mins</Chip>
-        <Chip tone="blue">Value {fmt(p.value_coin)}</Chip>
-        {pressure >= 60 && <Chip tone="red">Unsettled</Chip>}
-      </div>
-      {last && (
-        <p className="mt-3 border-t border-white/5 pt-3 text-xs text-slate-400" data-testid="regen-growth-explanation">
-          <span className="gx-mono mr-1 text-[10px] uppercase text-slate-500">Day {last.day}</span>+{last.gain} · {last.explanation}
-        </p>
-      )}
     </div>
   );
 }
@@ -81,7 +81,7 @@ export default function Academy() {
         </div>
       </Panel>
       {regens.length === 0 ? <Empty title="No regens yet" body="Run a scouting intake to bring in your first academy prospects." /> : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{regens.map((p: any) => <RegenCard key={p.id} p={p} />)}</div>
+        <div className="grid gap-4 xl:grid-cols-2">{regens.map((p: any) => <RegenCard key={p.id} p={p} />)}</div>
       )}
     </div>
   );

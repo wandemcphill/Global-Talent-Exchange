@@ -100,6 +100,25 @@ def price_from_value(value_eur: float | None) -> int:
     return int(clamp(float(value_eur or 0) / 10_000, 800, 25_000))
 
 
+def market_quote(value_eur: float | None, value_credits: float | None) -> tuple[int, int]:
+    """(price, rating) from EUR value, else from the repo's GTEX credit valuation."""
+    if value_eur:
+        return price_from_value(value_eur), rating_from_value(value_eur)
+    credits = max(float(value_credits or 0), 0.0)
+    return int(clamp(credits * 120, 800, 25_000)), int(clamp(45 + 8.5 * math.log(credits + 1), 50, 88))
+
+
+def normalize_position(raw: str | None) -> str:
+    text = (raw or "").strip().lower()
+    if text in {"gk", "goalkeeper", "keeper"} or text.startswith("goal"):
+        return "goalkeeper"
+    if text in {"df", "def", "cb", "lb", "rb"} or any(k in text for k in ("back", "defend")):
+        return "defender"
+    if text in {"fw", "st", "cf", "lw", "rw"} or any(k in text for k in ("striker", "forward", "wing", "attack")):
+        return "forward"
+    return "midfielder"
+
+
 def regen_value(rating: int, potential: int, age: int) -> int:
     return int(max(300, (rating - 40) * 60 + (potential - rating) * 45 + (19 - min(age, 19)) * 120))
 

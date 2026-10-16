@@ -611,11 +611,6 @@ DOMAIN_MODULES = (
         api_only=True,
     ),
     _module("auth", router_path="app.auth.router:router"),
-    _module(
-        "api_v1",
-        router_path="app.api_v1.router:router",
-        on_startup=("app.api_v1.router:install_exception_handlers",),
-    ),
     _module("jobs_api", router_path="app.jobs.router:router"),
     _module("organizations", router_path="app.access_control.router:router"),
     _module("wallets", router_path="app.wallets.router:router"),
@@ -910,6 +905,12 @@ DOMAIN_MODULES = (
     _module("gtex_universe", router_path="app.gtex_universe.router:router"),
     _module("realtime", router_path="app.realtime.router:router"),
     _module("users", router_path="app.users.router:router"),
+    # Registered last so its catch-all paths (e.g. /players/{player_id}) never shadow live domain routes.
+    _module(
+        "api_v1",
+        router_path="app.api_v1.router:router",
+        on_startup=("app.api_v1.router:install_exception_handlers",),
+    ),
 )
 
 

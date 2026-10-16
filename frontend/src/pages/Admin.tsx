@@ -10,7 +10,7 @@ import { Btn, Chip, Empty, Loading, PageHeader, Panel } from "@/components/gtex/
 export default function Admin() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const isAdmin = ["admin", "super_admin"].includes(String(user?.role));
+  const isAdmin = ["admin", "super_admin"].includes(String(user?.role).toLowerCase());
   const { data, isLoading } = useQuery({ queryKey: ["admin-queue"], queryFn: async () => (await api.get("/owner/admin/review-queue")).data, enabled: isAdmin });
   if (!isAdmin) return <Navigate to="/app" replace />;
   if (isLoading || !data) return <Loading />;

@@ -136,6 +136,14 @@ def snapshot_value(session: Session, state: OwnerClubState) -> None:
     state.value_history_json = history[-20:]
 
 
+def player_quotes(session: Session, players: list) -> dict[str, tuple[int, int]]:
+    from app.players.read_models import PlayerSummaryReadModel
+
+    ids = [p.id for p in players]
+    credits = dict(session.execute(select(PlayerSummaryReadModel.player_id, PlayerSummaryReadModel.current_value_credits).where(PlayerSummaryReadModel.player_id.in_(ids))).all()) if ids else {}
+    return {p.id: engine.market_quote(p.market_value_eur, credits.get(p.id)) for p in players}
+
+
 def sign_market_player(session: Session, user_id: str, club_id: str, player_id: str) -> OwnerSquadPlayer:
     from app.ingestion.models import Player
 
@@ -151,7 +159,7 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
     player = session.get(Player, player_id)
     if player is None:
         raise OwnerError("player_not_found", 404)
-    price = engine.price_from_value(player.market_value_eur)
+    price, rating = player_quotes(session, [player])[player_id]
     try:
         ledger.record(session, event_type="transfer_purchase", source=ledger.club_account(club_id), destination=ledger.WORLD_MARKET, currency=ledger.GTEX, gross=price, club_id=club_id, user_id=user_id, related_type="player", related_id=player_id, memo=f"Signed {player.full_name}")
     except ledger.LedgerError as exc:
@@ -159,10 +167,9 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
     age = 24
     if player.date_of_birth:
         age = max(16, now().year - player.date_of_birth.year)
-    rating = engine.rating_from_value(player.market_value_eur)
     signed = OwnerSquadPlayer(
         club_id=club_id, player_ref=player_id, name=player.canonical_display_name or player.full_name,
-        position=(player.normalized_position or player.position or "midfielder").lower(), age=age, rating=rating,
+        position=engine.normalize_position(player.normalized_position or player.position), age=age, rating=rating,
         potential=max(rating, int(player.potential or rating + 3)), value_coin=Decimal(price), morale=72, acquired_via="market",
     )
     session.add(signed)

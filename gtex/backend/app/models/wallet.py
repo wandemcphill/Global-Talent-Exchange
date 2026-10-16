@@ -30,6 +30,20 @@ def _enum_values(enum_cls: Any) -> list[str]:
     return [member.value for member in enum_cls]
 
 
+class _LegacyCaseEnum(Enum):
+    """Reads legacy append-only rows written as enum names (e.g. 'COIN')."""
+
+    cache_ok = True
+
+    def _object_value_for_elem(self, elem):
+        try:
+            return super()._object_value_for_elem(elem)
+        except LookupError:
+            if isinstance(elem, str) and elem != elem.lower():
+                return super()._object_value_for_elem(elem.lower())
+            raise
+
+
 class LedgerUnit(StrEnum):
     COIN = "coin"
     CREDIT = "credit"
@@ -216,20 +230,20 @@ class LedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=_enum_values), nullable=False
+        _LegacyCaseEnum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=_enum_values), nullable=False
     )
     source_tag: Mapped[LedgerSourceTag] = mapped_column(
-        Enum(LedgerSourceTag, name="ledger_source_tag", native_enum=False, values_callable=_enum_values),
+        _LegacyCaseEnum(LedgerSourceTag, name="ledger_source_tag", native_enum=False, values_callable=_enum_values),
         nullable=False,
         default=LedgerSourceTag.ADMIN_ADJUSTMENT,
         server_default=LedgerSourceTag.ADMIN_ADJUSTMENT.value,
     )
     reason: Mapped[LedgerEntryReason] = mapped_column(
-        Enum(LedgerEntryReason, name="ledger_entry_reason", native_enum=False, values_callable=_enum_values),
+        _LegacyCaseEnum(LedgerEntryReason, name="ledger_entry_reason", native_enum=False, values_callable=_enum_values),
         nullable=False,
     )
     transaction_type: Mapped[LedgerTransactionType] = mapped_column(
-        Enum(LedgerTransactionType, name="ledger_transaction_type", native_enum=False, values_callable=_enum_values),
+        _LegacyCaseEnum(LedgerTransactionType, name="ledger_transaction_type", native_enum=False, values_callable=_enum_values),
         nullable=False,
         default=LedgerTransactionType.ADJUSTMENT,
         server_default=LedgerTransactionType.ADJUSTMENT.value,

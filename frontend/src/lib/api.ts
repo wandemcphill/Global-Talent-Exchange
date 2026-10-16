@@ -27,11 +27,14 @@ api.interceptors.request.use((config) => {
 
 let refreshing: Promise<string | null> | null = null;
 
+const unwrap = (body: any) => (body && body.success === true && "data" in body ? body.data : body);
+
 async function doRefresh(): Promise<string | null> {
   const rt = tokens.refresh();
   if (!rt) return null;
   try {
-    const { data } = await axios.post(`${API}/auth/refresh`, { refresh_token: rt });
+    const { data: raw } = await axios.post(`${API}/v2/auth/refresh`, { refresh_token: rt });
+    const data = unwrap(raw);
     tokens.set(data.access_token, data.refresh_token);
     return data.access_token;
   } catch {
@@ -41,7 +44,10 @@ async function doRefresh(): Promise<string | null> {
 }
 
 api.interceptors.response.use(
-  (r) => r,
+  (r) => {
+    r.data = unwrap(r.data);
+    return r;
+  },
   async (error) => {
     const original = error.config;
     if (error.response?.status === 401 && !original._retry && tokens.refresh()) {

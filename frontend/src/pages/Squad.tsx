@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub, useClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel, TraitBar } from "@/components/gtex/ui";
+import { PlayerCard } from "@/components/gtex/PlayerCard";
+import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
 
 function ManagerSheet({ club }: any) {
   const m = club.manager_profile || {};
@@ -68,9 +70,25 @@ function HireManager({ club }: any) {
   );
 }
 
+function SquadCards({ club }: any) {
+  const [open, setOpen] = useState<string | null>(null);
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" data-testid="squad-cards">
+      {club.squad.map((p: any) => (
+        <PlayerCard key={p.id} testid={`squad-card-${p.id}`} name={p.name} rating={p.rating} potential={p.potential} position={p.position} age={p.age} regen={p.is_regen}
+          badge={p.status === "listed" ? "Listed" : p.injured_days > 0 ? "Injured" : undefined}
+          onClick={!p.is_regen && p.player_ref ? () => setOpen(p.player_ref) : undefined}
+          stats={[{ k: "Morale", v: p.morale }, { k: "Mins", v: p.minutes }, { k: "Value", v: fmt(p.value_coin) }]} />
+      ))}
+      <PlayerDrawer playerId={open} onClose={() => setOpen(null)} />
+    </div>
+  );
+}
+
 function SquadTable({ club }: any) {
   const refresh = useRefreshOwner();
   const [mentality, setMentality] = useState(club.mentality);
+  const [view, setView] = useState<"cards" | "table">("cards");
   const save = async (m: string) => {
     setMentality(m);
     await api.put(`/owner/clubs/${club.club_id}/mentality`, { mentality: m });
@@ -78,7 +96,8 @@ function SquadTable({ club }: any) {
   };
   return (
     <Panel eyebrow={`${club.squad.length} players`} title="Squad" testid="squad-table-panel" className="lg:col-span-7"
-      action={<div className="flex gap-1">{["defensive", "balanced", "attacking"].map((m) => <button key={m} data-testid={`default-mentality-${m}`} onClick={() => save(m)} className={`gx-btn ${mentality === m ? "gx-btn-primary" : "gx-btn-secondary"}`}>{m}</button>)}</div>}>
+      action={<div className="flex flex-wrap gap-1">{["cards", "table"].map((v) => <button key={v} data-testid={`squad-view-${v}`} onClick={() => setView(v as any)} className={`gx-btn ${view === v ? "gx-btn-primary" : "gx-btn-ghost"}`}>{v}</button>)}<span className="mx-1 w-px bg-white/10" />{["defensive", "balanced", "attacking"].map((m) => <button key={m} data-testid={`default-mentality-${m}`} onClick={() => save(m)} className={`gx-btn ${mentality === m ? "gx-btn-primary" : "gx-btn-secondary"}`}>{m}</button>)}</div>}>
+      {view === "cards" ? <div className="gx-scroll max-h-[640px] overflow-auto pr-1"><SquadCards club={club} /></div> : (
       <div className="gx-scroll max-h-[560px] overflow-auto">
         <table className="gx-table w-full min-w-[620px]">
           <thead><tr><th>Player</th><th>Pos</th><th>Age</th><th>Rtg/Pot</th><th>Morale</th><th>Mins</th><th>Value</th></tr></thead>
@@ -97,6 +116,7 @@ function SquadTable({ club }: any) {
           </tbody>
         </table>
       </div>
+      )}
     </Panel>
   );
 }
