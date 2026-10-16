@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import logging
+import time
 from threading import RLock
 from typing import Any, Protocol
 
@@ -84,18 +86,86 @@ return {current, ttl}
 
     def increment(self, *, key: str, window_seconds: int) -> tuple[int, int]:
         try:
-            current, ttl = self._script(keys=[key], args=[window_seconds])
-            retry_after = max(1, int(ttl or window_seconds))
-            return int(current), retry_after
+            return self.increment_strict(key=key, window_seconds=window_seconds)
         except RedisError:
             logger.warning("rate_limit.increment_failed_using_memory_fallback key=%s", key)
             return self._fallback.increment(key=key, window_seconds=window_seconds)
+
+    def increment_strict(self, *, key: str, window_seconds: int) -> tuple[int, int]:
+        current, ttl = self._script(keys=[key], args=[window_seconds])
+        retry_after = max(1, int(ttl or window_seconds))
+        return int(current), retry_after
 
     def snapshot(self) -> dict[str, Any]:
         fallback_snapshot = self._fallback.snapshot()
         return {
             "backend": "redis",
             "redis_error_fallback": fallback_snapshot,
+        }
+
+
+class ResilientRateLimitStore:
+    """Wraps a Redis store with an in-memory fallback and retry backoff.
+
+    Every call tries Redis; on failure the store degrades to memory for
+    ``retry_backoff_seconds`` before probing Redis again, so a Redis restart
+    recovers without a process restart.
+    """
+
+    def __init__(
+        self,
+        redis_url: str,
+        *,
+        clock: Callable[[], float] | None = None,
+        retry_backoff_seconds: float = 30.0,
+    ) -> None:
+        self._redis = RedisRateLimitStore(redis_url)
+        self._memory = MemoryRateLimitStore()
+        self._clock = clock or time.monotonic
+        self._retry_backoff_seconds = retry_backoff_seconds
+        self._retry_at = 0.0
+        self._degraded = False
+        self._outage_logged = False
+        self._lock = RLock()
+
+    @property
+    def degraded(self) -> bool:
+        return self._degraded
+
+    def increment(self, *, key: str, window_seconds: int) -> tuple[int, int]:
+        with self._lock:
+            use_redis = not self._degraded or self._clock() >= self._retry_at
+        if use_redis:
+            try:
+                result = self._redis.increment_strict(key=key, window_seconds=window_seconds)
+            except Exception:
+                self._mark_outage()
+            else:
+                self._mark_recovered()
+                return result
+        return self._memory.increment(key=key, window_seconds=window_seconds)
+
+    def _mark_outage(self) -> None:
+        with self._lock:
+            self._degraded = True
+            self._retry_at = self._clock() + self._retry_backoff_seconds
+            if not self._outage_logged:
+                self._outage_logged = True
+                logger.error("rate_limit.redis_unavailable_falling_back_to_memory")
+
+    def _mark_recovered(self) -> None:
+        with self._lock:
+            if self._outage_logged:
+                logger.info("rate_limit.redis_recovered")
+            self._degraded = False
+            self._outage_logged = False
+            self._retry_at = 0.0
+
+    def snapshot(self) -> dict[str, Any]:
+        return {
+            "backend": "redis",
+            "degraded": self._degraded,
+            "redis_error_fallback": self._memory.snapshot(),
         }
 
 
@@ -195,6 +265,8 @@ class ApiRateLimiter:
             "/api/wallet/top-up/verify",
         }:
             return self._rules()[1]
+        if self._is_share_event_path(path):
+            return self._rules()[1]
         if self._matches_prefix(path, "/api/market", "/market", "/api/gtex/market", "/gtex/market"):
             return self._rules()[2]
         if self._matches_prefix(path, *self._WALLET_PREFIXES):
@@ -202,6 +274,12 @@ class ApiRateLimiter:
                 return self._rules()[3]
             return self._rules()[4]
         return self._rules()[5]
+
+    @staticmethod
+    def _is_share_event_path(path: str) -> bool:
+        if path.startswith("/api/challenges/") and path.endswith("/share-events"):
+            return True
+        return path.startswith("/api/match-share-links/") and path.endswith("/events")
 
     @classmethod
     def _is_auth_path(cls, path: str) -> bool:
@@ -307,12 +385,7 @@ def ensure_api_rate_limiter(app: FastAPI) -> ApiRateLimiter:
 
 def _build_store(settings: Settings) -> RateLimitStore:
     if settings.redis_url:
-        try:
-            store = RedisRateLimitStore(settings.redis_url)
-            store.client.ping()
-            return store
-        except Exception:
-            logger.warning("rate_limit.redis_unavailable_falling_back_to_memory")
+        return ResilientRateLimitStore(settings.redis_url)
     return MemoryRateLimitStore()
 
 
@@ -321,5 +394,6 @@ __all__ = [
     "RateLimitDecision",
     "RateLimitMiddleware",
     "RateLimitRule",
+    "ResilientRateLimitStore",
     "ensure_api_rate_limiter",
 ]

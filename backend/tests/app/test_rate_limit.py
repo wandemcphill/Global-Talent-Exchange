@@ -90,3 +90,153 @@ def test_redis_rate_limit_store_uses_memory_fallback_on_increment_errors() -> No
     assert first == 1
     assert second == 2
     assert store.snapshot()["redis_error_fallback"]["backend"] == "memory"
+
+
+def test_resilient_store_falls_back_to_memory_and_recovers_after_backoff(
+    monkeypatch, caplog
+) -> None:
+    import logging
+
+    from app.core import rate_limit as rate_limit_module
+
+    clock_state = {"now": 0.0}
+    created: list[_FailingRedisStore] = []
+
+    class _FailingRedisStore:
+        def __init__(self, redis_url: str) -> None:
+            self.redis_url = redis_url
+            self.fail = True
+            self.calls = 0
+            created.append(self)
+
+        def increment_strict(self, *, key: str, window_seconds: int) -> tuple[int, int]:
+            self.calls += 1
+            if self.fail:
+                raise RedisError("redis unavailable")
+            return 1, window_seconds
+
+    monkeypatch.setattr(rate_limit_module, "RedisRateLimitStore", _FailingRedisStore)
+
+    store = rate_limit_module.ResilientRateLimitStore(
+        "redis://127.0.0.1:1/0",
+        clock=lambda: clock_state["now"],
+        retry_backoff_seconds=30.0,
+    )
+
+    with caplog.at_level(logging.ERROR, logger="app.core.rate_limit"):
+        first, _ = store.increment(key="test:bucket", window_seconds=60)
+        second, _ = store.increment(key="test:bucket", window_seconds=60)
+
+    assert first == 1
+    assert second == 2
+    assert created[0].calls == 1  # backoff suppresses further Redis calls
+    assert store.degraded is True
+    assert caplog.text.count("rate_limit.redis_unavailable_falling_back_to_memory") == 1
+
+    created[0].fail = False
+    clock_state["now"] += 31.0
+
+    with caplog.at_level(logging.INFO, logger="app.core.rate_limit"):
+        third, _ = store.increment(key="test:bucket", window_seconds=60)
+
+    assert third == 1  # fresh Redis-backed bucket
+    assert created[0].calls == 2
+    assert store.degraded is False
+    assert "rate_limit.redis_recovered" in caplog.text
+
+
+def test_resilient_store_retries_redis_after_backoff_and_stays_degraded_on_failure(
+    monkeypatch, caplog
+) -> None:
+    import logging
+
+    from app.core import rate_limit as rate_limit_module
+
+    clock_state = {"now": 0.0}
+    created: list[_AlwaysFailingRedisStore] = []
+
+    class _AlwaysFailingRedisStore:
+        def __init__(self, redis_url: str) -> None:
+            self.calls = 0
+            created.append(self)
+
+        def increment_strict(self, *, key: str, window_seconds: int) -> tuple[int, int]:
+            self.calls += 1
+            raise RedisError("redis unavailable")
+
+    monkeypatch.setattr(rate_limit_module, "RedisRateLimitStore", _AlwaysFailingRedisStore)
+
+    store = rate_limit_module.ResilientRateLimitStore(
+        "redis://127.0.0.1:1/0",
+        clock=lambda: clock_state["now"],
+        retry_backoff_seconds=30.0,
+    )
+
+    with caplog.at_level(logging.ERROR, logger="app.core.rate_limit"):
+        store.increment(key="test:bucket", window_seconds=60)
+        clock_state["now"] += 31.0
+        store.increment(key="test:bucket", window_seconds=60)
+        clock_state["now"] += 31.0
+        store.increment(key="test:bucket", window_seconds=60)
+
+    assert created[0].calls == 3  # probed again after each backoff window
+    assert store.degraded is True
+    assert caplog.text.count("rate_limit.redis_unavailable_falling_back_to_memory") == 1
+
+
+def test_build_store_uses_memory_store_without_redis_url() -> None:
+    from app.core import rate_limit as rate_limit_module
+    from app.core.config import get_settings, reset_settings_cache
+
+    reset_settings_cache()
+    settings = get_settings()
+    assert not settings.redis_url
+    store = rate_limit_module._build_store(settings)
+    assert isinstance(store, rate_limit_module.MemoryRateLimitStore)
+
+
+def test_share_event_paths_use_sensitive_rate_limit_bucket() -> None:
+    from types import SimpleNamespace
+
+    from starlette.requests import Request
+
+    from app.core.rate_limit import ApiRateLimiter
+
+    settings = SimpleNamespace(
+        auth_rate_limit_per_minute=5,
+        sensitive_rate_limit_per_minute=7,
+        market_rate_limit_per_minute=10,
+        wallet_read_rate_limit_per_minute=20,
+        wallet_rate_limit_per_minute=15,
+        api_rate_limit_per_minute=60,
+        distributed_rate_limit_enabled=True,
+    )
+    limiter = ApiRateLimiter(
+        app=FastAPI(),
+        settings=settings,
+        store=rate_limit_module_placeholder(),
+    )
+
+    def _request(path: str) -> Request:
+        return Request(
+            {
+                "type": "http",
+                "method": "POST",
+                "path": path,
+                "headers": [],
+                "client": ("10.0.0.1", 1234),
+            }
+        )
+
+    for path in (
+        "/api/challenges/challenge-1/share-events",
+        "/api/match-share-links/abc123/events",
+    ):
+        rule = limiter._rule_for_request(_request(path))
+        assert rule.scope == "sensitive", path
+
+
+def rate_limit_module_placeholder():
+    from app.core.rate_limit import MemoryRateLimitStore
+
+    return MemoryRateLimitStore()

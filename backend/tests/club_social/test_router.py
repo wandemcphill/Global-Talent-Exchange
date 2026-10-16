@@ -200,3 +200,87 @@ def test_identity_metrics_refresh_rejects_other_owner(client, user_state, sessio
     user_state["user"] = session.get(User, "user-bravo")
     response = client.post("/api/clubs/club-alpha/identity/metrics/refresh")
     assert response.status_code == 403
+
+
+def test_match_share_event_dedupes_anonymous_actor_by_client_ip(
+    client,
+    session: Session,
+) -> None:
+    from sqlalchemy import func, select
+
+    from app.models.club_social import MatchShareEvent
+
+    _seed_match_context(session)
+    share_response = client.post(
+        "/api/matches/match-router/share-links",
+        json={"reward_amount_minor": 0},
+    )
+    assert share_response.status_code == 201
+    share_code = share_response.json()["share_code"]
+
+    same_ip_headers = {"x-forwarded-for": "203.0.113.10"}
+    first = client.post(
+        f"/api/match-share-links/{share_code}/events",
+        json={"event_type": "open", "source_platform": "social"},
+        headers=same_ip_headers,
+    )
+    second = client.post(
+        f"/api/match-share-links/{share_code}/events",
+        json={"event_type": "open", "source_platform": "social"},
+        headers=same_ip_headers,
+    )
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    count_same_ip = session.scalar(
+        select(func.count()).select_from(MatchShareEvent)
+    )
+    assert count_same_ip == 1
+
+    other_ip = client.post(
+        f"/api/match-share-links/{share_code}/events",
+        json={"event_type": "open", "source_platform": "social"},
+        headers={"x-forwarded-for": "198.51.100.77"},
+    )
+    assert other_ip.status_code == 201
+    assert session.scalar(select(func.count()).select_from(MatchShareEvent)) == 2
+
+    # Fingerprints, not raw IPs, are persisted.
+    events = session.scalars(select(MatchShareEvent)).all()
+    assert all(event.actor_user_id is None for event in events)
+    assert all(event.actor_fingerprint for event in events)
+    assert all("203.0.113.10" not in (event.actor_fingerprint or "") for event in events)
+
+
+def test_match_share_event_records_authenticated_actor(
+    app,
+    client,
+    session: Session,
+    user_state: dict[str, User],
+) -> None:
+    from sqlalchemy import select
+
+    from app.auth.dependencies import get_optional_current_user
+    from app.models.club_social import MatchShareEvent
+
+    app.dependency_overrides[get_optional_current_user] = lambda: user_state["user"]
+
+    _seed_match_context(session)
+    share_response = client.post(
+        "/api/matches/match-router/share-links",
+        json={"reward_amount_minor": 0},
+    )
+    assert share_response.status_code == 201
+    share_code = share_response.json()["share_code"]
+
+    for _ in range(2):
+        response = client.post(
+            f"/api/match-share-links/{share_code}/events",
+            json={"event_type": "share", "source_platform": "in_app"},
+        )
+        assert response.status_code == 201
+
+    events = session.scalars(select(MatchShareEvent)).all()
+    assert len(events) == 1  # same authenticated actor deduped
+    assert events[0].actor_user_id == "user-alpha"
+    assert events[0].actor_fingerprint is None

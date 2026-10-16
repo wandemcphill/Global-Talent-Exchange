@@ -76,7 +76,7 @@ def provider_webhook_secret_configured(provider_key: str) -> bool:
     normalized = provider_key.strip().lower()
     env_names = {
         "paystack": ("GTE_PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET", "GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"),
-        "korapay": ("GTE_KORAPAY_WEBHOOK_SECRET", "KORAPAY_WEBHOOK_SECRET", "GTE_KORAPAY_ENCRYPTION_KEY", "KORAPAY_ENCRYPTION_KEY"),
+        "korapay": ("GTE_KORAPAY_WEBHOOK_SECRET", "KORAPAY_WEBHOOK_SECRET", "GTE_KORAPAY_SECRET_KEY", "KORAPAY_SECRET_KEY"),
     }.get(normalized, (f"GTE_{normalized.upper()}_WEBHOOK_SECRET",))
     return any((os.getenv(name) or "").strip() for name in env_names)
 

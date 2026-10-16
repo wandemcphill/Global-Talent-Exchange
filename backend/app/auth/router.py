@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hmac
+from hashlib import sha256
 import logging
 from datetime import UTC, datetime
 from time import perf_counter
@@ -44,6 +46,7 @@ from app.auth.service import (
     InvalidSessionError,
     IssuedAuthSession,
 )
+from app.core.config import get_settings
 from app.core.request_security import extract_client_ip
 from app.common.enums.creator_profile_status import CreatorProfileStatus
 from app.models.coin_trader import CoinTraderProfile
@@ -66,6 +69,17 @@ router = APIRouter(tags=["auth"])
 legacy_router = APIRouter(prefix="/auth")
 api_router = APIRouter(prefix="/api/auth")
 api_v2_router = APIRouter(prefix="/api/v2/auth")
+
+
+def _email_fingerprint(email: str) -> str:
+    """HMAC fingerprint of an email for analytics metadata (no raw PII)."""
+    secret = get_settings().auth_secret or ""
+    digest = hmac.new(
+        secret.encode("utf-8"),
+        email.strip().lower().encode("utf-8"),
+        sha256,
+    ).hexdigest()
+    return digest[:32]
 
 
 class _AuthRouteTelemetry:
@@ -861,7 +875,7 @@ def login_user(
         telemetry.mark("db.refresh_user_ms", refresh_started_at)
     except InvalidCredentialsError as exc:
         analytics_failure_started_at = perf_counter()
-        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
+        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email_hash": _email_fingerprint(payload.email)})
         telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
         _rollback_with_telemetry(session, telemetry)
         _record_login_attempt(
@@ -876,7 +890,7 @@ def login_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except AuthError as exc:
         analytics_failure_started_at = perf_counter()
-        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
+        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email_hash": _email_fingerprint(payload.email)})
         telemetry.mark("analytics.login_failure_ms", analytics_failure_started_at)
         _rollback_with_telemetry(session, telemetry)
         _record_login_attempt(
@@ -1056,7 +1070,7 @@ def request_account_recovery(
         user, recovery_code = service.prepare_account_recovery(session, email=payload.email)
         session.commit()
     except AuthError as exc:
-        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email": payload.email})
+        analytics.track_event(session, name="login_failure", user_id=None, metadata={"email_hash": _email_fingerprint(payload.email)})
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

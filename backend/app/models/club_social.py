@@ -332,6 +332,7 @@ class ChallengeShareEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=True,
         index=True,
     )
+    actor_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     event_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     source_platform: Mapped[str | None] = mapped_column(String(48), nullable=True, index=True)
     country_code: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
@@ -415,6 +416,7 @@ class MatchShareEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=True,
         index=True,
     )
+    actor_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     event_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     source_platform: Mapped[str | None] = mapped_column(String(48), nullable=True, index=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

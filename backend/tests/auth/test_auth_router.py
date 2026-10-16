@@ -733,3 +733,53 @@ def test_scoped_admin_login_reflects_delegated_permissions_and_admin_route(app_c
     )
     assert me_response.status_code == 200, me_response.text
     assert "manage_manager_catalog" in me_response.json()["permissions"]
+
+
+def test_login_failure_analytics_stores_email_hash_not_email(session, monkeypatch) -> None:
+    from app.analytics.service import AnalyticsService
+    from app.auth.router import _email_fingerprint
+
+    captured: list[dict[str, object]] = []
+    original = AnalyticsService.track_event
+
+    def spy(self, tracked_session, *, name, user_id, metadata=None):
+        if name == "login_failure":
+            captured.append(metadata or {})
+        return original(
+            self,
+            tracked_session,
+            name=name,
+            user_id=user_id,
+            metadata=metadata,
+        )
+
+    monkeypatch.setattr(AnalyticsService, "track_event", spy)
+
+    AuthService().register_user(
+        session,
+        email="hash-check@example.com",
+        username="hashcheck",
+        password=TEST_PASSWORD,
+        full_name="Hash Check",
+        region_code="NG",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        login_user(
+            LoginRequest(email="hash-check@example.com", password=WRONG_PASSWORD),
+            session,
+        )
+
+    assert exc_info.value.status_code == 401
+    assert captured
+    for metadata in captured:
+        assert "email" not in metadata
+        assert metadata["email_hash"] == _email_fingerprint("hash-check@example.com")
+        assert metadata["email_hash"] != "hash-check@example.com"
+
+
+def test_email_fingerprint_is_normalized_and_truncated() -> None:
+    from app.auth.router import _email_fingerprint
+
+    assert _email_fingerprint("  Fan@Example.COM  ") == _email_fingerprint("fan@example.com")
+    assert len(_email_fingerprint("fan@example.com")) == 32
