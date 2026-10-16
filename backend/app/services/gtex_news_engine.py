@@ -91,11 +91,25 @@ class JournalistProfile:
 
 
 JOURNALISTS = (
-    JournalistProfile(name="Rico Blaze", style="sensational", loves=("Madrid", "superstar"), hates=("Barca",), credibility=0.48),
-    JournalistProfile(name="Marco Steele", style="dramatic", loves=("Arsenal", "GTEX Academy"), hates=("Chelsea",), credibility=0.72),
-    JournalistProfile(name="Ada Okonkwo", style="scouting", loves=("regen", "academy", "wonderkid"), hates=("stagnation",), credibility=0.86),
-    JournalistProfile(name="Luis Calder", style="measured", loves=("market", "tactics"), hates=("panic deals",), credibility=0.91),
-    JournalistProfile(name="Tomi Briggs", style="sharp", loves=("underdogs", "local clubs"), hates=("complacency",), credibility=0.66),
+    JournalistProfile(
+        name="Rico Blaze", style="sensational", loves=("Madrid", "superstar"), hates=("Barca",), credibility=0.48
+    ),
+    JournalistProfile(
+        name="Marco Steele", style="dramatic", loves=("Arsenal", "GTEX Academy"), hates=("Chelsea",), credibility=0.72
+    ),
+    JournalistProfile(
+        name="Ada Okonkwo",
+        style="scouting",
+        loves=("regen", "academy", "wonderkid"),
+        hates=("stagnation",),
+        credibility=0.86,
+    ),
+    JournalistProfile(
+        name="Luis Calder", style="measured", loves=("market", "tactics"), hates=("panic deals",), credibility=0.91
+    ),
+    JournalistProfile(
+        name="Tomi Briggs", style="sharp", loves=("underdogs", "local clubs"), hates=("complacency",), credibility=0.66
+    ),
 )
 
 
@@ -297,7 +311,11 @@ def fan_reaction(story: dict[str, Any], rng: random.Random) -> str:
     if story_type in {"drama", "rivalry"}:
         options = ("Fans are furious.", "Mixed reactions online.", "Supporters are already arguing over the timing.")
     elif story_type in {"regen", "award", "form"} and story.get("is_regen"):
-        options = ("Supporters are excited.", "The fanbase is watching the next update closely.", "Mixed reactions online.")
+        options = (
+            "Supporters are excited.",
+            "The fanbase is watching the next update closely.",
+            "Mixed reactions online.",
+        )
     elif priority >= 8:
         options = ("The online noise around this one is getting louder.", "Fans are divided on this move.")
     else:
@@ -397,7 +415,10 @@ def narrative_arc_story(arc: dict[str, Any]) -> dict[str, Any]:
         2: (f"{club} deny {name} exit noise", "Club sources are pushing back, but the room is not fully convinced."),
         3: (f"Talks begin around {name}", "A quiet pathway is forming and the market is beginning to react."),
         4: (f"{name} deal edges closer", "The next update could decide whether this becomes a full breaking story."),
-        5: (f"Here we go arc: {name} reaches the final beat", "The storyline has moved from smoke to a high-impact decision point."),
+        5: (
+            f"Here we go arc: {name} reaches the final beat",
+            "The storyline has moved from smoke to a high-impact decision point.",
+        ),
     }
     headline, body = beats[progress]
     return _news_story(
@@ -420,7 +441,9 @@ def narrative_arc_story(arc: dict[str, Any]) -> dict[str, Any]:
 def manager_career_snapshot(manager: dict[str, Any]) -> dict[str, Any]:
     seed = int(_stable_digest({"manager": manager})[:8], 16)
     win_rate = 35 + (seed % 51)
-    pressure = max(5, min(100, 90 - win_rate + (10 if str(manager.get("rarity", "")).lower() in {"elite", "legendary"} else 0)))
+    pressure = max(
+        5, min(100, 90 - win_rate + (10 if str(manager.get("rarity", "")).lower() in {"elite", "legendary"} else 0))
+    )
     sentiment = "praise" if win_rate >= 62 else "criticism" if pressure >= 60 else "neutral"
     if pressure >= 82:
         sentiment = "sack_watch"
@@ -444,10 +467,22 @@ def chaos_event_story(data: dict[str, Any]) -> dict[str, Any] | None:
     player = regen_players[rng.randrange(len(regen_players))] if regen_players else {}
     name = _player_name(player) if player else "A hidden academy name"
     templates = {
-        "surprise_retirement": (f"{name} camp hit by surprise future talk", "A sudden career-path twist has shocked the room."),
-        "takeover": ("Takeover whispers shake a GTEX club", "Ownership noise is threatening to change the transfer mood."),
-        "scandal": ("Scandal rumor hits the market desk", "The facts are still thin, but the noise is impossible to ignore."),
-        "youth_explosion": (f"Youth explosion alert around {name}", "A rare academy jump has pushed scouts into emergency meetings."),
+        "surprise_retirement": (
+            f"{name} camp hit by surprise future talk",
+            "A sudden career-path twist has shocked the room.",
+        ),
+        "takeover": (
+            "Takeover whispers shake a GTEX club",
+            "Ownership noise is threatening to change the transfer mood.",
+        ),
+        "scandal": (
+            "Scandal rumor hits the market desk",
+            "The facts are still thin, but the noise is impossible to ignore.",
+        ),
+        "youth_explosion": (
+            f"Youth explosion alert around {name}",
+            "A rare academy jump has pushed scouts into emergency meetings.",
+        ),
     }
     headline, body = templates[event_type]
     return _news_story(
@@ -1012,7 +1047,9 @@ class GTEXNewsEngineService:
         self.cache_backend.set(cache_key, json.dumps(stamped, default=str), BREAKING_TTL_SECONDS)
         return stamped
 
-    def personalized_news(self, user_context: dict[str, Any], *, force: bool = False) -> dict[str, list[dict[str, Any]]]:
+    def personalized_news(
+        self, user_context: dict[str, Any], *, force: bool = False
+    ) -> dict[str, list[dict[str, Any]]]:
         from app.services.personalized_feed import rank_for_user
 
         payload = self.daily_news(user_id=str(user_context.get("user_id") or "anonymous"), force=force)
@@ -1530,7 +1567,9 @@ class GTEXNewsEngineService:
                         "dedupe_window_hours": 48,
                     }
                     mutated["metadata"] = metadata
-                    mutated["id"] = f"news_{_stable_digest({'headline': mutated.get('headline'), 'player_id': mutated.get('player_id'), 'mutation': mutation_index})[:20]}"
+                    mutated["id"] = (
+                        f"news_{_stable_digest({'headline': mutated.get('headline'), 'player_id': mutated.get('player_id'), 'mutation': mutation_index})[:20]}"
+                    )
                     accepted.append(mutated)
                     used_hashes.add(headline_hash)
                     new_memory.append(

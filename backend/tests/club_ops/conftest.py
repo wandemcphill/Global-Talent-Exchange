@@ -99,7 +99,9 @@ def build_club_ops_services() -> dict[str, object]:
         "analytics": analytics,
         "admin": admin,
         "admin_user": SimpleNamespace(id="admin-1", role="admin", is_admin=True),
-        "club_user": SimpleNamespace(id="club-user-1", role=UserRole.CLUB, **{ACCESS_ROLE_MAP_ATTR: {"club-api": "club"}}),
+        "club_user": SimpleNamespace(
+            id="club-user-1", role=UserRole.CLUB, **{ACCESS_ROLE_MAP_ATTR: {"club-api": "club"}}
+        ),
     }
 
 

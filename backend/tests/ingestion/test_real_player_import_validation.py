@@ -34,6 +34,7 @@ from app.players.read_models import PlayerSummaryReadModel
 from app.providers.import_models import RealPlayerSourceItem
 from app.schemas.real_player_ingestion import RealPlayerSeedInput
 from app.value_engine.read_models import PlayerValueSnapshotRecord
+
 try:
     from backend.scripts.validate_real_player_import import main as validate_real_player_import_main
 except ModuleNotFoundError:
@@ -577,7 +578,9 @@ def test_validation_service_summarizes_duplicate_mapping_and_valuation_gaps() ->
         assert report.duplicate_candidates[0].identity_key == "victor_osimhen_1998_ng"
         assert report.duplicate_candidates[0].row_count == 2
 
-        unresolved = {(item.entity_type, item.provider_reference_key): item.reason_code for item in report.unresolved_references}
+        unresolved = {
+            (item.entity_type, item.provider_reference_key): item.reason_code for item in report.unresolved_references
+        }
         assert unresolved == {
             ("club", "mystery-fc"): "club_not_mapped",
             ("competition", "unknown-super-league"): "competition_not_mapped",
@@ -700,10 +703,7 @@ def test_validation_service_keeps_ambiguous_unresolved_references_tracked() -> N
             "club:tracked:ambiguous_club_match": 1,
             "competition:tracked:ambiguous_competition_match": 1,
         }
-        assert {
-            (item.entity_type, item.reason_code, item.state)
-            for item in report.unresolved_references
-        } == {
+        assert {(item.entity_type, item.reason_code, item.state) for item in report.unresolved_references} == {
             ("club", "ambiguous_club_match", "tracked"),
             ("competition", "ambiguous_competition_match", "tracked"),
         }

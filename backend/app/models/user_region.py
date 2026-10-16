@@ -15,9 +15,7 @@ if TYPE_CHECKING:
 
 class UserRegionProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "user_region_profiles"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_user_region_profiles_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_region_profiles_user_id"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36),

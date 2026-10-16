@@ -105,11 +105,18 @@ class MatchIntegrityService:
             try:
                 token_payload = self.signer.verify(continuation_token)
             except SignatureError as exc:
-                raise MatchIntegrityViolation("Segment continuation token is invalid.", reason="invalid_segment_token") from exc
+                raise MatchIntegrityViolation(
+                    "Segment continuation token is invalid.", reason="invalid_segment_token"
+                ) from exc
             if token_payload.get("match_id") != match_id:
-                raise MatchIntegrityViolation("Continuation token does not belong to this match.", reason="segment_token_match_mismatch")
+                raise MatchIntegrityViolation(
+                    "Continuation token does not belong to this match.", reason="segment_token_match_mismatch"
+                )
             if token_payload.get("mode") != mode.value:
-                raise MatchIntegrityViolation("Continuation token mode does not match the requested playback mode.", reason="segment_token_mode_mismatch")
+                raise MatchIntegrityViolation(
+                    "Continuation token mode does not match the requested playback mode.",
+                    reason="segment_token_mode_mismatch",
+                )
             segment_start_seconds = int(token_payload.get("revealed_through_seconds") or 0)
 
         segment_end_seconds = min(
@@ -189,12 +196,10 @@ class MatchIntegrityService:
         revealed_through_seconds: int,
     ) -> MatchViewStateView:
         visible_events = [
-            item for item in view_state.events
-            if float(item.time_seconds) <= float(revealed_through_seconds)
+            item for item in view_state.events if float(item.time_seconds) <= float(revealed_through_seconds)
         ]
         visible_frames = [
-            item for item in view_state.frames
-            if float(item.time_seconds) <= float(revealed_through_seconds)
+            item for item in view_state.frames if float(item.time_seconds) <= float(revealed_through_seconds)
         ]
         if not visible_frames and view_state.frames:
             visible_frames = [view_state.frames[0]]

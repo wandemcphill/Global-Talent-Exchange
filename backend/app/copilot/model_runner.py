@@ -23,7 +23,7 @@ class CopilotModelRunner:
         features: CopilotFeatureBundle,
         hook_score: float,
     ) -> CopilotPredictionResult:
-        creator_metrics = ((features.creator_history.get("insights") or {}).get("creator_metrics") or {})
+        creator_metrics = (features.creator_history.get("insights") or {}).get("creator_metrics") or {}
         clip_metadata = features.clip_metadata
         preferred_format = str(clip_metadata.get("preferred_format") or "instant")
         best_history_format = creator_metrics.get("best_format")
@@ -40,7 +40,9 @@ class CopilotModelRunner:
             creator_bonus = 0.18 if format_type == best_history_format else 0.0
             creator_penalty = -0.1 if format_type == worst_history_format else 0.0
             preferred_bonus = 0.08 if format_type == preferred_format else 0.0
-            tempo_bonus = self._tempo_bonus(format_type=format_type, tempo=str(features.current_trends.get("tempo") or "steady"))
+            tempo_bonus = self._tempo_bonus(
+                format_type=format_type, tempo=str(features.current_trends.get("tempo") or "steady")
+            )
             duration_bonus = self._duration_bonus(
                 format_type=format_type,
                 duration_seconds=float(clip_metadata.get("duration_seconds") or 18.0),
@@ -50,7 +52,9 @@ class CopilotModelRunner:
                 event_type=str(clip_metadata.get("event_type") or "goal"),
                 dominant_cluster=str(dominant_cluster or "general"),
             )
-            overlay_bonus = 0.03 if clip_metadata.get("has_reaction_overlay") and format_type in {"meme", "instant"} else 0.0
+            overlay_bonus = (
+                0.03 if clip_metadata.get("has_reaction_overlay") and format_type in {"meme", "instant"} else 0.0
+            )
             system_score = float(system_prior.get("avg_viral_score", 0.58))
             winner_rate = float(system_prior.get("winner_rate", 0.16))
             format_scores[format_type] = self._clamp(
@@ -71,7 +75,9 @@ class CopilotModelRunner:
         best_format = sorted(
             format_scores.items(),
             key=lambda item: (-item[1], item[0]),
-        )[0][0]
+        )[
+            0
+        ][0]
         duration_alignment = self._duration_alignment(
             duration_seconds=float(clip_metadata.get("duration_seconds") or 18.0),
             optimal_bucket=creator_metrics.get("optimal_duration"),
@@ -99,11 +105,7 @@ class CopilotModelRunner:
         avg_views = float(features.creator_history.get("avg_views", 0.0) or 0.0)
         baseline_views = max(avg_views, 18000.0 if features.creator_history.get("recent_clip_count", 0) < 3 else 4000.0)
         expected_views = int(
-            round(
-                baseline_views
-                * (0.72 + viral_probability)
-                * (0.9 + (format_scores[best_format] * 0.38))
-            )
+            round(baseline_views * (0.72 + viral_probability) * (0.9 + (format_scores[best_format] * 0.38)))
         )
 
         risk_flags = self._risk_flags(
@@ -146,7 +148,10 @@ class CopilotModelRunner:
             risk_flags.append("high competition window")
         if trend_alignment < 0.38:
             risk_flags.append("weak trend alignment")
-        if preferred_format != best_format and (format_scores.get(best_format, 0.0) - format_scores.get(preferred_format, 0.0)) >= 0.1:
+        if (
+            preferred_format != best_format
+            and (format_scores.get(best_format, 0.0) - format_scores.get(preferred_format, 0.0)) >= 0.1
+        ):
             risk_flags.append("format mismatch")
         return risk_flags[:4]
 
@@ -206,7 +211,11 @@ class CopilotModelRunner:
         format_match = 0.35 if best_format in top_formats else 0.0
         tag_overlap = len(set(clip_metadata.get("tags") or []) & top_tags)
         tag_score = min(0.25, tag_overlap * 0.08)
-        tempo_score = 0.15 if str(features.current_trends.get("tempo") or "steady") == "high" and best_format in {"meme", "instant"} else 0.08
+        tempo_score = (
+            0.15
+            if str(features.current_trends.get("tempo") or "steady") == "high" and best_format in {"meme", "instant"}
+            else 0.08
+        )
         return cls._clamp(format_match + event_match + tag_score + tempo_score, minimum=0.0, maximum=1.0)
 
     @classmethod

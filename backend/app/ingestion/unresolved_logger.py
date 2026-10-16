@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import tempfile
 
-
 DEFAULT_UNRESOLVED_REPORT_PATH = Path(tempfile.gettempdir()) / "unresolved_mappings_report.csv"
 
 

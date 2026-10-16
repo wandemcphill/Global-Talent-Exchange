@@ -136,7 +136,9 @@ class CreatorInsightsService:
                     audience_cluster=audience_cluster,
                     hook_style=hook_style,
                     is_viral=bool(attribution.is_viral),
-                    score=self._performance_score(tracked_metrics=tracked_metrics, feedback=feedback, is_viral=bool(attribution.is_viral)),
+                    score=self._performance_score(
+                        tracked_metrics=tracked_metrics, feedback=feedback, is_viral=bool(attribution.is_viral)
+                    ),
                     tracked_metrics=tracked_metrics,
                     feedback=feedback,
                 )
@@ -171,7 +173,9 @@ class CreatorInsightsService:
             "best_format": None if best_format == UNKNOWN_FORMAT else best_format,
             "worst_format": None if worst_format == UNKNOWN_FORMAT else worst_format,
             "optimal_duration": self._top_group(duration_stats),
-            "audience_cluster": None if dominant_cluster == UNKNOWN_CLUSTER and not audience_stats else dominant_cluster,
+            "audience_cluster": (
+                None if dominant_cluster == UNKNOWN_CLUSTER and not audience_stats else dominant_cluster
+            ),
         }
 
     def _analyzer(self, *, records: list[_ClipInsightRecord], creator_metrics: Mapping[str, Any]) -> dict[str, Any]:
@@ -229,7 +233,11 @@ class CreatorInsightsService:
 
         hook_style = best_hook
         if hook_style is None:
-            hook_style = "fast-start" if shorten_signals > 0 or (optimal_length is not None and self._as_duration_value(optimal_length) <= 20) else "narrative-build"
+            hook_style = (
+                "fast-start"
+                if shorten_signals > 0 or (optimal_length is not None and self._as_duration_value(optimal_length) <= 20)
+                else "narrative-build"
+            )
 
         if clip_count >= 3 and (viral_hit_rate >= 0.4 or increase_similar >= 2):
             posting_strategy = "high frequency"
@@ -260,8 +268,7 @@ class CreatorInsightsService:
         for item in records:
             action_counts.update(item.feedback.actions)
         recommended_actions = [
-            action
-            for action, _count in sorted(action_counts.items(), key=lambda entry: (-entry[1], entry[0]))[:3]
+            action for action, _count in sorted(action_counts.items(), key=lambda entry: (-entry[1], entry[0]))[:3]
         ]
         return {
             "clips_analyzed": len(records),
@@ -307,7 +314,9 @@ class CreatorInsightsService:
         return sorted(
             stats.items(),
             key=lambda item: (-float(item[1]["avg_score"]), -int(item[1]["count"]), item[0]),
-        )[0][0]
+        )[
+            0
+        ][0]
 
     def _bottom_group(self, stats: Mapping[str, Mapping[str, float | int]]) -> str | None:
         if not stats:
@@ -315,7 +324,9 @@ class CreatorInsightsService:
         return sorted(
             stats.items(),
             key=lambda item: (float(item[1]["avg_score"]), int(item[1]["count"]), item[0]),
-        )[0][0]
+        )[
+            0
+        ][0]
 
     @staticmethod
     def _average(values) -> float:

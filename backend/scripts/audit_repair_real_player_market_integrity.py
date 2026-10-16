@@ -25,14 +25,18 @@ for candidate in (REPO_ROOT, BACKEND_ROOT):
 
 from app.core.database import create_database_engine, create_session_factory, load_model_modules
 from app.ingestion.models import Club, Competition, Country, Player
-from app.ingestion.normalizers import clean_name, normalize_club_name, normalize_competition_name, normalize_country_name
+from app.ingestion.normalizers import (
+    clean_name,
+    normalize_club_name,
+    normalize_competition_name,
+    normalize_country_name,
+)
 from app.ingestion.real_player_canonical_mapping_service import RealPlayerCanonicalMappingService
 from app.ingestion.real_player_import_models import RealPlayerImportStagingRecord
 from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.players.read_models import PlayerSummaryReadModel
 from app.value_engine.scoring import credits_from_real_world_value
-
 
 REAL_VALUE_SOURCE_FIELDS = {
     "player.current_market_reference_value",
@@ -105,16 +109,12 @@ class IntegrityRelatedRows:
         source_name = (
             source_link.source_name
             if source_link is not None
-            else profile.source_name
-            if profile is not None
-            else player.source_provider
+            else profile.source_name if profile is not None else player.source_provider
         )
         source_key = (
             source_link.source_player_key
             if source_link is not None
-            else profile.source_player_key
-            if profile is not None
-            else player.provider_external_id
+            else profile.source_player_key if profile is not None else player.provider_external_id
         )
         if not source_name or not source_key:
             return None
@@ -144,9 +144,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--database-url", default=os.environ.get("GTE_DATABASE_URL"))
     parser.add_argument("--apply", action="store_true", help="Write repairs. Default is audit-only.")
-    parser.add_argument("--auto-create", action="store_true", help="Create missing canonical countries/leagues/clubs when safe.")
+    parser.add_argument(
+        "--auto-create", action="store_true", help="Create missing canonical countries/leagues/clubs when safe."
+    )
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--offset", type=int, default=0, help="Skip this many ordered players before auditing/repairing.")
+    parser.add_argument(
+        "--offset", type=int, default=0, help="Skip this many ordered players before auditing/repairing."
+    )
     parser.add_argument("--min-count", type=int, default=17000)
     parser.add_argument("--sample-size", type=int, default=25)
     parser.add_argument(
@@ -203,9 +207,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     repair_summaries=not bool(args.skip_summaries),
                     sample_size=args.sample_size,
                 )
-                tradable_count = session.scalar(
-                    select(func.count()).select_from(Player).where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
-                ) or 0
+                tradable_count = (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(Player)
+                        .where(Player.is_real_player.is_(True), Player.is_tradable.is_(True))
+                    )
+                    or 0
+                )
                 if args.apply:
                     session.commit()
             break
@@ -326,7 +335,9 @@ def audit_or_repair(
             if apply:
                 player.country_id = country.id
 
-        competition = _resolve_competition(session, mapper=mapper, entity_cache=entity_cache, player=player, facts=facts)
+        competition = _resolve_competition(
+            session, mapper=mapper, entity_cache=entity_cache, player=player, facts=facts
+        )
         if competition is None:
             stats.missing_competition += 1
             _sample(stats, player=player, issue="missing_competition", facts=facts, sample_size=sample_size)
@@ -335,7 +346,9 @@ def audit_or_repair(
             if apply:
                 player.current_competition_id = competition.id
 
-        club = _resolve_club(session, mapper=mapper, entity_cache=entity_cache, player=player, facts=facts, competition=competition)
+        club = _resolve_club(
+            session, mapper=mapper, entity_cache=entity_cache, player=player, facts=facts, competition=competition
+        )
         if club is None:
             stats.missing_club += 1
             _sample(stats, player=player, issue="missing_club", facts=facts, sample_size=sample_size)
@@ -365,7 +378,11 @@ def audit_or_repair(
             stats.missing_real_value += 1
             _sample(stats, player=player, issue="missing_real_value", facts=facts, sample_size=sample_size)
 
-        if repair_summaries and summary is not None and _summary_needs_update(summary, player=player, facts=facts, competition=competition, club=club):
+        if (
+            repair_summaries
+            and summary is not None
+            and _summary_needs_update(summary, player=player, facts=facts, competition=competition, club=club)
+        ):
             stats.summary_fixed += 1
             if apply:
                 _repair_summary(summary, player=player, facts=facts, competition=competition, club=club)
@@ -400,17 +417,13 @@ def _prefetch_related_rows(
     profiles_by_player_id: dict[str, RealPlayerProfile] = {}
     profiles_by_source_link_id: dict[str, RealPlayerProfile] = {}
     for chunk in _chunks(player_ids):
-        for profile in session.scalars(
-            select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id.in_(chunk))
-        ):
+        for profile in session.scalars(select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id.in_(chunk))):
             if profile.gtex_player_id:
                 profiles_by_player_id[profile.gtex_player_id] = profile
             if profile.source_link_id:
                 profiles_by_source_link_id[profile.source_link_id] = profile
     for chunk in _chunks(source_link_ids):
-        for profile in session.scalars(
-            select(RealPlayerProfile).where(RealPlayerProfile.source_link_id.in_(chunk))
-        ):
+        for profile in session.scalars(select(RealPlayerProfile).where(RealPlayerProfile.source_link_id.in_(chunk))):
             if profile.gtex_player_id:
                 profiles_by_player_id[profile.gtex_player_id] = profile
             if profile.source_link_id:
@@ -427,16 +440,12 @@ def _prefetch_related_rows(
         source_name = (
             source_link.source_name
             if source_link is not None
-            else profile.source_name
-            if profile is not None
-            else player.source_provider
+            else profile.source_name if profile is not None else player.source_provider
         )
         source_key = (
             source_link.source_player_key
             if source_link is not None
-            else profile.source_player_key
-            if profile is not None
-            else player.provider_external_id
+            else profile.source_player_key if profile is not None else player.provider_external_id
         )
         if source_name and source_key:
             staging_keys.add((source_name, source_key))
@@ -551,13 +560,15 @@ def _staging(
     source_link: RealPlayerSourceLink | None,
     profile: RealPlayerProfile | None,
 ) -> RealPlayerImportStagingRecord | None:
-    source_name = source_link.source_name if source_link is not None else profile.source_name if profile is not None else player.source_provider
+    source_name = (
+        source_link.source_name
+        if source_link is not None
+        else profile.source_name if profile is not None else player.source_provider
+    )
     source_key = (
         source_link.source_player_key
         if source_link is not None
-        else profile.source_player_key
-        if profile is not None
-        else player.provider_external_id
+        else profile.source_player_key if profile is not None else player.provider_external_id
     )
     if not source_name or not source_key:
         return None
@@ -577,7 +588,9 @@ def _facts(
     staging: RealPlayerImportStagingRecord | None,
     summary: PlayerSummaryReadModel | None,
 ) -> PlayerFacts:
-    payload = staging.latest_payload_json if staging is not None and isinstance(staging.latest_payload_json, dict) else {}
+    payload = (
+        staging.latest_payload_json if staging is not None and isinstance(staging.latest_payload_json, dict) else {}
+    )
     current_club = _dict_value(payload, "currentClub")
     current_competition = _dict_value(payload, "currentCompetition")
     nationality_name = _first_clean(
@@ -863,9 +876,7 @@ def _repair_summary(
         "current_club_id": club.id if club is not None else None,
         "current_club_name": club.name if club is not None else summary.current_club_name,
         "current_competition_id": competition.id if competition is not None else None,
-        "current_competition_name": (
-            competition.name if competition is not None else summary.current_competition_name
-        ),
+        "current_competition_name": (competition.name if competition is not None else summary.current_competition_name),
     }
     summary.summary_json = payload
 
@@ -877,7 +888,11 @@ def _first_real_value(
     staging: RealPlayerImportStagingRecord | None,
 ) -> tuple[float | None, str | None]:
     values = (
-        (player.current_market_reference_value, player.market_reference_currency, "player.current_market_reference_value"),
+        (
+            player.current_market_reference_value,
+            player.market_reference_currency,
+            "player.current_market_reference_value",
+        ),
         (player.market_value_eur, "EUR", "player.market_value_eur"),
         (
             profile.current_market_reference_value if profile is not None else None,
@@ -892,7 +907,11 @@ def _first_real_value(
     )
     for value, currency, source in values:
         positive = _positive_float(value)
-        if positive is not None and (currency is None or str(currency).upper() == "EUR") and source in REAL_VALUE_SOURCE_FIELDS:
+        if (
+            positive is not None
+            and (currency is None or str(currency).upper() == "EUR")
+            and source in REAL_VALUE_SOURCE_FIELDS
+        ):
             return positive, source
     return None, None
 

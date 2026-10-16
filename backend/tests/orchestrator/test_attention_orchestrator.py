@@ -120,12 +120,18 @@ def test_attention_orchestrator_variant_budget_manager_splits_and_locks_winner()
             variant.variant_id: variant
             for variant in session.query(ClipVariant).filter(ClipVariant.base_clip_id == "match-3::clip-base").all()
         }
-        assert variants["match-3::clip-base::instant"].distribution_weight > variants["match-3::clip-base::cinematic"].distribution_weight
-        assert round(
+        assert (
             variants["match-3::clip-base::instant"].distribution_weight
-            + variants["match-3::clip-base::cinematic"].distribution_weight,
-            4,
-        ) == 1.0
+            > variants["match-3::clip-base::cinematic"].distribution_weight
+        )
+        assert (
+            round(
+                variants["match-3::clip-base::instant"].distribution_weight
+                + variants["match-3::clip-base::cinematic"].distribution_weight,
+                4,
+            )
+            == 1.0
+        )
         assert variants["match-3::clip-base::instant"].metadata_json["variant_winner_score"] > 0.0
         assert variants["match-3::clip-base::instant"].metadata_json["global_exposure_feedback"] >= 0.0
 

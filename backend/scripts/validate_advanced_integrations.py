@@ -532,11 +532,7 @@ def _validate_ads() -> dict[str, Any]:
         assert response.status_code == 200, response.text
         payload = response.json()
         items = payload["items"]
-        sponsored_positions = [
-            item["slot_index"]
-            for item in items
-            if item["item_type"] == "sponsored"
-        ]
+        sponsored_positions = [item["slot_index"] for item in items if item["item_type"] == "sponsored"]
         ranking_sample = rank_unified_feed(
             [
                 UnifiedFeedCandidate(
@@ -575,9 +571,7 @@ def _validate_ads() -> dict[str, Any]:
 
 
 def _validate_observability() -> dict[str, Any]:
-    engine, session_factory = _build_engine_and_factory(
-        tables=[User.__table__, AnalyticsEvent.__table__]
-    )
+    engine, session_factory = _build_engine_and_factory(tables=[User.__table__, AnalyticsEvent.__table__])
     try:
         user = _make_user(user_id="viewer-analytics", username="viewer.analytics", display_name="Viewer Analytics")
         with session_factory() as session:
@@ -652,16 +646,9 @@ def _frontend_gap_audit() -> list[dict[str, Any]]:
         )
 
     frontend_uses_creator_marketplace = any(
-        (
-            "/campaigns/" in text
-            or "/creators/marketplace" in text
-            or "CreatorMarketplace" in text
-        )
+        ("/campaigns/" in text or "/creators/marketplace" in text or "CreatorMarketplace" in text)
         and ("/apply" in text or "/accept" in text)
-        for text in (
-            path.read_text(encoding="utf-8", errors="ignore")
-            for path in frontend_root.rglob("*.dart")
-        )
+        for text in (path.read_text(encoding="utf-8", errors="ignore") for path in frontend_root.rglob("*.dart"))
     )
     if not frontend_uses_creator_marketplace:
         gaps.append(

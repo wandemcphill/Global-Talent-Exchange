@@ -15,7 +15,6 @@ from app.integrations.payments.schemas import (
     PaymentQuoteView,
 )
 
-
 router = APIRouter(prefix="/integrations/payments", tags=["payments"])
 
 
@@ -66,7 +65,9 @@ def quote_payment(
         net_amount=quote.net_amount,
         currency_code=quote.currency_code,
         rate_value=quote.rate_value,
-        rate_direction=quote.rate_direction.value if hasattr(quote.rate_direction, "value") else str(quote.rate_direction),
+        rate_direction=(
+            quote.rate_direction.value if hasattr(quote.rate_direction, "value") else str(quote.rate_direction)
+        ),
         unit=quote.unit,
         processor_mode=quote.processor_mode,
         payout_channel=quote.payout_channel,

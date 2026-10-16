@@ -8,7 +8,9 @@ from services.universe.generator import GeneratedClub
 
 
 def _fixture_id(round_number: int, leg: int, home_club_id: str, away_club_id: str) -> str:
-    digest = hashlib.sha1(f"{round_number}|{leg}|{home_club_id}|{away_club_id}".encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
+    digest = hashlib.sha1(
+        f"{round_number}|{leg}|{home_club_id}|{away_club_id}".encode("utf-8"), usedforsecurity=False
+    ).hexdigest()[:12]
     return f"fix_{digest}"
 
 

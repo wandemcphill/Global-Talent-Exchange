@@ -31,6 +31,7 @@ _NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # DNS namespace — arb
 def _uuid5(tag: str) -> str:
     return str(uuid.uuid5(_NS, tag))
 
+
 import psycopg
 import psycopg.rows
 
@@ -63,6 +64,7 @@ def compute_plans(conn) -> list[RegenPlan]:
     """Load all regen players not yet having a market; compute their plan."""
     # Import pricing inside the function so sys.path doesn't need patching at module level.
     import os
+
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     from app.players.token_market_defaults import resolve_player_share_market_config
     from app.ingestion.models import Player as _Player  # noqa: F401 — needed for type hints only
@@ -155,25 +157,27 @@ def run(plans: list[RegenPlan], conn, *, dry_run: bool) -> dict:
         # ── 1. player_share_markets ──────────────────────────────────────────
         market_rows = [
             (
-                p.player_id,                   # id (same as player_id for uniqueness)
-                p.player_id,                   # player_id
+                p.player_id,  # id (same as player_id for uniqueness)
+                p.player_id,  # player_id
                 p.total_shares,
                 str(p.share_price_coin),
                 "active",
-                json.dumps({
-                    "player_name": p.player_name,
-                    "is_real_player": p.is_real_player,
-                    "real_player_tier": p.real_player_tier,
-                    "market_issued": True,
-                    "auto_initialized": True,
-                    "liquidity_coin": str(p.liquidity_coin),
-                    "liquidity_account_code": liquidity_wallet_code(p.player_id),
-                    "initial_liquidity_coin": str(p.liquidity_coin),
-                    "issuance_tier": "discovery",
-                    "initial_circulating_cap": 40,
-                    "initial_mm_inventory_target": 50,
-                    "bulk_issuance_policy": "player_share_issuance_regen.toml",
-                }),
+                json.dumps(
+                    {
+                        "player_name": p.player_name,
+                        "is_real_player": p.is_real_player,
+                        "real_player_tier": p.real_player_tier,
+                        "market_issued": True,
+                        "auto_initialized": True,
+                        "liquidity_coin": str(p.liquidity_coin),
+                        "liquidity_account_code": liquidity_wallet_code(p.player_id),
+                        "initial_liquidity_coin": str(p.liquidity_coin),
+                        "issuance_tier": "discovery",
+                        "initial_circulating_cap": 40,
+                        "initial_mm_inventory_target": 50,
+                        "bulk_issuance_policy": "player_share_issuance_regen.toml",
+                    }
+                ),
             )
             for p in plans
         ]
@@ -192,13 +196,13 @@ def run(plans: list[RegenPlan], conn, *, dry_run: bool) -> dict:
         # ── 2. wallets (liquidity accounts) ─────────────────────────────────
         wallet_rows = [
             (
-                p.player_id,                           # id (reuse player_id for traceability)
-                liquidity_wallet_code(p.player_id),    # code
+                p.player_id,  # id (reuse player_id for traceability)
+                liquidity_wallet_code(p.player_id),  # code
                 f"Player share liquidity {p.player_id}",  # label
                 "COIN",
                 "SYSTEM",
-                False,   # allow_negative
-                True,    # is_active
+                False,  # allow_negative
+                True,  # is_active
             )
             for p in plans
         ]
@@ -216,7 +220,7 @@ def run(plans: list[RegenPlan], conn, *, dry_run: bool) -> dict:
         # ── 3. transactions (one ledger header per regen) ────────────────────
         txn_rows = [
             (
-                p.player_id,       # id — reuse player_id for idempotency
+                p.player_id,  # id — reuse player_id for idempotency
                 "COMMITTED",
                 "ADJUSTMENT",
                 "MARKET_TOPUP",
@@ -241,31 +245,35 @@ def run(plans: list[RegenPlan], conn, *, dry_run: bool) -> dict:
         entry_rows = []
         for p in plans:
             # Credit: liquidity wallet gets +liquidity_coin
-            entry_rows.append((
-                _uuid5(f"{p.player_id}:credit"),
-                p.player_id,                  # transaction_id
-                p.player_id,                  # account_id = wallet id (same as player_id)
-                str(p.liquidity_coin),
-                "COIN",
-                "ADJUSTMENT",
-                f"player-share-market-topup:{p.player_id}:bulk",
-                f"Seeded liquidity for player share market {p.player_id}",
-                "MARKET_TOPUP",
-                "ADJUSTMENT",
-            ))
+            entry_rows.append(
+                (
+                    _uuid5(f"{p.player_id}:credit"),
+                    p.player_id,  # transaction_id
+                    p.player_id,  # account_id = wallet id (same as player_id)
+                    str(p.liquidity_coin),
+                    "COIN",
+                    "ADJUSTMENT",
+                    f"player-share-market-topup:{p.player_id}:bulk",
+                    f"Seeded liquidity for player share market {p.player_id}",
+                    "MARKET_TOPUP",
+                    "ADJUSTMENT",
+                )
+            )
             # Debit: clearing account gets -liquidity_coin
-            entry_rows.append((
-                _uuid5(f"{p.player_id}:debit"),
-                p.player_id,                  # transaction_id
-                PLATFORM_CLEARING_WALLET_ID,
-                str(-p.liquidity_coin),
-                "COIN",
-                "ADJUSTMENT",
-                f"player-share-market-topup:{p.player_id}:bulk",
-                f"Seeded liquidity for player share market {p.player_id}",
-                "MARKET_TOPUP",
-                "ADJUSTMENT",
-            ))
+            entry_rows.append(
+                (
+                    _uuid5(f"{p.player_id}:debit"),
+                    p.player_id,  # transaction_id
+                    PLATFORM_CLEARING_WALLET_ID,
+                    str(-p.liquidity_coin),
+                    "COIN",
+                    "ADJUSTMENT",
+                    f"player-share-market-topup:{p.player_id}:bulk",
+                    f"Seeded liquidity for player share market {p.player_id}",
+                    "MARKET_TOPUP",
+                    "ADJUSTMENT",
+                )
+            )
         cur.executemany(
             """
             INSERT INTO ledger_entries
@@ -281,11 +289,11 @@ def run(plans: list[RegenPlan], conn, *, dry_run: bool) -> dict:
         # ── 5. ledger_balance_projections ────────────────────────────────────
         lbp_rows = [
             (
-                p.player_id,   # id
-                p.player_id,   # account_id (wallet id)
+                p.player_id,  # id
+                p.player_id,  # account_id (wallet id)
                 "COIN",
                 str(p.liquidity_coin),
-                p.player_id,   # last_transaction_id
+                p.player_id,  # last_transaction_id
             )
             for p in plans
         ]

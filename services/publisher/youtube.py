@@ -16,7 +16,9 @@ def _render_description(caption: str, hashtags: Sequence[str]) -> str:
 
 
 def _dry_run_post_id(platform: str, payload: dict[str, Any]) -> str:
-    digest = hashlib.sha1(json.dumps(payload, ensure_ascii=True, sort_keys=True).encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
+    digest = hashlib.sha1(
+        json.dumps(payload, ensure_ascii=True, sort_keys=True).encode("utf-8"), usedforsecurity=False
+    ).hexdigest()[:12]
     return f"{platform}-dry-{digest}"
 
 
@@ -74,9 +76,14 @@ class YouTubePublisher:
         )
         response.raise_for_status()
         data = response.json() if response.content else {}
-        post_id = data.get("post_id") or data.get("videoId") or data.get("id") or _dry_run_post_id(
-            self.platform_name,
-            payload,
+        post_id = (
+            data.get("post_id")
+            or data.get("videoId")
+            or data.get("id")
+            or _dry_run_post_id(
+                self.platform_name,
+                payload,
+            )
         )
         return {
             "platform": self.platform_name,

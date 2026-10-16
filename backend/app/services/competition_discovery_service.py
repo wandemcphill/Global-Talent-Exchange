@@ -37,7 +37,10 @@ class CompetitionDiscoveryService:
                 continue
             if filters.creator_id is not None and getattr(item, "creator_id") != filters.creator_id:
                 continue
-            if filters.beginner_friendly is not None and getattr(item, "beginner_friendly") != filters.beginner_friendly:
+            if (
+                filters.beginner_friendly is not None
+                and getattr(item, "beginner_friendly") != filters.beginner_friendly
+            ):
                 continue
 
             entry_fee = getattr(item, "entry_fee")

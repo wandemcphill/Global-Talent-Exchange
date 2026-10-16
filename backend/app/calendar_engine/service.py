@@ -153,7 +153,9 @@ class CalendarEngineService:
         if not blockers:
             summary = "No GTEX-wide pause windows are active. The calendar is open for normal competition traffic."
         else:
-            summary = f"{len(blockers)} pause window(s) active. Blocked families: {', '.join(sorted(blocked_families))}."
+            summary = (
+                f"{len(blockers)} pause window(s) active. Blocked families: {', '.join(sorted(blocked_families))}."
+            )
         return {
             "as_of": as_of,
             "blocked_competition_families": sorted(blocked_families),
@@ -162,7 +164,11 @@ class CalendarEngineService:
         }
 
     def _season_for(self, day: date) -> CalendarSeason | None:
-        return self.session.scalar(select(CalendarSeason).where(CalendarSeason.starts_on <= day, CalendarSeason.ends_on >= day, CalendarSeason.active.is_(True)).order_by(CalendarSeason.starts_on.asc()))
+        return self.session.scalar(
+            select(CalendarSeason)
+            .where(CalendarSeason.starts_on <= day, CalendarSeason.ends_on >= day, CalendarSeason.active.is_(True))
+            .order_by(CalendarSeason.starts_on.asc())
+        )
 
     def _upsert_source_event(
         self,
@@ -258,7 +264,9 @@ class CalendarEngineService:
         self.session.flush()
         return event
 
-    def launch_hosted_competition(self, *, competition_id: str, actor: User, payload) -> tuple[CalendarEvent, CompetitionLifecycleRun]:
+    def launch_hosted_competition(
+        self, *, competition_id: str, actor: User, payload
+    ) -> tuple[CalendarEvent, CompetitionLifecycleRun]:
         hosted = HostedCompetitionService(self.session).get_competition(competition_id)
         if hosted is None:
             raise CalendarEngineError("Hosted competition was not found.")
@@ -267,7 +275,9 @@ class CalendarEngineService:
         if current_participants < 2:
             raise CalendarEngineError("Hosted competition needs at least two participants before launch.")
         format_name = self._infer_hosted_format(hosted)
-        total_rounds, total_matches, requested_dates, competition_type = self._build_schedule_shape(format_name, current_participants, starts_on)
+        total_rounds, total_matches, requested_dates, competition_type = self._build_schedule_shape(
+            format_name, current_participants, starts_on
+        )
         event = self._upsert_source_event(
             event_key=f"hosted:{hosted.slug}",
             title=payload.override_title or hosted.title,
@@ -281,7 +291,11 @@ class CalendarEngineService:
             exclusive_windows=False,
             pause_other_gtx_competitions=False,
             actor=actor,
-            metadata_json={"participants": current_participants, "template_id": hosted.template_id, "slug": hosted.slug},
+            metadata_json={
+                "participants": current_participants,
+                "template_id": hosted.template_id,
+                "slug": hosted.slug,
+            },
         )
         plan = CompetitionScheduler().build_schedule(
             (
@@ -330,7 +344,9 @@ class CalendarEngineService:
         )
         return event, run
 
-    def launch_national_competition(self, *, competition_id: str, actor: User, payload) -> tuple[CalendarEvent, CompetitionLifecycleRun]:
+    def launch_national_competition(
+        self, *, competition_id: str, actor: User, payload
+    ) -> tuple[CalendarEvent, CompetitionLifecycleRun]:
         competition = NationalTeamEngineService(self.session).get_competition(competition_id)
         if competition is None:
             raise CalendarEngineError("National team competition was not found.")
@@ -444,14 +460,26 @@ class CalendarEngineService:
                         CompetitionMatch.match_date.is_not(None),
                     )
                 )
-                .order_by(CompetitionMatch.scheduled_at.asc(), CompetitionMatch.match_date.asc(), CompetitionMatch.stage.desc())
+                .order_by(
+                    CompetitionMatch.scheduled_at.asc(),
+                    CompetitionMatch.match_date.asc(),
+                    CompetitionMatch.stage.desc(),
+                )
             ).all()
         )
 
         while day_cursor <= end_day:
-            day_matches = [item for item in matches if (item.scheduled_at.date() if item.scheduled_at is not None else item.match_date) == day_cursor]
+            day_matches = [
+                item
+                for item in matches
+                if (item.scheduled_at.date() if item.scheduled_at is not None else item.match_date) == day_cursor
+            ]
             featured_match = day_matches[0] if day_matches else None
-            start_dt = featured_match.scheduled_at if featured_match is not None and featured_match.scheduled_at is not None else datetime.combine(day_cursor, time(hour=18, minute=0), tzinfo=timezone.utc)
+            start_dt = (
+                featured_match.scheduled_at
+                if featured_match is not None and featured_match.scheduled_at is not None
+                else datetime.combine(day_cursor, time(hour=18, minute=0), tzinfo=timezone.utc)
+            )
             self._upsert_global_event(
                 event_key=f"match-of-the-day:{day_cursor.isoformat()}",
                 event_name="Match of the Day",
@@ -503,12 +531,24 @@ class CalendarEngineService:
         now = datetime.now(timezone.utc)
         start = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
         end = datetime.combine(now.date(), time.max, tzinfo=timezone.utc)
-        return {"requested_for": now.date(), "window": "today", "events": [self._serialize_global_event(item, now=now) for item in self.list_global_events(start=start, end=end)]}
+        return {
+            "requested_for": now.date(),
+            "window": "today",
+            "events": [
+                self._serialize_global_event(item, now=now) for item in self.list_global_events(start=start, end=end)
+            ],
+        }
 
     def upcoming_events_feed(self, *, days: int = 7) -> dict[str, object]:
         now = datetime.now(timezone.utc)
         end = now + timedelta(days=max(days, 1))
-        return {"requested_for": now.date(), "window": "upcoming", "events": [self._serialize_global_event(item, now=now) for item in self.list_global_events(start=now, end=end)]}
+        return {
+            "requested_for": now.date(),
+            "window": "upcoming",
+            "events": [
+                self._serialize_global_event(item, now=now) for item in self.list_global_events(start=now, end=end)
+            ],
+        }
 
     def _upsert_global_event(
         self,
@@ -548,12 +588,16 @@ class CalendarEngineService:
 
     def _serialize_global_event(self, event: GlobalEvent, *, now: datetime) -> dict[str, object]:
         notifications = []
-        start_time = event.start_time if event.start_time.tzinfo is not None else event.start_time.replace(tzinfo=timezone.utc)
+        start_time = (
+            event.start_time if event.start_time.tzinfo is not None else event.start_time.replace(tzinfo=timezone.utc)
+        )
         end_time = event.end_time if event.end_time.tzinfo is not None else event.end_time.replace(tzinfo=timezone.utc)
         lead = start_time - timedelta(minutes=30)
         if lead >= now:
             kind = "big_event" if event.priority >= 90 else "upcoming_match"
-            notifications.append({"kind": kind, "message": f"{event.event_name} starts at {start_time.isoformat()}.", "send_at": lead})
+            notifications.append(
+                {"kind": kind, "message": f"{event.event_name} starts at {start_time.isoformat()}.", "send_at": lead}
+            )
         engagement = {
             "match_route": f"/matches/{event.match_id}" if event.match_id else None,
             "pre_match_show_route": f"/shows/pre-match/{event.match_id}" if event.match_id else None,
@@ -580,10 +624,20 @@ class CalendarEngineService:
     @staticmethod
     def _infer_hosted_format(hosted: UserHostedCompetition) -> str:
         metadata = hosted.metadata_json or {}
-        return str(metadata.get("cup_or_league") or metadata.get("format") or ("league" if "league" in hosted.slug else "cup")).strip().lower()
+        return (
+            str(
+                metadata.get("cup_or_league")
+                or metadata.get("format")
+                or ("league" if "league" in hosted.slug else "cup")
+            )
+            .strip()
+            .lower()
+        )
 
     @staticmethod
-    def _build_schedule_shape(format_name: str, participant_count: int, starts_on: date, *, national: bool = False, exclusive: bool = False):
+    def _build_schedule_shape(
+        format_name: str, participant_count: int, starts_on: date, *, national: bool = False, exclusive: bool = False
+    ):
         format_name = format_name.strip().lower()
         if format_name == "league":
             rounds = max(1, (participant_count - 1) * 2)

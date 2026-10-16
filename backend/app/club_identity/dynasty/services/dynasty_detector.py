@@ -224,9 +224,7 @@ class DynastyDetectorService:
         return DynastyStreaks(
             top_four=self._count_streak(ordered, lambda season: season.top_four_finish),
             trophy_seasons=self._count_streak(ordered, lambda season: season.trophy_count > 0),
-            world_super_cup_qualification=self._count_streak(
-                ordered, lambda season: season.world_super_cup_qualified
-            ),
+            world_super_cup_qualification=self._count_streak(ordered, lambda season: season.world_super_cup_qualified),
             positive_reputation=self._count_streak(ordered, lambda season: season.reputation_gain > 0),
         )
 

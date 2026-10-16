@@ -76,31 +76,17 @@ class RollingMatchMemory:
             previous_away_score=int(raw.get("previous_away_score") or 0),
             momentum=str(raw.get("momentum") or "balanced"),
             lead_changes=int(raw.get("lead_changes") or 0),
-            last_events=[
-                dict(item)
-                for item in raw.get("last_events", [])
-                if isinstance(item, dict)
-            ][-8:],
-            player_impact={
-                str(key): float(value)
-                for key, value in dict(raw.get("player_impact") or {}).items()
-            },
-            player_goals={
-                str(key): int(value)
-                for key, value in dict(raw.get("player_goals") or {}).items()
-            },
-            player_form={
-                str(key): str(value)
-                for key, value in dict(raw.get("player_form") or {}).items()
-            },
+            last_events=[dict(item) for item in raw.get("last_events", []) if isinstance(item, dict)][-8:],
+            player_impact={str(key): float(value) for key, value in dict(raw.get("player_impact") or {}).items()},
+            player_goals={str(key): int(value) for key, value in dict(raw.get("player_goals") or {}).items()},
+            player_form={str(key): str(value) for key, value in dict(raw.get("player_form") or {}).items()},
         )
 
 
 class CommentaryLLMClient(Protocol):
     provider_name: str
 
-    def generate(self, prompt: dict[str, Any]) -> str | None:
-        ...
+    def generate(self, prompt: dict[str, Any]) -> str | None: ...
 
 
 @dataclass(slots=True)
@@ -292,11 +278,11 @@ class LiveCommentaryEngine:
         tone = (
             "high_intensity"
             if context["is_final"]
-            else "dramatic"
-            if context["late_deadlock"]
-            else "hype"
-            if tier == "llm" or context["is_major_moment"]
-            else "tactical"
+            else (
+                "dramatic"
+                if context["late_deadlock"]
+                else "hype" if tier == "llm" or context["is_major_moment"] else "tactical"
+            )
         )
         commentator = "lead" if tier == "llm" or context["event_family"] in {"goal", "card"} else "analyst"
         audio_channel = "headline" if tone in {"high_intensity", "dramatic", "hype"} else "match_bed"
@@ -342,20 +328,17 @@ class LiveCommentaryEngine:
         metadata = _metadata(event)
         xg = _float_value(metadata.get("xg"), default=_float_value(metadata.get("chance_quality"), default=0.0))
         minute = int(getattr(event, "minute", 0) or 0)
-        player_name = (
-            getattr(getattr(event, "primary_player", None), "player_name", None)
-            or metadata.get("player_name")
+        player_name = getattr(getattr(event, "primary_player", None), "player_name", None) or metadata.get(
+            "player_name"
         )
-        secondary_player_name = (
-            getattr(getattr(event, "secondary_player", None), "player_name", None)
-            or metadata.get("secondary_player_name")
+        secondary_player_name = getattr(getattr(event, "secondary_player", None), "player_name", None) or metadata.get(
+            "secondary_player_name"
         )
         assisted = bool(metadata.get("assisted") and secondary_player_name)
         event_family = _event_family(event_type)
         equalizer = event_family == "goal" and previous_delta != 0 and score_delta == 0
         go_ahead = event_family == "goal" and (
-            (previous_delta <= 0 and score_delta > 0)
-            or (previous_delta >= 0 and score_delta < 0)
+            (previous_delta <= 0 and score_delta > 0) or (previous_delta >= 0 and score_delta < 0)
         )
         comeback = event_family == "goal" and (
             (team_side == "home" and previous_delta < 0 and score_delta >= 0)
@@ -407,9 +390,8 @@ class LiveCommentaryEngine:
             "player_story_hook": _string_or_none(metadata.get("player_story_hook")),
             "late_drama": minute >= 85 and abs(score_delta) <= 1,
             "late_deadlock": minute >= 85 and score_diff == 0,
-            "is_major_moment": event_family in {"goal", "card"} or bool(
-                minute >= 85 and (xg >= 0.35 or go_ahead or equalizer or comeback)
-            ),
+            "is_major_moment": event_family in {"goal", "card"}
+            or bool(minute >= 85 and (xg >= 0.35 or go_ahead or equalizer or comeback)),
             "last_events": last_events,
         }
 
@@ -424,9 +406,7 @@ class LiveCommentaryEngine:
             return "llm"
         if context["reviewable"] and context["event_family"] in {"goal", "foul"}:
             return "llm"
-        if context["event_family"] == "shot" and (
-            context["xg"] >= 0.40 or int(context["importance"]) >= 4
-        ):
+        if context["event_family"] == "shot" and (context["xg"] >= 0.40 or int(context["importance"]) >= 4):
             return "llm"
         if context["event_family"] in {"shot", "card", "substitution"}:
             return "template"
@@ -558,7 +538,11 @@ class LiveCommentaryEngine:
                     f"{team} carve it open and {player} cannot finish the move.",
                     f"A huge opening for {team}, and {player} leaves it behind.",
                 ]
-            elif context["event_type"] in {MatchEventType.WOODWORK.value, MatchEventType.DOUBLE_SAVE.value, MatchEventType.GOALKEEPER_SAVE.value}:
+            elif context["event_type"] in {
+                MatchEventType.WOODWORK.value,
+                MatchEventType.DOUBLE_SAVE.value,
+                MatchEventType.GOALKEEPER_SAVE.value,
+            }:
                 options = [
                     f"{player} looks certain to score, but {team} are denied at full stretch.",
                     f"{team} are inches away as {player} comes close to a huge moment.",
@@ -647,7 +631,9 @@ class LiveCommentaryEngine:
             if context["late_deadlock"]:
                 return "The tension is unbearable as the chance opens up. Who breaks the deadlock now?"
             if context["late_drama"]:
-                return f"{player} goes for the killer blow for {team}, and everyone inside the ground holds their breath."
+                return (
+                    f"{player} goes for the killer blow for {team}, and everyone inside the ground holds their breath."
+                )
             if context["xg"] >= 0.55:
                 return f"{player} gets a massive look for {team}, but the finish does not arrive."
             return f"{player} forces the moment for {team}, and the tempo jumps immediately."

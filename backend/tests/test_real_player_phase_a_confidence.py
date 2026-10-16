@@ -93,10 +93,7 @@ def _valuation_projection(session_factory) -> dict[str, tuple[float, float]]:
             summary.player_name: round(float(summary.current_value_credits), 6)
             for summary in session.scalars(select(PlayerSummaryReadModel))
         }
-    return {
-        player_name: (snapshots[player_name], summaries[player_name])
-        for player_name in sorted(snapshots)
-    }
+    return {player_name: (snapshots[player_name], summaries[player_name]) for player_name in sorted(snapshots)}
 
 
 def test_real_player_authoritative_valuation_is_deterministic_across_isolated_databases() -> None:

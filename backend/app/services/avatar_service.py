@@ -5,7 +5,6 @@ from typing import Any
 
 from app.schemas.avatar import PlayerAvatarView
 
-
 _FNV_OFFSET = 2166136261
 _FNV_PRIME = 16777619
 
@@ -57,6 +56,7 @@ _EUROPE_CODES = frozenset(
     }
 )
 from datetime import date as date
+
 _AFRICA_CODES = frozenset(
     {
         "AO",
@@ -97,12 +97,8 @@ _AFRICA_CODES = frozenset(
         "ZW",
     }
 )
-_SOUTH_AMERICA_CODES = frozenset(
-    {"AR", "BO", "BR", "CL", "CO", "EC", "GF", "GY", "PE", "PY", "SR", "UY", "VE"}
-)
-_NORTH_AMERICA_CODES = frozenset(
-    {"CA", "CR", "CU", "DO", "GT", "HN", "HT", "JM", "MX", "NI", "PA", "SV", "TT", "US"}
-)
+_SOUTH_AMERICA_CODES = frozenset({"AR", "BO", "BR", "CL", "CO", "EC", "GF", "GY", "PE", "PY", "SR", "UY", "VE"})
+_NORTH_AMERICA_CODES = frozenset({"CA", "CR", "CU", "DO", "GT", "HN", "HT", "JM", "MX", "NI", "PA", "SV", "TT", "US"})
 _ASIA_PACIFIC_CODES = frozenset(
     {
         "AU",
@@ -128,9 +124,7 @@ _ASIA_PACIFIC_CODES = frozenset(
         "VN",
     }
 )
-_MIDDLE_EAST_CODES = frozenset(
-    {"AE", "BH", "IL", "IQ", "IR", "JO", "KW", "LB", "OM", "PS", "QA", "SA", "SY", "YE"}
-)
+_MIDDLE_EAST_CODES = frozenset({"AE", "BH", "IL", "IQ", "IR", "JO", "KW", "LB", "OM", "PS", "QA", "SA", "SY", "YE"})
 
 _REGION_SKIN_WEIGHTS = {
     "africa": [1, 2, 6, 18, 28, 34],
@@ -192,9 +186,7 @@ class AvatarService:
         use_trait_bias = not self._has_canonical_seed(identity)
         region = self._region_for_identity(identity) if use_trait_bias else "global"
         position_group = (
-            self._position_group(identity.normalized_position or identity.position)
-            if use_trait_bias
-            else "utility"
+            self._position_group(identity.normalized_position or identity.position) if use_trait_bias else "utility"
         )
         age = identity.age
         if use_trait_bias and age is None and identity.birth_year is not None:

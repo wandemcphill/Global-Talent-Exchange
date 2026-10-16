@@ -51,10 +51,22 @@ class MockFootballProvider(BaseFootballProvider):
         ]
         self._seasons = {
             "PL": [
-                {"id": "PL-2025", "startDate": "2025-08-15", "endDate": "2026-05-24", "current": True, "currentMatchday": 28},
+                {
+                    "id": "PL-2025",
+                    "startDate": "2025-08-15",
+                    "endDate": "2026-05-24",
+                    "current": True,
+                    "currentMatchday": 28,
+                },
             ],
             "UCL": [
-                {"id": "UCL-2025", "startDate": "2025-09-16", "endDate": "2026-05-30", "current": True, "currentMatchday": 12},
+                {
+                    "id": "UCL-2025",
+                    "startDate": "2025-09-16",
+                    "endDate": "2026-05-30",
+                    "current": True,
+                    "currentMatchday": 12,
+                },
             ],
         }
         self._clubs = {
@@ -197,8 +209,32 @@ class MockFootballProvider(BaseFootballProvider):
                     {
                         "type": "TOTAL",
                         "table": [
-                            {"position": 1, "team": {"id": "ARS"}, "playedGames": 28, "won": 20, "draw": 5, "lost": 3, "goalsFor": 60, "goalsAgainst": 25, "goalDifference": 35, "points": 65, "form": "WWDWW"},
-                            {"position": 2, "team": {"id": "MCI"}, "playedGames": 28, "won": 19, "draw": 4, "lost": 5, "goalsFor": 58, "goalsAgainst": 28, "goalDifference": 30, "points": 61, "form": "WLWWW"},
+                            {
+                                "position": 1,
+                                "team": {"id": "ARS"},
+                                "playedGames": 28,
+                                "won": 20,
+                                "draw": 5,
+                                "lost": 3,
+                                "goalsFor": 60,
+                                "goalsAgainst": 25,
+                                "goalDifference": 35,
+                                "points": 65,
+                                "form": "WWDWW",
+                            },
+                            {
+                                "position": 2,
+                                "team": {"id": "MCI"},
+                                "playedGames": 28,
+                                "won": 19,
+                                "draw": 4,
+                                "lost": 5,
+                                "goalsFor": 58,
+                                "goalsAgainst": 28,
+                                "goalDifference": 30,
+                                "points": 61,
+                                "form": "WLWWW",
+                            },
                         ],
                     }
                 ],
@@ -206,28 +242,105 @@ class MockFootballProvider(BaseFootballProvider):
         }
         self._player_stats = {
             "p-saka": {
-                "season": {"appearances": 26, "starts": 25, "minutes": 2180, "goals": 14, "assists": 9, "yellowCards": 3, "redCards": 0, "averageRating": 7.84},
+                "season": {
+                    "appearances": 26,
+                    "starts": 25,
+                    "minutes": 2180,
+                    "goals": 14,
+                    "assists": 9,
+                    "yellowCards": 3,
+                    "redCards": 0,
+                    "averageRating": 7.84,
+                },
                 "matches": [
-                    {"id": "p-saka:pl-match-1", "matchId": "pl-match-1", "minutes": 90, "goals": 1, "assists": 1, "rating": 8.7, "position": "Right Winger", "started": True},
-                    {"id": "p-saka:ucl-match-1", "matchId": "ucl-match-1", "minutes": 90, "goals": 1, "assists": 0, "rating": 8.4, "position": "Right Winger", "started": True},
+                    {
+                        "id": "p-saka:pl-match-1",
+                        "matchId": "pl-match-1",
+                        "minutes": 90,
+                        "goals": 1,
+                        "assists": 1,
+                        "rating": 8.7,
+                        "position": "Right Winger",
+                        "started": True,
+                    },
+                    {
+                        "id": "p-saka:ucl-match-1",
+                        "matchId": "ucl-match-1",
+                        "minutes": 90,
+                        "goals": 1,
+                        "assists": 0,
+                        "rating": 8.4,
+                        "position": "Right Winger",
+                        "started": True,
+                    },
                 ],
             },
             "p-raya": {
-                "season": {"appearances": 24, "starts": 24, "minutes": 2160, "goals": 0, "assists": 0, "cleanSheets": 11, "saves": 74, "averageRating": 7.2},
+                "season": {
+                    "appearances": 24,
+                    "starts": 24,
+                    "minutes": 2160,
+                    "goals": 0,
+                    "assists": 0,
+                    "cleanSheets": 11,
+                    "saves": 74,
+                    "averageRating": 7.2,
+                },
                 "matches": [
-                    {"id": "p-raya:pl-match-1", "matchId": "pl-match-1", "minutes": 90, "saves": 5, "cleanSheet": False, "rating": 7.5, "position": "Goalkeeper", "started": True},
+                    {
+                        "id": "p-raya:pl-match-1",
+                        "matchId": "pl-match-1",
+                        "minutes": 90,
+                        "saves": 5,
+                        "cleanSheet": False,
+                        "rating": 7.5,
+                        "position": "Goalkeeper",
+                        "started": True,
+                    },
                 ],
             },
             "p-foden": {
-                "season": {"appearances": 25, "starts": 21, "minutes": 1880, "goals": 11, "assists": 7, "averageRating": 7.61},
+                "season": {
+                    "appearances": 25,
+                    "starts": 21,
+                    "minutes": 1880,
+                    "goals": 11,
+                    "assists": 7,
+                    "averageRating": 7.61,
+                },
                 "matches": [
-                    {"id": "p-foden:pl-match-1", "matchId": "pl-match-1", "minutes": 90, "goals": 1, "assists": 0, "rating": 8.0, "position": "Attacking Midfield", "started": True},
+                    {
+                        "id": "p-foden:pl-match-1",
+                        "matchId": "pl-match-1",
+                        "minutes": 90,
+                        "goals": 1,
+                        "assists": 0,
+                        "rating": 8.0,
+                        "position": "Attacking Midfield",
+                        "started": True,
+                    },
                 ],
             },
             "p-bellingham": {
-                "season": {"appearances": 22, "starts": 22, "minutes": 1980, "goals": 9, "assists": 6, "averageRating": 7.9},
+                "season": {
+                    "appearances": 22,
+                    "starts": 22,
+                    "minutes": 1980,
+                    "goals": 9,
+                    "assists": 6,
+                    "averageRating": 7.9,
+                },
                 "matches": [
-                    {"id": "p-bellingham:ucl-match-1", "matchId": "ucl-match-1", "minutes": 90, "goals": 1, "assists": 1, "rating": 8.9, "position": "Midfielder", "started": True},
+                    {
+                        "id": "p-bellingham:ucl-match-1",
+                        "matchId": "ucl-match-1",
+                        "minutes": 90,
+                        "goals": 1,
+                        "assists": 1,
+                        "rating": 8.9,
+                        "position": "Midfielder",
+                        "started": True,
+                    },
                 ],
             },
         }
@@ -237,7 +350,13 @@ class MockFootballProvider(BaseFootballProvider):
             "updates": [
                 {"entity_type": "competition", "id": "PL", "seasonId": "PL-2025"},
                 {"entity_type": "club", "id": "ARS", "seasonId": "PL-2025", "competitionId": "PL"},
-                {"entity_type": "player", "id": "p-saka", "clubId": "ARS", "seasonId": "PL-2025", "competitionId": "PL"},
+                {
+                    "entity_type": "player",
+                    "id": "p-saka",
+                    "clubId": "ARS",
+                    "seasonId": "PL-2025",
+                    "competitionId": "PL",
+                },
             ],
         }
 
@@ -311,7 +430,8 @@ class MockFootballProvider(BaseFootballProvider):
 
     def _build_player_directory(self) -> list[RealPlayerSourceItem]:
         country_codes = {
-            str(country.get("name") or "").strip().lower(): str(country.get("countryCode") or "").strip().upper() or None
+            str(country.get("name") or "").strip().lower(): str(country.get("countryCode") or "").strip().upper()
+            or None
             for country in self._countries
         }
         competition_by_club: dict[str, tuple[str | None, str | None, str | None]] = {}

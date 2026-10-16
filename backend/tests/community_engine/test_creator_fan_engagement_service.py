@@ -135,7 +135,9 @@ def test_comment_ranking_orders_by_visibility_priority(service: CreatorFanEngage
     assert [message.visibility_priority for message in messages[:3]] == [300, 200, 100]
 
 
-def test_tactical_advice_creation_retrieval_and_no_match_control_mutation(service: CreatorFanEngagementService, session: Session) -> None:
+def test_tactical_advice_creation_retrieval_and_no_match_control_mutation(
+    service: CreatorFanEngagementService, session: Session
+) -> None:
     match = session.get(CompetitionMatch, "match-1")
     assert match is not None
     scheduled_at = match.scheduled_at
@@ -196,7 +198,9 @@ def test_tactical_advice_rate_limit_blocks_rapid_repeat_submissions(
     assert exc_info.value.reason == "tactical_advice_rate_limited"
 
 
-def test_fan_wall_retrieval_includes_gifts_and_fan_events(service: CreatorFanEngagementService, session: Session) -> None:
+def test_fan_wall_retrieval_includes_gifts_and_fan_events(
+    service: CreatorFanEngagementService, session: Session
+) -> None:
     scheduled_at = session.get(CompetitionMatch, "match-1").scheduled_at
     assert scheduled_at is not None
 
@@ -262,7 +266,9 @@ def test_fan_wall_retrieval_includes_gifts_and_fan_events(service: CreatorFanEng
     assert "follow" in item_types or "fan_group_launch" in item_types
 
 
-def test_rivalry_outputs_generate_homepage_and_notification_signals(service: CreatorFanEngagementService, session: Session) -> None:
+def test_rivalry_outputs_generate_homepage_and_notification_signals(
+    service: CreatorFanEngagementService, session: Session
+) -> None:
     match = session.get(CompetitionMatch, "match-1")
     assert match is not None
     scheduled_at = match.scheduled_at

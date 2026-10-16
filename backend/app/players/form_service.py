@@ -96,8 +96,7 @@ class PlayerFormService:
 
     def build_window(self, player_id: str, *, as_of: datetime | None = None) -> PlayerFormWindow:
         stmt = (
-            select(PlayerMatchPerformance)
-            .where(
+            select(PlayerMatchPerformance).where(
                 PlayerMatchPerformance.player_id == player_id,
                 PlayerMatchPerformance.eligible_for_valuation.is_(True),
             )

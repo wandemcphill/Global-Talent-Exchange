@@ -33,8 +33,7 @@ def _extract_llm_text(payload: dict[str, Any]) -> str | None:
 class CaptionLLMClient(Protocol):
     provider_name: str
 
-    def generate(self, prompt: dict[str, Any]) -> str | None:
-        ...
+    def generate(self, prompt: dict[str, Any]) -> str | None: ...
 
 
 @dataclass(slots=True)

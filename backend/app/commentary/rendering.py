@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import hashlib
 from typing import Any, Mapping
 
-
 DEFAULT_COMMENTATOR_PROFILES: tuple[dict[str, object], ...] = (
     {
         "name": "The General",
@@ -231,7 +230,9 @@ def _decorate_with_catchphrase(
     should_prefix = bool(context.get("is_major_moment")) or bool(context.get("late_drama")) or importance >= 4
     if not should_prefix:
         return line
-    catchphrase = profile.catchphrases[_stable_index(profile=profile, context=context, variant_index=variant_index) % len(profile.catchphrases)]
+    catchphrase = profile.catchphrases[
+        _stable_index(profile=profile, context=context, variant_index=variant_index) % len(profile.catchphrases)
+    ]
     if catchphrase.upper() in line.upper():
         return line
     return f"{catchphrase} {line}".strip()
@@ -257,8 +258,9 @@ def _stable_index(*, profile: CommentaryProfileSnapshot, context: Mapping[str, A
                 str(context.get("event_type") or ""),
                 str(variant_index),
             ]
-        ).encode("utf-8")
-    , usedforsecurity=False).hexdigest()
+        ).encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()
     return int(digest[:8], 16)
 
 

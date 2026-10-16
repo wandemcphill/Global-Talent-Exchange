@@ -104,9 +104,8 @@ class CampaignViralIntegrationHook:
         creator_profile: CreatorProfile,
         clips: list[dict[str, Any]],
     ) -> list[ViralClipView]:
-        if (
-            not self._has_bound_table(AnalyticsEvent.__tablename__)
-            or not self._has_bound_table(ClipVariant.__tablename__)
+        if not self._has_bound_table(AnalyticsEvent.__tablename__) or not self._has_bound_table(
+            ClipVariant.__tablename__
         ):
             return []
         published: list[ViralClipView] = []

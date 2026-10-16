@@ -64,7 +64,9 @@ class RealPlayerProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     current_market_reference_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     market_reference_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     source_last_refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    normalization_profile_version: Mapped[str] = mapped_column(String(32), nullable=False, default="real_player_v1", server_default="real_player_v1")
+    normalization_profile_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="real_player_v1", server_default="real_player_v1"
+    )
     normalized_signals_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     ingestion_batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ingestion_source_version: Mapped[str | None] = mapped_column(String(64), nullable=True)

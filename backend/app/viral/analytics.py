@@ -166,8 +166,7 @@ class ClipOptimizationFeedback:
 class ViralityInsightLLMClient(Protocol):
     provider_name: str
 
-    def generate(self, prompt: dict[str, Any]) -> str | None:
-        ...
+    def generate(self, prompt: dict[str, Any]) -> str | None: ...
 
 
 @dataclass(slots=True)

@@ -75,13 +75,13 @@ class ColdStartManager:
             if total >= self.new_user_event_threshold:
                 return False
         observed_events = self.session.scalars(
-            select(AnalyticsEvent.id)
-            .where(AnalyticsEvent.user_id == user_id)
-            .limit(self.new_user_event_threshold)
+            select(AnalyticsEvent.id).where(AnalyticsEvent.user_id == user_id).limit(self.new_user_event_threshold)
         ).all()
         return len(observed_events) < self.new_user_event_threshold
 
-    def exploration_rate(self, *, is_new_user: bool, configured_rate: float = DEFAULT_COLD_START_EXPLORATION_RATE) -> float:
+    def exploration_rate(
+        self, *, is_new_user: bool, configured_rate: float = DEFAULT_COLD_START_EXPLORATION_RATE
+    ) -> float:
         if not is_new_user:
             return 0.0
         return max(0.0, min(float(configured_rate), 1.0))
