@@ -167,7 +167,8 @@ class MarketDashboardData {
       .where((PlayerShareSummary item) => !item.isTradable)
       .toList(growable: false);
 
-  List<PlayerShareSummary> get discoveryOnlyPlayerShares => upcomingPlayerShares;
+  List<PlayerShareSummary> get discoveryOnlyPlayerShares =>
+      upcomingPlayerShares;
 }
 
 class PlayerShareDetailData {
@@ -209,6 +210,7 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
       api.getMap(
         '/players/markets',
         auth: false,
+        opportunisticAuth: true,
         query: <String, Object?>{
           'page': 1,
           'per_page': resultWindow,
@@ -329,11 +331,11 @@ marketDashboardProvider = FutureProvider<MarketDashboardData>((Ref ref) async {
     }
   }
 
-  final List<TransferListingSummary> transferListings =
-      (marketPayloads[1] as List<dynamic>)
-          .map((dynamic item) => jsonMap(item, label: 'transfer listing'))
-          .map(_transferListingFromJson)
-          .toList(growable: false);
+  final List<TransferListingSummary> transferListings = (marketPayloads[1]
+          as List<dynamic>)
+      .map((dynamic item) => jsonMap(item, label: 'transfer listing'))
+      .map(_transferListingFromJson)
+      .toList(growable: false);
 
   return MarketDashboardData(
     playerShares: <PlayerShareSummary>[

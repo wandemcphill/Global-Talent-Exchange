@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
 import 'package:gte_frontend/ui_gtex/theme/gtex_colors.dart';
 
@@ -235,6 +236,7 @@ class Gtex22LoginScreen extends StatefulWidget {
 class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   bool _busy = false;
   String? _error;
   bool _obscure = true;
@@ -246,6 +248,9 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -257,7 +262,7 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
       );
       if (mounted && widget.controller.isAuthenticated) context.go('/app/home');
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = AppFeedback.messageFor(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -364,9 +369,17 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
           style: TextStyle(color: GtexFloodlit.chalkMuted, fontSize: 12),
         ),
         const SizedBox(height: 22),
-        _field(_email, 'Email', Icons.mail_outline_rounded),
-        const SizedBox(height: 11),
-        _passwordField(),
+        Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _field(_email, 'Email', Icons.mail_outline_rounded),
+              const SizedBox(height: 11),
+              _passwordField(),
+            ],
+          ),
+        ),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
@@ -440,13 +453,23 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
     ),
   );
   Widget _field(TextEditingController c, String label, IconData icon) =>
-      TextField(
+      TextFormField(
         controller: c,
         keyboardType: TextInputType.emailAddress,
         style: const TextStyle(color: GtexFloodlit.chalk, fontSize: 13),
         decoration: _decoration(label, icon),
+        validator: (String? value) {
+          final String email = value?.trim() ?? '';
+          if (email.isEmpty) {
+            return 'Enter your email address.';
+          }
+          if (!email.contains('@')) {
+            return 'Enter a valid email address.';
+          }
+          return null;
+        },
       );
-  Widget _passwordField() => TextField(
+  Widget _passwordField() => TextFormField(
     controller: _password,
     obscureText: _obscure,
     style: const TextStyle(color: GtexFloodlit.chalk, fontSize: 13),
@@ -460,6 +483,16 @@ class _Gtex22LoginScreenState extends State<Gtex22LoginScreen> {
         ),
       ),
     ),
+    validator: (String? value) {
+      final String password = value ?? '';
+      if (password.isEmpty) {
+        return 'Enter your password.';
+      }
+      if (password.length < 8) {
+        return 'Password must be at least 8 characters.';
+      }
+      return null;
+    },
   );
   InputDecoration _decoration(String label, IconData icon) => InputDecoration(
     labelText: label,

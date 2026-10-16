@@ -2,9 +2,21 @@ from __future__ import annotations
 
 from app.club_identity.reputation.schemas import ContinentalStage, SeasonReputationOutcome, WorldSuperCupStage
 from app.club_identity.reputation.season_reputation_rollup import SeasonReputationRollupService
+from app.models.club_profile import ClubProfile
 
 
 def test_reputation_endpoints_return_profile_history_and_leaderboard(client, session) -> None:
+    session.add(
+        ClubProfile(
+            id="alpha",
+            owner_user_id="owner-alpha",
+            club_name="Alpha United",
+            slug="alpha-united",
+            primary_color="#112233",
+            secondary_color="#445566",
+            accent_color="#778899",
+        )
+    )
     rollup = SeasonReputationRollupService()
     rollup.apply_season_outcome(
         session,
@@ -53,6 +65,7 @@ def test_reputation_endpoints_return_profile_history_and_leaderboard(client, ses
     leaderboard_payload = leaderboard_response.json()
 
     assert reputation_payload["club_id"] == "alpha"
+    assert reputation_payload["club_name"] == "Alpha United"
     assert reputation_payload["current_score"] > 0
     assert "continental_champion" in reputation_payload["badges_earned"]
     assert history_payload["history"][0]["season"] == 1

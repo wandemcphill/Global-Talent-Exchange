@@ -622,7 +622,8 @@ class GteUserSignupRequest {
       'club_short_tag': clubShortTag,
     if (clubCountry != null && clubCountry!.trim().isNotEmpty)
       'club_country': clubCountry,
-    if (clubState != null && clubState!.trim().isNotEmpty) 'club_state': clubState,
+    if (clubState != null && clubState!.trim().isNotEmpty)
+      'club_state': clubState,
     if (clubLocality != null && clubLocality!.trim().isNotEmpty)
       'club_locality': clubLocality,
     if (clubType != null) 'club_type': clubType,
@@ -3930,7 +3931,9 @@ class GtePlayerShareMarket {
   bool get isActive => status == 'active';
 
   int get availableShares =>
-      (totalShares - circulatingShares) < 0 ? 0 : totalShares - circulatingShares;
+      (totalShares - circulatingShares) < 0
+          ? 0
+          : totalShares - circulatingShares;
 
   factory GtePlayerShareMarket.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -3939,7 +3942,10 @@ class GtePlayerShareMarket {
     );
     return GtePlayerShareMarket(
       playerId: GteJson.string(json, <String>['player_id', 'playerId']),
-      totalShares: GteJson.integer(json, <String>['total_shares', 'totalShares']),
+      totalShares: GteJson.integer(json, <String>[
+        'total_shares',
+        'totalShares',
+      ]),
       circulatingShares: GteJson.integer(json, <String>[
         'circulating_shares',
         'circulatingShares',
@@ -4067,7 +4073,7 @@ class GtePortfolioSnapshot {
   });
 
   final String userId;
-  final String currency;
+  final GteLedgerUnit currency;
   final double availableBalance;
   final double reservedBalance;
   final double totalBalance;
@@ -4080,8 +4086,9 @@ class GtePortfolioSnapshot {
     );
     return GtePortfolioSnapshot(
       userId: GteJson.string(json, <String>['user_id', 'userId'], fallback: ''),
-      currency:
-          GteJson.stringOrNull(json, <String>['currency']) ?? 'coin',
+      currency: _ledgerUnitFromString(
+        GteJson.string(json, <String>['currency'], fallback: 'coin'),
+      ),
       availableBalance: GteJson.number(json, <String>[
         'available_balance',
         'availableBalance',

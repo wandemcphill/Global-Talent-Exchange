@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/controllers/competition_controller.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
 import 'package:gte_frontend/features/app_routes/gte_navigation_helpers.dart';
 import 'package:gte_frontend/features/app_routes/gte_route_data.dart';
 import 'package:gte_frontend/features/navigation_guards/gte_navigation_guards.dart';
@@ -79,8 +80,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
               return Padding(
                 padding: const EdgeInsets.all(20),
                 child: GteStatePanel(
-                  title: 'Competition detail unavailable',
-                  message: widget.controller.detailError!,
+                  title: "We couldn't load this competition.",
+                  message: AppFeedback.messageFor(
+                    widget.controller.detailError!,
+                  ),
                   actionLabel: 'Retry',
                   onAction: () {
                     widget.controller.openCompetition(widget.competitionId);
@@ -469,8 +472,10 @@ class _CompetitionDetailScreenState extends State<CompetitionDetailScreen> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder:
-            (BuildContext context) =>
-                CompetitionJoinScreen(controller: widget.controller),
+            (BuildContext context) => CompetitionJoinScreen(
+              controller: widget.controller,
+              competitionId: widget.competitionId,
+            ),
       ),
     );
   }

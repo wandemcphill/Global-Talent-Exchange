@@ -52,6 +52,51 @@ void main() {
     expect(find.text('Reject KYC'), findsOneWidget);
   });
 
+  testWidgets('admin trust ops hides raw API exception details', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: Scaffold(
+          body: GtexAdminTrustOpsScreen(
+            repository: _FailingTrustOpsRepository(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        "We couldn't load the live Trust Ops queues right now. Retry in a moment.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('GteApiException'), findsNothing);
+  });
+
+  testWidgets('admin trust ops explains role-based queue access failures', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: Scaffold(
+          body: GtexAdminTrustOpsScreen(
+            repository: _ForbiddenTrustOpsRepository(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Your admin role does not include Trust Ops queues.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('admin trust ops approve calls live review adapter', (
     WidgetTester tester,
   ) async {
@@ -62,9 +107,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.dark(useMaterial3: true),
-        home: Scaffold(
-          body: GtexAdminTrustOpsScreen(repository: repository),
-        ),
+        home: Scaffold(body: GtexAdminTrustOpsScreen(repository: repository)),
       ),
     );
 
@@ -88,9 +131,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.dark(useMaterial3: true),
-        home: Scaffold(
-          body: GtexAdminTrustOpsScreen(repository: repository),
-        ),
+        home: Scaffold(body: GtexAdminTrustOpsScreen(repository: repository)),
       ),
     );
 
@@ -119,9 +160,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: ThemeData.dark(useMaterial3: true),
-        home: Scaffold(
-          body: GtexAdminTrustOpsScreen(repository: repository),
-        ),
+        home: Scaffold(body: GtexAdminTrustOpsScreen(repository: repository)),
       ),
     );
 
@@ -401,6 +440,32 @@ class _ReadinessRepository extends GtexTrustOpsRepository {
       ],
       disputes: const <GtexDisputeRecord>[],
       operationsReadiness: snapshot,
+    );
+  }
+}
+
+class _FailingTrustOpsRepository extends GtexTrustOpsRepository {
+  const _FailingTrustOpsRepository();
+
+  @override
+  Future<GtexTrustOpsState> load() async {
+    throw const GteApiException(
+      type: GteApiErrorType.notFound,
+      message: 'sensitive backend detail',
+      statusCode: 404,
+    );
+  }
+}
+
+class _ForbiddenTrustOpsRepository extends GtexTrustOpsRepository {
+  const _ForbiddenTrustOpsRepository();
+
+  @override
+  Future<GtexTrustOpsState> load() async {
+    throw const GteApiException(
+      type: GteApiErrorType.unauthorized,
+      message: 'sensitive forbidden detail',
+      statusCode: 403,
     );
   }
 }

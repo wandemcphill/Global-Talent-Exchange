@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:gte_frontend/data/gte_api_repository.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
 
 import '../../../ui_gtex/ui_gtex.dart';
 import '../data/gtex_trust_ops_api_repository.dart';
@@ -77,7 +78,7 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      snapshot.error.toString(),
+                      _errorMessage(snapshot.error!),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: GtexColors.textMuted,
                         fontWeight: FontWeight.w700,
@@ -163,6 +164,17 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
     );
   }
 
+  String _errorMessage(Object error) {
+    if (error is GteApiException && error.statusCode == 403) {
+      return 'Your admin role does not include Trust Ops queues.';
+    }
+    if (error is GteApiException &&
+        error.type == GteApiErrorType.unauthorized) {
+      return AppFeedback.messageFor(error);
+    }
+    return "We couldn't load the live Trust Ops queues right now. Retry in a moment.";
+  }
+
   Widget _buildQueue(GtexTrustOpsState state) {
     switch (_selectedModule) {
       case GtexTrustModule.kyc:
@@ -242,9 +254,9 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
         return;
       }
       setState(() => _kycReviewBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('KYC review failed: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('KYC review failed: $error')));
     }
   }
 
@@ -316,9 +328,9 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
         return;
       }
       setState(() => _disputeReplyBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Dispute reply failed: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Dispute reply failed: $error')));
     }
   }
 
@@ -364,9 +376,9 @@ class _GtexAdminTrustOpsScreenState extends State<GtexAdminTrustOpsScreen> {
         return;
       }
       setState(() => _orderReviewBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Order review failed: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Order review failed: $error')));
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/domain/ownership/gtex_ownership_models.dart';
 import 'package:gte_frontend/features/club_redesign/models/gtex_club_ownership_models.dart';
 import 'package:gte_frontend/screens/wallet/gtex_ownership_experience.dart';
+import 'package:gte_frontend/widgets/gte_formatters.dart';
 import 'package:gte_frontend/widgets/gte_shell_theme.dart';
 
 GtePortfolioHolding _holding({
@@ -43,10 +44,7 @@ Future<void> _pump(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
-    MaterialApp(
-      theme: GteShellTheme.build(),
-      home: Scaffold(body: child),
-    ),
+    MaterialApp(theme: GteShellTheme.build(), home: Scaffold(body: child)),
   );
   await tester.pump(const Duration(milliseconds: 50));
 }
@@ -65,20 +63,21 @@ void main() {
     expect(find.text('MY SQUAD'), findsNothing);
   });
 
-  testWidgets('load error shows a blocked state with retry, not a spreadsheet', (
-    WidgetTester tester,
-  ) async {
-    await _pump(
-      tester,
-      GtexOwnershipExperience(
-        book: GtexOwnershipBook.empty(),
-        portfolioError: 'Network unreachable',
-        onRetry: () async {},
-      ),
-    );
-    expect(find.text('Squad could not be loaded'), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
-  });
+  testWidgets(
+    'load error shows a blocked state with retry, not a spreadsheet',
+    (WidgetTester tester) async {
+      await _pump(
+        tester,
+        GtexOwnershipExperience(
+          book: GtexOwnershipBook.empty(),
+          portfolioError: 'Network unreachable',
+          onRetry: () async {},
+        ),
+      );
+      expect(find.text('Squad could not be loaded'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+    },
+  );
 
   testWidgets('one holding renders as a player identity with its stake', (
     WidgetTester tester,
@@ -95,6 +94,30 @@ void main() {
     expect(find.text('MY SQUAD'), findsOneWidget);
     expect(find.textContaining('YOU OWN 2 SHARES'), findsOneWidget);
     expect(find.text('Enyimba FC'), findsWidgets);
+  });
+
+  testWidgets('credit portfolio snapshots label and format Fan Coin cash', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      GtexOwnershipExperience(
+        book: _book(<GtePortfolioHolding>[
+          _holding(id: 'a', name: 'Ada Obi', club: 'Enyimba FC'),
+        ]),
+        snapshot: GtePortfolioSnapshot.fromJson(<String, Object?>{
+          'currency': 'credit',
+          'available_balance': 1200,
+          'reserved_balance': 0,
+          'total_balance': 1200,
+          'holdings': <Object?>[],
+        }),
+      ),
+    );
+
+    expect(find.text('FAN COIN READY'), findsOneWidget);
+    expect(find.text(gteFormatFnc(1200)), findsOneWidget);
+    expect(find.text('CASH READY'), findsNothing);
   });
 
   testWidgets('multiple holdings group by club', (WidgetTester tester) async {
@@ -218,37 +241,38 @@ void main() {
     expect(find.textContaining('40 shares'), findsOneWidget);
   });
 
-  testWidgets('club-share performance signal is honest when there is no history', (
-    WidgetTester tester,
-  ) async {
-    const GtexClubShareHolding flat = GtexClubShareHolding(
-      clubId: 'club-x',
-      clubName: 'Kano Pillars',
-      sharesOwned: 10,
-      averagePriceCoin: 1,
-      sharePriceCoin: 1,
-      marketValueCoin: 10,
-      costBasisCoin: 10,
-      unrealizedPlCoin: 0,
-    );
-    await _pump(
-      tester,
-      GtexOwnershipExperience(
-        book: GtexOwnershipBook.empty(),
-        clubOwnership: const GtexClubOwnershipPortfolio(
-          clubCount: 1,
-          totalMarketValueCoin: 10,
-          totalCostBasisCoin: 10,
-          totalUnrealizedPlCoin: 0,
-          holdings: <GtexClubShareHolding>[flat],
+  testWidgets(
+    'club-share performance signal is honest when there is no history',
+    (WidgetTester tester) async {
+      const GtexClubShareHolding flat = GtexClubShareHolding(
+        clubId: 'club-x',
+        clubName: 'Kano Pillars',
+        sharesOwned: 10,
+        averagePriceCoin: 1,
+        sharePriceCoin: 1,
+        marketValueCoin: 10,
+        costBasisCoin: 10,
+        unrealizedPlCoin: 0,
+      );
+      await _pump(
+        tester,
+        GtexOwnershipExperience(
+          book: GtexOwnershipBook.empty(),
+          clubOwnership: const GtexClubOwnershipPortfolio(
+            clubCount: 1,
+            totalMarketValueCoin: 10,
+            totalCostBasisCoin: 10,
+            totalUnrealizedPlCoin: 0,
+            holdings: <GtexClubShareHolding>[flat],
+          ),
         ),
-      ),
-    );
-    expect(
-      find.text('No settled GTEX matches behind this price yet.'),
-      findsOneWidget,
-    );
-  });
+      );
+      expect(
+        find.text('No settled GTEX matches behind this price yet.'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('club-share sync failure is surfaced without hiding the squad', (
     WidgetTester tester,
@@ -275,7 +299,12 @@ void main() {
         GtexOwnershipExperience(
           book: _book(<GtePortfolioHolding>[
             _holding(id: 'a', name: 'Ada Obi', club: 'Enyimba FC', value: 40),
-            _holding(id: 'b', name: 'Bala Sule', club: 'Rangers Intl', value: 20),
+            _holding(
+              id: 'b',
+              name: 'Bala Sule',
+              club: 'Rangers Intl',
+              value: 20,
+            ),
           ]),
           clubOwnership: const GtexClubOwnershipPortfolio(
             clubCount: 1,

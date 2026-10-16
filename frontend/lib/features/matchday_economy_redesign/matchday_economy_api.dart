@@ -56,7 +56,7 @@ class GtexMatchdayEconomyApi {
         auth: admin,
       );
       return GtexMatchdayEconomyOverview.fromJson(payload);
-    }, _requireFixtures().overview);
+    }, () => _requireFixtures().overview());
   }
 
   Future<GtexMatchdayEconomyAction> resolveFederationSanction({
