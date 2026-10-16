@@ -20,9 +20,14 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - Paystack LIVE deposits: initialize, verify on callback, webhook (/api/owner/deposits/webhook, HMAC with secret key), credited as "deposited" at ₦100 = 1 GTX.
 - Fan Coin conversion at the repo rate 1:100; Club Support Units (non-investment framing); sponsor and endorsement deals (70/30); read-only coin traders directory.
 
+## Implemented (2026-10-16, iteration 2)
+- One Wallet: every owner-console LedgerEvent now also posts balanced double-entry transactions into the repo wallet ledger (WalletService.append_transaction, idempotency oc:<event>:<phase>). The owner wallet is the repo user COIN/CREDIT account, and club cash is the repo club treasury account. Pending/held money sits in owner_console:held until release or reversal. Existing events were backfilled.
+- Fiat rates come from the repo's admin-controlled TreasurySettings (deposit ₦900, withdrawal ₦880 per GTEX Coin), used for Paystack deposits and withdrawals.
+- Coin Trader Orders on the Finance page: buy/sell with verified traders through the repo coin_traders API (create, accept with escrow, proof, confirm/release, cancel, dispute) plus a trader desk view. Demo trader seeded by scripts/seed_demo_coin_trader.py.
+
 ## Backlog
-- P0: Bridge the owner-console ledger with the repo's existing wallet ledger (LedgerAccount/LedgerEntry) so the exchange wallet, coin-trader orders and owner wallet are one balance.
+- P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
 - P0: Register the Paystack webhook URL in the dashboard for the production domain.
-- P1: Coin-trader buy/sell orders from the web UI; KYC submission UI (/api/kyc); Paystack transfer payouts if processor mode changes.
+- P1: KYC submission UI (/api/kyc); Paystack transfer payouts if processor mode changes; remove the demo trader and its 2,000 GTX demo float before launch.
 - P1: Fix the pre-existing GtexUniverseService super() TypeError in the repo's gtex runtime hook.
 - P2: Club identity editor (crest/colours), supporter-only competitions, 3D/season passes.
