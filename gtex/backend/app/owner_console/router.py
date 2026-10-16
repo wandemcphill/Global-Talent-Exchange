@@ -361,7 +361,10 @@ def finance(user=Depends(get_current_user), session: Session = Depends(get_sessi
         "gift_catalog": money.GIFTS,
         "support_unit_price": money.SUPPORT_UNIT_PRICE,
         "fan_coin_per_gtex": money.FAN_COIN_PER_GTEX,
-        "paystack_configured": bool(__import__("os").environ.get("PAYSTACK_SECRET_KEY", "").strip()),
+        "paystack_configured": bool(money.paystack_secret()),
+        "paystack_mode": "live" if (money.paystack_secret() or "").startswith("sk_live_") else "test",
+        "ngn_per_gtex_coin": str(money.NGN_PER_GTEX_COIN),
+        "withdrawal_processor_mode": "manual_bank_transfer",
     }
 
 

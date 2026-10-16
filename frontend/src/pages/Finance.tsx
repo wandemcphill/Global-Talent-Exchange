@@ -23,7 +23,7 @@ function Balances({ w }: any) {
   );
 }
 
-function Deposit({ configured }: any) {
+function Deposit({ configured, rate, mode }: any) {
   const [amount, setAmount] = useState("5000");
   const go = async () => {
     try {
@@ -37,6 +37,7 @@ function Deposit({ configured }: any) {
     <Panel eyebrow="Paystack · NGN" title="Deposit" testid="deposit-panel" className="lg:col-span-4">
       <label className="gx-label">Amount (₦)</label>
       <input data-testid="deposit-amount-input" className="gx-input" type="number" min={100} value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <p className="mt-2 text-xs text-slate-400" data-testid="deposit-preview">You receive <b className="text-white">{fmt(Number(amount || 0) / Number(rate || 100), 2)} GTX</b> at ₦{fmt(rate)} = 1 GTEX Coin {mode === "live" && <Chip tone="red">Live payments</Chip>}</p>
       <Btn className="mt-3 w-full" disabled={!configured} onClick={go} data-testid="deposit-button">Pay with Paystack</Btn>
       {!configured && <p className="mt-2 text-xs text-amber-300" data-testid="paystack-not-configured">Paystack keys are not connected yet, so Naira deposits are switched off.</p>}
       <p className="mt-2 text-xs text-slate-500">Deposits credit your wallet as "deposited" GTEX Coin after Paystack verification.</p>
@@ -44,7 +45,7 @@ function Deposit({ configured }: any) {
   );
 }
 
-function Withdraw() {
+function Withdraw({ rate }: any) {
   const refresh = useRefreshOwner();
   const [f, setF] = useState<any>({ amount_coin: "", bank_name: "", account_number: "", account_name: "" });
   const { data: elig } = useQuery({ queryKey: ["finance", "elig", f.amount_coin], queryFn: async () => (await api.get("/owner/withdrawals/eligibility", { params: { amount: Number(f.amount_coin) || 1 } })).data });
@@ -72,7 +73,8 @@ function Withdraw() {
           <Chip>KYC {elig.kyc_status} · required above {fmt(elig.kyc_threshold)}</Chip>
         </div>
       )}
-      <Btn className="mt-4" disabled={!elig?.eligible || !f.amount_coin} onClick={submit} data-testid="withdraw-submit-button">Request withdrawal</Btn>
+      <Btn className="mt-4" disabled={!elig?.eligible || !f.amount_coin} onClick={submit} data-testid="withdraw-submit-button">Request withdrawal{f.amount_coin ? ` · ₦${fmt(Number(f.amount_coin) * Number(rate || 100))}` : ""}</Btn>
+      <p className="mt-2 text-xs text-slate-500">Payouts follow the platform processor mode (manual bank transfer): an admin reviews every request, then pays it out to your bank account.</p>
       <p className="mt-2 text-xs text-slate-500">Every withdrawal goes to manual fraud review. Available in: {elig?.supported_countries?.join(", ")}. Only earned and deposited GTEX Coin is withdrawable.</p>
     </Panel>
   );
@@ -141,6 +143,23 @@ function FanCoin({ data }: any) {
   );
 }
 
+function CoinTraders() {
+  const { data } = useQuery({ queryKey: ["coin-traders"], queryFn: async () => (await api.get("/coin-traders")).data });
+  return (
+    <Panel eyebrow="Peer-to-peer · verified traders" title="Coin traders" testid="coin-traders-panel" className="lg:col-span-12">
+      <p className="mb-3 text-sm text-slate-400">GTEX also lets you buy or sell GTEX Coin with verified coin traders, in addition to Paystack.</p>
+      {(data || []).length === 0 ? <Empty title="No verified traders yet" body="Approved coin traders will appear here." /> : (
+        <div className="grid gap-3 md:grid-cols-3">{data.map((t: any) => (
+          <div key={t.id} className="rounded-sm border border-white/10 p-3 text-sm" data-testid={`coin-trader-${t.id}`}>
+            <p className="text-white">{t.display_name} <Chip tone="emerald">{t.tier}</Chip></p>
+            <p className="text-xs text-slate-500">Rating {t.rating} · completion {Math.round(Number(t.completion_rate) * 100)}% · ~{Math.round(t.average_release_minutes)} min release</p>
+          </div>))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function LedgerTable({ rows }: any) {
   return (
     <Panel eyebrow="Single source of truth" title="Unified ledger" testid="ledger-panel" className="lg:col-span-12">
@@ -190,8 +209,8 @@ export default function Finance() {
             </div>
           </Panel>
         ))}
-        <Deposit configured={data.paystack_configured} />
-        <Withdraw />
+        <Deposit configured={data.paystack_configured} rate={data.ngn_per_gtex_coin} mode={data.paystack_mode} />
+        <Withdraw rate={data.ngn_per_gtex_coin} />
         {data.withdrawals.length > 0 && (
           <Panel eyebrow="History" title="Withdrawals" className="lg:col-span-12" testid="withdrawals-history">
             {data.withdrawals.map((w: any) => <p key={w.id} className="text-sm text-slate-300">{fmt(w.amount_coin)} GTX → {w.bank_name} ****{w.account_last4} <Chip tone={w.status === "approved" ? "emerald" : w.status === "rejected" ? "red" : "gold"}>{label(w.status)}</Chip></p>)}
@@ -200,6 +219,7 @@ export default function Finance() {
         <LedgerTable rows={data.ledger} />
         <FanCoin data={data} />
         <SupportUnits data={data} />
+        <CoinTraders />
       </div>
     </div>
   );

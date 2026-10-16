@@ -55,8 +55,8 @@ export default function AppShell() {
   if (loading) return <Loading label="Opening the boardroom" />;
   if (!user) return <Navigate to="/login" replace />;
   if (isLoading) return <Loading label="Loading your clubs" />;
-  if (data && !data.clubs.some((c: any) => ["competition", "active"].includes(c.stage))) return <Navigate to="/onboarding" replace />;
   const isAdmin = ["admin", "super_admin"].includes(String(user.role));
+  if (!isAdmin && data && !data.clubs.some((c: any) => ["competition", "active"].includes(c.stage))) return <Navigate to="/onboarding" replace />;
   const wallet = data?.economy?.wallet || {};
   return (
     <div className="min-h-screen bg-[#070B11] text-slate-200">

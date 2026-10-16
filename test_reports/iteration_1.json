@@ -1,0 +1,49 @@
+{
+  "summary": "First iteration end-to-end review of GTEX owner console. Backend: 15/15 pytest cases pass against /api/owner/* (auth, control-center, finance labels, world/clubs, inbox, advance world, competitions list + host, admin review-queue RBAC, deposit paystack=503, signup validations). Frontend: landing + CTA, owner login, 6 Control Center blocks, Advance World Day, Finance (all 6 labelled balances + Paystack-not-connected note), Competitions (host form + join panel), Inbox (8 open items, inbox-action-* buttons render for Enter Competition / Sign Sponsor / Accept Bid / Approve budget / etc.) all work. CRITICAL BUG: admin@gtex.ng login lands on /onboarding (blank) instead of /app or /app/admin because AppShell redirects any user whose clubs lack stage in {active,competition} to /onboarding without exempting admin/super_admin — so admins can never see nav-admin or /app/admin review desk.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "startup", "issue": "Backend logs show pre-existing TypeError: 'GtexUniverseService super()' during module hydration (bind_gtex_runtime). Flagged as known issue by main agent; endpoints still work after lazy hydration completes."},
+      {"endpoint": "openapi", "issue": "Duplicate Operation ID warning for create_federation at /app/gtex/backend/app/federations/router.py (cosmetic)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AppShell.tsx (line 58)",
+        "issue": "Admin users with no clubs are force-redirected to /onboarding. Admin (admin@gtex.ng) cannot reach /app, nav-admin is never rendered, /app/admin also bounces to /onboarding (blank screen). The guard `data.clubs.some(stage in [active,competition])` must be skipped when user.role in {admin, super_admin}.",
+        "selector": "[data-testid=\"nav-admin\"] (never rendered for admin)",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Finance", "issues": ["Paystack-disabled copy is 'Paystack keys are not connected yet, so Naira deposits are switched off.' — functional and clear; just note the test spec referenced the string 'not configured'. Not a bug, FYI only."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_owner_console.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix AppShell.tsx line ~58: short-circuit onboarding redirect for admin/super_admin so admins route to /app and see nav-admin + /app/admin review desk. Suggested change: `if (data && !isAdmin && !data.clubs.some(...)) return <Navigate to=\"/onboarding\" replace />;` (move isAdmin derivation above the redirect, or inline the role check)."
+  ],
+  "critical_code_review_comments": [
+    "AppShell gating logic conflates ownership state with routing eligibility — admins and non-owners get locked into club onboarding. Add explicit role gating before onboarding redirect.",
+    "AuthPage login submit always navigates to /app after login (line 30). After the AppShell fix, admin lands on /app Control Center which then shows nav-admin and allows /app/admin — current flow is otherwise consistent.",
+    "/api/owner/deposits/init correctly returns 503 paystack_secret_key_not_configured; required body is {amount_ngn, callback_url} (not amount/currency as a developer might guess from UI). Consider documenting in schema or 400 if callback_url omitted vs 422 Pydantic."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_owner_console.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15)",
+    "frontend": "~85% (owner flows pass; admin console unreachable)"
+  },
+  "test_credentials": "flow7@gtex.test / FlowPass123! (verified working, onboarded owner of Flow United). admin@gtex.ng / GtexAdmin2026 (auth works, backend recognizes super_admin — /api/owner/admin/review-queue returns 200; frontend blocked by onboarding redirect).",
+  "seed_data_creation": "Created 2 TEST_ hosted competitions via /api/owner/competitions (names TEST_cup_<hex>). Could not clean up via API (no DELETE endpoint); flagged by main agent note.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend 15/15 pytest in /app/backend/tests/test_owner_console.py passes against public URL. Reuse flow7@gtex.test / FlowPass123! for owner. After the AppShell admin-redirect fix, verify (a) admin@gtex.ng login lands on /app (not /onboarding), (b) [data-testid=nav-admin] visible, (c) /app/admin shows withdrawals/integrity flags/held payouts sections, (d) non-admin flow7 user visiting /app/admin is redirected away. Also worth deeper testing: Market signing goalkeeper filter (market-filter-goalkeeper), onboarding full new-signup flow, Match Center live commentary + gift rail, sister-club transfer fair-value band (requires creating a 2nd club under same owner), capital distribute cap (should be bounded by earned revenue).",
+  "rca_of_the_issue": "File /app/frontend/src/components/gtex/AppShell.tsx line 58: `if (data && !data.clubs.some((c:any) => ['competition','active'].includes(c.stage))) return <Navigate to='/onboarding' replace />;` runs before isAdmin is derived (line 59) and does not consider that admin/super_admin users typically have zero owned clubs. Reproduction: 1) Open /login, 2) submit admin@gtex.ng / GtexAdmin2026, 3) observe URL becomes /onboarding and page renders blank (Onboarding query hits /api/owner/onboarding which may 403 for admin). Backend: /api/auth/me returns 200 with role=super_admin; /api/owner/admin/review-queue returns 200 — proving the backend is correct. Mitigation: compute isAdmin from user.role and skip the onboarding redirect for admins (or redirect them to /app/admin instead)."
+}

@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.models.club_profile import ClubProfile
 from app.owner_console import engine, ledger
+from app.value_engine.banded_pricing import NAIRA_PER_COIN
+from app.wallets.service import COIN_TO_CREDIT_RATE
 from app.owner_console.models import LedgerEvent, OwnerSquadPlayer, OwnerWithdrawal, RelatedPartyTransfer, SupportUnitHolding
 from app.owner_console.service import OwnerError, get_state, integrity_score, now, open_high_flags, raise_flag, require_state, user_states
 
@@ -32,10 +34,26 @@ SUPPORT_TIERS = (
     (10, "Patron", ["Supporter-only competitions", "Patron badge on club page"]),
     (1, "Supporter", ["Supporter badge", "Club supporter leaderboard"]),
 )
-FAN_COIN_PER_GTEX = 10
+FAN_COIN_PER_GTEX = COIN_TO_CREDIT_RATE
+NGN_PER_GTEX_COIN = Decimal(str(NAIRA_PER_COIN))
 SISTER_CAPITAL_CAP_BPS = 2500
 FAIR_BAND = (Decimal("0.8"), Decimal("1.3"))
 RECIPROCAL_COOLDOWN = timedelta(days=14)
+
+
+def paystack_secret() -> str | None:
+    for name in ("GTE_PAYSTACK_SECRET_KEY", "PAYSTACK_SECRET_KEY"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return None
+
+
+def _secret() -> str:
+    value = paystack_secret()
+    if not value:
+        raise OwnerError("paystack_secret_key_not_configured", 503)
+    return value
 
 
 def _env(name: str) -> str:
@@ -72,7 +90,7 @@ def request_withdrawal(session: Session, user, payload: dict[str, Any]) -> Owner
     result = withdrawal_eligibility(session, user, amount)
     if not result["eligible"]:
         raise OwnerError("withdrawal_not_eligible", 403, result)
-    rate = Decimal(_env("GTEX_COIN_TO_NGN"))
+    rate = NGN_PER_GTEX_COIN
     account_age_days = (now() - (user.created_at if user.created_at.tzinfo else user.created_at.replace(tzinfo=now().tzinfo))).days
     risk = {"new_account": account_age_days < 7, "large_amount": amount > Decimal(result["kyc_threshold"])}
     withdrawal = OwnerWithdrawal(user_id=user.id, amount_coin=amount, amount_ngn=ledger.D(amount * rate), bank_name=payload["bank_name"], account_number=payload["account_number"], account_name=payload["account_name"], checks_json={**result, "risk": risk})
@@ -116,8 +134,8 @@ def release_payout(session: Session, ledger_event_id: str) -> LedgerEvent:
 # ---------- Paystack deposits ----------
 
 def paystack_init(session: Session, user, amount_ngn: int, callback_url: str) -> dict[str, Any]:
-    secret = _env("PAYSTACK_SECRET_KEY")
-    if amount_ngn < 100:
+    secret = _secret()
+    if amount_ngn < NGN_PER_GTEX_COIN:
         raise OwnerError("minimum_deposit_100_ngn")
     reference = f"gtex_{uuid.uuid4().hex[:18]}"
     response = httpx.post("https://api.paystack.co/transaction/initialize", headers={"Authorization": f"Bearer {secret}"}, json={"email": user.email, "amount": amount_ngn * 100, "currency": "NGN", "reference": reference, "callback_url": callback_url, "metadata": {"user_id": user.id, "product": "gtex_coin"}}, timeout=20)
@@ -132,12 +150,12 @@ def _credit_deposit(session: Session, user_id: str, reference: str, amount_kobo:
     if existing:
         return existing
     ngn = Decimal(amount_kobo) / 100
-    coins = ledger.D(ngn * Decimal(_env("NGN_TO_GTEX_COIN")))
+    coins = ledger.D(ngn / NGN_PER_GTEX_COIN)
     return ledger.record(session, event_type="deposit", source=ledger.PAYSTACK, destination=ledger.user_account(user_id), currency=ledger.GTEX, gross=coins, balance_class="deposited", user_id=user_id, related_type="paystack", related_id=reference, memo=f"Paystack deposit NGN {ngn:,.2f}")
 
 
 def paystack_verify(session: Session, user, reference: str) -> dict[str, Any]:
-    secret = _env("PAYSTACK_SECRET_KEY")
+    secret = _secret()
     data = httpx.get(f"https://api.paystack.co/transaction/verify/{reference}", headers={"Authorization": f"Bearer {secret}"}, timeout=20).json()
     tx = data.get("data") or {}
     if not data.get("status") or tx.get("status") != "success":
@@ -149,7 +167,7 @@ def paystack_verify(session: Session, user, reference: str) -> dict[str, Any]:
 
 
 def paystack_webhook(session: Session, raw: bytes, signature: str | None, event: dict[str, Any]) -> None:
-    secret = _env("PAYSTACK_SECRET_KEY")
+    secret = _secret()
     computed = hmac.new(secret.encode(), raw, hashlib.sha512).hexdigest()
     if not signature or not hmac.compare_digest(computed, signature):
         raise OwnerError("invalid_signature", 401)
