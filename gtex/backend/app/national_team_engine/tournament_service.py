@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -2574,7 +2575,7 @@ class NationalTeamTournamentService:
             description=f"National team rental for {item['player_name']} in {competition.title}",
             external_reference=f"national-rental:{competition.id}:{entry.id}:{player_id}",
             actor=actor,
-            idempotency_key=f"national-rental:{competition.id}:{entry.id}:{player_id}:{actor.id}",
+            idempotency_key="national-rental:" + hashlib.sha256(f"{competition.id}:{entry.id}:{player_id}:{actor.id}".encode()).hexdigest()[:64],
         )
         contract = self._create_rental_contract(
             entry=entry,

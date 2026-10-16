@@ -49,6 +49,11 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - Academy pack reveal (PackReveal.tsx, framer-motion): unseen regens per club (localStorage gtex.regens.seen.<club>) trigger a sealed pack, then card-by-card flips with a Wonderkid banner (ceiling of 15+), then a summary. It shows once per regen.
 - PlayerCard: the badge moved to the card corner (no name overlap), with an initials fallback for broken photos. The National page defaults to the tournament you've entered.
 
+## Iteration 6 (2026-10-16): faster rental pool + first paid rental
+- _prefetch_eligibility batches the injury/sanction/agency/contract/active-rental/member checks for a pool page (one grouped query per check). The rental pool now takes about 4s warm through the public URL (was about 19s). GTE_DB_POOL_SIZE=6 / GTE_DB_MAX_OVERFLOW=4 (was 3/2, which starved requests behind background workers).
+- Admin wallet funded with no real money (user's instruction): scripts/admin_credit_wallet.py posts a balanced ADMIN_ADJUSTMENT from the platform COIN account (metadata real_money=false). 150 GTX credited to vidvimedialtd@gmail.com.
+- Fixed a pre-existing repo bug: the paid national rental idempotency key was 163 chars, over the varchar(128) column, so every paid rental returned 500. It's now a sha256-based key.
+
 ## Backlog
 - P0: Bridge the owner-console ledger with the repo's existing wallet ledger: DONE (iteration 2).
 - P0: Register the Paystack webhook URL in the dashboard for the production domain.
@@ -56,6 +61,7 @@ User choices: work inside the existing repo (github.com/wandemcphill/Global-Tale
 - P1: Fix the pre-existing GtexUniverseService super() TypeError in the repo's gtex runtime hook.
 - P2: Club identity editor (crest/colours), supporter-only competitions, 3D/season passes.
 - P1: Admin must click 'Seed default tournaments' on /app/national to open rentals: DONE.
-- P1: Fund the wallet (Paystack deposit) to complete a paid national rental. The rental pool is still about 19s (per-item eligibility queries); batch the eligibility checks next.
+- P1: Fund the wallet to complete a paid national rental: DONE via admin adjustment (no real money). Eligibility batching: DONE.
+- P2: Other ledger idempotency keys that may exceed 128 chars, e.g. fast-cup-entry:{cup}:{club}:{actor} in app/fast_cups/services/finance.py; audit them.
 - P1: /api/market/players is slow (about 60s) on the live DB; React uses /api/v2/players instead.
 - Future: Phase 3 manager requests and regen pressure; Phase 4 unified ledger and anti-collusion hardening; Phase 5 gifting and sponsor inventory.

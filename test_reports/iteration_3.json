@@ -1,0 +1,50 @@
+{
+  "summary": "Backend speed + Boniface rental validation. Rental-pool endpoint works and meets the speed target (public URL warm calls 3.9s / 5.2s, cold 6.5s; 12 items; Boniface eligible=true loan_price_coin=100.0000; Tella eligible=false reasons=['duplicate_player','active_rental_exists']). Wallet /api/wallets/summary returns available_balance=150.0000 for admin. UI loaded /app/national correctly: Nigeria squad shows 5 free roster players (#1 Maduka Okoye, #2 Nathan Adewale Temitayo Tella, #3 Wilfred Ndidi, #4 Victor Gidado, #5 Solomon John), header wallet shows '150 GTX', rental-pool-panel renders rental cards and the Boniface card has data-testid=rent-player-b87c5690-ed83-4691-947e-697362a2e92c with label 'Rent · 100 GTX', Tella card shows 'DUPLICATE PLAYER'. CRITICAL BUG on single approved rent click: POST /api/national-team-engine/entries/{entry}/rentals returns 500 Internal Server Error -> frontend toast 'Internal server error.'. Root cause in backend logs: `sqlalchemy.exc.DataError: (psycopg.errors.StringDataRightTruncation) value too long for type character varying(128)` for the wallet-ledger idempotency_key. Wallet state is unchanged (still 150.0000) and Boniface is NOT in rental_squad_members, so the paid rental flow cannot complete end-to-end.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/national-team-engine/entries/{entry_id}/rentals",
+        "issue": "500 StringDataRightTruncation: idempotency_key exceeds varchar(128). File /app/gtex/backend/app/national_team_engine/tournament_service.py:2577 builds `idempotency_key=f\"national-rental:{competition.id}:{entry.id}:{player_id}:{actor.id}\"` which is 16+36+1+36+1+36+1+36 = 163 chars. Column (wallet ledger table) is varchar(128). Transaction rolls back so no money is lost, but the paid rental flow is completely broken.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Paid national-team rental (click Rent 100 GTX for Boniface)",
+        "issue": "Backend 500 propagates to a generic 'Internal server error.' toast. UI could parse the backend error envelope for a clearer message, but the real fix is the backend truncation bug above.",
+        "affected_selectors": ["[data-testid=\"rent-player-b87c5690-ed83-4691-947e-697362a2e92c\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_national_team_rental.py"
+  ],
+  "action_items": [
+    "Shorten the idempotency_key in /app/gtex/backend/app/national_team_engine/tournament_service.py:2577 so it fits varchar(128). Suggested fix: use `f\"nt-rental:{entry.id}:{player_id}\"` (len 10+36+1+36 = 83) which is already unique per (entry, player) and matches the natural dedupe key, or hash the full tuple with sha1/sha256 and store the hex digest. Also audit `reference` and `external_reference` (both ~125 chars right now, dangerously close to the 128 limit and will break the moment the prefix grows).",
+    "After the fix, retest: click rent-player-b87c5690-ed83-4691-947e-697362a2e92c once; expect success toast, Boniface appears in roster with source='rental', wallet drops 150 -> 50 GTX, GET /api/national-team-engine/entries/{entry} shows Boniface in rental_squad_members."
+  ],
+  "critical_code_review_comments": [
+    "idempotency_key / reference / external_reference columns on the wallet ledger are only varchar(128) but the service is concatenating multiple UUIDs. Either widen the column (varchar(256) or text) or compress the keys. This is a general risk across any flow that constructs similar keys.",
+    "Rental-pool batching change is working: warm calls are ~3.9-5.2s on the public URL (spec target 'a few seconds, 3-6s warm'). Cold first call was 6.5s via the public ingress and 9.5s on localhost — acceptable.",
+    "Eligibility payload is correct and detailed (eligible, reasons[], checks{nationality,tournament_lock,injury,suspension,cooldown,contract_lock,duplicate,active_rentals}, active_rental_count, duplicate, source). This makes the UI 'DUPLICATE PLAYER' pill trivial — good design.",
+    "/api/national-team-engine/entries/{id} returns keys: squad_members (free), rental_squad_members, rental_contracts, free_players_remaining. Note: the review request's wording 'free_squad_members' doesn't match the actual key — the key is `squad_members` for free members. Not a bug, but worth aligning docs/types."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_national_team_rental.py"
+  ],
+  "success_rate": {
+    "backend": "75% (rental-pool speed OK, wallet OK, entry OK, rental POST BROKEN)",
+    "frontend": "90% (page loads and shows every expected element; the single rent action fails because of the backend 500)"
+  },
+  "test_credentials": "Admin: vidvimedialtd@gmail.com / Desolamcphill89. (POST /api/auth/login returns {access_token}). Super admin.",
+  "seed_data_creation": "None. No successful writes occurred (the one approved rental attempt was rejected by the DB with StringDataRightTruncation and rolled back). Wallet still 150.0000, entry still has 5 rental_squad_members none of which are Boniface.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "After main agent shortens idempotency_key in tournament_service.py:2577, re-run POST /api/national-team-engine/entries/3487e6de-cbe3-4344-abbc-e969026e0e01/rentals (or click rent-player-b87c5690-ed83-4691-947e-697362a2e92c once in /app/national) and verify: (a) 200/201 response, (b) wallet 150 -> 50, (c) Boniface in rental_squad_members, (d) his pool card flips to a non-rentable 'DUPLICATE PLAYER' state. The admin wallet credit of 150 GTX was done out-of-band by the main agent via admin_credit_wallet.py (metadata real_money=false), no Paystack involved. The rental-pool public URL p95 is ~5s warm which already satisfies the perf target.",
+  "rca_of_the_issue": "File: /app/gtex/backend/app/national_team_engine/tournament_service.py line 2577. Code: `idempotency_key=f\"national-rental:{competition.id}:{entry.id}:{player_id}:{actor.id}\"`. UUIDs are 36 chars each; 'national-rental:' is 16 chars; four UUIDs + three colons = 36*4+3 = 147; total = 16+147 = 163 characters. The wallet-ledger `idempotency_key` column is `VARCHAR(128)`, so Postgres raises `psycopg.errors.StringDataRightTruncation`. SQLAlchemy wraps as `sqlalchemy.exc.DataError`, FastAPI returns 500 and rolls the transaction back — which is why the wallet is still at 150.0000 and Boniface is still absent from rental_squad_members. Reproduction: POST /api/national-team-engine/entries/3487e6de-cbe3-4344-abbc-e969026e0e01/rentals with body {player_id: 'b87c5690-ed83-4691-947e-697362a2e92c'} using admin bearer token. Mitigation: use `f\"nt-rental:{entry.id}:{player_id}\"` (83 chars, naturally unique per entry+player, which is also exactly the dedupe semantic the business wants — one rental per player per entry), OR hash the full compound key with hashlib.sha1 and store the 40-char hex, OR widen the column to varchar(256)/text in a migration. Also audit `reference`/`external_reference` which are 125 chars today and will overflow if any prefix changes."
+}
