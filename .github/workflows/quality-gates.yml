@@ -41,6 +41,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Verify requirements.lock is in sync with requirements.txt
         run: |
+          cp backend/requirements.lock /tmp/requirements.lock
           uv pip compile backend/requirements.txt \
             --python-version 3.14 \
             --python-platform x86_64-unknown-linux-gnu \
