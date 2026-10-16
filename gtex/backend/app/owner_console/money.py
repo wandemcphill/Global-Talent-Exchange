@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 
 from app.models.club_profile import ClubProfile
 from app.owner_console import engine, ledger
-from app.value_engine.banded_pricing import NAIRA_PER_COIN
 from app.wallets.service import COIN_TO_CREDIT_RATE
 from app.owner_console.models import LedgerEvent, OwnerSquadPlayer, OwnerWithdrawal, RelatedPartyTransfer, SupportUnitHolding
 from app.owner_console.service import OwnerError, get_state, integrity_score, now, open_high_flags, raise_flag, require_state, user_states
@@ -35,7 +34,25 @@ SUPPORT_TIERS = (
     (1, "Supporter", ["Supporter badge", "Club supporter leaderboard"]),
 )
 FAN_COIN_PER_GTEX = COIN_TO_CREDIT_RATE
-NGN_PER_GTEX_COIN = Decimal(str(NAIRA_PER_COIN))
+
+
+def treasury_rates(session: Session) -> dict[str, Any]:
+    """Admin-controlled NGN rates from the repo's TreasurySettings (single source for fiat conversion)."""
+    from app.treasury.service import TreasuryService
+
+    s = TreasuryService().ensure_settings(session)
+    return {
+        "deposit_rate": Decimal(s.deposit_rate_value), "deposit_direction": str(getattr(s.deposit_rate_direction, "value", s.deposit_rate_direction)),
+        "withdrawal_rate": Decimal(s.withdrawal_rate_value), "withdrawal_direction": str(getattr(s.withdrawal_rate_direction, "value", s.withdrawal_rate_direction)),
+    }
+
+
+def fiat_to_coin(fiat: Decimal, rate: Decimal, direction: str) -> Decimal:
+    return ledger.D(fiat / rate if direction == "fiat_per_coin" else fiat * rate)
+
+
+def coin_to_fiat(coin: Decimal, rate: Decimal, direction: str) -> Decimal:
+    return ledger.D(coin * rate if direction == "fiat_per_coin" else coin / rate)
 SISTER_CAPITAL_CAP_BPS = 2500
 FAIR_BAND = (Decimal("0.8"), Decimal("1.3"))
 RECIPROCAL_COOLDOWN = timedelta(days=14)
@@ -90,10 +107,10 @@ def request_withdrawal(session: Session, user, payload: dict[str, Any]) -> Owner
     result = withdrawal_eligibility(session, user, amount)
     if not result["eligible"]:
         raise OwnerError("withdrawal_not_eligible", 403, result)
-    rate = NGN_PER_GTEX_COIN
+    rates = treasury_rates(session)
     account_age_days = (now() - (user.created_at if user.created_at.tzinfo else user.created_at.replace(tzinfo=now().tzinfo))).days
     risk = {"new_account": account_age_days < 7, "large_amount": amount > Decimal(result["kyc_threshold"])}
-    withdrawal = OwnerWithdrawal(user_id=user.id, amount_coin=amount, amount_ngn=ledger.D(amount * rate), bank_name=payload["bank_name"], account_number=payload["account_number"], account_name=payload["account_name"], checks_json={**result, "risk": risk})
+    withdrawal = OwnerWithdrawal(user_id=user.id, amount_coin=amount, amount_ngn=coin_to_fiat(amount, rates["withdrawal_rate"], rates["withdrawal_direction"]), bank_name=payload["bank_name"], account_number=payload["account_number"], account_name=payload["account_name"], checks_json={**result, "risk": risk})
     session.add(withdrawal)
     session.flush()
     event = ledger.record(session, event_type="withdrawal", source=ledger.user_account(user.id), destination=ledger.BANK_OUT, currency=ledger.GTEX, gross=amount, status="pending_review", user_id=user.id, related_type="withdrawal", related_id=withdrawal.id, memo=f"Withdrawal to {payload['bank_name']} ****{payload['account_number'][-4:]}", check_funds=False)
@@ -112,7 +129,8 @@ def review_withdrawal(session: Session, admin, withdrawal_id: str, decision: str
     mapping = {"approve": ("approved", "completed"), "reject": ("rejected", "reversed"), "hold": ("held", "held")}
     if decision not in mapping:
         raise OwnerError("invalid_decision")
-    w.status, event.status = mapping[decision]
+    w.status = mapping[decision][0]
+    ledger.transition(session, event, mapping[decision][1])
     w.review_note, w.reviewed_by, w.reviewed_at = note, admin.id, now()
     session.flush()
     return w
@@ -126,16 +144,14 @@ def release_payout(session: Session, ledger_event_id: str) -> LedgerEvent:
     event = session.get(LedgerEvent, ledger_event_id)
     if event is None or event.status != "held" or event.event_type == "withdrawal":
         raise OwnerError("payout_not_held", 409)
-    event.status = "completed"
-    session.flush()
-    return event
+    return ledger.transition(session, event, "completed")
 
 
 # ---------- Paystack deposits ----------
 
 def paystack_init(session: Session, user, amount_ngn: int, callback_url: str) -> dict[str, Any]:
     secret = _secret()
-    if amount_ngn < NGN_PER_GTEX_COIN:
+    if amount_ngn < 100:
         raise OwnerError("minimum_deposit_100_ngn")
     reference = f"gtex_{uuid.uuid4().hex[:18]}"
     response = httpx.post("https://api.paystack.co/transaction/initialize", headers={"Authorization": f"Bearer {secret}"}, json={"email": user.email, "amount": amount_ngn * 100, "currency": "NGN", "reference": reference, "callback_url": callback_url, "metadata": {"user_id": user.id, "product": "gtex_coin"}}, timeout=20)
@@ -150,7 +166,8 @@ def _credit_deposit(session: Session, user_id: str, reference: str, amount_kobo:
     if existing:
         return existing
     ngn = Decimal(amount_kobo) / 100
-    coins = ledger.D(ngn / NGN_PER_GTEX_COIN)
+    rates = treasury_rates(session)
+    coins = fiat_to_coin(ngn, rates["deposit_rate"], rates["deposit_direction"])
     return ledger.record(session, event_type="deposit", source=ledger.PAYSTACK, destination=ledger.user_account(user_id), currency=ledger.GTEX, gross=coins, balance_class="deposited", user_id=user_id, related_type="paystack", related_id=reference, memo=f"Paystack deposit NGN {ngn:,.2f}")
 
 

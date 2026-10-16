@@ -5,7 +5,11 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.user import User
+from app.models.wallet import LedgerEntryReason, LedgerUnit
 from app.owner_console.models import LedgerEvent, OwnerWithdrawal
+from app.wallets.service import LedgerError as WalletLedgerError
+from app.wallets.service import LedgerPosting, WalletService
 
 GTEX = "GTEX_COIN"
 FAN = "FAN_COIN"
@@ -16,7 +20,19 @@ WORLD_MARKET = "world:market"
 WORLD_CLUBS = "world:clubs"
 PAYSTACK = "external:paystack"
 BANK_OUT = "external:bank_payout"
+HELD = "owner_console:held"
 LIVE_STATUSES = ("completed", "pending_review", "held")
+UNITS = {"GTEX_COIN": LedgerUnit.COIN, "FAN_COIN": LedgerUnit.CREDIT}
+REASONS = {
+    "deposit": LedgerEntryReason.DEPOSIT,
+    "withdrawal": LedgerEntryReason.WITHDRAWAL_HOLD,
+    "competition_entry_fee": LedgerEntryReason.COMPETITION_ENTRY,
+    "competition_prize": LedgerEntryReason.COMPETITION_REWARD,
+    "transfer_purchase": LedgerEntryReason.TRADE_SETTLEMENT,
+    "transfer_sale": LedgerEntryReason.TRADE_SETTLEMENT,
+    "related_party_transfer": LedgerEntryReason.TRADE_SETTLEMENT,
+}
+_wallet = WalletService()
 
 
 class LedgerError(ValueError):
@@ -33,6 +49,85 @@ def user_account(user_id: str) -> str:
 
 def club_account(club_id: str) -> str:
     return f"club:{club_id}"
+
+
+def wallet_account(session: Session, account: str, currency: str):
+    """Map an owner-console account name onto the repo's wallet ledger (one wallet)."""
+    unit = UNITS[currency]
+    kind, _, ident = account.partition(":")
+    if kind == "user":
+        user = session.get(User, ident)
+        if user is None:
+            raise LedgerError("user_not_found")
+        _wallet.ensure_default_accounts(session, user)
+        return _wallet.get_user_account(session, user, unit)
+    if kind == "club":
+        return _wallet.ensure_club_treasury_account(session, ident, unit)
+    if kind == "competition":
+        return _wallet.ensure_named_system_account(session, code=f"competition:{ident}:{unit.value}:pot", label=f"Competition {ident} pot", unit=unit, allow_negative=False)
+    if account == PAYSTACK:
+        return _wallet.ensure_deposit_clearing_account(session, unit)
+    if account == BANK_OUT:
+        return _wallet.ensure_withdrawal_clearing_account(session, unit)
+    if account == HELD:
+        return _wallet.ensure_named_system_account(session, code=f"owner_console:held:{unit.value}", label="Owner console held funds", unit=unit, allow_negative=False)
+    if account == PLATFORM_FEES:
+        return _wallet.ensure_named_system_account(session, code=f"platform:{unit.value}:owner_console_fees", label="Owner console platform fees", unit=unit, allow_negative=True)
+    return _wallet.ensure_named_system_account(session, code=f"owner_console:{account.replace(':', '_')}:{unit.value}", label=f"Owner console {account}", unit=unit, allow_negative=True)
+
+
+def _post(session: Session, event: LedgerEvent, source: str, destination: str, net: Decimal, fee: Decimal, phase: str) -> None:
+    cur = event.currency
+    postings = [
+        LedgerPosting(account=wallet_account(session, source, cur), amount=-(net + fee)),
+        LedgerPosting(account=wallet_account(session, destination, cur), amount=net),
+    ]
+    if fee > 0:
+        postings.append(LedgerPosting(account=wallet_account(session, PLATFORM_FEES, cur), amount=fee))
+    try:
+        _wallet.append_transaction(
+            session,
+            postings=postings,
+            reason=REASONS.get(event.event_type, LedgerEntryReason.ADJUSTMENT),
+            reference=f"owner-console:{event.id}:{phase}",
+            description=(event.memo or event.event_type)[:255],
+            idempotency_key=f"oc:{event.id}:{phase}",
+            metadata={"owner_ledger_event_id": event.id, "event_type": event.event_type, "phase": phase},
+        )
+    except WalletLedgerError as exc:
+        raise LedgerError("insufficient_funds" if "nsufficient" in str(exc) else str(exc)) from exc
+
+
+def post_event(session: Session, event: LedgerEvent) -> None:
+    if event.status == "completed":
+        _post(session, event, event.source_account, event.destination_account, D(event.net_amount), D(event.platform_fee), "settle")
+    else:
+        _post(session, event, event.source_account, HELD, D(event.gross_amount), D(0), "hold")
+        if event.status == "reversed":
+            _post(session, event, HELD, event.source_account, D(event.gross_amount), D(0), "reverse")
+
+
+def transition(session: Session, event: LedgerEvent, new_status: str) -> LedgerEvent:
+    if event.status == new_status:
+        return event
+    if event.status not in ("pending_review", "held"):
+        raise LedgerError("event_not_pending")
+    if new_status == "completed":
+        _post(session, event, HELD, event.destination_account, D(event.net_amount), D(event.platform_fee), "release")
+    elif new_status == "reversed":
+        _post(session, event, HELD, event.source_account, D(event.gross_amount), D(0), "reverse")
+    elif new_status not in ("pending_review", "held"):
+        raise LedgerError("invalid_transition")
+    event.status = new_status
+    session.flush()
+    return event
+
+
+def backfill_wallet_postings(session: Session) -> int:
+    events = session.scalars(select(LedgerEvent).order_by(LedgerEvent.created_at.asc())).all()
+    for event in events:
+        post_event(session, event)
+    return len(events)
 
 
 def record(
@@ -78,25 +173,12 @@ def record(
     )
     session.add(event)
     session.flush()
+    post_event(session, event)
     return event
 
 
 def balance(session: Session, account: str, currency: str) -> Decimal:
-    inflow = session.scalar(
-        select(func.coalesce(func.sum(LedgerEvent.net_amount), 0)).where(
-            LedgerEvent.destination_account == account,
-            LedgerEvent.currency == currency,
-            LedgerEvent.status == "completed",
-        )
-    )
-    outflow = session.scalar(
-        select(func.coalesce(func.sum(LedgerEvent.gross_amount), 0)).where(
-            LedgerEvent.source_account == account,
-            LedgerEvent.currency == currency,
-            LedgerEvent.status.in_(LIVE_STATUSES),
-        )
-    )
-    return D(inflow or 0) - D(outflow or 0)
+    return D(_wallet.get_balance(session, wallet_account(session, account, currency)))
 
 
 def _sum(session: Session, *conditions, column=LedgerEvent.net_amount) -> Decimal:
@@ -131,9 +213,10 @@ def wallet_classes(session: Session, user_id: str) -> dict[str, str]:
         LedgerEvent.status.in_(LIVE_STATUSES),
         column=LedgerEvent.gross_amount,
     )
-    promo_left = max(Decimal("0"), credits["promotional"] - spend)
-    spend_beyond_promo = max(Decimal("0"), spend - credits["promotional"])
-    withdrawable = max(Decimal("0"), credits["earned"] + credits["deposited"] - spend_beyond_promo - withdrawals)
+    gtex_total = balance(session, acct, GTEX)
+    promo_left = min(max(Decimal("0"), credits["promotional"] - spend), max(gtex_total, Decimal("0")))
+    withdrawable = max(Decimal("0"), gtex_total - promo_left)
+    console_net = sum(credits.values(), Decimal("0")) - spend - withdrawals
     pending = _sum(
         session,
         LedgerEvent.source_account == acct,
@@ -143,7 +226,8 @@ def wallet_classes(session: Session, user_id: str) -> dict[str, str]:
     )
     fan_total = balance(session, acct, FAN)
     return {
-        "gtex_total": str(balance(session, acct, GTEX)),
+        "gtex_total": str(gtex_total),
+        "exchange_activity": str(gtex_total - console_net),
         "fan_total": str(fan_total),
         "deposited": str(credits["deposited"]),
         "earned": str(credits["earned"]),
